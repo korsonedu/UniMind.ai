@@ -508,7 +508,6 @@ class AIService:
 
         target_rank = cls.DIFFICULTY_ORDER.get(target_difficulty, cls.DIFFICULTY_ORDER['normal'])
         tolerance = 1  # 严控在 ±1 档内
-        passed: List[Dict[str, Any]] = []
         for q in questions:
             estimated_level = cls._estimate_difficulty_level(q)
             estimated_rank = cls.DIFFICULTY_ORDER.get(estimated_level, cls.DIFFICULTY_ORDER['normal'])
@@ -517,11 +516,8 @@ class AIService:
             q['difficulty_estimated_level'] = estimated_level
             q['difficulty_check_passed'] = check_passed
             q['difficulty_level'] = target_difficulty
-            if check_passed:
-                passed.append(q)
-
-        # 若全部不通过则保留原列表并标记为未通过，方便前端提示
-        return passed if passed else questions
+        # 保留所有题目，只打标是否通过，避免题目数量被裁掉
+        return questions
 
     @classmethod
     def _apply_type_ratio_filter(

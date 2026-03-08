@@ -551,7 +551,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                                   ) : (
                                       <div className="space-y-3">
                                           <p className="text-[11px] font-bold text-black/20 uppercase tracking-widest px-1">参考答案</p>
-                                          <textarea value={q.answer} onChange={e => updatePreviewQuestion(idx, 'answer', e.target.value)} className="w-full bg-emerald-50/30 border border-emerald-100/50 rounded-2xl p-5 text-xs font-bold text-emerald-900 leading-relaxed min-h-[100px] focus:ring-1 focus:ring-emerald-100" placeholder="输入参考答案..." />
+                                          <textarea value={q.answer} onChange={e => updatePreviewQuestion(idx, 'answer', e.target.value)} className="w-full bg-emerald-50/30 border border-emerald-100/50 rounded-2xl p-5 text-xs font-bold text-emerald-900 leading-relaxed min-h-[100px] focus:ring-1 focus:ring-emerald-100 whitespace-pre-wrap break-words" placeholder="输入参考答案..." />
                                       </div>
                                   )}
 
