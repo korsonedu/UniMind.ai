@@ -78,6 +78,8 @@ const AI_TYPE_RATIO_PRESET_MAP: Record<string, Record<string, number>> = {
 
 export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[], onEdit: (q: any) => void, onDelete: (id: number) => void }) => {
   const DEFAULT_AI_TYPES: string[] = [];
+  // 防止一次请求量过大导致 AI 超时/失败
+  const MAX_AI_TOTAL = 10; // 单次最多生成的题目总数
   const [bankSearch, setBankSearch] = useState('');
   const [bankKP, setBankKP] = useState('0');
   const [bankType, setBankType] = useState('all');
@@ -170,6 +172,13 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
   const handleAIGenerate = async () => {
     if (selectedKPs.length === 0) return toast.error("请选择至少一个知识点");
     if (selectedTypes.length === 0) return toast.error("请选择至少一种题型");
+    const totalRequested = selectedKPs.length * genCount;
+    if (totalRequested > MAX_AI_TOTAL) {
+      return toast.error(`单次最多生成 ${MAX_AI_TOTAL} 题，请减少知识点数量或生成数量`);
+    }
+    if (totalRequested > MAX_AI_TOTAL - 2) {
+      toast.warning(`本次将生成 ${totalRequested} 题，可能稍慢，请耐心等待`);
+    }
     setIsGenerating(true);
     try {
       const res = await api.post('/quizzes/ai-smart-generate-preview/', { 
