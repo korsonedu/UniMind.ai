@@ -430,20 +430,20 @@ class AIService:
         text_len = len(text)
         answer_len = len(answer)
 
-        if text_len >= 80:
+        if text_len >= 120:
             complexity_score += 1
-        if text_len >= 160:
+        if text_len >= 240:
             complexity_score += 1
-        if answer_len >= 250:
+        if answer_len >= 400:
             complexity_score += 1
-        if answer_len >= 500:
+        if answer_len >= 800:
             complexity_score += 1
 
         if q_type == 'objective':
             complexity_score -= 1
             if isinstance(options, dict):
                 option_text_total = sum(len(str(v or '').strip()) for v in options.values())
-                if option_text_total >= 80:
+                if option_text_total >= 120:
                     complexity_score += 1
         elif subjective_type == 'noun':
             complexity_score -= 1
@@ -469,9 +469,9 @@ class AIService:
             complexity_score += 1
         if hard_hits >= 4:
             complexity_score += 1
-        if extreme_hits >= 1:
+        if extreme_hits >= 2:
             complexity_score += 1
-        if calc_hits >= 2:
+        if calc_hits >= 3:
             complexity_score += 1
 
         if complexity_score <= 0:
@@ -490,15 +490,24 @@ class AIService:
         questions: List[Dict[str, Any]],
         target_difficulty: str,
     ) -> List[Dict[str, Any]]:
+        # 允许通过环境变量直接跳过难度校验，避免前端出现“难度未通过”
+        if not getattr(settings, 'AI_DIFFICULTY_CHECK_ENABLED', True):
+            for q in questions:
+                q['difficulty_estimated_level'] = cls._estimate_difficulty_level(q)
+                q['difficulty_check_passed'] = True
+                q['difficulty_level'] = target_difficulty
+            return questions
+
         if target_difficulty == 'mixed':
             for q in questions:
                 estimated_level = cls._estimate_difficulty_level(q)
                 q['difficulty_estimated_level'] = estimated_level
                 q['difficulty_check_passed'] = True
+                q['difficulty_level'] = target_difficulty
             return questions
 
         target_rank = cls.DIFFICULTY_ORDER.get(target_difficulty, cls.DIFFICULTY_ORDER['normal'])
-        tolerance = 2  # 放宽容差，避免全量被判定为未通过
+        tolerance = 1  # 严控在 ±1 档内
         passed: List[Dict[str, Any]] = []
         for q in questions:
             estimated_level = cls._estimate_difficulty_level(q)
@@ -511,15 +520,8 @@ class AIService:
             if check_passed:
                 passed.append(q)
 
-        # 若全部不通过则回退保留原结果，避免前端收到空列表。
-        if passed:
-            return passed
-
-        # 全部未通过时，不再把所有题标红，改为保留原列表并标记为放宽通过
-        for q in questions:
-            q['difficulty_check_passed'] = True
-            q['difficulty_check_relaxed'] = True
-        return questions
+        # 若全部不通过则保留原列表并标记为未通过，方便前端提示
+        return passed if passed else questions
 
     @classmethod
     def _apply_type_ratio_filter(
