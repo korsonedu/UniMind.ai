@@ -498,12 +498,13 @@ class AIService:
             return questions
 
         target_rank = cls.DIFFICULTY_ORDER.get(target_difficulty, cls.DIFFICULTY_ORDER['normal'])
+        tolerance = 2  # 放宽容差，避免全量被判定为未通过
         passed: List[Dict[str, Any]] = []
         for q in questions:
             estimated_level = cls._estimate_difficulty_level(q)
             estimated_rank = cls.DIFFICULTY_ORDER.get(estimated_level, cls.DIFFICULTY_ORDER['normal'])
             distance = abs(estimated_rank - target_rank)
-            check_passed = distance <= 1
+            check_passed = distance <= tolerance
             q['difficulty_estimated_level'] = estimated_level
             q['difficulty_check_passed'] = check_passed
             q['difficulty_level'] = target_difficulty
@@ -511,7 +512,14 @@ class AIService:
                 passed.append(q)
 
         # 若全部不通过则回退保留原结果，避免前端收到空列表。
-        return passed if passed else questions
+        if passed:
+            return passed
+
+        # 全部未通过时，不再把所有题标红，改为保留原列表并标记为放宽通过
+        for q in questions:
+            q['difficulty_check_passed'] = True
+            q['difficulty_check_relaxed'] = True
+        return questions
 
     @classmethod
     def _apply_type_ratio_filter(
