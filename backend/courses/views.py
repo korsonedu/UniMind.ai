@@ -1,9 +1,196 @@
-from rest_framework import generics, permissions, status
+import json
+import os
+import shutil
+import uuid
+from pathlib import Path
+
+from django.conf import settings
+from django.core.files import File
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import generics, permissions
+
 from .models import Course, Album, StartupMaterial, VideoProgress
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.views import IsMember
+
+
+CHUNK_DIR = Path(settings.MEDIA_ROOT) / "chunk_uploads"
+MAX_CHUNK_SIZE_BYTES = 20 * 1024 * 1024  # 20MB per chunk
+
+
+def _upload_dir(upload_id: str) -> Path:
+    return CHUNK_DIR / upload_id
+
+
+def _meta_path(upload_id: str) -> Path:
+    return _upload_dir(upload_id) / "meta.json"
+
+
+def _chunk_path(upload_id: str, chunk_index: int) -> Path:
+    return _upload_dir(upload_id) / f"chunk_{chunk_index:08d}.part"
+
+
+def _load_meta(upload_id: str):
+    meta_file = _meta_path(upload_id)
+    if not meta_file.exists():
+        return None
+    with meta_file.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _safe_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+class ChunkedUploadInitView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request):
+        file_name = str(request.data.get("file_name", "")).strip()
+        total_size = _safe_int(request.data.get("total_size"), 0)
+        chunk_size = _safe_int(request.data.get("chunk_size"), 0)
+        total_chunks = _safe_int(request.data.get("total_chunks"), 0)
+        mime_type = str(request.data.get("mime_type", "")).strip()
+
+        if not file_name:
+            return Response({"error": "缺少文件名"}, status=400)
+        if total_size <= 0 or chunk_size <= 0 or total_chunks <= 0:
+            return Response({"error": "分片参数非法"}, status=400)
+        if chunk_size > MAX_CHUNK_SIZE_BYTES:
+            return Response({"error": f"单片过大，单片上限 {MAX_CHUNK_SIZE_BYTES // (1024 * 1024)}MB"}, status=400)
+
+        upload_id = uuid.uuid4().hex
+        upload_path = _upload_dir(upload_id)
+        upload_path.mkdir(parents=True, exist_ok=True)
+
+        meta = {
+            "upload_id": upload_id,
+            "file_name": file_name,
+            "total_size": total_size,
+            "chunk_size": chunk_size,
+            "total_chunks": total_chunks,
+            "mime_type": mime_type,
+            "uploaded_chunks": [],
+            "user_id": request.user.id,
+        }
+        with _meta_path(upload_id).open("w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False)
+
+        return Response(
+            {
+                "upload_id": upload_id,
+                "max_chunk_size": MAX_CHUNK_SIZE_BYTES,
+            }
+        )
+
+
+class ChunkedUploadChunkView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request, upload_id):
+        meta = _load_meta(upload_id)
+        if not meta:
+            return Response({"error": "上传会话不存在或已失效"}, status=404)
+        if meta.get("user_id") != request.user.id:
+            return Response({"error": "无权限访问该上传会话"}, status=403)
+
+        chunk_index = _safe_int(request.data.get("chunk_index"), -1)
+        chunk = request.FILES.get("chunk")
+
+        if chunk is None:
+            return Response({"error": "缺少分片文件"}, status=400)
+        if chunk_index < 0 or chunk_index >= _safe_int(meta.get("total_chunks"), 0):
+            return Response({"error": "分片索引非法"}, status=400)
+        if chunk.size > MAX_CHUNK_SIZE_BYTES:
+            return Response({"error": "分片超出大小限制"}, status=400)
+
+        chunk_file = _chunk_path(upload_id, chunk_index)
+        with chunk_file.open("wb") as f:
+            for part in chunk.chunks():
+                f.write(part)
+
+        uploaded_chunks = set(meta.get("uploaded_chunks", []))
+        uploaded_chunks.add(chunk_index)
+        meta["uploaded_chunks"] = sorted(uploaded_chunks)
+        with _meta_path(upload_id).open("w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False)
+
+        return Response(
+            {
+                "status": "ok",
+                "uploaded_count": len(meta["uploaded_chunks"]),
+                "total_chunks": meta["total_chunks"],
+            }
+        )
+
+
+class ChunkedUploadCompleteView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request, upload_id):
+        meta = _load_meta(upload_id)
+        if not meta:
+            return Response({"error": "上传会话不存在或已失效"}, status=404)
+        if meta.get("user_id") != request.user.id:
+            return Response({"error": "无权限访问该上传会话"}, status=403)
+
+        total_chunks = _safe_int(meta.get("total_chunks"), 0)
+        uploaded_chunks = set(meta.get("uploaded_chunks", []))
+        missing = [i for i in range(total_chunks) if i not in uploaded_chunks]
+        if missing:
+            return Response({"error": f"仍有分片缺失，缺失数：{len(missing)}"}, status=400)
+
+        title = str(request.data.get("title", "")).strip()
+        if not title:
+            return Response({"error": "课程标题必填"}, status=400)
+
+        description = request.data.get("description", "")
+        elo_reward = _safe_int(request.data.get("elo_reward"), 50)
+        album_obj_id = request.data.get("album_obj")
+        knowledge_point_id = request.data.get("knowledge_point")
+        cover_image = request.FILES.get("cover_image")
+        courseware = request.FILES.get("courseware")
+
+        upload_path = _upload_dir(upload_id)
+        merged_path = upload_path / "merged_video.bin"
+
+        try:
+            with merged_path.open("wb") as merged:
+                for chunk_index in range(total_chunks):
+                    chunk_file = _chunk_path(upload_id, chunk_index)
+                    with chunk_file.open("rb") as cf:
+                        shutil.copyfileobj(cf, merged, length=1024 * 1024)
+
+            original_name = os.path.basename(meta.get("file_name") or "video.mp4")
+            course = Course(
+                title=title,
+                description=description,
+                elo_reward=elo_reward,
+                author=request.user,
+            )
+            if str(album_obj_id or "").strip() and str(album_obj_id) != "0":
+                course.album_obj_id = _safe_int(album_obj_id, None)
+            if str(knowledge_point_id or "").strip() and str(knowledge_point_id) != "0":
+                course.knowledge_point_id = _safe_int(knowledge_point_id, None)
+            if cover_image:
+                course.cover_image = cover_image
+            if courseware:
+                course.courseware = courseware
+
+            with merged_path.open("rb") as merged_file:
+                course.video_file.save(original_name, File(merged_file), save=False)
+            course.save()
+        except Exception as exc:
+            return Response({"error": f"合并失败：{exc}"}, status=500)
+        finally:
+            shutil.rmtree(upload_path, ignore_errors=True)
+
+        return Response(CourseSerializer(course).data, status=201)
+
 
 class VideoProgressUpdateView(APIView):
     permission_classes = [IsMember]

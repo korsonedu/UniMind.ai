@@ -27,6 +27,8 @@ import { MembershipPanel } from './maintenance/MembershipPanel';
 import { AuditPanel } from './maintenance/AuditPanel';
 
 export const Maintenance: React.FC = () => {
+  const CHUNKED_UPLOAD_THRESHOLD_BYTES = 100 * 1024 * 1024;
+  const CHUNK_SIZE_BYTES = 10 * 1024 * 1024;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -108,15 +110,77 @@ export const Maintenance: React.FC = () => {
 
   const handleCreateCourse = async () => {
     if (!courseForm.title || !courseForm.video) return toast.error("核心信息不全");
-    setIsSubmitting(true); setUploadProgress(10);
-    const fd = new FormData();
-    fd.append('title', courseForm.title); fd.append('description', courseForm.desc); fd.append('elo_reward', courseForm.elo_reward.toString());
-    if (courseForm.album_obj !== '0') fd.append('album_obj', courseForm.album_obj);
-    if (courseForm.knowledge_point !== '0') fd.append('knowledge_point', courseForm.knowledge_point);
-    fd.append('video_file', courseForm.video); if (courseForm.cover) fd.append('cover_image', courseForm.cover);
-    if (courseForm.courseware) fd.append('courseware', courseForm.courseware);
-    try { await api.post('/courses/', fd, { onUploadProgress: p => p.total && setUploadProgress(Math.round((p.loaded / p.total) * 100)) }); toast.success("课程已发布"); fetchLists(); }
-    catch (e) { toast.error("发布失败"); } finally { setIsSubmitting(false); setUploadProgress(0); }
+    setIsSubmitting(true); setUploadProgress(2);
+    const file = courseForm.video;
+
+    try {
+      if (file.size <= CHUNKED_UPLOAD_THRESHOLD_BYTES) {
+        const fd = new FormData();
+        fd.append('title', courseForm.title);
+        fd.append('description', courseForm.desc);
+        fd.append('elo_reward', courseForm.elo_reward.toString());
+        if (courseForm.album_obj !== '0') fd.append('album_obj', courseForm.album_obj);
+        if (courseForm.knowledge_point !== '0') fd.append('knowledge_point', courseForm.knowledge_point);
+        fd.append('video_file', file);
+        if (courseForm.cover) fd.append('cover_image', courseForm.cover);
+        if (courseForm.courseware) fd.append('courseware', courseForm.courseware);
+        await api.post('/courses/', fd, {
+          onUploadProgress: p => p.total && setUploadProgress(Math.round((p.loaded / p.total) * 100)),
+        });
+      } else {
+        const totalChunks = Math.ceil(file.size / CHUNK_SIZE_BYTES);
+        const initRes = await api.post('/courses/chunked/init/', {
+          file_name: file.name,
+          total_size: file.size,
+          chunk_size: CHUNK_SIZE_BYTES,
+          total_chunks: totalChunks,
+          mime_type: file.type || 'application/octet-stream',
+        });
+        const uploadId = initRes.data?.upload_id;
+        if (!uploadId) throw new Error('missing upload id');
+
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_SIZE_BYTES;
+          const end = Math.min(start + CHUNK_SIZE_BYTES, file.size);
+          const chunkBlob = file.slice(start, end);
+          const chunkFd = new FormData();
+          chunkFd.append('chunk_index', i.toString());
+          chunkFd.append('chunk', chunkBlob, `${file.name}.part${i}`);
+          await api.post(`/courses/chunked/${uploadId}/chunk/`, chunkFd);
+          setUploadProgress(Math.floor(((i + 1) / totalChunks) * 95));
+        }
+
+        const completeFd = new FormData();
+        completeFd.append('title', courseForm.title);
+        completeFd.append('description', courseForm.desc);
+        completeFd.append('elo_reward', courseForm.elo_reward.toString());
+        if (courseForm.album_obj !== '0') completeFd.append('album_obj', courseForm.album_obj);
+        if (courseForm.knowledge_point !== '0') completeFd.append('knowledge_point', courseForm.knowledge_point);
+        if (courseForm.cover) completeFd.append('cover_image', courseForm.cover);
+        if (courseForm.courseware) completeFd.append('courseware', courseForm.courseware);
+        await api.post(`/courses/chunked/${uploadId}/complete/`, completeFd);
+        setUploadProgress(100);
+      }
+
+      toast.success("课程已发布");
+      fetchLists();
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const detail = e?.response?.data?.detail || e?.response?.data?.error || e?.response?.data?.message;
+      if (status === 403) toast.error("当前账号无管理员权限，无法发布课程");
+      else if (typeof detail === 'string' && detail.trim()) toast.error(detail);
+      else toast.error("发布失败");
+    } finally {
+      setIsSubmitting(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return setCourseForm({ ...courseForm, video: null });
+    if (file.size > CHUNKED_UPLOAD_THRESHOLD_BYTES) toast.message("大文件将自动启用分片上传");
+    setCourseForm({ ...courseForm, video: file });
   };
 
   const handleCreateQuiz = async () => {
@@ -284,7 +348,7 @@ export const Maintenance: React.FC = () => {
             <Card className="lg:col-span-4 p-8 bg-white rounded-3xl border-none shadow-sm space-y-6">
               <div className="space-y-3"><Label className="text-[11px] font-bold uppercase opacity-40">奖励设定</Label><div className="flex items-center gap-3"><Input type="number" value={courseForm.elo_reward} onChange={e => setCourseForm({ ...courseForm, elo_reward: parseInt(e.target.value) || 0 })} className="bg-[#F5F5F7] border-none h-10 rounded-xl font-bold w-20 text-center" /><span className="text-[11px] font-bold opacity-40 uppercase">ELO Reward</span></div></div>
               <div className="space-y-4"><Label className="text-[11px] font-bold uppercase opacity-40">媒体附件</Label>
-                <div className="relative"><Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 px-4 font-bold text-[11px]"><span>{courseForm.video ? "视频已就绪" : "上传视频"}</span><Video className="w-4 h-4 opacity-20" /></Button><input type="file" onChange={e => setCourseForm({ ...courseForm, video: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept="video/*" /></div>
+                <div className="relative"><Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 px-4 font-bold text-[11px]"><span>{courseForm.video ? "视频已就绪" : "上传视频"}</span><Video className="w-4 h-4 opacity-20" /></Button><input type="file" onChange={handleVideoFileChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="video/*" /></div>
                 <div className="relative"><Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 px-4 font-bold text-[11px]"><span>{courseForm.cover ? "封面已就绪" : "上传封面"}</span><ImageIcon className="w-4 h-4 opacity-20" /></Button><input type="file" onChange={e => setCourseForm({ ...courseForm, cover: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" /></div>
                 <div className="relative"><Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 px-4 font-bold text-[11px]"><span>{courseForm.courseware ? "PDF已就绪" : "上传课件"}</span><FileUp className="w-4 h-4 opacity-20" /></Button><input type="file" onChange={e => setCourseForm({ ...courseForm, courseware: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" /></div>
               </div>
