@@ -51,11 +51,15 @@ class SystemConfigSerializer(serializers.ModelSerializer):
         fields = ("school_name", "school_short_name", "school_description", "school_logo", "invite_code")
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
+    username = serializers.CharField(required=False)
+    email = serializers.EmailField(required=True)
+    code = serializers.CharField(required=True, write_only=True)
+    nickname = serializers.CharField(required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, required=True)
 
     class Meta:
         model = User
-        fields = ("username", "password")
+        fields = ("username", "email", "code", "nickname", "password")
 
     def create(self, validated_data):
         # 如果是第一个用户，设为管理员且具有后台权限
