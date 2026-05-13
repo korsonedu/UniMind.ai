@@ -1,34 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   ChevronLeft, Play, Calendar, BookOpen,
   Share2, Star, FileText, Download,
-  ListVideo, Layers
+  ListVideo, Layers, Sparkles, Clock,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useCourseAIStore } from '@/store/useCourseAIStore';
+import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { toast } from 'sonner';
 
 export const VideoLesson: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { updateUser } = useAuthStore();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [course, setCourse] = useState<any>(null);
   const [relatedCourses, setRelatedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasAwarded, setHasAwarded] = useState(false);
+  const { transcriptStatus, transcriptSegments, fullText, fetchTranscript, triggerTranscription } = useCourseAIStore();
+
+  const courseId = Number(id);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setHasAwarded(false);
-        const res = await api.get(`/courses/${id}/`);
+        const res = await api.get(`/courses/${courseId}/`);
         setCourse(res.data);
-        
-        // Fetch same-album courses
+
         if (res.data.album) {
           const allRes = await api.get('/courses/');
           setRelatedCourses(allRes.data.filter((c: any) => c.album === res.data.album && c.id !== res.data.id));
@@ -37,20 +42,28 @@ export const VideoLesson: React.FC = () => {
       finally { setLoading(false); }
     };
     fetchData();
-  }, [id]);
+  }, [courseId]);
+
+  useEffect(() => {
+    fetchTranscript(courseId);
+  }, [courseId, fetchTranscript]);
+
+  const handleSeek = (seconds: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = seconds;
+      videoRef.current.play().catch(() => {});
+    }
+  };
 
   const handleVideoEnd = async () => {
     if (hasAwarded) return;
-    
-    // Report finished status and get reward in one go
     try {
-      const res = await api.post(`/courses/${id}/progress/`, { is_finished: true });
+      const res = await api.post(`/courses/${courseId}/progress/`, { is_finished: true });
       if (res.data.elo_added > 0) {
         setHasAwarded(true);
         toast.success(`观看完成！奖励 ${res.data.elo_added} ELO`, {
           description: `当前积分: ${res.data.new_score}`
         });
-        // 更新全局用户信息以反映分数变化
         const me = await api.get('/users/me/');
         updateUser(me.data);
       }
@@ -61,33 +74,31 @@ export const VideoLesson: React.FC = () => {
 
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget;
-    // 每 10 秒上报一次进度
     if (Math.floor(video.currentTime) % 10 === 0) {
-      api.post(`/courses/${id}/progress/`, { position: video.currentTime }).catch(() => {});
+      api.post(`/courses/${courseId}/progress/`, { position: video.currentTime }).catch(() => {});
     }
   };
 
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center gap-4 text-center bg-background">
       <div className="h-10 w-10 border-4 border-border border-t-primary rounded-full animate-spin" />
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Preparing Theater...</p>
+      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">加载课程...</p>
     </div>
   );
-  
-  if (!course) return <div className="h-screen flex items-center justify-center font-bold">Resource Not Found</div>;
+
+  if (!course) return <div className="h-screen flex items-center justify-center font-bold">课程未找到</div>;
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 text-left p-6">
       <header className="flex items-center justify-between border-b border-border pb-6">
         <div className="flex items-center gap-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl hover:bg-muted shadow-sm border border-border h-12 w-12"><ChevronLeft className="h-6 w-6"/></Button>
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl hover:bg-muted shadow-sm border border-border h-12 w-12">
+            <ChevronLeft className="h-6 w-6"/>
+          </Button>
           <div>
-            <div className="flex items-center gap-2 mb-1">
-               <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-md uppercase tracking-tighter">Academic Theater</span>
-               <h2 className="text-3xl font-bold tracking-tight text-foreground">{course.title}</h2>
-            </div>
-            <div className="flex items-center gap-4 opacity-40 font-bold text-[10px] uppercase tracking-widest leading-none">
-               {course.album && <span className="flex items-center gap-1.5 text-foreground"><Layers className="w-3 h-3"/> Album: {course.album}</span>}
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">{course.title}</h2>
+            <div className="flex items-center gap-4 opacity-40 font-bold text-[10px] uppercase tracking-widest leading-none mt-1">
+               {course.album && <span className="flex items-center gap-1.5 text-foreground"><Layers className="w-3 h-3"/> {course.album}</span>}
                <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(course.created_at).toLocaleDateString('zh-CN')}</span>
             </div>
           </div>
@@ -99,28 +110,99 @@ export const VideoLesson: React.FC = () => {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Left Side: Player & Info */}
+        {/* Left: Video + AI Tools */}
         <div className="lg:col-span-9 space-y-8">
            <div className="bg-black overflow-hidden relative aspect-video flex items-center justify-center rounded-[2rem] shadow-2xl">
              {course.video_file ? (
-               <video 
-                 onEnded={handleVideoEnd} 
+               <video
+                 ref={videoRef}
+                 onEnded={handleVideoEnd}
                  onTimeUpdate={handleTimeUpdate}
-                 src={course.video_file} 
-                 controls 
-                 className="w-full h-full" 
-                 preload="metadata" 
-                 poster={course.cover_image || undefined} 
+                 src={course.video_file}
+                 controls
+                 className="w-full h-full"
+                 preload="metadata"
+                 poster={course.cover_image || undefined}
                />
              ) : (
-               <div className="flex flex-col items-center gap-4 opacity-20"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">No Stream Available</p></div>
+               <div className="flex flex-col items-center gap-4 opacity-20"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">暂无视频</p></div>
              )}
            </div>
 
+          {/* AI 智能大纲 + 逐字稿 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4 text-indigo-500" />
+                <h3 className="text-sm font-bold text-foreground">AI 智能大纲</h3>
+              </div>
+              <OutlinePanel courseId={courseId} videoRef={videoRef} />
+              {course.ai_outline_enabled && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3 text-xs"
+                  onClick={() => fetchTranscript(courseId)}
+                >
+                  刷新大纲
+                </Button>
+              )}
+            </Card>
+
+            <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="h-4 w-4 text-emerald-500" />
+                <h3 className="text-sm font-bold text-foreground">
+                  课程逐字稿
+                  {transcriptStatus === 'loading' && <span className="ml-2 text-[10px] text-muted-foreground">加载中...</span>}
+                </h3>
+                {transcriptStatus === 'unavailable' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto text-[10px] h-7 rounded-lg"
+                    onClick={() => triggerTranscription(courseId)}
+                  >
+                    生成逐字稿
+                  </Button>
+                )}
+              </div>
+              {transcriptStatus === 'available' && transcriptSegments.length > 0 ? (
+                <ScrollArea className="h-[300px] pr-2">
+                  <div className="space-y-1">
+                    {transcriptSegments.map((seg, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSeek(seg.start)}
+                        className="w-full text-left p-2 rounded-lg hover:bg-muted/50 transition-colors group"
+                      >
+                        <span className="text-[10px] font-bold text-emerald-600 tabular-nums mr-2">
+                          {Math.floor(seg.start / 60)}:{(Math.floor(seg.start) % 60).toString().padStart(2, '0')}
+                        </span>
+                        <span className="text-xs text-muted-foreground group-hover:text-foreground leading-relaxed">
+                          {seg.text}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              ) : transcriptStatus === 'available' && fullText ? (
+                <ScrollArea className="h-[300px] pr-2">
+                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{fullText}</p>
+                </ScrollArea>
+              ) : (
+                <p className="text-xs text-muted-foreground py-4">
+                  {transcriptStatus === 'loading' ? '正在加载逐字稿...' : '尚未生成逐字稿，点击上方按钮开始'}
+                </p>
+              )}
+            </Card>
+          </div>
+
+          {/* Course info + downloads */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
              <div className="md:col-span-2 space-y-8">
                 <section className="space-y-6">
-                   <div className="flex items-center gap-3 border-b border-border pb-4"><BookOpen className="h-5 w-5 text-emerald-600"/><h3 className="text-xl font-bold text-foreground">课程大纲与简介</h3></div>
+                   <div className="flex items-center gap-3 border-b border-border pb-4"><BookOpen className="h-5 w-5 text-emerald-600"/><h3 className="text-xl font-bold text-foreground">课程简介</h3></div>
                    <p className="text-muted-foreground text-base font-medium leading-relaxed whitespace-pre-wrap">{course.description}</p>
                 </section>
 
@@ -129,13 +211,13 @@ export const VideoLesson: React.FC = () => {
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {course.courseware && (
                         <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
-                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><FileText className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">教学课件 (Lecture)</p><p className="text-[9px] font-bold opacity-30 uppercase">Academic PDF</p></div></div>
+                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><FileText className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">教学课件</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
                            <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.courseware} download><Download className="w-4 h-4"/></a></Button>
                         </div>
                       )}
                       {course.reference_materials && (
                         <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
-                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><BookOpen className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">参考文献 (Ref)</p><p className="text-[9px] font-bold opacity-30 uppercase">Resource PDF</p></div></div>
+                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><BookOpen className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">参考文献</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
                            <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.reference_materials} download><Download className="w-4 h-4"/></a></Button>
                         </div>
                       )}
@@ -143,9 +225,9 @@ export const VideoLesson: React.FC = () => {
                 </section>
              </div>
              <div className="space-y-6">
-                <Card className="border-none shadow-sm rounded-3xl bg-card p-8 border border-border space-y-6 text-left">
+                <Card className="border-none shadow-sm rounded-3xl bg-card p-8 space-y-6 text-left">
                    <div className="space-y-1"><h4 className="text-xs font-bold uppercase tracking-widest text-foreground">学习奖励</h4><p className="text-2xl font-bold text-green-700">+{course.elo_reward} ELO</p></div>
-                   <p className="text-xs font-medium text-muted-foreground leading-relaxed">完整观看教学内容后，系统将自动结算并同步至您的学术分位。</p>
+                   <p className="text-xs font-medium text-muted-foreground leading-relaxed">完整观看后自动结算并同步至您的学术分位。</p>
                 </Card>
              </div>
           </div>
@@ -153,7 +235,7 @@ export const VideoLesson: React.FC = () => {
 
         {/* Right Side: Album & Related */}
         <div className="lg:col-span-3 space-y-6">
-           <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">同辑系列 / Album</h4><ListVideo className="w-4 h-4 opacity-40"/></div>
+           <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">同专辑系列</h4><ListVideo className="w-4 h-4 opacity-40"/></div>
            <ScrollArea className="h-[750px] pr-4">
               <div className="space-y-3">
                  {relatedCourses.map((c, i) => (
@@ -163,13 +245,13 @@ export const VideoLesson: React.FC = () => {
                            {c.cover_image && <img src={c.cover_image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
                         </div>
                         <div className="space-y-1">
-                           <span className="text-[9px] font-bold opacity-30 uppercase">Track 0{i+1}</span>
+                           <span className="text-[9px] font-bold opacity-30 uppercase">第 {i+1} 课</span>
                            <p className="text-xs font-bold leading-relaxed text-foreground line-clamp-2">{c.title}</p>
                         </div>
                      </div>
                    </Link>
                  ))}
-                 {relatedCourses.length === 0 && <div className="py-20 text-center text-muted-foreground italic text-[10px] font-bold uppercase">No other courses in this album</div>}
+                 {relatedCourses.length === 0 && <div className="py-20 text-center text-muted-foreground italic text-[10px] font-bold uppercase">暂未收录其他课程</div>}
               </div>
            </ScrollArea>
         </div>

@@ -193,6 +193,13 @@ export const MainLayout: React.FC = () => {
   ];
 
   if (user?.role === 'admin') navItems.push({ to: '/management', icon: ShieldCheck, label: '维护中心', restricted: false });
+  if (user?.institution) navItems.push(
+    { to: '/institution', icon: ShieldCheck, label: '机构看板', restricted: false },
+    { to: '/institution/students', icon: UserIcon, label: '学员管理', restricted: false },
+  );
+  if (user?.institution_role === 'admin') navItems.push(
+    { to: '/institution/admin', icon: Settings2, label: '机构设置', restricted: false },
+  );
 
   return (
     <TooltipProvider delayDuration={0}>

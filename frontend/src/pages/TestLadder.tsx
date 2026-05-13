@@ -513,7 +513,7 @@ export const TestLadder: React.FC = () => {
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
                 <p className="label-meta">Memorix 拟合曲线</p>
-                <p className="text-sm font-bold text-foreground mt-1">预测召回率 vs 实际召回率（近 {fsrsCurve?.window_days || 90} 天）</p>
+                <p className="text-sm font-bold text-foreground mt-1">记忆预测 vs 实际掌握（近 {fsrsCurve?.window_days || 90} 天）</p>
               </div>
               <Button variant="outline" className="h-8 rounded-lg text-xs font-bold" onClick={() => { fetchFsrsCurve(); fetchFsrsHistory(); }}>
                 刷新
@@ -527,19 +527,19 @@ export const TestLadder: React.FC = () => {
                     <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.review_count ?? 0}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">RMSE</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">预测准确度</p>
                     <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.rmse ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">MAE</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">平均误差</p>
                     <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.mae ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">平均预测</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">预测掌握度</p>
                     <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.avg_predicted ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">平均实际</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">实际掌握度</p>
                     <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.avg_actual ?? '--'}</p>
                   </div>
                 </div>

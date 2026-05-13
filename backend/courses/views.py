@@ -293,9 +293,75 @@ class AwardEloView(APIView):
             user.elo_score += course.elo_reward
             user.save()
             return Response({
-                'status': 'success', 
-                'elo_added': course.elo_reward, 
+                'status': 'success',
+                'elo_added': course.elo_reward,
                 'new_score': user.elo_score
             })
         except Course.DoesNotExist:
             return Response({'error': '课程不存在'}, status=404)
+
+
+class CourseOutlineView(APIView):
+    permission_classes = [IsMember]
+
+    def get(self, request, pk):
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({'error': '课程不存在'}, status=404)
+
+        try:
+            outline = course.outline
+        except Exception:
+            return Response({'status': 'not_available', 'items': []})
+
+        items = list(outline.items.values('title', 'timestamp', 'description', 'index').order_by('index'))
+        return Response({
+            'status': outline.status,
+            'items': items,
+        })
+
+    def post(self, request, pk):
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({'error': '课程不存在'}, status=404)
+
+        from .models import CourseOutline
+        outline, _ = CourseOutline.objects.get_or_create(course=course)
+        if outline.status not in ('completed', 'generating'):
+            from .services.task_dispatcher import dispatch_outline_generation
+            dispatch_outline_generation(course.id)
+        return Response({'status': 'processing'})
+
+
+class CourseTranscriptView(APIView):
+    permission_classes = [IsMember]
+
+    def get(self, request, pk):
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({'error': '课程不存在'}, status=404)
+
+        try:
+            transcript = course.transcript
+        except Exception:
+            return Response({'status': 'not_available', 'segments': [], 'full_text': ''})
+
+        segments = list(transcript.segments.values('start_time', 'end_time', 'text', 'index').order_by('index'))
+        return Response({
+            'status': transcript.asr_status,
+            'segments': segments,
+            'full_text': transcript.full_text,
+        })
+
+    def post(self, request, pk):
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({'error': '课程不存在'}, status=404)
+
+        from .services.task_dispatcher import dispatch_transcription
+        dispatch_transcription(course.id)
+        return Response({'status': 'processing'})

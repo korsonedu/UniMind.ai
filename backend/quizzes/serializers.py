@@ -72,6 +72,10 @@ class QuizExamSerializer(serializers.ModelSerializer):
 
 
 class ContentPipelineTaskSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    task_type_display = serializers.CharField(source='get_task_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
     class Meta:
         model = ContentPipelineTask
         fields = '__all__'

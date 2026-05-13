@@ -16,6 +16,14 @@ import { KnowledgeMap } from './pages/KnowledgeMap';
 import { KnowledgeNodeDetail } from './pages/KnowledgeNodeDetail';
 import { QASystem } from './pages/QASystem';
 import { TestSessionPage } from './pages/TestSessionPage';
+import { InstitutionDashboard } from './pages/InstitutionDashboard';
+import { InstitutionStudents } from './pages/InstitutionStudents';
+import { InstitutionAdmin } from './pages/InstitutionAdmin';
+import { InstitutionHome } from './pages/InstitutionHome';
+import { InviteCodeAdmin } from './pages/InviteCodeAdmin';
+import { Interviews } from './pages/Interviews';
+import { PdfMockExam } from './pages/PdfMockExam';
+import { WrongQuestionReviewPage } from './pages/WrongQuestionReviewPage';
 import { useAuthStore } from './store/useAuthStore';
 import { useSystemStore } from './store/useSystemStore';
 import { Loader2 } from 'lucide-react';
@@ -117,7 +125,6 @@ const router = createBrowserRouter([
     element: <RootRedirect />,
     children: [
       { index: true, element: <RequireAuth><CourseCenter /></RequireAuth> },
-      { path: "intro", element: <Landing /> },
       { path: "course-details", element: <CourseDetails /> },
       { path: "startup-materials", element: <StartupMaterials /> },
       { path: "articles", element: <RequireAuth><ArticleCenter /></RequireAuth> },
@@ -133,6 +140,14 @@ const router = createBrowserRouter([
       { path: "system-settings", element: <RequireAuth><RequireAdmin><SystemSettings /></RequireAdmin></RequireAuth> },
       { path: "management", element: <RequireAuth><RequireAdmin><Maintenance /></RequireAdmin></RequireAuth> },
       { path: "course/:id", element: <RequireAuth><VideoLesson /></RequireAuth> },
+      { path: "tests/review", element: <RequireAuth><WrongQuestionReviewPage /></RequireAuth> },
+      { path: "mock-exam", element: <RequireAuth><PdfMockExam /></RequireAuth> },
+      { path: "interviews", element: <RequireAuth><Interviews /></RequireAuth> },
+      { path: "institution", element: <RequireAuth><InstitutionDashboard /></RequireAuth> },
+      { path: "institution/students", element: <RequireAuth><InstitutionStudents /></RequireAuth> },
+      { path: "institution/admin", element: <RequireAuth><InstitutionAdmin /></RequireAuth> },
+      { path: "invite-codes", element: <RequireAuth><RequireAdmin><InviteCodeAdmin /></RequireAdmin></RequireAuth> },
+      { path: "intro", element: <InstitutionHome /> },
     ],
   },
   { path: "/login", element: <Login /> },
