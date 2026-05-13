@@ -13,6 +13,7 @@ interface User {
   allow_broadcast: boolean;
   show_others_broadcast: boolean;
   is_member: boolean;
+  membership_tier?: string;
   has_completed_initial_assessment: boolean;
   elo_reset_count: number;
   current_task?: string;
