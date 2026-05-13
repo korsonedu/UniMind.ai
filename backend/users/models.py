@@ -203,29 +203,26 @@ MAX_DURATION_DAYS = 365
 
 PLAN_FEATURES: dict[str, list[str]] = {
     'free': [
-        'AI 出题 20 次/月', 'FSRS 4.5 遗忘算法', '题库管理·手动组卷',
-        '错题复盘中心', '基础学情统计', '30 名学员上限',
-        '1 名教师·1 个学科',
+        'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
+        'ai.generate', 'faq.system',
     ],
     'solo': [
-        'AI 出题 50 次/月', 'Memorix 自适应复习', '题库管理·手动组卷',
-        '错题复盘中心', '个人完整学情报告', '50 名学员上限',
-        '1 名教师·3 个学科',
+        'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
+        'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
+        'ai.assistant',
     ],
     'plus': [
-        'AI 出题无限制', 'Memorix 自适应复习', '题库管理·手动+自动组卷',
-        '错题复盘中心', '班级对比报表·数据导出', '200 名学员上限',
-        '5 名教师·不限学科', '课程视频+AI 大纲打点', '交互式知识图谱',
-        '在线答疑系统', '多教师协作·权限管理', '实时学习房间·番茄钟',
-        'AI 助教·多 Bot 对话', 'PDF 个性化模考',
+        'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
+        'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
+        'ai.assistant', 'course.video', 'video.outline', 'faq.system',
+        'pdf.mock', 'study.room', 'multi.teacher', 'class.compare', 'data.export',
     ],
     'pro': [
-        'AI 出题无限制', 'Memorix 自适应复习', '题库管理·手动+自动组卷',
-        '错题复盘中心', '高级学情看板·AI 建议', '学员数不限',
-        '教师·学科均不限', '课程视频+AI 大纲打点', '交互式知识图谱',
-        '在线答疑系统', '多教师协作·权限管理', '实时学习房间·番茄钟',
-        'AI 助教·多 Bot 对话', 'PDF 个性化模考', '品牌定制·本地白标部署',
-        '数据私有化', 'REST API 对接', '专属客户经理',
+        'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
+        'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
+        'ai.assistant', 'course.video', 'video.outline', 'faq.system',
+        'pdf.mock', 'study.room', 'multi.teacher', 'class.compare', 'data.export',
+        'brand.custom', 'api.access',
     ],
 }
 

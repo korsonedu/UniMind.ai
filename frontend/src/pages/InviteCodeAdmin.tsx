@@ -111,7 +111,6 @@ export default function InviteCodeAdmin() {
             <Input type="number" min={0} max={3650} value={durationDays}
               onChange={e => setDurationDays(parseInt(e.target.value, 10) || 0)}
               className="h-10 w-22 rounded-xl text-sm" />
-            <p className="text-[9px] text-[#C7C7CC]">0=永久</p>
           </div>
           <div className="space-y-1">
             <p className="text-[10px] font-bold text-[#AEAEB2] uppercase">数量</p>
@@ -127,7 +126,7 @@ export default function InviteCodeAdmin() {
           </div>
           <div className="space-y-1 flex-1 min-w-[120px]">
             <p className="text-[10px] font-bold text-[#AEAEB2] uppercase">备注</p>
-            <Input placeholder="给谁用的" value={note}
+            <Input placeholder="" value={note}
               onChange={e => setNote(e.target.value)}
               className="h-10 rounded-xl text-sm" />
           </div>

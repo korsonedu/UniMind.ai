@@ -673,7 +673,7 @@ class PlanInviteCodeGenerateView(APIView):
             'plan': plan,
             'plan_label': dict(Institution.PLAN_CHOICES).get(plan, plan),
             'duration_days': duration_days,
-            'codes': [c.code for c in codes],
+            'codes': codes,
         }, status=status.HTTP_201_CREATED)
 
 
