@@ -25,6 +25,8 @@ import { QuestionBankPanel } from './maintenance/QuestionBankPanel';
 import { InsightsPanel } from './maintenance/InsightsPanel';
 import { MembershipPanel } from './maintenance/MembershipPanel';
 import { AuditPanel } from './maintenance/AuditPanel';
+import { PipelinePanel } from './maintenance/PipelinePanel';
+import { PromptTemplatesPanel } from './maintenance/PromptTemplatesPanel';
 
 export const Maintenance: React.FC = () => {
   const CHUNKED_UPLOAD_THRESHOLD_BYTES = 100 * 1024 * 1024;

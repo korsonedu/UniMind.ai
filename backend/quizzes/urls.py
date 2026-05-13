@@ -26,6 +26,7 @@ from .views_knowledge import (
 from .views_ai import (
     GenerateFromTextView, AIPreviewParseView,
     AIPreviewGenerateView, AIConfirmSaveQuestionsView,
+    AdversarialPipelineView, PipelineReviewListView, PipelineReviewActionView,
 )
 from .views_admin import (
     AdminContentPipelineTaskListCreateView, AdminContentPipelineMetricsView,
@@ -74,6 +75,9 @@ urlpatterns = [
     path('admin/pipeline-metrics/', AdminContentPipelineMetricsView.as_view(), name='admin-pipeline-metrics'),
     path('admin/pipeline-tasks/<int:pk>/', AdminContentPipelineTaskDetailView.as_view(), name='admin-pipeline-task-detail'),
     path('admin/pipeline-tasks/<int:pk>/retry/', AdminContentPipelineTaskRetryView.as_view(), name='admin-pipeline-task-retry'),
+    path('admin/pipeline-review/', PipelineReviewListView.as_view(), name='admin-pipeline-review-list'),
+    path('admin/pipeline-review/<int:pk>/', PipelineReviewActionView.as_view(), name='admin-pipeline-review-action'),
+    path('admin/adversarial-pipeline/', AdversarialPipelineView.as_view(), name='admin-adversarial-pipeline'),
     path('admin/prompt-templates/', AdminPromptTemplateListView.as_view(), name='admin-prompt-template-list'),
     path('admin/prompt-templates/detail/', AdminPromptTemplateDetailView.as_view(), name='admin-prompt-template-detail'),
     path('admin/prompt-templates/rollback/', AdminPromptTemplateRollbackView.as_view(), name='admin-prompt-template-rollback'),
