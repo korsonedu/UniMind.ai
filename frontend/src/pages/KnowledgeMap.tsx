@@ -4,7 +4,7 @@ import { PageWrapper } from '@/components/PageWrapper';
 import {
   Target, Maximize2, ZoomIn, ZoomOut, GitMerge,
   ChevronRight, ChevronDown, BookOpen, FileText, Video,
-  Search, X, Layers,
+  Search, X, Layers, List,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
@@ -651,6 +651,8 @@ export const KnowledgeMap: React.FC = () => {
   const [treeSearch, setTreeSearch] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph');
+  const [graphRootId, setGraphRootId] = useState<string>('all');
 
   useEffect(() => {
     fetchMap();
@@ -693,11 +695,40 @@ export const KnowledgeMap: React.FC = () => {
     }
   };
 
+  /** Find the ancestor at `targetLevel` for a given node. */
+  const findAncestorAtLevel = useCallback(
+    (node: KPNode, targetLevel: string): KPNode | null => {
+      const nodeMap = new Map(allNodes.map(n => [n.id, n]));
+      let cur: KPNode | undefined = node;
+      while (cur) {
+        if (cur.level === targetLevel) return cur;
+        cur = cur.parent ? nodeMap.get(cur.parent) : undefined;
+      }
+      return null;
+    },
+    [allNodes],
+  );
+
   const handleNodeSelect = useCallback(async (node: KPNode) => {
     if (isMobile) {
       navigate(`/knowledge-map/node/${node.id}`);
       return;
     }
+
+    // Auto-focus graph on the chapter (篇) containing this node
+    if (node.level === 'kp') {
+      const ch = findAncestorAtLevel(node, 'ch');
+      if (ch) setGraphRootId(ch.id.toString());
+      else {
+        const sub = findAncestorAtLevel(node, 'sub');
+        if (sub) setGraphRootId(sub.id.toString());
+      }
+    } else if (node.level === 'ch') {
+      setGraphRootId(node.id.toString());
+    } else if (node.level === 'sub') {
+      setGraphRootId(node.id.toString());
+    }
+
     setSelectedNode(node);
     setDetailsLoading(true);
     try {
@@ -715,12 +746,39 @@ export const KnowledgeMap: React.FC = () => {
     } finally {
       setDetailsLoading(false);
     }
-  }, [isMobile, navigate]);
+  }, [isMobile, navigate, findAncestorAtLevel]);
 
   const handleClearSelection = useCallback(() => {
     setSelectedNode(null);
     setNodeDetails({ courses: [], articles: [], questions: [] });
   }, []);
+
+  // Branch filter: subjects for the toolbar dropdown
+  const rootOptions = useMemo(() => allNodes.filter(n => n.level === 'sub'), [allNodes]);
+
+  // Filter graph nodes by selected branch
+  const displayNodes = useMemo(() => {
+    if (graphRootId === 'all') return allNodes;
+    const rootId = parseInt(graphRootId);
+    const validIds = new Set<number>([rootId]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const node of allNodes) {
+        if (node.parent && validIds.has(node.parent) && !validIds.has(node.id)) {
+          validIds.add(node.id);
+          added = true;
+        }
+      }
+    }
+    return allNodes.filter(n => validIds.has(n.id));
+  }, [allNodes, graphRootId]);
+
+  // List-view nodes (kps only, searchable)
+  const listNodes = useMemo(
+    () => displayNodes.filter(n => n.level === 'kp' && n.name.toLowerCase().includes(treeSearch.toLowerCase())),
+    [displayNodes, treeSearch],
+  );
 
   if (loading) {
     return (
@@ -761,9 +819,9 @@ export const KnowledgeMap: React.FC = () => {
           </div>
         ) : (
           /* ── Desktop: three-panel layout ── */
-          <div className="flex gap-4" style={{ height: 'calc(100vh - 13rem)' }}>
+          <div className="flex gap-4" style={{ minHeight: 'calc(100vh - 18rem)' }}>
             {/* ── Left: Tree Panel ── */}
-            <div className="w-[260px] shrink-0">
+            <div className="w-[260px] shrink-0 self-stretch">
               <KnowledgeTreePanel
                 nodes={allNodes}
                 selectedId={selectedNode?.id ?? null}
@@ -773,17 +831,97 @@ export const KnowledgeMap: React.FC = () => {
               />
             </div>
 
-            {/* ── Center: Graph Panel ── */}
-            <div className="flex-1 min-w-0">
-              <KnowledgeGraph
-                nodes={allNodes}
-                selectedId={selectedNode?.id ?? null}
-                onNodeClick={handleNodeSelect}
-              />
+            {/* ── Center: Graph / List ── */}
+            <div className="flex-1 min-w-0 flex flex-col gap-3 self-stretch">
+              {/* Toolbar */}
+              <div className="flex items-center gap-3 shrink-0">
+                <Select value={graphRootId} onValueChange={setGraphRootId}>
+                  <SelectTrigger className="w-[200px] h-10 bg-card rounded-xl font-bold border-border shadow-sm text-xs">
+                    <GitMerge className="w-3.5 h-3.5 mr-2 text-indigo-500" />
+                    <SelectValue placeholder="全部分支" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="all" className="font-bold text-xs">全部分支</SelectItem>
+                    {rootOptions.map(opt => (
+                      <SelectItem key={opt.id} value={opt.id.toString()} className="text-xs">
+                        {opt.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {viewMode === 'list' && (
+                  <Input
+                    placeholder="搜索考点..."
+                    value={treeSearch}
+                    onChange={e => setTreeSearch(e.target.value)}
+                    className="flex-1 rounded-xl bg-card border-border shadow-sm h-10 px-4 font-bold text-xs"
+                  />
+                )}
+
+                <div className="flex bg-muted/30 p-1 rounded-xl border border-border/50 ml-auto shrink-0">
+                  <Button
+                    variant={viewMode === 'graph' ? 'secondary' : 'ghost'}
+                    onClick={() => setViewMode('graph')}
+                    className="rounded-lg h-8 text-xs font-bold px-4"
+                  >
+                    <GitMerge className="w-3.5 h-3.5 mr-1.5" /> 关系图
+                  </Button>
+                  <Button
+                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                    onClick={() => setViewMode('list')}
+                    className="rounded-lg h-8 text-xs font-bold px-3"
+                  >
+                    <List className="w-3.5 h-3.5 mr-1.5" /> 词条表
+                  </Button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-h-0">
+                {viewMode === 'graph' ? (
+                  <KnowledgeGraph
+                    nodes={displayNodes}
+                    selectedId={selectedNode?.id ?? null}
+                    onNodeClick={handleNodeSelect}
+                  />
+                ) : (
+                  <div className="h-full bg-muted/30 rounded-2xl border border-border/50 p-4">
+                    <ScrollArea className="h-full">
+                      <div className="flex flex-wrap gap-2 content-start">
+                        {listNodes.map(node => (
+                          <button
+                            key={node.id}
+                            onClick={() => handleNodeSelect(node)}
+                            className={cn(
+                              'flex items-center gap-2 bg-card border hover:shadow-md px-3 py-2 rounded-xl transition-all active:scale-95 text-left',
+                              selectedNode?.id === node.id
+                                ? 'border-amber-300 bg-amber-50'
+                                : 'border-border/50 hover:border-indigo-500/30',
+                            )}
+                          >
+                            <span className="text-xs font-bold">{node.name}</span>
+                            {node.questions_count !== undefined && node.questions_count > 0 && (
+                              <Badge variant="secondary" className="text-[9px] rounded-full px-1.5 py-0 h-4 bg-indigo-50 text-indigo-500 border-none font-bold">
+                                {node.questions_count}
+                              </Badge>
+                            )}
+                          </button>
+                        ))}
+                        {listNodes.length === 0 && (
+                          <div className="w-full text-center text-xs font-bold text-muted-foreground py-20">
+                            没有匹配到相关知识点
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* ── Right: Detail Panel ── */}
-            <div className="w-[320px] shrink-0">
+            <div className="w-[320px] shrink-0 self-stretch">
               <NodeDetailPanel
                 node={selectedNode}
                 details={nodeDetails}

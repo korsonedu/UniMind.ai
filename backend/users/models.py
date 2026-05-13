@@ -39,6 +39,11 @@ class User(AbstractUser):
     institution = models.ForeignKey('Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='students', verbose_name="所属机构")
 
     @property
+    def is_platform_admin(self):
+        """超级管理员：is_superuser 且未绑定机构"""
+        return self.is_superuser and self.institution_id is None
+
+    @property
     def avatar_url(self):
         seed = self.avatar_seed or self.username
         return f"https://api.dicebear.com/7.x/{self.avatar_style}/svg?seed={seed}"
@@ -153,12 +158,34 @@ class Institution(models.Model):
     plan_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="版本到期时间")
     max_students_override = models.IntegerField(null=True, blank=True, verbose_name="学员上限覆写")
     is_active = models.BooleanField(default=True, verbose_name="是否启用")
+    invite_code = models.CharField(max_length=12, blank=True, unique=True, verbose_name="邀请码")
     custom_domain = models.CharField(max_length=200, blank=True, verbose_name="自定义域名")
     logo = models.ImageField(upload_to='institution_logos/', blank=True, verbose_name="机构 Logo")
     notes = models.TextField(blank=True, verbose_name="管理员备注")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_institutions', verbose_name="创建人")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    _PLAN_STUDENT_LIMITS = {'free': 30, 'solo': 50, 'plus': 200, 'pro': float('inf')}
+
+    @property
+    def max_students(self):
+        if self.max_students_override is not None:
+            return self.max_students_override
+        return self._PLAN_STUDENT_LIMITS.get(self.plan, 30)
+
+    @property
+    def student_count(self):
+        return self.students.filter(institution_role='student').count()
+
+    @property
+    def is_plan_active(self):
+        if not self.is_active:
+            return False
+        if self.plan_expires_at is None:
+            return True
+        from django.utils import timezone
+        return self.plan_expires_at > timezone.now()
 
     class Meta:
         verbose_name = '机构'
