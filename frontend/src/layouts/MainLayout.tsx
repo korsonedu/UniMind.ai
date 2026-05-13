@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { 
-  BookOpen, 
-  FileText, 
-  Trophy, 
-  Clock, 
+import {
+  BookOpen,
+  FileText,
+  Trophy,
+  Clock,
   User as UserIcon,
   LogOut,
   ShieldCheck,
@@ -14,12 +14,14 @@ import {
   Settings2,
   BrainCircuit,
   BarChart3,
+  Building2,
   Home,
   Info,
   Rocket,
   MessageCircleQuestion,
   Loader2,
   Lock,
+  Mic,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -175,27 +177,36 @@ export const MainLayout: React.FC = () => {
     }
   };
 
-	  const isMember = user?.is_member;
-	  const isPro = isMember && (user?.membership_tier === 'pro' || user?.institution?.plan === 'pro' || user?.institution?.plan === 'plus');
+	  // ── 身份与方案层级 ──
+	  const isSuperAdmin = user?.role === 'admin' && !user?.institution;
+	  const instPlan = user?.institution?.plan || 'free';
+	  const planLevel = (p: string) => ({ free: 1, solo: 2, plus: 3, pro: 4 })[p] || 1;
+	  const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
+	  const atLeast = (lvl: number) => myPlanLevel >= lvl;
 
-	  type NavItem = { to: string; icon: any; label: string; memberOnly?: boolean; proOnly?: boolean; section?: string };
-	  const navItems: NavItem[] = [
-	    { to: '/', icon: BookOpen, label: '课程中心' },
-	    { to: '/tests', icon: Trophy, label: '习题训练' },
-	    { to: '/knowledge-map', icon: BrainCircuit, label: '知识地图' },
-	    { to: '/articles', icon: FileText, label: '文章' },
-	    { to: '/qa', icon: MessageCircleQuestion, label: '答疑' },
-	    { to: '/study', icon: Clock, label: '自习室', memberOnly: true },
-	    { to: '/ai', icon: Sparkles, label: 'AI 实验室', memberOnly: true },
-	    { to: '/interviews', icon: Sparkles, label: '模拟面试', memberOnly: true },
-	    { to: '/mock-exam', icon: FileText, label: 'PDF 模考', proOnly: true },
-	  ];
+	  type NavItem = { to: string; icon: any; label: string; minPlan?: number; section?: string };
 
-	  if (user?.role === 'admin') {
-	    navItems.push({ to: '/management', icon: ShieldCheck, label: '维护中心', section: '管理' });
-	    navItems.push({ to: '/invite-codes', icon: Sparkles, label: '邀请码', section: '管理' });
-	  }
-	  if (user?.institution) {
+	  // ── 超级管理员（我）—— 只看机构管理 + 邀请码 ──
+	  const navItems: NavItem[] = isSuperAdmin
+	    ? [
+	        { to: '/institution', icon: Building2, label: '机构管理' },
+	        { to: '/invite-codes', icon: Sparkles, label: '邀请码' },
+	        { to: '/system-settings', icon: Settings2, label: '系统设置' },
+	      ]
+	    : [
+	        { to: '/', icon: BookOpen, label: '课程中心' },
+	        { to: '/tests', icon: Trophy, label: '习题训练' },
+	        { to: '/knowledge-map', icon: BrainCircuit, label: '知识地图', minPlan: 2 },
+	        { to: '/articles', icon: FileText, label: '文章' },
+	        { to: '/qa', icon: MessageCircleQuestion, label: '答疑', minPlan: 3 },
+	        { to: '/ai', icon: Sparkles, label: 'AI 实验室', minPlan: 2 },
+	        { to: '/study', icon: Clock, label: '自习室', minPlan: 3 },
+	        { to: '/interviews', icon: Mic, label: '模拟面试', minPlan: 3 },
+	        { to: '/mock-exam', icon: FileText, label: 'PDF 模考', minPlan: 3 },
+	      ];
+
+	  // ── 机构管理员 / 学员 —— 附加机构入口 ──
+	  if (!isSuperAdmin && user?.institution) {
 	    navItems.push({ to: '/institution', icon: BarChart3, label: '机构看板', section: '机构' });
 	    navItems.push({ to: '/institution/students', icon: UserIcon, label: '学员管理', section: '机构' });
 	    if (user?.institution_role === 'admin') {
@@ -203,13 +214,18 @@ export const MainLayout: React.FC = () => {
 	    }
 	  }
 
-	  const mobileNavItems: NavItem[] = [
-	    { to: '/', icon: BookOpen, label: '课程' },
-	    { to: '/tests', icon: Trophy, label: '做题' },
-	    { to: '/knowledge-map', icon: BrainCircuit, label: '知识' },
-	    { to: '/articles', icon: FileText, label: '文章' },
-	    { to: '/qa', icon: MessageCircleQuestion, label: '答疑' },
-	  ];
+	  const mobileNavItems: NavItem[] = isSuperAdmin
+	    ? [
+	        { to: '/institution', icon: Building2, label: '机构' },
+	        { to: '/invite-codes', icon: Sparkles, label: '邀请' },
+	      ]
+	    : [
+	        { to: '/', icon: BookOpen, label: '课程' },
+	        { to: '/tests', icon: Trophy, label: '做题' },
+	        { to: '/knowledge-map', icon: BrainCircuit, label: '知识' },
+	        { to: '/articles', icon: FileText, label: '文章' },
+	        { to: '/qa', icon: MessageCircleQuestion, label: '答疑' },
+	      ];
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
@@ -242,7 +258,7 @@ export const MainLayout: React.FC = () => {
                 {...item} 
                 active={location.pathname === item.to} 
                 collapsed={collapsed}
-                restricted={Boolean((item as any).memberOnly && !isMember || (item as any).proOnly && !isPro)}
+                restricted={Boolean((item as any).minPlan && !atLeast((item as any).minPlan))}
                 onRestrictedClick={() => setShowActivateDialog(true)}
               />
             ))}
@@ -419,7 +435,7 @@ export const MainLayout: React.FC = () => {
                 item.to === '/articles'
                   ? location.pathname === '/articles' || location.pathname.startsWith('/article/')
                   : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
-              const restricted = Boolean((item as any).memberOnly && !isMember || (item as any).proOnly && !isPro);
+              const restricted = Boolean((item as any).minPlan && !atLeast((item as any).minPlan));
               return (
                 <button
                   key={item.to}

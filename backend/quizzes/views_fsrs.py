@@ -115,7 +115,7 @@ class QuizStatsView(APIView):
         if review_count > 0:
             today_notif = Notification.objects.filter(recipient=user, ntype='fsrs_reminder', created_at__date=now.date()).exists()
             if not today_notif:
-                Notification.objects.create(recipient=user, ntype='fsrs_reminder', title='今日复习任务已就绪', content=f'你有 {review_count} 道题目已进入 FSRS 遗忘临界点。', link='/tests')
+                Notification.objects.create(recipient=user, ntype='fsrs_reminder', title='今日复习任务已就绪', content=f'你有 {review_count} 道题目已进入 Memorix 遗忘临界点。', link='/tests')
 
         plan = calculate_study_plan(user=user, minutes=25)
 

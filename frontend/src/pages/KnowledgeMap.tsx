@@ -1,7 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
-import { Target, Maximize2, ZoomIn, ZoomOut, GitMerge } from 'lucide-react';
+import {
+  Target, Maximize2, ZoomIn, ZoomOut, GitMerge,
+  ChevronRight, ChevronDown, BookOpen, FileText, Video,
+  Search, X, Layers,
+} from 'lucide-react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -13,22 +17,20 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 // Modularized Components
 import { KnowledgeTrainingDialog } from './knowledge-map/TrainingDialog';
+
+/* ────────────────────────────────────────────
+   Types & Constants
+   ──────────────────────────────────────────── */
 
 export interface KPNode {
   id: number;
   name: string;
   description: string;
   parent: number | null;
-  level: string; 
+  level: string;
   questions_count?: number;
   x?: number;
   y?: number;
@@ -37,9 +39,20 @@ export interface KPNode {
 }
 
 const LEVEL_ORDER: Record<string, number> = { sub: 0, ch: 1, sec: 2, kp: 3 };
+const LEVEL_LABELS: Record<string, string> = { sub: '学科', ch: '篇章', sec: '小节', kp: '考点' };
+const LEVEL_COLORS: Record<string, string> = {
+  sub: 'text-indigo-700 bg-indigo-50 border-indigo-200',
+  ch: 'text-blue-700 bg-blue-50 border-blue-200',
+  sec: 'text-sky-700 bg-sky-50 border-sky-200',
+  kp: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+};
 
 const sortNodes = (a: KPNode, b: KPNode) =>
   (LEVEL_ORDER[a.level] ?? 99) - (LEVEL_ORDER[b.level] ?? 99) || a.name.localeCompare(b.name);
+
+/* ────────────────────────────────────────────
+   Stable Tree Layout (for graph viz)
+   ──────────────────────────────────────────── */
 
 const buildStableLayout = (nodes: KPNode[]) => {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
@@ -113,8 +126,19 @@ const buildStableLayout = (nodes: KPNode[]) => {
   return positions;
 };
 
-// --- 高级力导向图引擎 ---
-export const KnowledgeGraph = ({ nodes, onNodeClick }: { nodes: KPNode[], onNodeClick: (node: KPNode) => void }) => {
+/* ────────────────────────────────────────────
+   Knowledge Graph Canvas
+   ──────────────────────────────────────────── */
+
+const KnowledgeGraph = ({
+  nodes,
+  selectedId,
+  onNodeClick,
+}: {
+  nodes: KPNode[];
+  selectedId: number | null;
+  onNodeClick: (node: KPNode) => void;
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
   const [isDark, setIsDark] = useState(
@@ -174,6 +198,8 @@ export const KnowledgeGraph = ({ nodes, onNodeClick }: { nodes: KPNode[], onNode
     ctx.save();
     ctx.translate(canvas.width / 2 + transform.x, canvas.height / 2 + transform.y);
     ctx.scale(transform.k, transform.k);
+
+    // Edges
     ctx.beginPath();
     ctx.strokeStyle = isDark ? 'rgba(148, 163, 184, 0.45)' : 'rgba(148, 163, 184, 0.28)';
     ctx.lineWidth = 1.2 / transform.k;
@@ -182,29 +208,48 @@ export const KnowledgeGraph = ({ nodes, onNodeClick }: { nodes: KPNode[], onNode
       if (node.parent) {
         if (hideDenseKpEdges && node.level === 'kp') continue;
         const parentNode = nodeMap.get(node.parent);
-        if (parentNode) { ctx.moveTo(parentNode.x!, parentNode.y!); ctx.lineTo(node.x!, node.y!); }
+        if (parentNode) {
+          ctx.moveTo(parentNode.x!, parentNode.y!);
+          ctx.lineTo(node.x!, node.y!);
+        }
       }
     }
     ctx.stroke();
 
+    // Nodes
     for (const node of currentNodes) {
-      const radius = node.level === 'sub' ? 20 : node.level === 'ch' ? 14 : node.level === 'sec' ? 10 : 6 + Math.sqrt(node.questions_count || 0) * 1.5;
+      const isSelected = node.id === selectedId;
+      const radius =
+        node.level === 'sub' ? 20
+        : node.level === 'ch' ? 14
+        : node.level === 'sec' ? 10
+        : 6 + Math.sqrt(node.questions_count || 0) * 1.5;
+
       ctx.beginPath();
       ctx.arc(node.x!, node.y!, radius, 0, Math.PI * 2);
-      ctx.fillStyle = node.level === 'sub'
-        ? (isDark ? '#6366f1' : '#1e1b4b')
-        : node.level === 'ch'
-          ? (isDark ? '#818cf8' : '#4338ca')
-          : node.level === 'sec'
-            ? (isDark ? '#a5b4fc' : '#818cf8')
-            : (isDark ? '#1f2937' : '#ffffff');
+
+      if (isSelected) {
+        ctx.fillStyle = '#f59e0b';
+      } else {
+        ctx.fillStyle =
+          node.level === 'sub' ? (isDark ? '#6366f1' : '#1e1b4b')
+          : node.level === 'ch' ? (isDark ? '#818cf8' : '#4338ca')
+          : node.level === 'sec' ? (isDark ? '#a5b4fc' : '#818cf8')
+          : (isDark ? '#1f2937' : '#ffffff');
+      }
       ctx.fill();
-      if (node.level === 'kp') { ctx.strokeStyle = isDark ? '#64748b' : '#94a3b8'; ctx.lineWidth = 1.2 / transform.k; ctx.stroke(); }
+
+      if (node.level === 'kp') {
+        ctx.strokeStyle = isSelected ? '#f59e0b' : isDark ? '#64748b' : '#94a3b8';
+        ctx.lineWidth = isSelected ? 3 / transform.k : 1.2 / transform.k;
+        ctx.stroke();
+      }
+
       if (node.level !== 'kp' || transform.k > 1.15) {
-        ctx.fillStyle = node.level === 'kp'
-          ? (isDark ? '#cbd5e1' : '#475569')
+        ctx.fillStyle =
+          node.level === 'kp' ? (isDark ? '#cbd5e1' : '#475569')
           : (isDark ? '#e2e8f0' : '#1e293b');
-        ctx.font = `${node.level === 'kp' ? 'normal' : 'bold'} ${ (node.level === 'kp' ? 10 : 13) / transform.k}px sans-serif`;
+        ctx.font = `${node.level === 'kp' ? 'normal' : 'bold'} ${(node.level === 'kp' ? 10 : 13) / transform.k}px sans-serif`;
         ctx.textAlign = "center";
         ctx.fillText(node.name, node.x!, node.y! + radius + (14 / transform.k));
       }
@@ -219,50 +264,401 @@ export const KnowledgeGraph = ({ nodes, onNodeClick }: { nodes: KPNode[], onNode
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [nodes, transform, isDark]);
-  const handleWheel = (e: React.WheelEvent) => { const delta = e.deltaY > 0 ? 0.9 : 1.1; setTransform(prev => ({ ...prev, k: Math.max(0.1, Math.min(5, prev.k * delta)) })); };
-  const handleMouseDown = (e: React.MouseEvent) => {
-    const startX = e.clientX - transform.x, startY = e.clientY - transform.y;
-    const handleMouseMove = (mv: MouseEvent) => setTransform(prev => ({ ...prev, x: mv.clientX - startX, y: mv.clientY - startY }));
-    const handleMouseUp = () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); };
-    window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseup', handleMouseUp);
+  }, [nodes, transform, isDark, selectedId]);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setTransform(prev => ({ ...prev, k: Math.max(0.1, Math.min(5, prev.k * delta)) }));
   };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const startX = e.clientX - transform.x;
+    const startY = e.clientY - transform.y;
+    const handleMouseMove = (mv: MouseEvent) =>
+      setTransform(prev => ({ ...prev, x: mv.clientX - startX, y: mv.clientY - startY }));
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   const handleClick = (e: React.MouseEvent) => {
-    const canvas = canvasRef.current; if (!canvas) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const mx = (e.clientX - rect.left - canvas.width / 2 - transform.x) / transform.k;
     const my = (e.clientY - rect.top - canvas.height / 2 - transform.y) / transform.k;
-    for (const n of nodesRef.current) { if (Math.sqrt((n.x! - mx) ** 2 + (n.y! - my) ** 2) < (n.level === 'kp' ? 12 : 20)) { onNodeClick(n); break; } }
+    for (const n of nodesRef.current) {
+      if (Math.sqrt((n.x! - mx) ** 2 + (n.y! - my) ** 2) < (n.level === 'kp' ? 12 : 20)) {
+        onNodeClick(n);
+        break;
+      }
+    }
   };
 
   return (
-    <div className="relative w-full h-[650px] bg-muted/50 rounded-[3rem] border border-border/50 overflow-hidden cursor-move shadow-inner">
-      <canvas ref={canvasRef} width={1200} height={650} className="w-full h-full" onWheel={handleWheel} onMouseDown={handleMouseDown} onClick={handleClick} />
-      <div className="absolute bottom-8 left-8 flex flex-col gap-2">
-        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 1.2 }))}><ZoomIn className="h-4 w-4" /></Button>
-        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 0.8 }))}><ZoomOut className="h-4 w-4" /></Button>
-        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform({ x: 0, y: 0, k: 1 })}><Maximize2 className="h-4 w-4" /></Button>
+    <div className="relative w-full h-full bg-muted/30 rounded-2xl border border-border/50 overflow-hidden cursor-move shadow-inner">
+      <canvas
+        ref={canvasRef}
+        width={1000}
+        height={600}
+        className="w-full h-full"
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onClick={handleClick}
+      />
+      <div className="absolute bottom-4 left-4 flex flex-col gap-1.5">
+        <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 1.2 }))}>
+          <ZoomIn className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 0.8 }))}>
+          <ZoomOut className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl shadow-lg" onClick={() => setTransform({ x: 0, y: 0, k: 1 })}>
+          <Maximize2 className="h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
   );
 };
+
+/* ────────────────────────────────────────────
+   Tree Panel (Left Sidebar)
+   ──────────────────────────────────────────── */
+
+interface TreeNodeData extends KPNode {
+  children: TreeNodeData[];
+}
+
+const KnowledgeTreePanel: React.FC<{
+  nodes: KPNode[];
+  selectedId: number | null;
+  onSelect: (node: KPNode) => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+}> = ({ nodes, selectedId, onSelect, searchQuery, onSearchChange }) => {
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const tree = useMemo(() => {
+    const nodeMap = new Map<number, TreeNodeData>();
+    const roots: TreeNodeData[] = [];
+
+    for (const n of nodes) {
+      nodeMap.set(n.id, { ...n, children: [] });
+    }
+    for (const n of nodes) {
+      const tn = nodeMap.get(n.id)!;
+      if (n.parent && nodeMap.has(n.parent)) {
+        nodeMap.get(n.parent)!.children.push(tn);
+      } else {
+        roots.push(tn);
+      }
+    }
+    const sortTree = (list: TreeNodeData[]) => {
+      list.sort((a, b) => (LEVEL_ORDER[a.level] ?? 99) - (LEVEL_ORDER[b.level] ?? 99) || a.name.localeCompare(b.name));
+      list.forEach(t => sortTree(t.children));
+    };
+    sortTree(roots);
+
+    // Auto-expand to show selected node
+    if (selectedId && nodeMap.has(selectedId)) {
+      const path: number[] = [];
+      let cur: TreeNodeData | undefined = nodeMap.get(selectedId);
+      while (cur) {
+        path.push(cur.id);
+        cur = cur.parent ? nodeMap.get(cur.parent) : undefined;
+      }
+      setExpandedIds(prev => {
+        const next = new Set(prev);
+        path.forEach(id => next.add(id));
+        return next;
+      });
+    }
+    return roots;
+  }, [nodes, selectedId]);
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const filteredTree = useMemo(() => {
+    if (!searchQuery.trim()) return tree;
+    const q = searchQuery.toLowerCase();
+    const matchSet = new Set<number>();
+    // Mark all nodes that match
+    for (const n of nodes) {
+      if (n.name.toLowerCase().includes(q)) matchSet.add(n.id);
+    }
+    // Also keep ancestors of matches
+    const keepSet = new Set<number>(matchSet);
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    for (const id of matchSet) {
+      let cur = nodeMap.get(id);
+      while (cur?.parent) {
+        keepSet.add(cur.parent);
+        cur = nodeMap.get(cur.parent);
+      }
+    }
+    const filterNodes = (list: TreeNodeData[]): TreeNodeData[] =>
+      list.filter(t => keepSet.has(t.id)).map(t => ({ ...t, children: filterNodes(t.children) }));
+    return filterNodes(tree);
+  }, [tree, searchQuery, nodes]);
+
+  const renderNode = (tn: TreeNodeData, depth: number) => {
+    const hasChildren = tn.children.length > 0;
+    const isExpanded = expandedIds.has(tn.id);
+    const isSelected = tn.id === selectedId;
+    const isKp = tn.level === 'kp';
+
+    return (
+      <div key={tn.id}>
+        <button
+          onClick={() => {
+            if (hasChildren) toggleExpand(tn.id);
+            if (isKp) onSelect(tn);
+          }}
+          className={cn(
+            'w-full flex items-center gap-1.5 py-1.5 pr-2 rounded-lg text-left transition-colors group',
+            isSelected && 'bg-amber-50 border border-amber-200',
+            !isSelected && 'hover:bg-muted/50',
+          )}
+          style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        >
+          {/* expand toggle for non-kp nodes */}
+          {hasChildren ? (
+            isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          ) : (
+            <span className="w-3.5 shrink-0" />
+          )}
+
+          {/* level badge */}
+          <Badge
+            variant="outline"
+            className={cn(
+              'text-[9px] py-0 h-4 px-1.5 font-bold uppercase shrink-0',
+              LEVEL_COLORS[tn.level] || 'bg-muted',
+            )}
+          >
+            {LEVEL_LABELS[tn.level] || tn.level}
+          </Badge>
+
+          {/* name */}
+          <span
+            className={cn(
+              'text-xs font-bold truncate flex-1',
+              isSelected && 'text-amber-700',
+              isKp && 'cursor-pointer',
+            )}
+          >
+            {tn.name}
+          </span>
+
+          {/* question count */}
+          {tn.questions_count !== undefined && tn.questions_count > 0 && (
+            <Badge variant="secondary" className="text-[9px] rounded-full px-1.5 py-0 h-4 bg-indigo-50 text-indigo-500 border-none font-bold shrink-0">
+              {tn.questions_count}
+            </Badge>
+          )}
+        </button>
+
+        {/* children */}
+        {hasChildren && isExpanded && (
+          <div>{tn.children.map(child => renderNode(child, depth + 1))}</div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-card rounded-2xl border border-border/50 overflow-hidden">
+      <div className="p-3 border-b border-border/30">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="搜索知识点..."
+            value={searchQuery}
+            onChange={e => onSearchChange(e.target.value)}
+            className="h-9 pl-9 pr-8 rounded-xl bg-muted/50 border-none text-xs font-medium"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => onSearchChange('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2"
+            >
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+      </div>
+      <ScrollArea className="flex-1 p-2">
+        <div className="space-y-0.5">
+          {filteredTree.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">无匹配知识点</p>
+          ) : (
+            filteredTree.map(root => renderNode(root, 0))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+};
+
+/* ────────────────────────────────────────────
+   Detail Panel (Right Sidebar)
+   ──────────────────────────────────────────── */
+
+const NodeDetailPanel: React.FC<{
+  node: KPNode | null;
+  details: { courses: any[]; articles: any[]; questions: any[] };
+  loading: boolean;
+  onQuestionClick: (q: any) => void;
+  onClear: () => void;
+}> = ({ node, details, loading, onQuestionClick, onClear }) => {
+  if (!node) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-card rounded-2xl border border-border/50 p-6">
+        <Layers className="h-8 w-8 mb-3 opacity-20" />
+        <p className="text-xs font-bold uppercase tracking-widest">选择考点</p>
+        <p className="text-[10px] mt-1 opacity-50">在树状图或关系图中点击考点查看详情</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-card rounded-2xl border border-border/50 overflow-hidden">
+      {/* header */}
+      <div className="p-4 border-b border-border/30 flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <Badge className={cn('text-[9px] py-0 h-5 px-2 font-bold uppercase border', LEVEL_COLORS[node.level] || 'bg-muted')}>
+            {LEVEL_LABELS[node.level] || node.level}
+          </Badge>
+          <h3 className="text-sm font-bold truncate">{node.name}</h3>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg shrink-0" onClick={onClear}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {/* content */}
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-5">
+          {/* description */}
+          {node.description && (
+            <div className="text-xs text-muted-foreground leading-relaxed">
+              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                {processMathContent(node.description)}
+              </ReactMarkdown>
+            </div>
+          )}
+
+          {loading ? (
+            <p className="text-[10px] font-bold uppercase text-muted-foreground animate-pulse text-center py-8">Loading...</p>
+          ) : (
+            <>
+              {/* questions */}
+              <section>
+                <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Target className="w-3 h-3" /> 关联题目 ({details.questions.length})
+                </h5>
+                <div className="space-y-1.5">
+                  {details.questions.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground/50">暂无题目</p>
+                  )}
+                  {details.questions.map((q: any) => (
+                    <button
+                      key={q.id}
+                      onClick={() => onQuestionClick(q)}
+                      className="w-full p-3 bg-muted/50 hover:bg-muted rounded-xl flex items-center gap-2 text-left transition-colors group"
+                    >
+                      <Badge variant="outline" className="text-[8px] py-0 h-4 uppercase shrink-0">{q.subjective_type || q.q_type || 'Q'}</Badge>
+                      <span className="text-[11px] font-medium truncate flex-1">
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {processMathContent(q.text)}
+                        </ReactMarkdown>
+                      </span>
+                      <Maximize2 className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-all shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {/* courses */}
+              <section>
+                <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Video className="w-3 h-3" /> 课程资源 ({details.courses.length})
+                </h5>
+                <div className="space-y-1.5">
+                  {details.courses.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground/50">暂无课程</p>
+                  )}
+                  {details.courses.map((c: any) => (
+                    <div key={c.id} className="p-3 bg-emerald-50/50 rounded-xl flex items-center gap-2 border border-emerald-100">
+                      <Video className="w-3 h-3 text-emerald-500 shrink-0" />
+                      <p className="text-[11px] font-medium truncate">{c.title}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* articles */}
+              <section>
+                <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <FileText className="w-3 h-3" /> 参考文章 ({details.articles.length})
+                </h5>
+                <div className="space-y-1.5">
+                  {details.articles.length === 0 && (
+                    <p className="text-[10px] text-muted-foreground/50">暂无文章</p>
+                  )}
+                  {details.articles.map((a: any) => (
+                    <div key={a.id} className="p-3 bg-orange-50/50 rounded-xl flex items-center gap-2 border border-orange-100">
+                      <FileText className="w-3 h-3 text-orange-500 shrink-0" />
+                      <p className="text-[11px] font-medium truncate">{a.title}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+};
+
+/* ────────────────────────────────────────────
+   Main KnowledgeMap Page
+   ──────────────────────────────────────────── */
 
 export const KnowledgeMap: React.FC = () => {
   const navigate = useNavigate();
   const [allNodes, setAllNodes] = useState<KPNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<KPNode | null>(null);
-  const [nodeDetails, setNodeDetails] = useState<{ courses: any[], articles: any[], questions: any[] }>({ courses: [], articles: [], questions: [] });
-  const [searchQuery, setSearchQuery] = useState('');
+  const [nodeDetails, setNodeDetails] = useState<{ courses: any[]; articles: any[]; questions: any[] }>({
+    courses: [],
+    articles: [],
+    questions: [],
+  });
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [treeSearch, setTreeSearch] = useState('');
   const [isMobile, setIsMobile] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'graph'>('graph');
-  const [selectedRootId, setSelectedRootId] = useState<string>('all');
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
 
-  useEffect(() => { fetchMap(); }, []);
+  useEffect(() => {
+    fetchMap();
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(max-width: 767px)');
+    const media = window.matchMedia('(max-width: 1023px)');
     const sync = () => setIsMobile(media.matches);
     sync();
     media.addEventListener('change', sync);
@@ -275,169 +671,136 @@ export const KnowledgeMap: React.FC = () => {
       let rawData = res.data;
       const flatNodes: KPNode[] = [];
       const flatten = (items: any[]) => {
-          for (const item of items) {
-              flatNodes.push({ id: item.id, name: item.name, description: item.description, parent: item.parent, level: item.level, questions_count: item.questions_count });
-              if (item.children && item.children.length > 0) flatten(item.children);
-          }
+        for (const item of items) {
+          flatNodes.push({
+            id: item.id,
+            name: item.name,
+            description: item.description,
+            parent: item.parent,
+            level: item.level,
+            questions_count: item.questions_count,
+          });
+          if (item.children && item.children.length > 0) flatten(item.children);
+        }
       };
-      if (rawData.length > 0 && rawData[0].children !== undefined) flatten(rawData); else flatNodes.push(...rawData);
+      if (rawData.length > 0 && rawData[0].children !== undefined) flatten(rawData);
+      else flatNodes.push(...rawData);
       flatNodes.sort((a, b) => (b.questions_count || 0) - (a.questions_count || 0) || a.name.localeCompare(b.name));
       setAllNodes(flatNodes);
-    } catch (e) { } finally { setLoading(false); }
+    } catch (e) {
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleNodeSelect = async (node: KPNode) => {
-    if (node.level !== 'kp') return; 
+  const handleNodeSelect = useCallback(async (node: KPNode) => {
     if (isMobile) {
       navigate(`/knowledge-map/node/${node.id}`);
       return;
     }
     setSelectedNode(node);
+    setDetailsLoading(true);
     try {
       const [cRes, aRes, qRes] = await Promise.all([
         api.get('/courses/', { params: { kp: node.id } }),
         api.get('/articles/', { params: { kp: node.id } }),
-        api.get('/quizzes/questions/', { params: { kp: node.id } })
+        api.get('/quizzes/questions/', { params: { kp: node.id } }),
       ]);
-      setNodeDetails({ courses: cRes.data || [], articles: aRes.data.articles || [], questions: qRes.data || [] });
-    } catch (e) { }
-  };
-
-  const rootOptions = useMemo(() => allNodes.filter(n => n.level === 'sub'), [allNodes]);
-  const displayNodes = useMemo(() => {
-    if (selectedRootId === 'all') return allNodes;
-    const rootId = parseInt(selectedRootId);
-    const validIds = new Set<number>([rootId]);
-    let added = true;
-    while (added) {
-      added = false;
-      for (const node of allNodes) {
-        if (node.parent && validIds.has(node.parent) && !validIds.has(node.id)) {
-          validIds.add(node.id);
-          added = true;
-        }
-      }
+      setNodeDetails({
+        courses: cRes.data || [],
+        articles: aRes.data.articles || aRes.data || [],
+        questions: qRes.data || [],
+      });
+    } catch (e) {
+    } finally {
+      setDetailsLoading(false);
     }
-    return allNodes.filter(n => validIds.has(n.id));
-  }, [allNodes, selectedRootId]);
+  }, [isMobile, navigate]);
 
-  const listNodes = useMemo(
-    () => (isMobile ? allNodes : displayNodes).filter(n => n.level === 'kp' && n.name.toLowerCase().includes(searchQuery.toLowerCase())),
-    [allNodes, displayNodes, isMobile, searchQuery]
-  );
+  const handleClearSelection = useCallback(() => {
+    setSelectedNode(null);
+    setNodeDetails({ courses: [], articles: [], questions: [] });
+  }, []);
+
+  if (loading) {
+    return (
+      <PageWrapper title="知识地图" subtitle="可视化呈现知识载体间的逻辑脉络与关联结构。">
+        <div className="text-center opacity-20 font-bold uppercase text-[10px] animate-pulse py-32">Mapping...</div>
+      </PageWrapper>
+    );
+  }
 
   return (
-    <PageWrapper title="知识地图" subtitle="可视化呈现知识载体间的逻辑脉络与关联结构。">
-      <div className={cn("w-full text-left animate-in fade-in duration-700", isMobile ? "space-y-3" : "space-y-6")}>
+    <PageWrapper title="知识地图" subtitle="树状结构 · 关系图谱 · 资源详情，三栏联动探索知识体系。">
+      <div className="w-full text-left animate-in fade-in duration-700">
         {isMobile ? (
-          <div className="w-full">
-            <Input
-              placeholder="搜索知识卡片..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full rounded-2xl bg-card border-border shadow-sm h-10 px-4 font-bold"
-            />
-          </div>
-        ) : (
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-3 w-full sm:max-w-xl">
-              <Select value={selectedRootId} onValueChange={setSelectedRootId}>
-                <SelectTrigger className="w-[220px] h-11 bg-card rounded-2xl font-bold border-border shadow-sm">
-                  <GitMerge className="w-4 h-4 mr-2 text-indigo-500" />
-                  <SelectValue placeholder="全部分支" />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl">
-                  <SelectItem value="all" className="font-bold">全部分支</SelectItem>
-                  {rootOptions.map(opt => (
-                    <SelectItem key={opt.id} value={opt.id.toString()}>
-                      {opt.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          /* ── Mobile: simplified list view ── */
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={viewMode === 'list' ? "搜索考点..." : "关系图模式"}
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="flex-1 rounded-2xl bg-card border-border shadow-sm h-11 px-5 font-bold"
-                disabled={viewMode === 'graph'}
+                placeholder="搜索知识卡片..."
+                value={treeSearch}
+                onChange={e => setTreeSearch(e.target.value)}
+                className="w-full rounded-2xl bg-card border-border shadow-sm h-11 pl-10 pr-4 font-bold"
               />
             </div>
-            <div className="flex bg-muted/30 p-1 rounded-2xl border border-border/50 shrink-0">
-              <Button variant={viewMode === 'graph' ? 'secondary' : 'ghost'} onClick={() => setViewMode('graph')} className="rounded-xl h-9 text-xs font-bold px-6">关系图</Button>
-              <Button variant={viewMode === 'list' ? 'secondary' : 'ghost'} onClick={() => setViewMode('list')} className="rounded-xl h-9 text-xs font-bold px-6">词条表</Button>
+            <div className="grid grid-cols-2 gap-2 p-2 bg-muted/50 rounded-[2rem] min-h-[400px] content-start">
+              {allNodes
+                .filter(n => n.name.toLowerCase().includes(treeSearch.toLowerCase()))
+                .map(node => (
+                  <button
+                    key={node.id}
+                    onClick={() => handleNodeSelect(node)}
+                    className="flex items-center justify-between bg-card border border-border/50 hover:border-indigo-500/30 hover:shadow-md px-2.5 py-2 rounded-xl transition-all active:scale-[0.99] text-left min-h-[58px]"
+                  >
+                    <span className="text-[12px] font-bold truncate pr-2 leading-snug">{node.name}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        ) : (
+          /* ── Desktop: three-panel layout ── */
+          <div className="flex gap-4" style={{ height: 'calc(100vh - 13rem)' }}>
+            {/* ── Left: Tree Panel ── */}
+            <div className="w-[260px] shrink-0">
+              <KnowledgeTreePanel
+                nodes={allNodes}
+                selectedId={selectedNode?.id ?? null}
+                onSelect={handleNodeSelect}
+                searchQuery={treeSearch}
+                onSearchChange={setTreeSearch}
+              />
+            </div>
+
+            {/* ── Center: Graph Panel ── */}
+            <div className="flex-1 min-w-0">
+              <KnowledgeGraph
+                nodes={allNodes}
+                selectedId={selectedNode?.id ?? null}
+                onNodeClick={handleNodeSelect}
+              />
+            </div>
+
+            {/* ── Right: Detail Panel ── */}
+            <div className="w-[320px] shrink-0">
+              <NodeDetailPanel
+                node={selectedNode}
+                details={nodeDetails}
+                loading={detailsLoading}
+                onQuestionClick={setSelectedQuestion}
+                onClear={handleClearSelection}
+              />
             </div>
           </div>
         )}
-
-        {loading ? (
-          <div className={cn("text-center opacity-20 font-bold uppercase text-[10px] animate-pulse", isMobile ? "py-16" : "py-20")}>Mapping...</div>
-        ) : (!isMobile && viewMode === 'graph') ? (
-          <KnowledgeGraph nodes={displayNodes} onNodeClick={handleNodeSelect} />
-        ) : (
-          <div
-            className={cn(
-              "bg-muted/50 border border-border/50",
-              isMobile
-                ? "rounded-[2rem] grid grid-cols-2 gap-2 p-2 h-[calc(100dvh-15.5rem)] overflow-y-auto content-start min-h-[360px]"
-                : "rounded-[3rem] flex flex-wrap gap-2 p-6 content-start min-h-[400px]"
-            )}
-          >
-            {listNodes.map(node => isMobile ? (
-              <button
-                key={node.id}
-                onClick={() => handleNodeSelect(node)}
-                className="group flex items-center justify-between bg-card border border-border/50 hover:border-indigo-500/30 hover:shadow-md px-2.5 py-2 rounded-xl cursor-pointer transition-all active:scale-[0.99] text-left min-h-[58px]"
-              >
-                <span className="text-[12px] font-bold text-foreground truncate pr-2 leading-snug">{node.name}</span>
-              </button>
-            ) : (
-              <div key={node.id} onClick={() => handleNodeSelect(node)} className="group flex items-center gap-2 bg-card border border-border/50 hover:border-indigo-500/30 hover:shadow-md px-4 py-2 rounded-xl cursor-pointer transition-all active:scale-95">
-                <span className="text-xs font-bold text-foreground">{node.name}</span>
-                {node.questions_count !== undefined && node.questions_count > 0 && (
-                  <Badge variant="secondary" className="text-[9px] rounded-full px-1.5 py-0.5 h-4 bg-indigo-50 text-indigo-600 border-none font-black opacity-60 group-hover:opacity-100 transition-opacity">
-                    {node.questions_count} 题
-                  </Badge>
-                )}
-              </div>
-            ))}
-            {listNodes.length === 0 && (
-              <div className={cn("w-full text-center text-xs font-bold text-muted-foreground", isMobile ? "col-span-2 py-12" : "py-20")}>
-                没有匹配到相关知识点
-              </div>
-            )}
-          </div>
-        )}
-
-        <Dialog open={!!selectedNode} onOpenChange={open => !open && setSelectedNode(null)}>
-          <DialogContent className={cn(
-            "sm:max-w-[750px] border-none shadow-2xl text-left overflow-hidden min-h-0 flex flex-col",
-            isMobile ? "rounded-[2rem] p-5 max-h-[90vh]" : "rounded-[3rem] p-10 max-h-[85vh]"
-          )}>
-            <DialogHeader>
-              <div className="flex items-center gap-3 mb-2"><Badge className="bg-emerald-500 text-white border-none uppercase text-[9px] font-bold">Knowledge Point</Badge></div>
-              <DialogTitle className="text-3xl font-bold tracking-tight">{selectedNode?.name}</DialogTitle>
-              <div className="text-sm font-medium text-muted-foreground mt-2 leading-relaxed">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{processMathContent(selectedNode?.description || "")}</ReactMarkdown>
-              </div>
-            </DialogHeader>
-            <ScrollArea className="flex-1 min-h-0 mt-8 pr-4">
-              <div className="space-y-4 text-left">
-                <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"><Target className="w-3.5 h-3.5" /> 关联题目 ({nodeDetails.questions.length})</h5>
-                <div className="grid gap-2">{nodeDetails.questions.map(q => (
-                  <div key={q.id} onClick={() => setSelectedQuestion(q)} className="p-4 bg-muted/60 rounded-2xl flex items-center gap-3 border border-border cursor-pointer hover:bg-muted transition-colors group">
-                    <Badge variant="outline" className="text-[8px] py-0 h-4 uppercase">{q.subjective_type || q.q_type}</Badge>
-                    <div className="text-xs font-bold text-foreground truncate flex-1"><ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{processMathContent(q.text)}</ReactMarkdown></div>
-                    <Maximize2 className="w-3 h-3 text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-all" />
-                  </div>))}
-                </div>
-              </div>
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
-
-        <KnowledgeTrainingDialog question={selectedQuestion} onClose={() => setSelectedQuestion(null)} />
       </div>
+
+      {/* Training Dialog */}
+      <KnowledgeTrainingDialog
+        question={selectedQuestion}
+        onClose={() => setSelectedQuestion(null)}
+      />
     </PageWrapper>
   );
 };
