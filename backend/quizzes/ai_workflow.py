@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from ai_service import AIService
 from notifications.models import Notification
-from quizzes.fsrs import FSRS
+from quizzes.memorix.service import MemorixService
 from quizzes.models import ExamQuestionResult, Question, QuizExam, UserQuestionStatus
 from users.models import User
 
@@ -29,7 +29,8 @@ def _subjective_type_label(question: Question) -> str:
 
 def _apply_fsrs_status(user: User, question: Question, normalized_score: float, fsrs_rating: int, review_time=None) -> UserQuestionStatus:
     status_obj, _ = UserQuestionStatus.objects.get_or_create(user=user, question=question)
-    status_obj = FSRS.update_status(status_obj, fsrs_rating)
+    # Memorix handles stability/difficulty update + online SGD + save
+    status_obj = MemorixService.update_status(user_id=user.id, status=status_obj, rating=fsrs_rating)
     if review_time is not None:
         status_obj.last_review = review_time
 
@@ -39,7 +40,7 @@ def _apply_fsrs_status(user: User, question: Question, normalized_score: float, 
     else:
         status_obj.last_correct = True
 
-    status_obj.save()
+    status_obj.save(update_fields=['wrong_count', 'last_correct', 'last_review'])
     return status_obj
 
 

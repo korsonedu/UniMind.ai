@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
+import { EmptyState } from '@/components/EmptyState';
 import { isAdminUser } from '@/lib/authz';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
@@ -183,7 +184,7 @@ export const PdfMockExam: React.FC = () => {
             ) : failed ? (
               <Card className="p-10 rounded-2xl border border-red-200 bg-red-50/70 text-center text-sm font-bold text-red-700">{failed}</Card>
             ) : items.length === 0 ? (
-              <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">暂无历史模考记录</Card>
+              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title="暂无历史模考记录" className="py-4" /></Card>
             ) : (
               items.map((item) => (
                 <Card key={item.id} className={`p-4 rounded-2xl border ${item.status === 'processing' ? 'border-amber-200 bg-amber-50/40' : 'border-border/60'}`}>
@@ -258,9 +259,9 @@ export const PdfMockExam: React.FC = () => {
             ) : failed ? (
               <Card className="p-10 rounded-2xl border border-red-200 bg-red-50/70 text-center text-sm font-bold text-red-700">{failed}</Card>
             ) : teacherItems.length === 0 && !isAdmin ? (
-              <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">老师暂未发布试卷</Card>
+              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title="老师暂未发布试卷" className="py-4" /></Card>
             ) : teacherItems.length === 0 ? (
-              <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">暂无已发布试卷</Card>
+              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title="暂无已发布试卷" className="py-4" /></Card>
             ) : (
               teacherItems.map((item) => (
                 <Card key={item.id} className="p-5 rounded-2xl border border-border/60 space-y-4">

@@ -27,31 +27,30 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     try {
       const res = await api.get('/notifications/');
       set({ notifications: res.data });
-    } catch (e) {}
+    } catch (e) { console.error('fetchNotifications failed', e); }
   },
   fetchUnreadCount: async () => {
     try {
       const res = await api.get('/notifications/unread-count/');
       set({ unreadCount: res.data.unread_count });
-    } catch (e) {}
+    } catch (e) { console.error('fetchUnreadCount failed', e); }
   },
   markAsRead: async (id) => {
     try {
       const url = id ? `/notifications/read/${id}/` : '/notifications/read/';
       await api.post(url);
       get().fetchUnreadCount();
-      // Optimistically update the list if needed
       set({
-        notifications: get().notifications.map(n => 
+        notifications: get().notifications.map(n =>
           (id ? n.id === id : true) ? { ...n, is_read: true } : n
         )
       });
-    } catch (e) {}
+    } catch (e) { console.error('markAsRead failed', e); }
   },
   clearAll: async () => {
     try {
       await api.delete('/notifications/clear/');
       set({ notifications: [], unreadCount: 0 });
-    } catch (e) {}
-  }
+    } catch (e) { console.error('clearAll failed', e); }
+  },
 }));

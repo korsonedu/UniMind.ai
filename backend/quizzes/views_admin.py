@@ -7,14 +7,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import ContentPipelineTask, PromptTemplateVersion
 from quizzes.serializers import ContentPipelineTaskSerializer
-from users.permissions import IsPlatformAdmin
+from users.permissions import IsAdmin
 from core.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
 
 
 class AdminContentPipelineTaskListCreateView(APIView):
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         qs = ContentPipelineTask.objects.select_related("created_by", "assignee").all()
@@ -66,7 +66,7 @@ class AdminContentPipelineTaskListCreateView(APIView):
 
 
 class AdminContentPipelineTaskDetailView(APIView):
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def get_object(self, pk):
         return get_object_or_404(ContentPipelineTask.objects.select_related("created_by", "assignee"), pk=pk)
@@ -97,7 +97,7 @@ class AdminContentPipelineTaskDetailView(APIView):
 
 
 class AdminContentPipelineMetricsView(APIView):
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         try:
@@ -208,7 +208,7 @@ class AdminContentPipelineMetricsView(APIView):
 
 
 class AdminContentPipelineTaskRetryView(APIView):
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def post(self, request, pk):
         source = get_object_or_404(ContentPipelineTask, pk=pk)
@@ -227,7 +227,7 @@ class AdminContentPipelineTaskRetryView(APIView):
 
 class AdminPromptTemplateListView(APIView):
     """列出某 namespace 下的所有 prompt 模板文件。"""
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         namespace = str(request.query_params.get("namespace", "quizzes")).strip() or "quizzes"
@@ -255,7 +255,7 @@ class AdminPromptTemplateListView(APIView):
 
 class AdminPromptTemplateDetailView(APIView):
     """读取/保存单个 prompt 模板文件。"""
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         namespace = str(request.query_params.get("namespace", "quizzes")).strip() or "quizzes"
@@ -330,7 +330,7 @@ class AdminPromptTemplateDetailView(APIView):
 
 class AdminPromptTemplateRollbackView(APIView):
     """回滚 prompt 模板到指定版本。"""
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def post(self, request):
         namespace = str(request.data.get("namespace", "quizzes")).strip() or "quizzes"

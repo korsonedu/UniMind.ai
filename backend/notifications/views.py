@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from .models import Notification
 from .serializers import NotificationSerializer
 from users.models import User
+from users.permissions import IsAdmin
 
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
@@ -23,7 +24,7 @@ class MarkAsReadView(APIView):
         return Response({'status': 'ok'})
 
 class AdminBroadcastView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def post(self, request):
         title = request.data.get('title', '')

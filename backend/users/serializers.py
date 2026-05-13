@@ -3,10 +3,34 @@ from .models import User, SystemConfig, DailyPlan, ActivationCode
 
 class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.ReadOnlyField()
+    institution = serializers.SerializerMethodField()
+    is_admin = serializers.SerializerMethodField()
+    is_institution_admin = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'elo_reset_count', 'is_member')
-        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member')
+        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'elo_reset_count', 'is_member', 'is_admin', 'is_institution_admin', 'institution', 'institution_role')
+        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'is_admin', 'is_institution_admin', 'institution_role')
+
+    def get_is_admin(self, obj):
+        return obj.is_superuser and obj.institution_id is None
+
+    def get_is_institution_admin(self, obj):
+        return obj.institution is not None and obj.institution_role == 'admin'
+
+    def get_institution(self, obj):
+        inst = obj.institution
+        if inst is None:
+            return None
+        return {
+            'id': inst.id,
+            'name': inst.name,
+            'plan': inst.plan,
+            'plan_label': inst.get_plan_display(),
+            'is_plan_active': inst.is_plan_active,
+            'max_students': inst.max_students,
+            'student_count': inst.student_count,
+        }
 
 class ActivationCodeSerializer(serializers.ModelSerializer):
     used_by_username = serializers.CharField(source='used_by.username', read_only=True)

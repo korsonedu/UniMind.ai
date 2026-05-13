@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import KnowledgePoint, KnowledgePointAnnotation
 from quizzes.serializers import KnowledgePointSerializer, KnowledgePointAnnotationSerializer
-from users.permissions import IsAdminWriteMemberRead, IsMemberOrAdmin, HasPlanFeature, HasAIQuota
+from users.permissions import IsAdminWriteMemberRead, IsMemberOrAdmin, HasPlanFeature, HasAIQuota, IsAdmin
 from users.quota import increment_ai_quota
 from ai_service import AIService
 
@@ -116,3 +116,191 @@ class GenerateBulkQuestionsView(APIView):
 
         increment_ai_quota(request.user.institution)
         return Response({'status': 'success', 'count': count})
+
+
+# ── MD Knowledge Tree Import / Export ──
+
+import re
+from django.db import transaction
+
+
+def _parse_md_knowledge_tree(md_text: str) -> list:
+    """
+    Parse Markdown knowledge tree into structured data.
+    Format:
+      # MB - 货币银行学           → prefix_category, level='sub'
+      ## MB-1 - 货币的起源        → level='ch', code='MB-1'
+      ### MB-1-1 - 商品交换       → level='sec', code='MB-1-1'
+      #### MB-1-1-1 - 一般等价物  → level='kp', code='MB-1-1-1'
+    Lines not starting with # are treated as descriptions for the last node.
+    """
+    nodes = []
+    current_path = {1: None, 2: None, 3: None, 4: None}  # heading level → node id
+
+    for line in md_text.strip().split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+
+        heading_match = re.match(r'^(#{1,4})\s+(.+)', line)
+        if heading_match:
+            level = len(heading_match.group(1))  # 1-4
+            content = heading_match.group(2).strip()
+
+            # Parse code and name: "MB-1-1 - Description" or "MB - Subject"
+            parts = content.split(' - ', 1)
+            code = parts[0].strip() if len(parts) > 0 else ''
+            name = parts[1].strip() if len(parts) > 1 else code
+
+            # Determine KP level from heading depth
+            kp_level = {1: 'sub', 2: 'ch', 3: 'sec', 4: 'kp'}.get(level, 'kp')
+
+            # Extract prefix from code
+            prefix = code.split('-')[0].strip().upper() if code else ''
+
+            node = {
+                'code': code,
+                'name': name,
+                'level': kp_level,
+                'prefix_category': prefix,
+                'heading_level': level,
+                'description': '',
+            }
+            nodes.append(node)
+            current_path[level] = len(nodes) - 1
+
+            # Set parent based on previous heading level
+            parent_level = level - 1
+            while parent_level >= 1:
+                if current_path.get(parent_level) is not None:
+                    parent_node = nodes[current_path[parent_level]]
+                    if 'children' not in parent_node:
+                        parent_node['children'] = []
+                    parent_node['children'].append(node)
+                    break
+                parent_level -= 1
+
+            # Clear deeper levels
+            for l in range(level + 1, 5):
+                current_path[l] = None
+        else:
+            # Description line — append to last node
+            if nodes:
+                last = nodes[-1]
+                if last['description']:
+                    last['description'] += '\n' + line
+                else:
+                    last['description'] = line
+
+    # Return only top-level nodes (heading level 1)
+    return [n for n in nodes if n['heading_level'] == 1]
+
+
+def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix=''):
+    """Recursively create/update KnowledgePoint entries from parsed tree."""
+    created_count = 0
+    updated_count = 0
+
+    for node in nodes:
+        code = node.get('code', '')
+        name = node.get('name', '')
+        kp_level = node.get('level', 'kp')
+        description = node.get('description', '')
+        prefix_category = node.get('prefix_category', prefix)
+
+        # Try to find existing by code
+        existing = None
+        if code:
+            existing = KnowledgePoint.objects.filter(code=code).first()
+
+        if existing:
+            existing.name = name
+            existing.level = kp_level
+            existing.description = description
+            existing.prefix_category = prefix_category
+            existing.parent = parent
+            existing.save()
+            updated_count += 1
+            current = existing
+        else:
+            current = KnowledgePoint.objects.create(
+                code=code or None,
+                name=name,
+                level=kp_level,
+                prefix_category=prefix_category,
+                description=description,
+                parent=parent,
+            )
+            created_count += 1
+
+        # Recurse children
+        children = node.get('children', [])
+        if children:
+            cc, cu = _create_or_update_knowledge_tree(children, parent=current, prefix=prefix_category)
+            created_count += cc
+            updated_count += cu
+
+    return created_count, updated_count
+
+
+class KnowledgePointImportMDView(APIView):
+    """从 Markdown 文件导入知识体系"""
+    permission_classes = [IsAdmin]
+
+    @transaction.atomic
+    def post(self, request):
+        md_text = request.data.get('content', '')
+        if not md_text:
+            # Try file upload
+            file = request.FILES.get('file')
+            if file:
+                md_text = file.read().decode('utf-8')
+            else:
+                return Response({'error': '请提供 Markdown 内容或上传文件'}, status=400)
+
+        try:
+            tree = _parse_md_knowledge_tree(md_text)
+        except Exception as e:
+            return Response({'error': f'Markdown 解析失败: {str(e)}'}, status=400)
+
+        if not tree:
+            return Response({'error': '未解析到有效的知识树结构'}, status=400)
+
+        created, updated = _create_or_update_knowledge_tree(tree)
+        return Response({
+            'status': 'ok',
+            'created': created,
+            'updated': updated,
+            'categories': [n.get('prefix_category', '') for n in tree],
+        })
+
+
+class KnowledgePointExportMDView(APIView):
+    """导出知识体系为 Markdown"""
+    permission_classes = [IsAdmin]
+
+    def get(self, request):
+        roots = KnowledgePoint.objects.filter(parent__isnull=True, level='sub').order_by('prefix_category', 'code')
+
+        if not roots.exists():
+            # Fallback: get all top-level nodes
+            roots = KnowledgePoint.objects.filter(parent__isnull=True).order_by('prefix_category', 'code')
+
+        lines = []
+        for root in roots:
+            _export_node_md(root, lines, 1)
+
+        md_text = '\n'.join(lines)
+        return Response({'content': md_text, 'format': 'markdown'})
+
+
+def _export_node_md(node, lines, depth):
+    """Recursively export a KnowledgePoint node to Markdown lines."""
+    heading = '#' * min(depth, 4)
+    code_str = f'{node.code} - ' if node.code else ''
+    lines.append(f'{heading} {code_str}{node.name}')
+    if node.description:
+        lines.append(node.description)
+        lines.append('')
+    for child in node.children.all().order_by('code'):
+        _export_node_md(child, lines, depth + 1)

@@ -10,8 +10,11 @@ import api from '@/lib/api';
 import {
   Building2, Plus, Search, Loader2, Pencil, Power, PowerOff,
   Users, Calendar, ArrowLeft, Layers, Eye, Copy, Check,
+  Upload, ShieldCheck,
 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
 interface Institution {
@@ -53,7 +56,7 @@ export default function InstitutionAdmin() {
       const params: Record<string, string> = {};
       if (search) params.search = search;
       if (planFilter) params.plan = planFilter;
-      const { data } = await api.get('/users/admin/institutions/', { params });
+      const { data } = await api.get('/users/institutions/', { params });
       setInstitutions(data);
     } catch { /* ignore */ }
     setLoading(false);
@@ -62,19 +65,25 @@ export default function InstitutionAdmin() {
   useEffect(() => { fetchInstitutions(); }, [search, planFilter]);
 
   const handleActivate = async (id: number) => {
-    await api.post(`/users/admin/institutions/${id}/activate/`);
+    await api.post(`/users/institutions/${id}/activate/`);
     fetchInstitutions();
   };
   const handleDeactivate = async (id: number) => {
-    await api.post(`/users/admin/institutions/${id}/deactivate/`);
+    await api.post(`/users/institutions/${id}/deactivate/`);
     fetchInstitutions();
   };
   const handleDelete = async (id: number, name: string) => {
     if (!confirm(`确认删除机构「${name}」？该操作不可撤销。`)) return;
-    await api.delete(`/users/admin/institutions/${id}/`);
+    await api.delete(`/users/institutions/${id}/`);
     fetchInstitutions();
   };
 
+  // 机构管理员 → 自己的机构设置
+  if (user?.is_institution_admin) {
+    return <InstitutionSelfSettings />;
+  }
+
+  // 超级管理员 → 机构 CRUD
   if (!user?.is_admin) {
     return (
       <div className="min-h-screen bg-muted flex items-center justify-center text-muted-foreground text-sm">
@@ -270,7 +279,7 @@ function CreateInstitutionDialog({
       if (!payload.plan_expires_at) delete payload.plan_expires_at;
       if (!payload.contact_phone) payload.contact_phone = '';
       if (!payload.slug) payload.slug = payload.name.toLowerCase().replace(/\s+/g, '-');
-      await api.post('/users/admin/institutions/', payload);
+      await api.post('/users/institutions/', payload);
       onCreated();
     } catch (err: any) {
       setError(err.response?.data?.detail || err.response?.data?.error || '创建失败');
@@ -345,10 +354,10 @@ function EditInstitutionDialog({
     try {
       const payload: any = { ...form };
       if (!payload.plan_expires_at) delete payload.plan_expires_at;
-      await api.put(`/users/admin/institutions/${institution.id}/`, payload);
+      await api.put(`/users/institutions/${institution.id}/`, payload);
       // Also change plan via dedicated endpoint if changed
       if (form.plan !== institution.plan) {
-        await api.post(`/users/admin/institutions/${institution.id}/change-plan/`, {
+        await api.post(`/users/institutions/${institution.id}/change-plan/`, {
           plan: form.plan,
           plan_expires_at: payload.plan_expires_at || null,
         });
@@ -399,5 +408,152 @@ function EditInstitutionDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ── Institution Self-Settings (for institution admins) ── */
+
+function InstitutionSelfSettings() {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({
+    name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '',
+  });
+  const [logo, setLogo] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState('');
+  const [planLabel, setPlanLabel] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [studentCount, setStudentCount] = useState(0);
+  const [maxStudents, setMaxStudents] = useState(0);
+  const [planActive, setPlanActive] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get('/users/institution/me/update/').then(({ data }) => {
+      setForm({
+        name: data.name || '',
+        contact_name: data.contact_name || '',
+        contact_email: data.contact_email || '',
+        contact_phone: data.contact_phone || '',
+        notes: data.notes || '',
+      });
+      setLogoPreview(data.logo_url || '');
+      setPlanLabel(data.plan_label || '');
+      setExpiresAt(data.plan_expires_at || '');
+      setStudentCount(data.student_count || 0);
+      setMaxStudents(data.max_students || 0);
+      setPlanActive(data.is_plan_active);
+    }).catch(() => {});
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append('name', form.name);
+      fd.append('contact_name', form.contact_name);
+      fd.append('contact_email', form.contact_email);
+      fd.append('contact_phone', form.contact_phone);
+      fd.append('notes', form.notes);
+      if (logo) fd.append('logo', logo);
+      const { data } = await api.put('/users/institution/me/update/', fd);
+      if (data.logo_url) setLogoPreview(data.logo_url);
+      setLogo(null);
+      toast.success('机构信息已更新');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-muted">
+      <header className="bg-white border-b border-border/60">
+        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate('/')}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> 返回
+            </Button>
+            <span className="text-muted-foreground/40">|</span>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-primary" />
+              <span className="font-extrabold text-sm text-foreground">机构设置</span>
+            </div>
+          </div>
+          <Badge className={cn('text-[10px] font-bold', planActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
+            {planLabel} {planActive ? '· 生效中' : '· 已到期'}
+          </Badge>
+        </div>
+      </header>
+
+      <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+        <Card className="p-6 rounded-2xl border-none shadow-sm bg-white">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">当前方案</p>
+              <p className="text-sm font-bold mt-1">{planLabel}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">到期时间</p>
+              <p className="text-sm font-bold mt-1">{expiresAt ? new Date(expiresAt).toLocaleDateString('zh-CN') : '永久'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">学员数</p>
+              <p className="text-sm font-bold mt-1">{studentCount} / {maxStudents}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-8 rounded-2xl border-none shadow-sm bg-white space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构名称</Label>
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系人</Label>
+              <Input value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系邮箱</Label>
+              <Input value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系电话</Label>
+              <Input value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构简介</Label>
+            <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" placeholder="简短介绍你的机构..." />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构 Logo</Label>
+            <div className="flex items-center gap-4">
+              {logoPreview && (
+                <img src={logoPreview} alt="Logo" className="h-16 w-16 rounded-2xl object-cover border border-border" />
+              )}
+              <div className="relative flex-1">
+                <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 font-bold text-xs">
+                  <Upload className="w-4 h-4 mr-2 opacity-40" />
+                  {logo ? logo.name : logoPreview ? '更换 Logo' : '上传 Logo'}
+                </Button>
+                <input type="file" accept="image/*" onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) { setLogo(f); setLogoPreview(URL.createObjectURL(f)); }
+                }} className="absolute inset-0 opacity-0 cursor-pointer" />
+              </div>
+            </div>
+          </div>
+
+          <Button onClick={handleSave} disabled={saving} className="w-full h-12 rounded-xl bg-black text-white font-bold text-xs uppercase tracking-widest">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+            保存机构设置
+          </Button>
+        </Card>
+      </div>
+    </div>
   );
 }

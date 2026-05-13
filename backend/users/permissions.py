@@ -24,10 +24,12 @@ ROLE_PERMISSION_MATRIX = {
 
 
 def is_platform_admin(user) -> bool:
+    """超级管理员：is_superuser 且未绑定机构。机构管理员返回 False。"""
     return bool(
         user
         and user.is_authenticated
-        and (getattr(user, "is_superuser", False) or getattr(user, "is_staff", False) or getattr(user, "role", "") == "admin")
+        and getattr(user, "is_superuser", False)
+        and getattr(user, "institution_id", None) is None
     )
 
 
@@ -100,6 +102,19 @@ class IsPlatformAdmin(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return is_platform_admin(request.user)
+
+
+class IsAdmin(permissions.BasePermission):
+    """超级管理员或机构管理员"""
+    message = "需要管理员权限。"
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if is_platform_admin(user):
+            return True
+        return (user.institution is not None and user.institution_role == 'admin')
 
 
 class IsMemberOrAdmin(permissions.BasePermission):

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Bell, CheckCheck, MessageCircle, Info, Brain, Trash2 } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import {
   DropdownMenu,
@@ -97,7 +98,7 @@ export const NotificationBell = () => {
         <DropdownMenuSeparator className="bg-border" />
         <ScrollArea className="h-80">
           {notifications.length === 0 ? (
-            <div className="py-10 text-center text-[10px] font-bold text-muted-foreground uppercase opacity-30 tracking-widest">暂无消息通知</div>
+            <EmptyState icon={Bell} title="暂无消息通知" className="py-6" />
           ) : (
             <div className="p-1 space-y-0.5">
               {notifications.map(notif => (

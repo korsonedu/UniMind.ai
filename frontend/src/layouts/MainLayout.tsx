@@ -22,13 +22,20 @@ import {
   Loader2,
   Lock,
   Mic,
+  Wrench,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSystemStore } from '@/store/useSystemStore';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { NotificationBell } from '@/components/NotificationBell';
+import { OnboardingDialog } from '@/components/OnboardingDialog';
+import { UpgradeModal } from '@/components/UpgradeModal';
+import { EloPopover } from '@/components/EloPopover';
 import api from '@/lib/api';
 import {
   DropdownMenu,
@@ -77,8 +84,8 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
         asChild={!restricted}
         className={cn(
           "w-full justify-start gap-3 h-10 px-3 transition-all duration-200 rounded-lg cursor-pointer",
-          active 
-            ? "bg-card text-foreground shadow-sm border border-border" 
+          active
+            ? "bg-card text-foreground shadow-sm border border-border"
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
           collapsed && "justify-center px-0"
         )}
@@ -107,7 +114,7 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="right" className="font-bold border-none shadow-xl">{label}{restricted && " (需激活会员)"}</TooltipContent>
+        <TooltipContent side="right" className="font-bold border-none shadow-xl">{label}{restricted && " (需升级方案)"}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   ) : content;
@@ -124,18 +131,25 @@ export const MainLayout: React.FC = () => {
   const [activationCode, setActivationCode] = useState('');
   const [isActivating, setIsActivating] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [restrictedFeature, setRestrictedFeature] = useState<string | undefined>(undefined);
+
+  const { institution: instFromStore, fetchFeatures, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
+  const instInfo = instFromStore || user?.institution || null;
 
   const isFullPage = ['/intro', '/course-details', '/management'].includes(location.pathname);
   const isMobileAllowedPath = (pathname: string) =>
+    pathname === '/' ||
     pathname === '/articles' ||
     pathname.startsWith('/article/') ||
     pathname === '/qa' ||
     pathname.startsWith('/qa/') ||
     pathname === '/study' ||
+    pathname === '/ai' ||
     pathname === '/knowledge-map' ||
     pathname.startsWith('/knowledge-map/') ||
     pathname === '/tests' ||
-    pathname.startsWith('/tests/session') ||
+    pathname.startsWith('/tests/') ||
     pathname === '/settings';
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && location.pathname.startsWith('/tests/session');
@@ -144,6 +158,10 @@ export const MainLayout: React.FC = () => {
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-override', primaryColor);
   }, [primaryColor]);
+
+  useEffect(() => {
+    fetchFeatures();
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -161,6 +179,14 @@ export const MainLayout: React.FC = () => {
     }
   }, [isMobile, location.pathname, navigate]);
 
+  // Detect ?upgrade=1 from FeatureGuard redirects and show upgrade modal
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('upgrade') === '1') {
+      setShowUpgradeModal(true);
+    }
+  }, [location.search]);
+
   const handleActivate = async () => {
     if (!activationCode.trim()) return toast.error("请输入激活码");
     setIsActivating(true);
@@ -177,54 +203,66 @@ export const MainLayout: React.FC = () => {
     }
   };
 
-	  // ── 身份与方案层级 ──
-	  const isSuperAdmin = user?.role === 'admin' && !user?.institution;
-	  const instPlan = user?.institution?.plan || 'free';
-	  const planLevel = (p: string) => ({ free: 1, solo: 2, plus: 3, pro: 4 })[p] || 1;
-	  const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
-	  const atLeast = (lvl: number) => myPlanLevel >= lvl;
+  // ── 身份与方案层级 ──
+  const isSuperAdmin = user?.role === 'admin' && !instInfo;
+  const instPlan = instInfo?.plan || 'free';
+  const planLevel = (p: string) => ({ free: 1, solo: 2, plus: 3, pro: 4 })[p] || 1;
+  const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
+  const atLeast = (lvl: number) => myPlanLevel >= lvl;
 
-	  type NavItem = { to: string; icon: any; label: string; minPlan?: number; section?: string };
+  type NavItem = { to: string; icon: any; label: string; minPlan?: number; section?: string };
 
-	  // ── 超级管理员（我）—— 只看机构管理 + 邀请码 ──
-	  const navItems: NavItem[] = isSuperAdmin
-	    ? [
-	        { to: '/institution', icon: Building2, label: '机构管理' },
-	        { to: '/invite-codes', icon: Sparkles, label: '邀请码' },
-	      ]
-	    : [
-	        { to: '/', icon: BookOpen, label: '课程中心' },
-	        { to: '/tests', icon: Trophy, label: '习题训练' },
-	        { to: '/knowledge-map', icon: BrainCircuit, label: '知识地图', minPlan: 2 },
-	        { to: '/articles', icon: FileText, label: '文章' },
-	        { to: '/qa', icon: MessageCircleQuestion, label: '答疑', minPlan: 3 },
-	        { to: '/ai', icon: Sparkles, label: 'AI 实验室', minPlan: 2 },
-	        { to: '/study', icon: Clock, label: '自习室', minPlan: 3 },
-	        { to: '/interviews', icon: Mic, label: '模拟面试', minPlan: 3 },
-	        { to: '/mock-exam', icon: FileText, label: 'PDF 模考', minPlan: 3 },
-	      ];
+  // ── 超级管理员 —— 只看机构管理 + 邀请码 ──
+  const navItems: NavItem[] = isSuperAdmin
+    ? [
+        { to: '/institution/admin', icon: Building2, label: '机构管理' },
+        { to: '/invite-codes', icon: Sparkles, label: '邀请码' },
+      ]
+    : [
+        { to: '/', icon: BookOpen, label: '课程中心' },
+        { to: '/tests', icon: Trophy, label: '习题训练' },
+        { to: '/knowledge-map', icon: BrainCircuit, label: '知识地图', minPlan: 2 },
+        { to: '/articles', icon: FileText, label: '文章' },
+        { to: '/qa', icon: MessageCircleQuestion, label: '答疑', minPlan: 3 },
+        { to: '/ai', icon: Sparkles, label: 'AI 实验室', minPlan: 2 },
+        { to: '/study', icon: Clock, label: '自习室', minPlan: 3 },
+        { to: '/interviews', icon: Mic, label: '模拟面试' },
+        { to: '/mock-exam', icon: FileText, label: 'PDF 模考', minPlan: 3 },
+      ];
 
-	  // ── 机构管理员 / 学员 —— 附加机构入口 ──
-	  if (!isSuperAdmin && user?.institution) {
-	    navItems.push({ to: '/institution', icon: BarChart3, label: '机构看板', section: '机构' });
-	    navItems.push({ to: '/institution/students', icon: UserIcon, label: '学员管理', section: '机构' });
-	    if (user?.institution_role === 'admin') {
-	      navItems.push({ to: '/institution/admin', icon: Settings2, label: '机构设置', section: '机构' });
-	    }
-	  }
+  // ── 机构成员 —— 附加机构入口（机构设置移到头像下拉菜单）──
+  if (!isSuperAdmin && instInfo) {
+    navItems.push({ to: '/institution', icon: BarChart3, label: '机构看板', section: '机构' });
+    if (user?.institution_role === 'admin') {
+      navItems.push({ to: '/institution/students', icon: UserIcon, label: '学员管理', section: '机构' });
+      navItems.push({ to: '/management', icon: Wrench, label: '维护中心', section: '机构' });
+    }
+  }
 
-	  const mobileNavItems: NavItem[] = isSuperAdmin
-	    ? [
-	        { to: '/institution', icon: Building2, label: '机构' },
-	        { to: '/invite-codes', icon: Sparkles, label: '邀请' },
-	      ]
-	    : [
-	        { to: '/', icon: BookOpen, label: '课程' },
-	        { to: '/tests', icon: Trophy, label: '做题' },
-	        { to: '/knowledge-map', icon: BrainCircuit, label: '知识' },
-	        { to: '/articles', icon: FileText, label: '文章' },
-	        { to: '/qa', icon: MessageCircleQuestion, label: '答疑' },
-	      ];
+  const mobileNavItems: NavItem[] = isSuperAdmin
+    ? [
+        { to: '/institution', icon: Building2, label: '机构' },
+        { to: '/invite-codes', icon: Sparkles, label: '邀请' },
+      ]
+    : [
+        { to: '/', icon: BookOpen, label: '课程' },
+        { to: '/tests', icon: Trophy, label: '做题' },
+        { to: '/knowledge-map', icon: BrainCircuit, label: '知识', minPlan: 2 },
+        { to: '/articles', icon: FileText, label: '文章' },
+        { to: '/qa', icon: MessageCircleQuestion, label: '答疑', minPlan: 3 },
+      ];
+
+  // Sidebar onRestrictedClick: show upgrade modal with appropriate feature
+  const handleRestrictedClick = (item: NavItem) => {
+    const mp = (item as any).minPlan;
+    const featureMap: Record<number, string> = {
+      2: 'ai.assistant',
+      3: 'study.room',
+    };
+    setRestrictedFeature(featureMap[mp]);
+    setShowUpgradeModal(true);
+  };
+
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
@@ -252,16 +290,16 @@ export const MainLayout: React.FC = () => {
 
           <nav className="flex-1 space-y-0.5">
             {navItems.map(item => (
-              <SidebarItem 
-                key={item.to} 
-                {...item} 
-                active={location.pathname === item.to} 
+              <SidebarItem
+                key={item.to}
+                {...item}
+                active={location.pathname === item.to}
                 collapsed={collapsed}
                 restricted={Boolean((item as any).minPlan && !atLeast((item as any).minPlan))}
-                onRestrictedClick={() => setShowActivateDialog(true)}
+                onRestrictedClick={() => handleRestrictedClick(item)}
               />
             ))}
-            
+
             <div className="my-3 px-2.5">
               <div className="h-px bg-border w-full opacity-80" />
             </div>
@@ -286,7 +324,7 @@ export const MainLayout: React.FC = () => {
                           <p className="text-[12px] font-bold truncate">{user?.nickname || user?.username}</p>
                           {user.is_member && <ShieldCheck className="h-3 w-3 text-amber-500" />}
                         </div>
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{user.is_member ? 'Pro Member' : 'Free Scholar'}</p>
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{instInfo ? instInfo.name : (user.is_member ? 'Pro Member' : 'Free Scholar')}</p>
                       </div>
                     )}
                   </div>
@@ -303,6 +341,13 @@ export const MainLayout: React.FC = () => {
                     <UserIcon className="h-3.5 w-3.5" />
                     <span className="font-bold text-xs">个人设置</span>
                   </DropdownMenuItem>
+                  {/* 机构设置：机构管理员在头像下拉菜单中可见 */}
+                  {!isSuperAdmin && instInfo && user?.institution_role === 'admin' && (
+                    <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                      <Settings2 className="h-3.5 w-3.5" />
+                      <span className="font-bold text-xs">机构设置</span>
+                    </DropdownMenuItem>
+                  )}
                   {user?.role === 'admin' && (
                     <DropdownMenuItem onClick={() => navigate('/system-settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Settings2 className="h-3.5 w-3.5" />
@@ -354,12 +399,23 @@ export const MainLayout: React.FC = () => {
                     </div>
                   )}
                </div>
-               <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 px-3.5 py-1.5 bg-card rounded-full shadow-sm border border-border">
-                     <Sparkles className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-                     <span className="text-xs font-bold text-foreground">ELO: {user?.elo_score}</span>
-                  </div>
-                  <div className="h-6 w-px bg-border mx-2" />
+               <div className="flex items-center gap-3">
+                  {/* Clickable ELO */}
+                  {user && <EloPopover />}
+                  {/* Upgrade plan button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 rounded-full px-3 text-[11px] font-bold bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-700 hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 transition-all"
+                    onClick={() => {
+                      setRestrictedFeature(undefined);
+                      setShowUpgradeModal(true);
+                    }}
+                  >
+                    <Sparkles className="h-3 w-3 mr-1 text-amber-500" />
+                    升级方案
+                  </Button>
+                  <div className="h-6 w-px bg-border mx-1" />
                   {user && <NotificationBell />}
                   <Avatar className={cn("h-8 w-8 border border-border shadow-sm")}>
                      <AvatarImage src={user?.avatar_url} />
@@ -395,6 +451,12 @@ export const MainLayout: React.FC = () => {
                       <UserIcon className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">个人设置</span>
                     </DropdownMenuItem>
+                    {!isSuperAdmin && instInfo && user?.institution_role === 'admin' && (
+                      <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                        <Settings2 className="h-3.5 w-3.5" />
+                        <span className="font-bold text-xs">机构设置</span>
+                      </DropdownMenuItem>
+                    )}
                     {user?.is_member && (
                       <DropdownMenuItem
                         onClick={() => window.dispatchEvent(new Event('open-weekly-report'))}
@@ -420,6 +482,19 @@ export const MainLayout: React.FC = () => {
               ? "px-0 py-0 h-full overflow-hidden"
               : !isFullPage && "px-4 py-4 md:px-8 md:py-6"
           )}>
+            {/* Preview mode banner */}
+            {previewMode && previewInstitution && (
+              <div className="flex items-center justify-between bg-[#0071E3] text-white px-4 py-2.5 rounded-xl mb-3">
+                <div className="flex items-center gap-2 text-sm font-bold">
+                  <Eye className="h-4 w-4" />
+                  <span>预览模式：{previewInstitution.name}（{previewInstitution.plan_label}）</span>
+                </div>
+                <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 text-xs"
+                  onClick={exitPreview}>
+                  <EyeOff className="h-3.5 w-3.5 mr-1" /> 退出预览
+                </Button>
+              </div>
+            )}
             <Outlet />
           </div>
         </main>
@@ -440,7 +515,7 @@ export const MainLayout: React.FC = () => {
                   key={item.to}
                   onClick={() => {
                     if (restricted) {
-                      setShowActivateDialog(true);
+                      handleRestrictedClick(item);
                       return;
                     }
                     navigate(item.to);
@@ -473,15 +548,15 @@ export const MainLayout: React.FC = () => {
             <div className="space-y-6 pt-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">激活码 (Activation Code)</Label>
-                <Input 
+                <Input
                   value={activationCode}
                   onChange={(e) => setActivationCode(e.target.value)}
                   placeholder="XXXX-XXXX-XXXX"
                   className="h-14 rounded-2xl bg-muted/50 border-none font-mono font-bold text-center text-lg tracking-wider focus-visible:ring-amber-500/20"
                 />
               </div>
-              <Button 
-                onClick={handleActivate} 
+              <Button
+                onClick={handleActivate}
                 disabled={isActivating}
                 className="w-full h-14 rounded-2xl bg-black text-white font-black shadow-xl hover:opacity-90 active:scale-[0.98] transition-all uppercase tracking-widest text-xs"
               >
@@ -493,6 +568,12 @@ export const MainLayout: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        <UpgradeModal
+          open={showUpgradeModal}
+          onOpenChange={setShowUpgradeModal}
+          feature={restrictedFeature}
+        />
 
         <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}>
           <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl bg-card">
@@ -506,6 +587,8 @@ export const MainLayout: React.FC = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <OnboardingDialog />
       </div>
     </TooltipProvider>
   );

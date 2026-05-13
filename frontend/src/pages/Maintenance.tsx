@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -27,6 +28,7 @@ import { MembershipPanel } from './maintenance/MembershipPanel';
 import { AuditPanel } from './maintenance/AuditPanel';
 import { PipelinePanel } from './maintenance/PipelinePanel';
 import { PromptTemplatesPanel } from './maintenance/PromptTemplatesPanel';
+import { KnowledgeSystemPanel } from './maintenance/KnowledgeSystemPanel';
 
 export const Maintenance: React.FC = () => {
   const CHUNKED_UPLOAD_THRESHOLD_BYTES = 100 * 1024 * 1024;
@@ -89,13 +91,17 @@ export const Maintenance: React.FC = () => {
     } catch (e) { }
   };
 
+  const { user } = useAuthStore();
+
   const fetchBI = async () => {
     setIsLoadingBI(true);
     try { const res = await api.get('/users/admin/bi/'); setBIData(res.data); } catch (e) { toast.error("分析数据同步失败"); }
     finally { setIsLoadingBI(false); }
   };
 
-  const fetchCodes = async () => { try { const res = await api.get('/users/admin/codes/'); setCodes(res.data); } catch (e) {} };
+  const fetchCodes = async () => {
+    try { const res = await api.get('/users/admin/codes/'); setCodes(res.data); } catch (e) {}
+  };
 
   useEffect(() => { fetchLists(); fetchCodes(); fetchBI(); }, []);
 
@@ -400,19 +406,7 @@ export const Maintenance: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="kp">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <Card className="lg:col-span-5 p-8 bg-white rounded-3xl border-none shadow-sm space-y-6">
-              <div className="flex items-center gap-3"><BrainCircuit className="h-5 w-5 text-purple-600" /><h3 className="text-lg font-bold tracking-tight">建立拓扑节点</h3></div>
-              <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">节点名称</Label><Input value={kpForm.name} onChange={e => setKpForm({ ...kpForm, name: e.target.value })} className="bg-[#F5F5F7] border-none h-10 rounded-xl font-bold px-4 text-xs" /></div>
-              <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">隶属父级</Label><Select value={kpForm.parent} onValueChange={v => setKpForm({ ...kpForm, parent: v })}><SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-none font-bold text-[11px] px-4"><SelectValue placeholder="顶级节点" /></SelectTrigger><SelectContent>{kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()} className="text-xs">{kp.name}</SelectItem>)}</SelectContent></Select></div>
-              <textarea value={kpForm.description} onChange={e => setKpForm({ ...kpForm, description: e.target.value })} className="w-full bg-[#F5F5F7] border-none rounded-xl p-4 min-h-[80px] font-bold text-xs" placeholder="描述..." />
-              <Button onClick={async () => { try { await api.post('/quizzes/knowledge-points/', { ...kpForm, parent: kpForm.parent === "0" ? null : kpForm.parent }); toast.success("已保存"); setKpForm({ name: '', description: '', parent: '0' }); fetchLists(); } catch (e) { toast.error("失败"); } }} className="w-full h-12 rounded-xl bg-black text-white font-bold text-[11px] uppercase tracking-widest">Save Node</Button>
-            </Card>
-            <Card className="lg:col-span-7 p-8 bg-[#F5F5F7]/50 rounded-3xl border-none shadow-sm space-y-6">
-              <div className="flex items-center justify-between"><h3 className="text-[11px] font-bold uppercase tracking-widest opacity-40">树状结构预览</h3><Button variant="ghost" size="icon" onClick={fetchLists}><RefreshCcw className="w-3.5 h-3.5 opacity-40" /></Button></div>
-              <ScrollArea className="h-[500px]"><div className="pr-4">{roots.map(root => (<KPTreeNode key={root.id} node={root} allNodes={kpList} onDelete={id => handleDelete('kp', id)} onEdit={node => setEditingItem({ type: 'kp', data: node })} />))}</div></ScrollArea>
-            </Card>
-          </div>
+          <KnowledgeSystemPanel />
         </TabsContent>
 
         <TabsContent value="albums">
@@ -492,10 +486,12 @@ export const Maintenance: React.FC = () => {
 
         <TabsContent value="membership">
           <MembershipPanel codes={codes} newCodeCount={newCodeCount} setNewCodeCount={setNewCodeCount} isGeneratingCodes={isGeneratingCodes} handleGenerateCodes={handleGenerateCodes} handleDeleteCode={handleDeleteCode} fetchCodes={fetchCodes} />
+
         </TabsContent>
 
         <TabsContent value="insights">
           <InsightsPanel biData={biData} isLoadingBI={isLoadingBI} fetchBI={fetchBI} />
+
         </TabsContent>
 
         <TabsContent value="manage">

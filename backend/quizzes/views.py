@@ -6,6 +6,7 @@ import io
 import logging
 from django.utils import timezone
 from rest_framework import generics, permissions
+from users.permissions import IsAdmin
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from .models import Question, QuizAttempt, UserQuestionStatus, KnowledgePoint, QuizExam
@@ -40,7 +41,7 @@ class QuestionListView(generics.ListCreateAPIView):
     
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [permissions.IsAdminUser()]
+            return [IsAdmin()]
         return [IsMember()]
 
     def get_queryset(self):
@@ -174,7 +175,7 @@ class FavoriteQuestionListView(generics.ListAPIView):
 class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
 class QuizAttemptCreateView(generics.CreateAPIView):
     serializer_class = QuizAttemptSerializer
@@ -303,7 +304,7 @@ class ExamDetailView(generics.RetrieveAPIView):
         return QuizExam.objects.filter(user=self.request.user)
 
 class GenerateBulkQuestionsView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
     def post(self, request, pk):
         try: 
             kp = KnowledgePoint.objects.get(pk=pk)
@@ -323,7 +324,7 @@ class AIPreviewGenerateView(APIView):
     """
     智能出题预览：返回生成的数据但不存库
     """
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
     def post(self, request):
         kp_ids = request.data.get('kp_ids', [])
         count = int(request.data.get('count', 1))
@@ -356,7 +357,7 @@ class AIConfirmSaveQuestionsView(APIView):
     """
     确认入库：保存前端编辑后的题目
     """
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
     def post(self, request):
         questions_data = request.data.get('questions', [])
         if not isinstance(questions_data, list) or not questions_data:
@@ -396,7 +397,7 @@ class AIConfirmSaveQuestionsView(APIView):
         return Response({'status': 'success', 'count': created_count})
 
 class GenerateFromTextView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
     def post(self, request):
         text = request.data.get('text')
         kp_id = request.data.get('kp_id')
@@ -423,7 +424,7 @@ class AIPreviewParseView(APIView):
     """
     整理功能：改用高性能异步模式
     """
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
     def post(self, request):
         raw_text = extract_raw_text(
             request.data.get('raw_text', ''),
@@ -446,7 +447,7 @@ class AIPreviewParseView(APIView):
         return Response(result)
 
 class BulkImportQuestionsView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
     def post(self, request):
         questions_data = request.data.get('questions', [])
         kp_id = request.data.get('kp_id')
@@ -463,7 +464,7 @@ class AdminQuestionListView(APIView):
     管理员专用分页题目列表接口，支持搜索、知识点筛选和题型筛选。
     用于前端题库管理面板，性能优化版本，面向5000题以上的大规模题库。
     """
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         qs = Question.objects.select_related('knowledge_point').order_by('-created_at')
@@ -519,7 +520,7 @@ class ExportStructuredQuestionsView(APIView):
     导出结构化题目数据（AI 可读格式）。
     直接同步至服务器本地 seed_questions.json。
     """
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         kp_id = request.query_params.get('kp_id')
@@ -572,7 +573,7 @@ class ExportStructuredQuestionsView(APIView):
             return Response({"error": f"写入文件失败: {str(e)}"}, status=500)
 
 class ImportCSVQuestionsView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
     
     def post(self, request):
         file_obj = request.FILES.get('file')

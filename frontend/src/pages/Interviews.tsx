@@ -1,10 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Bot, FileText, Globe, GraduationCap, Mic, Sparkles } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
+import { InlineError } from '@/components/InlineError';
+import { useFetch } from '@/lib/useFetch';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
@@ -27,9 +30,9 @@ export const Interviews: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'lobby' | 'history'>('lobby');
   const [style, setStyle] = useState<'friendly' | 'pressure'>('friendly');
   const [startingType, setStartingType] = useState<string | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyFailed, setHistoryFailed] = useState('');
-  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const { data: sessions, loading: historyLoading, error: historyFailed, refetch } = useFetch<SessionItem[]>(
+    (signal) => api.get('/interviews/sessions/', { signal }).then(r => (r.data?.results || []) as SessionItem[])
+  );
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSending, setChatSending] = useState(false);
   const [chatInput, setChatInput] = useState('');
@@ -38,22 +41,7 @@ export const Interviews: React.FC = () => {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeSaving, setResumeSaving] = useState(false);
 
-  const activeSession = useMemo(() => sessions.find((s) => s.id === activeSessionId) || null, [sessions, activeSessionId]);
-
-  const loadHistory = async () => {
-    setHistoryLoading(true);
-    setHistoryFailed('');
-    try {
-      const res = await api.get('/interviews/sessions/');
-      setSessions((res.data?.results || []) as SessionItem[]);
-    } catch (e) {
-      const msg = formatApiErrorToast(e, '加载历史记录失败');
-      setHistoryFailed(msg);
-      toast.error(msg);
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
+  const activeSession = useMemo(() => (sessions || []).find((s) => s.id === activeSessionId) || null, [sessions, activeSessionId]);
 
   const loadSessionDetail = async (sessionId: number) => {
     if (!sessionId) return;
@@ -61,11 +49,7 @@ export const Interviews: React.FC = () => {
     try {
       const res = await api.get(`/interviews/sessions/${sessionId}/`);
       const detail = res.data as SessionItem;
-      setSessions((prev) => {
-        const has = prev.some((item) => item.id === sessionId);
-        if (!has) return [detail, ...prev];
-        return prev.map((item) => (item.id === sessionId ? detail : item));
-      });
+      refetch();
       setActiveTab('history');
     } catch (e) {
       toast.error(formatApiErrorToast(e, '加载会话详情失败'));
@@ -73,10 +57,6 @@ export const Interviews: React.FC = () => {
       setChatLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadHistory();
-  }, []);
 
   useEffect(() => {
     if (activeSessionId > 0) {
@@ -95,7 +75,7 @@ export const Interviews: React.FC = () => {
       if (!sessionId) throw new Error('missing_session_id');
       toast.success(`面试会话 #${sessionId} 已创建`);
       navigate(`/interviews?session_id=${sessionId}`);
-      await loadHistory();
+      refetch();
     } catch (e) {
       toast.error(formatApiErrorToast(e, '创建面试会话失败'));
     } finally {
@@ -124,7 +104,7 @@ export const Interviews: React.FC = () => {
       await api.post(`/interviews/sessions/${activeSessionId}/finish/`, {});
       toast.success('复盘已生成');
       await loadSessionDetail(activeSessionId);
-      await loadHistory();
+      refetch();
     } catch (e) {
       toast.error(formatApiErrorToast(e, '生成复盘失败'));
     } finally {
@@ -212,19 +192,18 @@ export const Interviews: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {historyLoading && sessions.length === 0 ? (
+            {historyLoading && (!sessions || sessions.length === 0) ? (
               <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">正在加载面试记录...</Card>
             ) : historyFailed ? (
-              <Card className="p-10 rounded-2xl border border-red-200 bg-red-50/70 text-center text-sm font-bold text-red-700">{historyFailed}</Card>
-            ) : sessions.length === 0 ? (
-              <Card className="p-10 rounded-2xl border border-border/60 text-center text-muted-foreground">
-                <Bot className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p className="font-bold">暂无面试记录</p>
+              <Card className="p-6 rounded-2xl border border-border/60"><InlineError message={historyFailed} onRetry={refetch} /></Card>
+            ) : !sessions || sessions.length === 0 ? (
+              <Card className="p-10 rounded-2xl border border-border/60">
+                <EmptyState icon={Bot} title="暂无面试记录" className="py-0" />
               </Card>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <Card className="lg:col-span-1 p-3 rounded-2xl border border-border/60 space-y-2">
-                  {sessions.map((s) => (
+                  {(sessions || []).map((s) => (
                     <button key={s.id} onClick={() => navigate(`/interviews?session_id=${s.id}`)} className={`w-full text-left rounded-xl border px-3 py-2 ${s.id === activeSessionId ? 'border-indigo-400 bg-indigo-50/70' : 'border-border/60'}`}>
                       <p className="text-sm font-black">Session #{s.id}</p>
                       <p className="text-xs text-muted-foreground mt-1">{s.session_type} · {s.interviewer_style} · {s.status}</p>

@@ -39,7 +39,8 @@ export const KnowledgeNodeDetail: React.FC = () => {
         ]);
         setNode(nodeRes.data);
         setQuestions(questionRes.data || []);
-      } finally {
+      } catch (e) { console.error('fetchKnowledgeNode failed', e); }
+      finally {
         setLoading(false);
       }
     };

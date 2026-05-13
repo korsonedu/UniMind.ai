@@ -19,6 +19,15 @@ interface User {
   current_timer_end?: string;
   today_focused_minutes?: number;
   today_completed_tasks?: any[];
+  institution?: {
+    id: number;
+    name: string;
+    plan: string;
+    plan_label: string;
+    is_plan_active: boolean;
+    max_students: number;
+    student_count: number;
+  } | null;
   institution_id?: number;
   institution_role?: string;
   is_admin?: boolean;

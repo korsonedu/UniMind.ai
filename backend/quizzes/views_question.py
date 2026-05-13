@@ -13,7 +13,7 @@ from quizzes.models import Question, UserQuestionStatus, KnowledgePoint
 from quizzes.serializers import QuestionSerializer
 from users.models import User
 from users.views import IsMember
-from users.permissions import IsPlatformAdmin, is_platform_admin
+from users.permissions import IsAdmin, is_platform_admin
 from ai_service import AIService
 from quizzes.services.study_planner import build_adaptive_question_ids
 from quizzes.ai_workflow import save_confirmed_questions
@@ -43,7 +43,7 @@ class QuestionListView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [IsPlatformAdmin()]
+            return [IsAdmin()]
         return [IsMember()]
 
     def get_queryset(self):
@@ -175,11 +175,11 @@ class QuestionListView(generics.ListCreateAPIView):
 class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
 
 class BulkImportQuestionsView(APIView):
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
     def post(self, request):
         questions_data = request.data.get('questions', [])
         kp_id = request.data.get('kp_id')
@@ -196,7 +196,7 @@ class AdminQuestionListView(APIView):
     管理员专用分页题目列表接口，支持搜索、知识点筛选和题型筛选。
     用于前端题库管理面板，性能优化版本，面向5000题以上的大规模题库。
     """
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         qs = Question.objects.select_related('knowledge_point').order_by('-created_at')
@@ -252,7 +252,7 @@ class ExportStructuredQuestionsView(APIView):
     导出结构化题目数据（AI 可读格式）。
     直接同步至服务器本地 seed_questions.json。
     """
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         kp_id = request.query_params.get('kp_id')
@@ -311,7 +311,7 @@ class ExportStructuredQuestionsView(APIView):
 
 class ImportCSVQuestionsView(APIView):
     MAX_SIZE = 5 * 1024 * 1024  # 5MB
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def post(self, request):
         file_obj = request.FILES.get('file')

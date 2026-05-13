@@ -4,7 +4,8 @@ from .views import (
     SystemConfigView, OnlineUserListView, UpdateEmailView, UpdatePasswordView,
     DailyPlanListView, DailyPlanDetailView, ResetEloView,
     ActivateMembershipView, ActivationCodeListView, ActivationCodeDetailView,
-    BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView
+    BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
+    MyKnowledgeMasteryView,
 )
 from .views_institution import (
     InstitutionDashboardView, InstitutionListView, InstitutionDetailView,
@@ -12,6 +13,7 @@ from .views_institution import (
     InstitutionChangePlanView, InstitutionStatsView,
     InstitutionStudentListView, InstitutionStudentDetailView,
     InstitutionStudentStatsView, InstitutionStudentResetPasswordView,
+    InstitutionStudentRankingView,
     InstitutionFeatureView, InstitutionPreviewView,
     JoinInstitutionView, InstitutionSelfUpdateView, InstitutionJoinView,
     InstitutionInviteLookupView,
@@ -29,6 +31,7 @@ urlpatterns = [
     path('me/reset-elo/', ResetEloView.as_view(), name='reset-elo'),
     path('me/activate/', ActivateMembershipView.as_view(), name='activate-membership'),
     path('me/weekly-report/', WeeklyCognitiveReportView.as_view(), name='weekly-report'),
+    path('me/knowledge-mastery/', MyKnowledgeMasteryView.as_view(), name='knowledge-mastery'),
     path('heartbeat/', HeartbeatView.as_view(), name='heartbeat'),
 
     # System
@@ -50,6 +53,7 @@ urlpatterns = [
     path('institutions/<int:pk>/deactivate/', InstitutionDeactivateView.as_view(), name='institution-deactivate'),
     path('institutions/<int:pk>/change-plan/', InstitutionChangePlanView.as_view(), name='institution-change-plan'),
     path('institutions/<int:pk>/stats/', InstitutionStatsView.as_view(), name='institution-stats'),
+    path('institutions/<int:pk>/preview/', InstitutionPreviewView.as_view(), name='institution-preview'),
 
     # Institution — self-service (current user's institution)
     path('institution/me/', InstitutionDashboardView.as_view(), name='institution-me'),
@@ -62,6 +66,7 @@ urlpatterns = [
 
     # Institution — students
     path('institution/me/students/', InstitutionStudentListView.as_view(), name='institution-student-list'),
+    path('institution/me/students/ranking/', InstitutionStudentRankingView.as_view(), name='institution-student-ranking'),
     path('institution/me/students/<int:pk>/', InstitutionStudentDetailView.as_view(), name='institution-student-detail'),
     path('institution/me/students/<int:pk>/stats/', InstitutionStudentStatsView.as_view(), name='institution-student-stats'),
     path('institution/me/students/<int:pk>/reset-password/', InstitutionStudentResetPasswordView.as_view(), name='institution-student-reset-password'),

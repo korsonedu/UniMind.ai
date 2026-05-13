@@ -22,6 +22,7 @@ from .views_knowledge import (
     KnowledgePointListView, KnowledgePointDetailView,
     MyKnowledgePointAnnotationView, MyKnowledgePointAnnotationListView,
     GenerateBulkQuestionsView,
+    KnowledgePointImportMDView, KnowledgePointExportMDView,
 )
 from .views_ai import (
     GenerateFromTextView, AIPreviewParseView,
@@ -58,6 +59,8 @@ urlpatterns = [
     path('knowledge-points/<int:pk>/', KnowledgePointDetailView.as_view(), name='knowledge-point-detail'),
     path('knowledge-points/<int:pk>/annotation/', MyKnowledgePointAnnotationView.as_view(), name='knowledge-point-annotation-me'),
     path('knowledge-points/<int:pk>/generate/', GenerateBulkQuestionsView.as_view(), name='knowledge-point-generate'),
+    path('knowledge-points/import-md/', KnowledgePointImportMDView.as_view(), name='knowledge-point-import-md'),
+    path('knowledge-points/export-md/', KnowledgePointExportMDView.as_view(), name='knowledge-point-export-md'),
     # 智能出题工作流
     path('ai-smart-generate-preview/', AIPreviewGenerateView.as_view(), name='ai-smart-generate-preview'),
     path('ai-smart-generate-confirm/', AIConfirmSaveQuestionsView.as_view(), name='ai-smart-generate-confirm'),

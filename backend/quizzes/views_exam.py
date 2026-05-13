@@ -10,7 +10,7 @@ from quizzes.models import Question, QuizAttempt, QuizExam, TeacherExam, Student
 from quizzes.serializers import QuizAttemptSerializer, QuizExamSerializer, TeacherExamSerializer
 from users.models import User
 from users.serializers import UserSerializer
-from users.permissions import IsPlatformAdmin
+from users.permissions import IsAdmin
 from users.views import IsMember
 from quizzes.ai_workflow import grade_single_question_submission, mark_questions_reviewed
 from quizzes.services.task_dispatcher import dispatch_exam_grading
@@ -66,7 +66,7 @@ class TeacherExamListView(APIView):
 
 class TeacherExamCreateView(APIView):
     """教师/管理员上传发布试卷 PDF"""
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def post(self, request):
         title = request.data.get('title', '').strip()
@@ -86,7 +86,7 @@ class TeacherExamCreateView(APIView):
 
 class TeacherExamDeleteView(APIView):
     """教师/管理员删除已发布试卷"""
-    permission_classes = [IsPlatformAdmin]
+    permission_classes = [IsAdmin]
 
     def delete(self, request, pk):
         exam = get_object_or_404(TeacherExam, id=pk)

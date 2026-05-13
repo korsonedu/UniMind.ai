@@ -204,12 +204,12 @@ MAX_DURATION_DAYS = 365
 PLAN_FEATURES: dict[str, list[str]] = {
     'free': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
-        'ai.generate', 'faq.system',
+        'ai.generate', 'course.video',
     ],
     'solo': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
-        'ai.assistant',
+        'ai.assistant', 'course.video', 'video.outline',
     ],
     'plus': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
@@ -222,7 +222,9 @@ PLAN_FEATURES: dict[str, list[str]] = {
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline', 'faq.system',
         'pdf.mock', 'study.room', 'multi.teacher', 'class.compare', 'data.export',
-        'brand.custom', 'api.access',
+        'brand.custom', 'api.access', 'student.payment',
+        'private.deploy', 'i18n.custom', 'sso.saml', 'audit.log',
+        'dedicated.support', 'sla.99.9',
     ],
 }
 

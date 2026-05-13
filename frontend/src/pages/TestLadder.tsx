@@ -162,28 +162,28 @@ export const TestLadder: React.FC = () => {
       const res = await api.get('/quizzes/knowledge-points/');
       const data = Array.isArray(res.data) ? res.data : (res.data?.results || []);
       setSubjectList(data.map((item: any) => ({ id: item.id, name: item.name, code: item.code })));
-    } catch (e) { }
+    } catch (e) { console.error('fetchSubjects failed', e); }
   };
 
   const fetchGoals = async () => {
     try {
       const res = await api.get('/quizzes/stats/');
       setGoals(res.data);
-    } catch (e) { }
+    } catch (e) { console.error('fetchGoals failed', e); }
   };
 
   const fetchFsrsCurve = async () => {
     try {
       const res = await api.get('/quizzes/fsrs/curve/', { params: { window_days: 90 } });
       setFsrsCurve(res.data as FsrsCurvePayload);
-    } catch (e) { }
+    } catch (e) { console.error('fetchFsrsCurve failed', e); }
   };
 
   const fetchFsrsHistory = async () => {
     try {
       const res = await api.get('/quizzes/fsrs/optimization-history/');
       setFsrsHistory((res.data?.results || []) as FsrsOptimizationHistory[]);
-    } catch (e) { }
+    } catch (e) { console.error('fetchFsrsHistory failed', e); }
   };
 
   const toggleFavorite = async (qId: number) => {

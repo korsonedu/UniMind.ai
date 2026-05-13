@@ -1,26 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { LayoutGrid, PlusCircle, PlayCircle, Loader2 } from 'lucide-react';
+import { PlusCircle, PlayCircle, BookOpen } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
+import { Loading } from '@/components/Loading';
+import { EmptyState } from '@/components/EmptyState';
+import { InlineError } from '@/components/InlineError';
+import { useFetch } from '@/lib/useFetch';
 import api from '@/lib/api';
 
 export const CourseCenter: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [courses, setCourses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get('/courses/').then(res => {
-      setCourses(res.data);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  const { data: courses, loading, error, refetch } = useFetch<any[]>(
+    (signal) => api.get('/courses/', { signal }).then(r => r.data)
+  );
 
   const ActionBtn = user?.role === 'admin' ? (
-    <Button 
+    <Button
       onClick={() => navigate('/management')}
       className="bg-primary text-primary-foreground hover:opacity-90 rounded-2xl px-6 h-11 font-bold shadow-lg transition-all hover:scale-[1.02]"
     >
@@ -28,12 +27,9 @@ export const CourseCenter: React.FC = () => {
     </Button>
   ) : null;
 
-  if (loading) return (
-    <div className="h-[60vh] flex flex-col items-center justify-center gap-4">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Synchronizing Catalog...</p>
-    </div>
-  );
+  if (loading) return <Loading message="Synchronizing Catalog..." />;
+  if (error) return <InlineError message={error} onRetry={refetch} />;
+  if (!courses?.length) return <EmptyState icon={BookOpen} title="暂无课程" description="管理员发布课程后将在此显示" className="h-[60vh]" />;
 
   return (
     <PageWrapper 
@@ -41,22 +37,7 @@ export const CourseCenter: React.FC = () => {
       subtitle="精品课程助你构建完整的专业知识体系。"
       action={ActionBtn}
     >
-      {courses.length === 0 ? (
-        <div className="space-y-10 text-left">
-          <Card className="border-none shadow-sm rounded-3xl bg-card p-16 flex flex-col items-center justify-center text-center space-y-6 border border-border">
-            <div className="h-20 w-20 bg-muted rounded-3xl flex items-center justify-center">
-              <LayoutGrid className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-foreground">虚位以待</h3>
-              <p className="text-muted-foreground max-w-sm mx-auto text-sm font-medium leading-relaxed">
-                目前还没有上传课程。如果你是管理员，可以前往维护中心发布第一门课程。
-              </p>
-            </div>
-          </Card>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 text-left animate-in fade-in duration-700">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 text-left animate-in fade-in duration-700">
            {courses.map(course => (
              <Card 
               key={course.id} 
@@ -84,7 +65,6 @@ export const CourseCenter: React.FC = () => {
              </Card>
            ))}
         </div>
-      )}
     </PageWrapper>
   );
 };

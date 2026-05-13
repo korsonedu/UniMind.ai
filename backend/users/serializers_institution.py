@@ -36,9 +36,10 @@ class ChangePlanSerializer(serializers.Serializer):
 
 
 class InstitutionStudentSerializer(serializers.ModelSerializer):
+    avatar_url = serializers.ReadOnlyField()
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'nickname', 'elo_score',
+        fields = ['id', 'username', 'email', 'nickname', 'elo_score', 'avatar_url',
                   'institution_role', 'date_joined', 'last_active']
 
 

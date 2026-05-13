@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
+import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -426,7 +427,7 @@ export const PipelinePanel: React.FC = () => {
         {loading ? (
           <div className="py-14 flex justify-center"><Loader2 className="h-7 w-7 animate-spin text-muted-foreground/40" /></div>
         ) : tasks.length === 0 ? (
-          <div className="py-12 text-center text-[11px] font-bold uppercase tracking-widest text-muted-foreground">暂无任务</div>
+          <EmptyState title="暂无任务" className="py-6" />
         ) : (
           <div className="space-y-2">
             {tasks.map((task) => {

@@ -23,7 +23,7 @@ export function OnboardingDialog() {
   const [joinCode, setJoinCode] = useState('');
 
   // 不弹
-  if (!user || user.institution_id || user.institution_role === 'admin' || user.is_admin) return null;
+  if (!user || user.institution || user.institution_id || user.institution_role === 'admin' || user.is_admin) return null;
 
   const handleCreateInstitution = async (e: React.FormEvent) => {
     e.preventDefault();

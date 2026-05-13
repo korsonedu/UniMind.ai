@@ -15,7 +15,7 @@ from django.contrib.auth import get_user_model
 from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS
 
 User = get_user_model()
-from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionActive
+from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionActive, IsInstitutionMember
 from .serializers_institution import (
     InstitutionSerializer, CreateInstitutionSerializer, ChangePlanSerializer,
     InstitutionStudentSerializer, CreateStudentSerializer, InstitutionFeatureSerializer,
@@ -228,8 +228,7 @@ class InstitutionStudentStatsView(APIView):
         student = get_object_or_404(
             User, pk=pk, institution=request.user.institution, institution_role='student')
         from quizzes.models import (
-            UserQuestionStatus, UserKnowledgeState, QuizExam, ReviewLog,
-            KnowledgePointAnnotation,
+            UserQuestionStatus, QuizExam, ReviewLog,
         )
         from django.db.models import Count, Avg, Sum, Q
         from django.utils import timezone
@@ -250,15 +249,35 @@ class InstitutionStudentStatsView(APIView):
         recent_reviews = ReviewLog.objects.filter(user=student, review_time__gte=week_ago).count()
         recent_exams = QuizExam.objects.filter(user=student, created_at__gte=week_ago).count()
 
-        # Knowledge mastery breakdown
-        annotations = KnowledgePointAnnotation.objects.filter(user=student)
+        # Knowledge mastery breakdown (Memorix Weibull retrievability)
+        from quizzes.memorix.service import predict_retrievability as weibull_r
+        now = timezone.now()
+        statuses = UserQuestionStatus.objects.filter(
+            user=student, stability__gt=0, last_review__isnull=False,
+        ).select_related('question__knowledge_point')
+        kp_retrievability: dict[int, list[float]] = {}
+        for s in statuses:
+            kp = s.question.knowledge_point
+            if kp is None:
+                continue
+            elapsed = max(0.0, (now - s.last_review).total_seconds() / 86400.0)
+            r = weibull_r(stability=s.stability, elapsed_days=elapsed)
+            kp_retrievability.setdefault(kp.id, []).append(r)
         mastery_breakdown = {
-            'mastered': annotations.filter(mastery_level='mastered').count(),
-            'stable': annotations.filter(mastery_level='stable').count(),
-            'learning': annotations.filter(mastery_level='learning').count(),
-            'weak': annotations.filter(mastery_level='weak').count(),
-            'unknown': annotations.filter(mastery_level='unknown').count(),
+            'mastered': 0, 'stable': 0, 'learning': 0, 'weak': 0, 'unknown': 0,
         }
+        for scores in kp_retrievability.values():
+            avg_r = sum(scores) / len(scores)
+            if avg_r >= 0.8:
+                mastery_breakdown['mastered'] += 1
+            elif avg_r >= 0.6:
+                mastery_breakdown['stable'] += 1
+            elif avg_r >= 0.4:
+                mastery_breakdown['learning'] += 1
+            elif avg_r > 0:
+                mastery_breakdown['weak'] += 1
+            else:
+                mastery_breakdown['unknown'] += 1
 
         # Recent exam scores (last 5)
         recent_scores = list(QuizExam.objects.filter(user=student).order_by('-created_at')[:5].values(
@@ -292,6 +311,17 @@ class InstitutionStudentStatsView(APIView):
             'recent_scores': recent_scores,
             'daily_reviews': daily_reviews,
         })
+
+
+class InstitutionStudentRankingView(APIView):
+    """机构内 ELO 排行榜"""
+    permission_classes = [IsAuthenticated, IsInstitutionMember, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        qs = inst.students.order_by('-elo_score')[:50]
+        serializer = InstitutionStudentSerializer(qs, many=True)
+        return Response(serializer.data)
 
 
 class InstitutionStudentResetPasswordView(APIView):
@@ -400,21 +430,36 @@ class InstitutionDashboardView(APIView):
             from users.quota import get_ai_quota_info
             ai_usage = get_ai_quota_info(inst)
 
-            # 薄弱知识点排行 (取掌握度最低的前 5 个)
+            # 薄弱知识点排行 (Memorix Weibull retrievability, R < 0.4 即为薄弱)
             top_weak = []
             if student_ids:
-                from quizzes.models import KnowledgePointAnnotation
-                weak_annotations = (
-                    KnowledgePointAnnotation.objects
-                    .filter(user_id__in=student_ids, mastery_level='weak')
-                    .values('knowledge_point__label')
-                    .annotate(count=Count('id'))
-                    .order_by('-count')[:5]
-                )
-                top_weak = [
-                    {'label': a['knowledge_point__label'], 'weak_count': a['count']}
-                    for a in weak_annotations
-                ]
+                from quizzes.models import UserQuestionStatus
+                from quizzes.memorix.service import predict_retrievability as weibull_r
+                now = timezone.now()
+                statuses = UserQuestionStatus.objects.filter(
+                    user_id__in=student_ids, stability__gt=0, last_review__isnull=False,
+                ).select_related('question__knowledge_point')
+                user_kp_scores: dict[tuple[int, int], list[float]] = {}
+                kp_name_map: dict[int, str] = {}
+                for s in statuses:
+                    kp = s.question.knowledge_point
+                    if kp is None:
+                        continue
+                    kp_name_map[kp.id] = kp.name
+                    elapsed = max(0.0, (now - s.last_review).total_seconds() / 86400.0)
+                    r = weibull_r(stability=s.stability, elapsed_days=elapsed)
+                    user_kp_scores.setdefault((s.user_id, kp.id), []).append(r)
+                # Count weak users per KP
+                weak_counts: dict[int, int] = {}
+                for (uid, kp_id), scores in user_kp_scores.items():
+                    avg_r = sum(scores) / len(scores)
+                    if avg_r < 0.4:
+                        weak_counts[kp_id] = weak_counts.get(kp_id, 0) + 1
+                top_weak = sorted(
+                    [{'label': kp_name_map.get(kp_id, '?'), 'weak_count': c}
+                     for kp_id, c in weak_counts.items()],
+                    key=lambda x: x['weak_count'], reverse=True,
+                )[:5]
 
             return Response({
                 'mode': 'institution_admin',
@@ -484,8 +529,13 @@ class JoinInstitutionView(APIView):
 # ── Institution Self-Update (机构管理员编辑自己的机构信息) ──
 
 class InstitutionSelfUpdateView(APIView):
-    """机构管理员可编辑机构名称、联系人等信息。学生无权访问。"""
+    """机构管理员可编辑机构名称、联系人、Logo、简介等信息。学生无权访问。"""
     permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def _build_logo_url(self, inst, request):
+        if inst.logo:
+            return request.build_absolute_uri(inst.logo.url)
+        return None
 
     def get(self, request):
         inst = request.user.institution
@@ -502,16 +552,32 @@ class InstitutionSelfUpdateView(APIView):
             'is_plan_active': inst.is_plan_active,
             'max_students': inst.max_students,
             'student_count': inst.student_count,
+            'notes': inst.notes or '',
+            'custom_domain': inst.custom_domain or '',
+            'logo_url': self._build_logo_url(inst, request),
         })
 
     def put(self, request):
         inst = request.user.institution
-        allowed = ['name', 'contact_name', 'contact_email', 'contact_phone']
+        allowed = ['name', 'contact_name', 'contact_email', 'contact_phone', 'notes']
+        updated = []
         for field in allowed:
             if field in request.data:
                 setattr(inst, field, request.data[field])
-        inst.save(update_fields=[f for f in allowed if f in request.data] + ['updated_at'])
-        return Response({'status': 'ok', 'name': inst.name, 'contact_name': inst.contact_name})
+                updated.append(field)
+        if 'logo' in request.FILES:
+            inst.logo = request.FILES['logo']
+            updated.append('logo')
+        if updated:
+            updated.append('updated_at')
+            inst.save(update_fields=updated)
+        return Response({
+            'status': 'ok',
+            'name': inst.name,
+            'contact_name': inst.contact_name,
+            'notes': inst.notes or '',
+            'logo_url': self._build_logo_url(inst, request),
+        })
 
 
 # ── Student Join via Invite Code ──

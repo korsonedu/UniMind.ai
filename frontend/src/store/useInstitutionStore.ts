@@ -70,7 +70,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
 
   enterPreview: async (institutionId: number) => {
     try {
-      const { data } = await api.get(`/users/admin/institutions/${institutionId}/preview/`);
+      const { data } = await api.get(`/users/institutions/${institutionId}/preview/`);
       set({
         previewMode: true,
         previewInstitution: data.institution,
@@ -140,4 +140,10 @@ export const FEATURES = {
   BRAND_CUSTOM: 'brand.custom',
   API_ACCESS: 'api.access',
   STUDENT_PAYMENT: 'student.payment',
+  PRIVATE_DEPLOY: 'private.deploy',
+  I18N_CUSTOM: 'i18n.custom',
+  SSO_SAML: 'sso.saml',
+  AUDIT_LOG: 'audit.log',
+  DEDICATED_SUPPORT: 'dedicated.support',
+  SLA_99_9: 'sla.99.9',
 } as const;

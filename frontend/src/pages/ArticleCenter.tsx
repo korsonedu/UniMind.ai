@@ -1,47 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { FileText, ChevronRight, ChevronLeft } from 'lucide-react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Button } from '@/components/ui/button';
+import { Loading } from '@/components/Loading';
+import { EmptyState } from '@/components/EmptyState';
+import { InlineError } from '@/components/InlineError';
+import { useFetch } from '@/lib/useFetch';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
 export const ArticleCenter: React.FC = () => {
-  const [articles, setArticles] = useState<any[]>([]);
-  const [tagStats, setTagStats] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showAllTags, setShowAllTags] = useState(false);
-  
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  
+
   const navigate = useNavigate();
 
-  useEffect(() => {
-    setPage(1);
-    fetchArticles(1);
-  }, [selectedTag]);
+  const cacheKey = `articles-${selectedTag || 'all'}-${page}`;
+  const { data, loading, error, refetch } = useFetch<{
+    articles: any[];
+    tag_stats: any[];
+    total_pages: number;
+  }>(
+    (signal) => api.get('/articles/', { params: { tag: selectedTag, page }, signal }).then(r => r.data),
+    cacheKey
+  );
 
-  const fetchArticles = async (p = page) => {
-    setLoading(true);
-    try {
-      const res = await api.get('/articles/', { params: { tag: selectedTag, page: p } });
-      setArticles(res.data.articles);
-      setTagStats(res.data.tag_stats);
-      setTotalPages(res.data.total_pages);
-    } catch (e) {}
-    finally { setLoading(false); }
+  const articles = data?.articles || [];
+  const tagStats = data?.tag_stats || [];
+  const totalPages = data?.total_pages || 1;
+
+  const handleTagChange = (tag: string | null) => {
+    setSelectedTag(tag);
+    setPage(1);
   };
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-    fetchArticles(newPage);
-    // Scroll the main layout container to top
     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  if (loading && articles.length === 0) return <div className="h-[60vh] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-black/10" /></div>;
+  if (loading && articles.length === 0) return <Loading message="Loading articles..." />;
+  if (error) return <InlineError message={error} onRetry={refetch} />;
 
   return (
     <PageWrapper title="文章中心" subtitle="沉淀学术思想，探索知识前沿。">
@@ -54,7 +55,7 @@ export const ArticleCenter: React.FC = () => {
             !showAllTags ? "max-h-[32px]" : "max-h-[500px]"
           )}>
             <Button 
-              onClick={() => setSelectedTag(null)}
+              onClick={() => handleTagChange(null)}
               variant={selectedTag === null ? "default" : "outline"}
               className="rounded-full h-7 px-4 text-[11px] font-bold uppercase tracking-widest transition-all"
             >
@@ -63,7 +64,7 @@ export const ArticleCenter: React.FC = () => {
             {tagStats && Array.isArray(tagStats) && tagStats.map((tag) => (
               <Button 
                 key={tag.name}
-                onClick={() => setSelectedTag(tag.name)}
+                onClick={() => handleTagChange(tag.name)}
                 variant={selectedTag === tag.name ? "default" : "outline"}
                 className="rounded-full h-7 px-4 text-[11px] font-bold uppercase tracking-widest transition-all border-black/5"
               >

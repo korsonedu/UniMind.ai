@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -134,12 +134,24 @@ const KnowledgeGraph = ({
   nodes,
   selectedId,
   onNodeClick,
+  masteryData = {},
 }: {
   nodes: KPNode[];
   selectedId: number | null;
   onNodeClick: (node: KPNode) => void;
+  masteryData?: Record<string, string>;
 }) => {
+
+  const MASTERY_COLORS: Record<string, string> = {
+    mastered: '#34C759',
+    stable: '#0071E3',
+    learning: '#FF9500',
+    weak: '#FF3B30',
+    unknown: '#AEAEB2',
+  };
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [canvasSize, setCanvasSize] = useState({ w: 1000, h: 600 });
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
   const [isDark, setIsDark] = useState(
     () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
@@ -174,6 +186,20 @@ const KnowledgeGraph = ({
     const observer = new MutationObserver(sync);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const dpr = window.devicePixelRatio || 1;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setCanvasSize({ w: Math.round(width * dpr), h: Math.round(height * dpr) });
+      }
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
   }, []);
 
   const animate = () => {
@@ -228,8 +254,12 @@ const KnowledgeGraph = ({
       ctx.beginPath();
       ctx.arc(node.x!, node.y!, radius, 0, Math.PI * 2);
 
+      const kpMastery = node.level === 'kp' ? masteryData[String(node.id)] : undefined;
+
       if (isSelected) {
         ctx.fillStyle = '#f59e0b';
+      } else if (kpMastery && MASTERY_COLORS[kpMastery]) {
+        ctx.fillStyle = MASTERY_COLORS[kpMastery];
       } else {
         ctx.fillStyle =
           node.level === 'sub' ? (isDark ? '#6366f1' : '#1e1b4b')
@@ -240,7 +270,8 @@ const KnowledgeGraph = ({
       ctx.fill();
 
       if (node.level === 'kp') {
-        ctx.strokeStyle = isSelected ? '#f59e0b' : isDark ? '#64748b' : '#94a3b8';
+        const mc = kpMastery ? MASTERY_COLORS[kpMastery] : undefined;
+        ctx.strokeStyle = isSelected ? '#f59e0b' : mc || (isDark ? '#64748b' : '#94a3b8');
         ctx.lineWidth = isSelected ? 3 / transform.k : 1.2 / transform.k;
         ctx.stroke();
       }
@@ -299,11 +330,11 @@ const KnowledgeGraph = ({
   };
 
   return (
-    <div className="relative w-full h-full bg-muted/30 rounded-2xl border border-border/50 overflow-hidden cursor-move shadow-inner">
+    <div ref={containerRef} className="relative w-full h-full bg-muted/30 rounded-2xl border border-border/50 overflow-hidden cursor-move shadow-inner">
       <canvas
         ref={canvasRef}
-        width={1000}
-        height={600}
+        width={canvasSize.w}
+        height={canvasSize.h}
         className="w-full h-full"
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
@@ -320,6 +351,18 @@ const KnowledgeGraph = ({
           <Maximize2 className="h-3.5 w-3.5" />
         </Button>
       </div>
+
+      {/* Mastery legend */}
+      {Object.keys(masteryData).length > 0 && (
+        <div className="absolute bottom-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 backdrop-blur-md rounded-xl border border-border/50 shadow-sm">
+          {Object.entries(MASTERY_COLORS).map(([level, color]) => (
+            <div key={level} className="flex items-center gap-1" title={level}>
+              <span className="h-2.5 w-2.5 rounded-full border border-white/50" style={{ backgroundColor: color }} />
+              <span className="text-[9px] font-bold text-muted-foreground uppercase">{level === 'mastered' ? '掌握' : level === 'stable' ? '稳定' : level === 'learning' ? '学习' : level === 'weak' ? '薄弱' : '未知'}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -332,13 +375,22 @@ interface TreeNodeData extends KPNode {
   children: TreeNodeData[];
 }
 
+const MASTERY_DOT_COLORS: Record<string, string> = {
+  mastered: '#34C759',
+  stable: '#0071E3',
+  learning: '#FF9500',
+  weak: '#FF3B30',
+  unknown: '#AEAEB2',
+};
+
 const KnowledgeTreePanel: React.FC<{
   nodes: KPNode[];
   selectedId: number | null;
   onSelect: (node: KPNode) => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
-}> = ({ nodes, selectedId, onSelect, searchQuery, onSearchChange }) => {
+  masteryData?: Record<string, string>;
+}> = ({ nodes, selectedId, onSelect, searchQuery, onSearchChange, masteryData = {} }) => {
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
   const tree = useMemo(() => {
@@ -439,6 +491,14 @@ const KnowledgeTreePanel: React.FC<{
             <span className="w-3.5 shrink-0" />
           )}
 
+          {/* mastery dot */}
+          {isKp && (
+            <span
+              className="h-2.5 w-2.5 rounded-full shrink-0 border border-white/50 shadow-sm"
+              style={{ backgroundColor: MASTERY_DOT_COLORS[masteryData[String(tn.id)]] || MASTERY_DOT_COLORS.unknown }}
+            />
+          )}
+
           {/* level badge */}
           <Badge
             variant="outline"
@@ -498,14 +558,32 @@ const KnowledgeTreePanel: React.FC<{
           )}
         </div>
       </div>
-      <ScrollArea className="flex-1 p-2">
-        <div className="space-y-0.5">
+      {/* Mastery legend */}
+      <div className="px-3 py-2 border-t border-border/30 flex items-center gap-3 flex-wrap">
+        {[
+          { level: 'mastered', label: '掌握', color: MASTERY_DOT_COLORS.mastered },
+          { level: 'stable', label: '稳定', color: MASTERY_DOT_COLORS.stable },
+          { level: 'learning', label: '学习', color: MASTERY_DOT_COLORS.learning },
+          { level: 'weak', label: '薄弱', color: MASTERY_DOT_COLORS.weak },
+        ].map(item => (
+          <div key={item.level} className="flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-2.5 rounded-full shrink-0 border border-white/50 shadow-sm"
+              style={{ backgroundColor: item.color }}
+            />
+            <span className="text-[10px] font-bold text-muted-foreground">{item.label}</span>
+          </div>
+        ))}
+      </div>
+      <ScrollArea className="flex-1 p-2" type="always">
+        <div className="space-y-0.5 min-w-max">
           {filteredTree.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-8">无匹配知识点</p>
           ) : (
             filteredTree.map(root => renderNode(root, 0))
           )}
         </div>
+        <ScrollBar orientation="horizontal" />
       </ScrollArea>
     </div>
   );
@@ -521,7 +599,15 @@ const NodeDetailPanel: React.FC<{
   loading: boolean;
   onQuestionClick: (q: any) => void;
   onClear: () => void;
-}> = ({ node, details, loading, onQuestionClick, onClear }) => {
+  masteryData?: Record<string, string>;
+}> = ({ node, details, loading, onQuestionClick, onClear, masteryData = {} }) => {
+
+  const MASTERY_LABELS: Record<string, string> = {
+    mastered: '已掌握', stable: '已稳定', learning: '学习中', weak: '薄弱', unknown: '未知',
+  };
+  const MASTERY_BG: Record<string, string> = {
+    mastered: 'bg-[#34C759]', stable: 'bg-[#0071E3]', learning: 'bg-[#FF9500]', weak: 'bg-[#FF3B30]', unknown: 'bg-[#AEAEB2]',
+  };
   if (!node) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-card rounded-2xl border border-border/50 p-6">
@@ -541,6 +627,11 @@ const NodeDetailPanel: React.FC<{
             {LEVEL_LABELS[node.level] || node.level}
           </Badge>
           <h3 className="text-sm font-bold truncate">{node.name}</h3>
+          {masteryData[String(node.id)] && (
+            <Badge className={cn('text-[9px] text-white py-0 h-5 px-2 font-bold', MASTERY_BG[masteryData[String(node.id)]] || 'bg-muted')}>
+              {MASTERY_LABELS[masteryData[String(node.id)]] || masteryData[String(node.id)]}
+            </Badge>
+          )}
         </div>
         <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg shrink-0" onClick={onClear}>
           <X className="h-3.5 w-3.5" />
@@ -653,10 +744,19 @@ export const KnowledgeMap: React.FC = () => {
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph');
   const [graphRootId, setGraphRootId] = useState<string>('all');
+  const [masteryData, setMasteryData] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchMap();
+    fetchMastery();
   }, []);
+
+  const fetchMastery = async () => {
+    try {
+      const { data } = await api.get('/users/me/knowledge-mastery/');
+      setMasteryData(data || {});
+    } catch { /* silently fail if no mastery data */ }
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -715,14 +815,20 @@ export const KnowledgeMap: React.FC = () => {
       return;
     }
 
-    // Auto-focus graph on the chapter (篇) containing this node
+    // Auto-focus graph on the section (小节) containing this node
     if (node.level === 'kp') {
-      const ch = findAncestorAtLevel(node, 'ch');
-      if (ch) setGraphRootId(ch.id.toString());
+      const sec = findAncestorAtLevel(node, 'sec');
+      if (sec) setGraphRootId(sec.id.toString());
       else {
-        const sub = findAncestorAtLevel(node, 'sub');
-        if (sub) setGraphRootId(sub.id.toString());
+        const ch = findAncestorAtLevel(node, 'ch');
+        if (ch) setGraphRootId(ch.id.toString());
+        else {
+          const sub = findAncestorAtLevel(node, 'sub');
+          if (sub) setGraphRootId(sub.id.toString());
+        }
       }
+    } else if (node.level === 'sec') {
+      setGraphRootId(node.id.toString());
     } else if (node.level === 'ch') {
       setGraphRootId(node.id.toString());
     } else if (node.level === 'sub') {
@@ -819,15 +925,16 @@ export const KnowledgeMap: React.FC = () => {
           </div>
         ) : (
           /* ── Desktop: three-panel layout ── */
-          <div className="flex gap-4" style={{ minHeight: 'calc(100vh - 18rem)' }}>
+          <div className="flex gap-4" style={{ height: 'calc(100vh - 3.5rem)' }}>
             {/* ── Left: Tree Panel ── */}
-            <div className="w-[260px] shrink-0 self-stretch">
+            <div className="w-[300px] shrink-0 self-stretch">
               <KnowledgeTreePanel
                 nodes={allNodes}
                 selectedId={selectedNode?.id ?? null}
                 onSelect={handleNodeSelect}
                 searchQuery={treeSearch}
                 onSearchChange={setTreeSearch}
+                masteryData={masteryData}
               />
             </div>
 
@@ -884,6 +991,7 @@ export const KnowledgeMap: React.FC = () => {
                     nodes={displayNodes}
                     selectedId={selectedNode?.id ?? null}
                     onNodeClick={handleNodeSelect}
+                    masteryData={masteryData}
                   />
                 ) : (
                   <div className="h-full bg-muted/30 rounded-2xl border border-border/50 p-4">
@@ -928,6 +1036,7 @@ export const KnowledgeMap: React.FC = () => {
                 loading={detailsLoading}
                 onQuestionClick={setSelectedQuestion}
                 onClear={handleClearSelection}
+                masteryData={masteryData}
               />
             </div>
           </div>

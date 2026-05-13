@@ -2,7 +2,7 @@ from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from django.utils.decorators import method_decorator
 from .serializers import (
@@ -13,6 +13,7 @@ from .serializers import (
     ActivationCodeSerializer,
 )
 from .models import User, SystemConfig, DailyPlan, ActivationCode
+from .permissions import IsPlatformAdmin, IsAdmin
 from django.utils import timezone
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -66,7 +67,7 @@ class ActivateMembershipView(APIView):
 class ActivationCodeListView(generics.ListCreateAPIView):
     queryset = ActivationCode.objects.all().order_by('-created_at')
     serializer_class = ActivationCodeSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def perform_create(self, serializer):
         # 可以在这里增加逻辑自动生成 code，或者由前端传入
@@ -75,7 +76,7 @@ class ActivationCodeListView(generics.ListCreateAPIView):
 class ActivationCodeDetailView(generics.DestroyAPIView):
     queryset = ActivationCode.objects.all()
     serializer_class = ActivationCodeSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def perform_destroy(self, instance):
         # 如果已被使用，需要收回用户的会员权限
@@ -179,7 +180,7 @@ from courses.models import VideoProgress, Course
 from study_room.models import ChatMessage
 
 class BIAnalyticsView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         # 1. 知识点错题热力图 (取前10)
@@ -560,3 +561,44 @@ class SendVerificationCodeView(APIView):
             return Response({'error': '验证码发送失败，请稍后重试'}, status=500)
 
         return Response({'status': 'ok', 'message': f'验证码已发送至 {email}，10 分钟内有效'})
+
+
+class MyKnowledgeMasteryView(APIView):
+    """返回当前用户所有知识点的掌握度映射 {kp_id: mastery_level}，基于 Memorix Weibull retrievability"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from django.utils import timezone
+        from quizzes.models import UserQuestionStatus
+        from quizzes.memorix.service import predict_retrievability as weibull_r
+
+        def _r_to_level(r: float) -> str:
+            if r >= 0.8:
+                return 'mastered'
+            if r >= 0.6:
+                return 'stable'
+            if r >= 0.4:
+                return 'learning'
+            if r > 0:
+                return 'weak'
+            return 'unknown'
+
+        now = timezone.now()
+        qs = UserQuestionStatus.objects.filter(
+            user=request.user, stability__gt=0, last_review__isnull=False,
+        ).select_related('question__knowledge_point')
+
+        kp_scores: dict[int, list[float]] = {}
+        for s in qs:
+            kp = s.question.knowledge_point
+            if kp is None:
+                continue
+            elapsed = max(0.0, (now - s.last_review).total_seconds() / 86400.0)
+            r = weibull_r(stability=s.stability, elapsed_days=elapsed, user_id=request.user.id)
+            kp_scores.setdefault(kp.id, []).append(r)
+
+        data = {}
+        for kp_id, scores in kp_scores.items():
+            avg_r = sum(scores) / len(scores)
+            data[str(kp_id)] = _r_to_level(avg_r)
+        return Response(data)

@@ -9,6 +9,7 @@ from django.core.files import File
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics, permissions
+from users.permissions import IsAdmin
 
 from .models import Course, Album, StartupMaterial, VideoProgress
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
@@ -47,7 +48,7 @@ def _safe_int(value, default=0):
 
 
 class ChunkedUploadInitView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def post(self, request):
         file_name = str(request.data.get("file_name", "")).strip()
@@ -89,7 +90,7 @@ class ChunkedUploadInitView(APIView):
 
 
 class ChunkedUploadChunkView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def post(self, request, upload_id):
         meta = _load_meta(upload_id)
@@ -129,7 +130,7 @@ class ChunkedUploadChunkView(APIView):
 
 
 class ChunkedUploadCompleteView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def post(self, request, upload_id):
         meta = _load_meta(upload_id)
@@ -231,28 +232,28 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
     queryset = StartupMaterial.objects.all().order_by('-created_at')
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
-        if self.request.method == 'POST': return [permissions.IsAdminUser()]
+        if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
 
 class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StartupMaterial.objects.all()
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
-        if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [permissions.IsAdminUser()]
+        if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
         return [permissions.AllowAny()]
 
 class AlbumListCreateView(generics.ListCreateAPIView):
     queryset = Album.objects.all().order_by('-created_at')
     serializer_class = AlbumSerializer
     def get_permissions(self):
-        if self.request.method == 'POST': return [permissions.IsAdminUser()]
+        if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
 
 class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Album.objects.all()
     serializer_class = AlbumSerializer
     def get_permissions(self):
-        if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [permissions.IsAdminUser()]
+        if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
         return [permissions.AllowAny()]
 
 class CourseListCreateView(generics.ListCreateAPIView):
@@ -260,7 +261,7 @@ class CourseListCreateView(generics.ListCreateAPIView):
     
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [permissions.IsAdminUser()]
+            return [IsAdmin()]
         return [IsMember()]
 
     def get_queryset(self):
@@ -280,7 +281,7 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']:
-            return [permissions.IsAdminUser()]
+            return [IsAdmin()]
         return [IsMember()]
 
 class AwardEloView(APIView):

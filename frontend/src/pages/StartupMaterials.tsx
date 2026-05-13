@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Download, File, CheckSquare, Square, Loader2, Info } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -108,10 +109,7 @@ const StartupMaterials: React.FC = () => {
       </div>
       
       {files.length === 0 && (
-        <div className="flex flex-col items-center justify-center h-64 text-center border-2 border-dashed border-border/50 rounded-3xl bg-muted/10 mt-6">
-          <File className="h-10 w-10 text-muted-foreground/20 mb-3" />
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">暂无资料</p>
-        </div>
+        <EmptyState icon={File} title="暂无资料" className="h-64 border-2 border-dashed border-border/50 rounded-3xl bg-muted/10 mt-6" />
       )}
     </PageWrapper>
   );

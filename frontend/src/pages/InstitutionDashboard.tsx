@@ -54,7 +54,10 @@ const FEATURE_LABELS: Record<string, string> = {
   'pdf.mock': 'PDF 模考', 'study.room': '实时自习室',
   'multi.teacher': '多教师协作', 'class.compare': '班级对比',
   'data.export': '数据导出', 'brand.custom': '品牌定制',
-  'api.access': 'API 接入',
+  'api.access': 'API 接入', 'student.payment': '学生端收费',
+  'private.deploy': '私有化部署', 'i18n.custom': '多语言 · 国际化',
+  'sso.saml': 'SSO · SAML', 'audit.log': '审计日志',
+  'dedicated.support': '专属支持', 'sla.99.9': 'SLA 99.9%',
 };
 
 const ALL_FEATURES = [
@@ -62,7 +65,9 @@ const ALL_FEATURES = [
   'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph', 'ai.assistant',
   'course.video', 'video.outline', 'faq.system', 'pdf.mock', 'study.room',
   'multi.teacher', 'class.compare', 'data.export',
-  'brand.custom', 'api.access',
+  'brand.custom', 'api.access', 'student.payment',
+  'private.deploy', 'i18n.custom', 'sso.saml', 'audit.log',
+  'dedicated.support', 'sla.99.9',
 ];
 
 export default function InstitutionDashboard() {
@@ -245,24 +250,42 @@ export default function InstitutionDashboard() {
               {inst.plan_label}
             </Badge>
           </h3>
-          <div className="space-y-1.5">
-            {ALL_FEATURES.map(f => {
-              const included = features.includes(f);
+          <div className="space-y-4">
+            {/* 当前方案功能 */}
+            <div>
+              <p className="text-xs font-bold text-[#8E8E93] mb-2">{inst.plan_label} 方案包含</p>
+              <div className="space-y-1">
+                {ALL_FEATURES.filter(f => features.includes(f)).map(f => (
+                  <div key={f} className="flex items-center gap-2.5 py-1">
+                    <Check className="h-4 w-4 text-[#34C759] shrink-0" />
+                    <span className="text-sm font-medium text-[#1D1D1F]">{FEATURE_LABELS[f] || f}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* 升级功能 */}
+            {(() => {
+              const locked = ALL_FEATURES.filter(f => !features.includes(f));
+              if (locked.length === 0) return null;
+              const nextTier = ['solo', 'plus', 'pro'].find((_, i) => i + 1 > currentTier) || 'pro';
               return (
-                <div key={f} className="flex items-center gap-2.5 py-1">
-                  {included
-                    ? <Check className="h-4 w-4 text-[#34C759] shrink-0" />
-                    : <Minus className="h-4 w-4 text-[#C7C7CC] shrink-0" />
-                  }
-                  <span className={cn(
-                    'text-sm font-medium',
-                    included ? 'text-[#1D1D1F]' : 'text-[#C7C7CC]'
-                  )}>
-                    {FEATURE_LABELS[f] || f}
-                  </span>
+                <div>
+                  <p className="text-xs font-bold text-[#FF9500] mb-2">
+                    升级解锁 <Badge className="ml-1 text-[10px] font-bold text-white bg-[#FF9500]">{PLAN_NAMES[nextTier]}</Badge>
+                  </p>
+                  <div className="space-y-1">
+                    {locked.map(f => (
+                      <div key={f} className="flex items-center gap-2.5 py-1">
+                        <div className="h-4 w-4 rounded-full bg-[#FF9500]/12 flex items-center justify-center shrink-0">
+                          <div className="h-1.5 w-1.5 rounded-full bg-[#FF9500]" />
+                        </div>
+                        <span className="text-sm font-medium text-[#8E8E93]">{FEATURE_LABELS[f] || f}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               );
-            })}
+            })()}
           </div>
         </Card>
 

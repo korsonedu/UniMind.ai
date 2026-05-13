@@ -53,7 +53,7 @@ export default function Institutions() {
       const params: Record<string, string> = {};
       if (search) params.search = search;
       if (planFilter) params.plan = planFilter;
-      const { data } = await api.get('/users/admin/institutions/', { params });
+      const { data } = await api.get('/users/institutions/', { params });
       setInstitutions(data);
     } catch (err: any) {
       console.warn('[Institutions] fetch failed:', apiErr(err, 'unknown'));
@@ -64,16 +64,16 @@ export default function Institutions() {
   useEffect(() => { fetchInstitutions(); }, [search, planFilter]);
 
   const handleActivate = async (id: number) => {
-    await api.post(`/users/admin/institutions/${id}/activate/`);
+    await api.post(`/users/institutions/${id}/activate/`);
     fetchInstitutions();
   };
   const handleDeactivate = async (id: number) => {
-    await api.post(`/users/admin/institutions/${id}/deactivate/`);
+    await api.post(`/users/institutions/${id}/deactivate/`);
     fetchInstitutions();
   };
   const handleDelete = async (id: number, name: string) => {
     if (!confirm(`确认删除机构「${name}」？该操作不可撤销。`)) return;
-    await api.delete(`/users/admin/institutions/${id}/`);
+    await api.delete(`/users/institutions/${id}/`);
     fetchInstitutions();
   };
 
@@ -228,7 +228,7 @@ function CreateDialog({
       if (!payload.plan_expires_at) delete payload.plan_expires_at;
       if (!payload.contact_phone) payload.contact_phone = '';
       if (!payload.slug) payload.slug = payload.name.toLowerCase().replace(/\s+/g, '-');
-      await api.post('/users/admin/institutions/', payload);
+      await api.post('/users/institutions/', payload);
       onCreated();
     } catch (err: any) {
       setError(apiErr(err, '创建失败'));
@@ -303,9 +303,9 @@ function EditDialog({
     try {
       const payload: any = { ...form };
       if (!payload.plan_expires_at) delete payload.plan_expires_at;
-      await api.put(`/users/admin/institutions/${institution.id}/`, payload);
+      await api.put(`/users/institutions/${institution.id}/`, payload);
       if (form.plan !== institution.plan) {
-        await api.post(`/users/admin/institutions/${institution.id}/change-plan/`, {
+        await api.post(`/users/institutions/${institution.id}/change-plan/`, {
           plan: form.plan,
           plan_expires_at: payload.plan_expires_at || null,
         });

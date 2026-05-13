@@ -38,7 +38,7 @@ export const VideoLesson: React.FC = () => {
           const allRes = await api.get('/courses/');
           setRelatedCourses(allRes.data.filter((c: any) => c.album === res.data.album && c.id !== res.data.id));
         }
-      } catch (e) {}
+      } catch (e) { console.error('fetchCourse failed', e); }
       finally { setLoading(false); }
     };
     fetchData();
