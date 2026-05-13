@@ -191,7 +191,6 @@ export const MainLayout: React.FC = () => {
 	    ? [
 	        { to: '/institution', icon: Building2, label: '机构管理' },
 	        { to: '/invite-codes', icon: Sparkles, label: '邀请码' },
-	        { to: '/system-settings', icon: Settings2, label: '系统设置' },
 	      ]
 	    : [
 	        { to: '/', icon: BookOpen, label: '课程中心' },

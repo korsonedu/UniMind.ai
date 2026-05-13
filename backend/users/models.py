@@ -262,6 +262,25 @@ class PlanInviteCode(models.Model):
         verbose_name_plural = '方案邀请码'
         ordering = ['-created_at']
 
+    @property
+    def is_exhausted(self):
+        return self.used_count >= self.max_uses
+
+    @classmethod
+    def generate(cls, plan, created_by, count=1, max_uses=1, duration_days=30, note=''):
+        import secrets, string
+        codes = []
+        for _ in range(count):
+            raw = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(12))
+            code = f'{raw[:4]}-{raw[4:8]}-{raw[8:12]}'
+            obj = cls.objects.create(
+                code=code, plan=plan, max_uses=max_uses,
+                duration_days=duration_days, note=note,
+                created_by=created_by,
+            )
+            codes.append({'id': obj.id, 'code': obj.code})
+        return codes
+
     def __str__(self):
         return self.code
 
