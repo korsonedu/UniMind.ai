@@ -50,7 +50,7 @@ export default function InviteCodeAdmin() {
   const fetchCodes = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/users/admin/invite-codes/');
+      const { data } = await api.get('/users/admin/plan-invite-codes/');
       setCodes(data);
     } catch { /* */ }
     setLoading(false);
@@ -61,10 +61,10 @@ export default function InviteCodeAdmin() {
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      const { data } = await api.post('/users/admin/invite-codes/generate/', {
+      const { data } = await api.post('/users/admin/plan-invite-codes/generate/', {
         plan, count, max_uses: maxUses, duration_days: durationDays, note,
       });
-      setGenerated(data.codes);
+      setGenerated(data.codes.map((c: any) => c.code));
       fetchCodes();
       toast.success(`已生成 ${data.generated} 条 ${data.plan_label} 邀请码`);
     } catch { toast.error('生成失败'); }
@@ -72,7 +72,7 @@ export default function InviteCodeAdmin() {
   };
 
   const handleDeactivate = async (id: number) => {
-    await api.post(`/users/admin/invite-codes/${id}/deactivate/`);
+    await api.post(`/users/admin/plan-invite-codes/${id}/deactivate/`);
     fetchCodes();
   };
 

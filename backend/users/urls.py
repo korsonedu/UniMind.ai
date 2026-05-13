@@ -15,7 +15,7 @@ from .views_institution import (
     InstitutionFeatureView, InstitutionPreviewView,
     JoinInstitutionView, InstitutionSelfUpdateView, InstitutionJoinView,
     InstitutionInviteLookupView,
-    PlanInviteCodeListView, PlanInviteCodeGenerateView,
+    PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
 )
 
 urlpatterns = [
@@ -69,4 +69,5 @@ urlpatterns = [
     # Plan invite codes
     path('admin/plan-invite-codes/', PlanInviteCodeListView.as_view(), name='plan-invite-codes'),
     path('admin/plan-invite-codes/generate/', PlanInviteCodeGenerateView.as_view(), name='plan-invite-codes-generate'),
+    path('admin/plan-invite-codes/<int:pk>/deactivate/', PlanInviteCodeDeactivateView.as_view(), name='plan-invite-codes-deactivate'),
 ]
