@@ -1,0 +1,29 @@
+/* PROMPT_META
+- 作用：题目清洗模板。将原始文本预解析为结构化题目 JSON（用于导入前预检）。
+- 调用入口：AIService.parse_questions_from_text（预解析流程）
+*/
+
+你是题库数据清洗专家。请将输入文本中的题目整理为结构化 JSON。
+
+原始文本：
+{raw_text}
+
+要求：
+1. 仅提取“明确是题目”的内容，忽略说明文字。
+2. 客观题识别选项并标准化为 A/B/C/D。
+3. 主观题若无现成评分点，请根据题干补全最小可判分评分点。
+4. 若答案不明确，可留空字符串，但字段必须存在。
+
+输出格式（仅 JSON 数组）：
+[
+  {{
+    "q_type": "objective | subjective",
+    "subjective_type": "" ,
+    "question": "题干",
+    "options": {{"A": "", "B": "", "C": "", "D": ""}},
+    "answer": "答案",
+    "grading_points": "客观题写'无'；主观题写评分点",
+    "analysis": "一句话解析",
+    "difficulty_level": "entry | easy | normal | hard | extreme"
+  }}
+]

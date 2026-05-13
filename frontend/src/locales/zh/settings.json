@@ -1,0 +1,60 @@
+{
+  "pageTitle": "个人设置",
+  "pageSubtitle": "管理个人身份标识、学术简介及数字化化身。",
+  "avatar": {
+    "lab": "化身实验室",
+    "styleLabel": "风格选择",
+    "seedLabel": "特征种子 (Seed)",
+    "styles": {
+      "avataaars": "简约角色",
+      "bottts": "机器人",
+      "pixelArt": "像素艺术",
+      "adventurer": "冒险家",
+      "bigSmile": "大笑脸",
+      "micah": "扁平化",
+      "lorelei": "手绘风格",
+      "notionists": "极简主义"
+    }
+  },
+  "profile": {
+    "nicknameLabel": "我的昵称 (公开显示)",
+    "bioLabel": "个人履历 / Bio",
+    "bioPlaceholder": "写下你的学术格言与研究方向...",
+    "usernameNote": "登录账号: {{username}} (不可修改)",
+    "eloRank": "ELO Rank: {{score}}",
+    "saveProfile": "保存所有个人资料",
+    "saved": "个人账户信息已同步"
+  },
+  "security": {
+    "title": "安全与重置",
+    "emailLabel": "修改邮箱",
+    "emailPlaceholder": "New Email",
+    "emailUpdate": "Update",
+    "emailSaved": "邮箱更新成功",
+    "passwordLabel": "安全密码",
+    "oldPassword": "Old Password",
+    "newPassword": "New Password",
+    "passwordReset": "Reset",
+    "passwordSaved": "密码重置成功",
+    "passwordError": "原始密码错误"
+  },
+  "elo": {
+    "title": "天梯定位校准",
+    "description": "每个账户仅有一次机会重置分位记录。",
+    "resetBtn": "重置分位 ({{remaining}}/1)",
+    "confirmTitle": "确认重置 ELO 吗？",
+    "confirmDesc": "重置后需重新进行评估赛。此操作不可撤回。",
+    "saved": "ELO 已重置",
+    "savedDesc": "你现在可以重新进行学术评估。"
+  },
+  "institution": {
+    "title": "机构信息",
+    "description": "修改机构名称和联系信息，学员端将同步显示。",
+    "nameLabel": "机构名称",
+    "contactLabel": "联系人",
+    "emailLabel": "联系邮箱",
+    "phoneLabel": "联系电话",
+    "saveBtn": "保存机构信息",
+    "saved": "机构信息已更新"
+  }
+}

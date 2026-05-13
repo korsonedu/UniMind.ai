@@ -1,0 +1,17 @@
+/* PROMPT_META
+- 作用：共享 JSON 输出字段结构定义，统一命题输出 schema。
+- 引用方：bulk_generate_prompt.txt、generate_from_text_prompt.txt
+*/
+
+[
+  {{
+    "q_type": "objective | subjective",
+    "subjective_type": "" ,
+    "question": "题干",
+    "options": {{"A": "", "B": "", "C": "", "D": ""}},
+    "answer": "客观题填A/B/C/D；主观题填参考答案",
+    "grading_points": "客观题写'无'；主观题按分值列点",
+    "difficulty_level": "entry | easy | normal | hard | extreme",
+    "related_knowledge_id": "知识点code"
+  }}
+]

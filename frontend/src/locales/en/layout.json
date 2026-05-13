@@ -1,0 +1,55 @@
+{
+  "nav": {
+    "courses": "Courses",
+    "articles": "Articles",
+    "qa": "Q&A",
+    "tests": "Practice",
+    "knowledgeMap": "Knowledge Map",
+    "interviews": "Mock Interview",
+    "mockExams": "PDF Exam",
+    "studyRoom": "Study Room",
+    "aiLab": "AI Lab",
+    "startupMaterials": "Materials",
+    "home": "Home",
+    "courseIntro": "Course Intro",
+    "institution": "Dashboard",
+    "students": "Students",
+    "maintenance": "Maintenance",
+    "institutionAdmin": "Institution Admin",
+    "settings": "Appearance",
+    "weeklyReport": "Weekly Report"
+  },
+  "userMenu": {
+    "accountPreferences": "Account & Preferences",
+    "activateMember": "Activate Membership",
+    "personalSettings": "Personal Settings",
+    "appearanceSettings": "Appearance & System",
+    "proMember": "Pro Member",
+    "freeScholar": "Free Scholar"
+  },
+  "expiryBanner": {
+    "expired": "Your plan has expired. Features are limited. Renew to restore full access.",
+    "renewNow": "Renew Now"
+  },
+  "quotaBanner": {
+    "exhausted": "Monthly AI quota exhausted ({{used}}/{{limit}}). Upgrade to Solo for unlimited — only ¥299/mo.",
+    "low": "AI quota: {{remaining}}/{{limit}} remaining this month",
+    "upgradeNow": "Upgrade Now",
+    "upgradeUnlimited": "Unlock Unlimited"
+  },
+  "previewMode": "Preview: {{name}} ({{plan}})",
+  "exitPreview": "Exit Preview",
+  "lockedTooltip": "Upgrade required",
+  "unlockUpgrade": "Unlock {{plan}}",
+  "leaderboard": "Leaderboard",
+  "thisFeature": "this feature",
+  "upgradeModal": {
+    "title": "Upgrade to unlock {{feature}}",
+    "requires": "{{feature}} requires the {{plan}} plan. ",
+    "soloDesc": "Only ¥299/mo — unlock the full AI-powered learning suite.",
+    "plusDesc": "¥1,299/mo — complete teaching platform for institutions.",
+    "proDesc": "Enterprise flagship — brand customization & API access.",
+    "coreFeatures": "{{plan}} Core Features",
+    "freeTrialNote": "All plans include a 14-day free trial"
+  }
+}

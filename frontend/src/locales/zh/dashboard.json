@@ -1,0 +1,32 @@
+{
+  "pageTitle": "机构仪表盘",
+  "overviewTitle": "机构总览",
+  "totalInstitutions": "共 {{count}} 个机构",
+  "noAccess": "暂无机构信息",
+  "noPermission": "你没有机构管理权限",
+  "current": "当前",
+  "featureMatrix": "方案功能矩阵",
+  "previewAs": "以此机构身份预览",
+  "itemsCount": "{{count}} 项",
+  "featuresCount": "{{count}} 项功能",
+  "stats": {
+    "plan": "当前方案",
+    "students": "学员数",
+    "admins": "管理员数",
+    "weeklyActive": "周活跃学员",
+    "aiUsage": "AI 出题用量",
+    "expires": "到期时间",
+    "permanent": "永久有效"
+  },
+  "features": {
+    "title": "当前方案功能"
+  },
+  "comparison": {
+    "title": "方案对比"
+  },
+  "actions": {
+    "manageStudents": "管理学员",
+    "preview": "预览"
+  },
+  "contactAdminForUpgrade": "需要升级方案？请联系平台管理员"
+}

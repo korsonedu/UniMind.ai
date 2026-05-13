@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 *)",
+      "mcp__plugin_claude-mem_mcp-search__search",
+      "Bash(pkill -f \"claude-mem\")",
+      "Bash(curl -s \"https://openrouter.ai/api/v1/models\" -H \"Authorization: Bearer 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\")",
+      "Bash(sqlite3 *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(npx tsc *)",
+      "WebFetch(domain:api-docs.deepseek.com)",
+      "Bash(pip3 show *)",
+      "Bash(npx vite *)",
+      "Bash(grep -rl \"institution\\\\|Institution\" /Users/eular/Desktop/官网0215/backend/ --include=\"*.py\" ! -path \"*/migrations/*\" ! -path \"*/.venv/*\" ! -path \"*/__pycache__/*\")",
+      "Bash(grep *)",
+      "Bash(lsof -ti:5173)",
+      "Bash(xargs kill -9)",
+      "Bash(curl -s -X POST http://localhost:8000/api/users/login/ -H 'Content-Type: application/json' -d '{\"login_id\":\"demo@unimind.ai\",\"password\":\"demo123456\"}')",
+      "Bash(curl -s http://localhost:8000/api/users/institution/me/features/ -H \"Authorization: Token $\\(curl -s -X POST http://localhost:8000/api/users/login/ -H 'Content-Type: application/json' -d '{\"login_id\":\"demo@unimind.ai\",\"password\":\"demo123456\"}')",
+      "Bash(system_profiler SPFontsDataType)",
+      "Bash(fc-list :lang=zh)",
+      "Bash(npm run *)",
+      "Bash(node *)"
+    ]
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "nav": {
+    "courses": "课程中心",
+    "articles": "文章",
+    "qa": "答疑",
+    "tests": "习题训练",
+    "knowledgeMap": "知识地图",
+    "interviews": "复试模拟",
+    "mockExams": "PDF 模考",
+    "studyRoom": "自习室",
+    "aiLab": "AI 实验室",
+    "startupMaterials": "启动资料",
+    "home": "主页",
+    "courseIntro": "课程介绍",
+    "institution": "机构仪表盘",
+    "students": "学员管理",
+    "maintenance": "维护中心",
+    "institutionAdmin": "机构后台",
+    "settings": "外观与系统",
+    "weeklyReport": "周报"
+  },
+  "userMenu": {
+    "accountPreferences": "账户与偏好",
+    "activateMember": "激活会员",
+    "personalSettings": "个人设置",
+    "appearanceSettings": "外观与系统",
+    "proMember": "Pro Member",
+    "freeScholar": "Free Scholar"
+  },
+  "expiryBanner": {
+    "expired": "服务已到期，功能受限。请续费恢复完整功能",
+    "renewNow": "立即续费"
+  },
+  "quotaBanner": {
+    "exhausted": "本月 AI 出题次数已用完（{{used}}/{{limit}}）。升级到 Solo 版解锁无限次，仅 ¥299/月",
+    "low": "本月 AI 出题剩余 {{remaining}}/{{limit}} 次，即将用完",
+    "upgradeNow": "立即升级",
+    "upgradeUnlimited": "升级解锁无限次"
+  },
+  "previewMode": "预览模式：{{name}}（{{plan}}）",
+  "exitPreview": "退出预览",
+  "lockedTooltip": "需升级版本",
+  "unlockUpgrade": "解锁 {{plan}} 版功能",
+  "leaderboard": "全站学术排名",
+  "thisFeature": "此功能",
+  "upgradeModal": {
+    "title": "升级以解锁{{feature}}",
+    "requires": "{{feature}}需要 {{plan}} 版本。",
+    "soloDesc": "每月仅 ¥299，解锁 AI 智能学习全部能力。",
+    "plusDesc": "每月 ¥1,299，解锁完整机构教学平台。",
+    "proDesc": "企业旗舰版，解锁品牌定制与 API 接入。",
+    "coreFeatures": "{{plan}} 版核心功能",
+    "freeTrialNote": "所有方案均含 14 天免费试用"
+  }
+}

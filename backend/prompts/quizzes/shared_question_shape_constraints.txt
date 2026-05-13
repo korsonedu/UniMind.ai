@@ -1,0 +1,8 @@
+/* PROMPT_META
+- 作用：共享“题干形态约束”规则块，约束 noun/short/essay 的题干写法。
+- 引用方：bulk_generate_prompt.txt、generate_from_text_prompt.txt
+*/
+
+- `subjective_type=noun`：`question` 必须是“单个名词/概念词组”，例如“流动性陷阱”，不要问句、不要背景材料、不要“请解释/什么是”前缀。
+- `subjective_type=short`：`question` 必须带简要业务或政策背景，要求考生分点作答；允许采用“比较/辨析相近概念”的问法。
+- `subjective_type=essay`：`question` 必须带完整现实背景与分析任务，要求系统论证与评价建议。

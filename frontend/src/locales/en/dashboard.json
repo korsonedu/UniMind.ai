@@ -1,0 +1,32 @@
+{
+  "pageTitle": "Institution Dashboard",
+  "overviewTitle": "All Institutions",
+  "totalInstitutions": "{{count}} institutions",
+  "noAccess": "No institution data",
+  "noPermission": "You do not have institution management permissions",
+  "current": "Current",
+  "featureMatrix": "Feature Matrix",
+  "previewAs": "Preview as this institution",
+  "itemsCount": "{{count}} items",
+  "featuresCount": "{{count}} features",
+  "stats": {
+    "plan": "Current Plan",
+    "students": "Students",
+    "admins": "Admins",
+    "weeklyActive": "Weekly Active",
+    "aiUsage": "AI Usage",
+    "expires": "Expires",
+    "permanent": "Never"
+  },
+  "features": {
+    "title": "Current Plan Features"
+  },
+  "comparison": {
+    "title": "Plan Comparison"
+  },
+  "actions": {
+    "manageStudents": "Manage Students",
+    "preview": "Preview"
+  },
+  "contactAdminForUpgrade": "Need to upgrade? Contact your platform administrator."
+}

@@ -1,0 +1,60 @@
+{
+  "pageTitle": "Settings",
+  "pageSubtitle": "Manage your identity, academic profile, and digital avatar.",
+  "avatar": {
+    "lab": "Avatar Lab",
+    "styleLabel": "Style",
+    "seedLabel": "Seed",
+    "styles": {
+      "avataaars": "Avataaars",
+      "bottts": "Bottts",
+      "pixelArt": "Pixel Art",
+      "adventurer": "Adventurer",
+      "bigSmile": "Big Smile",
+      "micah": "Micah",
+      "lorelei": "Lorelei",
+      "notionists": "Notionists"
+    }
+  },
+  "profile": {
+    "nicknameLabel": "Nickname (public)",
+    "bioLabel": "Bio",
+    "bioPlaceholder": "Write your academic motto & research interests...",
+    "usernameNote": "Username: {{username}} (cannot be changed)",
+    "eloRank": "ELO Rank: {{score}}",
+    "saveProfile": "Save Profile",
+    "saved": "Profile updated"
+  },
+  "security": {
+    "title": "Security & Reset",
+    "emailLabel": "Update Email",
+    "emailPlaceholder": "New Email",
+    "emailUpdate": "Update",
+    "emailSaved": "Email updated",
+    "passwordLabel": "Password",
+    "oldPassword": "Old Password",
+    "newPassword": "New Password",
+    "passwordReset": "Reset",
+    "passwordSaved": "Password changed",
+    "passwordError": "Incorrect current password"
+  },
+  "elo": {
+    "title": "ELO Recalibration",
+    "description": "Each account gets one chance to reset ranking record.",
+    "resetBtn": "Reset ELO ({{remaining}}/1)",
+    "confirmTitle": "Confirm ELO Reset?",
+    "confirmDesc": "You will need to take placement assessments again. This cannot be undone.",
+    "saved": "ELO Reset",
+    "savedDesc": "You may now retake the placement assessment."
+  },
+  "institution": {
+    "title": "Institution Info",
+    "description": "Update your institution name and contact details. Students will see these changes.",
+    "nameLabel": "Institution Name",
+    "contactLabel": "Contact Person",
+    "emailLabel": "Contact Email",
+    "phoneLabel": "Contact Phone",
+    "saveBtn": "Save Institution Info",
+    "saved": "Institution info updated"
+  }
+}
