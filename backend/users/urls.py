@@ -5,7 +5,7 @@ from .views import (
     DailyPlanListView, DailyPlanDetailView, ResetEloView,
     ActivateMembershipView, ActivationCodeListView, ActivationCodeDetailView,
     BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
-    MyKnowledgeMasteryView,
+    MyKnowledgeMasteryView, SendVerificationCodeView,
 )
 from .views_institution import (
     InstitutionDashboardView, InstitutionListView, InstitutionDetailView,
@@ -24,6 +24,7 @@ urlpatterns = [
     # Auth & profile
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
+    path('send-verification-code/', SendVerificationCodeView.as_view(), name='send-verification-code'),
     path('me/', UserDetailView.as_view(), name='user-detail'),
     path('me/update/', UpdateProfileView.as_view(), name='user-update'),
     path('me/email/', UpdateEmailView.as_view(), name='email-update'),
