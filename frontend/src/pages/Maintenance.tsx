@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 
 // Sub-components
-import { TagInput, KPTreeNode } from './maintenance/MaintenanceComponents';
+import { TagInput } from './maintenance/MaintenanceComponents';
 import { QuestionBankPanel } from './maintenance/QuestionBankPanel';
 import { InsightsPanel } from './maintenance/InsightsPanel';
 import { MembershipPanel } from './maintenance/MembershipPanel';
@@ -69,7 +69,6 @@ export const Maintenance: React.FC = () => {
   const [botForm, setBotForm] = useState({ name: '', prompt: '', avatar: null as File | null, is_exclusive: false });
   const [albumForm, setAlbumForm] = useState({ name: '', description: '', cover: null as File | null });
   const [quizForm, setQuizForm] = useState({ text: '', q_type: 'objective', subjective_type: 'noun', grading_points: '', knowledge_point: '0', options: ['', '', '', ''], answer: '', difficulty_level: 'normal' });
-  const [kpForm, setKpForm] = useState({ name: '', description: '', parent: '0' });
   const [smForm, setSmForm] = useState({ name: '', description: '', file: null as File | null });
   const [notifForm, setNotifForm] = useState({ title: '', content: '', link: '' });
   const [isSendingNotif, setIsSendingNotif] = useState(false);
@@ -321,8 +320,6 @@ export const Maintenance: React.FC = () => {
       toast.success("成功导入题库"); setAiPreviewData(null); setShowAIWorkstation(false); fetchLists();
     } catch (e) { toast.error("导入失败"); }
   };
-
-  const roots = useMemo(() => kpList.filter(kp => !kp.parent), [kpList]);
 
   return (
     <div className="p-6 space-y-6 animate-in fade-in duration-500 max-w-[1600px] mx-auto overflow-hidden text-left">

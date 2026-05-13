@@ -1,3 +1,4 @@
+import requests
 from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -77,9 +78,35 @@ class ImageUploadView(APIView):
         file = request.FILES.get('image')
         if not file:
             return Response({'error': 'No file uploaded'}, status=400)
-        
-        # 保存文件
+
         file_name = default_storage.save(f'chat_images/{file.name}', file)
         file_url = request.build_absolute_uri(settings.MEDIA_URL + file_name)
-        
+
         return Response({'url': file_url})
+
+
+class GiphySearchView(APIView):
+    """Proxy GIPHY search/tending through our backend to avoid exposing API key."""
+    permission_classes = [IsMember]
+
+    def get(self, request):
+        api_key = getattr(settings, 'GIPHY_API_KEY', '')
+        if not api_key:
+            return Response({'error': 'GIPHY not configured'}, status=503)
+
+        q = request.GET.get('q', '')
+        offset = request.GET.get('offset', '0')
+
+        if q:
+            url = 'https://api.giphy.com/v1/gifs/search'
+            params = {'api_key': api_key, 'q': q, 'offset': offset, 'limit': 24, 'rating': 'pg'}
+        else:
+            url = 'https://api.giphy.com/v1/gifs/trending'
+            params = {'api_key': api_key, 'offset': offset, 'limit': 24, 'rating': 'pg'}
+
+        try:
+            r = requests.get(url, params=params, timeout=5)
+            r.raise_for_status()
+            return Response(r.json())
+        except requests.RequestException:
+            return Response({'error': 'GIPHY temporarily unavailable'}, status=502)

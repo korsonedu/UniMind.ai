@@ -4,7 +4,7 @@ import logging
 import time
 import requests
 from django.conf import settings
-from .config import get_llm_config
+from .config import get_llm_config, get_model_for_task
 from .observability import record_ai_operation
 
 
@@ -44,9 +44,9 @@ class AIEngine:
     ):
         """通用的 AI 模型调用接口"""
         started_at = time.monotonic()
-        config = get_llm_config()
+        config = get_model_for_task(operation)
         if not config['api_key']:
-            msg = "LLM_API_KEY 未设置，AI 调用被跳过。"
+            msg = "DEEPSEEK_API_KEY 未设置，AI 调用被跳过。"
             logger.error(msg)
             duration_ms = int((time.monotonic() - started_at) * 1000)
             record_ai_operation(
@@ -65,18 +65,22 @@ class AIEngine:
 
         for attempt in range(max_retries + 1):
             try:
+                body = {
+                    "model": config['model'],
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                }
+                if config.get('thinking'):
+                    body["reasoning_effort"] = config['thinking']
+
                 r = requests.post(
                     config['base_url'],
                     headers={
                         "Authorization": f"Bearer {config['api_key'].strip()}",
                         "Content-Type": "application/json"
                     },
-                    json={
-                        "model": config['model'],
-                        "messages": messages,
-                        "temperature": temperature,
-                        "max_tokens": max_tokens
-                    },
+                    json=body,
                     timeout=timeout_seconds
                 )
                 r.raise_for_status()

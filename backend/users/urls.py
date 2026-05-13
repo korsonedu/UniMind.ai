@@ -16,7 +16,7 @@ from .views_institution import (
     InstitutionStudentRankingView,
     InstitutionFeatureView, InstitutionPreviewView,
     JoinInstitutionView, InstitutionSelfUpdateView, InstitutionJoinView,
-    InstitutionInviteLookupView,
+    InstitutionInviteLookupView, CheckInviteView, RegenerateInviteSlugView,
     PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
 )
 
@@ -61,7 +61,9 @@ urlpatterns = [
     path('institution/me/features/', InstitutionFeatureView.as_view(), name='institution-features'),
     path('institution/me/preview/', InstitutionPreviewView.as_view(), name='institution-preview'),
     path('institution/join/', InstitutionJoinView.as_view(), name='institution-join'),
-    path('institution/join/<slug:slug>/', JoinInstitutionView.as_view(), name='institution-join-by-slug'),
+    path('institution/me/regenerate-invite-slug/', RegenerateInviteSlugView.as_view(), name='regenerate-invite-slug'),
+    path('join/<str:invite_slug>/', JoinInstitutionView.as_view(), name='join-by-invite'),
+    path('check-invite/', CheckInviteView.as_view(), name='check-invite'),
     path('institution/invite-lookup/', InstitutionInviteLookupView.as_view(), name='institution-invite-lookup'),
 
     # Institution — students

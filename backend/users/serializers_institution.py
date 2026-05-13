@@ -11,7 +11,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Institution
         fields = [
-            'id', 'name', 'slug', 'invite_code',
+            'id', 'name', 'slug', 'invite_code', 'invite_slug',
             'contact_name', 'contact_email', 'contact_phone',
             'plan', 'plan_expires_at', 'is_active', 'is_plan_active',
             'max_students', 'student_count', 'features',

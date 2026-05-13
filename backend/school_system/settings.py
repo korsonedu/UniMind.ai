@@ -81,6 +81,8 @@ INSTALLED_APPS = [
     "ai_assistant",
     "faq_system",
     "notifications",
+    "interviews",
+    "core",
 ]
 
 MIDDLEWARE = [
@@ -189,6 +191,10 @@ AI_BULK_GENERATE_CONCURRENCY = _get_int("AI_BULK_GENERATE_CONCURRENCY", 4)
 AI_DIFFICULTY_CHECK_ENABLED = _get_bool("AI_DIFFICULTY_CHECK_ENABLED", default=True)
 QUIZ_EXAM_GRADING_USE_CELERY = _get_bool("QUIZ_EXAM_GRADING_USE_CELERY", default=True)
 
+# 上传限制 — 匹配 nginx client_max_body_size (200MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = _get_int("DATA_UPLOAD_MAX_MEMORY_SIZE", 209715200)
+FILE_UPLOAD_MAX_MEMORY_SIZE = _get_int("FILE_UPLOAD_MAX_MEMORY_SIZE", 209715200)
+
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 CHANNEL_LAYER_REDIS_URL = os.getenv("CHANNEL_LAYER_REDIS_URL", REDIS_URL)
 
@@ -233,6 +239,22 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
 
 # GIPHY
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY", "")
+
+# AI 引擎 — DeepSeek V4
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", os.getenv("LLM_API_KEY", ""))
+LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-pro")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1/chat/completions")
+
+# 按任务模型覆盖 (DeepSeek V4 多模型路由)
+AI_MODEL_CHAT = os.getenv("AI_MODEL_CHAT", "deepseek-v4-flash")
+AI_MODEL_GENERATE_AUTHOR = os.getenv("AI_MODEL_GENERATE_AUTHOR", "deepseek-v4-pro")
+AI_MODEL_GENERATE_REVIEWER = os.getenv("AI_MODEL_GENERATE_REVIEWER", "deepseek-v4-pro")
+AI_MODEL_GENERATE_CLASSIFIER = os.getenv("AI_MODEL_GENERATE_CLASSIFIER", "deepseek-v4-flash")
+AI_MODEL_GRADE_SUBJECTIVE = os.getenv("AI_MODEL_GRADE_SUBJECTIVE", "deepseek-v4-pro")
+AI_MODEL_ESSAY_GRADE = os.getenv("AI_MODEL_ESSAY_GRADE", "deepseek-v4-pro")
+AI_MODEL_GENERATE_ANSWER = os.getenv("AI_MODEL_GENERATE_ANSWER", "deepseek-v4-flash")
+AI_MODEL_PARSE_TEXT = os.getenv("AI_MODEL_PARSE_TEXT", "deepseek-v4-flash")
+AI_MODEL_SCHEMA_REPAIR = os.getenv("AI_MODEL_SCHEMA_REPAIR", "deepseek-v4-flash")
 
 # Email
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")

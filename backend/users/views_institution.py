@@ -517,13 +517,33 @@ from rest_framework.permissions import AllowAny
 
 
 class JoinInstitutionView(APIView):
-    """邀请链接：/join/{slug} → 重定向到前端注册页预填邀请码"""
+    """邀请链接：/join/{invite_slug} → 种 cookie → 重定向到 /login"""
     permission_classes = [AllowAny]
 
-    def get(self, request, slug):
-        institution = get_object_or_404(Institution, slug=slug, is_active=True)
+    def get(self, request, invite_slug):
+        institution = get_object_or_404(Institution, invite_slug=invite_slug, is_active=True)
         frontend_url = getattr(settings, 'FRONTEND_URL', '')
-        return redirect(f'{frontend_url}/register?invite={slug}&name={institution.name}')
+        response = redirect(f'{frontend_url}/login')
+        response.set_cookie(
+            'institution_invite', invite_slug,
+            max_age=7 * 24 * 3600,
+            httponly=False,
+            samesite='Lax',
+        )
+        return response
+
+
+class CheckInviteView(APIView):
+    """前端检测：是否有有效的机构邀请 cookie"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        invite_slug = request.COOKIES.get('institution_invite', '')
+        exists = bool(
+            invite_slug
+            and Institution.objects.filter(invite_slug=invite_slug, is_active=True).exists()
+        )
+        return Response({'has_invite': exists})
 
 
 # ── Institution Self-Update (机构管理员编辑自己的机构信息) ──
@@ -578,6 +598,16 @@ class InstitutionSelfUpdateView(APIView):
             'notes': inst.notes or '',
             'logo_url': self._build_logo_url(inst, request),
         })
+
+
+class RegenerateInviteSlugView(APIView):
+    """机构管理员重新生成邀请链接 slug"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def post(self, request):
+        inst = request.user.institution
+        inst.regenerate_invite_slug()
+        return Response({'invite_slug': inst.invite_slug})
 
 
 # ── Student Join via Invite Code ──

@@ -419,7 +419,7 @@ class SystemConfigView(generics.RetrieveUpdateAPIView):
         return config
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS: return [permissions.AllowAny()]
-        return [permissions.IsAdminUser()]
+        return [IsAdmin()]
 
 class ResetEloView(generics.UpdateAPIView):
     serializer_class = UserSerializer

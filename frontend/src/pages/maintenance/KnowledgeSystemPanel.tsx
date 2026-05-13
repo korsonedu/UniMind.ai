@@ -275,9 +275,9 @@ export function KnowledgeSystemPanel() {
   const selectedNode = allNodes.find(n => n.id === selectedId);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-14rem)]">
       {/* Left: Tree */}
-      <Card className="p-4 lg:col-span-2 flex flex-col min-h-[500px]">
+      <Card className="p-4 lg:col-span-2 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-extrabold text-[#1D1D1F] flex items-center gap-2">
             <BrainCircuit className="h-4 w-4 text-indigo-500" /> 知识体系
@@ -316,6 +316,7 @@ export function KnowledgeSystemPanel() {
       </Card>
 
       {/* Right: Detail + Import */}
+      <ScrollArea className="min-h-0">
       <div className="space-y-4">
         {/* Detail */}
         {selectedNode ? (
@@ -377,6 +378,7 @@ export function KnowledgeSystemPanel() {
           </div>
         </Card>
       </div>
+      </ScrollArea>
 
       <KPEditDialog
         open={showCreate || !!editNode}

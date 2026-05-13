@@ -160,6 +160,7 @@ class Institution(models.Model):
     is_active = models.BooleanField(default=True, verbose_name="是否启用")
     invite_code = models.CharField(max_length=12, blank=True, unique=True, verbose_name="邀请码")
     custom_domain = models.CharField(max_length=200, blank=True, verbose_name="自定义域名")
+    invite_slug = models.CharField(max_length=40, blank=True, unique=True, verbose_name="邀请链接 slug")
     logo = models.ImageField(upload_to='institution_logos/', blank=True, verbose_name="机构 Logo")
     notes = models.TextField(blank=True, verbose_name="管理员备注")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_institutions', verbose_name="创建人")
@@ -191,6 +192,17 @@ class Institution(models.Model):
         verbose_name = '机构'
         verbose_name_plural = '机构'
         ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.invite_slug:
+            import secrets
+            self.invite_slug = secrets.token_urlsafe(12)
+        super().save(*args, **kwargs)
+
+    def regenerate_invite_slug(self):
+        import secrets
+        self.invite_slug = secrets.token_urlsafe(12)
+        self.save(update_fields=['invite_slug'])
 
     def __str__(self):
         return self.name

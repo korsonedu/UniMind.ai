@@ -205,6 +205,7 @@ export const MainLayout: React.FC = () => {
 
   // ── 身份与方案层级 ──
   const isSuperAdmin = user?.role === 'admin' && !instInfo;
+  const isInstStudent = user?.institution_role === 'student';
   const instPlan = instInfo?.plan || 'free';
   const planLevel = (p: string) => ({ free: 1, solo: 2, plus: 3, pro: 4 })[p] || 1;
   const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
@@ -331,7 +332,7 @@ export const MainLayout: React.FC = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" side={collapsed ? "right" : "top"} className="w-52 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-2xl">
                   <DropdownMenuLabel className="px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">账户与偏好</DropdownMenuLabel>
-                  {user && !user.is_member && (
+                  {user && !user.is_member && !isInstStudent && (
                     <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer bg-amber-50 text-amber-700 focus:bg-amber-100 focus:text-amber-800 transition-colors">
                       <Sparkles className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">激活会员</span>
@@ -402,19 +403,21 @@ export const MainLayout: React.FC = () => {
                <div className="flex items-center gap-3">
                   {/* Clickable ELO */}
                   {user && <EloPopover />}
-                  {/* Upgrade plan button */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 rounded-full px-3 text-[11px] font-bold bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-700 hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 transition-all"
-                    onClick={() => {
-                      setRestrictedFeature(undefined);
-                      setShowUpgradeModal(true);
-                    }}
-                  >
-                    <Sparkles className="h-3 w-3 mr-1 text-amber-500" />
-                    升级方案
-                  </Button>
+                  {/* Upgrade plan button — hidden for institution students */}
+                  {!isInstStudent && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-full px-3 text-[11px] font-bold bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-700 hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 transition-all"
+                      onClick={() => {
+                        setRestrictedFeature(undefined);
+                        setShowUpgradeModal(true);
+                      }}
+                    >
+                      <Sparkles className="h-3 w-3 mr-1 text-amber-500" />
+                      升级方案
+                    </Button>
+                  )}
                   <div className="h-6 w-px bg-border mx-1" />
                   {user && <NotificationBell />}
                   <Avatar className={cn("h-8 w-8 border border-border shadow-sm")}>
@@ -441,7 +444,7 @@ export const MainLayout: React.FC = () => {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-2xl">
-                    {user && !user.is_member && (
+                    {user && !user.is_member && !isInstStudent && (
                       <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="rounded-xl px-3 py-2 gap-2 cursor-pointer bg-amber-50 text-amber-700 focus:bg-amber-100 focus:text-amber-800 transition-colors">
                         <Sparkles className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">激活会员</span>

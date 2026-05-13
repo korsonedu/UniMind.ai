@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider, Navigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { MainLayout } from './layouts/MainLayout';
 import { CourseCenter } from './pages/CourseCenter';
 import { TestLadder } from './pages/TestLadder';
@@ -117,6 +117,8 @@ import StartupMaterials from './pages/StartupMaterials';
 const RootRedirect = () => {
   const { token, user, setAuth } = useAuthStore();
   const [loading, setLoading] = useState(!!token && !user);
+  const [checkingInvite, setCheckingInvite] = useState(true);
+  const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
@@ -130,14 +132,24 @@ const RootRedirect = () => {
     }
   }, [token, user, setAuth]);
 
-  if (loading) return <Loading message="Authenticating Secure Session..." fullScreen size="lg" />;
+  useEffect(() => {
+    if (token || user) { setCheckingInvite(false); return; }
+    api.get('/users/check-invite/')
+      .then(res => {
+        if (res.data?.has_invite) navigate('/login', { replace: true });
+      })
+      .catch(() => {})
+      .finally(() => setCheckingInvite(false));
+  }, [token, user]);
+
+  if (loading || checkingInvite) return <Loading message="Authenticating Secure Session..." fullScreen size="lg" />;
 
   // Allow access to startup materials even if not logged in (using MainLayout)
   if (location.pathname === '/startup-materials') return <MainLayout />;
 
   // If logged in, wrap the app content in MainLayout
   if (token && user) return <MainLayout />;
-  
+
   // Otherwise, return the landing page (outside layout)
   return <Landing />;
 };

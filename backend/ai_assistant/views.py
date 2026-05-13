@@ -1,6 +1,7 @@
 import threading
 import logging
 from django.db import connections
+from users.permissions import IsAdmin
 from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -63,7 +64,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
 class BotListCreateView(generics.ListCreateAPIView):
     serializer_class = BotSerializer
     def get_permissions(self):
-        if self.request.method == 'POST': return [permissions.IsAdminUser()]
+        if self.request.method == 'POST': return [IsAdmin()]
         return [IsMember()]
 
     def get_queryset(self):
@@ -84,7 +85,7 @@ class BotListCreateView(generics.ListCreateAPIView):
 class BotDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Bot.objects.all()
     serializer_class = BotSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def perform_update(self, serializer):
         bot = serializer.save()
