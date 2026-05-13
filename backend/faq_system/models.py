@@ -22,6 +22,7 @@ class Answer(models.Model):
     is_teacher = models.BooleanField(default=False, verbose_name="是否教师回答")
     likes = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='liked_answers', blank=True, verbose_name="点赞用户")
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['created_at']

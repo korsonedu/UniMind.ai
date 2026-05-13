@@ -62,7 +62,9 @@ class Question(models.Model):
     options = models.JSONField(blank=True, null=True, help_text="客观题选项")
     correct_answer = models.TextField(blank=True, null=True, help_text="客观题标准答案或主观题参考答案")
     ai_answer = models.TextField(blank=True, null=True, verbose_name="AI 生成的深度解析答案")
+    rubric = models.JSONField(blank=True, null=True, help_text="主观题采分点 JSON 结构")
     difficulty = models.IntegerField(default=1200, help_text="基准 ELO 分值")
+    institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="questions", verbose_name="所属机构")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
@@ -121,6 +123,7 @@ class QuizExam(models.Model):
 
 class ExamQuestionResult(models.Model):
     exam = models.ForeignKey(QuizExam, on_delete=models.CASCADE, related_name='results')
+    details = models.JSONField(blank=True, null=True, help_text="主观题采分明细")
     question = models.ForeignKey(Question, on_delete=models.SET_NULL, null=True)
     user_answer = models.TextField()
     score = models.FloatField()
@@ -128,3 +131,152 @@ class ExamQuestionResult(models.Model):
     feedback = models.TextField(blank=True)
     analysis = models.TextField(blank=True, help_text="思维链分析")
     is_correct = models.BooleanField(default=False)
+
+
+# ── 0013 ContentPipelineTask ──
+class ContentPipelineTask(models.Model):
+    TASK_TYPES = [
+        ("ai_parse", "AI 整理解析"), ("ai_generate", "AI 智能命题"),
+        ("bulk_import", "批量题库导入"), ("course_publish", "课程发布流水线"),
+        ("article_publish", "文章发布流水线"), ("other", "其他任务"),
+    ]
+    STATUS_CHOICES = [
+        ("draft", "草稿"), ("pending", "待执行"), ("running", "执行中"),
+        ("review", "待审核"), ("completed", "已完成"),
+        ("failed", "失败"), ("cancelled", "已取消"),
+    ]
+    task_type = models.CharField(max_length=30, choices=TASK_TYPES, default="other", verbose_name="任务类型")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", verbose_name="任务状态")
+    title = models.CharField(max_length=200, verbose_name="任务标题")
+    description = models.TextField(blank=True, verbose_name="任务说明")
+    progress = models.PositiveSmallIntegerField(default=0, verbose_name="进度百分比")
+    payload = models.JSONField(blank=True, default=dict, verbose_name="输入载荷")
+    result = models.JSONField(blank=True, default=dict, verbose_name="输出结果")
+    error_message = models.TextField(blank=True, verbose_name="错误信息")
+    request_id = models.CharField(max_length=80, blank=True, verbose_name="请求链路 ID")
+    assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_pipeline_tasks", verbose_name="处理人")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pipeline_tasks", verbose_name="创建人")
+    started_at = models.DateTimeField(null=True, blank=True, verbose_name="开始时间")
+    finished_at = models.DateTimeField(null=True, blank=True, verbose_name="完成时间")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+# ── 0016 PromptTemplateVersion ──
+class PromptTemplateVersion(models.Model):
+    namespace = models.CharField(max_length=50, default="quizzes", verbose_name="模板命名空间")
+    template_name = models.CharField(max_length=120, verbose_name="模板文件名")
+    version = models.PositiveIntegerField(default=1, verbose_name="版本号")
+    content = models.TextField(verbose_name="模板内容")
+    change_note = models.CharField(max_length=200, blank=True, verbose_name="变更说明")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="prompt_template_versions", verbose_name="操作人")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        unique_together = ("namespace", "template_name", "version")
+
+
+# ── 0017 KnowledgePointAnnotation ──
+class KnowledgePointAnnotation(models.Model):
+    MASTERY_CHOICES = [
+        ("unknown", "未知"), ("weak", "薄弱"), ("learning", "学习中"),
+        ("stable", "已稳定"), ("mastered", "已掌握"),
+    ]
+    PRIORITY_CHOICES = [("low", "低"), ("medium", "中"), ("high", "高")]
+    SOURCE_CHOICES = [("auto", "系统计算"), ("manual", "用户标注")]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="knowledge_annotations")
+    knowledge_point = models.ForeignKey(KnowledgePoint, on_delete=models.CASCADE, related_name="user_annotations")
+    mastery_level = models.CharField(max_length=20, choices=MASTERY_CHOICES, default="unknown", verbose_name="掌握等级")
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default="medium", verbose_name="复习优先级")
+    confidence_score = models.PositiveSmallIntegerField(default=0, verbose_name="信心分(0-100)")
+    tags = models.JSONField(blank=True, default=list, verbose_name="个性标签")
+    note = models.TextField(blank=True, verbose_name="个性备注")
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default="manual", verbose_name="数据来源")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "knowledge_point")
+
+
+# ── 0018 FSRSProfile / ReviewLog / UserKnowledgeState ──
+class FSRSProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="fsrs_profile")
+    weights = models.JSONField(default=list)
+    last_optimized_at = models.DateTimeField(null=True, blank=True)
+    total_reviews_used = models.IntegerField(default=0)
+    current_loss = models.FloatField(null=True, blank=True)
+
+
+class ReviewLog(models.Model):
+    GRADE_CHOICES = [(1, "Again"), (2, "Hard"), (3, "Good"), (4, "Easy")]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="review_logs")
+    knowledge_point = models.ForeignKey(KnowledgePoint, on_delete=models.CASCADE)
+    grade = models.IntegerField(choices=GRADE_CHOICES)
+    review_time = models.DateTimeField(auto_now_add=True)
+    elapsed_days = models.FloatField(help_text="距离上次复习过去的天数")
+    predicted_retrievability = models.FloatField()
+
+
+class UserKnowledgeState(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="knowledge_states")
+    knowledge_point = models.ForeignKey(KnowledgePoint, on_delete=models.CASCADE)
+    mastery_score = models.FloatField(default=0.0, help_text="综合掌握度评分")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "knowledge_point")
+
+
+# ── 0020 FSRSOptimizationLog / PersonalizedMockExam ──
+class FSRSOptimizationLog(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="fsrs_optimization_logs")
+    previous_loss = models.FloatField(null=True, blank=True)
+    new_loss = models.FloatField(null=True, blank=True)
+    improvement_ratio = models.FloatField(default=0.0, help_text="(old - new) / old")
+    reviews_used = models.IntegerField(default=0)
+    accepted = models.BooleanField(default=False)
+    note = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PersonalizedMockExam(models.Model):
+    STATUS_CHOICES = [
+        ("processing", "生成中"), ("ready", "可下载"), ("failed", "生成失败"),
+    ]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="personalized_mock_exams")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ready")
+    exam_pdf = models.CharField(max_length=500, blank=True, help_text="试卷版绝对路径")
+    answer_pdf = models.CharField(max_length=500, blank=True, help_text="解析版绝对路径")
+    question_count = models.IntegerField(default=0)
+    weak_coverage = models.IntegerField(default=0, help_text="命中的薄弱点题目数")
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+# ── 0021 TeacherExam / StudentExamSubmission ──
+class TeacherExam(models.Model):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    exam_pdf = models.FileField(upload_to="teacher_exams/")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class StudentExamSubmission(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    exam = models.ForeignKey(TeacherExam, on_delete=models.CASCADE, related_name="submissions")
+    answer_pdf = models.FileField(upload_to="student_answers/")
+    score = models.FloatField(null=True, blank=True)
+    feedback = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)

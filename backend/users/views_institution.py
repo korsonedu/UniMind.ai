@@ -2,10 +2,13 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from datetime import timedelta
+
+from core.rate_limit import rate_limit
 
 from django.contrib.auth import get_user_model
 from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS
@@ -549,8 +552,9 @@ class InstitutionJoinView(APIView):
 
 class InstitutionInviteLookupView(APIView):
     """公开：通过邀请码查询机构名称（注册时前端校验）"""
-    permission_classes = []
+    permission_classes = [AllowAny]
 
+    @method_decorator(rate_limit(key_prefix="invite_lookup", max_requests=10, window_seconds=300))
     def get(self, request):
         code = (request.query_params.get('code') or '').strip().upper()
         if not code:

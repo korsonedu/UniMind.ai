@@ -230,3 +230,25 @@ CELERY_BEAT_SCHEDULE_FILENAME = os.getenv(
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "visibility_timeout": _get_int("CELERY_VISIBILITY_TIMEOUT", 3600),
 }
+
+# GIPHY
+GIPHY_API_KEY = os.getenv("GIPHY_API_KEY", "")
+
+# Email
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = _get_int("EMAIL_PORT", 587)
+EMAIL_USE_TLS = _get_bool("EMAIL_USE_TLS", default=True)
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "korsonedu@gmail.com")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "korsonedu@gmail.com")
+
+UNIMIND_LOGO_URL = os.getenv(
+    "UNIMIND_LOGO_URL",
+    "https://unimind.ai/logo.png",
+)
+
+EMAIL_SSL_CERTFILE = os.getenv("SSL_CERT_FILE", "")
+# macOS SSL: If cert verification fails, run in terminal:
+#   /Applications/Python\ 3.14/Install\ Certificates.command
+# Or install certifi and set SSL_CERT_FILE to certifi's cacert.pem

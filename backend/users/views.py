@@ -4,11 +4,19 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
-from .serializers import UserSerializer, RegisterSerializer, SystemConfigSerializer, DailyPlanSerializer, ActivationCodeSerializer
+from django.utils.decorators import method_decorator
+from .serializers import (
+    UserSerializer,
+    RegisterSerializer,
+    SystemConfigSerializer,
+    DailyPlanSerializer,
+    ActivationCodeSerializer,
+)
 from .models import User, SystemConfig, DailyPlan, ActivationCode
 from django.utils import timezone
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
+from core.rate_limit import rate_limit
 import datetime
 import logging
 import re
@@ -81,6 +89,42 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
     serializer_class = RegisterSerializer
+
+    @method_decorator(rate_limit(key_prefix="register", max_requests=5, window_seconds=3600))
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        email = str(self.request.data.get('email', '')).strip().lower()
+        code = str(self.request.data.get('code', '')).strip()
+        nickname = str(self.request.data.get('nickname', '')).strip()
+        password = self.request.data.get('password', '')
+
+        if not email or not code or not password:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': '邮箱、验证码、密码为必填项'})
+        if len(password) < 6:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': '密码至少需要 6 位'})
+
+        from datetime import timedelta
+        existing = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
+        if not existing or existing.verification_code != code:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': '验证码错误或已过期'})
+        if existing.verification_code_sent_at:
+            expires = existing.verification_code_sent_at + timedelta(minutes=10)
+            if timezone.now() > expires:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({'error': '验证码已过期，请重新发送'})
+
+        user = existing
+        if nickname:
+            user.nickname = nickname
+        user.email_verified = True
+        user.verification_code = ''
+        user.set_password(password)
+        user.save()
 
 class UpdateProfileView(generics.UpdateAPIView):
     serializer_class = UserSerializer
@@ -394,17 +438,28 @@ from rest_framework.views import APIView
 
 class LoginView(APIView):
     permission_classes = (AllowAny,)
-    
+
+    @method_decorator(rate_limit(key_prefix="login", max_requests=10, window_seconds=300))
     def post(self, request, *args, **kwargs):
-        username = request.data.get('username')
+        from django.contrib.auth import authenticate
+
+        login_id = request.data.get('email') or request.data.get('username') or ''
         password = request.data.get('password')
-        logger.debug("Login attempt username=%s", username)
-        
-        if not username or not password:
-            return Response({'error': '请提供用户名和密码'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        user = authenticate(username=username, password=password)
-        
+        logger.debug("Login attempt id=%s", login_id)
+
+        if not login_id or not password:
+            return Response({'error': '请提供邮箱和密码'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = None
+        if '@' in str(login_id):
+            try:
+                u = User.objects.get(email__iexact=login_id)
+                user = authenticate(username=u.username, password=password)
+            except User.DoesNotExist:
+                pass
+        else:
+            user = authenticate(username=login_id, password=password)
+
         if user:
             token, created = Token.objects.get_or_create(user=user)
             user.last_login = timezone.now()
@@ -414,8 +469,8 @@ class LoginView(APIView):
                 'user': UserSerializer(user).data
             })
         else:
-            logger.debug("Authentication failed username=%s", username)
-            return Response({'error': '用户名或密码错误'}, status=status.HTTP_401_UNAUTHORIZED)
+            logger.debug("Authentication failed id=%s", login_id)
+            return Response({'error': '邮箱或密码错误'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class UserDetailView(generics.RetrieveAPIView):
 
@@ -427,7 +482,7 @@ class UserDetailView(generics.RetrieveAPIView):
 
         user.last_active = timezone.now()
 
-        user.save()
+        user.save(update_fields=['last_active'])
 
         return user
 
@@ -454,3 +509,54 @@ class UpdatePasswordView(generics.UpdateAPIView):
             user.save()
             return Response({'status': 'ok'})
         return Response({'old_password': ['Wrong']}, status=400)
+
+
+class SendVerificationCodeView(APIView):
+    """发送邮箱验证码。注册场景：自动创建临时未验证用户。"""
+    permission_classes = [AllowAny]
+
+    @method_decorator(rate_limit(key_prefix="send_code", max_requests=3, window_seconds=600))
+    def post(self, request):
+        email = str(request.data.get('email', '')).strip().lower()
+        if not email:
+            return Response({'error': '请提供邮箱地址'}, status=400)
+
+        existing_verified = User.objects.filter(email=email, email_verified=True).first()
+        if existing_verified:
+            if request.user.is_authenticated and existing_verified == request.user:
+                pass
+            else:
+                return Response({'error': '该邮箱已被注册'}, status=400)
+
+        from core.email_service import generate_verification_code, send_verification_email
+        from datetime import timedelta
+
+        code = generate_verification_code()
+
+        if request.user.is_authenticated:
+            user = request.user
+            user.email = email
+        else:
+            user = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
+            if not user:
+                username_base = email.split('@')[0]
+                username = username_base
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{username_base}{counter}"
+                    counter += 1
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                )
+                user.set_unusable_password()
+
+        user.verification_code = code
+        user.verification_code_sent_at = timezone.now()
+        user.save(update_fields=['email', 'verification_code', 'verification_code_sent_at'])
+
+        ok = send_verification_email(email, code)
+        if not ok:
+            return Response({'error': '验证码发送失败，请稍后重试'}, status=500)
+
+        return Response({'status': 'ok', 'message': f'验证码已发送至 {email}，10 分钟内有效'})

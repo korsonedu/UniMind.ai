@@ -136,6 +136,23 @@ def send_verification_email(email: str, code: str) -> bool:
         return False
 
 
+def send_email(recipient: str, subject: str, body: str) -> bool:
+    """Generic email sender — plain text only."""
+    from_email = getattr(settings, 'EMAIL_NOREPLY_ADDRESS', 'noreply@unimind.ai')
+    try:
+        send_mail(
+            subject=subject,
+            message=body,
+            from_email=from_email,
+            recipient_list=[recipient],
+            fail_silently=False,
+        )
+        return True
+    except Exception as exc:
+        logger.exception("Failed to send email to %s: %s", recipient, exc)
+        return False
+
+
 def send_membership_notification(email: str, tier: str, expires_at) -> bool:
     tier_labels = {'basic': '基础版', 'pro': '专业版'}
     label = tier_labels.get(tier, tier)

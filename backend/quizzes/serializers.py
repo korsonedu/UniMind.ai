@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from .models import Question, QuizAttempt, KnowledgePoint, UserQuestionStatus, QuizExam, ExamQuestionResult
+from .models import (
+    Question, QuizAttempt, KnowledgePoint, UserQuestionStatus, QuizExam, ExamQuestionResult,
+    ContentPipelineTask, TeacherExam, StudentExamSubmission, KnowledgePointAnnotation,
+    PersonalizedMockExam, PromptTemplateVersion,
+)
 from users.serializers import UserSerializer
 
 class KnowledgePointSerializer(serializers.ModelSerializer):
@@ -61,7 +65,37 @@ class ExamQuestionResultSerializer(serializers.ModelSerializer):
 class QuizExamSerializer(serializers.ModelSerializer):
     results = ExamQuestionResultSerializer(many=True, read_only=True)
     created_at_fmt = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M", read_only=True)
-    
+
     class Meta:
         model = QuizExam
+        fields = '__all__'
+
+
+class ContentPipelineTaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContentPipelineTask
+        fields = '__all__'
+
+
+class TeacherExamSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeacherExam
+        fields = '__all__'
+
+
+class StudentExamSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentExamSubmission
+        fields = '__all__'
+
+
+class KnowledgePointAnnotationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = KnowledgePointAnnotation
+        fields = '__all__'
+
+
+class PersonalizedMockExamSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PersonalizedMockExam
         fields = '__all__'

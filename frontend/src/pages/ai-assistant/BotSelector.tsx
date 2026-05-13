@@ -22,7 +22,7 @@ interface BotSelectorProps {
   onSelect: (bot: Bot) => void;
 }
 
-export const BotSelector: React.FC<BotSelectorProps> = ({ bots, selectedBot, onSelect }) => {
+export const BotSelector: React.FC<BotSelectorProps> = React.memo(({ bots, selectedBot, onSelect }) => {
   return (
     <div className="flex items-center gap-4 text-left">
       <DropdownMenu modal={false}>
@@ -38,21 +38,7 @@ export const BotSelector: React.FC<BotSelectorProps> = ({ bots, selectedBot, onS
               </div>
               {selectedBot && (
                 <div className="flex items-center gap-2">
-                  <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest">Powered by DeepSeek-V3.2</p>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <button className="text-[11px] font-bold text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground">Core Logic</button>
-                    </DialogTrigger>
-                    <DialogContent className="rounded-[2rem] border-none shadow-2xl p-10 max-w-2xl text-left bg-card">
-                      <DialogHeader>
-                        <DialogTitle className="text-xl font-bold text-foreground">{selectedBot.name} Core Logic</DialogTitle>
-                        <DialogDescription className="text-xs font-medium text-muted-foreground">The system-level prompt guiding this assistant's behavior.</DialogDescription>
-                      </DialogHeader>
-                      <div className="mt-6 p-6 bg-muted rounded-2xl">
-                        <pre className="text-xs leading-relaxed font-medium whitespace-pre-wrap text-foreground">{selectedBot.system_prompt}</pre>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                  <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest">Powered by DeepSeek-V4 pro</p>
                 </div>
               )}
             </div>
@@ -70,4 +56,4 @@ export const BotSelector: React.FC<BotSelectorProps> = ({ bots, selectedBot, onS
       </DropdownMenu>
     </div>
   );
-};
+});

@@ -19,6 +19,10 @@ interface User {
   current_timer_end?: string;
   today_focused_minutes?: number;
   today_completed_tasks?: any[];
+  institution_id?: number;
+  institution_role?: string;
+  is_admin?: boolean;
+  is_institution_admin?: boolean;
 }
 
 interface AuthState {
