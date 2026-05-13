@@ -335,6 +335,8 @@ export const Maintenance: React.FC = () => {
           <TabsTrigger value="membership" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><ShieldCheck className="h-3.5 w-3.5 mr-2" />激活码</TabsTrigger>
           <TabsTrigger value="insights" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><BarChart3 className="w-3.5 h-3.5 mr-2" />数据洞察</TabsTrigger>
           <TabsTrigger value="manage" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Settings2 className="w-3.5 h-3.5 mr-2" />资源审计</TabsTrigger>
+          <TabsTrigger value="pipeline" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Sparkles className="w-3.5 h-3.5 mr-2" />AI出题中心</TabsTrigger>
+          <TabsTrigger value="prompts" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><FileText className="w-3.5 h-3.5 mr-2" />Prompt模板</TabsTrigger>
         </TabsList>
 
         <TabsContent value="courses">
@@ -498,6 +500,14 @@ export const Maintenance: React.FC = () => {
 
         <TabsContent value="manage">
           <AuditPanel auditMode={auditMode} setAuditMode={setAuditMode} qSearch={qSearch} setQSearch={setQSearch} fetchLists={fetchLists} courseList={courseList} articleList={articleList} kpList={kpList} smList={smList} onEdit={(type, data) => setEditingItem({ type, data })} onDelete={handleDelete} />
+        </TabsContent>
+
+        <TabsContent value="pipeline">
+          <PipelinePanel />
+        </TabsContent>
+
+        <TabsContent value="prompts">
+          <PromptTemplatesPanel />
         </TabsContent>
       </Tabs>
 

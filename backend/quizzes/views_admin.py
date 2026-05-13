@@ -1,6 +1,7 @@
 import datetime
 import logging
 from django.utils import timezone
+from django.db.models import Max
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -234,8 +235,19 @@ class AdminPromptTemplateListView(APIView):
             names = PromptManager.list_prompts(namespace)
         except Exception:
             names = []
+
+        version_map = {}
+        try:
+            for t in PromptTemplateVersion.objects.filter(
+                namespace=namespace, template_name__in=names
+            ).values("template_name").annotate(max_ver=Max("version")):
+                version_map[t["template_name"]] = t["max_ver"]
+        except Exception:
+            pass
+
         items = [
-            {"namespace": namespace, "template_name": n, "latest_version": 1}
+            {"namespace": namespace, "template_name": n,
+             "latest_version": version_map.get(n, 1)}
             for n in names
         ]
         return Response({"namespace": namespace, "results": items})

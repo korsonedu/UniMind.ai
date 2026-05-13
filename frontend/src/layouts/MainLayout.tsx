@@ -175,32 +175,41 @@ export const MainLayout: React.FC = () => {
     }
   };
 
-  const navItems = [
-    { to: '/', icon: BookOpen, label: '课程中心', restricted: true },
-    { to: '/articles', icon: FileText, label: '文章', restricted: true },
-    { to: '/qa', icon: MessageCircleQuestion, label: '答疑', restricted: true },
-    { to: '/tests', icon: Trophy, label: '习题训练', restricted: true },
-    { to: '/knowledge-map', icon: BrainCircuit, label: '知识地图', restricted: true },
-    { to: '/study', icon: Clock, label: '自习室', restricted: true },
-    { to: '/ai', icon: Sparkles, label: 'AI 实验室', restricted: true },
-  ];
-  const mobileNavItems = [
-    { to: '/articles', icon: FileText, label: '文章', restricted: true },
-    { to: '/qa', icon: MessageCircleQuestion, label: '答疑', restricted: true },
-    { to: '/study', icon: Clock, label: '自习', restricted: true },
-    { to: '/knowledge-map', icon: BrainCircuit, label: '知识卡片', restricted: true },
-    { to: '/tests', icon: Trophy, label: '做题', restricted: true },
-  ];
+	  const isMember = user?.is_member;
+	  const isPro = isMember && (user?.membership_tier === 'pro' || user?.institution?.plan === 'pro' || user?.institution?.plan === 'plus');
 
-  if (user?.role === 'admin') navItems.push({ to: '/management', icon: ShieldCheck, label: '维护中心', restricted: false });
-  if (user?.institution) navItems.push(
-    { to: '/institution', icon: ShieldCheck, label: '机构看板', restricted: false },
-    { to: '/institution/students', icon: UserIcon, label: '学员管理', restricted: false },
-  );
-  if (user?.institution_role === 'admin') navItems.push(
-    { to: '/institution/admin', icon: Settings2, label: '机构设置', restricted: false },
-  );
+	  type NavItem = { to: string; icon: any; label: string; memberOnly?: boolean; proOnly?: boolean; section?: string };
+	  const navItems: NavItem[] = [
+	    { to: '/', icon: BookOpen, label: '课程中心' },
+	    { to: '/tests', icon: Trophy, label: '习题训练' },
+	    { to: '/knowledge-map', icon: BrainCircuit, label: '知识地图' },
+	    { to: '/articles', icon: FileText, label: '文章' },
+	    { to: '/qa', icon: MessageCircleQuestion, label: '答疑' },
+	    { to: '/study', icon: Clock, label: '自习室', memberOnly: true },
+	    { to: '/ai', icon: Sparkles, label: 'AI 实验室', memberOnly: true },
+	    { to: '/interviews', icon: Sparkles, label: '模拟面试', memberOnly: true },
+	    { to: '/mock-exam', icon: FileText, label: 'PDF 模考', proOnly: true },
+	  ];
 
+	  if (user?.role === 'admin') {
+	    navItems.push({ to: '/management', icon: ShieldCheck, label: '维护中心', section: '管理' });
+	    navItems.push({ to: '/invite-codes', icon: Sparkles, label: '邀请码', section: '管理' });
+	  }
+	  if (user?.institution) {
+	    navItems.push({ to: '/institution', icon: BarChart3, label: '机构看板', section: '机构' });
+	    navItems.push({ to: '/institution/students', icon: UserIcon, label: '学员管理', section: '机构' });
+	    if (user?.institution_role === 'admin') {
+	      navItems.push({ to: '/institution/admin', icon: Settings2, label: '机构设置', section: '机构' });
+	    }
+	  }
+
+	  const mobileNavItems: NavItem[] = [
+	    { to: '/', icon: BookOpen, label: '课程' },
+	    { to: '/tests', icon: Trophy, label: '做题' },
+	    { to: '/knowledge-map', icon: BrainCircuit, label: '知识' },
+	    { to: '/articles', icon: FileText, label: '文章' },
+	    { to: '/qa', icon: MessageCircleQuestion, label: '答疑' },
+	  ];
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
@@ -233,7 +242,7 @@ export const MainLayout: React.FC = () => {
                 {...item} 
                 active={location.pathname === item.to} 
                 collapsed={collapsed}
-                restricted={item.restricted && !user?.is_member}
+                restricted={Boolean((item as any).memberOnly && !isMember || (item as any).proOnly && !isPro)}
                 onRestrictedClick={() => setShowActivateDialog(true)}
               />
             ))}
@@ -410,7 +419,7 @@ export const MainLayout: React.FC = () => {
                 item.to === '/articles'
                   ? location.pathname === '/articles' || location.pathname.startsWith('/article/')
                   : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
-              const restricted = item.restricted && !user?.is_member;
+              const restricted = Boolean((item as any).memberOnly && !isMember || (item as any).proOnly && !isPro);
               return (
                 <button
                   key={item.to}
