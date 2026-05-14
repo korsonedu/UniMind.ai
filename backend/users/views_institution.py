@@ -638,7 +638,8 @@ class InstitutionJoinView(APIView):
         user.institution = inst
         user.institution_role = 'student'
         user.is_member = True
-        user.save(update_fields=['institution', 'institution_role', 'is_member'])
+        user.membership_tier = user.institution.plan if user.institution else 'free'
+        user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
         return Response({
             'status': 'ok',
             'institution': {'id': inst.id, 'name': inst.name, 'plan_label': inst.get_plan_display()},
@@ -715,7 +716,8 @@ class InstitutionCreateView(APIView):
         user.institution = inst
         user.institution_role = 'admin'
         user.is_member = True
-        user.save(update_fields=['institution', 'institution_role', 'is_member'])
+        user.membership_tier = user.institution.plan if user.institution else 'free'
+        user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
 
         return Response({
             'status': 'ok',

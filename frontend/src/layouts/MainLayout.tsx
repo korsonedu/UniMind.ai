@@ -325,7 +325,7 @@ export const MainLayout: React.FC = () => {
                           <p className="text-[12px] font-bold truncate">{user?.nickname || user?.username}</p>
                           {user.is_member && <ShieldCheck className="h-3 w-3 text-amber-500" />}
                         </div>
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{instInfo ? instInfo.name : (user.is_member ? 'Pro Member' : 'Free Scholar')}</p>
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{instInfo ? `${instInfo.name} · ${instInfo.plan_label || instInfo.plan}` : (user.is_member ? 'Pro Member' : 'Free Scholar')}</p>
                       </div>
                     )}
                   </div>
