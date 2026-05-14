@@ -264,7 +264,8 @@ EMAIL_USE_TLS = _get_bool("EMAIL_USE_TLS", default=True)
 EMAIL_USE_SSL = _get_bool("EMAIL_USE_SSL", default=False)
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "korsonedu@gmail.com")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "korsonedu@gmail.com")
+EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 
 UNIMIND_LOGO_URL = os.getenv(
     "UNIMIND_LOGO_URL",

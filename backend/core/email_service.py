@@ -1,20 +1,57 @@
 import logging
 import secrets
 import string
-from datetime import timedelta
 
+import requests
 from django.conf import settings
-from django.core.mail import send_mail
-from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
 VERIFICATION_CODE_LENGTH = 6
 VERIFICATION_CODE_TTL_MINUTES = 10
+RESEND_API_URL = "https://api.resend.com/emails"
+
+
+def _resend_api_key():
+    return getattr(settings, "RESEND_API_KEY", "")
 
 
 def generate_verification_code() -> str:
     return ''.join(secrets.choice(string.digits) for _ in range(VERIFICATION_CODE_LENGTH))
+
+
+def _send_via_resend(*, to: str, subject: str, html: str, text: str) -> bool:
+    from_email = getattr(settings, "EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
+    api_key = _resend_api_key()
+    if not api_key:
+        logger.error("RESEND_API_KEY not configured")
+        return False
+
+    try:
+        resp = requests.post(
+            RESEND_API_URL,
+            json={
+                "from": f"UniMind.ai <{from_email}>",
+                "to": [to],
+                "subject": subject,
+                "html": html,
+                "text": text,
+            },
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=15,
+        )
+        if resp.status_code in (200, 201, 202):
+            logger.info("Email sent to %s via Resend", to)
+            return True
+        else:
+            logger.error("Resend API error %s: %s", resp.status_code, resp.text[:300])
+            return False
+    except Exception as exc:
+        logger.exception("Failed to send email to %s via Resend: %s", to, exc)
+        return False
 
 
 def _verification_email_html(code: str) -> str:
@@ -119,38 +156,12 @@ def send_verification_email(email: str, code: str) -> bool:
         f"If you did not request this code, please ignore this email.\n\n"
         f"UniMind.ai"
     )
-    from_email = getattr(settings, 'EMAIL_NOREPLY_ADDRESS', 'noreply@unimind.ai')
-    try:
-        send_mail(
-            subject=subject,
-            message=plain,
-            from_email=from_email,
-            recipient_list=[email],
-            fail_silently=False,
-            html_message=_verification_email_html(code),
-        )
-        logger.info("Verification email sent to %s", email)
-        return True
-    except Exception as exc:
-        logger.exception("Failed to send verification email to %s: %s", email, exc)
-        return False
+    return _send_via_resend(to=email, subject=subject, html=_verification_email_html(code), text=plain)
 
 
 def send_email(recipient: str, subject: str, body: str) -> bool:
     """Generic email sender — plain text only."""
-    from_email = getattr(settings, 'EMAIL_NOREPLY_ADDRESS', 'noreply@unimind.ai')
-    try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=from_email,
-            recipient_list=[recipient],
-            fail_silently=False,
-        )
-        return True
-    except Exception as exc:
-        logger.exception("Failed to send email to %s: %s", recipient, exc)
-        return False
+    return _send_via_resend(to=recipient, subject=subject, text=body, html="")
 
 
 def send_membership_notification(email: str, tier: str, expires_at) -> bool:
@@ -164,15 +175,4 @@ def send_membership_notification(email: str, tier: str, expires_at) -> bool:
         message = f"您的 UniMind.ai {label} 会员已激活，无限期有效。"
     message += "\n\n如有任何问题，请回复此邮件联系我们。\n\n— UniMind.ai 团队"
 
-    try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=getattr(settings, 'EMAIL_NOREPLY_ADDRESS', 'noreply@unimind.ai'),
-            recipient_list=[email],
-            fail_silently=False,
-        )
-        return True
-    except Exception as exc:
-        logger.exception("Failed to send membership notification to %s: %s", email, exc)
-        return False
+    return _send_via_resend(to=email, subject=subject, text=message, html="")
