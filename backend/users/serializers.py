@@ -9,7 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'elo_reset_count', 'is_member', 'is_admin', 'is_institution_admin', 'institution', 'institution_role')
+        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'elo_reset_count', 'is_member', 'membership_tier', 'is_admin', 'is_institution_admin', 'institution', 'institution_role', 'institution_id')
         read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'is_admin', 'is_institution_admin', 'institution_role')
 
     def get_is_admin(self, obj):

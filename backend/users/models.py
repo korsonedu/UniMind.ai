@@ -167,7 +167,7 @@ class Institution(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
-    _PLAN_STUDENT_LIMITS = {'free': 30, 'solo': 50, 'plus': 200, 'pro': float('inf')}
+    _PLAN_STUDENT_LIMITS = {'free': 30, 'solo': 50, 'plus': 200, 'pro': 999999}
 
     @property
     def max_students(self):
