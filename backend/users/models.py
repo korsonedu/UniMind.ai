@@ -8,7 +8,7 @@ class User(AbstractUser):
         ('admin', '管理员'),
     )
     MEMBERSHIP_TIER_CHOICES = (
-        ('free', '免费'), ('basic', '基础'), ('pro', '专业'),
+        ('free', 'Free'), ('solo', 'Solo'), ('plus', 'Plus'), ('pro', 'Pro'),
     )
     INSTITUTION_ROLE_CHOICES = (
         ('admin', '机构管理员'), ('student', '学员'),
@@ -276,6 +276,24 @@ class PlanInviteCode(models.Model):
     @property
     def is_exhausted(self):
         return self.used_count >= self.max_uses
+
+    @classmethod
+    def validate_and_use(cls, code: str):
+        """验证并消耗方案邀请码。返回 (valid: bool, result: str|tuple)"""
+        from django.utils import timezone
+        obj = cls.objects.select_for_update().filter(code=code).first()
+        if not obj:
+            return False, '邀请码不存在'
+        if not obj.is_active:
+            return False, '邀请码已被停用'
+        if obj.is_exhausted:
+            return False, '邀请码已达到使用次数上限'
+        plan = obj.plan
+        duration_days = obj.duration_days
+        obj.used_count += 1
+        obj.used_at = timezone.now()
+        obj.save(update_fields=['used_count', 'used_at'])
+        return True, (plan, duration_days)
 
     @classmethod
     def generate(cls, plan, created_by, count=1, max_uses=1, duration_days=30, note=''):
