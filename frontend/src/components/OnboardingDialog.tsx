@@ -39,7 +39,7 @@ export function OnboardingDialog() {
     if (!instName.trim()) return setError('请输入机构名称');
     setLoading(true); setError('');
     try {
-      const { data } = await api.post('/users/institution/create/', {
+      const { data } = await api.post('/users/institutions/create/', {
         invite_code: teacherCode.trim().toUpperCase(),
         name: instName.trim(),
         description: instDesc.trim(),
