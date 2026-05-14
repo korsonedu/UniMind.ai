@@ -108,6 +108,10 @@ class RegisterView(generics.CreateAPIView):
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'error': '密码至少需要 6 位'})
 
+        if User.objects.filter(email=email, email_verified=True).exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': '该邮箱已被注册'})
+
         from datetime import timedelta
         existing = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
         if not existing or existing.verification_code != code:
@@ -535,8 +539,9 @@ class SendVerificationCodeView(APIView):
         code = generate_verification_code()
 
         if request.user.is_authenticated:
+            # 已登录用户只重发验证码到当前邮箱，不允许通过此接口改邮箱
             user = request.user
-            user.email = email
+            email = user.email
         else:
             user = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
             if not user:
