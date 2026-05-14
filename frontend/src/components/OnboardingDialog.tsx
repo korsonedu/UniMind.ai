@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
-import { GraduationCap, Building2, ArrowRight, Loader2, Check, X } from 'lucide-react';
+import { GraduationCap, Building2, ArrowRight, Loader2, Check } from 'lucide-react';
 
 export function OnboardingDialog() {
   const { user, updateUser } = useAuthStore();
@@ -16,14 +16,6 @@ export function OnboardingDialog() {
   const [done, setDone] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
-  // 路由切换时重新弹出
-  useEffect(() => {
-    setDismissed(false);
-  }, [location.pathname]);
-
-  // 不弹
-  if (!user || user.institution || user.institution_id || user.institution_role === 'admin' || user.is_admin || dismissed) return null;
-
   // Teacher form
   const [teacherCode, setTeacherCode] = useState('');
   const [instName, setInstName] = useState('');
@@ -33,8 +25,13 @@ export function OnboardingDialog() {
   // Student join
   const [joinCode, setJoinCode] = useState('');
 
+  // 路由切换时重新弹出
+  useEffect(() => {
+    setDismissed(false);
+  }, [location.pathname]);
+
   // 不弹
-  if (!user || user.institution || user.institution_id || user.institution_role === 'admin' || user.is_admin) return null;
+  if (!user || user.institution || user.institution_id || user.institution_role === 'admin' || user.is_admin || dismissed) return null;
 
   const handleCreateInstitution = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,13 +68,15 @@ export function OnboardingDialog() {
   };
 
   const handleDone = () => {
-    window.location.reload(); // full refresh to pick up new institution state
+    window.location.reload();
   };
 
   return (
     <Dialog open={!dismissed} onOpenChange={(open) => { if (!open) setDismissed(true); }} modal={true}>
-      <DialogContent className="sm:max-w-[440px] rounded-2xl border-none shadow-2xl bg-card p-8"
-        onInteractOutside={e => e.preventDefault()}>
+      <DialogContent
+        className="sm:max-w-[440px] rounded-2xl border-none shadow-2xl bg-card p-8"
+        onInteractOutside={e => e.preventDefault()}
+      >
         {done ? (
           <div className="text-center space-y-5 py-4">
             <div className="h-14 w-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
@@ -98,16 +97,9 @@ export function OnboardingDialog() {
             <DialogHeader className="space-y-1 mb-6">
               <DialogTitle className="text-xl font-black">设置你的身份</DialogTitle>
               <DialogDescription className="font-medium text-muted-foreground">
-                选择你在 UniMind 中的角色，或先跳过稍后设置
+                选择你在 UniMind 中的角色，或点右上角 X 跳过稍后设置
               </DialogDescription>
             </DialogHeader>
-            <button
-              onClick={() => setDismissed(true)}
-              className="absolute top-4 right-4 h-8 w-8 rounded-full border-0 bg-muted/50 flex items-center justify-center hover:bg-muted transition-colors"
-              aria-label="关闭"
-            >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
             <div className="grid gap-3">
               <button
                 onClick={() => setStep('teacher')}
