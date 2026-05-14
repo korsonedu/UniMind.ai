@@ -43,7 +43,7 @@ export const Login: React.FC = () => {
             {error && <p className="text-red-500 text-xs text-center">{error}</p>}
             <div className="space-y-2">
               <Input 
-                placeholder="用户名" 
+                placeholder="邮箱或用户名" 
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
