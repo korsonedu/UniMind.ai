@@ -3,6 +3,13 @@ import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
@@ -35,6 +42,217 @@ type TeacherExamItem = {
     feedback: string;
   } | null;
 };
+
+type SubmissionItem = {
+  id: number;
+  student_name: string;
+  student_email: string;
+  answer_pdf_url: string;
+  score: number | null;
+  feedback: string;
+  created_at: string;
+};
+
+function PublishExamDialog({
+  open,
+  onOpenChange,
+  onPublished,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onPublished: () => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [desc, setDesc] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file || !title.trim()) {
+      toast.error('请填写标题并选择 PDF 文件');
+      return;
+    }
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      fd.append('title', title.trim());
+      fd.append('description', desc.trim());
+      fd.append('exam_pdf', file);
+      await api.post('/quizzes/teacher-exams/create/', fd);
+      toast.success('试卷已发布');
+      setTitle('');
+      setDesc('');
+      if (fileRef.current) fileRef.current.value = '';
+      onOpenChange(false);
+      onPublished();
+    } catch (e) {
+      toast.error(formatApiErrorToast(e, '发布失败'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>发布新试卷</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input
+            placeholder="试卷标题（如：2025 模拟卷 A）"
+            className="h-9 text-sm"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <textarea
+            placeholder="试卷说明（可选）"
+            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            rows={2}
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+          />
+          <Input ref={fileRef} type="file" accept=".pdf" className="h-9 text-xs" />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button size="sm" onClick={submit} disabled={saving}>
+            {saving ? '发布中...' : '发布试卷'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SubmissionsDialog({
+  open,
+  onOpenChange,
+  examId,
+  onGraded,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  examId: number | null;
+  onGraded: () => void;
+}) {
+  const [subs, setSubs] = useState<SubmissionItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [scores, setScores] = useState<Record<number, string>>({});
+  const [feedbacks, setFeedbacks] = useState<Record<number, string>>({});
+  const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!open || !examId) return;
+    setLoading(true);
+    api.get(`/quizzes/teacher-exams/${examId}/submissions/`)
+      .then((res) => {
+        const list = (res.data?.results || []) as SubmissionItem[];
+        setSubs(list);
+        const sm: Record<number, string> = {};
+        const fm: Record<number, string> = {};
+        for (const s of list) {
+          sm[s.id] = s.score !== null ? String(s.score) : '';
+          fm[s.id] = s.feedback || '';
+        }
+        setScores(sm);
+        setFeedbacks(fm);
+      })
+      .catch(() => toast.error('加载提交列表失败'))
+      .finally(() => setLoading(false));
+  }, [open, examId]);
+
+  const saveGrade = async (subId: number) => {
+    setSavingIds((prev) => new Set(prev).add(subId));
+    try {
+      await api.post(`/quizzes/teacher-exams/submissions/${subId}/grade/`, {
+        score: scores[subId] ? parseFloat(scores[subId]) : null,
+        feedback: feedbacks[subId] || '',
+      });
+      toast.success('评分已保存');
+      onGraded();
+    } catch (e) {
+      toast.error(formatApiErrorToast(e, '保存失败'));
+    } finally {
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(subId);
+        return next;
+      });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>学生提交列表</DialogTitle>
+        </DialogHeader>
+        {loading ? (
+          <p className="text-sm text-muted-foreground text-center py-8">加载中...</p>
+        ) : subs.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">暂无学生提交</p>
+        ) : (
+          <div className="space-y-4">
+            {subs.map((s) => (
+              <div key={s.id} className="p-4 rounded-xl border border-border/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold">{s.student_name}</p>
+                    <p className="text-xs text-muted-foreground">{s.student_email}</p>
+                    <p className="text-xs text-muted-foreground/60">
+                      提交于 {new Date(s.created_at).toLocaleString('zh-CN')}
+                    </p>
+                  </div>
+                  {s.answer_pdf_url && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => window.open(s.answer_pdf_url, '_blank')}
+                    >
+                      下载解答
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-end gap-3">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs font-bold text-muted-foreground">分数</label>
+                    <Input
+                      type="number"
+                      className="h-9 text-sm"
+                      placeholder="输入分数"
+                      value={scores[s.id] ?? ''}
+                      onChange={(e) => setScores((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex-[2] space-y-1">
+                    <label className="text-xs font-bold text-muted-foreground">评语</label>
+                    <Input
+                      className="h-9 text-sm"
+                      placeholder="输入评语"
+                      value={feedbacks[s.id] ?? ''}
+                      onChange={(e) => setFeedbacks((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    className="h-9 text-xs shrink-0"
+                    disabled={savingIds.has(s.id)}
+                    onClick={() => saveGrade(s.id)}
+                  >
+                    {savingIds.has(s.id) ? '保存中...' : '保存评分'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export const PdfMockExam: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ai' | 'teacher'>('ai');
@@ -115,36 +333,10 @@ export const PdfMockExam: React.FC = () => {
   };
 
   // --- 教师发布试卷 ---
-  const [publishing, setPublishing] = useState(false);
-  const [publishTitle, setPublishTitle] = useState('');
-  const [publishDesc, setPublishDesc] = useState('');
-  const publishFileRef = useRef<HTMLInputElement>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [submissionsOpen, setSubmissionsOpen] = useState(false);
+  const [submissionsExamId, setSubmissionsExamId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  const createTeacherExam = async () => {
-    const file = publishFileRef.current?.files?.[0];
-    if (!file || !publishTitle.trim()) {
-      toast.error('请填写标题并选择 PDF 文件');
-      return;
-    }
-    setPublishing(true);
-    try {
-      const fd = new FormData();
-      fd.append('title', publishTitle.trim());
-      fd.append('description', publishDesc.trim());
-      fd.append('exam_pdf', file);
-      await api.post('/quizzes/teacher-exams/create/', fd);
-      toast.success('试卷已发布');
-      setPublishTitle('');
-      setPublishDesc('');
-      if (publishFileRef.current) publishFileRef.current.value = '';
-      await loadData();
-    } catch (e) {
-      toast.error(formatApiErrorToast(e, '发布失败'));
-    } finally {
-      setPublishing(false);
-    }
-  };
 
   const deleteTeacherExam = async (examId: number) => {
     setDeletingId(examId);
@@ -226,33 +418,18 @@ export const PdfMockExam: React.FC = () => {
         ) : (
           <>
             {isAdmin && (
-              <Card className="p-5 rounded-2xl border border-indigo-200 bg-indigo-50/50 space-y-3">
-                <p className="text-sm font-black text-indigo-900">发布新试卷</p>
-                <Input
-                  placeholder="试卷标题（如：2025 模拟卷 A）"
-                  className="h-9 text-sm"
-                  value={publishTitle}
-                  onChange={(e) => setPublishTitle(e.target.value)}
-                />
-                <textarea
-                  placeholder="试卷说明（可选）"
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  rows={2}
-                  value={publishDesc}
-                  onChange={(e) => setPublishDesc(e.target.value)}
-                />
-                <div className="flex items-center gap-3">
-                  <Input ref={publishFileRef} type="file" accept=".pdf" className="flex-1 h-9 text-xs" />
-                  <Button
-                    className="rounded-xl text-xs font-bold shrink-0"
-                    onClick={createTeacherExam}
-                    disabled={publishing}
-                  >
-                    {publishing ? '发布中...' : '发布试卷'}
-                  </Button>
-                </div>
-              </Card>
+              <div className="flex justify-end">
+                <Button size="sm" variant="apple" onClick={() => setPublishOpen(true)}>
+                  发布新试卷
+                </Button>
+              </div>
             )}
+
+            <PublishExamDialog
+              open={publishOpen}
+              onOpenChange={setPublishOpen}
+              onPublished={loadData}
+            />
 
             {loading ? (
               <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">加载中...</Card>
@@ -276,48 +453,67 @@ export const PdfMockExam: React.FC = () => {
                         下载题目 PDF
                       </Button>
                       {isAdmin && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          className="h-9 text-xs"
-                          disabled={deletingId === item.id}
-                          onClick={() => deleteTeacherExam(item.id)}
-                        >
-                          {deletingId === item.id ? '删除中...' : '删除'}
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-9 text-xs"
+                            onClick={() => { setSubmissionsExamId(item.id); setSubmissionsOpen(true); }}
+                          >
+                            查看提交
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-9 text-xs"
+                            disabled={deletingId === item.id}
+                            onClick={() => deleteTeacherExam(item.id)}
+                          >
+                            {deletingId === item.id ? '删除中...' : '删除'}
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>
-                  <div className="p-4 bg-muted/40 rounded-xl border border-border/50">
-                    <p className="text-xs font-black tracking-widest text-muted-foreground uppercase mb-3">我的作答与成绩</p>
-                    {item.submission ? (
-                      <div className="space-y-2">
+                  {!isAdmin && (
+                    <div className="p-4 bg-muted/40 rounded-xl border border-border/50">
+                      <p className="text-xs font-black tracking-widest text-muted-foreground uppercase mb-3">我的作答与成绩</p>
+                      {item.submission ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                             <span className="text-sm font-bold">成绩: {item.submission.score !== null ? `${item.submission.score} 分` : '老师批改中...'}</span>
+                             <Button size="sm" variant="link" className="h-6 px-0 text-xs" onClick={() => window.open(item.submission!.answer_pdf_url, '_blank')}>查看我的解答文件</Button>
+                          </div>
+                          {item.submission.feedback && (
+                             <div className="text-sm text-indigo-900 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                               老师评语: {item.submission.feedback}
+                             </div>
+                          )}
+                          <div className="mt-2 flex items-center gap-2">
+                             <Input type="file" accept=".pdf,.jpg,.png" className="w-[220px] h-8 text-xs" onChange={(e) => uploadSubmission(item.id, e)} />
+                             {uploadingExamId === item.id && <span className="text-xs text-muted-foreground">上传中...</span>}
+                             <span className="text-[10px] text-muted-foreground">(重新上传会覆盖旧解答)</span>
+                          </div>
+                        </div>
+                      ) : (
                         <div className="flex items-center gap-3">
-                           <span className="text-sm font-bold">成绩: {item.submission.score !== null ? `${item.submission.score} 分` : '老师批改中...'}</span>
-                           <Button size="sm" variant="link" className="h-6 px-0 text-xs" onClick={() => window.open(item.submission!.answer_pdf_url, '_blank')}>查看我的解答文件</Button>
+                          <Input type="file" accept=".pdf,.jpg,.png" className="w-[260px] h-9 text-xs" onChange={(e) => uploadSubmission(item.id, e)} />
+                          {uploadingExamId === item.id && <span className="text-xs text-muted-foreground">上传中...</span>}
+                          <span className="text-xs text-muted-foreground">做完后拍照转成PDF上传给老师批改</span>
                         </div>
-                        {item.submission.feedback && (
-                           <div className="text-sm text-indigo-900 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                             老师评语: {item.submission.feedback}
-                           </div>
-                        )}
-                        <div className="mt-2 flex items-center gap-2">
-                           <Input type="file" accept=".pdf,.jpg,.png" className="w-[220px] h-8 text-xs" onChange={(e) => uploadSubmission(item.id, e)} />
-                           {uploadingExamId === item.id && <span className="text-xs text-muted-foreground">上传中...</span>}
-                           <span className="text-[10px] text-muted-foreground">(重新上传会覆盖旧解答)</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <Input type="file" accept=".pdf,.jpg,.png" className="w-[260px] h-9 text-xs" onChange={(e) => uploadSubmission(item.id, e)} />
-                        {uploadingExamId === item.id && <span className="text-xs text-muted-foreground">上传中...</span>}
-                        <span className="text-xs text-muted-foreground">做完后拍照转成PDF上传给老师批改</span>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </Card>
               ))
             )}
+
+            <SubmissionsDialog
+              open={submissionsOpen}
+              onOpenChange={setSubmissionsOpen}
+              examId={submissionsExamId}
+              onGraded={loadData}
+            />
           </>
         )}
       </div>

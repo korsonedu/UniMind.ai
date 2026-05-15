@@ -48,6 +48,7 @@ class ChatMessage(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     related_plan = models.ForeignKey(DailyPlan, on_delete=models.CASCADE, null=True, blank=True, related_name='broadcast_messages')
     message_type = models.CharField(max_length=20, choices=MESSAGE_TYPE_CHOICES, default='chat', verbose_name="消息类型")
+    institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="chat_messages", verbose_name="所属机构")
 
     class Meta:
         ordering = ['timestamp']

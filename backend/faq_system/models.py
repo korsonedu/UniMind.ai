@@ -11,6 +11,7 @@ class Question(models.Model):
     followers = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='followed_questions', blank=True, verbose_name="关注者")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="faq_questions", verbose_name="所属机构")
 
     class Meta:
         ordering = ['-created_at']

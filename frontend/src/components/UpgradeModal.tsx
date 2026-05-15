@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Sparkles, Check, ChevronRight } from 'lucide-react';
+import { ArrowRight, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -80,7 +80,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
           </DialogHeader>
         </div>
 
-        {/* Features + pricing */}
+        {/* Features */}
         <div className="px-8 py-4 space-y-3">
           <p className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-[0.2em]">
             {meta.label} 核心功能
@@ -94,13 +94,6 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
             ))}
           </div>
 
-          <div className="flex items-center justify-between bg-[#F5F5F7] rounded-2xl px-5 py-3">
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">月费</p>
-              <p className="text-lg font-extrabold text-[#1D1D1F]">{meta.price}</p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </div>
         </div>
 
         {/* Footer */}

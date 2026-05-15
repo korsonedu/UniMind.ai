@@ -37,7 +37,16 @@ class TeacherExamListView(APIView):
     permission_classes = [IsMember]
 
     def get(self, request):
-        exams = TeacherExam.objects.all().order_by('-created_at')
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        qs = TeacherExam.objects.all().order_by('-created_at')
+        if not is_platform_admin(request.user):
+            inst = getattr(request.user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
+        exams = qs
         submission_map = {
             s.exam_id: s
             for s in StudentExamSubmission.objects.filter(
@@ -80,6 +89,8 @@ class TeacherExamCreateView(APIView):
             title=title,
             description=description,
             exam_pdf=exam_file,
+            created_by=request.user,
+            institution=request.user.institution,
         )
         return Response(TeacherExamSerializer(exam).data, status=201)
 
@@ -108,6 +119,50 @@ class StudentExamSubmissionView(APIView):
             defaults={'answer_pdf': answer_file}
         )
         return Response({'status': 'success', 'submission_id': submission.id})
+
+
+class TeacherExamSubmissionsView(APIView):
+    """教师查看某试卷的所有学生提交"""
+    permission_classes = [IsAdmin]
+
+    def get(self, request, pk):
+        exam = get_object_or_404(TeacherExam, id=pk)
+        submissions = exam.submissions.select_related('user').order_by('-created_at')
+        data = []
+        for s in submissions:
+            data.append({
+                'id': s.id,
+                'student_name': s.user.nickname or s.user.username,
+                'student_email': s.user.email,
+                'answer_pdf_url': _build_media_abs_url(request, s.answer_pdf.name) if s.answer_pdf else '',
+                'score': s.score,
+                'feedback': s.feedback,
+                'created_at': s.created_at,
+            })
+        return Response({'results': data})
+
+
+class TeacherGradeSubmissionView(APIView):
+    """教师为学生提交打分并填写评语"""
+    permission_classes = [IsAdmin]
+
+    def post(self, request, pk):
+        submission = get_object_or_404(StudentExamSubmission, id=pk)
+        score = request.data.get('score')
+        feedback = request.data.get('feedback', '')
+        if score is not None:
+            try:
+                submission.score = float(score)
+            except (TypeError, ValueError):
+                return Response({'error': '分数格式不正确'}, status=400)
+        if feedback:
+            submission.feedback = str(feedback)
+        submission.save(update_fields=['score', 'feedback'])
+        return Response({
+            'id': submission.id,
+            'score': submission.score,
+            'feedback': submission.feedback,
+        })
 
 
 class GradeSubjectiveView(APIView):
@@ -220,7 +275,17 @@ class QuizAttemptCreateView(generics.CreateAPIView):
 
 class LeaderboardView(generics.ListAPIView):
     def get_queryset(self):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
         size = getattr(settings, 'LEADERBOARD_SIZE', 50)
-        return User.objects.filter(is_active=True).order_by('-elo_score')[:size]
+        qs = User.objects.filter(is_active=True)
+        user = self.request.user
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
+        return qs.order_by('-elo_score')[:size]
     serializer_class = UserSerializer
     permission_classes = [IsMember]

@@ -17,7 +17,15 @@ class AdminContentPipelineTaskListCreateView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
         qs = ContentPipelineTask.objects.select_related("created_by", "assignee").all()
+        if not is_platform_admin(request.user):
+            inst = getattr(request.user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(created_by__institution=inst) | Q(created_by__institution__isnull=True))
+            else:
+                qs = qs.filter(created_by__institution__isnull=True)
         status_filter = str(request.query_params.get("status", "")).strip()
         task_type = str(request.query_params.get("task_type", "")).strip()
         search = str(request.query_params.get("search", "")).strip()
@@ -211,7 +219,16 @@ class AdminContentPipelineTaskRetryView(APIView):
     permission_classes = [IsAdmin]
 
     def post(self, request, pk):
-        source = get_object_or_404(ContentPipelineTask, pk=pk)
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        if is_platform_admin(request.user):
+            source = get_object_or_404(ContentPipelineTask, pk=pk)
+        else:
+            inst = request.user.institution
+            if inst:
+                source = get_object_or_404(ContentPipelineTask, Q(pk=pk) & (Q(created_by__institution=inst) | Q(created_by__institution__isnull=True)))
+            else:
+                source = get_object_or_404(ContentPipelineTask, pk=pk, created_by__institution__isnull=True)
         new_task = ContentPipelineTask.objects.create(
             task_type=source.task_type,
             status="pending",

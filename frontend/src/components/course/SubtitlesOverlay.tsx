@@ -14,15 +14,24 @@ export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
   videoRef,
   visible: initialVisible = false,
 }) => {
-  const { transcriptStatus, transcriptSegments, fetchTranscript } =
+  const { transcriptStatus, transcriptSegments, fetchTranscript, triggerTranscription } =
     useCourseAIStore();
   const [visible, setVisible] = useState(initialVisible);
   const activeIdxRef = useRef(-1);
   const [, forceRender] = useState(0);
+  const autoTriggeredRef = useRef(false);
 
   useEffect(() => {
     fetchTranscript(courseId);
   }, [courseId, fetchTranscript]);
+
+  // 旧课程自动触发转录
+  useEffect(() => {
+    if (transcriptStatus === 'unavailable' && !autoTriggeredRef.current) {
+      autoTriggeredRef.current = true;
+      triggerTranscription(courseId);
+    }
+  }, [transcriptStatus, courseId, triggerTranscription]);
 
   // Sync subtitle index with video time
   useEffect(() => {

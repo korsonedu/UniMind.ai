@@ -14,6 +14,7 @@ class Article(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True)
     views = models.PositiveIntegerField(default=0, verbose_name="阅读量")
+    institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="articles", verbose_name="所属机构")
 
     def __str__(self):
         return self.title

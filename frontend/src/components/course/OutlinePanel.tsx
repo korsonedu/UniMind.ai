@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2, Clock, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
 import { cn, formatDuration } from '@/lib/utils';
@@ -9,12 +9,21 @@ interface OutlinePanelProps {
 }
 
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }) => {
-  const { outlineStatus, outlineItems, fetchOutline } = useCourseAIStore();
+  const { outlineStatus, outlineItems, fetchOutline, triggerOutlineGeneration } = useCourseAIStore();
   const [expanded, setExpanded] = useState(true);
+  const autoTriggeredRef = useRef(false);
 
   useEffect(() => {
     fetchOutline(courseId);
   }, [courseId, fetchOutline]);
+
+  // 旧课程自动触发生成
+  useEffect(() => {
+    if (outlineStatus === 'unavailable' && !autoTriggeredRef.current) {
+      autoTriggeredRef.current = true;
+      triggerOutlineGeneration(courseId);
+    }
+  }, [outlineStatus, courseId, triggerOutlineGeneration]);
 
   const handleSeek = useCallback(
     (seconds: number) => {

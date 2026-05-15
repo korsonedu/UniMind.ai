@@ -14,8 +14,17 @@ class QuestionListCreateView(generics.ListCreateAPIView):
     search_fields = ['content', 'user__nickname']
 
     def get_queryset(self):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        user = self.request.user
         qs = Question.objects.all().select_related('user').prefetch_related('answers__user')
-        
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
+
         # Filter Logic
         filter_type = self.request.query_params.get('filter', 'all')
         if filter_type == 'solved':
@@ -27,16 +36,29 @@ class QuestionListCreateView(generics.ListCreateAPIView):
             qs = qs.filter(is_starred=True)
         elif filter_type == 'followed':
             qs = qs.filter(followers=self.request.user)
-            
+
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        serializer.save(user=self.request.user, institution=self.request.user.institution)
 
 class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
     permission_classes = [IsMember]
+
+    def get_queryset(self):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        user = self.request.user
+        qs = super().get_queryset()
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
+        return qs
 
     def perform_update(self, serializer):
         if self.request.user == serializer.instance.user or self.request.user.role == 'admin':
@@ -56,6 +78,19 @@ class AnswerDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AnswerSerializer
     permission_classes = [IsMember]
 
+    def get_queryset(self):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        user = self.request.user
+        qs = super().get_queryset().select_related('question')
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(question__institution=inst) | Q(question__institution__isnull=True))
+            else:
+                qs = qs.filter(question__institution__isnull=True)
+        return qs
+
     def perform_update(self, serializer):
         if self.request.user == serializer.instance.user or self.request.user.role == 'admin':
             serializer.save()
@@ -73,9 +108,18 @@ class AnswerCreateView(generics.CreateAPIView):
     permission_classes = [IsMember]
 
     def create(self, request, *args, **kwargs):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
         question_id = request.data.get('question')
         try:
-            question = Question.objects.get(id=question_id)
+            if is_platform_admin(request.user):
+                question = Question.objects.get(id=question_id)
+            else:
+                inst = request.user.institution
+                if inst:
+                    question = Question.objects.get(Q(id=question_id) & (Q(institution=inst) | Q(institution__isnull=True)))
+                else:
+                    question = Question.objects.get(id=question_id, institution__isnull=True)
         except Question.DoesNotExist:
             return Response({'error': 'Question not found'}, status=404)
 
@@ -126,8 +170,17 @@ class QuestionActionView(APIView):
     permission_classes = [IsMember]
 
     def patch(self, request, pk):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
         try:
-            question = Question.objects.get(pk=pk)
+            if is_platform_admin(request.user):
+                question = Question.objects.get(pk=pk)
+            else:
+                inst = request.user.institution
+                if inst:
+                    question = Question.objects.get(Q(pk=pk) & (Q(institution=inst) | Q(institution__isnull=True)))
+                else:
+                    question = Question.objects.get(pk=pk, institution__isnull=True)
         except Question.DoesNotExist:
             return Response({'error': 'Not found'}, status=404)
 

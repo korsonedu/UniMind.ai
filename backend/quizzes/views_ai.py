@@ -333,9 +333,16 @@ class PipelineReviewListView(APIView):
     required_feature = 'ai.generate'
 
     def get(self, request):
-        tasks = ContentPipelineTask.objects.filter(
-            status='review'
-        ).select_related('created_by').order_by('-created_at')
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        qs = ContentPipelineTask.objects.filter(status='review').select_related('created_by').order_by('-created_at')
+        if not is_platform_admin(request.user):
+            inst = getattr(request.user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(created_by__institution=inst) | Q(created_by__institution__isnull=True))
+            else:
+                qs = qs.filter(created_by__institution__isnull=True)
+        tasks = qs
         serializer = ContentPipelineTaskSerializer(tasks, many=True)
         return Response({'results': serializer.data})
 

@@ -172,6 +172,7 @@ class ChunkedUploadCompleteView(APIView):
                 description=description,
                 elo_reward=elo_reward,
                 author=request.user,
+                institution=request.user.institution,
             )
             if str(album_obj_id or "").strip() and str(album_obj_id) != "0":
                 course.album_obj_id = _safe_int(album_obj_id, None)
@@ -189,6 +190,13 @@ class ChunkedUploadCompleteView(APIView):
             return Response({"error": f"合并失败：{exc}"}, status=500)
         finally:
             shutil.rmtree(upload_path, ignore_errors=True)
+
+        # 自动触发 ASR 转录 → 智能大纲流水线
+        try:
+            from .services.task_dispatcher import dispatch_transcription
+            dispatch_transcription(course.id)
+        except Exception:
+            pass
 
         return Response(CourseSerializer(course).data, status=201)
 
@@ -265,7 +273,16 @@ class CourseListCreateView(generics.ListCreateAPIView):
         return [IsMember()]
 
     def get_queryset(self):
+        user = self.request.user
         qs = Course.objects.all().order_by('-created_at')
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
         q = self.request.query_params.get('search')
         kp = self.request.query_params.get('kp')
         if q: qs = qs.filter(title__icontains=q)
@@ -273,12 +290,31 @@ class CourseListCreateView(generics.ListCreateAPIView):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        course = serializer.save(author=self.request.user, institution=self.request.user.institution)
+        # 自动触发 ASR 转录 → 智能大纲流水线
+        try:
+            from .services.task_dispatcher import dispatch_transcription
+            dispatch_transcription(course.id)
+        except Exception:
+            pass
 
 class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
-    
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = super().get_queryset()
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
+        return qs
+
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']:
             return [IsAdmin()]

@@ -271,6 +271,8 @@ class TeacherExam(models.Model):
     description = models.TextField(blank=True)
     exam_pdf = models.FileField(upload_to="teacher_exams/")
     created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="teacher_exams")
+    institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="teacher_exams", verbose_name="所属机构")
 
 
 class StudentExamSubmission(models.Model):

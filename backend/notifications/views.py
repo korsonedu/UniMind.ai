@@ -27,22 +27,32 @@ class AdminBroadcastView(APIView):
     permission_classes = [IsAdmin]
 
     def post(self, request):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
         title = request.data.get('title', '')
         content = request.data.get('content', '')
-        
+
         if not title or not content:
             return Response({'error': '标题和内容必填'}, status=400)
-        
+
         if len(content) > 50:
             return Response({'error': '内容不能超过50字'}, status=400)
 
-        users = User.objects.all()
+        if is_platform_admin(request.user):
+            users = User.objects.all()
+        else:
+            inst = request.user.institution
+            if inst:
+                users = User.objects.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                users = User.objects.filter(institution__isnull=True)
+
         notifications = [
             Notification(recipient=u, title=title, content=content, ntype='system')
             for u in users
         ]
         Notification.objects.bulk_create(notifications)
-        
+
         return Response({'status': 'ok', 'count': len(notifications)})
 
 class UnreadCountView(APIView):

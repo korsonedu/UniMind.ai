@@ -135,7 +135,7 @@ class PromptManager:
             return []
         return sorted([
             d.name for d in cls.PROMPTS_DIR.iterdir()
-            if d.is_dir()
+            if d.is_dir() and d.name != '__pycache__'
         ])
 
 

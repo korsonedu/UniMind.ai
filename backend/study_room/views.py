@@ -27,6 +27,19 @@ class ChatMessageListView(generics.ListCreateAPIView):
     serializer_class = ChatMessageSerializer
     permission_classes = [IsMember]
 
+    def get_queryset(self):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        user = self.request.user
+        qs = super().get_queryset()
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
+        return qs
+
     def perform_create(self, serializer):
         related_plan_id = self.request.data.get('related_plan_id')
         related_plan = None
@@ -35,8 +48,9 @@ class ChatMessageListView(generics.ListCreateAPIView):
                 related_plan = DailyPlan.objects.get(id=related_plan_id, user=self.request.user)
             except DailyPlan.DoesNotExist:
                 pass
-        
-        serializer.save(user=self.request.user, related_plan=related_plan)
+
+        serializer.save(user=self.request.user, related_plan=related_plan,
+                        institution=self.request.user.institution)
 
 class UndoBroadcastView(APIView):
     permission_classes = [IsMember]

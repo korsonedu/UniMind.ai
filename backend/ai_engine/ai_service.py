@@ -189,11 +189,13 @@ class AIService:
 
     @classmethod
     def batch_generate_questions(cls, kp_queryset, count_per_kp=1,
-                                 target_types=None, target_difficulty='normal') -> int:
+                                 target_types=None, target_difficulty='normal',
+                                 institution=None) -> int:
         gen = QuestionGenerator(cls)
         return gen.batch_generate_questions(
             kp_queryset=kp_queryset, count_per_kp=count_per_kp,
             target_types=target_types, target_difficulty=target_difficulty,
+            institution=institution,
         )
 
     @classmethod
@@ -235,4 +237,21 @@ class AIService:
         return AssistantChatService.chat_with_assistant(
             cls, bot=bot, history_messages=history_messages,
             user_message=user_message, student_context=student_context,
+        )
+
+    # ── Legacy private methods (delegated to QuestionGenerator) ──
+    # Used by ai_task_service which receives AIService class as `ai` parameter.
+
+    @classmethod
+    def _build_module_rules(cls, kps_data):
+        gen = QuestionGenerator(cls)
+        return gen._build_module_rules(kps_data)
+
+    @classmethod
+    def _normalize_generated_question(cls, raw, kp_by_code, kp_by_id,
+                                       fallback_kp, include_explanation=False):
+        gen = QuestionGenerator(cls)
+        return gen._normalize_generated_question(
+            raw, kp_by_code, kp_by_id, fallback_kp,
+            include_explanation=include_explanation,
         )

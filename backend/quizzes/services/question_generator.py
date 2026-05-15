@@ -519,6 +519,7 @@ class QuestionGenerator:
         count_per_kp: int = 1,
         target_types: Optional[List[str]] = None,
         target_difficulty: Any = 'normal',
+        institution=None,
     ) -> int:
         kp_ids = list(kp_queryset.values_list('id', flat=True))
         generated = self.preview_generate_questions(
@@ -545,6 +546,7 @@ class QuestionGenerator:
                     grading_points=q.get('grading_points', ''),
                     ai_answer='',
                     difficulty_level=q.get('difficulty_level', 'normal'),
+                    institution=institution,
                 )
                 created += 1
 

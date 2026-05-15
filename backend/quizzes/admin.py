@@ -29,7 +29,7 @@ class KnowledgePointAdmin(admin.ModelAdmin):
             
         try:
             # 调用 AI 服务
-            count = AIService.batch_generate_questions(kp_queryset, count_per_kp=1)
+            count = AIService.batch_generate_questions(kp_queryset, count_per_kp=1, institution=request.user.institution)
             self.message_user(request, f"成功为选中的考点生成了 {count} 道题目！", level=messages.SUCCESS)
         except Exception as e:
             self.message_user(request, f"生题过程发生错误：{str(e)}", level=messages.ERROR)

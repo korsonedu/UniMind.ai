@@ -192,7 +192,7 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
     )
 
 
-def save_confirmed_questions(questions_data: List[Dict[str, Any]]) -> int:
+def save_confirmed_questions(questions_data: List[Dict[str, Any]], institution=None) -> int:
     created_count = 0
 
     with transaction.atomic():
@@ -236,6 +236,7 @@ def save_confirmed_questions(questions_data: List[Dict[str, Any]]) -> int:
                 grading_points=grading_points,
                 ai_answer='',
                 difficulty_level=difficulty_level,
+                institution=institution,
             )
             created_count += 1
 

@@ -10,7 +10,7 @@ import { GraduationCap, Building2, ArrowRight, Loader2, Check } from 'lucide-rea
 export function OnboardingDialog() {
   const { user, updateUser } = useAuthStore();
   const location = useLocation();
-  const [step, setStep] = useState<'role' | 'teacher' | 'student'>('role');
+  const [step, setStep] = useState<'role' | 'teacher' | 'student'>(user?.institution_role === 'admin' ? 'teacher' : 'role');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -30,8 +30,9 @@ export function OnboardingDialog() {
     setDismissed(false);
   }, [location.pathname]);
 
-  // 不弹
-  if (!user || user.institution || user.institution_id || user.institution_role === 'admin' || user.is_admin || dismissed) return null;
+  // 不弹：无用户 / 已有机构 / 已关闭 / 平台超管
+  if (!user || user.institution || user.institution_id || dismissed) return null;
+  if (user.is_admin) return null;
 
   const handleCreateInstitution = async (e: React.FormEvent) => {
     e.preventDefault();

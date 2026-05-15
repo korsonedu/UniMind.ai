@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import {
   ChevronLeft, Play, Calendar, BookOpen,
   Share2, Star, FileText, Download,
-  ListVideo, Layers, Sparkles, Clock,
+  ListVideo, Layers, Sparkles,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useCourseAIStore } from '@/store/useCourseAIStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
+import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { toast } from 'sonner';
 
 export const VideoLesson: React.FC = () => {
@@ -23,8 +23,6 @@ export const VideoLesson: React.FC = () => {
   const [relatedCourses, setRelatedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasAwarded, setHasAwarded] = useState(false);
-  const { transcriptStatus, transcriptSegments, fullText, fetchTranscript, triggerTranscription } = useCourseAIStore();
-
   const courseId = Number(id);
 
   useEffect(() => {
@@ -43,17 +41,6 @@ export const VideoLesson: React.FC = () => {
     };
     fetchData();
   }, [courseId]);
-
-  useEffect(() => {
-    fetchTranscript(courseId);
-  }, [courseId, fetchTranscript]);
-
-  const handleSeek = (seconds: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = seconds;
-      videoRef.current.play().catch(() => {});
-    }
-  };
 
   const handleVideoEnd = async () => {
     if (hasAwarded) return;
@@ -114,6 +101,7 @@ export const VideoLesson: React.FC = () => {
         <div className="lg:col-span-9 space-y-8">
            <div className="bg-black overflow-hidden relative aspect-video flex items-center justify-center rounded-[2rem] shadow-2xl">
              {course.video_file ? (
+               <>
                <video
                  ref={videoRef}
                  onEnded={handleVideoEnd}
@@ -124,79 +112,22 @@ export const VideoLesson: React.FC = () => {
                  preload="metadata"
                  poster={course.cover_image || undefined}
                />
+               <SubtitlesOverlay courseId={courseId} videoRef={videoRef} />
+               </>
              ) : (
                <div className="flex flex-col items-center gap-4 opacity-20"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">暂无视频</p></div>
              )}
            </div>
 
-          {/* AI 智能大纲 + 逐字稿 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="h-4 w-4 text-indigo-500" />
-                <h3 className="text-sm font-bold text-foreground">AI 智能大纲</h3>
-              </div>
-              <OutlinePanel courseId={courseId} videoRef={videoRef} />
-              {course.ai_outline_enabled && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="mt-3 text-xs"
-                  onClick={() => fetchTranscript(courseId)}
-                >
-                  刷新大纲
-                </Button>
-              )}
-            </Card>
-
-            <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="h-4 w-4 text-emerald-500" />
-                <h3 className="text-sm font-bold text-foreground">
-                  课程逐字稿
-                  {transcriptStatus === 'loading' && <span className="ml-2 text-[10px] text-muted-foreground">加载中...</span>}
-                </h3>
-                {transcriptStatus === 'unavailable' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto text-[10px] h-7 rounded-lg"
-                    onClick={() => triggerTranscription(courseId)}
-                  >
-                    生成逐字稿
-                  </Button>
-                )}
-              </div>
-              {transcriptStatus === 'available' && transcriptSegments.length > 0 ? (
-                <ScrollArea className="h-[300px] pr-2">
-                  <div className="space-y-1">
-                    {transcriptSegments.map((seg, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleSeek(seg.start)}
-                        className="w-full text-left p-2 rounded-lg hover:bg-muted/50 transition-colors group"
-                      >
-                        <span className="text-[10px] font-bold text-emerald-600 tabular-nums mr-2">
-                          {Math.floor(seg.start / 60)}:{(Math.floor(seg.start) % 60).toString().padStart(2, '0')}
-                        </span>
-                        <span className="text-xs text-muted-foreground group-hover:text-foreground leading-relaxed">
-                          {seg.text}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </ScrollArea>
-              ) : transcriptStatus === 'available' && fullText ? (
-                <ScrollArea className="h-[300px] pr-2">
-                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{fullText}</p>
-                </ScrollArea>
-              ) : (
-                <p className="text-xs text-muted-foreground py-4">
-                  {transcriptStatus === 'loading' ? '正在加载逐字稿...' : '尚未生成逐字稿，点击上方按钮开始'}
-                </p>
-              )}
-            </Card>
-          </div>
+          {/* AI 智能大纲 */}
+          <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4 text-indigo-500" />
+              <h3 className="text-sm font-bold text-foreground">AI 智能大纲</h3>
+              <span className="text-[10px] text-muted-foreground ml-auto">由 ASR 语音识别 + AI 自动生成</span>
+            </div>
+            <OutlinePanel courseId={courseId} videoRef={videoRef} />
+          </Card>
 
           {/* Course info + downloads */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

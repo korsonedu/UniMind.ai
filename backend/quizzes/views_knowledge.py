@@ -109,7 +109,7 @@ class GenerateBulkQuestionsView(APIView):
         except KnowledgePoint.DoesNotExist:
             return Response({'error': '知识点不存在'}, status=404)
 
-        count = AIService.batch_generate_questions(KnowledgePoint.objects.filter(id=kp.id), count_per_kp=3)
+        count = AIService.batch_generate_questions(KnowledgePoint.objects.filter(id=kp.id), count_per_kp=3, institution=request.user.institution)
 
         if count == 0:
             return Response({'error': 'AI 生成失败或未生成任何题目'}, status=500)

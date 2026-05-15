@@ -105,7 +105,8 @@ const RequireInstitution = ({ children }: { children: ReactNode }) => {
 // 超管默认跳转到机构管理
 const HomeRedirect = () => {
   const { user } = useAuthStore();
-  if (user?.role === 'admin' && !user?.institution) return <Navigate to="/institution/admin" replace />;
+  const institution = useInstitutionStore(s => s.institution);
+  if (user?.role === 'admin' && !institution && !user?.institution) return <Navigate to="/institution/admin" replace />;
   return <CourseCenter />;
 };
 

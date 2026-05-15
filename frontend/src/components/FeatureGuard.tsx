@@ -23,5 +23,5 @@ export function FeatureGuard({
     return <>{children}</>;
   }
 
-  return <Navigate to="/?upgrade=1" replace />;
+  return <Navigate to="/" replace />;
 }

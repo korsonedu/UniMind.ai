@@ -57,7 +57,7 @@ def get_or_create_students(count=5):
             email=f'student{i+1}@demo.unimind',
             defaults={
                 'username': f'demo_student_{i+1}', 'nickname': names[i],
-                'role': 'student', 'is_member': True, 'membership_tier': 'basic',
+                'role': 'student', 'is_member': True, 'membership_tier': 'solo',
                 'email_verified': True, 'elo_score': random.randint(900, 1600),
                 'bio': f'备考中 | {directions[i % 3]}方向',
             }

@@ -179,13 +179,6 @@ export const MainLayout: React.FC = () => {
     }
   }, [isMobile, location.pathname, navigate]);
 
-  // Detect ?upgrade=1 from FeatureGuard redirects and show upgrade modal
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('upgrade') === '1') {
-      setShowUpgradeModal(true);
-    }
-  }, [location.search]);
 
   const handleActivate = async () => {
     if (!activationCode.trim()) return toast.error("请输入激活码");
@@ -325,7 +318,7 @@ export const MainLayout: React.FC = () => {
                           <p className="text-[12px] font-bold truncate">{user?.nickname || user?.username}</p>
                           {user.is_member && <ShieldCheck className="h-3 w-3 text-amber-500" />}
                         </div>
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{instInfo ? `${instInfo.name} · ${instInfo.plan_label || instInfo.plan}` : (user.is_member ? 'Pro Member' : 'Free Scholar')}</p>
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{instInfo ? `${instInfo.name} · ${instInfo.plan_label || instInfo.plan}` : isSuperAdmin ? '超级管理员' : (user.is_member ? 'Pro Member' : 'Free Scholar')}</p>
                       </div>
                     )}
                   </div>
@@ -403,8 +396,8 @@ export const MainLayout: React.FC = () => {
                <div className="flex items-center gap-3">
                   {/* Clickable ELO */}
                   {user && <EloPopover />}
-                  {/* Upgrade plan button — hidden for institution students */}
-                  {!isInstStudent && (
+                  {/* Upgrade plan button — hidden for institution students, plus & pro */}
+                  {!isInstStudent && myPlanLevel < 3 && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -576,6 +569,7 @@ export const MainLayout: React.FC = () => {
           open={showUpgradeModal}
           onOpenChange={setShowUpgradeModal}
           feature={restrictedFeature}
+          currentPlan={user?.membership_tier || instPlan || 'free'}
         />
 
         <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}>

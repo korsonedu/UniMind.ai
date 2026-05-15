@@ -313,7 +313,7 @@ class GenerateBulkQuestionsView(APIView):
         
         # 使用最新的解耦后的批量生成逻辑
         # 这会自动应用前缀动态 Prompt (MB, IF, CF等规则)
-        count = AIService.batch_generate_questions(KnowledgePoint.objects.filter(id=kp.id), count_per_kp=3)
+        count = AIService.batch_generate_questions(KnowledgePoint.objects.filter(id=kp.id), count_per_kp=3, institution=request.user.institution)
         
         if count == 0:
             return Response({'error': 'AI 生成失败或未生成任何题目'}, status=500)
@@ -455,7 +455,7 @@ class BulkImportQuestionsView(APIView):
             for q in questions_data:
                 q['kp_id'] = q.get('kp_id') or kp_id
 
-        created_count = save_confirmed_questions(questions_data)
+        created_count = save_confirmed_questions(questions_data, institution=request.user.institution)
         return Response({'status': 'success', 'count': created_count})
 
 
@@ -467,7 +467,16 @@ class AdminQuestionListView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+
         qs = Question.objects.select_related('knowledge_point').order_by('-created_at')
+        if not is_platform_admin(request.user):
+            inst = getattr(request.user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
 
         # 过滤条件
         search = request.query_params.get('search', '').strip()
@@ -523,8 +532,17 @@ class ExportStructuredQuestionsView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+
         kp_id = request.query_params.get('kp_id')
         qs = Question.objects.select_related('knowledge_point').all()
+        if not is_platform_admin(request.user):
+            inst = getattr(request.user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
         if kp_id and kp_id != '0':
             qs = qs.filter(knowledge_point_id=kp_id)
 
@@ -607,12 +625,13 @@ class ImportCSVQuestionsView(APIView):
                         text=text,
                         correct_answer=answer,
                         q_type=q_type,
-                        difficulty=int(difficulty) if str(difficulty).isdigit() else 1000
+                        difficulty=int(difficulty) if str(difficulty).isdigit() else 1000,
+                        institution=request.user.institution,
                     )
                     count += 1
                 except Exception as e:
                     errors.append(f"Row error: {str(e)}")
-            
+
             return Response({'status': 'success', 'count': count, 'errors': errors[:5]})
             
         except Exception as e:

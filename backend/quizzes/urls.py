@@ -7,8 +7,8 @@ from .views_question import (
 from .views_exam import (
     QuizAttemptCreateView,
     LeaderboardView, GradeSubjectiveView,
-    TeacherExamListView,
-    StudentExamSubmissionView,
+    TeacherExamListView, TeacherExamCreateView, TeacherExamDeleteView,
+    StudentExamSubmissionView, TeacherExamSubmissionsView, TeacherGradeSubmissionView,
     SubmitExamView, LatestExamReportView, ExamDetailView,
 )
 from .views_fsrs import (
@@ -42,6 +42,12 @@ urlpatterns = [
     path('submit-exam/', SubmitExamView.as_view(), name='quiz-submit-exam'),
     path('exams/<int:pk>/', ExamDetailView.as_view(), name='exam-detail'),
     path('latest-report/', LatestExamReportView.as_view(), name='latest-exam-report'),
+    path('teacher-exams/', TeacherExamListView.as_view(), name='teacher-exam-list'),
+    path('teacher-exams/create/', TeacherExamCreateView.as_view(), name='teacher-exam-create'),
+    path('teacher-exams/<int:pk>/delete/', TeacherExamDeleteView.as_view(), name='teacher-exam-delete'),
+    path('teacher-exams/<int:pk>/submit/', StudentExamSubmissionView.as_view(), name='teacher-exam-submit'),
+    path('teacher-exams/<int:pk>/submissions/', TeacherExamSubmissionsView.as_view(), name='teacher-exam-submissions'),
+    path('teacher-exams/submissions/<int:pk>/grade/', TeacherGradeSubmissionView.as_view(), name='teacher-exam-grade'),
     path('leaderboard/', LeaderboardView.as_view(), name='leaderboard'),
     path('grade-subjective/', GradeSubjectiveView.as_view(), name='grade-subjective'),
     path('stats/', QuizStatsView.as_view(), name='quiz-stats'),
