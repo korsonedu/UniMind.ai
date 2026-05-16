@@ -219,7 +219,7 @@ export const MainLayout: React.FC = () => {
         { to: '/invite-codes', icon: Sparkles, label: '邀请码' },
       ]
     : [
-        { to: '/', icon: BookOpen, label: '课程中心' },
+        { to: '/courses', icon: BookOpen, label: '课程中心' },
         { to: '/tests', icon: Trophy, label: '习题训练' },
         { to: '/knowledge-map', icon: BrainCircuit, label: '知识地图', minPlan: 2 },
         { to: '/articles', icon: FileText, label: '文章' },
@@ -243,7 +243,7 @@ export const MainLayout: React.FC = () => {
         { to: '/invite-codes', icon: Sparkles, label: '邀请' },
       ]
     : [
-        { to: '/', icon: BookOpen, label: '课程' },
+        { to: '/courses', icon: BookOpen, label: '课程' },
         { to: '/tests', icon: Trophy, label: '做题' },
         { to: '/knowledge-map', icon: BrainCircuit, label: '知识', minPlan: 2 },
         { to: '/articles', icon: FileText, label: '文章' },

@@ -602,7 +602,7 @@ const InstitutionHome: React.FC = () => {
       {user && (
         <div className="bg-black text-white py-2 px-4 flex items-center justify-end gap-4 text-sm font-mono">
           <span className="text-white/60">已登录：{user.nickname || user.username}</span>
-          <Link to="/" className="font-black uppercase hover:text-[#FF3333]">进入学习 <ArrowUpRight className="h-3.5 w-3.5 inline" /></Link>
+          <Link to="/courses" className="font-black uppercase hover:text-[#FF3333]">进入学习 <ArrowUpRight className="h-3.5 w-3.5 inline" /></Link>
         </div>
       )}
 

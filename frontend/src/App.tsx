@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { MainLayout } from './layouts/MainLayout';
 import { CourseCenter } from './pages/CourseCenter';
 import { TestLadder } from './pages/TestLadder';
@@ -109,7 +109,7 @@ const HomeRedirect = () => {
   const institution = useInstitutionStore(s => s.institution);
   if (user?.role === 'admin' && !institution && !user?.institution) return <Navigate to="/institution/admin" replace />;
   if (institution?.plan === 'pro') return <InstitutionHome />;
-  return <CourseCenter />;
+  return <Navigate to="/courses" replace />;
 };
 
 // Root entry handler to manage landing vs app logic
@@ -143,10 +143,8 @@ const RootRedirect = () => {
 
   if (loading || checkingInvite) return <Loading message="Authenticating Secure Session..." fullScreen size="lg" />;
 
-  // If logged in, wrap the app content in MainLayout
-  if (token && user) return <MainLayout />;
+  if (token && user) return <Outlet />;
 
-  // Otherwise, return the landing page (outside layout)
   return <Landing />;
 };
 
@@ -156,26 +154,32 @@ const router = createBrowserRouter([
     element: <RootRedirect />,
     children: [
       { index: true, element: <RequireAuth><HomeRedirect /></RequireAuth> },
-      { path: "articles", element: <RequireAuth><ArticleCenter /></RequireAuth> },
-      { path: "qa", element: <RequireAuth><FeatureGuard feature={FEATURES.FAQ_SYSTEM}><QASystem /></FeatureGuard></RequireAuth> },
-      { path: "article/:id", element: <RequireAuth><ArticleDetail /></RequireAuth> },
-      { path: "tests", element: <RequireAuth><FeatureGuard feature={FEATURES.QUIZ_EXAM}><TestLadder /></FeatureGuard></RequireAuth> },
-      { path: "tests/session", element: <RequireAuth><FeatureGuard feature={FEATURES.QUIZ_EXAM}><TestSessionPage /></FeatureGuard></RequireAuth> },
-      { path: "study", element: <RequireAuth><FeatureGuard feature={FEATURES.STUDY_ROOM}><StudyRoom /></FeatureGuard></RequireAuth> },
-      { path: "ai", element: <RequireAuth><FeatureGuard feature={FEATURES.AI_ASSISTANT}><AIAssistant /></FeatureGuard></RequireAuth> },
-      { path: "knowledge-map", element: <RequireAuth><FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}><KnowledgeMap /></FeatureGuard></RequireAuth> },
-      { path: "knowledge-map/node/:id", element: <RequireAuth><FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}><KnowledgeNodeDetail /></FeatureGuard></RequireAuth> },
-      { path: "settings", element: <RequireAuth><Settings /></RequireAuth> },
-      { path: "system-settings", element: <RequireAuth><RequireAdmin><SystemSettings /></RequireAdmin></RequireAuth> },
-      { path: "management", element: <RequireAuth><RequireAdmin><Maintenance /></RequireAdmin></RequireAuth> },
-      { path: "course/:id", element: <RequireAuth><FeatureGuard feature={FEATURES.COURSE_VIDEO}><VideoLesson /></FeatureGuard></RequireAuth> },
-      { path: "tests/review", element: <RequireAuth><FeatureGuard feature={FEATURES.WRONG_REVIEW}><WrongQuestionReviewPage /></FeatureGuard></RequireAuth> },
-      { path: "mock-exam", element: <RequireAuth><FeatureGuard feature={FEATURES.PDF_MOCK}><PdfMockExam /></FeatureGuard></RequireAuth> },
-      { path: "interviews", element: <RequireAuth><FeatureGuard feature={FEATURES.AI_GENERATE}><Interviews /></FeatureGuard></RequireAuth> },
-      { path: "institution", element: <RequireAuth><RequireInstitution><InstitutionDashboard /></RequireInstitution></RequireAuth> },
-      { path: "institution/students", element: <RequireAuth><RequireInstitution><InstitutionStudents /></RequireInstitution></RequireAuth> },
-      { path: "institution/admin", element: <RequireAuth><RequireAdmin><InstitutionAdmin /></RequireAdmin></RequireAuth> },
-      { path: "invite-codes", element: <RequireAuth><RequirePlatformAdmin><InviteCodeAdmin /></RequirePlatformAdmin></RequireAuth> },
+      {
+        element: <RequireAuth><MainLayout /></RequireAuth>,
+        children: [
+          { path: "courses", element: <CourseCenter /> },
+          { path: "articles", element: <ArticleCenter /> },
+          { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}><QASystem /></FeatureGuard> },
+          { path: "article/:id", element: <ArticleDetail /> },
+          { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}><TestLadder /></FeatureGuard> },
+          { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}><TestSessionPage /></FeatureGuard> },
+          { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}><StudyRoom /></FeatureGuard> },
+          { path: "ai", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}><AIAssistant /></FeatureGuard> },
+          { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}><KnowledgeMap /></FeatureGuard> },
+          { path: "knowledge-map/node/:id", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}><KnowledgeNodeDetail /></FeatureGuard> },
+          { path: "settings", element: <Settings /> },
+          { path: "system-settings", element: <RequireAdmin><SystemSettings /></RequireAdmin> },
+          { path: "management", element: <RequireAdmin><Maintenance /></RequireAdmin> },
+          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}><VideoLesson /></FeatureGuard> },
+          { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}><WrongQuestionReviewPage /></FeatureGuard> },
+          { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}><PdfMockExam /></FeatureGuard> },
+          { path: "interviews", element: <FeatureGuard feature={FEATURES.AI_GENERATE}><Interviews /></FeatureGuard> },
+          { path: "institution", element: <RequireInstitution><InstitutionDashboard /></RequireInstitution> },
+          { path: "institution/students", element: <RequireInstitution><InstitutionStudents /></RequireInstitution> },
+          { path: "institution/admin", element: <RequireAdmin><InstitutionAdmin /></RequireAdmin> },
+          { path: "invite-codes", element: <RequirePlatformAdmin><InviteCodeAdmin /></RequirePlatformAdmin> },
+        ],
+      },
     ],
   },
   { path: "/intro/:slug", element: <InstitutionHome /> },
