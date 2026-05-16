@@ -106,7 +106,7 @@ export async function uploadFileInChunks(config: ChunkedUploadConfig): Promise<C
     if (!done) throw lastError || new Error(`分片 ${index} 上传失败`);
 
     uploadedSet.add(index);
-    const doneCount = totalChunks - pending.length;
+    const doneCount = uploadedSet.size;
     if (onProgress) onProgress(Math.floor((doneCount / totalChunks) * 95));
     if (onStatus) onStatus({ phase: 'uploading', pipelineTaskId, chunkIndex: index, totalChunks, uploadedCount: uploadedSet.size });
   };

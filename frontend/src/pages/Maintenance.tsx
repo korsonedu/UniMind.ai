@@ -33,8 +33,7 @@ import { KnowledgeSystemPanel } from './maintenance/KnowledgeSystemPanel';
 export const Maintenance: React.FC = () => {
   const CHUNKED_UPLOAD_THRESHOLD_BYTES = 100 * 1024 * 1024;
   const CHUNK_SIZE_BYTES = 10 * 1024 * 1024;
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const isSubmitting = useUploadStore((s) => s.tasks.some((t) => t.status === 'uploading' || t.status === 'processing'));
 
   // Data Lists
   const [courseList, setCourseList] = useState<any[]>([]);
@@ -109,7 +108,6 @@ export const Maintenance: React.FC = () => {
 
     const { addTask, updateProgress, setStatus } = useUploadStore.getState();
     addTask({ id: uploadId, fileName: file.name, progress: 0, status: 'uploading', controller });
-    setIsSubmitting(true); setUploadProgress(2);
 
     try {
       await createCourseWithSmartUpload({
@@ -125,7 +123,6 @@ export const Maintenance: React.FC = () => {
         chunkSizeBytes: CHUNK_SIZE_BYTES,
         signal: controller.signal,
         onProgress: (p) => {
-          setUploadProgress(p);
           updateProgress(uploadId, p);
           if (p >= 95) setStatus(uploadId, 'processing');
         },
@@ -145,9 +142,6 @@ export const Maintenance: React.FC = () => {
         else toast.error("发布失败");
         setStatus(uploadId, 'failed', '上传失败');
       }
-    } finally {
-      setIsSubmitting(false);
-      setUploadProgress(0);
     }
   };
 
@@ -193,10 +187,30 @@ export const Maintenance: React.FC = () => {
 
   const handleCreateSM = async () => {
     if (!smForm.name || !smForm.file) return toast.error("信息不全");
-    setIsSubmitting(true); setUploadProgress(10);
-    const fd = new FormData(); fd.append('name', smForm.name); fd.append('description', smForm.description); fd.append('file', smForm.file);
-    try { await api.post('/courses/startup-materials/', fd, { onUploadProgress: p => p.total && setUploadProgress(Math.round((p.loaded / p.total) * 100)) }); toast.success("资料已上传"); setSmForm({ name: '', description: '', file: null }); fetchLists(); }
-    catch (e) { toast.error("上传失败"); } finally { setIsSubmitting(false); setUploadProgress(0); }
+    const file = smForm.file;
+    const controller = new AbortController();
+    const uploadId = `${Date.now()}-${file.name}`;
+    const { addTask, updateProgress, setStatus } = useUploadStore.getState();
+    addTask({ id: uploadId, fileName: file.name, progress: 0, status: 'uploading', controller });
+
+    const fd = new FormData(); fd.append('name', smForm.name); fd.append('description', smForm.description); fd.append('file', file);
+    try {
+      await api.post('/courses/startup-materials/', fd, {
+        signal: controller.signal,
+        onUploadProgress: p => {
+          if (p.total) updateProgress(uploadId, Math.round((p.loaded / p.total) * 100));
+        },
+      });
+      setStatus(uploadId, 'completed');
+      toast.success("资料已上传");
+      setSmForm({ name: '', description: '', file: null });
+      fetchLists();
+    } catch (e: any) {
+      if (e?.name !== 'AbortError' && e?.code !== 'ERR_CANCELED') {
+        toast.error("上传失败");
+        setStatus(uploadId, 'failed', '上传失败');
+      }
+    }
   };
 
   const handleBroadcast = async () => {
@@ -500,8 +514,6 @@ export const Maintenance: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {isSubmitting && (<div className="fixed bottom-10 right-10 z-[100]"><Card className="border-none shadow-2xl rounded-3xl bg-white p-6 w-80 flex items-center gap-5"><div className="relative h-12 w-12 shrink-0"><svg className="h-full w-full -rotate-90"><circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-100" /><circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" strokeDasharray="125.6" strokeDashoffset={125.6 - (125.6 * uploadProgress) / 100} className="text-black transition-all duration-500" strokeLinecap="round" /></svg><div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold">{uploadProgress}%</div></div><p className="text-xs font-bold text-[#1D1D1F]">资源同步中...</p></Card></div>)}
     </div>
   );
 };

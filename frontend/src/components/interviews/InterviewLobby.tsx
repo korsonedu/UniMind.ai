@@ -10,13 +10,13 @@ import api from '@/lib/api';
 interface Props {
   style: 'friendly' | 'pressure';
   onStyleChange: (s: 'friendly' | 'pressure') => void;
-  onSessionCreated: () => void;
+  onSessionCreated: (sessionId: number) => void;
 }
 
 const INTERVIEW_TYPES = [
   { id: 'resume', icon: FileText, title: '简历深挖', desc: '结合你的经历生成针对性追问。' },
   { id: 'english', icon: Globe, title: '英语口语', desc: '模拟英文问答并给出流畅度反馈。' },
-  { id: 'professional', icon: GraduationCap, title: '专业课(431)', desc: '围绕 431 核心考点做高压追问。' },
+  { id: 'professional', icon: GraduationCap, title: '专业课', desc: '围绕专业核心考点进行深度追问。' },
 ];
 
 export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessionCreated }) => {
@@ -32,7 +32,7 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
       const sessionId = Number(res.data?.id || 0);
       if (!sessionId) throw new Error('missing_session_id');
       toast.success(`面试会话 #${sessionId} 已创建`);
-      onSessionCreated();
+      onSessionCreated(sessionId);
     } catch (e) {
       toast.error(formatApiErrorToast(e, '创建面试会话失败'));
     } finally {
@@ -63,7 +63,7 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
           <Sparkles className="w-4 h-4" /> 多阶段复试训练
         </div>
         <h2 className="text-2xl font-black mt-3">从简历到专业面试的一体化闭环</h2>
-        <p className="text-sm text-muted-foreground mt-2">支持风格选择、实时追问、逐句反馈和结束后雷达报告。</p>
+        <p className="text-sm text-muted-foreground mt-2">支持风格选择、实时追问和结束后雷达报告。</p>
       </Card>
 
       <Card className="p-5 rounded-2xl border border-border/60 space-y-3">

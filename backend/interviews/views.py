@@ -73,7 +73,23 @@ class InterviewSessionListCreateView(APIView):
             interviewer_style=interviewer_style,
             status="ongoing",
         )
-        return Response(_serialize_session(session), status=201)
+
+        # 生成 AI 面试官开场白
+        opening = ""
+        try:
+            opening = InterviewAIService.generate_opening_question(session_type, interviewer_style)
+        except Exception:
+            logger.exception("opening question generation failed: session=%s", session.id)
+
+        if opening:
+            InterviewTurn.objects.create(
+                session=session,
+                turn_number=1,
+                speaker="interviewer",
+                content_text=opening,
+            )
+
+        return Response(_serialize_session(session, include_turns=True), status=201)
 
 
 class InterviewSessionDetailView(APIView):

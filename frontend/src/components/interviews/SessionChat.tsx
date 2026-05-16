@@ -34,15 +34,23 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [finishing, setFinishing] = useState(false);
+  const [localCandidateTurn, setLocalCandidateTurn] = useState<{ text: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const turns = session.turns || [];
   const isCompleted = session.status === 'completed';
   const isAnalyzing = session.status === 'analyzing';
 
+  // Clear local candidate turn once it appears in server turns
+  useEffect(() => {
+    if (localCandidateTurn && turns.some((t) => t.speaker === 'candidate' && t.content_text === localCandidateTurn.text)) {
+      setLocalCandidateTurn(null);
+    }
+  }, [turns, localCandidateTurn]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [turns.length, streamingText]);
+  }, [turns.length, streamingText, localCandidateTurn]);
 
   const sendTurn = async () => {
     if (!input.trim() || sending) return;
@@ -50,6 +58,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
     setInput('');
     setSending(true);
     setStreamingText('');
+    setLocalCandidateTurn({ text });
 
     try {
       const res = await fetch(`/api/interviews/sessions/${session.id}/text-turn/stream/`, {
@@ -69,6 +78,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
 
       const decoder = new TextDecoder();
       let leftover = '';
+      let streamCompleted = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -83,17 +93,23 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
           try {
             const payload = JSON.parse(line.slice(6));
             if (payload.done) {
-              onRefresh();
-              setStreamingText('');
+              streamCompleted = true;
             } else if (payload.token) {
               setStreamingText((prev) => prev + payload.token);
             }
-          } catch { /* skip malformed line */ }
+          } catch { /* skip malformed */ }
         }
+      }
+
+      // Stream finished — refresh to get saved turns
+      if (streamCompleted) {
+        setStreamingText('');
+        onRefresh();
       }
     } catch (e: any) {
       toast.error(formatApiErrorToast(e, '发送失败'));
       setStreamingText('');
+      setLocalCandidateTurn(null);
     } finally {
       setSending(false);
     }
@@ -129,9 +145,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
             {finishing ? '生成中...' : '结束并生成复盘'}
           </Button>
         )}
-        {isAnalyzing && (
-          <p className="text-xs font-bold text-amber-600">复盘分析中...</p>
-        )}
+        {isAnalyzing && <p className="text-xs font-bold text-amber-600">复盘分析中...</p>}
       </div>
 
       {/* Radar chart for completed session */}
@@ -139,38 +153,40 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
         <Card className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/70 mb-3 space-y-2">
           <p className="text-xs font-black uppercase tracking-widest text-emerald-700">五维雷达图</p>
           <InterviewRadarChart scores={session.radar_scores} />
-          {session.overall_feedback && (
-            <p className="text-sm text-emerald-800">{session.overall_feedback}</p>
-          )}
+          {session.overall_feedback && <p className="text-sm text-emerald-800">{session.overall_feedback}</p>}
         </Card>
       )}
 
       {/* Conversation */}
       <div className="flex-1 max-h-[320px] overflow-y-auto space-y-2 pr-1 mb-3">
-        {turns.length === 0 && !sending && (
-          <p className="text-xs font-bold text-muted-foreground">还没有对话内容，先发送一句话开始模拟。</p>
+        {turns.length === 0 && !localCandidateTurn && (
+          <p className="text-xs font-bold text-muted-foreground">等待面试官提问...</p>
         )}
 
         {turns.map((turn) => (
           <div
             key={turn.id}
             className={`rounded-xl px-3 py-2 border ${
-              turn.speaker === 'candidate'
-                ? 'bg-slate-50 border-slate-200'
-                : 'bg-indigo-50 border-indigo-200'
+              turn.speaker === 'candidate' ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50 border-indigo-200'
             }`}
           >
-            <p className="text-[11px] font-black uppercase">
-              {turn.speaker === 'candidate' ? '你' : '面试官'}
-            </p>
+            <p className="text-[11px] font-black uppercase">{turn.speaker === 'candidate' ? '你' : '面试官'}</p>
             <p className="text-sm mt-1 whitespace-pre-wrap">{turn.content_text}</p>
             {turn.feedback_for_turn && (
-              <p className="text-xs text-amber-700 mt-2">逐句反馈：{turn.feedback_for_turn}</p>
+              <p className="text-xs text-amber-700 mt-2">{turn.feedback_for_turn}</p>
             )}
           </div>
         ))}
 
-        {/* Streaming bubble */}
+        {/* Local candidate turn (optimistic) */}
+        {localCandidateTurn && (
+          <div className="rounded-xl px-3 py-2 border bg-slate-50 border-slate-200 opacity-60">
+            <p className="text-[11px] font-black uppercase">你</p>
+            <p className="text-sm mt-1 whitespace-pre-wrap">{localCandidateTurn.text}</p>
+          </div>
+        )}
+
+        {/* Streaming interviewer reply */}
         {streamingText && (
           <div className="rounded-xl px-3 py-2 border bg-indigo-50 border-indigo-200">
             <p className="text-[11px] font-black uppercase">面试官</p>
@@ -195,16 +211,16 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
             disabled={sending}
           />
           <Button
-            className="rounded-xl text-xs font-bold bg-black text-white"
+            className="rounded-xl text-xs font-bold bg-black text-white shrink-0"
             disabled={sending || !input.trim()}
             onClick={sendTurn}
           >
-            {sending ? '发送中...' : '发送'}
+            {sending ? '...' : '发送'}
           </Button>
         </div>
       )}
 
-      {/* Completed — just show feedback if no radar scores */}
+      {/* Text-only feedback fallback */}
       {isCompleted && (!session.radar_scores || Object.keys(session.radar_scores).length === 0) && (
         <Card className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/70">
           <p className="text-xs font-black uppercase tracking-widest text-emerald-700">复盘结果</p>

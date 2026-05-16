@@ -60,8 +60,8 @@ export const Interviews: React.FC = () => {
     }
   }, [activeSessionId]);
 
-  const handleSessionCreated = () => {
-    refetch(); setActiveTab('history');
+  const handleSessionCreated = (sessionId: number) => {
+    refetch(); setActiveTab('history'); navigate(`/interviews?session_id=${sessionId}`);
   };
 
   const handleSessionSelect = (id: number) => {

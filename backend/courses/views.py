@@ -1,3 +1,4 @@
+import fcntl
 import json
 import logging
 import os
@@ -98,6 +99,22 @@ def _load_meta(upload_id: str):
         return json.load(f)
 
 
+def _add_chunk_to_meta(upload_id: str, chunk_index: int) -> dict:
+    """原子化添加分片索引 — 使用文件锁防止并发覆写。"""
+    meta_path = _meta_path(upload_id)
+    with open(meta_path, "r+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        meta = json.load(f)
+        uploaded_chunks = set(meta.get("uploaded_chunks", []))
+        uploaded_chunks.add(chunk_index)
+        meta["uploaded_chunks"] = sorted(uploaded_chunks)
+        f.seek(0)
+        f.truncate()
+        json.dump(meta, f, ensure_ascii=False)
+        return meta
+
+
 class ChunkedUploadInitView(APIView):
     permission_classes = [IsAdmin]
 
@@ -165,17 +182,13 @@ class ChunkedUploadChunkView(APIView):
             for part in chunk.chunks():
                 f.write(part)
 
-        uploaded_chunks = set(meta.get("uploaded_chunks", []))
-        uploaded_chunks.add(chunk_index)
-        meta["uploaded_chunks"] = sorted(uploaded_chunks)
-        with _meta_path(upload_id).open("w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False)
+        updated_meta = _add_chunk_to_meta(upload_id, chunk_index)
 
         return Response(
             {
                 "status": "ok",
-                "uploaded_count": len(meta["uploaded_chunks"]),
-                "total_chunks": meta["total_chunks"],
+                "uploaded_count": len(updated_meta["uploaded_chunks"]),
+                "total_chunks": updated_meta["total_chunks"],
             }
         )
 
