@@ -36,6 +36,7 @@ interface User {
   institution_role?: string;
   is_admin?: boolean;
   is_institution_admin?: boolean;
+  is_institution_owner?: boolean;
 }
 
 interface AuthState {

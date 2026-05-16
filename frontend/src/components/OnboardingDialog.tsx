@@ -10,7 +10,7 @@ import { GraduationCap, Building2, ArrowRight, Loader2, Check } from 'lucide-rea
 export function OnboardingDialog() {
   const { user, updateUser } = useAuthStore();
   const location = useLocation();
-  const [step, setStep] = useState<'role' | 'teacher' | 'student'>(user?.institution_role === 'admin' ? 'teacher' : 'role');
+  const [step, setStep] = useState<'role' | 'teacher' | 'student'>(user?.institution_role === 'owner' ? 'teacher' : 'role');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -44,7 +44,7 @@ export function OnboardingDialog() {
         description: instDesc.trim(),
         contact_phone: instPhone.trim(),
       });
-      updateUser({ institution_id: data.institution.id, institution_role: 'admin' });
+      updateUser({ institution_id: data.institution.id, institution_role: 'owner' });
       setDone(true);
     } catch (err: any) {
       setError(err.response?.data?.error || '创建失败');

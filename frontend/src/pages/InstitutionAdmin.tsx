@@ -33,7 +33,6 @@ interface Institution {
   max_students: number;
   created_at: string;
   notes: string;
-  invite_code: string;
 }
 
 const PLAN_COLORS: Record<string, string> = {
@@ -78,9 +77,18 @@ export default function InstitutionAdmin() {
     fetchInstitutions();
   };
 
-  // 机构管理员 → 自己的机构设置
-  if (user?.is_institution_admin) {
+  // 机构所有者 → 自己的机构设置
+  if (user?.is_institution_owner) {
     return <InstitutionSelfSettings />;
+  }
+
+  // 教师 → 无权限访问机构设置
+  if (user?.is_institution_admin) {
+    return (
+      <div className="min-h-screen bg-muted flex items-center justify-center text-muted-foreground text-sm">
+        仅机构所有者可访问机构设置
+      </div>
+    );
   }
 
   // 超级管理员 → 机构 CRUD
@@ -193,17 +201,6 @@ export default function InstitutionAdmin() {
                       <span className="flex items-center gap-1"><Users className="h-3 w-3" />{inst.student_count}/{inst.max_students} 学员</span>
                       <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{inst.plan_expires_at ? inst.plan_expires_at.slice(0, 10) : '永久有效'}</span>
                       <span>{inst.contact_name} · {inst.contact_email}</span>
-                      {inst.invite_code && (
-                        <span className="flex items-center gap-1 text-primary">
-                          邀请码 <code className="font-mono font-bold text-primary bg-primary/8 px-1.5 py-0.5 rounded text-[11px]">{inst.invite_code}</code>
-                          <button onClick={async (e) => {
-                            e.stopPropagation();
-                            await navigator.clipboard.writeText(inst.invite_code);
-                          }} className="hover:opacity-70">
-                            <Copy className="h-3 w-3" />
-                          </button>
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>

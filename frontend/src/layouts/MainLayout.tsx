@@ -72,6 +72,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import UnimindLogo from '../../Unimind_logo.png';
+import { PersistentUploadToast } from '@/components/PersistentUploadToast';
 
 const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onRestrictedClick }: any) => {
   const content = (
@@ -217,6 +218,7 @@ export const MainLayout: React.FC = () => {
     ? [
         { to: '/institution/admin', icon: Building2, label: '机构管理' },
         { to: '/invite-codes', icon: Sparkles, label: '邀请码' },
+        { to: '/prompt-templates', icon: FileText, label: 'Prompt模板' },
       ]
     : [
         { to: '/courses', icon: BookOpen, label: '课程中心' },
@@ -226,13 +228,13 @@ export const MainLayout: React.FC = () => {
         { to: '/qa', icon: MessageCircleQuestion, label: '答疑', minPlan: 3 },
         { to: '/ai', icon: Sparkles, label: 'AI 实验室', minPlan: 2 },
         { to: '/study', icon: Clock, label: '自习室', minPlan: 3 },
-        { to: '/interviews', icon: Mic, label: '模拟面试' },
+        { to: '/interviews', icon: Mic, label: '模拟面试', minPlan: 3 },
         { to: '/mock-exam', icon: FileText, label: 'PDF 模考', minPlan: 3 },
       ];
 
   // ── 机构成员 —— 机构入口已移至头像下拉菜单 ──
   if (!isSuperAdmin && instInfo) {
-    if (user?.institution_role === 'admin') {
+    if (user?.is_institution_admin) {
       navItems.push({ to: '/management', icon: Wrench, label: '维护中心', section: '机构' });
     }
   }
@@ -241,6 +243,7 @@ export const MainLayout: React.FC = () => {
     ? [
         { to: '/institution', icon: Building2, label: '机构' },
         { to: '/invite-codes', icon: Sparkles, label: '邀请' },
+        { to: '/prompt-templates', icon: FileText, label: 'Prompt' },
       ]
     : [
         { to: '/courses', icon: BookOpen, label: '课程' },
@@ -251,13 +254,16 @@ export const MainLayout: React.FC = () => {
       ];
 
   // Sidebar onRestrictedClick: show upgrade modal with appropriate feature
+  const PATH_FEATURE_MAP: Record<string, string> = {
+    '/knowledge-map': 'knowledge.graph',
+    '/ai': 'ai.assistant',
+    '/qa': 'faq.system',
+    '/study': 'study.room',
+    '/interviews': 'interview.mock',
+    '/mock-exam': 'pdf.mock',
+  };
   const handleRestrictedClick = (item: NavItem) => {
-    const mp = (item as any).minPlan;
-    const featureMap: Record<number, string> = {
-      2: 'ai.assistant',
-      3: 'study.room',
-    };
-    setRestrictedFeature(featureMap[mp]);
+    setRestrictedFeature(PATH_FEATURE_MAP[item.to]);
     setShowUpgradeModal(true);
   };
 
@@ -332,8 +338,8 @@ export const MainLayout: React.FC = () => {
                     <UserIcon className="h-3.5 w-3.5" />
                     <span className="font-bold text-xs">个人设置</span>
                   </DropdownMenuItem>
-                  {/* 机构设置：机构管理员在头像下拉菜单中可见 */}
-                  {!isSuperAdmin && instInfo && user?.institution_role === 'admin' && (
+                  {/* 机构设置：仅机构所有者可见 */}
+                  {!isSuperAdmin && instInfo && user?.is_institution_owner && (
                     <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Settings2 className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">机构设置</span>
@@ -400,8 +406,8 @@ export const MainLayout: React.FC = () => {
                <div className="flex items-center gap-3">
                   {/* Clickable ELO */}
                   {user && <EloPopover />}
-                  {/* Invite students — institution admin only */}
-                  {!isSuperAdmin && instInfo && user?.institution_role === 'admin' && (
+                  {/* Invite students — institution admin (owner / teacher) */}
+                  {!isSuperAdmin && instInfo && user?.is_institution_admin && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-[11px] font-bold">
@@ -509,7 +515,7 @@ export const MainLayout: React.FC = () => {
                       <UserIcon className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">个人设置</span>
                     </DropdownMenuItem>
-                    {!isSuperAdmin && instInfo && user?.institution_role === 'admin' && (
+                    {!isSuperAdmin && instInfo && user?.is_institution_owner && (
                       <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Settings2 className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">机构设置</span>
@@ -522,7 +528,7 @@ export const MainLayout: React.FC = () => {
                         <span className="font-bold text-xs">机构看板</span>
                       </DropdownMenuItem>
                     )}
-                    {!isSuperAdmin && instInfo && user?.institution_role === 'admin' && (
+                    {!isSuperAdmin && instInfo && user?.is_institution_admin && (
                       <DropdownMenuItem
                         onClick={() => {
                           navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
@@ -667,6 +673,7 @@ export const MainLayout: React.FC = () => {
         </AlertDialog>
 
         <OnboardingDialog />
+        <PersistentUploadToast />
       </div>
     </TooltipProvider>
   );

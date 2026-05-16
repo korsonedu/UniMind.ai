@@ -7,16 +7,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   BookOpen, FileText, Target, Video, Image as ImageIcon,
   Upload, Trash2, Edit3, Settings2, Bot, Sparkles, Bell, Send, Loader2,
-  RefreshCcw, BrainCircuit, X, Layers, FileUp, CheckCircle2, Rocket, ShieldCheck, BarChart3
+  BrainCircuit, Layers, FileUp, Rocket, BarChart3
 } from 'lucide-react';
 import api from '@/lib/api';
+import { createCourseWithSmartUpload } from '@/lib/chunkedUpload';
+import { useUploadStore } from '@/store/useUploadStore';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Badge } from '@/components/ui/badge';
+
 import { cn } from '@/lib/utils';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 
@@ -24,10 +26,8 @@ import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { TagInput } from './maintenance/MaintenanceComponents';
 import { QuestionBankPanel } from './maintenance/QuestionBankPanel';
 import { InsightsPanel } from './maintenance/InsightsPanel';
-import { MembershipPanel } from './maintenance/MembershipPanel';
 import { AuditPanel } from './maintenance/AuditPanel';
 import { PipelinePanel } from './maintenance/PipelinePanel';
-import { PromptTemplatesPanel } from './maintenance/PromptTemplatesPanel';
 import { KnowledgeSystemPanel } from './maintenance/KnowledgeSystemPanel';
 
 export const Maintenance: React.FC = () => {
@@ -49,19 +49,13 @@ export const Maintenance: React.FC = () => {
   const [qSearch, setQSearch] = useState('');
   const [editingItem, setEditingItem] = useState<{ type: string, data: any } | null>(null);
 
-  // KP Creation Logic
+  // Quick Create Logic
   const [showNewKPDialog, setShowNewKPDialog] = useState(false);
+  const [showNewAlbumDialog, setShowNewAlbumDialog] = useState(false);
+  const [newAlbumName, setNewAlbumName] = useState('');
+  const [newAlbumDesc, setNewAlbumDesc] = useState('');
   const [newKPForm, setNewKPForm] = useState({ name: '', description: '', parent: '0' });
   const [kpCreationTarget, setKPCreationTarget] = useState<'course' | 'article' | 'none'>('course');
-
-  // AI Workshop State
-  const [showAIWorkstation, setShowAIWorkstation] = useState(false);
-  const [aiInputText, setAiInputText] = useState('');
-  const [aiFile, setAiFile] = useState<File | null>(null);
-  const [aiTargetKP, setAiTargetKP] = useState('0');
-  const [aiPreviewData, setAiPreviewData] = useState<any[] | null>(null);
-  const [isParsing, setIsParsing] = useState(false);
-  const [parseProgress, setParseProgress] = useState("");
 
   // Forms
   const [courseForm, setCourseForm] = useState({ title: '', album_obj: '0', desc: '', elo_reward: 50, knowledge_point: '0', video: null as File | null, cover: null as File | null, courseware: null as File | null });
@@ -73,10 +67,6 @@ export const Maintenance: React.FC = () => {
   const [notifForm, setNotifForm] = useState({ title: '', content: '', link: '' });
   const [isSendingNotif, setIsSendingNotif] = useState(false);
 
-  // BI & Codes
-  const [codes, setCodes] = useState<any[]>([]);
-  const [newCodeCount, setNewCodeCount] = useState(1);
-  const [isGeneratingCodes, setIsGeneratingCodes] = useState(false);
   const [biData, setBIData] = useState<any>(null);
   const [isLoadingBI, setIsLoadingBI] = useState(false);
 
@@ -98,11 +88,7 @@ export const Maintenance: React.FC = () => {
     finally { setIsLoadingBI(false); }
   };
 
-  const fetchCodes = async () => {
-    try { const res = await api.get('/users/admin/codes/'); setCodes(res.data); } catch (e) {}
-  };
-
-  useEffect(() => { fetchLists(); fetchCodes(); fetchBI(); }, []);
+  useEffect(() => { fetchLists(); fetchBI(); }, []);
 
   const handleDelete = async (type: string, id: number) => {
     try {
@@ -117,66 +103,48 @@ export const Maintenance: React.FC = () => {
 
   const handleCreateCourse = async () => {
     if (!courseForm.title || !courseForm.video) return toast.error("核心信息不全");
-    setIsSubmitting(true); setUploadProgress(2);
     const file = courseForm.video;
+    const controller = new AbortController();
+    const uploadId = `\${Date.now()}-\${file.name}`;
+
+    const { addTask, updateProgress, setStatus } = useUploadStore.getState();
+    addTask({ id: uploadId, fileName: file.name, progress: 0, status: 'uploading', controller });
+    setIsSubmitting(true); setUploadProgress(2);
 
     try {
-      if (file.size <= CHUNKED_UPLOAD_THRESHOLD_BYTES) {
-        const fd = new FormData();
-        fd.append('title', courseForm.title);
-        fd.append('description', courseForm.desc);
-        fd.append('elo_reward', courseForm.elo_reward.toString());
-        if (courseForm.album_obj !== '0') fd.append('album_obj', courseForm.album_obj);
-        if (courseForm.knowledge_point !== '0') fd.append('knowledge_point', courseForm.knowledge_point);
-        fd.append('video_file', file);
-        if (courseForm.cover) fd.append('cover_image', courseForm.cover);
-        if (courseForm.courseware) fd.append('courseware', courseForm.courseware);
-        await api.post('/courses/', fd, {
-          onUploadProgress: p => p.total && setUploadProgress(Math.round((p.loaded / p.total) * 100)),
-        });
-      } else {
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE_BYTES);
-        const initRes = await api.post('/courses/chunked/init/', {
-          file_name: file.name,
-          total_size: file.size,
-          chunk_size: CHUNK_SIZE_BYTES,
-          total_chunks: totalChunks,
-          mime_type: file.type || 'application/octet-stream',
-        });
-        const uploadId = initRes.data?.upload_id;
-        if (!uploadId) throw new Error('missing upload id');
+      await createCourseWithSmartUpload({
+        title: courseForm.title,
+        description: courseForm.desc,
+        eloReward: courseForm.elo_reward,
+        albumObj: courseForm.album_obj !== '0' ? courseForm.album_obj : undefined,
+        knowledgePoint: courseForm.knowledge_point !== '0' ? courseForm.knowledge_point : undefined,
+        video: file,
+        cover: courseForm.cover,
+        courseware: courseForm.courseware,
+        thresholdBytes: CHUNKED_UPLOAD_THRESHOLD_BYTES,
+        chunkSizeBytes: CHUNK_SIZE_BYTES,
+        signal: controller.signal,
+        onProgress: (p) => {
+          setUploadProgress(p);
+          updateProgress(uploadId, p);
+          if (p >= 95) setStatus(uploadId, 'processing');
+        },
+      });
 
-        for (let i = 0; i < totalChunks; i++) {
-          const start = i * CHUNK_SIZE_BYTES;
-          const end = Math.min(start + CHUNK_SIZE_BYTES, file.size);
-          const chunkBlob = file.slice(start, end);
-          const chunkFd = new FormData();
-          chunkFd.append('chunk_index', i.toString());
-          chunkFd.append('chunk', chunkBlob, `${file.name}.part${i}`);
-          await api.post(`/courses/chunked/${uploadId}/chunk/`, chunkFd);
-          setUploadProgress(Math.floor(((i + 1) / totalChunks) * 95));
-        }
-
-        const completeFd = new FormData();
-        completeFd.append('title', courseForm.title);
-        completeFd.append('description', courseForm.desc);
-        completeFd.append('elo_reward', courseForm.elo_reward.toString());
-        if (courseForm.album_obj !== '0') completeFd.append('album_obj', courseForm.album_obj);
-        if (courseForm.knowledge_point !== '0') completeFd.append('knowledge_point', courseForm.knowledge_point);
-        if (courseForm.cover) completeFd.append('cover_image', courseForm.cover);
-        if (courseForm.courseware) completeFd.append('courseware', courseForm.courseware);
-        await api.post(`/courses/chunked/${uploadId}/complete/`, completeFd);
-        setUploadProgress(100);
-      }
-
+      setStatus(uploadId, 'completed');
       toast.success("课程已发布");
       fetchLists();
     } catch (e: any) {
-      const status = e?.response?.status;
-      const detail = e?.response?.data?.detail || e?.response?.data?.error || e?.response?.data?.message;
-      if (status === 403) toast.error("当前账号无管理员权限，无法发布课程");
-      else if (typeof detail === 'string' && detail.trim()) toast.error(detail);
-      else toast.error("发布失败");
+      if (e?.name === 'AbortError' || e?.code === 'ERR_CANCELED') {
+        // User cancelled — status already set by cancelTask
+      } else {
+        const status = e?.response?.status;
+        const detail = e?.response?.data?.detail || e?.response?.data?.error || e?.response?.data?.message;
+        if (status === 403) toast.error("当前账号无管理员权限，无法发布课程");
+        else if (typeof detail === 'string' && detail.trim()) toast.error(detail);
+        else toast.error("发布失败");
+        setStatus(uploadId, 'failed', '上传失败');
+      }
     } finally {
       setIsSubmitting(false);
       setUploadProgress(0);
@@ -223,22 +191,6 @@ export const Maintenance: React.FC = () => {
     catch (e) { toast.error("失败"); }
   };
 
-  const handleGenerateCodes = async () => {
-    setIsGeneratingCodes(true);
-    try {
-      for (let i = 0; i < newCodeCount; i++) {
-        const randomCode = Math.random().toString(36).substring(2, 10).toUpperCase();
-        await api.post('/users/admin/codes/', { code: randomCode });
-      }
-      toast.success(`已生成 ${newCodeCount} 个激活码`); fetchCodes();
-    } catch (e) { toast.error("生成失败"); } finally { setIsGeneratingCodes(false); }
-  };
-
-  const handleDeleteCode = async (id: number) => {
-    if (!confirm("确定收回此激活码吗？")) return;
-    try { await api.delete(`/users/admin/codes/${id}/`); toast.success("已收回"); fetchCodes(); } catch (e) { toast.error("操作失败"); }
-  };
-
   const handleCreateSM = async () => {
     if (!smForm.name || !smForm.file) return toast.error("信息不全");
     setIsSubmitting(true); setUploadProgress(10);
@@ -262,6 +214,18 @@ export const Maintenance: React.FC = () => {
       if (kpCreationTarget === 'course') setCourseForm(prev => ({ ...prev, knowledge_point: newKPId }));
       else if (kpCreationTarget === 'article') setArticleForm(prev => ({ ...prev, knowledge_point: newKPId }));
       setShowNewKPDialog(false); setNewKPForm({ name: '', description: '', parent: '0' });
+    } catch (e) { toast.error("创建失败"); }
+  };
+
+  const handleQuickCreateAlbum = async () => {
+    if (!newAlbumName.trim()) return toast.error("名称必填");
+    try {
+      const res = await api.post('/courses/albums/', { name: newAlbumName.trim(), description: newAlbumDesc.trim() });
+      const newId = res.data.id.toString();
+      await fetchLists();
+      setCourseForm(prev => ({ ...prev, album_obj: newId }));
+      setShowNewAlbumDialog(false); setNewAlbumName(''); setNewAlbumDesc('');
+      toast.success("专辑已创建");
     } catch (e) { toast.error("创建失败"); }
   };
 
@@ -289,41 +253,8 @@ export const Maintenance: React.FC = () => {
     } catch (e: any) { toast.error("更新失败"); }
   };
 
-  // AI Logic
-  const handleAIParse = async () => {
-    if (!aiInputText.trim() && !aiFile) return toast.error("未提供语料");
-    setIsParsing(true); setParseProgress("初始化 AI 引擎...");
-    const fd = new FormData();
-    if (aiInputText) fd.append('raw_text', aiInputText);
-    if (aiFile) fd.append('file', aiFile);
-    try {
-      const res = await api.post('/quizzes/ai-parse-raw-text/', fd);
-      const taskId = res.data.task_id;
-      const poll = setInterval(async () => {
-        try {
-          const checkRes = await api.get(`/quizzes/ai-parse-raw-text/?task_id=${taskId}`);
-          if (checkRes.data.progress) setParseProgress(`正在深度解析: 分片 ${checkRes.data.progress}`);
-          if (checkRes.data.status === 'completed') {
-            clearInterval(poll); setAiPreviewData(checkRes.data.data);
-            toast.success(`解析完成，共发现 ${checkRes.data.data.length} 道题目`);
-            setIsParsing(false); setParseProgress("");
-          }
-        } catch (e) { clearInterval(poll); setIsParsing(false); setParseProgress(""); }
-      }, 3000);
-    } catch (e) { setIsParsing(false); setParseProgress(""); }
-  };
-
-  const handleAIImport = async () => {
-    if (!aiPreviewData) return;
-    try {
-      await api.post('/quizzes/ai-bulk-import/', { questions: aiPreviewData, kp_id: aiTargetKP === '0' ? null : aiTargetKP });
-      toast.success("成功导入题库"); setAiPreviewData(null); setShowAIWorkstation(false); fetchLists();
-    } catch (e) { toast.error("导入失败"); }
-  };
-
   return (
     <div className="p-6 space-y-6 animate-in fade-in duration-500 max-w-[1600px] mx-auto overflow-hidden text-left">
-      <Button onClick={() => setShowAIWorkstation(true)} className="fixed bottom-10 right-10 h-12 w-12 rounded-full bg-emerald-500 text-white shadow-2xl hover:scale-110 transition-all z-[60] animate-pulse"><Sparkles className="w-5 h-5" /></Button>
 
       <Tabs defaultValue="courses" className="space-y-6">
         <TabsList className="bg-white/50 backdrop-blur-md p-1.5 rounded-2xl border border-black/5 h-auto flex flex-wrap gap-1.5 shadow-sm w-fit mx-auto">
@@ -335,11 +266,9 @@ export const Maintenance: React.FC = () => {
           <TabsTrigger value="bots" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Bot className="w-3.5 h-3.5 mr-2" />AI 机器人</TabsTrigger>
           <TabsTrigger value="sm" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Rocket className="w-3.5 h-3.5 mr-2" />启动资料</TabsTrigger>
           <TabsTrigger value="notifications" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Bell className="w-3.5 h-3.5 mr-2" />全站广播</TabsTrigger>
-          <TabsTrigger value="membership" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><ShieldCheck className="h-3.5 w-3.5 mr-2" />激活码</TabsTrigger>
           <TabsTrigger value="insights" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><BarChart3 className="w-3.5 h-3.5 mr-2" />数据洞察</TabsTrigger>
           <TabsTrigger value="manage" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Settings2 className="w-3.5 h-3.5 mr-2" />资源审计</TabsTrigger>
           <TabsTrigger value="pipeline" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Sparkles className="w-3.5 h-3.5 mr-2" />AI出题中心</TabsTrigger>
-          <TabsTrigger value="prompts" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><FileText className="w-3.5 h-3.5 mr-2" />Prompt模板</TabsTrigger>
         </TabsList>
 
         <TabsContent value="courses">
@@ -347,7 +276,7 @@ export const Maintenance: React.FC = () => {
             <Card className="lg:col-span-8 p-8 bg-white rounded-3xl border-none shadow-sm space-y-6">
               <div className="space-y-2.5"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">课程标题</Label><Input value={courseForm.title} onChange={e => setCourseForm({ ...courseForm, title: e.target.value })} className="bg-[#F5F5F7] border-none h-12 rounded-xl font-bold px-5" /></div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">所属专辑</Label><Select value={courseForm.album_obj} onValueChange={v => setCourseForm({ ...courseForm, album_obj: v })}><SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-none font-bold px-4 text-xs"><SelectValue /></SelectTrigger><SelectContent>{albumList.map(al => <SelectItem key={al.id} value={al.id.toString()}>{al.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">所属专辑</Label><Select value={courseForm.album_obj} onValueChange={v => v === 'NEW_ALBUM' ? setShowNewAlbumDialog(true) : setCourseForm({ ...courseForm, album_obj: v })}><SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-none font-bold px-4 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">不挂载</SelectItem><SelectItem value="NEW_ALBUM" className="text-indigo-600 font-bold">+ 新建专辑</SelectItem>{albumList.map(al => <SelectItem key={al.id} value={al.id.toString()}>{al.name}</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-2"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">关联知识点</Label><Select value={courseForm.knowledge_point} onValueChange={v => v === 'NEW_KP' ? (setKPCreationTarget('course'), setShowNewKPDialog(true)) : setCourseForm({ ...courseForm, knowledge_point: v })}><SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-none font-bold px-4 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">不挂载</SelectItem><SelectItem value="NEW_KP" className="text-indigo-600 font-bold">+ 新建知识点</SelectItem>{kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()}>{kp.name}</SelectItem>)}</SelectContent></Select></div>
               </div>
               <div className="space-y-2"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">详细描述</Label><MarkdownEditor content={courseForm.desc} onChange={v => setCourseForm({ ...courseForm, desc: v })} /></div>
@@ -481,11 +410,6 @@ export const Maintenance: React.FC = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="membership">
-          <MembershipPanel codes={codes} newCodeCount={newCodeCount} setNewCodeCount={setNewCodeCount} isGeneratingCodes={isGeneratingCodes} handleGenerateCodes={handleGenerateCodes} handleDeleteCode={handleDeleteCode} fetchCodes={fetchCodes} />
-
-        </TabsContent>
-
         <TabsContent value="insights">
           <InsightsPanel biData={biData} isLoadingBI={isLoadingBI} fetchBI={fetchBI} />
 
@@ -497,10 +421,6 @@ export const Maintenance: React.FC = () => {
 
         <TabsContent value="pipeline">
           <PipelinePanel />
-        </TabsContent>
-
-        <TabsContent value="prompts">
-          <PromptTemplatesPanel />
         </TabsContent>
       </Tabs>
 
@@ -558,8 +478,17 @@ export const Maintenance: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Dynamic KP Dialog & AI Workstation Dialog omitted for brevity but they are similar refactored blocks */}
-      {/* ... (Keep AI Workstation and NewKPDialog as they were but clean) */}
+      <Dialog open={showNewAlbumDialog} onOpenChange={setShowNewAlbumDialog}>
+        <DialogContent className="sm:max-w-[420px] rounded-[2.5rem] p-10 border-none shadow-2xl bg-white text-left">
+          <DialogHeader><DialogTitle className="text-xl font-black flex items-center gap-3"><Layers className="text-emerald-600 w-5 h-5" /> 快速新建专辑</DialogTitle></DialogHeader>
+          <div className="space-y-5 pt-6">
+            <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40">专辑名称</Label><Input value={newAlbumName} onChange={e => setNewAlbumName(e.target.value)} placeholder="例如：金融基础精讲" className="bg-[#F5F5F7] border-none h-11 rounded-xl font-bold px-4 text-sm" /></div>
+            <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40">专辑简介</Label><textarea value={newAlbumDesc} onChange={e => setNewAlbumDesc(e.target.value)} className="w-full bg-[#F5F5F7] border-none rounded-xl p-4 min-h-[80px] font-bold text-xs" placeholder="一句话描述专辑内容..." /></div>
+            <div className="flex gap-3 pt-2"><Button variant="outline" onClick={() => setShowNewAlbumDialog(false)} className="flex-1 h-12 rounded-xl font-bold text-xs">取消</Button><Button onClick={handleQuickCreateAlbum} className="flex-[2] h-12 rounded-xl bg-black text-white font-black shadow-xl text-xs uppercase tracking-widest">确认创建</Button></div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showNewKPDialog} onOpenChange={setShowNewKPDialog}>
         <DialogContent className="sm:max-w-[500px] rounded-[2.5rem] p-10 border-none shadow-2xl bg-white text-left">
           <DialogHeader><DialogTitle className="text-xl font-black flex items-center gap-3"><BrainCircuit className="text-indigo-600 w-5 h-5" /> 快速新建知识点</DialogTitle></DialogHeader>
@@ -568,40 +497,6 @@ export const Maintenance: React.FC = () => {
             <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40">隶属父级</Label><Select value={newKPForm.parent} onValueChange={v => setNewKPForm({ ...newKPForm, parent: v })}><SelectTrigger className="h-11 rounded-xl bg-[#F5F5F7] border-none font-bold text-xs px-4"><SelectValue placeholder="顶级节点" /></SelectTrigger><SelectContent>{kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()} className="text-xs">{kp.name}</SelectItem>)}</SelectContent></Select></div>
             <textarea value={newKPForm.description} onChange={e => setNewKPForm({ ...newKPForm, description: e.target.value })} className="w-full bg-[#F5F5F7] border-none rounded-xl p-4 min-h-[100px] font-bold text-xs" placeholder="描述..." />
             <div className="flex gap-3 pt-2"><Button variant="outline" onClick={() => setShowNewKPDialog(false)} className="flex-1 h-12 rounded-xl font-bold text-xs">取消</Button><Button onClick={handleQuickCreateKP} className="flex-[2] h-12 rounded-xl bg-black text-white font-black shadow-xl text-xs uppercase tracking-widest">确认保存</Button></div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showAIWorkstation} onOpenChange={setShowAIWorkstation}>
-        <DialogContent className="sm:max-w-[1000px] rounded-[3rem] p-10 border-none shadow-2xl bg-white text-left overflow-hidden">
-          <DialogHeader><DialogTitle className="text-xl font-bold flex items-center gap-3"><Sparkles className="text-emerald-500" /> AI 题目作业中心</DialogTitle></DialogHeader>
-          <div className="space-y-6 pt-6">
-            {!aiPreviewData ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-                  <div className="md:col-span-8"><textarea value={aiInputText} onChange={e => setAiInputText(e.target.value)} className="w-full bg-[#F5F5F7] border-none rounded-[2rem] p-8 min-h-[350px] font-medium text-sm" placeholder="在此粘贴 5 万字以内的学术语料..." /></div>
-                  <div className="md:col-span-4 space-y-4">
-                    <div className="p-8 border-2 border-dashed border-black/10 rounded-[2rem] bg-slate-50 flex flex-col items-center justify-center text-center space-y-4 relative group hover:border-emerald-500/50 transition-all">
-                      <div className="h-14 w-14 rounded-2xl bg-white shadow-sm flex items-center justify-center"><FileUp className="h-6 w-6 opacity-40 group-hover:text-emerald-500 transition-colors" /></div>
-                      <div><p className="text-[11px] font-bold">拖动 Word 文件至此</p><p className="text-[11px] text-black/30 font-medium mt-1 uppercase">Supports .docx / .txt</p></div>
-                      {aiFile && <Badge className="bg-emerald-500 text-white border-none">{aiFile.name}</Badge>}<input type="file" onChange={e => setAiFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer" accept=".docx,.txt" />
-                    </div>
-                    <Card className="p-6 border-none bg-emerald-50/50 rounded-[1.5rem] space-y-2"><h5 className="text-[11px] font-bold text-emerald-700 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-3 h-3" /> 智能解析建议</h5><p className="text-[11px] text-emerald-900/60 font-medium leading-relaxed">对于超长文本，AI 将自动启动分片引擎并行作业。</p></Card>
-                  </div>
-                </div>
-                <Button onClick={handleAIParse} disabled={isParsing} className="w-full h-14 rounded-2xl bg-black text-white font-bold shadow-xl transition-all hover:scale-[1.01]">{isParsing ? <><RefreshCcw className="mr-2 h-4 w-4 animate-spin" /> {parseProgress || 'AI 深度整理中...'}</> : "开始 AI 自动整理"}</Button>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <ScrollArea className="h-[450px] border rounded-[2rem] bg-slate-50/50 p-6 text-left">
-                  <div className="space-y-4">{aiPreviewData.map((q, i) => (<Card key={i} className="p-5 bg-white rounded-2xl border-none shadow-sm space-y-3"><div className="flex justify-between items-start"><Badge className="bg-black text-white text-[11px]">{q.q_type}</Badge><Button variant="ghost" size="icon" onClick={() => setAiPreviewData(aiPreviewData.filter((_, idx) => idx !== i))} className="h-6 w-6 text-red-500"><X className="w-3 h-3" /></Button></div><textarea value={q.text} onChange={e => { const nd = [...aiPreviewData]; nd[i].text = e.target.value; setAiPreviewData(nd); }} className="w-full bg-[#F5F5F7] border-none rounded-xl p-3 text-xs font-bold min-h-[60px]" /><div className="grid grid-cols-2 gap-3 text-left"><div className="space-y-1.5"><Label className="text-[11px] uppercase opacity-40">答案</Label><textarea value={q.correct_answer} onChange={e => { const nd = [...aiPreviewData]; nd[i].correct_answer = e.target.value; setAiPreviewData(nd); }} className="w-full bg-[#F5F5F7] border-none rounded-lg p-2 text-[11px]" /></div><div className="space-y-1.5"><Label className="text-[11px] uppercase opacity-40">得分点/解析</Label><textarea value={q.grading_points || q.analysis} onChange={e => { const nd = [...aiPreviewData]; nd[i].grading_points = e.target.value; setAiPreviewData(nd); }} className="w-full bg-[#F5F5F7] border-none rounded-lg p-2 text-[11px]" /></div></div></Card>))}</div>
-                </ScrollArea>
-                <div className="grid grid-cols-2 gap-4 items-end">
-                  <div className="space-y-2 text-left"><Label className="text-[11px] font-bold uppercase tracking-widest opacity-40 ml-1">批量挂载知识点</Label><Select value={aiTargetKP} onValueChange={setAiTargetKP}><SelectTrigger className="h-12 rounded-2xl bg-[#F5F5F7] border-none font-bold px-5 text-xs"><SelectValue placeholder="选择知识点" /></SelectTrigger><SelectContent>{kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()}>{kp.name}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="flex gap-2"><Button variant="outline" onClick={() => setAiPreviewData(null)} className="flex-1 h-12 rounded-xl font-bold text-xs">取消重来</Button><Button onClick={handleAIImport} className="flex-[2] h-12 rounded-xl bg-emerald-500 text-white font-bold shadow-xl text-xs gap-2"><CheckCircle2 className="w-4 h-4" /> 确认导入</Button></div>
-                </div>
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -6,17 +6,21 @@ class UserSerializer(serializers.ModelSerializer):
     institution = serializers.SerializerMethodField()
     is_admin = serializers.SerializerMethodField()
     is_institution_admin = serializers.SerializerMethodField()
+    is_institution_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'elo_reset_count', 'is_member', 'membership_tier', 'is_admin', 'is_institution_admin', 'institution', 'institution_role', 'institution_id')
-        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'is_admin', 'is_institution_admin', 'institution_role', 'institution_id')
+        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'elo_reset_count', 'is_member', 'membership_tier', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'institution', 'institution_role', 'institution_id')
+        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'institution_role', 'institution_id')
 
     def get_is_admin(self, obj):
         return obj.is_superuser and obj.institution_id is None
 
     def get_is_institution_admin(self, obj):
-        return obj.institution is not None and obj.institution_role == 'admin'
+        return obj.institution is not None and obj.institution_role in ('owner', 'teacher')
+
+    def get_is_institution_owner(self, obj):
+        return obj.institution is not None and obj.institution_role == 'owner'
 
     def get_institution(self, obj):
         inst = obj.institution
@@ -49,7 +53,7 @@ class DailyPlanSerializer(serializers.ModelSerializer):
 class SystemConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = SystemConfig
-        fields = ("school_name", "school_short_name", "school_description", "school_logo", "invite_code")
+        fields = ("school_name", "school_short_name", "school_description", "school_logo")
 
 class RegisterSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=False)

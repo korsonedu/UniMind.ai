@@ -331,41 +331,59 @@ function Section({ label, children }: { label: string; children: React.ReactNode
    Institution Admin: Roster Management
    ═══════════════════════════════════════════════════════════ */
 
-type RosterStudent = {
+type RosterMember = {
   id: number; username: string; email: string; nickname: string;
   elo_score: number; institution_role: string; date_joined: string;
 };
 
 function InstitutionRosterManagement({ institution }: { institution: any }) {
-  const [students, setStudents] = useState<RosterStudent[]>([]);
+  const { user } = useAuthStore();
+  const isOwner = user?.is_institution_owner;
+  const [members, setMembers] = useState<RosterMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [roleUpdating, setRoleUpdating] = useState<number | null>(null);
 
   const fetch = async () => {
-    try { const { data } = await api.get('/users/institution/students/'); setStudents(data); } catch { /* */ }
+    try { const { data } = await api.get('/users/institution/me/members/'); setMembers(data); } catch { /* */ }
     setLoading(false);
   };
   useEffect(() => { fetch(); }, []);
 
-  const filtered = students.filter(s =>
+  const filtered = members.filter(s =>
     !search || s.nickname.includes(search) || s.email.includes(search) || s.username.includes(search)
   );
 
-  const avgElo = students.length ? Math.round(students.reduce((a, s) => a + s.elo_score, 0) / students.length) : 0;
+  const studentCount = members.filter(m => m.institution_role === 'student').length;
+  const teacherCount = members.filter(m => m.institution_role === 'teacher').length;
+  const avgElo = members.length ? Math.round(members.reduce((a, s) => a + s.elo_score, 0) / members.length) : 0;
+
+  const handleRoleChange = async (memberId: number, newRole: string) => {
+    setRoleUpdating(memberId);
+    try {
+      await api.patch(`/users/institution/me/members/${memberId}/role/`, { role: newRole });
+      setMembers(prev => prev.map(m => m.id === memberId ? { ...m, institution_role: newRole } : m));
+      toast.success(newRole === 'teacher' ? '已设为教师' : '已设为学员');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || '操作失败');
+    }
+    setRoleUpdating(null);
+  };
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold text-foreground tracking-tight mb-1">学员管理</h1>
+      <h1 className="text-2xl font-extrabold text-foreground tracking-tight mb-1">成员管理</h1>
       <p className="text-sm text-muted-foreground/60 mb-6">
-        {institution.name} · {institution.plan_label} · {students.length} / {institution.max_students} 名学员
+        {institution.name} · {institution.plan_label} · {studentCount} 学员 · {teacherCount} 教师
       </p>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {[
-          { label: '学员总数', value: students.length, icon: Users, color: 'text-primary', bg: 'bg-primary/6' },
-          { label: '版本上限', value: institution.max_students, icon: Hash, color: 'text-[#FF9500]', bg: 'bg-[#FF9500]/6' },
+          { label: '学员', value: studentCount, icon: GraduationCap, color: 'text-primary', bg: 'bg-primary/6' },
+          { label: '教师', value: teacherCount, icon: Shield, color: 'text-[#FF9500]', bg: 'bg-[#FF9500]/6' },
+          { label: '版本上限', value: institution.max_students, icon: Hash, color: 'text-muted-foreground/60', bg: 'bg-muted-foreground/10' },
           { label: '平均 ELO', value: avgElo, icon: TrendingUp, color: 'text-[#34C759]', bg: 'bg-[#34C759]/6' },
           { label: '版本', value: institution.plan_label, icon: Clock, color: 'text-muted-foreground/60', bg: 'bg-muted-foreground/10' },
         ].map(s => (
@@ -383,14 +401,14 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
       <div className="flex items-center gap-3 flex-wrap mb-4">
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="搜索学员..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input placeholder="搜索成员..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <AddStudentDialog onAdded={fetch} disabled={students.length >= institution.max_students} />
+        <AddStudentDialog onAdded={fetch} disabled={studentCount >= institution.max_students} />
         <BatchImportDialog onImported={fetch} />
         <Button variant="outline" size="sm" onClick={() => {
-          const csv = '昵称,用户名,邮箱,ELO\n' + filtered.map(s => `${s.nickname},${s.username},${s.email},${s.elo_score}`).join('\n');
-          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = '学员列表.csv'; a.click();
-        }} disabled={students.length === 0}><Download className="h-4 w-4" /> 导出</Button>
+          const csv = '昵称,用户名,邮箱,角色,ELO\n' + filtered.map(s => `${s.nickname},${s.username},${s.email},${s.institution_role === 'teacher' ? '教师' : '学员'},${s.elo_score}`).join('\n');
+          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = '成员列表.csv'; a.click();
+        }} disabled={members.length === 0}><Download className="h-4 w-4" /> 导出</Button>
         <Button variant="ghost" size="icon" onClick={fetch}><RefreshCw className="h-4 w-4" /></Button>
       </div>
 
@@ -400,7 +418,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-20" />
-          <p className="text-sm font-medium">{search ? '没有匹配的学员' : '还没有学员'}</p>
+          <p className="text-sm font-medium">{search ? '没有匹配的成员' : '还没有成员'}</p>
         </div>
       ) : (
         <>
@@ -412,25 +430,64 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
               onClick={() => setSelectedId(selectedId === s.id ? null : s.id)}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <GraduationCap className="h-4 w-4 text-primary" />
+                  <div className={cn('h-9 w-9 rounded-full flex items-center justify-center shrink-0',
+                    s.institution_role === 'teacher' ? 'bg-[#FF9500]/10' : 'bg-primary/10')}>
+                    {s.institution_role === 'teacher'
+                      ? <Shield className="h-4 w-4 text-[#FF9500]" />
+                      : <GraduationCap className="h-4 w-4 text-primary" />
+                    }
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-foreground truncate">{s.nickname || s.username}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-foreground truncate">{s.nickname || s.username}</p>
+                      <Badge className={cn('text-[10px]',
+                        s.institution_role === 'teacher' ? 'bg-[#FF9500]/10 text-[#FF9500]' : 'bg-muted text-muted-foreground/60')}>
+                        {s.institution_role === 'teacher' ? '教师' : '学员'}
+                      </Badge>
+                    </div>
                     <p className="text-xs text-muted-foreground">{s.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                   <Badge variant="outline" className="text-[10px]">ELO {s.elo_score}</Badge>
+                  {/* Role select — only visible to owner, and not for self */}
+                  {isOwner && s.id !== user?.id && (
+                    <select
+                      value={s.institution_role}
+                      disabled={roleUpdating === s.id}
+                      onChange={e => handleRoleChange(s.id, e.target.value)}
+                      className="h-7 text-[10px] font-bold rounded-lg border border-border bg-background px-2 cursor-pointer"
+                    >
+                      <option value="student">学员</option>
+                      <option value="teacher">教师</option>
+                    </select>
+                  )}
+                  {isOwner && s.id === user?.id && (
+                    <Badge variant="outline" className="text-[10px] text-muted-foreground/40">机构所有者</Badge>
+                  )}
                   <ResetPasswordDialog userId={s.id} username={s.nickname || s.username} />
-                  <Button variant="ghost" size="icon" className="h-8 w-8"
-                    onClick={async () => {
-                      if (!confirm(`确认移除「${s.nickname || s.username}」？`)) return;
-                      await api.delete(`/users/institution/students/${s.id}/`);
-                      fetch();
-                    }}>
-                    <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
-                  </Button>
+                  {/* Remove: owner can remove anyone except self; teacher can remove students only */}
+                  {(isOwner || user?.is_institution_admin) && s.id !== user?.id && s.institution_role !== 'teacher' && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8"
+                      onClick={async () => {
+                        if (!confirm(`确认移除「${s.nickname || s.username}」？`)) return;
+                        await api.delete(`/users/institution/me/students/${s.id}/`);
+                        fetch();
+                      }}>
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                    </Button>
+                  )}
+                  {/* Owner can also remove teachers */}
+                  {isOwner && s.id !== user?.id && s.institution_role === 'teacher' && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8"
+                      onClick={async () => {
+                        if (!confirm(`确认移除教师「${s.nickname || s.username}」？`)) return;
+                        await api.delete(`/users/institution/me/students/${s.id}/`);
+                        fetch();
+                      }}>
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </Card>
@@ -459,7 +516,7 @@ function AddStudentDialog({ onAdded, disabled }: { onAdded: () => void; disabled
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true); setError('');
     try {
-      await api.post('/users/institution/students/', form);
+      await api.post('/users/institution/me/students/', form);
       setForm({ username: '', email: '', nickname: '', password: '' });
       onAdded(); setOpen(false);
     } catch (err: any) { setError(err.response?.data?.error || '创建失败'); }
@@ -508,7 +565,7 @@ function StudentDetailPanel({ studentId }: { studentId: number }) {
 
   useEffect(() => {
     setLoading(true);
-    api.get(`/users/institution/students/${studentId}/stats/`)
+    api.get(`/users/institution/me/students/${studentId}/stats/`)
       .then(res => setStats(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -623,7 +680,7 @@ function BatchImportDialog({ onImported }: { onImported: () => void }) {
     }).filter(s => s.username && s.email && s.password);
     if (students.length === 0) { setResult({ ok: 0, fail: lines.length, errors: ['无有效数据'] }); setImporting(false); return; }
     try {
-      const { data } = await api.post('/users/institution/students/', { students });
+      const { data } = await api.post('/users/institution/me/students/', { students });
       const fail = (data.failed || []).length;
       const errors = (data.failed || []).map((f: any) => `${f.username}: ${f.error}`);
       setResult({ ok: data.created_count || 0, fail, errors }); setImporting(false);
@@ -674,7 +731,7 @@ function ResetPasswordDialog({ userId, username }: { userId: number; username: s
     try {
       // Try institution-level reset first, fall back to superuser endpoint
       try {
-        await api.post(`/users/institution/students/${userId}/reset-password/`, { password });
+        await api.post(`/users/institution/me/students/${userId}/reset-password/`, { password });
       } catch {
         await api.patch(`/users/admin/superusers/users/${userId}/`, { password });
       }

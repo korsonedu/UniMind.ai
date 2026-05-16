@@ -1,8 +1,10 @@
 import json
+import logging
 import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import uuid
 from pathlib import Path
 
@@ -22,6 +24,8 @@ from quizzes.utils import safe_int as _safe_int
 CHUNK_DIR = Path(settings.MEDIA_ROOT) / "chunk_uploads"
 MAX_CHUNK_SIZE_BYTES = 20 * 1024 * 1024  # 20MB per chunk
 
+
+logger = logging.getLogger(__name__)
 
 def _extract_first_frame(video_path: str, course_title: str) -> str | None:
     """用 ffmpeg 提取视频第一帧，返回截图临时文件路径。失败返回 None。"""
@@ -46,6 +50,32 @@ def _extract_first_frame(video_path: str, course_title: str) -> str | None:
         return tmp.name
     except Exception:
         return None
+
+
+def _extract_cover_async(course_id: int) -> None:
+    """后台线程：ffmpeg 提取视频第一帧作为封面，避免阻塞请求线程。"""
+    def _run():
+        from courses.models import Course
+        try:
+            course = Course.objects.get(pk=course_id)
+            if not course.video_file or course.cover_image:
+                return
+            frame_path = _extract_first_frame(course.video_file.path, course.title)
+            if not frame_path:
+                return
+            try:
+                with open(frame_path, "rb") as f:
+                    filename = f"cover_{course.id}_{uuid.uuid4().hex[:8]}.jpg"
+                    course.cover_image.save(filename, File(f), save=True)
+            finally:
+                try:
+                    os.remove(frame_path)
+                except OSError:
+                    pass
+        except Exception:
+            logger.exception("Async cover extraction failed for course %s", course_id)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _upload_dir(upload_id: str) -> Path:
@@ -185,7 +215,7 @@ class ChunkedUploadCompleteView(APIView):
                 for chunk_index in range(total_chunks):
                     chunk_file = _chunk_path(upload_id, chunk_index)
                     with chunk_file.open("rb") as cf:
-                        shutil.copyfileobj(cf, merged, length=1024 * 1024)
+                        shutil.copyfileobj(cf, merged, length=8 * 1024 * 1024)
 
             original_name = os.path.basename(meta.get("file_name") or "video.mp4")
             course = Course(
@@ -207,26 +237,16 @@ class ChunkedUploadCompleteView(APIView):
             with merged_path.open("rb") as merged_file:
                 course.video_file.save(original_name, File(merged_file), save=False)
             course.save()
-
-            # 未上传封面时，自动提取第一帧作为封面
-            if not cover_image:
-                frame_path = _extract_first_frame(course.video_file.path, title)
-                if frame_path:
-                    try:
-                        with open(frame_path, "rb") as f:
-                            filename = f"cover_{course.id}_{uuid.uuid4().hex[:8]}.jpg"
-                            course.cover_image.save(filename, File(f), save=True)
-                    finally:
-                        try:
-                            os.remove(frame_path)
-                        except OSError:
-                            pass
         except Exception as exc:
             return Response({"error": f"合并失败：{exc}"}, status=500)
         finally:
             shutil.rmtree(upload_path, ignore_errors=True)
 
-        # 自动触发 ASR 转录 → 智能大纲流水线
+        # 未上传封面 → 后台线程提取第一帧
+        if not cover_image:
+            _extract_cover_async(course.id)
+
+        # 后台触发 ASR 转录
         try:
             from .services.task_dispatcher import dispatch_transcription
             dispatch_transcription(course.id)
@@ -327,22 +347,11 @@ class CourseListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         course = serializer.save(author=self.request.user, institution=self.request.user.institution)
 
-        # 未上传封面时，自动提取第一帧作为封面
+        # 未上传封面 → 后台线程提取第一帧
         if not course.cover_image and course.video_file:
-            frame_path = _extract_first_frame(course.video_file.path, course.title)
-            if frame_path:
-                import uuid as _uuid
-                try:
-                    with open(frame_path, "rb") as f:
-                        filename = f"cover_{course.id}_{_uuid.uuid4().hex[:8]}.jpg"
-                        course.cover_image.save(filename, File(f), save=True)
-                finally:
-                    try:
-                        os.remove(frame_path)
-                    except OSError:
-                        pass
+            _extract_cover_async(course.id)
 
-        # 自动触发 ASR 转录 → 智能大纲流水线
+        # 后台触发 ASR 转录
         try:
             from .services.task_dispatcher import dispatch_transcription
             dispatch_transcription(course.id)

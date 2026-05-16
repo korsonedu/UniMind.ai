@@ -7,6 +7,9 @@ from .views import (
     BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
 )
+from .views_admin import (
+    SuperuserUserListView, UserTagListView, PermissionGroupListView,
+)
 from .views_institution import (
     InstitutionDashboardView, InstitutionListView, InstitutionDetailView,
     InstitutionCreateView, InstitutionActivateView, InstitutionDeactivateView,
@@ -15,10 +18,11 @@ from .views_institution import (
     InstitutionStudentStatsView, InstitutionStudentResetPasswordView,
     InstitutionStudentRankingView,
     InstitutionFeatureView, InstitutionPreviewView,
-    InstitutionSelfUpdateView, InstitutionJoinView,
+    InstitutionSelfUpdateView,
     CheckInviteView, RegenerateInviteSlugView,
     PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
     PublicInstitutionView, InstitutionJoinBySlugView,
+    InstitutionMemberListView, InstitutionMemberRoleView,
 )
 
 urlpatterns = [
@@ -46,6 +50,10 @@ urlpatterns = [
     path('admin/codes/', ActivationCodeListView.as_view(), name='activation-codes'),
     path('admin/codes/<int:pk>/', ActivationCodeDetailView.as_view(), name='activation-code-detail'),
     path('admin/bi/', BIAnalyticsView.as_view(), name='admin-bi'),
+    path('admin/superusers/users/', SuperuserUserListView.as_view(), name='admin-superuser-users'),
+    path('admin/superusers/users/<int:pk>/', SuperuserUserListView.as_view(), name='admin-superuser-user-detail'),
+    path('admin/user-tags/', UserTagListView.as_view(), name='admin-user-tags'),
+    path('admin/permission-groups/', PermissionGroupListView.as_view(), name='admin-permission-groups'),
 
     # Institution — platform admin
     path('institutions/', InstitutionListView.as_view(), name='institution-list'),
@@ -60,7 +68,6 @@ urlpatterns = [
     path('institution/me/', InstitutionDashboardView.as_view(), name='institution-me'),
     path('institution/me/update/', InstitutionSelfUpdateView.as_view(), name='institution-self-update'),
     path('institution/me/features/', InstitutionFeatureView.as_view(), name='institution-features'),
-    path('institution/join/', InstitutionJoinView.as_view(), name='institution-join'),
     path('institution/me/regenerate-invite-slug/', RegenerateInviteSlugView.as_view(), name='regenerate-invite-slug'),
     path('institution/join-by-slug/', InstitutionJoinBySlugView.as_view(), name='institution-join-by-slug'),
     path('public/institution/<str:slug>/', PublicInstitutionView.as_view(), name='public-institution'),
@@ -72,6 +79,10 @@ urlpatterns = [
     path('institution/me/students/<int:pk>/', InstitutionStudentDetailView.as_view(), name='institution-student-detail'),
     path('institution/me/students/<int:pk>/stats/', InstitutionStudentStatsView.as_view(), name='institution-student-stats'),
     path('institution/me/students/<int:pk>/reset-password/', InstitutionStudentResetPasswordView.as_view(), name='institution-student-reset-password'),
+
+    # Institution — members (owner + teacher management)
+    path('institution/me/members/', InstitutionMemberListView.as_view(), name='institution-member-list'),
+    path('institution/me/members/<int:pk>/role/', InstitutionMemberRoleView.as_view(), name='institution-member-role'),
 
     # Plan invite codes
     path('admin/plan-invite-codes/', PlanInviteCodeListView.as_view(), name='plan-invite-codes'),

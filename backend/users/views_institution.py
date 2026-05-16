@@ -6,10 +6,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.utils import timezone
-from django.utils.decorators import method_decorator
 from datetime import timedelta
 
-from core.rate_limit import rate_limit
+
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +16,7 @@ from django.contrib.auth import get_user_model
 from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS
 
 User = get_user_model()
-from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionActive, IsInstitutionMember
+from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionOwner, IsInstitutionActive, IsInstitutionMember
 from .serializers_institution import (
     InstitutionSerializer, CreateInstitutionSerializer, ChangePlanSerializer,
     InstitutionStudentSerializer, CreateStudentSerializer, InstitutionFeatureSerializer,
@@ -126,7 +125,7 @@ class InstitutionStatsView(APIView):
         return Response({
             'id': inst.id, 'name': inst.name, 'plan': inst.plan,
             'student_count': inst.student_count,
-            'admin_count': inst.students.filter(institution_role='admin').count(),
+            'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher')).count(),
             'is_active': inst.is_active,
             'plan_expires_at': inst.plan_expires_at,
             'created_at': inst.created_at,
@@ -363,7 +362,6 @@ class InstitutionFeatureView(APIView):
                 'is_plan_active': inst.is_plan_active,
                 'max_students': inst.max_students,
                 'student_count': inst.student_count,
-                'invite_code': inst.invite_code,
                 'invite_slug': inst.invite_slug,
             }
 
@@ -411,7 +409,7 @@ class InstitutionDashboardView(APIView):
                         'is_plan_active': i.is_plan_active,
                         'max_students': i.max_students,
                         'student_count': i.student_count,
-                        'admin_count': i.students.filter(institution_role='admin').count(),
+                        'staff_count': i.students.filter(institution_role__in=('owner', 'teacher')).count(),
                     }
                     for i in qs
                 ],
@@ -419,7 +417,7 @@ class InstitutionDashboardView(APIView):
             })
 
         # Institution admin or platform admin with institution → their dashboard
-        if inst and (user.institution_role == 'admin' or user.is_platform_admin):
+        if inst and (user.institution_role in ('owner', 'teacher') or user.is_platform_admin):
             # 7-day active student count
             from django.utils import timezone
             from datetime import timedelta
@@ -478,7 +476,7 @@ class InstitutionDashboardView(APIView):
                     'is_plan_active': inst.is_plan_active,
                     'max_students': inst.max_students,
                     'student_count': inst.student_count,
-                    'admin_count': inst.students.filter(institution_role='admin').count(),
+                    'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher')).count(),
                 },
                 'stats': {
                     'weekly_active_students': weekly_active,
@@ -557,7 +555,7 @@ class CheckInviteView(APIView):
 
 class InstitutionSelfUpdateView(APIView):
     """机构管理员可编辑机构名称、联系人、Logo、简介等信息。学生无权访问。"""
-    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
 
     def _build_logo_url(self, inst, request):
         if inst.logo:
@@ -579,6 +577,7 @@ class InstitutionSelfUpdateView(APIView):
             'is_plan_active': inst.is_plan_active,
             'max_students': inst.max_students,
             'student_count': inst.student_count,
+            'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher')).count(),
             'notes': inst.notes or '',
             'description': inst.description or '',
             'custom_domain': inst.custom_domain or '',
@@ -609,8 +608,8 @@ class InstitutionSelfUpdateView(APIView):
 
 
 class RegenerateInviteSlugView(APIView):
-    """机构管理员重新生成邀请链接 slug"""
-    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+    """机构所有者重新生成邀请链接 slug"""
+    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
 
     def post(self, request):
         inst = request.user.institution
@@ -618,58 +617,35 @@ class RegenerateInviteSlugView(APIView):
         return Response({'invite_slug': inst.invite_slug})
 
 
-# ── Student Join via Invite Code ──
+# ── Institution Member Management (owner + teacher) ──
 
-class InstitutionJoinView(APIView):
-    """学生通过邀请码加入机构"""
-    permission_classes = [IsAuthenticated]
+class InstitutionMemberListView(APIView):
+    """机构管理员（owner / teacher）列出所有成员（教师 + 学员）"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
 
-    def post(self, request):
-        code = (request.data.get('invite_code') or '').strip().upper()
-        if not code:
-            return Response({'error': '请输入邀请码'}, status=400)
-        try:
-            inst = Institution.objects.get(invite_code=code)
-        except Institution.DoesNotExist:
-            return Response({'error': '邀请码无效'}, status=404)
-        if not inst.is_active:
-            return Response({'error': '该机构已被停用'}, status=403)
-        if not inst.is_plan_active:
-            return Response({'error': '该机构已到期，请联系机构管理员'}, status=403)
-        if inst.student_count >= inst.max_students:
-            return Response({'error': f'该机构学员数已达上限 {inst.max_students} 人'}, status=403)
-
-        user = request.user
-        if user.institution and user.institution != inst:
-            return Response({'error': '你已加入其他机构，请先退出'}, status=409)
-
-        user.institution = inst
-        user.institution_role = 'student'
-        user.is_member = True
-        user.membership_tier = user.institution.plan if user.institution else 'free'
-        user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
-        return Response({
-            'status': 'ok',
-            'institution': {'id': inst.id, 'name': inst.name, 'plan_label': inst.get_plan_display()},
-        })
-
-
-# ── Lookup Institution by Invite Code ──
-
-class InstitutionInviteLookupView(APIView):
-    """公开：通过邀请码查询机构名称（注册时前端校验）"""
-    permission_classes = [AllowAny]
-
-    @method_decorator(rate_limit(key_prefix="invite_lookup", max_requests=10, window_seconds=300))
     def get(self, request):
-        code = (request.query_params.get('code') or '').strip().upper()
-        if not code:
-            return Response({'error': '请输入邀请码'}, status=400)
-        try:
-            inst = Institution.objects.get(invite_code=code, is_active=True)
-        except Institution.DoesNotExist:
-            return Response({'error': '邀请码无效'}, status=404)
-        return Response({'id': inst.id, 'name': inst.name, 'plan_label': inst.get_plan_display()})
+        inst = request.user.institution
+        qs = inst.students.exclude(institution_role='owner').order_by('institution_role', '-date_joined')
+        serializer = InstitutionStudentSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+class InstitutionMemberRoleView(APIView):
+    """机构所有者修改成员角色（student ↔ teacher）"""
+    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
+
+    def patch(self, request, pk):
+        inst = request.user.institution
+        member = get_object_or_404(
+            User, pk=pk, institution=inst)
+        if member.institution_role not in ('teacher', 'student'):
+            return Response({'error': '不能修改此用户的角色'}, status=400)
+        new_role = (request.data.get('role') or '').strip()
+        if new_role not in ('teacher', 'student'):
+            return Response({'error': '无效的角色'}, status=400)
+        member.institution_role = new_role
+        member.save(update_fields=['institution_role'])
+        return Response(InstitutionStudentSerializer(member).data)
 
 
 # ── Public Institution Page ──
@@ -783,7 +759,7 @@ class InstitutionCreateView(APIView):
         )
 
         user.institution = inst
-        user.institution_role = 'admin'
+        user.institution_role = 'owner'
         user.is_member = True
         user.membership_tier = user.institution.plan if user.institution else 'free'
         user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
@@ -793,7 +769,6 @@ class InstitutionCreateView(APIView):
             'institution': {
                 'id': inst.id, 'name': inst.name, 'slug': inst.slug,
                 'plan': inst.plan, 'plan_label': inst.get_plan_display(),
-                'invite_code': inst.invite_code,
             },
         }, status=status.HTTP_201_CREATED)
 

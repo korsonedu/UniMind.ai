@@ -107,7 +107,7 @@ class IsPlatformAdmin(permissions.BasePermission):
 
 
 class IsAdmin(permissions.BasePermission):
-    """超级管理员或机构管理员"""
+    """超级管理员或机构管理员（owner / teacher）"""
     message = "需要管理员权限。"
 
     def has_permission(self, request, view):
@@ -116,7 +116,7 @@ class IsAdmin(permissions.BasePermission):
             return False
         if is_platform_admin(user):
             return True
-        return (user.institution is not None and user.institution_role == 'admin')
+        return (user.institution is not None and user.institution_role in ('owner', 'teacher'))
 
 
 class IsMemberOrAdmin(permissions.BasePermission):
@@ -140,14 +140,25 @@ class IsAdminWriteMemberRead(permissions.BasePermission):
 
 
 class IsInstitutionAdmin(permissions.BasePermission):
-    """机构管理员权限"""
+    """机构管理员权限（owner 或 teacher）"""
     message = "需要机构管理员权限。"
 
     def has_permission(self, request, view):
         user = request.user
         return (user and user.is_authenticated
                 and user.institution is not None
-                and user.institution_role == 'admin')
+                and user.institution_role in ('owner', 'teacher'))
+
+
+class IsInstitutionOwner(permissions.BasePermission):
+    """机构所有者权限（仅 owner，teacher 不可）"""
+    message = "仅机构所有者可执行此操作。"
+
+    def has_permission(self, request, view):
+        user = request.user
+        return (user and user.is_authenticated
+                and user.institution is not None
+                and user.institution_role == 'owner')
 
 
 class IsInstitutionActive(permissions.BasePermission):

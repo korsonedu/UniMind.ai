@@ -11,14 +11,14 @@ class InstitutionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Institution
         fields = [
-            'id', 'name', 'slug', 'invite_code', 'invite_slug',
+            'id', 'name', 'slug', 'invite_slug',
             'contact_name', 'contact_email', 'contact_phone',
             'plan', 'plan_expires_at', 'is_active', 'is_plan_active',
             'max_students', 'student_count', 'features',
             'custom_domain', 'logo', 'description', 'notes',
             'created_by', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'invite_code', 'created_by', 'created_at', 'updated_at',
+        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at',
                             'student_count', 'max_students', 'is_plan_active', 'features']
 
 

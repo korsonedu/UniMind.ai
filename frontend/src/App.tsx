@@ -21,6 +21,7 @@ import InstitutionStudents from './pages/InstitutionStudents';
 import InstitutionAdmin from './pages/InstitutionAdmin';
 import InstitutionHome from './pages/InstitutionHome';
 import InviteCodeAdmin from './pages/InviteCodeAdmin';
+import { PromptTemplatesAdmin } from './pages/PromptTemplatesAdmin';
 import { Interviews } from './pages/Interviews';
 import { PdfMockExam } from './pages/PdfMockExam';
 import { WrongQuestionReviewPage } from './pages/WrongQuestionReviewPage';
@@ -96,8 +97,8 @@ const RequireInstitution = ({ children }: { children: ReactNode }) => {
   if (!user) return <Navigate to="/login" replace />;
   if (isPlatformAdmin) return children;
   if (!institution?.id) return <Navigate to="/" replace />;
-  // 仅机构管理员可访问管理类页面
-  if (user.institution_role !== 'admin' && !user.is_institution_admin && !user.is_admin) {
+  // 机构管理员（owner / teacher）可访问管理类页面
+  if (user.institution_role !== 'owner' && user.institution_role !== 'teacher' && !user.is_institution_admin && !user.is_admin) {
     return <Navigate to="/" replace />;
   }
   return children;
@@ -173,11 +174,12 @@ const router = createBrowserRouter([
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}><VideoLesson /></FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}><WrongQuestionReviewPage /></FeatureGuard> },
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}><PdfMockExam /></FeatureGuard> },
-          { path: "interviews", element: <FeatureGuard feature={FEATURES.AI_GENERATE}><Interviews /></FeatureGuard> },
+          { path: "interviews", element: <FeatureGuard feature={FEATURES.INTERVIEW_MOCK}><Interviews /></FeatureGuard> },
           { path: "institution", element: <RequireInstitution><InstitutionDashboard /></RequireInstitution> },
           { path: "institution/students", element: <RequireInstitution><InstitutionStudents /></RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin><InstitutionAdmin /></RequireAdmin> },
           { path: "invite-codes", element: <RequirePlatformAdmin><InviteCodeAdmin /></RequirePlatformAdmin> },
+          { path: "prompt-templates", element: <RequirePlatformAdmin><PromptTemplatesAdmin /></RequirePlatformAdmin> },
         ],
       },
     ],

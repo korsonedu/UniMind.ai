@@ -482,7 +482,7 @@ def seed_institution(admin, students):
         }
     )
     admin.institution = inst
-    admin.institution_role = 'admin'
+    admin.institution_role = 'owner'
     admin.save(update_fields=['institution', 'institution_role'])
     for s in students:
         s.institution = inst

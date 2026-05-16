@@ -11,7 +11,9 @@ class User(AbstractUser):
         ('free', 'Free'), ('solo', 'Solo'), ('plus', 'Plus'), ('pro', 'Pro'),
     )
     INSTITUTION_ROLE_CHOICES = (
-        ('admin', '机构管理员'), ('student', '学员'),
+        ('owner', '机构所有者'),
+        ('teacher', '教师'),
+        ('student', '学员'),
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     nickname = models.CharField(max_length=100, blank=True, verbose_name="昵称")
@@ -88,7 +90,6 @@ class SystemConfig(models.Model):
     school_short_name = models.CharField(max_length=20, default='宇艺', verbose_name="网校缩写")
     school_description = models.TextField(default='UNIMIND.AI')
     school_logo = models.ImageField(upload_to="school_logos/", blank=True, null=True)
-    invite_code = models.CharField(max_length=50, default="UNIMIND2026", verbose_name="邀请码")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -158,7 +159,6 @@ class Institution(models.Model):
     plan_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="版本到期时间")
     max_students_override = models.IntegerField(null=True, blank=True, verbose_name="学员上限覆写")
     is_active = models.BooleanField(default=True, verbose_name="是否启用")
-    invite_code = models.CharField(max_length=12, blank=True, unique=True, verbose_name="邀请码")
     custom_domain = models.CharField(max_length=200, blank=True, verbose_name="自定义域名")
     invite_slug = models.CharField(max_length=40, blank=True, unique=True, verbose_name="邀请链接 slug")
     logo = models.ImageField(upload_to='institution_logos/', blank=True, verbose_name="机构 Logo")
@@ -229,12 +229,14 @@ PLAN_FEATURES: dict[str, list[str]] = {
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline', 'faq.system',
         'pdf.mock', 'study.room', 'multi.teacher', 'class.compare', 'data.export',
+        'interview.mock',
     ],
     'pro': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline', 'faq.system',
         'pdf.mock', 'study.room', 'multi.teacher', 'class.compare', 'data.export',
+        'interview.mock',
         'brand.custom', 'api.access', 'student.payment',
         'private.deploy', 'i18n.custom', 'sso.saml', 'audit.log',
         'dedicated.support', 'sla.99.9',

@@ -35,7 +35,7 @@ const FEATURE_REQUIRED_PLAN: Record<string, string> = {
   'memorix.review': 'solo', 'ai.assistant': 'solo',
   'full.report': 'solo', 'knowledge.graph': 'solo', 'video.outline': 'solo',
   'faq.system': 'plus', 'multi.teacher': 'plus', 'class.compare': 'plus',
-  'data.export': 'plus', 'study.room': 'plus', 'pdf.mock': 'plus',
+  'data.export': 'plus', 'study.room': 'plus', 'pdf.mock': 'plus', 'interview.mock': 'plus',
   'brand.custom': 'pro', 'api.access': 'pro', 'student.payment': 'pro',
   'private.deploy': 'pro', 'i18n.custom': 'pro', 'sso.saml': 'pro',
   'audit.log': 'pro', 'dedicated.support': 'pro', 'sla.99.9': 'pro',

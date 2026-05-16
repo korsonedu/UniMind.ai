@@ -11,7 +11,9 @@ export interface ChunkedUploadInitResult {
 export interface ChunkedUploadConfig {
   file: File;
   chunkSize: number;
+  concurrency?: number;
   retriesPerChunk?: number;
+  signal?: AbortSignal;
   onProgress?: (percent: number) => void;
   onStatus?: (status: ChunkedUploadStatus) => void;
   alreadyUploadedChunkIndexes?: number[];
@@ -39,7 +41,9 @@ export async function uploadFileInChunks(config: ChunkedUploadConfig): Promise<C
   const {
     file,
     chunkSize,
+    concurrency = 3,
     retriesPerChunk = 2,
+    signal,
     onProgress,
     onStatus,
     alreadyUploadedChunkIndexes = [],
@@ -60,14 +64,15 @@ export async function uploadFileInChunks(config: ChunkedUploadConfig): Promise<C
       .map((idx) => Number(idx))
   );
 
+  const pending: number[] = [];
   for (let i = 0; i < totalChunks; i++) {
-    if (uploadedSet.has(i)) {
-      if (onProgress) onProgress(Math.floor(((i + 1) / totalChunks) * 95));
-      if (onStatus) onStatus({ phase: 'uploading', pipelineTaskId, chunkIndex: i, totalChunks, uploadedCount: uploadedSet.size });
-      continue;
-    }
+    if (!uploadedSet.has(i)) pending.push(i);
+  }
 
-    const start = i * chunkSize;
+  let firstError: unknown = null;
+
+  const uploadOne = async (index: number): Promise<void> => {
+    const start = index * chunkSize;
     const end = Math.min(start + chunkSize, file.size);
     const chunkBlob = file.slice(start, end);
 
@@ -77,7 +82,7 @@ export async function uploadFileInChunks(config: ChunkedUploadConfig): Promise<C
 
     while (attempt <= retriesPerChunk && !done) {
       try {
-        await uploadChunk(uploadId, i, chunkBlob);
+        await uploadChunk(uploadId, index, chunkBlob);
         done = true;
       } catch (err) {
         lastError = err;
@@ -87,23 +92,47 @@ export async function uploadFileInChunks(config: ChunkedUploadConfig): Promise<C
             onStatus({
               phase: 'retrying',
               pipelineTaskId,
-              chunkIndex: i,
+              chunkIndex: index,
               totalChunks,
               attempt,
               maxAttempts: retriesPerChunk + 1,
             });
           }
-          // Exponential backoff: 400ms, 800ms, 1600ms...
           await sleep(400 * (2 ** (attempt - 1)));
         }
       }
     }
 
-    if (!done) throw lastError || new Error(`分片 ${i} 上传失败`);
-    uploadedSet.add(i);
-    if (onProgress) onProgress(Math.floor(((i + 1) / totalChunks) * 95));
-    if (onStatus) onStatus({ phase: 'uploading', pipelineTaskId, chunkIndex: i, totalChunks, uploadedCount: uploadedSet.size });
+    if (!done) throw lastError || new Error(`分片 ${index} 上传失败`);
+
+    uploadedSet.add(index);
+    const doneCount = totalChunks - pending.length;
+    if (onProgress) onProgress(Math.floor((doneCount / totalChunks) * 95));
+    if (onStatus) onStatus({ phase: 'uploading', pipelineTaskId, chunkIndex: index, totalChunks, uploadedCount: uploadedSet.size });
+  };
+
+  const worker = async (): Promise<void> => {
+    while (pending.length > 0 && !firstError) {
+      if (signal?.aborted) {
+        firstError = new DOMException('上传已取消', 'AbortError');
+        break;
+      }
+      const index = pending.shift()!;
+      try {
+        await uploadOne(index);
+      } catch (err) {
+        firstError = err;
+      }
+    }
+  };
+
+  const workers: Promise<void>[] = [];
+  for (let w = 0; w < Math.min(concurrency, pending.length); w++) {
+    workers.push(worker());
   }
+  await Promise.all(workers);
+
+  if (firstError) throw firstError;
 
   return {
     uploadId,
@@ -127,6 +156,7 @@ export interface CreateCourseWithUploadParams {
   onProgress?: (percent: number) => void;
   onStatus?: (status: ChunkedUploadStatus) => void;
   resumeStorageKey?: string;
+  signal?: AbortSignal;
 }
 
 export async function createCourseWithSmartUpload(params: CreateCourseWithUploadParams) {
@@ -144,6 +174,7 @@ export async function createCourseWithSmartUpload(params: CreateCourseWithUpload
     onProgress,
     onStatus,
     resumeStorageKey,
+    signal,
   } = params;
 
   const canUseStorage = typeof window !== 'undefined';
@@ -189,6 +220,7 @@ export async function createCourseWithSmartUpload(params: CreateCourseWithUpload
     if (cover) fd.append('cover_image', cover);
     if (courseware) fd.append('courseware', courseware);
     const res = await api.post('/courses/', fd, {
+      signal,
       onUploadProgress: (p) => {
         if (p.total && onProgress) onProgress(Math.round((p.loaded / p.total) * 100));
       },
@@ -201,6 +233,7 @@ export async function createCourseWithSmartUpload(params: CreateCourseWithUpload
   const uploadResult = await uploadFileInChunks({
     file: video,
     chunkSize: chunkSizeBytes,
+    signal,
     onProgress,
     onStatus,
     init: async () => {
@@ -221,7 +254,9 @@ export async function createCourseWithSmartUpload(params: CreateCourseWithUpload
       const fd = new FormData();
       fd.append('chunk_index', String(index));
       fd.append('chunk', chunk, `${video.name}.part${index}`);
-      await api.post(`/courses/chunked/${id}/chunk/`, fd);
+      await api.post(`/courses/chunked/${id}/chunk/`, fd, {
+        signal,
+      });
     },
   });
 
@@ -237,7 +272,9 @@ export async function createCourseWithSmartUpload(params: CreateCourseWithUpload
       totalChunks: Math.ceil(video.size / chunkSizeBytes),
     });
   }
-  const res = await api.post(`/courses/chunked/${uploadResult.uploadId}/complete/`, completeFd);
+  const res = await api.post(`/courses/chunked/${uploadResult.uploadId}/complete/`, completeFd, {
+    signal,
+  });
   if (onStatus) {
     onStatus({
       phase: 'completed',

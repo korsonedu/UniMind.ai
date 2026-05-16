@@ -12,7 +12,6 @@ interface InstitutionInfo {
   is_plan_active: boolean;
   max_students: number;
   student_count: number;
-  invite_code: string;
   invite_slug: string;
 }
 
@@ -140,6 +139,7 @@ export const FEATURES = {
   STUDY_ROOM: 'study.room',
   AI_ASSISTANT: 'ai.assistant',
   PDF_MOCK: 'pdf.mock',
+  INTERVIEW_MOCK: 'interview.mock',
   BRAND_CUSTOM: 'brand.custom',
   API_ACCESS: 'api.access',
   STUDENT_PAYMENT: 'student.payment',

@@ -7,6 +7,7 @@ from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from users.permissions import HasPlanFeature
 from users.views import IsMember
 from .models import InterviewSession, InterviewTurn, ResumeRecord
 from .services import InterviewAIService
@@ -46,7 +47,8 @@ def _serialize_session(session: InterviewSession, include_turns: bool = False) -
 
 
 class InterviewSessionListCreateView(APIView):
-    permission_classes = [IsMember]
+    permission_classes = [IsMember, HasPlanFeature]
+    required_feature = 'interview.mock'
 
     def get(self, request):
         sessions = InterviewSession.objects.filter(user=request.user).order_by("-started_at")[:50]
@@ -73,7 +75,8 @@ class InterviewSessionListCreateView(APIView):
 
 
 class InterviewSessionDetailView(APIView):
-    permission_classes = [IsMember]
+    permission_classes = [IsMember, HasPlanFeature]
+    required_feature = 'interview.mock'
 
     def get(self, request, session_id: int):
         session = get_object_or_404(
@@ -85,7 +88,8 @@ class InterviewSessionDetailView(APIView):
 
 
 class InterviewTextTurnView(APIView):
-    permission_classes = [IsMember]
+    permission_classes = [IsMember, HasPlanFeature]
+    required_feature = 'interview.mock'
 
     def post(self, request, session_id: int):
         session = get_object_or_404(InterviewSession, id=session_id, user=request.user)
@@ -154,7 +158,8 @@ class InterviewTextTurnView(APIView):
 
 
 class InterviewFinishView(APIView):
-    permission_classes = [IsMember]
+    permission_classes = [IsMember, HasPlanFeature]
+    required_feature = 'interview.mock'
 
     def post(self, request, session_id: int):
         session = get_object_or_404(InterviewSession, id=session_id, user=request.user)
@@ -192,7 +197,8 @@ class ResumeTuneView(APIView):
     MAX_SIZE = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTS = {'.pdf', '.docx', '.txt'}
 
-    permission_classes = [IsMember]
+    permission_classes = [IsMember, HasPlanFeature]
+    required_feature = 'interview.mock'
 
     def post(self, request):
         resume_text = str(request.data.get("resume_text", "")).strip()
