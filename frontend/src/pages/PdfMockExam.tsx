@@ -382,7 +382,7 @@ export const PdfMockExam: React.FC = () => {
   };
 
   return (
-    <PageWrapper title="PDF 模考" subtitle="根据薄弱点自动组卷，或下载名师精选密卷。">
+    <PageWrapper title="模拟考试" subtitle="根据薄弱点自动组卷，或下载名师精选密卷。">
       <div className="max-w-4xl mx-auto space-y-4 pb-16">
         <div className="flex items-center gap-4 border-b border-border pb-3">
           <button onClick={() => setActiveTab('ai')} className={`text-sm font-bold pb-2 border-b-2 ${activeTab === 'ai' ? 'border-indigo-600' : 'border-transparent text-muted-foreground'}`}>AI 个性化组卷</button>

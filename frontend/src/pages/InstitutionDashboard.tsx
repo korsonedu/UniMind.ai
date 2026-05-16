@@ -41,7 +41,7 @@ const FEATURE_LABELS: Record<string, string> = {
   'full.report': '完整学情报告', 'knowledge.graph': '交互式知识图谱',
   'ai.assistant': 'AI 学习助手', 'course.video': '视频课程',
   'video.outline': 'AI 智能大纲', 'faq.system': '在线答疑系统',
-  'pdf.mock': 'PDF 模考', 'study.room': '实时自习室',
+  'pdf.mock': '模拟考试', 'study.room': '实时自习室',
   'multi.teacher': '多教师协作', 'class.compare': '班级对比',
   'data.export': '数据导出', 'brand.custom': '品牌定制',
   'api.access': 'API 接入', 'student.payment': '学生端收费',

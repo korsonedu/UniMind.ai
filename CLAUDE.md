@@ -145,7 +145,7 @@ sudo journalctl -u unimind.service -f
 | `docs/FSRS_AUTO_TUNING_ALGORITHM.md` | FSRS 自动调参 |
 | `docs/AI_MULTI_AGENT_PIPELINE.md` | 3-Agent 对抗出题管线 |
 | `docs/BUSINESS_VERSION_PERMISSION_ARCHITECTURE.md` | 多租户权限架构 |
-| `docs/PERSONALIZED_PDF_MOCK_EXAM.md` | PDF 模考（AI 组卷 + 教师发布 + 提交评分） |
+| `docs/PERSONALIZED_PDF_MOCK_EXAM.md` | 模拟考试（AI 组卷 + 教师发布 + 提交评分） |
 | `docs/incidents/` | 历史事故记录 |
 | `backend/knowledge_tree.md` | 431 金融知识树 |
 | `backend/finance_431.md` | 431 考纲说明 |

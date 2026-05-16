@@ -229,7 +229,7 @@ export const MainLayout: React.FC = () => {
         { to: '/ai', icon: Sparkles, label: 'AI 实验室', minPlan: 2 },
         { to: '/study', icon: Clock, label: '自习室', minPlan: 3 },
         { to: '/interviews', icon: Mic, label: '模拟面试', minPlan: 3 },
-        { to: '/mock-exam', icon: FileText, label: 'PDF 模考', minPlan: 3 },
+        { to: '/mock-exam', icon: FileText, label: '模拟考试', minPlan: 3 },
       ];
 
   // ── 机构成员 —— 机构入口已移至头像下拉菜单 ──

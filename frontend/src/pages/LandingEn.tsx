@@ -249,7 +249,7 @@ const Hero: React.FC = () => {
         </h1>
 
         <p className="text-lg text-[#475569] max-w-2xl mx-auto leading-relaxed">
-          AI question generation, smart exam assembly, adaptive review, real-time analytics, online Q&A, virtual study rooms, PDF mock exams, interactive knowledge graphs — UniMind is the AI operations layer that runs your entire tutoring business. Your teachers do what they do best: teach. We automate everything else. SAT, MCAT, GRE, LSAT, CFA, bar exams, language certifications — if it has a syllabus, our AI masters it.
+          AI question generation, smart exam assembly, adaptive review, real-time analytics, online Q&A, virtual study rooms, mock exams, interactive knowledge graphs — UniMind is the AI operations layer that runs your entire tutoring business. Your teachers do what they do best: teach. We automate everything else. SAT, MCAT, GRE, LSAT, CFA, bar exams, language certifications — if it has a syllabus, our AI masters it.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
@@ -432,7 +432,7 @@ const FEATURES = [
     icon: Globe,
     title: 'Complete Operations Suite',
     subtitle: 'One platform. Every tool your institution needs to run, scale, and grow.',
-    desc: 'Beyond question generation and review — UniMind includes built-in video courses with AI-generated outlines, a live Q&A system for student support, virtual study rooms with Pomodoro timers, PDF mock exam generation, multi-teacher role-based permissions, white-label branding, and API access for custom integrations. Stop paying for 6 different tools. Run everything from one dashboard.',
+    desc: 'Beyond question generation and review — UniMind includes built-in video courses with AI-generated outlines, a live Q&A system for student support, virtual study rooms with Pomodoro timers, mock exam generation, multi-teacher role-based permissions, white-label branding, and API access for custom integrations. Stop paying for 6 different tools. Run everything from one dashboard.',
     points: [
       'Video courses + AI outlines, online Q&A, virtual study rooms',
       'Multi-teacher permissions, white-label deployment, API access',
@@ -776,7 +776,7 @@ const PLANS = [
       'Online Q&A system',
       'Multi-teacher · Permissions',
       'Study room · Pomodoro timer',
-      'PDF mock exam generator',
+      'Mock exam generator',
       'Class comparison · Data export',
       '200 students · 5 teachers',
     ],

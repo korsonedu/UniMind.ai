@@ -16,13 +16,13 @@ const PLAN_META: Record<string, { label: string; price: string; color: string }>
 
 const PLAN_UNLOCK_SUMMARY: Record<string, string> = {
   solo: '解锁 AI 智能出题、记忆复习、知识图谱、完整学情报告等 6 项 AI 学习能力',
-  plus: '解锁在线答疑、多教师协作、实时自习室、PDF 模考、班级对比报表与数据导出等机构教学能力',
+  plus: '解锁在线答疑、多教师协作、实时自习室、模拟考试、班级对比报表与数据导出等机构教学能力',
   pro:  '解锁品牌定制白标、私有化部署、API 接入、SSO 单点登录、审计日志等企业旗舰能力',
 };
 
 const PLAN_FEATURES: Record<string, string[]> = {
   solo: ['AI 出题无限制', 'Memorix 记忆复习', 'AI 学习助手 · 多 Bot', '交互式知识图谱', '完整学情报告', 'AI 智能大纲'],
-  plus: ['在线答疑系统', '多教师协作 · 权限管理', '实时自习室 · 番茄钟', 'PDF 个性化模考', '班级对比报表 · 数据导出'],
+  plus: ['在线答疑系统', '多教师协作 · 权限管理', '实时自习室 · 番茄钟', '模拟考试', '班级对比报表 · 数据导出'],
   pro:  [
     '品牌定制 · 白标部署', '私有化部署 · 数据主权', 'API 接入 · 系统集成',
     '多语言 · 国际化支持', 'SSO · SAML 单点登录', '审计日志 · 合规就绪',
