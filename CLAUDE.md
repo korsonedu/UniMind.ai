@@ -13,6 +13,7 @@ AI 驱动的通用培训机构 SaaS 平台。Django 6.0 + React 19 + DeepSeek V4
 - **Serializer 字段必须显式声明**：禁止 `fields = '__all__'`，所有字段显式列出，防止未来新增 model 字段被自动暴露。
 - **敏感字段加密**：支付密钥等用 `core.fields.EncryptedCharField` / `EncryptedTextField`（Fernet AES），加密密钥通过 `ENCRYPTION_KEY` 环境变量设置（默认从 SECRET_KEY 派生）。
 - **Token 认证优先 Cookie**：`core.authentication.CookieTokenAuthentication` 先读 httpOnly cookie，fallback 到 Authorization header。前端 `api.ts` 设 `withCredentials:true`。
+- **只做被要求的事**：严格按指令执行，不擅自追加额外改动。如果认为某件额外的事确实有用，先询问，不得自行决定。
 
 ## 项目结构速查
 
@@ -119,7 +120,7 @@ python manage.py assign_default_institution     # 将无机构用户批量归入
 python manage.py makemigrations && python manage.py migrate
 
 # 生产部署
-sudo systemctl restart unimind.service unimind-celery.service unimind-celery-beat.service
+sudo systemctl restart unimind.service unimind-celery.service
 sudo journalctl -u unimind.service -f
 ```
 

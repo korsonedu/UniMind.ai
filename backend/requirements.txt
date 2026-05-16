@@ -20,6 +20,7 @@ idna==3.11
 Incremental==24.11.0
 lxml==6.0.2
 msgpack==1.1.2
+numpy==2.4.5
 packaging==26.0
 pillow==12.1.1
 psycopg2-binary==2.9.11

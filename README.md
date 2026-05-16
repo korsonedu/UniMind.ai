@@ -853,25 +853,36 @@ pg_dump -U unimind unimind > /backup/unimind_$(date +%Y%m%d_%H%M%S).sql
 
 ### 更新部署
 
+服务器 `git pull` 后的标准操作：
+
 ```bash
 cd /opt/unimind
 git pull origin main
 
 # 后端
-cd backend && source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py collectstatic --noinput
-sudo systemctl restart unimind.service unimind-celery.service unimind-celery-beat.service
+cd backend
+venv/bin/pip install -r requirements.txt   # 有新增/更新依赖时
+venv/bin/python manage.py migrate          # 有新增 migration 时
+venv/bin/python manage.py collectstatic --noinput
+sudo systemctl restart unimind.service unimind-celery.service
 
-# 前端
+# 前端（前端代码有变更时）
 cd ../frontend && npm ci && npm run build
 ```
+
+没有改依赖可跳过 `pip install`，没有 migration 可跳过 `migrate`，没改前端可跳过前端构建。
 
 ### 重启服务
 
 ```bash
-sudo systemctl restart unimind.service unimind-celery.service unimind-celery-beat.service
+sudo systemctl restart unimind.service unimind-celery.service
+```
+
+### 查看日志
+
+```bash
+sudo journalctl -u unimind.service -f       # Daphne 日志
+sudo journalctl -u unimind-celery.service -f # Celery 日志
 ```
 
 ---
