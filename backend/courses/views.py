@@ -46,10 +46,16 @@ def _extract_first_frame(video_path: str, course_title: str) -> str | None:
             capture_output=True,
             timeout=30,
         )
+        if result.returncode != 0:
+            logger.error("ffmpeg failed for %s: %s", video_path, result.stderr.decode(errors="replace")[-500:])
         if result.returncode != 0 or not os.path.isfile(tmp.name) or os.path.getsize(tmp.name) == 0:
             return None
         return tmp.name
+    except FileNotFoundError:
+        logger.error("ffmpeg not found — install ffmpeg on the server")
+        return None
     except Exception:
+        logger.exception("ffmpeg error for %s", video_path)
         return None
 
 

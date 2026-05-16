@@ -33,7 +33,8 @@ import { KnowledgeSystemPanel } from './maintenance/KnowledgeSystemPanel';
 export const Maintenance: React.FC = () => {
   const CHUNKED_UPLOAD_THRESHOLD_BYTES = 100 * 1024 * 1024;
   const CHUNK_SIZE_BYTES = 10 * 1024 * 1024;
-  const isSubmitting = useUploadStore((s) => s.tasks.some((t) => t.status === 'uploading' || t.status === 'processing'));
+  const [isCourseSubmitting, setIsCourseSubmitting] = useState(false);
+  const [isSMSubmitting, setIsSMSubmitting] = useState(false);
 
   // Data Lists
   const [courseList, setCourseList] = useState<any[]>([]);
@@ -102,23 +103,37 @@ export const Maintenance: React.FC = () => {
 
   const handleCreateCourse = async () => {
     if (!courseForm.title || !courseForm.video) return toast.error("核心信息不全");
+    setIsCourseSubmitting(true);
+
+    // 先捕获表单值，清空表单让用户立即准备下一个
     const file = courseForm.video;
+    const title = courseForm.title;
+    const desc = courseForm.desc;
+    const eloReward = courseForm.elo_reward;
+    const albumObj = courseForm.album_obj;
+    const knowledgePoint = courseForm.knowledge_point;
+    const cover = courseForm.cover;
+    const courseware = courseForm.courseware;
+
     const controller = new AbortController();
-    const uploadId = `\${Date.now()}-\${file.name}`;
+    const uploadId = `${Date.now()}-${file.name}`;
 
     const { addTask, updateProgress, setStatus } = useUploadStore.getState();
     addTask({ id: uploadId, fileName: file.name, progress: 0, status: 'uploading', controller });
 
+    setCourseForm({ title: '', album_obj: '0', desc: '', elo_reward: 50, knowledge_point: '0', video: null, cover: null, courseware: null });
+    setIsCourseSubmitting(false);
+
     try {
       await createCourseWithSmartUpload({
-        title: courseForm.title,
-        description: courseForm.desc,
-        eloReward: courseForm.elo_reward,
-        albumObj: courseForm.album_obj !== '0' ? courseForm.album_obj : undefined,
-        knowledgePoint: courseForm.knowledge_point !== '0' ? courseForm.knowledge_point : undefined,
+        title,
+        description: desc,
+        eloReward,
+        albumObj: albumObj !== '0' ? albumObj : undefined,
+        knowledgePoint: knowledgePoint !== '0' ? knowledgePoint : undefined,
         video: file,
-        cover: courseForm.cover,
-        courseware: courseForm.courseware,
+        cover,
+        courseware,
         thresholdBytes: CHUNKED_UPLOAD_THRESHOLD_BYTES,
         chunkSizeBytes: CHUNK_SIZE_BYTES,
         signal: controller.signal,
@@ -187,13 +202,21 @@ export const Maintenance: React.FC = () => {
 
   const handleCreateSM = async () => {
     if (!smForm.name || !smForm.file) return toast.error("信息不全");
+    setIsSMSubmitting(true);
+
     const file = smForm.file;
+    const name = smForm.name;
+    const description = smForm.description;
+
     const controller = new AbortController();
     const uploadId = `${Date.now()}-${file.name}`;
     const { addTask, updateProgress, setStatus } = useUploadStore.getState();
     addTask({ id: uploadId, fileName: file.name, progress: 0, status: 'uploading', controller });
 
-    const fd = new FormData(); fd.append('name', smForm.name); fd.append('description', smForm.description); fd.append('file', file);
+    setSmForm({ name: '', description: '', file: null });
+    setIsSMSubmitting(false);
+
+    const fd = new FormData(); fd.append('name', name); fd.append('description', description); fd.append('file', file);
     try {
       await api.post('/courses/startup-materials/', fd, {
         signal: controller.signal,
@@ -203,7 +226,6 @@ export const Maintenance: React.FC = () => {
       });
       setStatus(uploadId, 'completed');
       toast.success("资料已上传");
-      setSmForm({ name: '', description: '', file: null });
       fetchLists();
     } catch (e: any) {
       if (e?.name !== 'AbortError' && e?.code !== 'ERR_CANCELED') {
@@ -302,7 +324,7 @@ export const Maintenance: React.FC = () => {
                 <div className="relative"><Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 px-4 font-bold text-[11px]"><span>{courseForm.cover ? "封面已就绪" : "上传封面"}</span><ImageIcon className="w-4 h-4 opacity-20" /></Button><input type="file" onChange={e => setCourseForm({ ...courseForm, cover: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" /></div>
                 <div className="relative"><Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 px-4 font-bold text-[11px]"><span>{courseForm.courseware ? "PDF已就绪" : "上传课件"}</span><FileUp className="w-4 h-4 opacity-20" /></Button><input type="file" onChange={e => setCourseForm({ ...courseForm, courseware: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" /></div>
               </div>
-              <Button onClick={handleCreateCourse} disabled={isSubmitting} className="w-full h-14 rounded-2xl bg-black text-white font-bold uppercase tracking-widest text-[11px]">Publish Academy</Button>
+              <Button onClick={handleCreateCourse} disabled={isCourseSubmitting} className="w-full h-14 rounded-2xl bg-black text-white font-bold uppercase tracking-widest text-[11px]">Publish Academy</Button>
             </Card>
           </div>
         </TabsContent>
@@ -407,7 +429,7 @@ export const Maintenance: React.FC = () => {
               <Input value={smForm.name} onChange={e => setSmForm({ ...smForm, name: e.target.value })} className="bg-[#F5F5F7] border-none h-12 rounded-xl font-bold px-5" placeholder="资料名称" />
               <textarea value={smForm.description} onChange={e => setSmForm({ ...smForm, description: e.target.value })} className="w-full bg-[#F5F5F7] border-none rounded-2xl p-6 min-h-[100px] font-bold text-sm" placeholder="简介..." />
               <div className="relative"><Button variant="outline" className="w-full h-16 rounded-2xl border-dashed border-2 px-6 font-bold"><span>{smForm.file ? smForm.file.name : '上传文件'}</span><Upload className="w-4 h-4 opacity-20" /></Button><input type="file" onChange={e => setSmForm({ ...smForm, file: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" /></div>
-              <Button onClick={handleCreateSM} disabled={isSubmitting} className="w-full bg-black text-white h-14 rounded-2xl font-bold text-xs tracking-widest uppercase">Upload Material</Button>
+              <Button onClick={handleCreateSM} disabled={isSMSubmitting} className="w-full bg-black text-white h-14 rounded-2xl font-bold text-xs tracking-widest uppercase">Upload Material</Button>
             </Card>
             <Card className="p-10 bg-[#F5F5F7]/50 rounded-3xl border-none shadow-sm space-y-6"><h3 className="text-sm font-bold uppercase tracking-widest opacity-40">已存资料</h3><ScrollArea className="h-[520px]"><div className="grid gap-3 pr-4">{smList.map(sm => (<div key={sm.id} className="p-5 bg-white rounded-2xl flex items-center justify-between group"><p className="text-sm font-bold">{sm.name}</p><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button onClick={() => setEditingItem({ type: 'sm', data: { ...sm } })} variant="ghost" size="icon" className="h-8 w-8 text-blue-600"><Edit3 className="w-3.5 h-3.5" /></Button><Button onClick={() => handleDelete('sm', sm.id)} variant="ghost" size="icon" className="h-8 w-8 text-red-500"><Trash2 className="w-3.5 h-3.5" /></Button></div></div>))}</div></ScrollArea></Card>
           </div>
