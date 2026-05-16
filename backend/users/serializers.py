@@ -30,6 +30,7 @@ class UserSerializer(serializers.ModelSerializer):
             'is_plan_active': inst.is_plan_active,
             'max_students': inst.max_students,
             'student_count': inst.student_count,
+            'invite_slug': inst.invite_slug,
         }
 
 class ActivationCodeSerializer(serializers.ModelSerializer):

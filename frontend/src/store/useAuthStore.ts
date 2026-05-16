@@ -29,6 +29,7 @@ interface User {
     is_plan_active: boolean;
     max_students: number;
     student_count: number;
+    invite_slug: string;
   } | null;
   institution_id?: number;
   institution_role?: string;
