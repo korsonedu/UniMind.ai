@@ -255,6 +255,72 @@ class AIEngine:
                 return None
 
     @classmethod
+    def call_ai_stream(cls, messages, temperature=0.7, max_tokens=8192, operation='general'):
+        """流式 AI 调用，yield 每个 delta.content 片段。"""
+        from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
+
+        try:
+            AICircuitBreaker.check(operation)
+        except CircuitBreakerError:
+            yield None
+            return
+
+        config = get_model_for_task(operation)
+        if not config['api_key']:
+            yield None
+            return
+
+        timeout_seconds = max(30, int(getattr(settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120) or 120))
+        body = {
+            "model": config['model'],
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+        if config.get('thinking'):
+            body["reasoning_effort"] = config['thinking']
+
+        try:
+            r = requests.post(
+                config['base_url'],
+                headers={
+                    "Authorization": f"Bearer {config['api_key'].strip()}",
+                    "Content-Type": "application/json",
+                },
+                json=body,
+                timeout=timeout_seconds,
+                stream=True,
+            )
+            r.raise_for_status()
+
+            for line in r.iter_lines(decode_unicode=True):
+                if not line or not line.startswith('data: '):
+                    continue
+                data_str = line[6:]
+                if data_str.strip() == '[DONE]':
+                    break
+                try:
+                    data = json.loads(data_str)
+                    delta = data.get('choices', [{}])[0].get('delta', {})
+                    content = delta.get('content', '')
+                    if content:
+                        yield content
+                except json.JSONDecodeError:
+                    continue
+
+            AICircuitBreaker.record_success(operation)
+        except requests.Timeout:
+            AICircuitBreaker.record_failure(operation)
+            yield None
+        except requests.HTTPError:
+            AICircuitBreaker.record_failure(operation)
+            yield None
+        except requests.RequestException:
+            AICircuitBreaker.record_failure(operation)
+            yield None
+
+    @classmethod
     def simple_chat(cls, system_prompt, user_prompt, temperature=0.7, max_tokens=3000):
         """便捷的对话接口"""
         messages = [

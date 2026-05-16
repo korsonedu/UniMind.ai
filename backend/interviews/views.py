@@ -1,9 +1,11 @@
+import json
 import logging
 import time
 from typing import List
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.http import StreamingHttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -154,6 +156,68 @@ class InterviewTextTurnView(APIView):
                 "interviewer_turn": _serialize_turn(interviewer_turn),
                 "reply": ai_reply,
             }
+        )
+
+
+class InterviewReplyStreamView(APIView):
+    """SSE 流式返回面试官追问，前端逐 token 渲染。"""
+    permission_classes = [IsMember, HasPlanFeature]
+    required_feature = 'interview.mock'
+
+    def post(self, request, session_id: int):
+        session = get_object_or_404(InterviewSession, id=session_id, user=request.user)
+        if session.status != "ongoing":
+            return Response({"error": "当前会话已结束"}, status=400)
+
+        user_text = str(request.data.get("text", "")).strip()
+        if not user_text:
+            return Response({"error": "text 不能为空"}, status=400)
+
+        last_turn = session.turns.order_by("-turn_number", "-created_at").first()
+        next_turn_number = int(last_turn.turn_number + 1) if last_turn else 1
+
+        # 保存 candidate turn（annotation 跳过，流式场景不做逐句反馈）
+        candidate_turn = InterviewTurn.objects.create(
+            session=session,
+            turn_number=next_turn_number,
+            speaker="candidate",
+            content_text=user_text,
+        )
+
+        history_messages: List[dict] = []
+        for turn in session.turns.order_by("turn_number", "created_at"):
+            role = "assistant" if turn.speaker == "interviewer" else "user"
+            history_messages.append({"role": role, "content": turn.content_text})
+
+        def generate():
+            collected: list[str] = []
+            try:
+                for token in InterviewAIService.generate_interview_reply_stream(
+                    session_type=session.session_type,
+                    style=session.interviewer_style,
+                    chat_history=history_messages,
+                ):
+                    if token is None:
+                        break
+                    collected.append(token)
+                    yield f"data: {json.dumps({'token': token})}\n\n"
+            except Exception:
+                logger.exception("interview stream failed: session=%s", session.id)
+            finally:
+                reply_text = "".join(collected).strip() or "已收到你的回答。请继续展开你刚才提到的核心逻辑。"
+                InterviewTurn.objects.create(
+                    session=session,
+                    turn_number=next_turn_number + 1,
+                    speaker="interviewer",
+                    content_text=reply_text,
+                    latency_ms=0,
+                )
+                yield f"data: {json.dumps({'done': True})}\n\n"
+
+        return StreamingHttpResponse(
+            generate(),
+            content_type="text/event-stream",
+            headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
         )
 
 

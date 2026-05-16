@@ -113,20 +113,25 @@ class User(AbstractUser):
     )
     institution_role = models.CharField(
         max_length=20,
-        choices=[('admin', '机构管理员'), ('student', '学员')],
+        choices=[('owner', '机构所有者'), ('teacher', '教师'), ('student', '学员')],
         default='student',
         verbose_name="机构内角色"
     )
 
     @property
     def is_institution_admin(self):
-        """当前用户是否为机构管理员"""
-        return self.institution is not None and self.institution_role == 'admin'
+        """机构管理员（owner 或 teacher）"""
+        return self.institution is not None and self.institution_role in ('owner', 'teacher')
+
+    @property
+    def is_institution_owner(self):
+        """机构所有者（仅 owner）"""
+        return self.institution is not None and self.institution_role == 'owner'
 
     @property
     def is_platform_admin(self):
         """平台级管理员（我们）"""
-        return self.is_superuser or self.is_staff
+        return self.is_superuser and self.institution_id is None
 ```
 
 ### 2.3 版本功能标志映射（硬编码配置）
@@ -198,13 +203,21 @@ def has_feature(institution, feature: str) -> bool:
               ▼               ▼               ▼
      ┌────────────┐  ┌────────────┐  ┌────────────┐
      │ Institution│  │ Institution│  │ Institution│
-     │   Admin    │  │   Admin    │  │   Admin    │
-     │ role=admin │  │ role=admin │  │ role=admin │
+     │   Owner    │  │   Owner    │  │   Owner    │
+     │ role=owner │  │ role=owner │  │ role=owner │
      └─────┬──────┘  └─────┬──────┘  └─────┬──────┘
-           │ 管理            │               │
-     ┌─────┼──────┐         │               │
-     ▼     ▼      ▼         ▼               ▼
-   学生A  学生B  学生C      ...             ...
+           │               │               │
+     ┌─────┴──────┐        │               │
+     ▼            ▼        ▼               ▼
+  教师(teacher) 教师    教师(teacher)    ...
+     │
+     ├─ 管理学员（增删改查）
+     ├─ 管理内容（题库、课程）
+     └─ 不可：管教师、改机构设置
+           │
+     ┌─────┼──────┐
+     ▼     ▼      ▼
+   学生A  学生B  学生C
   role=   role=   role=
   student student student
 ```
@@ -228,9 +241,21 @@ class IsPlatformAdmin(permissions.BasePermission):
 
 
 class IsInstitutionAdmin(permissions.BasePermission):
-    """机构管理员"""
+    """机构管理员（owner 或 teacher）—— 可管理学生和内容"""
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.is_institution_admin
+        user = request.user
+        return (user and user.is_authenticated
+                and user.institution is not None
+                and user.institution_role in ('owner', 'teacher'))
+
+
+class IsInstitutionOwner(permissions.BasePermission):
+    """机构所有者（仅 owner）—— 可改机构设置、管理教师"""
+    def has_permission(self, request, view):
+        user = request.user
+        return (user and user.is_authenticated
+                and user.institution is not None
+                and user.institution_role == 'owner')
 
 
 class IsInstitutionActive(permissions.BasePermission):
@@ -292,28 +317,39 @@ class AIQuestionGenerateView(APIView):
 #### Super Admin 端点（管理所有机构）
 
 ```python
-# backend/users/urls.py — 新增路由
+# backend/users/urls.py — 实际路由（摘录关键端点）
 
 urlpatterns = [
     # ... 现有路由 ...
 
-    # === Super Admin：机构管理 ===
-    path('admin/institutions/', InstitutionListView.as_view()),           # GET 列表 / POST 创建
-    path('admin/institutions/<int:pk>/', InstitutionDetailView.as_view()),# GET/PUT/DELETE
-    path('admin/institutions/<int:pk>/activate/',                         # POST 启用
-         InstitutionActivateView.as_view()),
-    path('admin/institutions/<int:pk>/deactivate/',                       # POST 禁用
-         InstitutionDeactivateView.as_view()),
-    path('admin/institutions/<int:pk>/change-plan/',                      # POST 改版本
-         InstitutionChangePlanView.as_view()),
-    path('admin/institutions/<int:pk>/stats/',                            # GET 统计
-         InstitutionStatsView.as_view()),
+    # === Super Admin：机构 CRUD ===
+    path('institutions/', InstitutionListView.as_view()),              # GET 列表 / POST 创建
+    path('institutions/<int:pk>/', InstitutionDetailView.as_view()),   # GET/PUT/DELETE
+    path('institutions/<int:pk>/activate/', ...),
+    path('institutions/<int:pk>/deactivate/', ...),
+    path('institutions/<int:pk>/change-plan/', ...),
+    path('institutions/<int:pk>/preview/', ...),                       # 超管预览机构
 
-    # === 机构管理员：学员管理 ===
-    path('institution/students/', InstitutionStudentListView.as_view()),   # GET/POST
-    path('institution/students/<int:pk>/', InstitutionStudentDetailView.as_view()),# GET/PUT/DELETE
-    path('institution/stats/', InstitutionSelfStatsView.as_view()),        # GET 本机构统计
-    path('institution/me/features/', InstitutionFeatureView.as_view()),    # GET 当前功能列表
+    # === Super Admin：全局用户 & 权限管理 ===
+    path('admin/superusers/users/', ...),         # GET 列表 / PATCH 编辑
+    path('admin/user-tags/', ...),                # GET 列表 / POST 创建
+    path('admin/permission-groups/', ...),        # GET 列表 / POST 创建
+
+    # === 机构管理员（owner / teacher）：学员管理 ===
+    path('institution/me/students/', ...),           # GET 列表 / POST 创建/批量导入
+    path('institution/me/students/<int:pk>/', ...),  # GET 详情 / DELETE 移除
+    path('institution/me/students/<int:pk>/stats/', ...),   # GET 学习统计
+    path('institution/me/students/<int:pk>/reset-password/', ...),
+
+    # === 机构成员管理（owner / teacher） ===
+    path('institution/me/members/', ...),                # GET 所有成员（教师+学员）
+    path('institution/me/members/<int:pk>/role/', ...),  # PATCH 切换角色（仅 owner）
+
+    # === 机构自服务 ===
+    path('institution/me/', ...),                    # GET 仪表盘
+    path('institution/me/update/', ...),             # GET/PUT 机构设置（仅 owner）
+    path('institution/me/features/', ...),           # GET 功能列表
+    path('institution/me/regenerate-invite-slug/', ...),  # POST（仅 owner）
 ]
 ```
 
@@ -738,7 +774,8 @@ class InstitutionDeactivateView(APIView):
 | 租户隔离方式 | 共享 DB + institution FK | 早期机构少，无需独立数据库；FK 隔离足够 |
 | 版本定义方式 | 硬编码配置 `plan_features.py` | 版本少（3个），改配置比改数据库快 |
 | 功能入口策略 | 全部可见 + 置灰锁定 | 产品即销售，每次点击都是升级机会 |
-| 学员注册方式 | 管理员创建 + 邀请码双模式 | 大机构批量导入，小机构分享链接 |
+| 机构内角色 | owner(全权限) / teacher(学生+内容管理) / student(纯学习) | 三层分级，owner 可把管理权委派给 teacher |
+| 学员注册方式 | 管理员创建 + 邀请码 + 邀请链接三模式 | 大机构批量导入，小机构分享链接，微信分发 |
 | 到期后数据 | 保留不删，续费恢复 | 降低续费摩擦，不给用户离开理由 |
 | 平台管理员 | `is_superuser=True` + `institution=NULL` | 复用 Django 原生机制，降低复杂度 |
 

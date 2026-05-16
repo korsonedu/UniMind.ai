@@ -54,6 +54,20 @@ class IsContentReviewer(permissions.BasePermission):
         return request.user.groups.filter(name='Content Reviewer').exists()
 ```
 
-## 5. 后续 AI 编码指南 (For AI Assistant)
+## 5. 落地状态 (2026-05-17)
+
+**已落地：**
+- `PermissionGroup`、`UserTag`、`UserAccessProfile` 三模型（migration 0015）
+- `get_user_capabilities()` 权限聚合器（`users/permissions.py`）
+- 超管全局用户管理 API：`GET/PATCH /admin/superusers/users/`、`GET/POST /admin/user-tags/`、`GET/POST /admin/permission-groups/`（`users/views_admin.py`）
+- 前端全局用户管理面板（`InstitutionStudents.tsx` → `PlatformUserManagement`）
+
+**尚未落地：**
+- Content Reviewer / Content Creator 等预设角色组（需手动在超管面板创建）
+- 前端 Admin 界面的直观权限分配 UI（当前通过下拉选框 + 标签/权限组按钮实现）
+- FSRS 与标签联动（跨考生初始遗忘率差异化）
+
+## 6. 后续 AI 编码指南 (For AI Assistant)
 - **解耦操作**：不要直接修改 Django 的原生 `User` 模型（如果项目已经在运行），使用 `UserProfile` (OneToOne) 是更安全、兼容性更好的基建方式。
+- **权限端点已就绪**：`views_admin.py` 提供了完整的标签和权限组 CRUD，前端可直接对接。
 - **Admin 界面改造**：编写 `admin.py` 时，提供一个直观的界面，允许管理员在一个页面内为用户分配 Group，并手动添加 Tags。

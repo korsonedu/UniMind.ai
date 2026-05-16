@@ -1,6 +1,7 @@
 import logging
 from core.prompt_manager import PromptManager
 from ai_service import AIService
+from ai_engine.service import AIEngine
 import json
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,55 @@ class InterviewAIService:
             temperature=prompt_config.temperature,
         )
         return AIService.extract_content(response)
+
+    @classmethod
+    def generate_interview_reply_stream(cls, session_type: str, style: str, chat_history: list):
+        """流式生成面试官追问，yield 每个 token。"""
+        if session_type == 'english':
+            default_prompt = (
+                "You are an expert English examiner for a Master of Finance (431) program. "
+                "Your goal is to simulate a realistic, professional, and slightly challenging English interview. "
+                "Rules:\n"
+                "1. Always respond in English.\n"
+                "2. Ask ONE clear, specific question at a time related to finance, self-introduction, or macroeconomics.\n"
+                "3. If the candidate makes a significant grammar mistake, briefly correct it before asking the next question.\n"
+                "4. Keep your response under 50 words to maintain a conversational pace."
+            )
+            prompt_config = PromptManager.get_prompt_config("AI_SPOKEN_ENGLISH_EXAMINER", default_prompt)
+        elif session_type == 'resume':
+            style_desc = "高压追问、严厉刁钻、频繁质疑经历真实性" if style == 'pressure' else "循循善诱、和蔼可亲、重点挖掘潜力"
+            default_prompt = (
+                f"你是一名顶尖高校金融专硕(431)的复试考官。你正在对考生进行【简历深挖】面试。\n"
+                f"你的风格设定为：{style_desc}。\n\n"
+                "【行为准则】\n"
+                "1. 严格基于考生过去的发言进行追问，寻找逻辑漏洞或含糊其辞的地方。\n"
+                "2. 每次只问【一个】最核心的问题，不要连发多问。\n"
+                "3. 口语化表达，像真实的面试官一样对话，不要超过80个字。\n"
+                "4. 如果考生的回答很空泛，直接指出并要求举例说明。"
+            )
+            prompt_config = PromptManager.get_prompt_config("AI_RESUME_INTERVIEWER", default_prompt)
+        else:
+            style_desc = "高压追问、严厉刁钻、专挑概念漏洞和逻辑矛盾" if style == 'pressure' else "循循善诱、和蔼可亲、以引导启发为主"
+            default_prompt = (
+                f"你是一名顶尖高校金融专硕(431)的复试考官。你正在对考生进行【专业课】面试。\n"
+                f"你的风格设定为：{style_desc}。\n\n"
+                "【行为准则】\n"
+                "1. 针对考生刚刚的回答，深入追问底层的金融学/经济学原理。\n"
+                "2. 每次只问【一个】核心专业问题，不要一次性抛出多个。\n"
+                "3. 口语化表达，无AI痕迹（不要用“首先、其次”），回复字数控制在80字以内。\n"
+                "4. 如果考生概念错误，毫不留情地纠正（压力型）或委婉指出（和蔼型）。\n"
+                "5. 可以结合当前真实的时事热点测试应用能力。"
+            )
+            prompt_config = PromptManager.get_prompt_config("AI_MOCK_INTERVIEWER_PRO", default_prompt)
+
+        messages = [{"role": "system", "content": prompt_config.content}]
+        messages.extend(chat_history)
+
+        yield from AIEngine.call_ai_stream(
+            messages,
+            operation="interviews.mock_reply",
+            temperature=prompt_config.temperature,
+        )
 
     @classmethod
     def generate_post_interview_radar(cls, chat_history: list):
