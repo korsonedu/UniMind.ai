@@ -7,22 +7,23 @@ from django.db.models import Q, Sum
 from django.utils import timezone
 
 from quizzes.models import Question, UserQuestionStatus
+from quizzes.utils import safe_int as _safe_int
 
 
 def _clamp(value: int, lower: int, upper: int) -> int:
     return max(lower, min(value, upper))
 
 
-def _safe_int(raw, default: int) -> int:
-    try:
-        return int(raw)
-    except Exception:
-        return default
+def _bucket_targets(limit: int, preference: str = "balanced") -> Dict[str, int]:
+    if preference == "new_first":
+        due_ratio, risk_ratio, new_ratio = 0.20, 0.20, 0.60
+    elif preference == "review_first":
+        due_ratio, risk_ratio, new_ratio = 0.55, 0.35, 0.10
+    else:  # balanced
+        due_ratio, risk_ratio, new_ratio = 0.50, 0.30, 0.20
 
-
-def _bucket_targets(limit: int) -> Dict[str, int]:
-    due_target = max(1, round(limit * 0.5))
-    risk_target = max(1, round(limit * 0.3)) if limit > 1 else 0
+    due_target = max(1, round(limit * due_ratio))
+    risk_target = max(1, round(limit * risk_ratio)) if limit > 1 else 0
     new_target = max(0, limit - due_target - risk_target)
 
     if due_target + risk_target + new_target > limit:
@@ -53,17 +54,14 @@ def build_adaptive_question_ids(
     user,
     limit: int = 10,
     base_queryset=None,
-    cooldown_minutes: int = 30,
+    preference: str = "balanced",
     now=None,
 ) -> Dict[str, object]:
     """
-    按“到期复习 -> 高风险薄弱 -> 新题探索 -> 错题强化”的顺序抽题。
-    目标：在固定题量内最大化学习收益，而不是仅做随机或仅做新题。
+    preference: "balanced" | "new_first" | "review_first"
     """
     now = now or timezone.now()
     limit = _clamp(_safe_int(limit, 10), 1, 50)
-    cooldown_minutes = getattr(settings, 'STUDY_COOLDOWN_MINUTES', 30)
-    cooldown_time = now - datetime.timedelta(minutes=cooldown_minutes)
 
     if base_queryset is None:
         base_queryset = Question.objects.all()
@@ -77,7 +75,6 @@ def build_adaptive_question_ids(
 
     due_ids = list(
         active_status_qs.filter(next_review_at__lte=now)
-        .exclude(last_review__gt=cooldown_time)
         .order_by("next_review_at", "stability", "-wrong_count")
         .values_list("question_id", flat=True)
     )
@@ -86,7 +83,6 @@ def build_adaptive_question_ids(
     at_risk_ids = list(
         active_status_qs.filter(next_review_at__lte=at_risk_window)
         .exclude(question_id__in=due_ids)
-        .exclude(last_review__gt=cooldown_time)
         .filter(Q(wrong_count__gte=1) | Q(stability__lt=7) | Q(last_correct=False))
         .order_by("-wrong_count", "stability", "next_review_at")
         .values_list("question_id", flat=True)
@@ -96,7 +92,6 @@ def build_adaptive_question_ids(
         active_status_qs.filter(wrong_count__gt=0)
         .exclude(question_id__in=due_ids)
         .exclude(question_id__in=at_risk_ids)
-        .exclude(last_review__gt=cooldown_time)
         .order_by("-wrong_count", "next_review_at")
         .values_list("question_id", flat=True)
     )
@@ -110,7 +105,7 @@ def build_adaptive_question_ids(
     )
     random.shuffle(new_pool_ids)
 
-    targets = _bucket_targets(limit)
+    targets = _bucket_targets(limit, preference)
 
     selected: List[int] = []
     selected_set = set()
@@ -124,19 +119,34 @@ def build_adaptive_question_ids(
         picked_reinforce = _select_ids(reinforce_ids, limit - len(selected), selected_set, selected)
 
     if len(selected) < limit:
+        future_ids = set(
+            active_status_qs.filter(next_review_at__gt=now)
+            .values_list("question_id", flat=True)
+        )
         fallback_ids = list(
             base_queryset.exclude(id__in=mastered_ids_qs)
             .exclude(id__in=selected)
-            .order_by("id")
+            .exclude(id__in=future_ids)
+            .order_by("?")
             .values_list("id", flat=True)[: limit * 2]
         )
         _select_ids(fallback_ids, limit - len(selected), selected_set, selected)
+
+    if len(selected) < limit:
+        last_resort = list(
+            base_queryset.exclude(id__in=mastered_ids_qs)
+            .exclude(id__in=selected)
+            .order_by("?")
+            .values_list("id", flat=True)[: limit * 2]
+        )
+        _select_ids(last_resort, limit - len(selected), selected_set, selected)
 
     return {
         "question_ids": selected,
         "meta": {
             "requested_limit": limit,
             "actual_count": len(selected),
+            "preference": preference,
             "targets": targets,
             "picked": {
                 "due": picked_due,
@@ -150,7 +160,6 @@ def build_adaptive_question_ids(
                 "new": len(new_pool_ids),
                 "reinforce": len(reinforce_ids),
             },
-            "cooldown_minutes": cooldown_minutes,
         },
     }
 
@@ -177,7 +186,6 @@ def calculate_study_plan(user, minutes: int = 25, preferred_limit: Optional[int]
     else:
         minutes_per_q = getattr(settings, 'STUDY_MINUTES_PER_QUESTION', 2.8)
         base = _clamp(round(minutes / float(minutes_per_q)), 5, 40)
-        # 到期复习任务过多时，优先拉高推荐题量，防止积压
         recommended_questions = min(50, max(base, min(30, due_count)))
 
     targets = _bucket_targets(recommended_questions)

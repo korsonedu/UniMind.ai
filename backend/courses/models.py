@@ -104,6 +104,7 @@ class VideoProgress(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='progress_records')
     last_position = models.FloatField(default=0, help_text="上次观看位置（秒）")
     is_finished = models.BooleanField(default=False, verbose_name="是否观看完成")
+    elo_claimed_at = models.DateTimeField(null=True, blank=True, verbose_name="ELO 奖励领取时间")
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

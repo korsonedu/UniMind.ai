@@ -7,10 +7,11 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('file_path', type=str, help='Markdown 文件的本地路径')
+        parser.add_argument('--force', action='store_true', help='跳过确认提示，直接清空并导入')
 
     def handle(self, *args, **kwargs):
         file_path = kwargs['file_path']
-        
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
@@ -18,7 +19,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f'找不到文件: {file_path}'))
             return
 
-        # 清空旧数据
+        if not kwargs.get('force'):
+            existing = KnowledgePoint.objects.count()
+            if existing > 0:
+                confirm = input(f'当前知识树有 {existing} 个节点。清空并重新导入？[y/N] ')
+                if confirm.strip().lower() != 'y':
+                    self.stdout.write('已取消。')
+                    return
+
         KnowledgePoint.objects.all().delete()
         self.stdout.write("清理了旧的知识树数据。")
         

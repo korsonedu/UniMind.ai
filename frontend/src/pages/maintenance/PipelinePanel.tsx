@@ -77,6 +77,8 @@ const TYPE_OPTIONS: Array<{ value: TaskType | 'all'; label: string }> = [
 const Q_TYPE_CN: Record<string, string> = {
   objective: '客观选择', subjective: '主观题',
   noun: '名词解释', short: '简答', essay: '论述', calculate: '计算',
+  'subjective:noun': '名词解释', 'subjective:short': '简答',
+  'subjective:essay': '论述', 'subjective:calculate': '计算',
 };
 
 function getTypeLabel(q: any): string {
@@ -135,6 +137,7 @@ export const PipelinePanel: React.FC = () => {
   const [smartCount, setSmartCount] = useState(2);
   const [smartDifficulty, setSmartDifficulty] = useState('normal');
   const [smartTypes, setSmartTypes] = useState<string[]>(['objective', 'subjective:noun', 'subjective:short']);
+  const [smartTaskName, setSmartTaskName] = useState('');
   const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
   const [loadingKps, setLoadingKps] = useState(false);
   const [smartSubmitting, setSmartSubmitting] = useState(false);
@@ -231,6 +234,7 @@ export const PipelinePanel: React.FC = () => {
   const handleOpenGenerateDialog = () => {
     setPreviewQuestions(null);
     setSelectedPreviewIds(new Set());
+    setSmartTaskName('');
     setSmartDialogOpen(true);
     fetchKnowledgePoints();
   };
@@ -270,6 +274,8 @@ export const PipelinePanel: React.FC = () => {
       const res = await api.post('/quizzes/admin/adversarial-pipeline/', {
         kp_ids: smartKpIds,
         questions_per_kp: smartCount,
+        title: smartTaskName.trim() || '',
+        types: smartTypes,
       });
       toast.success(`对抗性出题已提交，任务 #${res.data.task_id}。完成后将进入审核队列`);
       setSmartDialogOpen(false);
@@ -552,6 +558,14 @@ export const PipelinePanel: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4 py-2">
+              {/* ── 任务名 ── */}
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase opacity-40">任务名称（选填）</Label>
+                <Input value={smartTaskName} onChange={(e) => setSmartTaskName(e.target.value)}
+                  placeholder={'留空则使用默认名称'}
+                  className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs" />
+              </div>
+
               {/* ── 质量模式开关 ── */}
               <div className="flex items-center justify-between p-4 rounded-2xl border border-border bg-muted/30">
                 <div>
@@ -565,39 +579,35 @@ export const PipelinePanel: React.FC = () => {
                 <Switch checked={adversarialMode} onCheckedChange={setAdversarialMode} />
               </div>
 
-              <div className={adversarialMode ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-3 gap-3'}>
+              <div className={adversarialMode ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-3 gap-3'}>
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] font-bold uppercase opacity-40">
-                    {adversarialMode ? '每知识点题数' : '每知识点题数'}
-                  </Label>
+                  <Label className="text-[11px] font-bold uppercase opacity-40">每知识点题数</Label>
                   <Input type="number" min={1} max={adversarialMode ? 10 : 5} value={smartCount}
                     onChange={(e) => setSmartCount(Math.max(1, parseInt(e.target.value) || 1))}
                     className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs" />
                 </div>
                 {!adversarialMode && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-[11px] font-bold uppercase opacity-40">目标难度</Label>
-                      <select value={smartDifficulty} onChange={(e) => setSmartDifficulty(e.target.value)}
-                        className="w-full bg-apple-gray-50 border-none h-10 rounded-xl px-3 text-xs font-bold">
-                        <option value="entry">入门</option><option value="easy">简单</option>
-                        <option value="normal">适当</option><option value="hard">困难</option>
-                        <option value="mixed">混合</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[11px] font-bold uppercase opacity-40">题型</Label>
-                      <div className="flex flex-wrap gap-1">
-                        {['objective', 'subjective:noun', 'subjective:short', 'subjective:essay', 'subjective:calculate'].map((t) => (
-                          <Badge key={t} onClick={() => setSmartTypes((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])}
-                            className={`cursor-pointer text-[10px] font-bold rounded-lg border ${smartTypes.includes(t) ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-bold uppercase opacity-40">目标难度</Label>
+                    <select value={smartDifficulty} onChange={(e) => setSmartDifficulty(e.target.value)}
+                      className="w-full bg-apple-gray-50 border-none h-10 rounded-xl px-3 text-xs font-bold">
+                      <option value="entry">入门</option><option value="easy">简单</option>
+                      <option value="normal">适当</option><option value="hard">困难</option>
+                      <option value="mixed">混合</option>
+                    </select>
+                  </div>
                 )}
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold uppercase opacity-40">题型</Label>
+                  <div className="flex flex-wrap gap-1">
+                    {['objective', 'subjective:noun', 'subjective:short', 'subjective:essay', 'subjective:calculate'].map((t) => (
+                      <Badge key={t} onClick={() => setSmartTypes((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t])}
+                        className={`cursor-pointer text-[10px] font-bold rounded-lg border ${smartTypes.includes(t) ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                        {Q_TYPE_CN[t] || t}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold uppercase opacity-40">选择知识点</Label>

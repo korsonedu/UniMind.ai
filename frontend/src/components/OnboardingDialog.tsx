@@ -22,8 +22,6 @@ export function OnboardingDialog() {
   const [instDesc, setInstDesc] = useState('');
   const [instPhone, setInstPhone] = useState('');
 
-  // Student join
-  const [joinCode, setJoinCode] = useState('');
 
   // 路由切换时重新弹出
   useEffect(() => {
@@ -54,19 +52,6 @@ export function OnboardingDialog() {
     setLoading(false);
   };
 
-  const handleJoinInstitution = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!joinCode.trim()) return setError('请输入邀请码');
-    setLoading(true); setError('');
-    try {
-      const { data } = await api.post('/users/institution/join/', { invite_code: joinCode.trim() });
-      updateUser({ institution_id: data.institution?.id, institution_role: 'student' });
-      setDone(true);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '加入失败，请检查邀请码');
-    }
-    setLoading(false);
-  };
 
   const handleDone = () => {
     window.location.reload();
@@ -175,24 +160,18 @@ export function OnboardingDialog() {
             <DialogHeader className="space-y-1 mb-5">
               <DialogTitle className="text-xl font-black">加入机构</DialogTitle>
               <DialogDescription className="font-medium text-muted-foreground">
-                输入老师提供的 8 位邀请码
+                请联系你的机构老师，获取邀请链接或邀请码来加入机构。
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleJoinInstitution} className="space-y-3">
-              <Input placeholder="邀请码（如 T1TYFLBN）" required value={joinCode}
-                onChange={e => setJoinCode(e.target.value.toUpperCase())}
-                className="h-11 rounded-xl font-mono text-lg text-center tracking-widest" />
-              {error && <p className="text-xs text-red-500">{error}</p>}
-              <div className="flex gap-2 pt-2">
-                <Button type="button" variant="outline" className="flex-1 h-11 rounded-xl"
-                  onClick={() => { setStep('role'); setError(''); }}>
-                  返回
-                </Button>
-                <Button type="submit" variant="apple" className="flex-1 h-11 rounded-xl" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : '加入'}
-                </Button>
-              </div>
-            </form>
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground font-medium">
+                机构老师可以在 UniMind 右上角「邀请学员」中复制邀请链接发送给你。
+              </p>
+              <Button variant="apple" className="w-full h-11 rounded-xl"
+                onClick={() => setDismissed(true)}>
+                知道了
+              </Button>
+            </div>
           </>
         )}
       </DialogContent>

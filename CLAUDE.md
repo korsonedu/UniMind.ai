@@ -10,6 +10,9 @@ AI 驱动的通用培训机构 SaaS 平台。Django 6.0 + React 19 + DeepSeek V4
 - **Prompt 模板唯一来源**：`backend/prompts/`（统一目录），不再用 `backend/core/prompts/` 或 app 内 `templates/` 散落。
 - **前端路由**：所有页面在 `frontend/src/App.tsx` 注册，权限 gating 在路由层或 sidebar 层处理。
 - **不要裸用 `float('inf')`** 表示无限——用具体大数（如 999999），避免 JSON 序列化问题。
+- **Serializer 字段必须显式声明**：禁止 `fields = '__all__'`，所有字段显式列出，防止未来新增 model 字段被自动暴露。
+- **敏感字段加密**：支付密钥等用 `core.fields.EncryptedCharField` / `EncryptedTextField`（Fernet AES），加密密钥通过 `ENCRYPTION_KEY` 环境变量设置（默认从 SECRET_KEY 派生）。
+- **Token 认证优先 Cookie**：`core.authentication.CookieTokenAuthentication` 先读 httpOnly cookie，fallback 到 Authorization header。前端 `api.ts` 设 `withCredentials:true`。
 
 ## 项目结构速查
 
@@ -21,7 +24,8 @@ backend/
 ├── quizzes/                # 核心刷题
 │   ├── services/           #   出题管线、评分、解析、PDF
 │   ├── memorix/            #   Memorix 自进化记忆调度算法
-│   └── views_*.py          #   views 已拆分为 6 个文件
+│   ├── management/         #   import_knowledge_tree, seed_questions/demo
+│   └── views_*.py          #   views 已拆分为 6 个文件（原始 views.py 已删除）
 ├── users/                  # 用户/会员/RBAC/ELO/机构管理
 ├── courses/                # 课程/专辑/AI大纲/ASR/分片上传
 ├── articles/               # 深度文章
@@ -29,7 +33,7 @@ backend/
 ├── study_room/             # 在线自习室
 ├── faq_system/             # 答疑系统
 ├── notifications/          # 站内通知
-├── core/                   # 基础设施 (邮件、Prompt 管理、限流)
+├── core/                   # 基础设施 (加密字段、Cookie认证、邮件、限流、Prompt管理)
 └── prompts/                # 统一 Prompt 模板目录
     ├── quizzes/  ai_assistant/  courses/  pipeline/  grading/  interviews/
 
@@ -48,10 +52,11 @@ frontend/
 
 | 路径 | 说明 |
 |------|------|
-| `/` | Landing（未登录）/ `/dashboard`（已登录） |
+| `/` | Landing（未登录）/ HomeRedirect（已登录：pro→机构主页, 其他→课程中心） |
 | `/login` `/register` | 邮箱验证码登录注册 |
-| `/intro` | 机构公开首页 |
+| `/intro/:slug` | 机构公开首页（无需登录，公开访问） |
 | `/management` | 管理后台（需管理员） |
+| `/join/:invite_slug` | 邀请链接 → 种 cookie → 302 到 /register |
 | `/api/users/` | 用户/会员/ELO API |
 | `/api/quizzes/` | 题库/考试 API |
 | `/api/courses/` | 课程/视频 API |
@@ -93,6 +98,7 @@ AI_CB_FAILURE_THRESHOLD=5  AI_CB_RECOVERY_TIMEOUT=300  AI_CB_WINDOW_TIMEOUT=60
 # 其他
 AI_BULK_GENERATE_MAX_PER_REQUEST=3  AI_BULK_GENERATE_CONCURRENCY=4
 ELO_K_FACTOR=32  USE_MEMORIX=false  ONLINE_USER_ACTIVE_WINDOW_SECONDS=300
+ENCRYPTION_KEY=xxx                # 加密密钥（可选，默认 SECRET_KEY 派生），用于 EncryptedCharField/EncryptedTextField
 ```
 
 ## 常用命令

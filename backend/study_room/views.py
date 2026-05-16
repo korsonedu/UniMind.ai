@@ -5,10 +5,12 @@ from rest_framework.response import Response
 from django.db.models import Q
 from django.core.files.storage import default_storage
 from django.conf import settings
+from django.utils.decorators import method_decorator
 from .models import ChatMessage
 from users.models import DailyPlan
 from .serializers import ChatMessageSerializer
 from users.views import IsMember
+from core.rate_limit import rate_limit
 
 
 def _task_state_message_q() -> Q:
@@ -88,14 +90,23 @@ class UndoBroadcastView(APIView):
 
 class ImageUploadView(APIView):
     permission_classes = [IsMember]
+    MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
+    ALLOWED_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+
     def post(self, request):
         file = request.FILES.get('image')
         if not file:
             return Response({'error': 'No file uploaded'}, status=400)
+        if file.size > self.MAX_UPLOAD_BYTES:
+            return Response({'error': '图片不能超过 10MB'}, status=400)
+        if file.content_type not in self.ALLOWED_TYPES:
+            return Response({'error': '仅支持 JPEG/PNG/GIF/WebP 格式'}, status=400)
 
-        file_name = default_storage.save(f'chat_images/{file.name}', file)
+        import uuid
+        ext = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else 'jpg'
+        safe_name = f"chat_images/{uuid.uuid4().hex}.{ext}"
+        file_name = default_storage.save(safe_name, file)
         file_url = request.build_absolute_uri(settings.MEDIA_URL + file_name)
-
         return Response({'url': file_url})
 
 
@@ -103,6 +114,7 @@ class GiphySearchView(APIView):
     """Proxy GIPHY search/tending through our backend to avoid exposing API key."""
     permission_classes = [IsMember]
 
+    @method_decorator(rate_limit(key_prefix="giphy", max_requests=30, window_seconds=60))
     def get(self, request):
         api_key = getattr(settings, 'GIPHY_API_KEY', '')
         if not api_key:

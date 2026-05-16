@@ -38,6 +38,7 @@ type TeacherExamItem = {
   submission: {
     id: number;
     answer_pdf_url: string;
+    graded_pdf_url: string;
     score: number | null;
     feedback: string;
   } | null;
@@ -48,6 +49,7 @@ type SubmissionItem = {
   student_name: string;
   student_email: string;
   answer_pdf_url: string;
+  graded_pdf_url: string;
   score: number | null;
   feedback: string;
   created_at: string;
@@ -141,6 +143,7 @@ function SubmissionsDialog({
   const [loading, setLoading] = useState(false);
   const [scores, setScores] = useState<Record<number, string>>({});
   const [feedbacks, setFeedbacks] = useState<Record<number, string>>({});
+  const [gradedFiles, setGradedFiles] = useState<Record<number, File | null>>({});
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
@@ -166,10 +169,14 @@ function SubmissionsDialog({
   const saveGrade = async (subId: number) => {
     setSavingIds((prev) => new Set(prev).add(subId));
     try {
-      await api.post(`/quizzes/teacher-exams/submissions/${subId}/grade/`, {
-        score: scores[subId] ? parseFloat(scores[subId]) : null,
-        feedback: feedbacks[subId] || '',
-      });
+      const fd = new FormData();
+      fd.append('score', scores[subId] || '');
+      fd.append('feedback', feedbacks[subId] || '');
+      const file = gradedFiles[subId];
+      if (file) {
+        fd.append('graded_pdf', file);
+      }
+      await api.post(`/quizzes/teacher-exams/submissions/${subId}/grade/`, fd);
       toast.success('评分已保存');
       onGraded();
     } catch (e) {
@@ -205,45 +212,68 @@ function SubmissionsDialog({
                       提交于 {new Date(s.created_at).toLocaleString('zh-CN')}
                     </p>
                   </div>
-                  {s.answer_pdf_url && (
+                  <div className="flex items-center gap-2">
+                    {s.answer_pdf_url && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() => window.open(s.answer_pdf_url, '_blank')}
+                      >
+                        学生解答
+                      </Button>
+                    )}
+                    {s.graded_pdf_url && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs text-green-700 border-green-300"
+                        onClick={() => window.open(s.graded_pdf_url, '_blank')}
+                      >
+                        批改件
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-xs font-bold text-muted-foreground">分数</label>
+                      <Input
+                        type="number"
+                        className="h-9 text-sm"
+                        placeholder="输入分数"
+                        value={scores[s.id] ?? ''}
+                        onChange={(e) => setScores((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex-[2] space-y-1">
+                      <label className="text-xs font-bold text-muted-foreground">评语</label>
+                      <Input
+                        className="h-9 text-sm"
+                        placeholder="输入评语"
+                        value={feedbacks[s.id] ?? ''}
+                        onChange={(e) => setFeedbacks((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                      />
+                    </div>
                     <Button
                       size="sm"
-                      variant="outline"
-                      className="h-8 text-xs"
-                      onClick={() => window.open(s.answer_pdf_url, '_blank')}
+                      className="h-9 text-xs shrink-0"
+                      disabled={savingIds.has(s.id)}
+                      onClick={() => saveGrade(s.id)}
                     >
-                      下载解答
+                      {savingIds.has(s.id) ? '保存中...' : '保存评分'}
                     </Button>
-                  )}
-                </div>
-                <div className="flex items-end gap-3">
-                  <div className="flex-1 space-y-1">
-                    <label className="text-xs font-bold text-muted-foreground">分数</label>
-                    <Input
-                      type="number"
-                      className="h-9 text-sm"
-                      placeholder="输入分数"
-                      value={scores[s.id] ?? ''}
-                      onChange={(e) => setScores((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                    />
                   </div>
-                  <div className="flex-[2] space-y-1">
-                    <label className="text-xs font-bold text-muted-foreground">评语</label>
+                  <div className="flex items-center gap-2">
                     <Input
-                      className="h-9 text-sm"
-                      placeholder="输入评语"
-                      value={feedbacks[s.id] ?? ''}
-                      onChange={(e) => setFeedbacks((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                      type="file"
+                      accept=".pdf"
+                      className="h-8 text-xs flex-1"
+                      onChange={(e) => setGradedFiles((prev) => ({ ...prev, [s.id]: e.target.files?.[0] || null }))}
                     />
+                    <span className="text-[10px] text-muted-foreground shrink-0">上传批改后带笔迹的PDF</span>
                   </div>
-                  <Button
-                    size="sm"
-                    className="h-9 text-xs shrink-0"
-                    disabled={savingIds.has(s.id)}
-                    onClick={() => saveGrade(s.id)}
-                  >
-                    {savingIds.has(s.id) ? '保存中...' : '保存评分'}
-                  </Button>
                 </div>
               </div>
             ))}
@@ -481,19 +511,22 @@ export const PdfMockExam: React.FC = () => {
                       {item.submission ? (
                         <div className="space-y-2">
                           <div className="flex items-center gap-3">
-                             <span className="text-sm font-bold">成绩: {item.submission.score !== null ? `${item.submission.score} 分` : '老师批改中...'}</span>
-                             <Button size="sm" variant="link" className="h-6 px-0 text-xs" onClick={() => window.open(item.submission!.answer_pdf_url, '_blank')}>查看我的解答文件</Button>
+                             <span className="text-sm font-bold">
+                               {item.submission.score !== null ? `成绩: ${item.submission.score} 分` : '老师批改中...'}
+                               {item.submission.graded_pdf_url && (
+                                 <span className="ml-2 text-green-600 text-xs bg-green-50 px-2 py-0.5 rounded-full">已批改</span>
+                               )}
+                             </span>
+                             <Button size="sm" variant="link" className="h-6 px-0 text-xs" onClick={() => window.open(item.submission!.answer_pdf_url, '_blank')}>查看我的解答</Button>
+                             {item.submission.graded_pdf_url && (
+                               <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => window.open(item.submission!.graded_pdf_url, '_blank')}>下载批改后试卷</Button>
+                             )}
                           </div>
                           {item.submission.feedback && (
                              <div className="text-sm text-indigo-900 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
                                老师评语: {item.submission.feedback}
                              </div>
                           )}
-                          <div className="mt-2 flex items-center gap-2">
-                             <Input type="file" accept=".pdf,.jpg,.png" className="w-[220px] h-8 text-xs" onChange={(e) => uploadSubmission(item.id, e)} />
-                             {uploadingExamId === item.id && <span className="text-xs text-muted-foreground">上传中...</span>}
-                             <span className="text-[10px] text-muted-foreground">(重新上传会覆盖旧解答)</span>
-                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">

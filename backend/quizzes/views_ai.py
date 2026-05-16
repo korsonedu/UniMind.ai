@@ -311,6 +311,7 @@ class AdversarialPipelineView(APIView):
 
         questions_per_kp = int(request.data.get('questions_per_kp', 3))
         title = str(request.data.get('title', '')).strip()
+        types = request.data.get('types', [])
 
         try:
             from quizzes.services.adversarial_pipeline import run_adversarial_pipeline
@@ -319,6 +320,7 @@ class AdversarialPipelineView(APIView):
                 created_by=request.user,
                 task_title=title,
                 questions_per_kp=questions_per_kp,
+                types=types,
             )
             increment_ai_quota(request.user.institution)
             return Response({'task_id': task_id, 'status': 'running'}, status=201)

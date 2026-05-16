@@ -29,14 +29,19 @@ def check_ai_quota(institution) -> bool:
 
 
 def increment_ai_quota(institution):
-    """AI 出题成功后，递增当月计数"""
+    """AI 出题成功后，递增当月计数。原子操作，超过配额时不会递增。"""
     from users.models_commercial import InstitutionUsageLog
     if institution is None or institution.plan != 'free':
         return
-    InstitutionUsageLog.objects.filter(
-        institution=institution,
-        period_start=get_current_period_start(),
-    ).update(ai_generation_count=F('ai_generation_count') + 1)
+    from django.db import transaction
+    with transaction.atomic():
+        usage = InstitutionUsageLog.objects.select_for_update().get_or_create(
+            institution=institution,
+            period_start=get_current_period_start(),
+        )[0]
+        if usage.ai_generation_count < FREE_AI_QUOTA_LIMIT:
+            usage.ai_generation_count = F('ai_generation_count') + 1
+            usage.save(update_fields=['ai_generation_count'])
 
 
 def get_ai_quota_info(institution):

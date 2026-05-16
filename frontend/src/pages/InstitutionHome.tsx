@@ -1,11 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, Plus, Minus } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowUpRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/version';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
+import api from '@/lib/api';
+
+interface InstitutionData {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  logo_url: string | null;
+}
 
 /* ──────────────────────────────────────────────────
-   BRUTALIST InstitutionHome — KORSEN EDUCATION
+   BRUTALIST InstitutionHome — 机构课程介绍页
+   受众：学生。卖机构课程，不卖 UniMind 平台。
+   内容为模板，按机构定制。
    ────────────────────────────────────────────────── */
 
 const useReveal = () => {
@@ -32,8 +45,10 @@ const BrutalLabel: React.FC<{ text: string }> = ({ text }) => (
 /* ──────────────────────────────────────────────────
    HERO
    ────────────────────────────────────────────────── */
-const Hero: React.FC = () => {
+const Hero: React.FC<{ institution: InstitutionData }> = ({ institution }) => {
   const navigate = useNavigate();
+  const registerUrl = `/register?institution=${institution.slug}`;
+
   return (
     <section className="relative bg-white pt-16 md:pt-28 pb-16 md:pb-24">
       <div className="max-w-[1200px] mx-auto px-6 md:px-12 lg:px-16">
@@ -48,15 +63,17 @@ const Hero: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <p className="font-mono text-[14px] font-black text-[#999] tracking-[0.3em] uppercase">
-                KORSEN EDUCATION
-              </p>
+              {institution.logo_url && (
+                <img src={institution.logo_url} alt={institution.name} className="h-16 md:h-20 w-auto object-contain mb-2" />
+              )}
               <h1 className="font-mono text-[clamp(3rem,7vw,5.5rem)] font-black text-black uppercase leading-[0.9]">
-                科晟智慧
+                {institution.name}
               </h1>
-              <p className="font-mono text-xl md:text-2xl font-bold text-[#999] uppercase tracking-wide">
-                金融硕士考研辅导
-              </p>
+              {institution.description && (
+                <p className="font-mono text-xl md:text-2xl font-bold text-[#999] uppercase tracking-wide">
+                  {institution.description}
+                </p>
+              )}
             </div>
 
             <p className="font-sans text-base md:text-base text-[#555] max-w-[500px] leading-relaxed font-medium">
@@ -79,7 +96,7 @@ const Hero: React.FC = () => {
               </div>
               <div className="flex gap-2.5 pb-0.5">
                 <button
-                  onClick={() => navigate('/register')}
+                  onClick={() => navigate(registerUrl)}
                   className="font-mono text-sm font-black text-white bg-black border-2 border-black px-7 py-3 uppercase hover:bg-[#FF3333] hover:border-[#FF3333]"
                 >
                   立即报名 <ArrowUpRight className="ml-1.5 h-4 w-4 inline" />
@@ -125,7 +142,7 @@ const Hero: React.FC = () => {
 };
 
 /* ──────────────────────────────────────────────────
-   COURSES
+   COURSES — 机构课程内容
    ────────────────────────────────────────────────── */
 const MODULES = [
   { title: '货币经济学', tag: '约 40% 课时 · 绝对核心',
@@ -155,7 +172,6 @@ const CourseContent: React.FC = () => {
   return (
     <section id="courses" className="py-20 md:py-28 bg-[#FAFAFA] border-y-2 border-black" ref={ref}>
       <div className="max-w-[1200px] mx-auto px-6 md:px-12 lg:px-16">
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-12 rv">
           <div className="space-y-3">
             <BrutalLabel text="2027 Curriculum" />
@@ -182,7 +198,6 @@ const CourseContent: React.FC = () => {
           </div>
         </div>
 
-        {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 border-2 border-black">
           {MODULES.map((mod, i) => (
             <div key={mod.title} className={cn(
@@ -223,9 +238,9 @@ const CourseContent: React.FC = () => {
 };
 
 /* ──────────────────────────────────────────────────
-   ABOUT
+   ABOUT — 关于机构
    ────────────────────────────────────────────────── */
-const About: React.FC = () => {
+const About: React.FC<{ institution: InstitutionData }> = ({ institution }) => {
   const ref = useReveal();
   return (
     <section id="about" className="py-20 md:py-28 bg-white border-b-2 border-black" ref={ref}>
@@ -234,7 +249,7 @@ const About: React.FC = () => {
           {/* Left */}
           <div className="space-y-8 rv">
             <div className="space-y-3">
-              <BrutalLabel text="About KORSEN" />
+              <BrutalLabel text={`About ${institution.name}`} />
               <h2 className="font-mono text-3xl md:text-4xl font-black text-black uppercase leading-[1.1]">
                 7 年专注金融硕士
                 <br />
@@ -243,7 +258,7 @@ const About: React.FC = () => {
             </div>
             <div className="space-y-4 text-base text-[#555] leading-relaxed font-medium max-w-[520px]">
               <p>
-                自 2019 年成立以来，科晟智慧已连续 7 年为金融硕士考生提供系统高效的辅导服务。我们推动学员用<strong className="text-black font-extrabold border-b-2 border-[#FF3333]">最短时间达成专业课掌握</strong>，预留更多时间应对公共课。
+                自 2019 年成立以来，{institution.name}已连续 7 年为金融硕士考生提供系统高效的辅导服务。我们推动学员用<strong className="text-black font-extrabold border-b-2 border-[#FF3333]">最短时间达成专业课掌握</strong>，预留更多时间应对公共课。
               </p>
               <p>
                 近 200 位全程班学员中，20 余位斩获 400+，30 余位专业课突破 120+，多名二战生专业课<strong className="text-black font-extrabold">提高 40 分以上</strong>。
@@ -305,7 +320,7 @@ const About: React.FC = () => {
 };
 
 /* ──────────────────────────────────────────────────
-   PRICING
+   PRICING — 机构定价
    ────────────────────────────────────────────────── */
 const PRICING_GROUPS = [
   { cat: '货币经济学 I', items: [
@@ -334,9 +349,10 @@ const PRICING_GROUPS = [
   ]},
 ];
 
-const Pricing: React.FC = () => {
+const Pricing: React.FC<{ institution: InstitutionData }> = ({ institution }) => {
   const navigate = useNavigate();
   const ref = useReveal();
+  const registerUrl = `/register?institution=${institution.slug}`;
 
   return (
     <section id="pricing" className="py-20 md:py-28 bg-[#FAFAFA] border-b-2 border-black" ref={ref}>
@@ -370,7 +386,7 @@ const Pricing: React.FC = () => {
                 <p className="font-mono text-[14px] font-black text-[#FF3333] mt-0.5 uppercase">早鸟优惠价</p>
               </div>
               <button
-                onClick={() => navigate('/register')}
+                onClick={() => navigate(registerUrl)}
                 className="font-mono text-sm font-black text-black bg-[#FF3333] border-2 border-[#FF3333] px-6 py-3 uppercase hover:bg-white hover:text-black"
               >
                 立即报名 <ArrowUpRight className="ml-1 h-4 w-4 inline" />
@@ -428,7 +444,7 @@ const Pricing: React.FC = () => {
 };
 
 /* ──────────────────────────────────────────────────
-   FAQ
+   FAQ — 机构常见问题
    ────────────────────────────────────────────────── */
 const FAQS = [
   ['课程有效期是多久？', '视频与课件部署在 UniMind，账号有效期两年。其他服务本年度初试结束后截止，二战考生经申请可延长一年。复试指南及就业服务终身有效。'],
@@ -486,12 +502,12 @@ const FAQ: React.FC = () => {
 /* ──────────────────────────────────────────────────
    FOOTER
    ────────────────────────────────────────────────── */
-const Footer: React.FC = () => (
+const Footer: React.FC<{ institution: InstitutionData }> = ({ institution }) => (
   <footer className="py-10 bg-[#FAFAFA] border-t-2 border-black">
     <div className="max-w-[1200px] mx-auto px-6 md:px-12 lg:px-16 flex flex-col md:flex-row items-center justify-between gap-4">
       <div className="flex items-center gap-3">
         <div>
-          <p className="font-mono font-black text-sm text-black uppercase">科晟智慧</p>
+          <p className="font-mono font-black text-sm text-black uppercase">{institution.name}</p>
           <p className="font-mono text-[14px] font-bold text-[#999] uppercase tracking-[0.15em]">
             科技驱动教育公平
           </p>
@@ -510,10 +526,70 @@ const Footer: React.FC = () => (
 );
 
 /* ──────────────────────────────────────────────────
+   LOADING / ERROR
+   ────────────────────────────────────────────────── */
+const LoadingState: React.FC = () => (
+  <div className="min-h-screen bg-white flex items-center justify-center">
+    <div className="text-center space-y-4">
+      <Loader2 className="h-8 w-8 animate-spin text-[#FF3333] mx-auto" />
+      <p className="font-mono text-[14px] font-black text-[#999] uppercase tracking-[0.2em]">Loading...</p>
+    </div>
+  </div>
+);
+
+const ErrorState: React.FC<{ slug: string }> = ({ slug }) => (
+  <div className="min-h-screen bg-white flex items-center justify-center px-6">
+    <div className="text-center space-y-6 max-w-md">
+      <p className="font-mono text-8xl font-black text-black/5 select-none">404</p>
+      <div className="space-y-3">
+        <h2 className="font-mono text-2xl font-black text-black uppercase">机构不存在</h2>
+        <p className="font-sans text-base text-[#666] font-medium leading-relaxed">
+          未找到 <code className="font-mono text-[14px] font-black text-[#FF3333] bg-[#FAFAFA] px-1.5 py-0.5">{slug}</code> 对应的机构，
+          请检查链接是否正确。
+        </p>
+      </div>
+      <a
+        href="/"
+        className="inline-block font-mono text-sm font-black text-white bg-black border-2 border-black px-7 py-3 uppercase hover:bg-[#FF3333] hover:border-[#FF3333]"
+      >
+        返回 UniMind.ai
+      </a>
+    </div>
+  </div>
+);
+
+/* ──────────────────────────────────────────────────
    MAIN
    ────────────────────────────────────────────────── */
 const InstitutionHome: React.FC = () => {
-  useEffect(() => { window.scrollTo(0, 0); }, []);
+  const { slug: paramSlug } = useParams<{ slug: string }>();
+  const storeInst = useInstitutionStore(s => s.institution);
+  const authInst = useAuthStore(s => s.user?.institution);
+  const slug = paramSlug || storeInst?.slug || authInst?.slug || '';
+  const [institution, setInstitution] = useState<InstitutionData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const { user } = useAuthStore();
+
+  useEffect(() => {
+    if (!slug) { setError(true); setLoading(false); return; }
+    setLoading(true);
+    setError(false);
+    api.get(`/users/public/institution/${encodeURIComponent(slug)}/`)
+      .then(res => {
+        setInstitution(res.data);
+        document.title = `${res.data.name} - UniMind.ai - 新一代AI教育基础设施`;
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [slug]);
+
+  useEffect(() => { window.scrollTo(0, 0); }, [slug]);
+
+  if (loading) return <LoadingState />;
+  if (error || !institution) return <ErrorState slug={slug || ''} />;
+
+  const registerUrl = `/register?institution=${institution.slug}`;
 
   return (
     <div className="w-full font-sans antialiased bg-white">
@@ -522,11 +598,18 @@ const InstitutionHome: React.FC = () => {
         .rv.on{opacity:1;transform:translateY(0)}
         ::selection{background:#FF3333;color:#fff}
       `}</style>
-      <Hero />
+
+      {user && (
+        <div className="bg-black text-white py-2 px-4 flex items-center justify-end gap-4 text-sm font-mono">
+          <span className="text-white/60">已登录：{user.nickname || user.username}</span>
+          <Link to="/" className="font-black uppercase hover:text-[#FF3333]">进入学习 <ArrowUpRight className="h-3.5 w-3.5 inline" /></Link>
+        </div>
+      )}
+
+      <Hero institution={institution} />
       <CourseContent />
-      <About />
-      <Pricing />
-      <FAQ />
+      <About institution={institution} />
+      <Pricing institution={institution} />
 
       {/* CTA */}
       <section className="py-16 bg-white border-b-2 border-black">
@@ -538,7 +621,7 @@ const InstitutionHome: React.FC = () => {
             2027 全程班现已开放报名。早鸟优惠限时进行中。
           </p>
           <a
-            href="/register"
+            href={registerUrl}
             className="inline-block font-mono text-sm font-black text-white bg-black border-2 border-black px-7 py-3 uppercase hover:bg-[#FF3333] hover:border-[#FF3333]"
           >
             立即报名
@@ -546,7 +629,8 @@ const InstitutionHome: React.FC = () => {
         </div>
       </section>
 
-      <Footer />
+      <FAQ />
+      <Footer institution={institution} />
     </div>
   );
 };

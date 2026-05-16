@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import {
   ChevronLeft, Play, Calendar, BookOpen,
   Share2, Star, FileText, Download,
-  ListVideo, Layers, Sparkles,
+  ListVideo, Layers, Sparkles, Maximize, Minimize, ClosedCaption,
+  Volume2, VolumeX,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,16 +15,85 @@ import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { toast } from 'sonner';
 
+const formatTime = (s: number) => {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+};
+
 export const VideoLesson: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { updateUser } = useAuthStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const [course, setCourse] = useState<any>(null);
   const [relatedCourses, setRelatedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasAwarded, setHasAwarded] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [subtitlesVisible, setSubtitlesVisible] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [seeking, setSeeking] = useState(false);
+  const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressRef = useRef<HTMLDivElement | null>(null);
   const courseId = Number(id);
+
+  const SPEEDS = [1, 1.25, 1.5, 2];
+
+  useEffect(() => {
+    const onFSChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFSChange);
+    return () => document.removeEventListener('fullscreenchange', onFSChange);
+  }, []);
+
+  const scheduleHideControls = () => {
+    if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    hideControlsTimer.current = setTimeout(() => setShowControls(false), 3000);
+  };
+
+  const handleVideoInteraction = () => {
+    setShowControls(true);
+    scheduleHideControls();
+  };
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      videoContainerRef.current?.requestFullscreen().catch(() => {});
+    }
+  };
+
+  const toggleMute = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setIsMuted(v.muted);
+  };
+
+  const cycleSpeed = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const idx = SPEEDS.indexOf(playbackRate);
+    const next = SPEEDS[(idx + 1) % SPEEDS.length];
+    v.playbackRate = next;
+    setPlaybackRate(next);
+  };
+
+  // 同步 video 初始状态
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    setIsMuted(v.muted);
+    setPlaybackRate(v.playbackRate);
+  }, [course?.video_file]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,9 +131,25 @@ export const VideoLesson: React.FC = () => {
 
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget;
+    if (!seeking) setCurrentTime(video.currentTime);
     if (Math.floor(video.currentTime) % 10 === 0) {
       api.post(`/courses/${courseId}/progress/`, { position: video.currentTime }).catch(() => {});
     }
+  };
+
+  const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    setDuration(e.currentTarget.duration || 0);
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const bar = progressRef.current;
+    const v = videoRef.current;
+    if (!bar || !v || !duration) return;
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const t = ratio * duration;
+    v.currentTime = t;
+    setCurrentTime(t);
   };
 
   if (loading) return (
@@ -99,20 +185,53 @@ export const VideoLesson: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         {/* Left: Video + AI Tools */}
         <div className="lg:col-span-9 space-y-8">
-           <div className="bg-black overflow-hidden relative aspect-video flex items-center justify-center rounded-[2rem] shadow-2xl">
+           <div
+             ref={videoContainerRef}
+             className="bg-black overflow-hidden relative flex items-center justify-center shadow-2xl group"
+             onMouseMove={handleVideoInteraction}
+             onMouseLeave={() => setShowControls(false)}
+           >
              {course.video_file ? (
                <>
                <video
                  ref={videoRef}
                  onEnded={handleVideoEnd}
                  onTimeUpdate={handleTimeUpdate}
+                 onLoadedMetadata={handleLoadedMetadata}
+                 onPlay={() => scheduleHideControls()}
+                 onPause={() => setShowControls(true)}
+                 onClick={() => { videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause(); }}
                  src={course.video_file}
-                 controls
-                 className="w-full h-full"
+                 className="w-full max-h-[70vh] cursor-pointer"
                  preload="metadata"
                  poster={course.cover_image || undefined}
                />
-               <SubtitlesOverlay courseId={courseId} videoRef={videoRef} />
+               <SubtitlesOverlay courseId={courseId} videoRef={videoRef} visible={subtitlesVisible} />
+               {/* 自定义控制栏：进度条 + 按钮，整体显示/隐藏 */}
+               <div className={`absolute bottom-0 inset-x-0 z-20 px-3 pb-3 pt-8 bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                 <div ref={progressRef} onClick={handleSeek} className="w-full h-5 flex items-center cursor-pointer group/progress mb-1">
+                   <div className="w-full h-1 rounded-full bg-white/20 group-hover/progress:h-1.5 transition-all">
+                     <div className="h-full rounded-full bg-white transition-all" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }} />
+                   </div>
+                 </div>
+                 <div className="flex items-center justify-between">
+                   <span className="text-[11px] font-medium text-white/70 tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                   <div className="flex items-center gap-0.5">
+                     <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isMuted ? '取消静音' : '静音'}>
+                       {isMuted ? <VolumeX className="h-[18px] w-[18px]" /> : <Volume2 className="h-[18px] w-[18px]" />}
+                     </button>
+                     <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-all min-w-[32px] text-center" title="播放速度">
+                       {playbackRate}x
+                     </button>
+                     <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-all ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} title={subtitlesVisible ? '关闭字幕' : '开启字幕'}>
+                       <ClosedCaption className="h-[18px] w-[18px]" />
+                     </button>
+                     <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isFullscreen ? '退出全屏' : '全屏'}>
+                       {isFullscreen ? <Minimize className="h-[18px] w-[18px]" /> : <Maximize className="h-[18px] w-[18px]" />}
+                     </button>
+                   </div>
+                 </div>
+               </div>
                </>
              ) : (
                <div className="flex flex-col items-center gap-4 opacity-20"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">暂无视频</p></div>
@@ -124,7 +243,6 @@ export const VideoLesson: React.FC = () => {
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-indigo-500" />
               <h3 className="text-sm font-bold text-foreground">AI 智能大纲</h3>
-              <span className="text-[10px] text-muted-foreground ml-auto">由 ASR 语音识别 + AI 自动生成</span>
             </div>
             <OutlinePanel courseId={courseId} videoRef={videoRef} />
           </Card>

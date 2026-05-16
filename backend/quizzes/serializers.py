@@ -12,7 +12,7 @@ class KnowledgePointSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = KnowledgePoint
-        fields = '__all__'
+        fields = ('id', 'code', 'name', 'level', 'prefix_category', 'description', 'parent', 'institution', 'created_at', 'questions_count', 'children')
 
     def get_children(self, obj):
         # 递归调用自身来序列化子节点，输出完美的 JSON 树
@@ -28,7 +28,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = '__all__'
+        fields = ('id', 'knowledge_point', 'text', 'q_type', 'subjective_type', 'difficulty_level', 'grading_points', 'options', 'correct_answer', 'ai_answer', 'rubric', 'difficulty', 'institution', 'created_at', 'knowledge_point_detail', 'is_favorite', 'is_mastered', 'difficulty_level_display')
 
     def get_is_favorite(self, obj):
         request = self.context.get('request')
@@ -48,19 +48,19 @@ class UserQuestionStatusSerializer(serializers.ModelSerializer):
     question_detail = QuestionSerializer(source='question', read_only=True)
     class Meta:
         model = UserQuestionStatus
-        fields = '__all__'
+        fields = ('id', 'user', 'question', 'is_favorite', 'is_mastered', 'wrong_count', 'stability', 'difficulty', 'reps', 'lapses', 'last_review', 'next_review_at', 'last_correct', 'question_detail')
 
 class QuizAttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuizAttempt
-        fields = '__all__'
+        fields = ('id', 'user', 'score', 'elo_change', 'is_initial_placement', 'created_at')
         read_only_fields = ('user', 'elo_change')
 
 class ExamQuestionResultSerializer(serializers.ModelSerializer):
     question_detail = QuestionSerializer(source='question', read_only=True)
     class Meta:
         model = ExamQuestionResult
-        fields = '__all__'
+        fields = ('id', 'exam', 'details', 'question', 'user_answer', 'score', 'max_score', 'feedback', 'analysis', 'is_correct', 'question_detail')
 
 class QuizExamSerializer(serializers.ModelSerializer):
     results = ExamQuestionResultSerializer(many=True, read_only=True)
@@ -68,7 +68,7 @@ class QuizExamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QuizExam
-        fields = '__all__'
+        fields = ('id', 'user', 'total_score', 'max_score', 'elo_change', 'summary', 'created_at', 'results', 'created_at_fmt')
 
 
 class ContentPipelineTaskSerializer(serializers.ModelSerializer):
@@ -78,28 +78,28 @@ class ContentPipelineTaskSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ContentPipelineTask
-        fields = '__all__'
+        fields = ('id', 'task_type', 'status', 'title', 'description', 'progress', 'payload', 'result', 'error_message', 'request_id', 'assignee', 'created_by', 'institution', 'started_at', 'finished_at', 'created_at', 'updated_at', 'created_by_username', 'task_type_display', 'status_display')
 
 
 class TeacherExamSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeacherExam
-        fields = '__all__'
+        fields = ('id', 'title', 'description', 'exam_pdf', 'created_at', 'created_by', 'institution')
 
 
 class StudentExamSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentExamSubmission
-        fields = '__all__'
+        fields = ('id', 'user', 'exam', 'answer_pdf', 'score', 'feedback', 'graded_pdf', 'created_at')
 
 
 class KnowledgePointAnnotationSerializer(serializers.ModelSerializer):
     class Meta:
         model = KnowledgePointAnnotation
-        fields = '__all__'
+        fields = ('id', 'user', 'knowledge_point', 'mastery_level', 'priority', 'confidence_score', 'tags', 'note', 'source', 'created_at', 'updated_at')
 
 
 class PersonalizedMockExamSerializer(serializers.ModelSerializer):
     class Meta:
         model = PersonalizedMockExam
-        fields = '__all__'
+        fields = ('id', 'user', 'status', 'exam_pdf', 'answer_pdf', 'question_count', 'weak_coverage', 'error_message', 'created_at')

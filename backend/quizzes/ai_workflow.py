@@ -1,7 +1,10 @@
 from typing import Any, Dict, Iterable, List
 
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
+
+from quizzes.utils import safe_int
 
 from ai_service import AIService
 from notifications.models import Notification
@@ -14,13 +17,6 @@ def _clamp_score(score: float, max_score: float) -> float:
     return max(0.0, min(float(max_score or 0), float(score or 0)))
 
 
-def _safe_int(value: Any, default: int) -> int:
-    try:
-        return int(value)
-    except Exception:
-        return default
-
-
 def _subjective_type_label(question: Question) -> str:
     if question.q_type == 'subjective' and question.subjective_type:
         return question.get_subjective_type_display()
@@ -29,18 +25,18 @@ def _subjective_type_label(question: Question) -> str:
 
 def _apply_fsrs_status(user: User, question: Question, normalized_score: float, fsrs_rating: int, review_time=None) -> UserQuestionStatus:
     status_obj, _ = UserQuestionStatus.objects.get_or_create(user=user, question=question)
-    # Memorix handles stability/difficulty update + online SGD + save
     status_obj = MemorixService.update_status(user_id=user.id, status=status_obj, rating=fsrs_rating)
     if review_time is not None:
         status_obj.last_review = review_time
 
     if normalized_score < 0.6:
-        status_obj.wrong_count += 1
+        UserQuestionStatus.objects.filter(pk=status_obj.pk).update(wrong_count=F('wrong_count') + 1)
+        status_obj.wrong_count = F('wrong_count') + 1
         status_obj.last_correct = False
     else:
         status_obj.last_correct = True
 
-    status_obj.save(update_fields=['wrong_count', 'last_correct', 'last_review'])
+    status_obj.save(update_fields=['last_correct', 'last_review'])
     return status_obj
 
 
@@ -58,6 +54,8 @@ def grade_answer_for_user(user: User, question: Question, user_answer: Any, set_
         q_type=question.q_type,
         max_score=max_score,
         grading_points=question.grading_points,
+        options=question.options,
+        rubric=question.rubric,
         subjective_type=_subjective_type_label(question),
     )
 
@@ -70,7 +68,7 @@ def grade_answer_for_user(user: User, question: Question, user_answer: Any, set_
         score_val = float(max_score if user_choice and user_choice == correct_choice else 0)
 
     normalized_score = score_val / max_score if max_score > 0 else 0
-    fsrs_rating = _safe_int(grade_data.get('fsrs_rating', 2), 2)
+    fsrs_rating = safe_int(grade_data.get('fsrs_rating', 2), 2)
     fsrs_rating = min(4, max(1, fsrs_rating))
 
     _apply_fsrs_status(
@@ -95,9 +93,11 @@ def grade_answer_for_user(user: User, question: Question, user_answer: Any, set_
 def grade_single_question_submission(user: User, question: Question, user_answer: Any) -> Dict[str, Any]:
     result = grade_answer_for_user(user=user, question=question, user_answer=user_answer)
 
-    elo_change = _calc_elo_change(user_elo=user.elo_score, score_ratio=result['normalized_score'], difficulty=float(question.difficulty or 1000))
-    user.elo_score += elo_change
-    user.save(update_fields=['elo_score'])
+    with transaction.atomic():
+        locked = User.objects.select_for_update().get(id=user.id)
+        elo_change = _calc_elo_change(user_elo=locked.elo_score, score_ratio=result['normalized_score'], difficulty=float(question.difficulty or 1000))
+        locked.elo_score += elo_change
+        locked.save(update_fields=['elo_score'])
 
     result['elo_change'] = elo_change
     return result
@@ -105,11 +105,16 @@ def grade_single_question_submission(user: User, question: Question, user_answer
 
 def mark_questions_reviewed(user: User, question_ids: Iterable[int], review_time=None):
     now = review_time or timezone.now()
+    min_next_review = now + timezone.timedelta(hours=1)
     for q_id in question_ids:
         try:
             status_obj, _ = UserQuestionStatus.objects.get_or_create(user=user, question_id=q_id)
             status_obj.last_review = now
-            status_obj.save(update_fields=['last_review'])
+            if status_obj.next_review_at < min_next_review:
+                status_obj.next_review_at = min_next_review
+                status_obj.save(update_fields=['last_review', 'next_review_at'])
+            else:
+                status_obj.save(update_fields=['last_review'])
         except Exception:
             continue
 
@@ -142,15 +147,17 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
             graded = grade_answer_for_user(user=user, question=question, user_answer=user_answer)
             total_score += graded['score']
 
-            ExamQuestionResult.objects.create(
+            ExamQuestionResult.objects.update_or_create(
                 exam=exam,
                 question=question,
-                user_answer=user_answer or '',
-                score=graded['score'],
-                max_score=max_score,
-                feedback=graded['feedback'],
-                analysis=graded['analysis'],
-                is_correct=graded['is_correct'],
+                defaults={
+                    'user_answer': user_answer or '',
+                    'score': graded['score'],
+                    'max_score': max_score,
+                    'feedback': graded['feedback'],
+                    'analysis': graded['analysis'],
+                    'is_correct': graded['is_correct'],
+                },
             )
         except Exception as exc:
             ExamQuestionResult.objects.create(
@@ -167,9 +174,11 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
     avg_score = total_score / max_total_score if max_total_score > 0 else 0
     avg_difficulty = total_difficulty / question_count if question_count > 0 else 1000
 
-    elo_change = _calc_elo_change(user_elo=user.elo_score, score_ratio=avg_score, difficulty=avg_difficulty)
-    user.elo_score += elo_change
-    user.save(update_fields=['elo_score'])
+    with transaction.atomic():
+        locked = User.objects.select_for_update().get(id=user_id)
+        elo_change = _calc_elo_change(user_elo=locked.elo_score, score_ratio=avg_score, difficulty=avg_difficulty)
+        locked.elo_score += elo_change
+        locked.save(update_fields=['elo_score'])
 
     exam.total_score = total_score
     exam.max_score = max_total_score
@@ -177,10 +186,10 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
     exam.save(update_fields=['total_score', 'max_score', 'elo_change'])
 
     if question_count == 1:
-        title = '🧠 特训判分完成'
+        title = '特训判分完成'
         content = f'该题已完成 AI 判分：{total_score}/{max_total_score}。点击查看详解。'
     else:
-        title = '📝 评估完成'
+        title = '评估完成'
         content = f'得分：{total_score}/{max_total_score}。本次测验平均难度：{int(avg_difficulty)}。'
 
     Notification.objects.create(

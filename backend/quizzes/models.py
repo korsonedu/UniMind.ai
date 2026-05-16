@@ -14,6 +14,7 @@ class KnowledgePoint(models.Model):
     prefix_category = models.CharField(max_length=20, blank=True, null=True, verbose_name="学科前缀", help_text="如 MB, IF, CF 等")
     description = models.TextField(blank=True, verbose_name="知识点描述")
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children', verbose_name="上级知识点")
+    institution = models.ForeignKey('users.Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='knowledge_points', verbose_name="所属机构")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
@@ -156,6 +157,7 @@ class ContentPipelineTask(models.Model):
     request_id = models.CharField(max_length=80, blank=True, verbose_name="请求链路 ID")
     assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_pipeline_tasks", verbose_name="处理人")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pipeline_tasks", verbose_name="创建人")
+    institution = models.ForeignKey('users.Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='pipeline_tasks', verbose_name="所属机构")
     started_at = models.DateTimeField(null=True, blank=True, verbose_name="开始时间")
     finished_at = models.DateTimeField(null=True, blank=True, verbose_name="完成时间")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
@@ -281,4 +283,5 @@ class StudentExamSubmission(models.Model):
     answer_pdf = models.FileField(upload_to="student_answers/")
     score = models.FloatField(null=True, blank=True)
     feedback = models.TextField(blank=True)
+    graded_pdf = models.FileField(upload_to="graded_answers/", blank=True, help_text="教师批改后带笔迹的PDF")
     created_at = models.DateTimeField(auto_now_add=True)

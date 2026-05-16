@@ -1,6 +1,6 @@
 import logging
 from django.conf import settings
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
@@ -16,6 +16,18 @@ from quizzes.ai_workflow import grade_single_question_submission, mark_questions
 from quizzes.services.task_dispatcher import dispatch_exam_grading
 
 logger = logging.getLogger(__name__)
+
+
+def _inst_q(user):
+    """返回机构数据隔离 Q 对象，用于 get_object_or_404 等查询"""
+    from users.permissions import is_platform_admin
+    from django.db.models import Q
+    if is_platform_admin(user):
+        return Q()
+    inst = getattr(user, 'institution', None)
+    if inst:
+        return Q(institution=inst) | Q(institution__isnull=True)
+    return Q(institution__isnull=True)
 
 
 def _build_media_abs_url(request, raw_path: str) -> str:
@@ -66,6 +78,7 @@ class TeacherExamListView(APIView):
                 'submission': {
                     'id': submission.id,
                     'answer_pdf_url': _build_media_abs_url(request, submission.answer_pdf.name) if submission.answer_pdf else "",
+                    'graded_pdf_url': _build_media_abs_url(request, submission.graded_pdf.name) if submission.graded_pdf else "",
                     'score': submission.score,
                     'feedback': submission.feedback,
                 } if submission else None
@@ -100,7 +113,7 @@ class TeacherExamDeleteView(APIView):
     permission_classes = [IsAdmin]
 
     def delete(self, request, pk):
-        exam = get_object_or_404(TeacherExam, id=pk)
+        exam = get_object_or_404(TeacherExam, Q(id=pk) & _inst_q(request.user))
         exam.delete()
         return Response({'status': 'deleted'})
 
@@ -126,7 +139,7 @@ class TeacherExamSubmissionsView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request, pk):
-        exam = get_object_or_404(TeacherExam, id=pk)
+        exam = get_object_or_404(TeacherExam, Q(id=pk) & _inst_q(request.user))
         submissions = exam.submissions.select_related('user').order_by('-created_at')
         data = []
         for s in submissions:
@@ -135,6 +148,7 @@ class TeacherExamSubmissionsView(APIView):
                 'student_name': s.user.nickname or s.user.username,
                 'student_email': s.user.email,
                 'answer_pdf_url': _build_media_abs_url(request, s.answer_pdf.name) if s.answer_pdf else '',
+                'graded_pdf_url': _build_media_abs_url(request, s.graded_pdf.name) if s.graded_pdf else '',
                 'score': s.score,
                 'feedback': s.feedback,
                 'created_at': s.created_at,
@@ -143,13 +157,22 @@ class TeacherExamSubmissionsView(APIView):
 
 
 class TeacherGradeSubmissionView(APIView):
-    """教师为学生提交打分并填写评语"""
+    """教师为学生提交打分、上传批改后PDF、填写评语"""
     permission_classes = [IsAdmin]
 
     def post(self, request, pk):
-        submission = get_object_or_404(StudentExamSubmission, id=pk)
+        from users.permissions import is_platform_admin
+        if is_platform_admin(request.user):
+            submission = get_object_or_404(StudentExamSubmission, id=pk)
+        else:
+            inst = request.user.institution
+            if inst:
+                submission = get_object_or_404(StudentExamSubmission, Q(id=pk) & (Q(exam__institution=inst) | Q(exam__institution__isnull=True)))
+            else:
+                submission = get_object_or_404(StudentExamSubmission, Q(id=pk) & Q(exam__institution__isnull=True))
         score = request.data.get('score')
         feedback = request.data.get('feedback', '')
+        graded_file = request.FILES.get('graded_pdf')
         if score is not None:
             try:
                 submission.score = float(score)
@@ -157,11 +180,14 @@ class TeacherGradeSubmissionView(APIView):
                 return Response({'error': '分数格式不正确'}, status=400)
         if feedback:
             submission.feedback = str(feedback)
-        submission.save(update_fields=['score', 'feedback'])
+        if graded_file:
+            submission.graded_pdf = graded_file
+        submission.save()
         return Response({
             'id': submission.id,
             'score': submission.score,
             'feedback': submission.feedback,
+            'graded_pdf_url': _build_media_abs_url(request, submission.graded_pdf.name) if submission.graded_pdf else '',
         })
 
 

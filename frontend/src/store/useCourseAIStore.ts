@@ -106,8 +106,14 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
     try {
       const res = await api.get(`/courses/${courseId}/transcript/`);
       if (res.data.status === 'completed') {
+        const segments = (res.data.segments || []).map((s: any) => ({
+          start: s.start_time ?? s.start ?? 0,
+          end: s.end_time ?? s.end ?? 0,
+          text: s.text ?? '',
+          index: s.index ?? 0,
+        }));
         set({
-          transcriptSegments: res.data.segments || [],
+          transcriptSegments: segments,
           fullText: res.data.full_text,
           transcriptStatus: 'available',
         });
@@ -122,8 +128,14 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
             if (pollRes.data.status === 'completed') {
               clearInterval(timer);
               get()._pollTimers.delete(key);
+              const pollSegments = (pollRes.data.segments || []).map((s: any) => ({
+                start: s.start_time ?? s.start ?? 0,
+                end: s.end_time ?? s.end ?? 0,
+                text: s.text ?? '',
+                index: s.index ?? 0,
+              }));
               set({
-                transcriptSegments: pollRes.data.segments || [],
+                transcriptSegments: pollSegments,
                 fullText: pollRes.data.full_text,
                 transcriptStatus: 'available',
               });

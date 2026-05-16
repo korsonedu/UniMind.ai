@@ -43,7 +43,19 @@ class AIEngine:
         operation='general',
     ):
         """通用的 AI 模型调用接口"""
+        from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         started_at = time.monotonic()
+
+        try:
+            AICircuitBreaker.check(operation)
+        except CircuitBreakerError as e:
+            logger.warning("AI 熔断器已打开: operation=%s", operation)
+            if raise_on_error:
+                raise AICallError(
+                    str(e), status_code=503, retryable=True, error_category='circuit_open',
+                )
+            return None
+
         config = get_model_for_task(operation)
         if not config['api_key']:
             msg = "DEEPSEEK_API_KEY 未设置，AI 调用被跳过。"
@@ -85,6 +97,7 @@ class AIEngine:
                 )
                 r.raise_for_status()
                 payload = r.json()
+                AICircuitBreaker.record_success(operation)
                 duration_ms = int((time.monotonic() - started_at) * 1000)
                 record_ai_operation(
                     operation=operation,
@@ -98,6 +111,7 @@ class AIEngine:
                 )
                 return payload
             except requests.Timeout as e:
+                AICircuitBreaker.record_failure(operation)
                 logger.warning(
                     "AI 调用超时: attempt=%s/%s timeout=%ss err=%s",
                     attempt + 1,
@@ -126,6 +140,7 @@ class AIEngine:
                     ) from e
                 return None
             except requests.HTTPError as e:
+                AICircuitBreaker.record_failure(operation)
                 response = getattr(e, "response", None)
                 status = response.status_code if response is not None else 502
                 detail = (response.text or "")[:500] if response is not None else ""
@@ -161,6 +176,7 @@ class AIEngine:
                     ) from e
                 return None
             except requests.RequestException as e:
+                AICircuitBreaker.record_failure(operation)
                 logger.warning("AI 网络异常: attempt=%s/%s err=%s", attempt + 1, max_retries + 1, e)
                 if attempt < max_retries:
                     time.sleep(min(2 ** attempt, 4))

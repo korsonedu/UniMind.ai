@@ -86,6 +86,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "school_system.middleware.RequestIDMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -94,6 +95,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "school_system.middleware.APIAccessLogMiddleware",
+    "school_system.middleware.APIExceptionMiddleware",
 ]
 
 ROOT_URLCONF = "school_system.urls"
@@ -150,6 +153,8 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 CORS_ALLOW_ALL_ORIGINS = _get_bool("CORS_ALLOW_ALL_ORIGINS", default=DEBUG)
+if IS_PROD and CORS_ALLOW_ALL_ORIGINS:
+    raise ImproperlyConfigured("CORS_ALLOW_ALL_ORIGINS must be False in production.")
 CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS")
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES")
 CORS_ALLOW_CREDENTIALS = _get_bool("CORS_ALLOW_CREDENTIALS", default=True)
@@ -175,11 +180,18 @@ if _get_bool("USE_X_FORWARDED_PROTO", default=IS_PROD):
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "core.authentication.CookieTokenAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "2000/hour",
+        "anon": "120/hour",
+    },
 }
 
 ONLINE_USER_ACTIVE_WINDOW_SECONDS = _get_int("ONLINE_USER_ACTIVE_WINDOW_SECONDS", 300)
@@ -202,6 +214,14 @@ LEADERBOARD_SIZE = _get_int("LEADERBOARD_SIZE", 50)
 # 上传限制 — 匹配 nginx client_max_body_size (200MB)
 DATA_UPLOAD_MAX_MEMORY_SIZE = _get_int("DATA_UPLOAD_MAX_MEMORY_SIZE", 209715200)
 FILE_UPLOAD_MAX_MEMORY_SIZE = _get_int("FILE_UPLOAD_MAX_MEMORY_SIZE", 209715200)
+
+# ASR 语音转文字
+ASR_DEFAULT_PROVIDER = os.getenv("ASR_DEFAULT_PROVIDER", "dummy")
+ASR_PROVIDER_CONFIG = {
+    "glm_asr": {
+        "api_key": os.getenv("GLM_ASR_API_KEY", ""),
+    },
+}
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 CHANNEL_LAYER_REDIS_URL = os.getenv("CHANNEL_LAYER_REDIS_URL", REDIS_URL)

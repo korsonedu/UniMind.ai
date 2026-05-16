@@ -9,7 +9,7 @@ class AnswerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Answer
-        fields = '__all__'
+        fields = ('id', 'question', 'user', 'content', 'is_teacher', 'likes', 'created_at', 'updated_at', 'user_detail', 'likes_count', 'is_liked')
         read_only_fields = ('user', 'is_teacher', 'created_at')
 
     def get_is_liked(self, obj):
@@ -29,7 +29,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = '__all__'
+        fields = ('id', 'user', 'content', 'attachment', 'is_solved', 'is_starred', 'likes', 'followers', 'created_at', 'updated_at', 'institution', 'user_detail', 'answers', 'first_answer', 'reply_count', 'likes_count', 'is_liked', 'is_followed')
         read_only_fields = ('user', 'created_at', 'updated_at', 'is_solved', 'is_starred')
 
     def get_answers(self, obj):

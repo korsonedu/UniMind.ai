@@ -1,15 +1,17 @@
+import logging
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from datetime import timedelta
 
 from core.rate_limit import rate_limit
+
+logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
 from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS
@@ -174,8 +176,11 @@ class InstitutionStudentListView(APIView):
                         email_verified=True,
                     )
                     created.append(InstitutionStudentSerializer(user).data)
-                except Exception as e:
+                except (ValueError, TypeError) as e:
                     failed.append({'index': i, 'username': item.get('username', ''), 'error': str(e)})
+                except Exception:
+                    logger.exception("批量创建学员失败: index=%s username=%s", i, item.get('username', ''))
+                    failed.append({'index': i, 'username': item.get('username', ''), 'error': '系统错误，请重试'})
 
             return Response({
                 'created': created,
@@ -351,13 +356,15 @@ class InstitutionFeatureView(APIView):
         inst_data = None
         if inst:
             inst_data = {
-                'id': inst.id, 'name': inst.name,
+                'id': inst.id, 'name': inst.name, 'slug': inst.slug,
                 'plan': inst.plan, 'plan_label': inst.get_plan_display(),
                 'plan_expires_at': inst.plan_expires_at,
                 'is_active': inst.is_active,
                 'is_plan_active': inst.is_plan_active,
                 'max_students': inst.max_students,
                 'student_count': inst.student_count,
+                'invite_code': inst.invite_code,
+                'invite_slug': inst.invite_slug,
             }
 
         # Platform admins without an institution see all features.
@@ -497,7 +504,7 @@ class InstitutionPreviewView(APIView):
             'preview': True,
             'is_platform_admin': False,  # preview mode → behave as institution member
             'institution': {
-                'id': inst.id, 'name': inst.name,
+                'id': inst.id, 'name': inst.name, 'slug': inst.slug,
                 'plan': inst.plan, 'plan_label': inst.get_plan_display(),
                 'plan_expires_at': inst.plan_expires_at,
                 'is_active': inst.is_active,
@@ -517,13 +524,13 @@ from rest_framework.permissions import AllowAny
 
 
 class JoinInstitutionView(APIView):
-    """邀请链接：/join/{invite_slug} → 种 cookie → 重定向到 /login"""
+    """邀请链接：/join/{invite_slug} → 种 cookie → 重定向到 /register"""
     permission_classes = [AllowAny]
 
     def get(self, request, invite_slug):
         institution = get_object_or_404(Institution, invite_slug=invite_slug, is_active=True)
         frontend_url = getattr(settings, 'FRONTEND_URL', '')
-        response = redirect(f'{frontend_url}/login')
+        response = redirect(f'{frontend_url}/register')
         response.set_cookie(
             'institution_invite', invite_slug,
             max_age=7 * 24 * 3600,
@@ -573,13 +580,14 @@ class InstitutionSelfUpdateView(APIView):
             'max_students': inst.max_students,
             'student_count': inst.student_count,
             'notes': inst.notes or '',
+            'description': inst.description or '',
             'custom_domain': inst.custom_domain or '',
             'logo_url': self._build_logo_url(inst, request),
         })
 
     def put(self, request):
         inst = request.user.institution
-        allowed = ['name', 'contact_name', 'contact_email', 'contact_phone', 'notes']
+        allowed = ['name', 'contact_name', 'contact_email', 'contact_phone', 'notes', 'description']
         updated = []
         for field in allowed:
             if field in request.data:
@@ -664,6 +672,67 @@ class InstitutionInviteLookupView(APIView):
         return Response({'id': inst.id, 'name': inst.name, 'plan_label': inst.get_plan_display()})
 
 
+# ── Public Institution Page ──
+
+class PublicInstitutionView(APIView):
+    """公开：按 slug 获取机构信息（机构公开页使用）"""
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug):
+        inst = get_object_or_404(Institution, slug=slug, is_active=True)
+        return Response({
+            'id': inst.id,
+            'name': inst.name,
+            'slug': inst.slug,
+            'description': inst.description or '',
+            'logo_url': request.build_absolute_uri(inst.logo.url) if inst.logo else None,
+        })
+
+
+class InstitutionJoinBySlugView(APIView):
+    """学生通过机构标识（slug 或 invite_slug）加入机构"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        identifier = (request.data.get('slug') or '').strip()
+        if not identifier:
+            return Response({'error': '缺少机构标识'}, status=400)
+
+        from django.db.models import Q
+        try:
+            inst = Institution.objects.get(
+                Q(slug=identifier) | Q(invite_slug=identifier),
+                is_active=True,
+            )
+        except Institution.DoesNotExist:
+            return Response({'error': '机构不存在或已停用'}, status=404)
+        except Institution.MultipleObjectsReturned:
+            inst = Institution.objects.filter(slug=identifier, is_active=True).first()
+
+        if not inst.is_plan_active:
+            return Response({'error': '该机构服务已到期'}, status=403)
+
+        if inst.student_count >= inst.max_students:
+            return Response({'error': '该机构学员数已达上限'}, status=403)
+
+        user = request.user
+        if user.institution == inst:
+            return Response({'status': 'ok', 'institution': {'id': inst.id, 'name': inst.name}})
+        if user.institution is not None:
+            return Response({'error': '你已加入其他机构，请先退出'}, status=409)
+
+        user.institution = inst
+        user.institution_role = 'student'
+        user.is_member = True
+        user.membership_tier = inst.plan
+        user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
+
+        return Response({
+            'status': 'ok',
+            'institution': {'id': inst.id, 'name': inst.name},
+        })
+
+
 # ── Teacher: Create Own Institution ──
 
 class InstitutionCreateView(APIView):
@@ -706,7 +775,7 @@ class InstitutionCreateView(APIView):
             contact_name=contact_name,
             contact_email=contact_email,
             contact_phone=contact_phone,
-            notes=description,
+            description=description,
             plan=plan,
             plan_expires_at=compute_expiry(duration_days),
             created_by=user,

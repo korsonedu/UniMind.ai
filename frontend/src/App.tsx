@@ -36,6 +36,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
 import { WeeklyReportDialog } from './components/WeeklyReportDialog';
+import { Landing } from './pages/Landing';
 
 // Auth Guard with Persistence
 const RequireAuth = ({ children }: { children: ReactNode }) => {
@@ -55,7 +56,7 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
       api.get('/users/me/')
         .then(res => setAuth(res.data, token))
         .catch(() => {
-          localStorage.removeItem('token');
+          api.post('/users/logout/').catch(() => {});
           window.location.href = '/login';
         })
         .finally(() => setLoading(false));
@@ -102,17 +103,14 @@ const RequireInstitution = ({ children }: { children: ReactNode }) => {
   return children;
 };
 
-// 超管默认跳转到机构管理
+// 超管默认跳转到机构管理；Pro 机构有主页 → 主页，否则 → 课程中心
 const HomeRedirect = () => {
   const { user } = useAuthStore();
   const institution = useInstitutionStore(s => s.institution);
   if (user?.role === 'admin' && !institution && !user?.institution) return <Navigate to="/institution/admin" replace />;
+  if (institution?.plan === 'pro') return <InstitutionHome />;
   return <CourseCenter />;
 };
-
-import { Landing } from './pages/Landing';
-import { CourseDetails } from './pages/CourseDetails';
-import StartupMaterials from './pages/StartupMaterials';
 
 // Root entry handler to manage landing vs app logic
 const RootRedirect = () => {
@@ -127,7 +125,7 @@ const RootRedirect = () => {
       api.get('/users/me/')
         .then(res => setAuth(res.data, token))
         .catch(() => {
-          localStorage.removeItem('token');
+          api.post('/users/logout/').catch(() => {});
         })
         .finally(() => setLoading(false));
     }
@@ -137,16 +135,13 @@ const RootRedirect = () => {
     if (token || user) { setCheckingInvite(false); return; }
     api.get('/users/check-invite/')
       .then(res => {
-        if (res.data?.has_invite) navigate('/login', { replace: true });
+        if (res.data?.has_invite) navigate('/register', { replace: true });
       })
       .catch(() => {})
       .finally(() => setCheckingInvite(false));
   }, [token, user]);
 
   if (loading || checkingInvite) return <Loading message="Authenticating Secure Session..." fullScreen size="lg" />;
-
-  // Allow access to startup materials even if not logged in (using MainLayout)
-  if (location.pathname === '/startup-materials') return <MainLayout />;
 
   // If logged in, wrap the app content in MainLayout
   if (token && user) return <MainLayout />;
@@ -161,8 +156,6 @@ const router = createBrowserRouter([
     element: <RootRedirect />,
     children: [
       { index: true, element: <RequireAuth><HomeRedirect /></RequireAuth> },
-      { path: "course-details", element: <CourseDetails /> },
-      { path: "startup-materials", element: <StartupMaterials /> },
       { path: "articles", element: <RequireAuth><ArticleCenter /></RequireAuth> },
       { path: "qa", element: <RequireAuth><FeatureGuard feature={FEATURES.FAQ_SYSTEM}><QASystem /></FeatureGuard></RequireAuth> },
       { path: "article/:id", element: <RequireAuth><ArticleDetail /></RequireAuth> },
@@ -183,9 +176,10 @@ const router = createBrowserRouter([
       { path: "institution/students", element: <RequireAuth><RequireInstitution><InstitutionStudents /></RequireInstitution></RequireAuth> },
       { path: "institution/admin", element: <RequireAuth><RequireAdmin><InstitutionAdmin /></RequireAdmin></RequireAuth> },
       { path: "invite-codes", element: <RequireAuth><RequirePlatformAdmin><InviteCodeAdmin /></RequirePlatformAdmin></RequireAuth> },
-      { path: "intro", element: <InstitutionHome /> },
     ],
   },
+  { path: "/intro/:slug", element: <InstitutionHome /> },
+  { path: "/intro", element: <Navigate to="/" replace /> },
   { path: "/en", element: <LandingEn /> },
   { path: "/zh", element: <LandingZh /> },
   { path: "/login", element: <Login /> },

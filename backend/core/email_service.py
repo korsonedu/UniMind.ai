@@ -20,6 +20,8 @@ def generate_verification_code() -> str:
     return ''.join(secrets.choice(string.digits) for _ in range(VERIFICATION_CODE_LENGTH))
 
 
+import time
+
 def _send_via_resend(*, to: str, subject: str, html: str, text: str) -> bool:
     from_email = getattr(settings, "EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
     api_key = _resend_api_key()
@@ -27,31 +29,45 @@ def _send_via_resend(*, to: str, subject: str, html: str, text: str) -> bool:
         logger.error("RESEND_API_KEY not configured")
         return False
 
-    try:
-        resp = requests.post(
-            RESEND_API_URL,
-            json={
-                "from": f"UniMind.ai <{from_email}>",
-                "to": [to],
-                "subject": subject,
-                "html": html,
-                "text": text,
-            },
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            timeout=15,
-        )
-        if resp.status_code in (200, 201, 202):
-            logger.info("Email sent to %s via Resend", to)
-            return True
-        else:
+    for attempt in range(3):
+        try:
+            resp = requests.post(
+                RESEND_API_URL,
+                json={
+                    "from": f"UniMind.ai <{from_email}>",
+                    "to": [to],
+                    "subject": subject,
+                    "html": html,
+                    "text": text,
+                },
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=15,
+            )
+            if resp.status_code in (200, 201, 202):
+                logger.info("Email sent to %s via Resend", to)
+                return True
+            if resp.status_code >= 500 or resp.status_code == 429:
+                logger.warning("Resend API %s (attempt %s/3), retrying...", resp.status_code, attempt + 1)
+                time.sleep(min(2 ** attempt, 4))
+                continue
             logger.error("Resend API error %s: %s", resp.status_code, resp.text[:300])
             return False
-    except Exception as exc:
-        logger.exception("Failed to send email to %s via Resend: %s", to, exc)
-        return False
+        except requests.Timeout:
+            if attempt < 2:
+                time.sleep(1)
+                continue
+            logger.exception("Resend timeout after 3 attempts to %s", to)
+            return False
+        except Exception as exc:
+            if attempt < 2:
+                time.sleep(1)
+                continue
+            logger.exception("Failed to send email to %s after 3 attempts: %s", to, exc)
+            return False
+    return False
 
 
 def _verification_email_html(code: str) -> str:

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
+import { toast } from 'sonner';
 
 import api from '@/lib/api';
 
@@ -12,8 +13,18 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { setAuth } = useAuthStore();
+  const { setAuth, updateUser } = useAuthStore();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const getInstitutionSlug = (): string => {
+    const fromParam = searchParams.get('institution');
+    if (fromParam) return fromParam;
+    const cookie = document.cookie.split('; ').find(r => r.startsWith('institution_invite='));
+    if (cookie) return cookie.split('=')[1];
+    return '';
+  };
+  const institutionSlug = getInstitutionSlug();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +32,22 @@ export const Login: React.FC = () => {
     setError('');
     try {
       const response = await api.post('/users/login/', { username, password });
-      setAuth(response.data.user, response.data.token);
-      navigate('/intro');
+      const user = response.data.user;
+      const token = response.data.token;
+      setAuth(user, token);
+
+      // Auto-join institution from invite link or registration flow
+      if (institutionSlug) {
+        try {
+          await api.post('/users/institution/join-by-slug/', { slug: institutionSlug });
+          const meRes = await api.get('/users/me/');
+          updateUser(meRes.data);
+        } catch (err: any) {
+          toast.error(err.response?.data?.error || '加入机构失败，可稍后在设置中重试');
+        }
+      }
+
+      navigate('/');
     } catch (err: any) {
       const errorData = err.response?.data;
       setError(errorData?.error || errorData?.non_field_errors?.[0] || errorData?.detail || '登录失败，请检查用户名或密码');
@@ -66,7 +91,7 @@ export const Login: React.FC = () => {
           </form>
           <div className="mt-6 text-center text-sm text-muted-foreground">
             还没有账号？{" "}
-            <Link to="/register" className="text-black font-semibold hover:underline">
+            <Link to={institutionSlug ? `/register?institution=${institutionSlug}` : '/register'} className="text-black font-semibold hover:underline">
               立即注册
             </Link>
           </div>

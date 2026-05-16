@@ -56,6 +56,15 @@ def _html_to_pdf(html_string: str, output_path: str):
             pass
 
 
+def generate_mock_exam_pdf(record):
+    """为 PersonalizedMockExam 记录生成 PDF 试卷，更新记录字段。"""
+    result = PDFMockExamGenerator.generate_personalized_exam(record.user)
+    record.exam_pdf = result['exam_pdf']
+    record.answer_pdf = result['answer_pdf']
+    record.question_count = result['question_count']
+    record.weak_coverage = result['weak_coverage']
+
+
 class PDFMockExamGenerator:
     """个性化 PDF 模考卷生成服务 — 基于 AI 根据用户错题生成全新题目"""
 

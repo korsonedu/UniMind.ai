@@ -470,12 +470,17 @@ class QuestionGenerator:
                     kp_id, batch_index = future_map[future]
                     try:
                         job_results[(kp_id, batch_index)] = future.result()
-                    except BaseException as exc:  # noqa: BLE001
+                    except Exception as exc:
                         first_error = exc
                         for pending in future_map:
                             if not pending.done():
                                 pending.cancel()
                         break
+                    except KeyboardInterrupt:
+                        for pending in future_map:
+                            if not pending.done():
+                                pending.cancel()
+                        raise
 
             if first_error:
                 # 触发业务降级：从本地题库抽取现有题目
@@ -570,6 +575,7 @@ class QuestionGenerator:
         max_score: float,
         grading_points: Optional[str] = None,
         rubric: Optional[Any] = None,
+        options: Optional[Any] = None,
         subjective_type: str = '主观题',
     ) -> Dict[str, Any]:
         from quizzes.services.ai_task_service import QuizAITaskService
@@ -583,6 +589,7 @@ class QuestionGenerator:
             max_score=max_score,
             grading_points=grading_points,
             rubric=rubric,
+            options=options,
             subjective_type=subjective_type,
         )
 

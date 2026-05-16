@@ -32,11 +32,14 @@ def run_adversarial_pipeline(
     created_by,
     task_title: str = "",
     questions_per_kp: int = QUESTIONS_PER_KP,
+    types: Optional[List[str]] = None,
 ) -> int:
     """启动对抗性出题管线，返回 pipeline_task_id。"""
     kps = list(KnowledgePoint.objects.filter(id__in=kp_ids))
     if not kps:
         raise ValueError("未找到有效知识点")
+
+    types_list = types or []
 
     task = ContentPipelineTask.objects.create(
         task_type="ai_generate",
@@ -48,6 +51,7 @@ def run_adversarial_pipeline(
             "questions_per_kp": questions_per_kp,
             "max_iterations": MAX_ITERATIONS,
             "quality_threshold": QUALITY_THRESHOLD,
+            "types": types_list,
             "stages": [],
         },
         progress=0,
@@ -61,18 +65,19 @@ def run_adversarial_pipeline(
         task_id=task.id,
         kp_ids=[k.id for k in kps],
         questions_per_kp=questions_per_kp,
+        types=types_list,
     )
     return task.id
 
 
-def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_per_kp: int):
+def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_per_kp: int, types: Optional[List[str]] = None):
     """执行对抗性出题管线。"""
     all_questions = []
     stage_log = []
 
     # ── Stage 1: Author 批量生成 ──
     _update_task(task, 5, "Author 正在生成候选题目...", stage_log, "author_start")
-    drafts = _author_generate(kps, q_per_kp)
+    drafts = _author_generate(kps, q_per_kp, types=types)
     stage_log.append({"stage": "author_generated", "count": len(drafts), "timestamp": str(timezone.now())})
     _update_task(task, 30, f"Author 生成了 {len(drafts)} 道候选题目", stage_log, "author_done")
 
@@ -192,9 +197,27 @@ AUTHOR_SYSTEM_PROMPT = """\
 输出纯 JSON 数组（不要 markdown 代码块包裹）：
 [{"question": "题干", "q_type": "objective|subjective", "subjective_type": "noun|short|essay|calculate|null", "options": ["A. ...", "B. ...", "C. ...", "D. ..."]|null, "answer": "正确答案", "grading_points": ["判分点1", "判分点2"]|null, "difficulty_level": "entry|easy|normal|hard|extreme"}]"""
 
-def _author_generate(kps: List[KnowledgePoint], q_per_kp: int) -> List[Dict]:
+def _author_generate(kps: List[KnowledgePoint], q_per_kp: int, types: Optional[List[str]] = None) -> List[Dict]:
     """Author Agent：从知识点资料生成候选题目。"""
     system_prompt = PromptManager.get_prompt("AI_QUESTION_AUTHOR", AUTHOR_SYSTEM_PROMPT)
+
+    types_list = types or []
+    type_hint = ""
+    if types_list:
+        type_labels = []
+        for t in types_list:
+            if t == 'objective':
+                type_labels.append('客观选择题')
+            elif t == 'subjective:noun':
+                type_labels.append('名词解释')
+            elif t == 'subjective:short':
+                type_labels.append('简答题')
+            elif t == 'subjective:essay':
+                type_labels.append('论述题')
+            elif t == 'subjective:calculate':
+                type_labels.append('计算题')
+        if type_labels:
+            type_hint = f"\n题型限制：只生成以下题型：{'、'.join(type_labels)}。\n"
 
     questions = []
     for kp in kps:
@@ -204,7 +227,7 @@ def _author_generate(kps: List[KnowledgePoint], q_per_kp: int) -> List[Dict]:
             f"描述：{kp.description or '（请根据 431 金融学大纲理解该知识点的标准内容）'}\n"
             f"编码：{kp.code}\n\n"
             f"【出题要求】\n"
-            f"请为该知识点生成 {q_per_kp} 道题目，尽量覆盖不同题型和难度。\n"
+            f"请为该知识点生成 {q_per_kp} 道题目，尽量覆盖不同难度。{type_hint}\n"
             f"严格遵守输出 JSON 格式，不要输出任何 JSON 之外的说明文字。"
         )
         try:

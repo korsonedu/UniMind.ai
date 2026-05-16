@@ -178,6 +178,112 @@ class QuizAITaskService:
             operation='quizzes.generate_ai_answer',
         ) or ''
 
+    @staticmethod
+    def _resolve_grading_points(ai, grading_points, rubric, normalized_subjective_type):
+        if rubric and isinstance(rubric, list) and len(rubric) > 0:
+            lines = []
+            for i, item in enumerate(rubric, 1):
+                if isinstance(item, dict):
+                    point = item.get('point', item.get('criteria', str(item)))
+                    score = item.get('score', item.get('max_score', ''))
+                    if score:
+                        lines.append(f"{i}. {point}（{score}分）")
+                    else:
+                        lines.append(f"{i}. {point}")
+                else:
+                    lines.append(f"{i}. {item}")
+            return '\n'.join(lines) if lines else (grading_points or ai.default_grading_points(normalized_subjective_type))
+        return grading_points or ai.default_grading_points(normalized_subjective_type)
+
+    @classmethod
+    def _analyze_objective(cls, ai, question_text, options, correct_answer, user_answer, is_correct):
+        """客观题 AI 深度解析：为什么对、为什么错、易错点。失败时回退到简单文本。"""
+        try:
+            options_text = cls._format_options(options)
+            template = ai.get_template('quizzes', 'objective_analysis_prompt.txt') or ''
+            if not template:
+                return cls._fallback_objective_feedback(ai, correct_answer, is_correct)
+
+            prompt = ai.format_template(
+                template,
+                question_text=question_text,
+                options_text=options_text,
+                correct_answer=str(correct_answer),
+                user_answer=str(user_answer or '未作答'),
+                is_correct='正确' if is_correct else '错误',
+            )
+            response = ai.simple_chat(
+                system_prompt=ai._get_system_prompt(
+                    'quizzes',
+                    'system_ai_answer_prompt.txt',
+                    '你是金融431资深讲师，擅长客观题深度解析。仅输出 JSON 对象。',
+                ),
+                user_prompt=prompt,
+                temperature=0.4,
+                max_tokens=2000,
+                operation='quizzes.objective_analysis',
+            )
+            content = ai.extract_content(response)
+            parsed = cls.parse_grading_payload_with_repair(
+                ai, content or '', operation='quizzes.objective_analysis',
+            )
+            if isinstance(parsed, dict):
+                why_correct = parsed.get('why_correct', '')
+                why_wrong = parsed.get('why_wrong', '')
+                pitfalls = parsed.get('pitfalls', '')
+
+                feedback_parts = []
+                if is_correct:
+                    feedback_parts.append('作答与标准答案一致，本题满分。')
+                else:
+                    user_choice = ai.normalize_objective_answer(user_answer)
+                    correct_choice = ai.normalize_objective_answer(correct_answer)
+                    feedback_parts.append(
+                        f'你的作答为 {user_choice or "未作答"}，标准答案为 {correct_choice or "未设置"}，两者不一致，本题不得分。'
+                    )
+                if why_wrong:
+                    feedback_parts.append(why_wrong)
+                if pitfalls:
+                    feedback_parts.append(f'易错提醒：{pitfalls}')
+
+                analysis_parts = [f'标准答案：{correct_answer}']
+                if why_correct:
+                    analysis_parts.append(why_correct)
+
+                return '\n\n'.join(feedback_parts), '\n\n'.join(analysis_parts)
+
+        except Exception:
+            pass
+
+        return cls._fallback_objective_feedback(ai, correct_answer, is_correct)
+
+    @staticmethod
+    def _format_options(options):
+        if not options:
+            return '（无选项信息）'
+        if isinstance(options, list):
+            lines = []
+            for item in options:
+                if isinstance(item, dict):
+                    key = item.get('key', item.get('label', item.get('value', '')))
+                    text = item.get('text', item.get('label', item.get('value', '')))
+                    lines.append(f"{key}. {text}")
+                else:
+                    lines.append(str(item))
+            return '\n'.join(lines) if lines else '（无选项信息）'
+        return str(options)
+
+    @staticmethod
+    def _fallback_objective_feedback(ai, correct_answer, is_correct):
+        correct_choice = ai.normalize_objective_answer(correct_answer)
+        if is_correct:
+            feedback = '作答与标准答案一致，本题满分。'
+            analysis = f'标准答案：选择 {correct_choice or "（题库未设置）"}。该选项满足题干条件并与题目设定一致。'
+        else:
+            feedback = f'作答与标准答案不一致，本题不得分。标准答案为 {correct_choice or "未设置"}。'
+            analysis = f'标准答案：选择 {correct_choice or "（题库未设置）"}。请管理员补全解析后再进行训练。'
+        return feedback, analysis
+
     @classmethod
     def grade_question(
         cls,
@@ -188,6 +294,8 @@ class QuizAITaskService:
         q_type: str,
         max_score: float,
         grading_points: Optional[str] = None,
+        rubric: Optional[Any] = None,
+        options: Optional[Any] = None,
         subjective_type: str = '主观题',
     ) -> Dict[str, Any]:
         max_score = float(max_score or 0)
@@ -196,21 +304,20 @@ class QuizAITaskService:
             user_choice = ai.normalize_objective_answer(user_answer)
             correct_choice = ai.normalize_objective_answer(correct_answer)
             is_correct = bool(user_choice and user_choice == correct_choice)
+
+            ai_feedback, ai_analysis = cls._analyze_objective(
+                ai,
+                question_text=question_text,
+                options=options,
+                correct_answer=correct_answer,
+                user_answer=user_answer,
+                is_correct=is_correct,
+            )
+
             return {
                 'score': max_score if is_correct else 0.0,
-                'feedback': (
-                    f'判分依据：本题按标准答案唯一判分。你的作答为 {user_choice or "未作答"}，'
-                    f'标准答案为 {correct_choice or "未设置"}。'
-                    + ('作答与标准答案一致，因此给满分。' if is_correct else '两者不一致，因此本题不得分。')
-                ),
-                'analysis': (
-                    f'标准答案：选择 {correct_choice or "（题库未设置）"}。'
-                    + (
-                        '该选项满足题干条件并与题目设定一致。'
-                        if correct_choice
-                        else '请管理员补全该题标准答案后再进行训练。'
-                    )
-                ),
+                'feedback': ai_feedback,
+                'analysis': ai_analysis,
                 'fsrs_rating': 4 if is_correct else 1,
             }
 
@@ -221,7 +328,7 @@ class QuizAITaskService:
             question_text=question_text,
             subjective_type=subjective_type,
             max_score=max_score,
-            grading_points=grading_points or ai.default_grading_points(normalized_subjective_type),
+            grading_points=cls._resolve_grading_points(ai, grading_points, rubric, normalized_subjective_type),
             correct_answer=correct_answer or '无',
             user_answer=user_answer or '（空白）',
         )

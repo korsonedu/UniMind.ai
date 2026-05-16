@@ -45,8 +45,8 @@ class Institution(models.Model):
     # 版本与计费
     plan = models.CharField(
         max_length=20,
-        choices=[('basic', 'Basic'), ('plus', 'Plus'), ('pro', 'Pro')],
-        default='basic',
+        choices=[('free', 'Basic'), ('plus', 'Plus'), ('pro', 'Pro')],
+        default='free',
         verbose_name="当前版本"
     )
     plan_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="版本到期时间")
@@ -135,13 +135,13 @@ class User(AbstractUser):
 # backend/users/plan_features.py
 
 PLAN_STUDENT_LIMITS = {
-    'basic': 50,
+    'free': 50,
     'plus': 200,
     'pro': 9999,  # 不限
 }
 
 PLAN_FEATURES = {
-    'basic': [
+    'free': [
         'quiz.manual',         # 手动题库管理
         'quiz.exam',           # 基础组卷考试
         'student.management',  # 学员管理
@@ -175,7 +175,7 @@ PLAN_FEATURES = {
 }
 
 def get_plan_features(plan: str) -> list[str]:
-    return PLAN_FEATURES.get(plan, PLAN_FEATURES['basic'])
+    return PLAN_FEATURES.get(plan, PLAN_FEATURES['free'])
 
 def has_feature(institution, feature: str) -> bool:
     """检查机构是否有某个功能"""
@@ -384,7 +384,7 @@ import api from '@/lib/api';
 interface InstitutionInfo {
   id: number;
   name: string;
-  plan: 'basic' | 'plus' | 'pro';
+  plan: 'free' | 'plus' | 'pro';
   plan_label: string;
   plan_expires_at: string | null;
   is_active: boolean;
@@ -755,7 +755,7 @@ CREATE TABLE users_institution (
     contact_name VARCHAR(100) NOT NULL,
     contact_email VARCHAR(254) NOT NULL,
     contact_phone VARCHAR(20) NOT NULL DEFAULT '',
-    plan VARCHAR(20) NOT NULL DEFAULT 'basic',
+    plan VARCHAR(20) NOT NULL DEFAULT 'free',
     plan_expires_at DATETIME NULL,
     max_students_override INTEGER NULL,
     is_active BOOL NOT NULL DEFAULT 1,

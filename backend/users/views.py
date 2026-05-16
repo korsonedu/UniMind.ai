@@ -13,7 +13,7 @@ from .serializers import (
     ActivationCodeSerializer,
 )
 from .models import User, SystemConfig, DailyPlan, ActivationCode
-from .permissions import IsPlatformAdmin, IsAdmin
+from .permissions import IsPlatformAdmin, IsAdmin, is_platform_admin
 from django.utils import timezone
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -114,7 +114,8 @@ class RegisterView(generics.CreateAPIView):
 
         from datetime import timedelta
         existing = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
-        if not existing or existing.verification_code != code:
+        from django.contrib.auth.hashers import check_password
+        if not existing or not check_password(code, existing.verification_code):
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'error': '验证码错误或已过期'})
         if existing.verification_code_sent_at:
@@ -187,13 +188,22 @@ class BIAnalyticsView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
+        user = request.user
+        inst = getattr(user, 'institution', None)
+        is_platform = is_platform_admin(user)
+
+        # 机构管理员只看本机构数据
+        user_filter = {} if is_platform else {'user__institution': inst}
+        qs_filter = {} if is_platform else {'institution': inst}
+
         # 1. 知识点错题热力图 (取前10)
         kp_errors = UserQuestionStatus.objects.values(
             'question__knowledge_point__name'
         ).annotate(
             total_errors=Sum('wrong_count')
         ).filter(
-            question__knowledge_point__name__isnull=False
+            question__knowledge_point__name__isnull=False,
+            **user_filter,
         ).order_by('-total_errors')[:10]
 
         # 2. 课程完播率统计
@@ -202,11 +212,17 @@ class BIAnalyticsView(APIView):
         ).annotate(
             total_views=Count('user', distinct=True),
             completions=Count('id', filter=Q(is_finished=True))
+        ).filter(
+            **user_filter,
         ).order_by('-total_views')[:10]
 
         # 3. 活跃用户概览
-        total_users = User.objects.count()
-        member_users = User.objects.filter(is_member=True).count()
+        if is_platform:
+            total_users = User.objects.count()
+            member_users = User.objects.filter(is_member=True).count()
+        else:
+            total_users = User.objects.filter(institution=inst).count()
+            member_users = User.objects.filter(is_member=True, institution=inst).count()
 
         return Response({
             'kp_errors': list(kp_errors),
@@ -363,10 +379,20 @@ class OnlineUserListView(generics.ListAPIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     def get_queryset(self):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
         now = timezone.now()
         active_window_seconds = max(getattr(settings, "ONLINE_USER_ACTIVE_WINDOW_SECONDS", 300), 10)
         threshold = now - datetime.timedelta(seconds=active_window_seconds)
-        return User.objects.filter(is_active=True, last_active__gte=threshold).order_by('-last_active', '-elo_score')
+        qs = User.objects.filter(is_active=True, last_active__gte=threshold)
+        user = self.request.user
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
+        return qs.order_by('-last_active', '-elo_score')
 
 
 class HeartbeatView(APIView):
@@ -466,16 +492,37 @@ class LoginView(APIView):
             user = authenticate(username=login_id, password=password)
 
         if user:
-            token, created = Token.objects.get_or_create(user=user)
+            Token.objects.filter(user=user).delete()
+            token = Token.objects.create(user=user)
             user.last_login = timezone.now()
             user.save(update_fields=['last_login'])
-            return Response({
+            response = Response({
                 'token': token.key,
                 'user': UserSerializer(user).data
             })
+            is_secure = getattr(settings, 'IS_PROD', False)
+            response.set_cookie(
+                'auth_token', token.key,
+                httponly=True,
+                secure=is_secure,
+                samesite='Lax',
+                max_age=30 * 24 * 3600,
+            )
+            return response
         else:
             logger.debug("Authentication failed id=%s", login_id)
             return Response({'error': '邮箱或密码错误'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        Token.objects.filter(user=request.user).delete()
+        response = Response({'status': 'ok'})
+        response.delete_cookie('auth_token', samesite='Lax')
+        return response
+
 
 class UserDetailView(generics.RetrieveAPIView):
 
@@ -493,27 +540,40 @@ class UserDetailView(generics.RetrieveAPIView):
 
 class UpdateEmailView(generics.UpdateAPIView):
     serializer_class = UserSerializer
-    def get_object(self): return self.request.user
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
-        email = request.data.get('email')
-        if email:
-            user.email = email
-            user.save()
-            return Response(UserSerializer(user).data)
-        return Response({'error': 'Email required'}, status=400)
+        email = str(request.data.get('email', '')).strip().lower()
+        if not email or '@' not in email:
+            return Response({'error': '请提供有效的邮箱地址'}, status=400)
+        if User.objects.filter(email=email, email_verified=True).exclude(id=user.id).exists():
+            return Response({'error': '该邮箱已被注册'}, status=409)
+        user.email = email
+        user.email_verified = False
+        user.save(update_fields=['email', 'email_verified'])
+        return Response(UserSerializer(user).data)
 
 class UpdatePasswordView(generics.UpdateAPIView):
-    def get_object(self): return self.request.user
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
     def patch(self, request, *args, **kwargs):
         user = self.get_object()
-        old_p = request.data.get('old_password')
-        new_p = request.data.get('new_password')
+        old_p = request.data.get('old_password', '')
+        new_p = request.data.get('new_password', '')
+        if not new_p or len(str(new_p)) < 6:
+            return Response({'error': '新密码至少需要 6 位'}, status=400)
         if user.check_password(old_p):
             user.set_password(new_p)
-            user.save()
+            user.save(update_fields=['password'])
             return Response({'status': 'ok'})
-        return Response({'old_password': ['Wrong']}, status=400)
+        return Response({'error': '旧密码错误'}, status=400)
 
 
 class SendVerificationCodeView(APIView):
@@ -557,7 +617,8 @@ class SendVerificationCodeView(APIView):
                 )
                 user.set_unusable_password()
 
-        user.verification_code = code
+        from django.contrib.auth.hashers import make_password
+        user.verification_code = make_password(code)
         user.verification_code_sent_at = timezone.now()
         user.save(update_fields=['email', 'verification_code', 'verification_code_sent_at'])
 

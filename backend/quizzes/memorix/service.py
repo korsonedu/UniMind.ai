@@ -14,6 +14,7 @@ Usage (replaces FSRS.update_status):
 
 import math
 import logging
+from functools import lru_cache
 from typing import Optional
 
 import numpy as np
@@ -24,24 +25,18 @@ from quizzes.memorix.optimizer import MemorixOptimizer, MEMORIX_DEFAULT_WEIGHTS,
 
 logger = logging.getLogger(__name__)
 
-# Global weights cache — loaded per-user on first review of the process lifetime.
-_optimizer_cache: dict[int, MemorixOptimizer] = {}
+
+@lru_cache(maxsize=5000)
+def _load_weights(user_id: int) -> tuple:
+    profile = FSRSProfile.objects.filter(user_id=user_id).first()
+    if profile and profile.weights and len(profile.weights) == 20:
+        return tuple(round(w, 6) for w in profile.weights)
+    return tuple(MEMORIX_DEFAULT_WEIGHTS)
 
 
 def _get_optimizer(user_id: int) -> MemorixOptimizer:
-    """Load or create MemorixOptimizer for a user, using FSRSProfile.weights."""
-    if user_id in _optimizer_cache:
-        return _optimizer_cache[user_id]
-
-    profile = FSRSProfile.objects.filter(user_id=user_id).first()
-    if profile and profile.weights and len(profile.weights) == 20:
-        weights = np.array(profile.weights, dtype=np.float64)
-    else:
-        weights = MEMORIX_DEFAULT_WEIGHTS.copy()
-
-    opt = MemorixOptimizer(weights=weights)
-    _optimizer_cache[user_id] = opt
-    return opt
+    weights = np.array(_load_weights(user_id), dtype=np.float64)
+    return MemorixOptimizer(weights=weights)
 
 
 def _save_weights(user_id: int, opt: MemorixOptimizer):
@@ -180,6 +175,6 @@ class MemorixService:
     @staticmethod
     def flush_user_weights(user_id: int):
         """Force-save weights and clear from cache."""
-        if user_id in _optimizer_cache:
-            _save_weights(user_id, _optimizer_cache[user_id])
-            del _optimizer_cache[user_id]
+        opt = _get_optimizer(user_id)
+        _save_weights(user_id, opt)
+        _load_weights.cache_clear()

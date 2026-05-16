@@ -2,6 +2,7 @@ import json
 import logging
 import re
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 from ai_service import AIService
@@ -260,12 +261,14 @@ class MockExamGeneratorService:
         wrong_data = cls._collect_wrong_question_data(user)
         wrong_context = cls._format_wrong_question_context(wrong_data)
 
-        # 分两批并行调用 AI，防止单次响应过大导致 JSON 解析失败
-        questions_part1 = cls._generate_objectives_and_nouns(wrong_context)
-        logger.info("Batch 1 (objectives+nouns) returned %d questions", len(questions_part1))
-
-        questions_part2 = cls._generate_calcs_and_essays(wrong_context)
-        logger.info("Batch 2 (calcs+essays) returned %d questions", len(questions_part2))
+        # 分两批并行调用 AI，减少阻塞时间
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            future1 = pool.submit(cls._generate_objectives_and_nouns, wrong_context)
+            future2 = pool.submit(cls._generate_calcs_and_essays, wrong_context)
+            questions_part1 = future1.result()
+            logger.info("Batch 1 (objectives+nouns) returned %d questions", len(questions_part1))
+            questions_part2 = future2.result()
+            logger.info("Batch 2 (calcs+essays) returned %d questions", len(questions_part2))
 
         all_questions = questions_part1 + questions_part2
         return cls._categorize(all_questions)

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, Activity, ChevronDown, Bell, Target, Info, Filter, Trophy } from 'lucide-react';
+import { ArrowRight, BrainCircuit, Activity, ChevronDown, Bell, Target, Info, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -79,6 +79,9 @@ export const TestLadder: React.FC = () => {
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
   const [selectedSubIds, setSelectedSubIds] = useState<number[]>([]);
   const [subjectList, setSubjectList] = useState<Array<{ id: number; name: string; code: string }>>([]);
+  const [preference, setPreference] = useState<string>(() => {
+    try { return localStorage.getItem('quiz_preference') || 'balanced'; } catch { return 'balanced'; }
+  });
   
   // Data State
   const [questions, setQuestions] = useState<any[]>([]);
@@ -214,12 +217,13 @@ export const TestLadder: React.FC = () => {
     if (`${normalizedCount}` !== qCount) setQCount(`${normalizedCount}`);
 
     if (isMobile) {
-      navigate(`/tests/session?count=${normalizedCount}`);
+      navigate(`/tests/session?count=${normalizedCount}&preference=${preference}`);
       return;
     }
 
     try {
       const params = new URLSearchParams({ limit: String(normalizedCount) });
+      params.set('preference', preference);
       if (selectedSubIds.length > 0) {
         params.set('sub_ids', selectedSubIds.join(','));
       }
@@ -429,6 +433,35 @@ export const TestLadder: React.FC = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* 抽题偏好 */}
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em] ml-1">偏好</span>
+                    <div className="flex rounded-xl bg-muted p-1 gap-0.5 h-11 items-center">
+                      {([
+                        { value: 'balanced', label: '智能混合' },
+                        { value: 'new_first', label: '偏新题' },
+                        { value: 'review_first', label: '偏复习' },
+                      ] as const).map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            setPreference(value);
+                            try { localStorage.setItem('quiz_preference', value); } catch {}
+                          }}
+                          className={cn(
+                            "rounded-lg px-3 py-1.5 text-xs font-bold transition-all h-full",
+                            preference === value
+                              ? "bg-card text-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* 学科筛选 */}
                   <Popover>
                     <PopoverTrigger asChild>
@@ -462,9 +495,6 @@ export const TestLadder: React.FC = () => {
                   </Button>
                   <Button variant="outline" onClick={() => navigate('/tests/review')} className={cn("rounded-xl font-bold border-border shadow-sm hover:shadow-md transition-all", isMobile ? "h-10 text-sm flex-1" : "h-14 px-6 text-sm")}>
                     <Target className="mr-2 h-4 w-4" />错题复盘
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate('/tests/leaderboard')} className={cn("rounded-xl font-bold border-border shadow-sm hover:shadow-md transition-all", isMobile ? "h-10 text-sm flex-1" : "h-14 px-6 text-sm")}>
-                    <Trophy className="mr-2 h-4 w-4" />天梯排名
                   </Button>
                 </div>
               </div>

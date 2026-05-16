@@ -42,11 +42,16 @@ export const TestSessionPage: React.FC = () => {
     return Math.max(1, Math.min(raw, 50));
   }, [searchParams]);
 
+  const preference = useMemo(() => {
+    const p = searchParams.get('preference') || 'balanced';
+    return ['balanced', 'new_first', 'review_first'].includes(p) ? p : 'balanced';
+  }, [searchParams]);
+
   useEffect(() => {
     const fetchQuestions = async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/quizzes/questions/?limit=${questionLimit}`);
+        const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}`);
         if (!res.data?.length) {
           toast.error('题库暂无可用题目');
           navigate('/tests', { replace: true });

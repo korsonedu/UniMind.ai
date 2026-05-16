@@ -22,24 +22,22 @@
 
 ---
 
-## 阶段二：基建与模型落地 (待执行)
+## 阶段二：基建与模型落地 (已完成)
 
-*（以下为接下来即将执行的代码级工作量，将在此实时更新）*
+*（以下均已落地执行）*
 
-- [ ] 注册并创建新的 Django App: `interviews`
-- [ ] 在 `interviews/models.py` 中编写 `ResumeRecord`, `InterviewSession`, `InterviewTurn` 模型。
-- [ ] 注册相关的 Django Admin 管理后台，以便教研人员监控模型面试质量。
-- [ ] 生成并执行数据库迁移 (`makemigrations interviews`, `migrate`)。
+- [x] 注册并创建新的 Django App: `interviews`
+- [x] 在 `interviews/models.py` 中编写 `ResumeRecord`, `InterviewSession`, `InterviewTurn` 模型。
+- [x] 注册相关的 Django Admin 管理后台。
+- [x] 生成并执行数据库迁移。
 
 ---
 
-## 阶段三：核心 Prompt 与 AI 链路集成 (待执行)
+## 阶段三：核心 Prompt 与 AI 链路集成 (已完成)
 
-- [ ] 在 `PromptTemplate` 系统中注入面试专属系统 Prompt：
-  - `AI_RESUME_TUNER`: 简历“STAR法则”诊断与改写。
-  - `AI_MOCK_INTERVIEWER`: 扮演刁钻的金融导师。
-  - `AI_SPOKEN_ENGLISH_EXAMINER`: 针对英语口语的语法、流畅度评委。
-- [ ] 编写底层通信逻辑：规划接入 WebSocket 或模拟 REST 的占位符服务。
+- [x] `InterviewConsumer` 已实现 WebSocket 鉴权、会话归属校验、落库与 AI 追问回复。
+- [x] `interviews/views.py` 已实现会话创建/列表/详情、文本轮次对话、结束复盘、简历调优。
+- [x] 前端 `Interviews.tsx` 已接入真实 API。
 
 ---
 *日志将在开发进程中持续滚动更新。*

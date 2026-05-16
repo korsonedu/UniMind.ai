@@ -50,11 +50,11 @@
 
 | 页面 | URL | 说明 |
 |------|-----|------|
-| **产品介绍页** | `/`（未登录） | Landing 页，含功能展示、定价、FAQ。登录后自动跳转 `/dashboard` |
-| **机构首页** | `/intro` | 公开的机构首页，无需登录 |
-| **登录** | `/login` | 邮箱/用户名 + 密码登录 |
+| **产品介绍页** | `/`（未登录） | Landing 页，含功能展示、定价、FAQ。登录后 pro→机构主页，其他→课程中心 |
+| **机构首页** | `/intro/:slug` | 公开的机构首页，无需登录 |
+| **登录** | `/login` | 邮箱验证码登录 |
 | **注册** | `/register` | 邮箱验证码注册，自动开启 7 天全功能试用 |
-| **控制台** | `/dashboard` | 个人学习数据中心 |
+| **邀请链接** | `/join/:invite_slug` | 邀请链接 → 种 cookie → 302 到 /register |
 | **管理后台** | `/management` | 题库管理、用户权限、系统配置（需管理员） |
 
 ---
@@ -691,15 +691,9 @@ AI_MODEL_SCHEMA_REPAIR=deepseek-v4-flash         # JSON 修复
 ### 邮件
 
 ```bash
-# Gmail 需要 App Password（非邮箱密码）
-# 获取: https://myaccount.google.com/apppasswords
-EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USE_TLS=true
-EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-gmail-app-password
-EMAIL_NOREPLY_ADDRESS=noreply@your-domain.com
+# Resend HTTP API（生产环境）
+EMAIL_BACKEND=core.email_service.ResendEmailBackend
+RESEND_API_KEY=re_xxx
 
 # 开发环境可用 console 后端:
 # EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend

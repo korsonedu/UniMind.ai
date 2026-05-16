@@ -33,7 +33,7 @@ class User(AbstractUser):
     membership_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="会员到期时间")
     membership_tier = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="会员等级")
     trial_ends_at = models.DateTimeField(null=True, blank=True, verbose_name="试用到期时间")
-    verification_code = models.CharField(max_length=8, blank=True, verbose_name="验证码")
+    verification_code = models.CharField(max_length=128, blank=True, verbose_name="验证码哈希")
     verification_code_sent_at = models.DateTimeField(null=True, blank=True, verbose_name="验证码发送时间")
     institution_role = models.CharField(max_length=20, choices=INSTITUTION_ROLE_CHOICES, default='student', verbose_name="机构内角色")
     institution = models.ForeignKey('Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='students', verbose_name="所属机构")
@@ -162,6 +162,7 @@ class Institution(models.Model):
     custom_domain = models.CharField(max_length=200, blank=True, verbose_name="自定义域名")
     invite_slug = models.CharField(max_length=40, blank=True, unique=True, verbose_name="邀请链接 slug")
     logo = models.ImageField(upload_to='institution_logos/', blank=True, verbose_name="机构 Logo")
+    description = models.TextField(blank=True, verbose_name="机构简介")
     notes = models.TextField(blank=True, verbose_name="管理员备注")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_institutions', verbose_name="创建人")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
@@ -245,6 +246,13 @@ def get_plan_features(plan: str) -> list[str]:
     return PLAN_FEATURES.get(plan, PLAN_FEATURES.get('free', []))
 
 
+def has_plan_feature(institution, feature: str) -> bool:
+    """检查机构是否具备指定功能。"""
+    if institution is None:
+        return False
+    return feature in get_plan_features(institution.plan)
+
+
 def compute_expiry(duration_days: int):
     if duration_days <= 0:
         return None
@@ -319,5 +327,4 @@ from .models_commercial import (
     InstitutionUsageLog,
     InstitutionAuditLog,
     InstitutionPaymentConfig,
-    InstitutionProductPrice,
 )

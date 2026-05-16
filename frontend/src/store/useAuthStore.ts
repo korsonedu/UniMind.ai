@@ -23,6 +23,7 @@ interface User {
   institution?: {
     id: number;
     name: string;
+    slug: string;
     plan: string;
     plan_label: string;
     is_plan_active: boolean;
@@ -45,13 +46,11 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  token: localStorage.getItem('token'),
+  token: null,
   setAuth: (user, token) => {
-    localStorage.setItem('token', token);
     set({ user, token });
   },
   logout: () => {
-    localStorage.removeItem('token');
     set({ user: null, token: null });
   },
   updateUser: (updatedUser) => set((state) => ({

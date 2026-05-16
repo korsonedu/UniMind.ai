@@ -4,6 +4,7 @@ import api from '@/lib/api';
 interface InstitutionInfo {
   id: number;
   name: string;
+  slug: string;
   plan: 'free' | 'solo' | 'plus' | 'pro';
   plan_label: string;
   plan_expires_at: string | null;
@@ -11,6 +12,8 @@ interface InstitutionInfo {
   is_plan_active: boolean;
   max_students: number;
   student_count: number;
+  invite_code: string;
+  invite_slug: string;
 }
 
 interface UsageInfo {

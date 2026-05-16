@@ -1,4 +1,7 @@
+import logging
 from rest_framework import permissions
+
+logger = logging.getLogger(__name__)
 
 # Permission point constants
 CAP_LEARNING_ACCESS = "learning.access"
@@ -24,12 +27,11 @@ ROLE_PERMISSION_MATRIX = {
 
 
 def is_platform_admin(user) -> bool:
-    """超级管理员：is_superuser 且未绑定机构。机构管理员返回 False。"""
+    """超级管理员：is_superuser 即为平台管理员。"""
     return bool(
         user
         and user.is_authenticated
         and getattr(user, "is_superuser", False)
-        and getattr(user, "institution_id", None) is None
     )
 
 
@@ -71,7 +73,7 @@ def get_user_capabilities(user) -> list[str]:
                     if cap_str:
                         caps.append(cap_str)
         except Exception:
-            pass
+            logger.exception("加载权限组失败: user=%s", user.id)
 
         for cap in (profile.extra_permissions or []):
             cap_str = str(cap).strip()

@@ -1,6 +1,8 @@
 import json
 import os
 import shutil
+import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -14,10 +16,36 @@ from users.permissions import IsAdmin
 from .models import Course, Album, StartupMaterial, VideoProgress
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.views import IsMember
+from quizzes.utils import safe_int as _safe_int
 
 
 CHUNK_DIR = Path(settings.MEDIA_ROOT) / "chunk_uploads"
 MAX_CHUNK_SIZE_BYTES = 20 * 1024 * 1024  # 20MB per chunk
+
+
+def _extract_first_frame(video_path: str, course_title: str) -> str | None:
+    """用 ffmpeg 提取视频第一帧，返回截图临时文件路径。失败返回 None。"""
+    tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+    tmp.close()
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-ss", "0",
+                "-i", video_path,
+                "-vframes", "1",
+                "-q:v", "2",
+                "-y",
+                tmp.name,
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0 or not os.path.isfile(tmp.name) or os.path.getsize(tmp.name) == 0:
+            return None
+        return tmp.name
+    except Exception:
+        return None
 
 
 def _upload_dir(upload_id: str) -> Path:
@@ -38,13 +66,6 @@ def _load_meta(upload_id: str):
         return None
     with meta_file.open("r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def _safe_int(value, default=0):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
 
 
 class ChunkedUploadInitView(APIView):
@@ -186,6 +207,20 @@ class ChunkedUploadCompleteView(APIView):
             with merged_path.open("rb") as merged_file:
                 course.video_file.save(original_name, File(merged_file), save=False)
             course.save()
+
+            # 未上传封面时，自动提取第一帧作为封面
+            if not cover_image:
+                frame_path = _extract_first_frame(course.video_file.path, title)
+                if frame_path:
+                    try:
+                        with open(frame_path, "rb") as f:
+                            filename = f"cover_{course.id}_{uuid.uuid4().hex[:8]}.jpg"
+                            course.cover_image.save(filename, File(f), save=True)
+                    finally:
+                        try:
+                            os.remove(frame_path)
+                        except OSError:
+                            pass
         except Exception as exc:
             return Response({"error": f"合并失败：{exc}"}, status=500)
         finally:
@@ -291,6 +326,22 @@ class CourseListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         course = serializer.save(author=self.request.user, institution=self.request.user.institution)
+
+        # 未上传封面时，自动提取第一帧作为封面
+        if not course.cover_image and course.video_file:
+            frame_path = _extract_first_frame(course.video_file.path, course.title)
+            if frame_path:
+                import uuid as _uuid
+                try:
+                    with open(frame_path, "rb") as f:
+                        filename = f"cover_{course.id}_{_uuid.uuid4().hex[:8]}.jpg"
+                        course.cover_image.save(filename, File(f), save=True)
+                finally:
+                    try:
+                        os.remove(frame_path)
+                    except OSError:
+                        pass
+
         # 自动触发 ASR 转录 → 智能大纲流水线
         try:
             from .services.task_dispatcher import dispatch_transcription
@@ -321,21 +372,34 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [IsMember()]
 
 class AwardEloView(APIView):
+    """完成课程后领取 ELO 奖励，每门课仅一次。"""
     permission_classes = [IsMember]
 
     def post(self, request, pk):
         try:
             course = Course.objects.get(pk=pk)
-            user = request.user
-            user.elo_score += course.elo_reward
-            user.save()
-            return Response({
-                'status': 'success',
-                'elo_added': course.elo_reward,
-                'new_score': user.elo_score
-            })
         except Course.DoesNotExist:
             return Response({'error': '课程不存在'}, status=404)
+
+        progress = VideoProgress.objects.filter(
+            user=request.user, course=course, is_finished=True,
+        ).first()
+        if not progress:
+            return Response({'error': '请先完成课程学习'}, status=400)
+        if progress.elo_claimed_at:
+            return Response({'error': '已领取过该课程奖励'}, status=409)
+
+        from django.utils import timezone
+        from django.db.models import F
+        User.objects.filter(id=request.user.id).update(elo_score=F('elo_score') + course.elo_reward)
+        VideoProgress.objects.filter(pk=progress.pk).update(elo_claimed_at=timezone.now())
+
+        request.user.refresh_from_db()
+        return Response({
+            'status': 'success',
+            'elo_added': course.elo_reward,
+            'new_score': request.user.elo_score,
+        })
 
 
 class CourseOutlineView(APIView):
@@ -363,6 +427,10 @@ class CourseOutlineView(APIView):
             course = Course.objects.get(pk=pk)
         except Course.DoesNotExist:
             return Response({'error': '课程不存在'}, status=404)
+
+        transcript = getattr(course, 'transcript', None)
+        if not transcript or transcript.asr_status != 'completed':
+            return Response({'error': '请先完成语音转录'}, status=400)
 
         from .models import CourseOutline
         outline, _ = CourseOutline.objects.get_or_create(course=course)

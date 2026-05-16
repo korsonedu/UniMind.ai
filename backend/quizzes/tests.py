@@ -27,7 +27,7 @@ class AIPreviewGenerateViewTests(APITestCase):
             level="kp",
         )
 
-    @patch("quizzes.views.AIService.preview_generate_questions")
+    @patch("quizzes.views_ai.AIService.preview_generate_questions")
     def test_preview_timeout_returns_504(self, mock_preview):
         mock_preview.side_effect = AICallError(
             "AI 服务响应超时（>120s），请稍后重试。",

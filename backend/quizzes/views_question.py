@@ -111,16 +111,16 @@ class QuestionListView(generics.ListCreateAPIView):
             limit = 10
         limit = max(1, min(limit, 50))
 
-        mode = str(self.request.query_params.get('mode', 'adaptive')).strip().lower()
+        preference = str(self.request.query_params.get('preference', 'balanced')).strip().lower()
+        if preference not in {'balanced', 'new_first', 'review_first'}:
+            preference = 'balanced'
+
         adaptive_plan = build_adaptive_question_ids(
             user=user,
             limit=limit,
             base_queryset=qs,
+            preference=preference,
         )
-
-        # 兼容：当前默认 adaptive，保留 mode 参数用于后续 A/B 切换
-        if mode not in {'adaptive', 'legacy'}:
-            mode = 'adaptive'
 
         selected_ids = adaptive_plan['question_ids']
         self._study_mix_meta = adaptive_plan['meta']
@@ -176,6 +176,18 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
     permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        from django.db.models import Q
+        user = self.request.user
+        qs = super().get_queryset()
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst:
+                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            else:
+                qs = qs.filter(institution__isnull=True)
+        return qs
 
 
 class BulkImportQuestionsView(APIView):

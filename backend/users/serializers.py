@@ -10,7 +10,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'elo_reset_count', 'is_member', 'membership_tier', 'is_admin', 'is_institution_admin', 'institution', 'institution_role', 'institution_id')
-        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'is_admin', 'is_institution_admin', 'institution_role')
+        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'is_admin', 'is_institution_admin', 'institution_role', 'institution_id')
 
     def get_is_admin(self, obj):
         return obj.is_superuser and obj.institution_id is None
@@ -34,15 +34,15 @@ class UserSerializer(serializers.ModelSerializer):
 
 class ActivationCodeSerializer(serializers.ModelSerializer):
     used_by_username = serializers.CharField(source='used_by.username', read_only=True)
-    
+
     class Meta:
         model = ActivationCode
-        fields = '__all__'
+        fields = ('id', 'code', 'is_used', 'used_by', 'used_at', 'duration_days', 'created_at', 'used_by_username')
 
 class DailyPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyPlan
-        fields = '__all__'
+        fields = ('id', 'user', 'content', 'is_completed', 'completed_at', 'created_at')
         read_only_fields = ('user',)
 
 class SystemConfigSerializer(serializers.ModelSerializer):

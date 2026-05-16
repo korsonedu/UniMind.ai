@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import ContentPipelineTask, PromptTemplateVersion
 from quizzes.serializers import ContentPipelineTaskSerializer
-from users.permissions import IsAdmin
+from users.permissions import IsAdmin, IsPlatformAdmin
 from core.prompt_manager import PromptManager
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,21 @@ class AdminContentPipelineTaskDetailView(APIView):
     permission_classes = [IsAdmin]
 
     def get_object(self, pk):
-        return get_object_or_404(ContentPipelineTask.objects.select_related("created_by", "assignee"), pk=pk)
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        user = self.request.user
+        if is_platform_admin(user):
+            return get_object_or_404(ContentPipelineTask.objects.select_related("created_by", "assignee"), pk=pk)
+        inst = user.institution
+        if inst:
+            return get_object_or_404(
+                ContentPipelineTask.objects.select_related("created_by", "assignee"),
+                Q(pk=pk) & (Q(created_by__institution=inst) | Q(created_by__institution__isnull=True)),
+            )
+        return get_object_or_404(
+            ContentPipelineTask.objects.select_related("created_by", "assignee"),
+            pk=pk, created_by__institution__isnull=True,
+        )
 
     def get(self, request, pk):
         task = self.get_object(pk)
@@ -108,6 +122,8 @@ class AdminContentPipelineMetricsView(APIView):
     permission_classes = [IsAdmin]
 
     def get(self, request):
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
         try:
             days = int(request.query_params.get("days", 14))
         except (TypeError, ValueError):
@@ -119,6 +135,13 @@ class AdminContentPipelineMetricsView(APIView):
             task_type="ai_generate",
             created_at__gte=since,
         ).only("status", "result", "error_message", "created_at")
+
+        if not is_platform_admin(request.user):
+            inst = request.user.institution
+            if inst:
+                qs = qs.filter(Q(created_by__institution=inst) | Q(created_by__institution__isnull=True))
+            else:
+                qs = qs.filter(created_by__institution__isnull=True)
 
         total = qs.count()
         status_counter = {
@@ -244,7 +267,7 @@ class AdminContentPipelineTaskRetryView(APIView):
 
 class AdminPromptTemplateListView(APIView):
     """列出某 namespace 下的所有 prompt 模板文件。"""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsPlatformAdmin]
 
     def get(self, request):
         namespace = str(request.query_params.get("namespace", "quizzes")).strip() or "quizzes"
@@ -272,7 +295,7 @@ class AdminPromptTemplateListView(APIView):
 
 class AdminPromptTemplateDetailView(APIView):
     """读取/保存单个 prompt 模板文件。"""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsPlatformAdmin]
 
     def get(self, request):
         namespace = str(request.query_params.get("namespace", "quizzes")).strip() or "quizzes"
@@ -347,7 +370,7 @@ class AdminPromptTemplateDetailView(APIView):
 
 class AdminPromptTemplateRollbackView(APIView):
     """回滚 prompt 模板到指定版本。"""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsPlatformAdmin]
 
     def post(self, request):
         namespace = str(request.data.get("namespace", "quizzes")).strip() or "quizzes"

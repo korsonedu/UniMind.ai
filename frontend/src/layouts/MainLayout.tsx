@@ -15,9 +15,6 @@ import {
   BrainCircuit,
   BarChart3,
   Building2,
-  Home,
-  Info,
-  Rocket,
   MessageCircleQuestion,
   Loader2,
   Lock,
@@ -25,6 +22,9 @@ import {
   Wrench,
   Eye,
   EyeOff,
+  UserPlus,
+  Copy,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -137,7 +137,7 @@ export const MainLayout: React.FC = () => {
   const { institution: instFromStore, fetchFeatures, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
   const instInfo = instFromStore || user?.institution || null;
 
-  const isFullPage = ['/intro', '/course-details', '/management'].includes(location.pathname);
+  const isFullPage = ['/management'].includes(location.pathname);
   const isMobileAllowedPath = (pathname: string) =>
     pathname === '/' ||
     pathname === '/articles' ||
@@ -158,6 +158,12 @@ export const MainLayout: React.FC = () => {
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-override', primaryColor);
   }, [primaryColor]);
+
+  useEffect(() => {
+    document.title = instInfo?.name
+      ? `${instInfo.name} - UniMind.ai - 新一代AI教育基础设施`
+      : 'UniMind.ai - 新一代AI教育基础设施';
+  }, [instInfo?.name]);
 
   useEffect(() => {
     fetchFeatures();
@@ -224,11 +230,9 @@ export const MainLayout: React.FC = () => {
         { to: '/mock-exam', icon: FileText, label: 'PDF 模考', minPlan: 3 },
       ];
 
-  // ── 机构成员 —— 附加机构入口（机构设置移到头像下拉菜单）──
+  // ── 机构成员 —— 机构入口已移至头像下拉菜单 ──
   if (!isSuperAdmin && instInfo) {
-    navItems.push({ to: '/institution', icon: BarChart3, label: '机构看板', section: '机构' });
     if (user?.institution_role === 'admin') {
-      navItems.push({ to: '/institution/students', icon: UserIcon, label: '学员管理', section: '机构' });
       navItems.push({ to: '/management', icon: Wrench, label: '维护中心', section: '机构' });
     }
   }
@@ -294,13 +298,6 @@ export const MainLayout: React.FC = () => {
               />
             ))}
 
-            <div className="my-3 px-2.5">
-              <div className="h-px bg-border w-full opacity-80" />
-            </div>
-
-            <SidebarItem to="/startup-materials" icon={Rocket} label="启动资料" active={location.pathname === '/startup-materials'} collapsed={collapsed} />
-            <SidebarItem to="/intro" icon={Home} label="主页" active={location.pathname === '/intro'} collapsed={collapsed} />
-            <SidebarItem to="/course-details" icon={Info} label="课程介绍" active={location.pathname === '/course-details'} collapsed={collapsed} />
           </nav>
 
           <div className="mt-auto">
@@ -340,6 +337,13 @@ export const MainLayout: React.FC = () => {
                     <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Settings2 className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">机构设置</span>
+                    </DropdownMenuItem>
+                  )}
+                  {/* 机构看板：所有机构成员可见 */}
+                  {!isSuperAdmin && instInfo && (
+                    <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                      <BarChart3 className="h-3.5 w-3.5" />
+                      <span className="font-bold text-xs">机构看板</span>
                     </DropdownMenuItem>
                   )}
                   {user?.role === 'admin' && (
@@ -396,6 +400,64 @@ export const MainLayout: React.FC = () => {
                <div className="flex items-center gap-3">
                   {/* Clickable ELO */}
                   {user && <EloPopover />}
+                  {/* Invite students — institution admin only */}
+                  {!isSuperAdmin && instInfo && user?.institution_role === 'admin' && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-[11px] font-bold">
+                          <UserPlus className="h-3.5 w-3.5 mr-1" />
+                          邀请学员
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-3 bg-card/95 backdrop-blur-xl border-border shadow-2xl">
+                        <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">
+                          邀请学员加入 {instInfo.name}
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <div className="space-y-3 px-1 py-1">
+                          <div className="space-y-1.5">
+                            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">邀请链接</Label>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 bg-muted px-3 py-2 rounded-lg text-[11px] font-mono font-bold truncate select-all">
+                                {window.location.origin}/api/users/join/{instInfo.invite_slug}/
+                              </code>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
+                                  toast.success('邀请链接已复制');
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            将链接发送给学员，学员点击后注册即可自动加入本机构。
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-[11px] font-bold text-muted-foreground"
+                            onClick={async () => {
+                              try {
+                                await api.post('/users/institution/me/regenerate-invite-slug/');
+                                toast.success('邀请链接已重置');
+                                fetchFeatures();
+                              } catch {
+                                toast.error('重置失败');
+                              }
+                            }}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            重新生成邀请链接
+                          </Button>
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   {/* Upgrade plan button — hidden for institution students, plus & pro */}
                   {!isInstStudent && myPlanLevel < 3 && (
                     <Button
@@ -451,6 +513,25 @@ export const MainLayout: React.FC = () => {
                       <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Settings2 className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">机构设置</span>
+                      </DropdownMenuItem>
+                    )}
+                    {/* 机构看板：所有机构成员可见 */}
+                    {!isSuperAdmin && instInfo && (
+                      <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                        <BarChart3 className="h-3.5 w-3.5" />
+                        <span className="font-bold text-xs">机构看板</span>
+                      </DropdownMenuItem>
+                    )}
+                    {!isSuperAdmin && instInfo && user?.institution_role === 'admin' && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
+                          toast.success('邀请链接已复制');
+                        }}
+                        className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span className="font-bold text-xs">复制邀请链接</span>
                       </DropdownMenuItem>
                     )}
                     {user?.is_member && (

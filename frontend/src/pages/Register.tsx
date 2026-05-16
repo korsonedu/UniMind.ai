@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,15 @@ export const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [codeSent, setCodeSent] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const getInstitutionSlug = (): string => {
+    const fromParam = searchParams.get('institution');
+    if (fromParam) return fromParam;
+    const cookie = document.cookie.split('; ').find(r => r.startsWith('institution_invite='));
+    if (cookie) return cookie.split('=')[1];
+    return '';
+  };
+  const institutionSlug = getInstitutionSlug();
 
   const handleSendCode = async () => {
     if (!email.trim()) { setError('请先输入邮箱'); return; }
@@ -38,7 +47,7 @@ export const Register: React.FC = () => {
     setError('');
     try {
       await api.post('/users/register/', { email, code, nickname, password });
-      navigate('/login');
+      navigate(institutionSlug ? `/login?institution=${institutionSlug}` : '/login');
     } catch (err: any) {
       setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat()[0] as string || '注册失败');
     } finally {
@@ -114,7 +123,7 @@ export const Register: React.FC = () => {
           </form>
           <div className="mt-6 text-center text-sm text-muted-foreground">
             已有账号？{" "}
-            <Link to="/login" className="text-black font-semibold hover:underline">
+            <Link to={institutionSlug ? `/login?institution=${institutionSlug}` : '/login'} className="text-black font-semibold hover:underline">
               去登录
             </Link>
           </div>
