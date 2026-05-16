@@ -63,7 +63,7 @@ urlpatterns = [
     path('institution/join/', InstitutionJoinView.as_view(), name='institution-join'),
     path('institution/me/regenerate-invite-slug/', RegenerateInviteSlugView.as_view(), name='regenerate-invite-slug'),
     path('institution/join-by-slug/', InstitutionJoinBySlugView.as_view(), name='institution-join-by-slug'),
-    path('public/institution/<slug:slug>/', PublicInstitutionView.as_view(), name='public-institution'),
+    path('public/institution/<str:slug>/', PublicInstitutionView.as_view(), name='public-institution'),
     path('check-invite/', CheckInviteView.as_view(), name='check-invite'),
 
     # Institution — students
