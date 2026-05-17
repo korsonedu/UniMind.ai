@@ -88,8 +88,12 @@ class Command(BaseCommand):
                 level_depth = 4
                 level_str = 'kp'
 
-            # 通过深度寻找父节点
-            parent = stack.get(level_depth - 1)
+            # 通过深度寻找父节点，找不到则向上回溯祖先
+            parent = None
+            for ancestor_level in range(level_depth - 1, 0, -1):
+                parent = stack.get(ancestor_level)
+                if parent is not None:
+                    break
 
             # 计算同级排序：以父节点 + 层级为 key
             parent_id = parent.id if parent else None

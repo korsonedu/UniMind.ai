@@ -182,15 +182,36 @@ def _parse_md_knowledge_tree(md_text: str) -> list:
         if not line:
             continue
 
+        # Support both "#" headings and "- [CODE] Name" for KP-level nodes
         heading_match = re.match(r'^(#{1,4})\s+(.+)', line)
-        if heading_match:
-            level = len(heading_match.group(1))  # 1-4
-            content = heading_match.group(2).strip()
+        dash_match = re.match(r'^-\s+\[(.*?)\]\s*(.*)$', line)
+        if heading_match or dash_match:
+            if heading_match:
+                level = len(heading_match.group(1))  # 1-4
+                content = heading_match.group(2).strip()
+                # Parse code and name — supports two formats:
+                #   1. "[CODE] Name (extra)"   — from management command style
+                #   2. "CODE - Name"           — from frontend import panel
+                bracket_match = re.match(r'^\[(.*?)\]\s*(.*)$', content)
+                if bracket_match:
+                    code = bracket_match.group(1).strip()
+                    name = bracket_match.group(2).strip()
+                else:
+                    parts = content.split(' - ', 1)
+                    if len(parts) > 1:
+                        code = parts[0].strip()
+                        name = parts[1].strip()
+                    else:
+                        # No recognizable code format — skip (comment or non-node line)
+                        continue
+            else:
+                # dash_match: "- [CODE] Name" → KP level
+                level = 4
+                code = dash_match.group(1).strip()
+                name = dash_match.group(2).strip()
 
-            # Parse code and name: "MB-1-1 - Description" or "MB - Subject"
-            parts = content.split(' - ', 1)
-            code = parts[0].strip() if len(parts) > 0 else ''
-            name = parts[1].strip() if len(parts) > 1 else code
+            # Strip parenthesized annotations from name (e.g. "货币银行学（基础理论组）" → "货币银行学")
+            name = re.sub(r'[（\(].*?[）\)]', '', name).strip()
 
             # Determine KP level from heading depth
             kp_level = {1: 'sub', 2: 'ch', 3: 'sec', 4: 'kp'}.get(level, 'kp')
@@ -209,7 +230,7 @@ def _parse_md_knowledge_tree(md_text: str) -> list:
             nodes.append(node)
             current_path[level] = len(nodes) - 1
 
-            # Set parent based on previous heading level
+            # Set parent based on previous heading level, with ancestor fallback
             parent_level = level - 1
             while parent_level >= 1:
                 if current_path.get(parent_level) is not None:
@@ -248,12 +269,14 @@ def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix='', instit
         description = node.get('description', '')
         prefix_category = node.get('prefix_category', prefix)
 
-        # Try to find existing by code (scoped to same institution or global)
+        # Try to find existing by code, strictly scoped to same institution bucket
         existing = None
         if code:
             qs = KnowledgePoint.objects.filter(code=code)
             if institution:
                 qs = qs.filter(institution=institution)
+            else:
+                qs = qs.filter(institution__isnull=True)
             existing = qs.first()
 
         if existing:
