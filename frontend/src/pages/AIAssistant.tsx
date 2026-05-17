@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 import { PageWrapper } from '@/components/PageWrapper';
+import { PointsConfirmDialog } from '@/components/PointsConfirmDialog';
 
 // Modularized Components
 import { BotSelector } from './ai-assistant/BotSelector';
@@ -35,7 +36,9 @@ export const AIAssistant: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isComposing, setIsComposition] = useState(false); 
+  const [isComposing, setIsComposition] = useState(false);
+  const [showPointsConfirm, setShowPointsConfirm] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -106,24 +109,32 @@ export const AIAssistant: React.FC = () => {
     }
   }, [messages, selectedBot]);
 
+  const doSend = async (text: string) => {
+    setLoading(true);
+    try {
+      await api.post('/ai/chat/', { message: text, bot_id: selectedBot!.id });
+      const res = await api.get('/ai/history/', { params: { bot_id: selectedBot!.id } });
+      if (res.data.length > 0) {
+        setMessages(res.data.map((m: any) => ({ ...m, content: processMathContent(m.content) })));
+      }
+    } catch (err: any) {
+      // 402 积分不足 由 api 拦截器处理 toast
+      if (err.response?.status !== 402) {
+        toast.error("发送失败");
+      }
+      setInput(text);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!selectedBot) return toast.error("请选择 AI 助教");
     if (!input.trim() || loading) return;
-    const messageContent = input;
+    const text = input;
     setInput('');
-    setLoading(true);
-    try {
-      await api.post('/ai/chat/', { message: messageContent, bot_id: selectedBot.id });
-      const res = await api.get('/ai/history/', { params: { bot_id: selectedBot.id } });
-      if (res.data.length > 0) {
-        setMessages(res.data.map((m: any) => ({ ...m, content: processMathContent(m.content) })));
-        setLoading(false);
-      }
-    } catch (error: any) {
-      toast.error("发送失败");
-      setLoading(false);
-      setInput(messageContent);
-    }
+    setPendingMessage(text);
+    setShowPointsConfirm(true);
   };
 
   const handleReset = async () => {
@@ -210,6 +221,18 @@ export const AIAssistant: React.FC = () => {
           </footer>
         </Card>
       </div>
+      <PointsConfirmDialog
+        open={showPointsConfirm}
+        onOpenChange={setShowPointsConfirm}
+        cost={8}
+        featureName="AI 助教对话"
+        balance={user?.elo_points ?? 0}
+        onConfirm={() => {
+          setShowPointsConfirm(false);
+          doSend(pendingMessage);
+        }}
+        loading={loading}
+      />
     </PageWrapper>
   );
 };

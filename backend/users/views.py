@@ -399,8 +399,23 @@ class HeartbeatView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        from datetime import date as date_cls
         user = request.user
-        user.last_active = timezone.now()
+        now = timezone.now()
+        today = now.date()
+
+        # 每日首次心跳发积分
+        daily_bonus = 0
+        last_date = user.last_active.date() if user.last_active else None
+        if last_date != today:
+            from users.points import _get_multiplier
+            base_bonus = 5
+            mult = _get_multiplier(user.institution_id)
+            daily_bonus = max(1, int(base_bonus * mult))
+            from users.points import award_elo_points
+            award_elo_points(user.id, daily_bonus, 'admin_adjust', description='每日登录')
+
+        user.last_active = now
         update_fields = ["last_active"]
 
         if "current_task" in request.data:
@@ -434,12 +449,17 @@ class HeartbeatView(APIView):
             update_fields.append("current_timer_end")
 
         user.save(update_fields=update_fields)
-        return Response({
+        resp = {
             "status": "ok",
             "last_active": user.last_active,
             "current_task": user.current_task,
             "current_timer_end": user.current_timer_end,
-        })
+            "daily_bonus": daily_bonus,
+        }
+        if daily_bonus > 0:
+            user.refresh_from_db(fields=['elo_points'])
+            resp['elo_points'] = user.elo_points
+        return Response(resp)
 
 class SystemConfigView(generics.RetrieveUpdateAPIView):
     queryset = SystemConfig.objects.all()

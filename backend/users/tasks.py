@@ -82,3 +82,31 @@ def elo_decay_weekly():
 
     if decayed > 0:
         logger.info("elo_decay_weekly: %s users deep-decayed", decayed)
+
+
+@shared_task
+def monthly_points_bonus():
+    """每月 1 号发放机构配置的积分赠送。"""
+    from users.models import InstitutionRewardConfig
+    from users.points import award_elo_points
+
+    configs = InstitutionRewardConfig.objects.filter(
+        is_enabled=True,
+        monthly_bonus_points__gt=0,
+    )
+    total_awarded = 0
+    for cfg in configs:
+        students = User.objects.filter(
+            institution=cfg.institution,
+            is_active=True,
+            institution_role='student',
+        )
+        for student in students:
+            award_elo_points(
+                student.id, cfg.monthly_bonus_points,
+                'admin_adjust',
+                description=f'{cfg.institution.name} 每月积分赠送',
+            )
+        total_awarded += students.count()
+    if total_awarded > 0:
+        logger.info("monthly_points_bonus: %s students received bonus", total_awarded)
