@@ -185,7 +185,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
       )}
 
       {/* Conversation transcript */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 min-h-0" style={{ minHeight: '320px' }}>
+      <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 min-h-0">
         {turns.length === 0 && !localCandidateTurn && (
           <p className="text-[13px] text-neutral-400 text-center py-16">等待面试官提问…</p>
         )}
