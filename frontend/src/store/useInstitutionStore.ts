@@ -13,6 +13,7 @@ interface InstitutionInfo {
   max_students: number;
   student_count: number;
   invite_slug: string;
+  business_type: string;
 }
 
 interface UsageInfo {

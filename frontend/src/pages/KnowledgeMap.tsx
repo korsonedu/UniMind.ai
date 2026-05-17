@@ -409,7 +409,7 @@ const KnowledgeTreePanel: React.FC<{
       }
     }
     const sortTree = (list: TreeNodeData[]) => {
-      list.sort((a, b) => (LEVEL_ORDER[a.level] ?? 99) - (LEVEL_ORDER[b.level] ?? 99) || a.name.localeCompare(b.name));
+      list.sort((a, b) => (LEVEL_ORDER[a.level ?? ''] ?? 99) - (LEVEL_ORDER[b.level ?? ''] ?? 99) || (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
       list.forEach(t => sortTree(t.children));
     };
     sortTree(roots);
@@ -780,6 +780,7 @@ export const KnowledgeMap: React.FC = () => {
             description: item.description,
             parent: item.parent,
             level: item.level,
+            order: item.order,
             questions_count: item.questions_count,
           });
           if (item.children && item.children.length > 0) flatten(item.children);
@@ -787,7 +788,7 @@ export const KnowledgeMap: React.FC = () => {
       };
       if (rawData.length > 0 && rawData[0].children !== undefined) flatten(rawData);
       else flatNodes.push(...rawData);
-      flatNodes.sort((a, b) => (b.questions_count || 0) - (a.questions_count || 0) || a.name.localeCompare(b.name));
+      flatNodes.sort((a, b) => (b.questions_count || 0) - (a.questions_count || 0) || (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
       setAllNodes(flatNodes);
     } catch (e) {
     } finally {

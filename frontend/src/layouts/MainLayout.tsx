@@ -151,7 +151,9 @@ export const MainLayout: React.FC = () => {
     pathname.startsWith('/knowledge-map/') ||
     pathname === '/tests' ||
     pathname.startsWith('/tests/') ||
-    pathname === '/settings';
+    pathname === '/settings' ||
+    pathname === '/courses' ||
+    pathname.startsWith('/course/');
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && location.pathname.startsWith('/tests/session');
   const hideMobileBottomNav = isMobile && location.pathname.startsWith('/tests/session');

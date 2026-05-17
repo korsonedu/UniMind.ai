@@ -72,7 +72,8 @@ class InterviewConsumer(AsyncWebsocketConsumer):
 
                     candidate_turn = await self._append_turn(session.id, 'candidate', user_text)
                     history = await self._build_messages_for_ai(session.id)
-                    ai_reply = await self._generate_reply(session.session_type, session.interviewer_style, history)
+                    institution = await database_sync_to_async(lambda: session.user.institution)()
+                    ai_reply = await self._generate_reply(session.session_type, session.interviewer_style, history, institution)
                     interviewer_turn = await self._append_turn(session.id, 'interviewer', ai_reply)
 
                     await self.send(text_data=json.dumps({
@@ -110,12 +111,13 @@ class InterviewConsumer(AsyncWebsocketConsumer):
         return messages
 
     @database_sync_to_async
-    def _generate_reply(self, session_type: str, style: str, history: list):
+    def _generate_reply(self, session_type: str, style: str, history: list, institution=None):
         try:
             generated = InterviewAIService.generate_interview_reply(
                 session_type=session_type,
                 style=style,
                 chat_history=history,
+                institution=institution,
             )
             if generated:
                 return generated

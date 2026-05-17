@@ -21,13 +21,23 @@ export const InterviewRadarChart: React.FC<Props> = ({ scores }) => {
   }));
 
   return (
-    <div className="w-full h-56">
+    <div className="w-full h-48">
       <ResponsiveContainer>
         <RechartsRadar data={data}>
-          <PolarGrid stroke="#e2e8f0" />
-          <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }} />
+          <PolarGrid stroke="#e5e5e5" strokeWidth={0.5} />
+          <PolarAngleAxis
+            dataKey="dimension"
+            tick={{ fontSize: 10, fontWeight: 500, fill: '#a3a3a3' }}
+          />
           <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
-          <Radar name="评分" dataKey="score" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} />
+          <Radar
+            name="评分"
+            dataKey="score"
+            stroke="#171717"
+            fill="#171717"
+            fillOpacity={0.08}
+            strokeWidth={1}
+          />
         </RechartsRadar>
       </ResponsiveContainer>
     </div>

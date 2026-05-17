@@ -13,9 +13,13 @@ class KnowledgePoint(models.Model):
     level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='kp', verbose_name="层级")
     prefix_category = models.CharField(max_length=20, blank=True, null=True, verbose_name="学科前缀", help_text="如 MB, IF, CF 等")
     description = models.TextField(blank=True, verbose_name="知识点描述")
-    parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children', verbose_name="上级知识点")
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children', verbose_name="上级知识点")
     institution = models.ForeignKey('users.Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='knowledge_points', verbose_name="所属机构")
+    order = models.PositiveIntegerField(default=0, verbose_name="排序", help_text="同级节点中的显示顺序，数字越小越靠前")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'id']
 
     def save(self, *args, **kwargs):
         # 自动提取前缀，例如从 "MB-1001" 提取 "MB"

@@ -162,6 +162,7 @@ class Institution(models.Model):
     custom_domain = models.CharField(max_length=200, blank=True, verbose_name="自定义域名")
     invite_slug = models.CharField(max_length=40, blank=True, unique=True, verbose_name="邀请链接 slug")
     logo = models.ImageField(upload_to='institution_logos/', blank=True, verbose_name="机构 Logo")
+    business_type = models.CharField(max_length=200, blank=True, verbose_name="主营业务", help_text="您主要讲授的课程，如考研英语、高等数学、GRE、IELTS。此项与模拟面试、AI助教等多个功能关联，请务必正确填写。")
     description = models.TextField(blank=True, verbose_name="机构简介")
     notes = models.TextField(blank=True, verbose_name="管理员备注")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_institutions', verbose_name="创建人")

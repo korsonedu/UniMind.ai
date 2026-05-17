@@ -15,7 +15,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
             'contact_name', 'contact_email', 'contact_phone',
             'plan', 'plan_expires_at', 'is_active', 'is_plan_active',
             'max_students', 'student_count', 'features',
-            'custom_domain', 'logo', 'description', 'notes',
+            'custom_domain', 'logo', 'business_type', 'description', 'notes',
             'created_by', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at',
@@ -27,7 +27,7 @@ class CreateInstitutionSerializer(serializers.ModelSerializer):
         model = Institution
         fields = ['name', 'slug', 'contact_name', 'contact_email', 'contact_phone',
                   'plan', 'plan_expires_at', 'max_students_override',
-                  'custom_domain', 'notes']
+                  'custom_domain', 'business_type', 'notes']
 
 
 class ChangePlanSerializer(serializers.Serializer):

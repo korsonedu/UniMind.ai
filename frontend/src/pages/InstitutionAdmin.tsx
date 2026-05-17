@@ -33,6 +33,7 @@ interface Institution {
   max_students: number;
   created_at: string;
   notes: string;
+  business_type: string;
 }
 
 const PLAN_COLORS: Record<string, string> = {
@@ -263,7 +264,7 @@ function CreateInstitutionDialog({
 }) {
   const [form, setForm] = useState({
     name: '', slug: '', contact_name: '', contact_email: '', contact_phone: '',
-    plan: 'free', plan_expires_at: '', notes: '',
+    plan: 'free', plan_expires_at: '', notes: '', business_type: '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -299,6 +300,9 @@ function CreateInstitutionDialog({
           </div>
           <Input placeholder="联系电话"
             value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
+          <Input placeholder="主营业务，如：考研英语、高等数学、GRE、IELTS"
+            value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} />
+          <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.plan}
@@ -341,6 +345,7 @@ function EditInstitutionDialog({
     plan: institution.plan,
     plan_expires_at: institution.plan_expires_at?.slice(0, 10) || '',
     notes: institution.notes || '',
+    business_type: institution.business_type || '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -379,6 +384,9 @@ function EditInstitutionDialog({
             value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} />
           <Input placeholder="联系电话"
             value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
+          <Input placeholder="主营业务，如：考研英语、高等数学、GRE、IELTS"
+            value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} />
+          <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.plan}
@@ -413,7 +421,7 @@ function EditInstitutionDialog({
 function InstitutionSelfSettings() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '',
+    name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', business_type: '',
   });
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState('');
@@ -432,6 +440,7 @@ function InstitutionSelfSettings() {
         contact_email: data.contact_email || '',
         contact_phone: data.contact_phone || '',
         notes: data.notes || '',
+        business_type: data.business_type || '',
       });
       setLogoPreview(data.logo_url || '');
       setPlanLabel(data.plan_label || '');
@@ -451,6 +460,7 @@ function InstitutionSelfSettings() {
       fd.append('contact_email', form.contact_email);
       fd.append('contact_phone', form.contact_phone);
       fd.append('notes', form.notes);
+      fd.append('business_type', form.business_type);
       if (logo) fd.append('logo', logo);
       const { data } = await api.put('/users/institution/me/update/', fd);
       if (data.logo_url) setLogoPreview(data.logo_url);
@@ -519,6 +529,12 @@ function InstitutionSelfSettings() {
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系电话</Label>
               <Input value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">主营业务</Label>
+            <Input value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" placeholder="如：考研英语、高等数学、GRE、IELTS" />
+            <p className="text-[11px] text-muted-foreground">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
           </div>
 
           <div className="space-y-1.5">

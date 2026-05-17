@@ -8,16 +8,15 @@ from users.serializers import UserSerializer
 
 class KnowledgePointSerializer(serializers.ModelSerializer):
     questions_count = serializers.IntegerField(source='questions.count', read_only=True)
-    children = serializers.SerializerMethodField()  # 新增：递归获取子节点
+    children = serializers.SerializerMethodField()
 
     class Meta:
         model = KnowledgePoint
-        fields = ('id', 'code', 'name', 'level', 'prefix_category', 'description', 'parent', 'institution', 'created_at', 'questions_count', 'children')
+        fields = ('id', 'code', 'name', 'level', 'prefix_category', 'description', 'parent', 'institution', 'order', 'created_at', 'questions_count', 'children')
 
     def get_children(self, obj):
-        # 递归调用自身来序列化子节点，输出完美的 JSON 树
         if obj.children.exists():
-            return KnowledgePointSerializer(obj.children.all(), many=True, context=self.context).data
+            return KnowledgePointSerializer(obj.children.all().order_by('order', 'id'), many=True, context=self.context).data
         return []
 
 class QuestionSerializer(serializers.ModelSerializer):

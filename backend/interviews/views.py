@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from users.permissions import HasPlanFeature
 from users.views import IsMember
+from quizzes.models import KnowledgePoint
 from .models import InterviewSession, InterviewTurn, ResumeRecord
 from .services import InterviewAIService
 
@@ -67,6 +68,20 @@ class InterviewSessionListCreateView(APIView):
         if interviewer_style not in valid_styles:
             return Response({"error": "无效的 interviewer_style"}, status=400)
 
+        # 英语口语：语音模型暂未接入，先禁用
+        if session_type == 'english':
+            return Response({"error": "英语口语面试正在升级语音模型，即将上线，敬请期待"}, status=400)
+
+        # 简历深挖：必须先上传简历
+        if session_type == 'resume' and not ResumeRecord.objects.filter(user=request.user).exists():
+            return Response({"error": "请先在下方「简历调优」中上传并分析简历，再使用简历深挖功能"}, status=400)
+
+        # 专业课：机构必须有知识树
+        if session_type == 'professional':
+            inst = request.user.institution
+            if inst is None or not KnowledgePoint.objects.filter(institution=inst).exists():
+                return Response({"error": "当前机构尚未设置知识结构，请联系机构管理员导入知识树后再使用专业课面试功能"}, status=400)
+
         session = InterviewSession.objects.create(
             user=request.user,
             session_type=session_type,
@@ -77,7 +92,7 @@ class InterviewSessionListCreateView(APIView):
         # 生成 AI 面试官开场白
         opening = ""
         try:
-            opening = InterviewAIService.generate_opening_question(session_type, interviewer_style)
+            opening = InterviewAIService.generate_opening_question(session_type, interviewer_style, institution=request.user.institution)
         except Exception:
             logger.exception("opening question generation failed: session=%s", session.id)
 
@@ -150,6 +165,7 @@ class InterviewTextTurnView(APIView):
                 session_type=session.session_type,
                 style=session.interviewer_style,
                 chat_history=history_messages,
+                institution=session.user.institution,
             )
             if generated:
                 ai_reply = generated
@@ -212,6 +228,7 @@ class InterviewReplyStreamView(APIView):
                     session_type=session.session_type,
                     style=session.interviewer_style,
                     chat_history=history_messages,
+                    institution=session.user.institution,
                 ):
                     if token is None:
                         break
@@ -280,6 +297,22 @@ class ResumeTuneView(APIView):
     permission_classes = [IsMember, HasPlanFeature]
     required_feature = 'interview.mock'
 
+    def get(self, request):
+        """列出当前用户的简历调优记录"""
+        records = ResumeRecord.objects.filter(user=request.user).order_by("-created_at")[:20]
+        results = []
+        for r in records:
+            results.append({
+                "id": r.id,
+                "score": r.optimized_content.get("score") if isinstance(r.optimized_content, dict) else None,
+                "diagnostics": r.optimized_content.get("diagnostics") if isinstance(r.optimized_content, dict) else "",
+                "optimized_content": r.optimized_content if isinstance(r.optimized_content, dict) else {},
+                "predicted_questions": r.predicted_questions if isinstance(r.predicted_questions, list) else [],
+                "parsed_content": r.parsed_content[:500],
+                "created_at": r.created_at,
+            })
+        return Response({"results": results})
+
     def post(self, request):
         resume_text = str(request.data.get("resume_text", "")).strip()
         resume_file = request.FILES.get("file")
@@ -315,10 +348,15 @@ class ResumeTuneView(APIView):
             logger.exception("resume tune failed: err=%s", exc)
             payload = {}
 
+        optimized = payload.get("optimized_content") if isinstance(payload, dict) else {}
+        if isinstance(optimized, dict):
+            optimized["score"] = payload.get("score") if isinstance(payload, dict) else None
+            optimized["diagnostics"] = payload.get("diagnostics") if isinstance(payload, dict) else ""
+
         record = ResumeRecord.objects.create(
             user=request.user,
             parsed_content=resume_text,
-            optimized_content=payload.get("optimized_content") if isinstance(payload, dict) else {},
+            optimized_content=optimized,
             predicted_questions=payload.get("predicted_questions") if isinstance(payload, dict) else [],
         )
         if resume_file is not None:

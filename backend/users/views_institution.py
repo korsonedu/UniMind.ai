@@ -363,6 +363,7 @@ class InstitutionFeatureView(APIView):
                 'max_students': inst.max_students,
                 'student_count': inst.student_count,
                 'invite_slug': inst.invite_slug,
+                'business_type': inst.business_type,
             }
 
         # Platform admins without an institution see all features.
@@ -581,12 +582,13 @@ class InstitutionSelfUpdateView(APIView):
             'notes': inst.notes or '',
             'description': inst.description or '',
             'custom_domain': inst.custom_domain or '',
+            'business_type': inst.business_type or '',
             'logo_url': self._build_logo_url(inst, request),
         })
 
     def put(self, request):
         inst = request.user.institution
-        allowed = ['name', 'contact_name', 'contact_email', 'contact_phone', 'notes', 'description']
+        allowed = ['name', 'contact_name', 'contact_email', 'contact_phone', 'notes', 'description', 'business_type']
         updated = []
         for field in allowed:
             if field in request.data:

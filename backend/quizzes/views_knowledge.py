@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import KnowledgePoint, KnowledgePointAnnotation
 from quizzes.serializers import KnowledgePointSerializer, KnowledgePointAnnotationSerializer
-from users.permissions import IsAdminWriteMemberRead, IsMemberOrAdmin, HasPlanFeature, HasAIQuota, IsAdmin
+from users.permissions import IsAdminWriteMemberRead, IsMemberOrAdmin, HasPlanFeature, HasAIQuota, IsAdmin, IsInstitutionAdmin
 from users.quota import increment_ai_quota
 from ai_service import AIService
 
@@ -21,9 +21,29 @@ def _build_annotation_map(user):
 
 class KnowledgePointListView(generics.ListCreateAPIView):
     # 只返回 parent__isnull=True 的顶层，序列化器会通过 children 把下面所有的全拉出来。
-    queryset = KnowledgePoint.objects.filter(parent__isnull=True).order_by('id')
+    queryset = KnowledgePoint.objects.filter(parent__isnull=True).order_by('order', 'id')
     serializer_class = KnowledgePointSerializer
     permission_classes = [IsAdminWriteMemberRead]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if not user.is_authenticated:
+            return qs.none()
+        # 平台管理员：只看全局知识树（institution=NULL），不得接触机构资产
+        if getattr(user, 'is_platform_admin', False) and user.institution is None:
+            return qs.filter(institution__isnull=True)
+        # 机构用户：只看本机构知识树
+        if user.institution:
+            return qs.filter(institution=user.institution)
+        return qs.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        institution = None
+        if user.is_authenticated and not getattr(user, 'is_platform_admin', False) and user.institution:
+            institution = user.institution
+        serializer.save(institution=institution)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -36,6 +56,26 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = KnowledgePoint.objects.all()
     serializer_class = KnowledgePointSerializer
     permission_classes = [IsAdminWriteMemberRead]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if not user.is_authenticated:
+            return qs.none()
+        # 平台管理员：只接触全局节点
+        if getattr(user, 'is_platform_admin', False) and user.institution is None:
+            return qs.filter(institution__isnull=True)
+        # 机构用户：只接触本机构节点
+        if user.institution:
+            return qs.filter(institution=user.institution)
+        return qs.none()
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        institution = None
+        if not getattr(user, 'is_platform_admin', False) and user.institution:
+            institution = user.institution
+        serializer.save(institution=institution)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -196,22 +236,25 @@ def _parse_md_knowledge_tree(md_text: str) -> list:
     return [n for n in nodes if n['heading_level'] == 1]
 
 
-def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix=''):
+def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix='', institution=None):
     """Recursively create/update KnowledgePoint entries from parsed tree."""
     created_count = 0
     updated_count = 0
 
-    for node in nodes:
+    for i, node in enumerate(nodes):
         code = node.get('code', '')
         name = node.get('name', '')
         kp_level = node.get('level', 'kp')
         description = node.get('description', '')
         prefix_category = node.get('prefix_category', prefix)
 
-        # Try to find existing by code
+        # Try to find existing by code (scoped to same institution or global)
         existing = None
         if code:
-            existing = KnowledgePoint.objects.filter(code=code).first()
+            qs = KnowledgePoint.objects.filter(code=code)
+            if institution:
+                qs = qs.filter(institution=institution)
+            existing = qs.first()
 
         if existing:
             existing.name = name
@@ -219,6 +262,8 @@ def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix=''):
             existing.description = description
             existing.prefix_category = prefix_category
             existing.parent = parent
+            existing.institution = institution
+            existing.order = i
             existing.save()
             updated_count += 1
             current = existing
@@ -230,13 +275,15 @@ def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix=''):
                 prefix_category=prefix_category,
                 description=description,
                 parent=parent,
+                order=i,
+                institution=institution,
             )
             created_count += 1
 
         # Recurse children
         children = node.get('children', [])
         if children:
-            cc, cu = _create_or_update_knowledge_tree(children, parent=current, prefix=prefix_category)
+            cc, cu = _create_or_update_knowledge_tree(children, parent=current, prefix=prefix_category, institution=institution)
             created_count += cc
             updated_count += cu
 
@@ -244,8 +291,8 @@ def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix=''):
 
 
 class KnowledgePointImportMDView(APIView):
-    """从 Markdown 文件导入知识体系"""
-    permission_classes = [IsAdmin]
+    """从 Markdown 文件导入知识体系。平台管理员或机构管理员可操作。"""
+    permission_classes = [IsAdmin | IsInstitutionAdmin]
 
     @transaction.atomic
     def post(self, request):
@@ -266,25 +313,40 @@ class KnowledgePointImportMDView(APIView):
         if not tree:
             return Response({'error': '未解析到有效的知识树结构'}, status=400)
 
-        created, updated = _create_or_update_knowledge_tree(tree)
+        # 机构管理员自动关联本机构，平台管理员导入为全局树（不得接触机构资产）
+        institution = None
+        user = request.user
+        if not getattr(user, 'is_platform_admin', False) and user.institution:
+            institution = user.institution
+
+        created, updated = _create_or_update_knowledge_tree(tree, institution=institution)
         return Response({
             'status': 'ok',
             'created': created,
             'updated': updated,
+            'institution_id': institution.id if institution else None,
             'categories': [n.get('prefix_category', '') for n in tree],
         })
 
 
 class KnowledgePointExportMDView(APIView):
-    """导出知识体系为 Markdown"""
-    permission_classes = [IsAdmin]
+    """导出知识体系为 Markdown。平台管理员或机构管理员可操作。"""
+    permission_classes = [IsAdmin | IsInstitutionAdmin]
 
     def get(self, request):
-        roots = KnowledgePoint.objects.filter(parent__isnull=True, level='sub').order_by('prefix_category', 'code')
+        user = request.user
+        # 平台管理员导出全局树，机构管理员导出本机构树
+        if getattr(user, 'is_platform_admin', False) and user.institution is None:
+            root_filter = {'institution__isnull': True}
+        elif user.institution:
+            root_filter = {'institution': user.institution}
+        else:
+            return Response({'error': '无法确定所属机构'}, status=400)
 
+        roots = KnowledgePoint.objects.filter(level='sub', parent__isnull=True, **root_filter).order_by('order', 'id')
         if not roots.exists():
             # Fallback: get all top-level nodes
-            roots = KnowledgePoint.objects.filter(parent__isnull=True).order_by('prefix_category', 'code')
+            roots = KnowledgePoint.objects.filter(parent__isnull=True, **root_filter).order_by('order', 'id')
 
         lines = []
         for root in roots:
@@ -302,5 +364,5 @@ def _export_node_md(node, lines, depth):
     if node.description:
         lines.append(node.description)
         lines.append('')
-    for child in node.children.all().order_by('code'):
+    for child in node.children.all().order_by('order', 'id'):
         _export_node_md(child, lines, depth + 1)

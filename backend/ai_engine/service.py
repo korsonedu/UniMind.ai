@@ -1,14 +1,31 @@
 import json
 import re
+import ssl
 import logging
 import time
 import requests
+from requests.adapters import HTTPAdapter
 from django.conf import settings
 from .config import get_llm_config, get_model_for_task
 from .observability import record_ai_operation
 
 
 logger = logging.getLogger(__name__)
+
+
+def _create_deepseek_session() -> requests.Session:
+    """创建强制 TLS 1.2 的 session，兼容 DeepSeek 边缘节点的 TLS 限制。"""
+    ctx = ssl.create_default_context()
+    ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+    adapter = HTTPAdapter(pool_connections=10, pool_maxsize=20)
+    session = requests.Session()
+    session.mount('https://', adapter)
+    # 覆盖 adapter 的 SSL context
+    adapter.poolmanager.connection_pool_kw['ssl_context'] = ctx
+    return session
+
+
+_session = _create_deepseek_session()
 
 
 class AICallError(Exception):
@@ -86,7 +103,7 @@ class AIEngine:
                 if config.get('thinking'):
                     body["reasoning_effort"] = config['thinking']
 
-                r = requests.post(
+                r = _session.post(
                     config['base_url'],
                     headers={
                         "Authorization": f"Bearer {config['api_key'].strip()}",
@@ -259,14 +276,19 @@ class AIEngine:
         """流式 AI 调用，yield 每个 delta.content 片段。"""
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
 
+        started_at = time.monotonic()
+
         try:
             AICircuitBreaker.check(operation)
         except CircuitBreakerError:
+            record_ai_operation(operation=operation, success=False, duration_ms=0, error_category='circuit_open')
             yield None
             return
 
         config = get_model_for_task(operation)
         if not config['api_key']:
+            record_ai_operation(operation=operation, success=False, duration_ms=0, error_category='config',
+                                metadata={'reason': 'missing_api_key'})
             yield None
             return
 
@@ -310,14 +332,22 @@ class AIEngine:
                     continue
 
             AICircuitBreaker.record_success(operation)
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            record_ai_operation(operation=operation, success=True, duration_ms=duration_ms, metadata={'stream': True})
         except requests.Timeout:
             AICircuitBreaker.record_failure(operation)
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            record_ai_operation(operation=operation, success=False, duration_ms=duration_ms, error_category='timeout', metadata={'stream': True})
             yield None
         except requests.HTTPError:
             AICircuitBreaker.record_failure(operation)
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            record_ai_operation(operation=operation, success=False, duration_ms=duration_ms, error_category='upstream_http', metadata={'stream': True})
             yield None
         except requests.RequestException:
             AICircuitBreaker.record_failure(operation)
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            record_ai_operation(operation=operation, success=False, duration_ms=duration_ms, error_category='network', metadata={'stream': True})
             yield None
 
     @classmethod

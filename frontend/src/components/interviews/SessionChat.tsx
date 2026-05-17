@@ -1,11 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { InterviewRadarChart } from './RadarChart';
 import { toast } from 'sonner';
 import { formatApiErrorToast } from '@/lib/apiError';
 import api from '@/lib/api';
+import { Send, StopCircle } from 'lucide-react';
 
 interface Turn {
   id: number;
@@ -29,6 +27,13 @@ interface Props {
   onRefresh: () => void;
 }
 
+const TYPE_LABEL: Record<string, string> = {
+  resume: '简历深挖', english: '英语口语', professional: '专业课', mixed: '综合面试',
+};
+const STYLE_LABEL: Record<string, string> = {
+  friendly: '引导模式', pressure: '压力模式',
+};
+
 export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -40,8 +45,8 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
   const turns = session.turns || [];
   const isCompleted = session.status === 'completed';
   const isAnalyzing = session.status === 'analyzing';
+  const hasRadar = isCompleted && session.radar_scores && Object.keys(session.radar_scores).length > 0;
 
-  // Clear local candidate turn once it appears in server turns
   useEffect(() => {
     if (localCandidateTurn && turns.some((t) => t.speaker === 'candidate' && t.content_text === localCandidateTurn.text)) {
       setLocalCandidateTurn(null);
@@ -67,12 +72,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
         credentials: 'include',
         body: JSON.stringify({ text }),
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error((errData as any)?.error || `HTTP ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const reader = res.body?.getReader();
       if (!reader) throw new Error('stream not available');
 
@@ -84,24 +84,18 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
         const { done, value } = await reader.read();
         if (done) break;
         leftover += decoder.decode(value, { stream: true });
-
         const lines = leftover.split('\n');
         leftover = lines.pop() || '';
-
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           try {
             const payload = JSON.parse(line.slice(6));
-            if (payload.done) {
-              streamCompleted = true;
-            } else if (payload.token) {
-              setStreamingText((prev) => prev + payload.token);
-            }
-          } catch { /* skip malformed */ }
+            if (payload.done) { streamCompleted = true; }
+            else if (payload.token) { setStreamingText((prev) => prev + payload.token); }
+          } catch { /* skip */ }
         }
       }
 
-      // Stream finished — refresh to get saved turns
       if (streamCompleted) {
         setStreamingText('');
         onRefresh();
@@ -136,97 +130,139 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
   };
 
   return (
-    <Card className="lg:col-span-2 p-4 rounded-2xl border border-border/60 flex flex-col min-h-[420px]">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-black">Session #{session.id}</p>
+    <div className="flex flex-col h-full">
+      {/* Meta bar */}
+      <div className="flex items-center justify-between pb-2.5 border-b border-neutral-200">
+        <div className="flex items-baseline gap-3">
+          <span className="text-[13px] font-semibold tabular-nums text-neutral-900">
+            Session {session.id}
+          </span>
+          <span className="text-[11px] text-neutral-400">
+            {TYPE_LABEL[session.session_type] || session.session_type}
+          </span>
+          <span className="text-[11px] text-neutral-400">
+            {STYLE_LABEL[session.interviewer_style] || session.interviewer_style}
+          </span>
+        </div>
+        {isAnalyzing && <span className="text-[11px] text-amber-600 font-medium animate-pulse">分析中</span>}
         {!isCompleted && !isAnalyzing && (
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={finishSession} disabled={finishing}>
-            {finishing ? '生成中...' : '结束并生成复盘'}
-          </Button>
+          <button
+            className="text-[11px] font-medium text-neutral-400 hover:text-neutral-800 transition-colors flex items-center gap-1"
+            onClick={finishSession}
+            disabled={finishing}
+          >
+            <StopCircle className="h-3 w-3" />
+            {finishing ? '生成中' : '结束面试'}
+          </button>
         )}
-        {isAnalyzing && <p className="text-xs font-bold text-amber-600">复盘分析中...</p>}
+        {isCompleted && <span className="text-[11px] font-medium text-emerald-600">已完成</span>}
       </div>
 
-      {/* Radar chart for completed session */}
-      {isCompleted && session.radar_scores && Object.keys(session.radar_scores).length > 0 && (
-        <Card className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/70 mb-3 space-y-2">
-          <p className="text-xs font-black uppercase tracking-widest text-emerald-700">五维雷达图</p>
-          <InterviewRadarChart scores={session.radar_scores} />
-          {session.overall_feedback && <p className="text-sm text-emerald-800">{session.overall_feedback}</p>}
-        </Card>
+      {/* Review header — shown only when completed */}
+      {isCompleted && (
+        <div className="border-b border-neutral-100 py-4">
+          {hasRadar ? (
+            <div className="flex items-start gap-5">
+              <div className="w-44 shrink-0">
+                <InterviewRadarChart scores={session.radar_scores} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mb-1.5">综合评价</p>
+                <p className="text-[13px] text-neutral-700 leading-relaxed">
+                  {session.overall_feedback || '暂无反馈'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mb-1.5">综合评价</p>
+              <p className="text-[13px] text-neutral-700 leading-relaxed">
+                {session.overall_feedback || '暂无反馈'}
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Conversation */}
-      <div className="flex-1 max-h-[320px] overflow-y-auto space-y-2 pr-1 mb-3">
+      {/* Conversation transcript */}
+      <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 min-h-0" style={{ minHeight: '320px' }}>
         {turns.length === 0 && !localCandidateTurn && (
-          <p className="text-xs font-bold text-muted-foreground">等待面试官提问...</p>
+          <p className="text-[13px] text-neutral-400 text-center py-16">等待面试官提问…</p>
         )}
 
         {turns.map((turn) => (
-          <div
-            key={turn.id}
-            className={`rounded-xl px-3 py-2 border ${
-              turn.speaker === 'candidate' ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50 border-indigo-200'
-            }`}
-          >
-            <p className="text-[11px] font-black uppercase">{turn.speaker === 'candidate' ? '你' : '面试官'}</p>
-            <p className="text-sm mt-1 whitespace-pre-wrap">{turn.content_text}</p>
+          <div key={turn.id}>
+            <p className={`text-[10px] font-semibold uppercase tracking-widest mb-1 ${
+              turn.speaker === 'interviewer' ? 'text-stone-400' : 'text-neutral-400'
+            }`}>
+              {turn.speaker === 'interviewer' ? '面试官' : '你'}
+            </p>
+            <div className={
+              turn.speaker === 'interviewer'
+                ? 'border-l-2 border-amber-400 pl-3 ml-0.5'
+                : 'pl-3 ml-0.5'
+            }>
+              <p className={`text-[14px] leading-relaxed whitespace-pre-wrap ${
+                turn.speaker === 'interviewer' ? 'font-serif text-neutral-900' : 'text-neutral-700'
+              }`}>
+                {turn.content_text}
+              </p>
+            </div>
             {turn.feedback_for_turn && (
-              <p className="text-xs text-amber-700 mt-2">{turn.feedback_for_turn}</p>
+              <p className="mt-1 pl-3 text-[11px] text-amber-600 italic leading-relaxed">
+                {turn.feedback_for_turn}
+              </p>
             )}
           </div>
         ))}
 
-        {/* Local candidate turn (optimistic) */}
         {localCandidateTurn && (
-          <div className="rounded-xl px-3 py-2 border bg-slate-50 border-slate-200 opacity-60">
-            <p className="text-[11px] font-black uppercase">你</p>
-            <p className="text-sm mt-1 whitespace-pre-wrap">{localCandidateTurn.text}</p>
+          <div className="opacity-50">
+            <p className="text-[10px] font-semibold uppercase tracking-widest mb-1 text-neutral-400">你</p>
+            <div className="pl-3 ml-0.5">
+              <p className="text-[14px] text-neutral-700 whitespace-pre-wrap leading-relaxed">
+                {localCandidateTurn.text}
+              </p>
+            </div>
           </div>
         )}
 
-        {/* Streaming interviewer reply */}
         {streamingText && (
-          <div className="rounded-xl px-3 py-2 border bg-indigo-50 border-indigo-200">
-            <p className="text-[11px] font-black uppercase">面试官</p>
-            <p className="text-sm mt-1 whitespace-pre-wrap">
-              {streamingText}
-              <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
-            </p>
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest mb-1 text-stone-400">面试官</p>
+            <div className="border-l-2 border-amber-400 pl-3 ml-0.5">
+              <p className="text-[14px] font-serif text-neutral-900 whitespace-pre-wrap leading-relaxed">
+                {streamingText}
+                <span className="inline-block w-[2px] h-[1em] bg-amber-400 ml-0.5 animate-pulse align-text-bottom" />
+              </p>
+            </div>
           </div>
         )}
 
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
+      {/* Input */}
       {!isCompleted && !isAnalyzing && (
-        <div className="flex gap-2">
-          <Input
+        <div className="border-t border-neutral-200 pt-3 flex gap-2 items-end">
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入你的回答..."
+            placeholder="输入回答"
+            rows={2}
             disabled={sending}
+            className="flex-1 resize-none text-[14px] leading-relaxed bg-transparent border-0 outline-none placeholder:text-neutral-300 text-neutral-900 py-1"
           />
-          <Button
-            className="rounded-xl text-xs font-bold bg-black text-white shrink-0"
+          <button
+            className="shrink-0 h-9 w-9 rounded-full bg-neutral-900 text-white flex items-center justify-center hover:bg-neutral-800 transition-colors disabled:opacity-30"
             disabled={sending || !input.trim()}
             onClick={sendTurn}
           >
-            {sending ? '...' : '发送'}
-          </Button>
+            <Send className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
-
-      {/* Text-only feedback fallback */}
-      {isCompleted && (!session.radar_scores || Object.keys(session.radar_scores).length === 0) && (
-        <Card className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/70">
-          <p className="text-xs font-black uppercase tracking-widest text-emerald-700">复盘结果</p>
-          <p className="text-sm mt-1">{session.overall_feedback || '暂无反馈'}</p>
-        </Card>
-      )}
-    </Card>
+    </div>
   );
 };

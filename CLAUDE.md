@@ -119,9 +119,14 @@ python manage.py assign_default_institution     # 将无机构用户批量归入
 # Migration
 python manage.py makemigrations && python manage.py migrate
 
-# 生产部署
+# 生产部署（服务器上执行）
+cd /opt/unimind && git pull
+cd frontend && npm run build
 sudo systemctl restart unimind.service unimind-celery.service
 sudo journalctl -u unimind.service -f
+
+# systemd PATH 须知：unimind.service 的 PATH 必须包含 /usr/bin（ffmpeg 等系统工具），
+# 不能只有 venv/bin。遇到 subprocess FileNotFoundError 先检查 systemctl cat unimind.service 的 Environment。
 ```
 
 ## AI 模型策略
