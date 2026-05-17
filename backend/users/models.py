@@ -211,6 +211,24 @@ class Institution(models.Model):
         return self.name
 
 
+class InstitutionRewardConfig(models.Model):
+    """机构积分配置"""
+    institution = models.OneToOneField('Institution', on_delete=models.CASCADE, related_name='reward_config')
+    is_enabled = models.BooleanField(default=True, verbose_name="启用积分功能")
+    points_multiplier = models.FloatField(default=1.0, verbose_name="积分倍率")
+    monthly_bonus_points = models.IntegerField(default=0, verbose_name="每月赠送积分")
+    daily_login_bonus = models.IntegerField(default=5, verbose_name="每日登录积分")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '机构积分配置'
+        verbose_name_plural = '机构积分配置'
+
+    def __str__(self):
+        return f'{self.institution.name} 积分配置'
+
+
 # ── Plan features utility ──
 DEFAULT_DURATION_DAYS = 30
 DURATION_PERMANENT = 0

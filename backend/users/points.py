@@ -18,11 +18,26 @@ def _resolve_ref(reference_obj):
     return reference_obj._meta.label, reference_obj.pk
 
 
+def _get_multiplier(institution_id) -> float:
+    """获取机构积分倍率，未配置则返回 1.0"""
+    if institution_id is None:
+        return 1.0
+    from .models import InstitutionRewardConfig
+    try:
+        cfg = InstitutionRewardConfig.objects.get(institution_id=institution_id)
+    except InstitutionRewardConfig.DoesNotExist:
+        return 1.0
+    if not cfg.is_enabled:
+        return 1.0
+    return cfg.points_multiplier
+
+
 def award_elo_points(user_id: int, amount: int, reason: str,
                      description: str = '', reference_obj=None) -> int:
     """
     为用户发放积分。仅正数有效，负数或零直接返回0。
     调用方不应处于 select_for_update 事务中——本函数自行管理事务和锁。
+    自动应用机构积分倍率。
     """
     if amount <= 0:
         return 0
@@ -30,14 +45,19 @@ def award_elo_points(user_id: int, amount: int, reason: str,
     ref_type, ref_id = _resolve_ref(reference_obj)
     with transaction.atomic():
         locked = User.objects.select_for_update().get(id=user_id)
-        locked.elo_points += amount
+        multiplier = _get_multiplier(locked.institution_id)
+        awarded = max(1, int(amount * multiplier))
+        locked.elo_points += awarded
         locked.save(update_fields=['elo_points'])
+        desc = description
+        if multiplier != 1.0:
+            desc = f'{desc} (x{multiplier})' if desc else f'倍率 x{multiplier}'
         _create_ledger(
-            user_id=user_id, amount=amount, balance_after=locked.elo_points,
-            reason=reason, description=description,
+            user_id=user_id, amount=awarded, balance_after=locked.elo_points,
+            reason=reason, description=desc,
             reference_type=ref_type, reference_id=ref_id,
         )
-    return amount
+    return awarded
 
 
 def spend_elo_points(user_id: int, amount: int, reason: str,

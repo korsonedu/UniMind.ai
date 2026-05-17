@@ -24,7 +24,10 @@ from .views_institution import (
     PublicInstitutionView, InstitutionJoinBySlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
 )
-from .views_points import PointsBalanceView, PointsLedgerView
+from .views_points import (
+    PointsBalanceView, PointsLedgerView,
+    InstitutionRewardConfigView, InstitutionAwardPointsView,
+)
 
 urlpatterns = [
     # Auth & profile
@@ -86,6 +89,10 @@ urlpatterns = [
     # Institution — members (owner + teacher management)
     path('institution/me/members/', InstitutionMemberListView.as_view(), name='institution-member-list'),
     path('institution/me/members/<int:pk>/role/', InstitutionMemberRoleView.as_view(), name='institution-member-role'),
+
+    # Institution — rewards
+    path('institution/me/rewards/config/', InstitutionRewardConfigView.as_view(), name='institution-rewards-config'),
+    path('institution/me/rewards/award/', InstitutionAwardPointsView.as_view(), name='institution-rewards-award'),
 
     # Plan invite codes
     path('admin/plan-invite-codes/', PlanInviteCodeListView.as_view(), name='plan-invite-codes'),
