@@ -31,6 +31,7 @@ export interface KPNode {
   description: string;
   parent: number | null;
   level: string;
+  order?: number;
   questions_count?: number;
   x?: number;
   y?: number;
