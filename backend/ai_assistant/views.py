@@ -1,7 +1,7 @@
 import threading
 import logging
 from django.db import connections
-from users.permissions import IsAdmin
+from users.permissions import IsAdmin, HasPointsBalance
 from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -99,7 +99,8 @@ class BotDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.delete()
 
 class AIChatView(APIView):
-    permission_classes = [IsMember]
+    permission_classes = [IsMember, HasPointsBalance]
+    points_cost = 8
 
     def post(self, request):
         user_message = request.data.get('message')
@@ -107,7 +108,12 @@ class AIChatView(APIView):
         if not user_message: return Response({'error': 'Message is required'}, status=400)
 
         bot = Bot.objects.filter(id=bot_id).first()
-        if bot: sync_bot_prompt(bot) 
+        if bot: sync_bot_prompt(bot)
+
+        # 扣积分
+        from users.points import spend_elo_points
+        if not spend_elo_points(request.user.id, 8, 'shop_redeem', description='AI助教对话'):
+            return Response({'error': '积分不足'}, status=402)
 
         # 1. Save User Message
         AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot)

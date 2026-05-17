@@ -218,3 +218,19 @@ class HasAIQuota(permissions.BasePermission):
             return True
         from users.quota import check_ai_quota
         return check_ai_quota(user.institution)
+
+
+class HasPointsBalance(permissions.BasePermission):
+    """检查用户积分余额是否足够消费指定 AI 服务"""
+    message = "积分不足。刷几道题就能解锁此功能，加油！"
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if getattr(user, 'is_platform_admin', False):
+            return True
+        cost = getattr(view, 'points_cost', 0)
+        if cost <= 0:
+            return True
+        return getattr(user, 'elo_points', 0) >= cost
