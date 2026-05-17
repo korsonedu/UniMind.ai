@@ -281,9 +281,10 @@ const KnowledgeGraph = ({
         ctx.fillStyle =
           node.level === 'kp' ? (isDark ? '#cbd5e1' : '#475569')
           : (isDark ? '#e2e8f0' : '#1e293b');
-        ctx.font = `${node.level === 'kp' ? 'normal' : 'bold'} ${(node.level === 'kp' ? 10 : 13) / transform.k}px sans-serif`;
+        const fontSize = node.level === 'kp' ? 11 : node.level === 'sub' ? 15 : 14;
+        ctx.font = `${node.level === 'kp' ? 'normal' : 'bold'} ${fontSize}px sans-serif`;
         ctx.textAlign = "center";
-        ctx.fillText(node.name, node.x!, node.y! + radius + (14 / transform.k));
+        ctx.fillText(node.name, node.x!, node.y! + radius + fontSize);
       }
     }
     ctx.restore();
