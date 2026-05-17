@@ -7,6 +7,7 @@ interface User {
   nickname: string;
   role: 'student' | 'admin';
   elo_score: number;
+  elo_points: number;
   avatar_url: string;
   avatar_style: string;
   avatar_seed: string;

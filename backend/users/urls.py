@@ -24,6 +24,7 @@ from .views_institution import (
     PublicInstitutionView, InstitutionJoinBySlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
 )
+from .views_points import PointsBalanceView, PointsLedgerView
 
 urlpatterns = [
     # Auth & profile
@@ -39,6 +40,8 @@ urlpatterns = [
     path('me/activate/', ActivateMembershipView.as_view(), name='activate-membership'),
     path('me/weekly-report/', WeeklyCognitiveReportView.as_view(), name='weekly-report'),
     path('me/knowledge-mastery/', MyKnowledgeMasteryView.as_view(), name='knowledge-mastery'),
+    path('me/points/', PointsBalanceView.as_view(), name='points-balance'),
+    path('me/points/ledger/', PointsLedgerView.as_view(), name='points-ledger'),
     path('heartbeat/', HeartbeatView.as_view(), name='heartbeat'),
 
     # System

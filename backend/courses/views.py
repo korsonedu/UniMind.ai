@@ -297,6 +297,8 @@ class VideoProgressUpdateView(APIView):
                 user.elo_score += course.elo_reward
                 user.save()
                 elo_added = course.elo_reward
+                from users.points import award_elo_points
+                award_elo_points(user.id, course.elo_reward, 'course_complete', reference_obj=course)
             
             progress.last_position = pos
             progress.save()
@@ -421,6 +423,8 @@ class AwardEloView(APIView):
         from django.db.models import F
         User.objects.filter(id=request.user.id).update(elo_score=F('elo_score') + course.elo_reward)
         VideoProgress.objects.filter(pk=progress.pk).update(elo_claimed_at=timezone.now())
+        from users.points import award_elo_points
+        award_elo_points(request.user.id, course.elo_reward, 'course_reward_claim', reference_obj=course)
 
         request.user.refresh_from_db()
         return Response({

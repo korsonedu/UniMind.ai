@@ -72,6 +72,7 @@ export const EloPopover: React.FC = () => {
         >
           <Sparkles className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
           <span className="text-xs font-bold text-foreground">ELO: {user?.elo_score}</span>
+          <span className="text-[10px] font-semibold text-muted-foreground ml-1">| {user?.elo_points ?? 0} 分</span>
         </button>
       </PopoverTrigger>
       <PopoverContent

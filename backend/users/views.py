@@ -461,6 +461,8 @@ class ResetEloView(generics.UpdateAPIView):
         user.elo_score = 1000
         user.has_completed_initial_assessment = False
         user.elo_reset_count += 1
+        from users.points import reset_elo_points
+        reset_elo_points(user.id)
         user.save()
         return Response(UserSerializer(user).data)
 
