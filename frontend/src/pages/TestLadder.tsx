@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { ArrowRight, BrainCircuit, Activity, ChevronDown, Bell, Target, Info, Filter } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, normalizeOptions } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -232,7 +232,7 @@ export const TestLadder: React.FC = () => {
       }
       const res = await api.get(`/quizzes/questions/?${params.toString()}`);
       if (res.data.length === 0) return toast.error("题库暂无可用题目");
-      setQuestions(res.data);
+      setQuestions(res.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
       setIsTestOpen(true);
       setAnswers({});
       setCurrentIdx(0);

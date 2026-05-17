@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { cn, processMathContent } from '@/lib/utils';
+import { cn, processMathContent, normalizeOptions } from '@/lib/utils';
 import api from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -57,7 +57,7 @@ export const TestSessionPage: React.FC = () => {
           navigate('/tests', { replace: true });
           return;
         }
-        setQuestions(res.data);
+        setQuestions(res.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
       } catch (e) {
         toast.error('题目加载失败');
         navigate('/tests', { replace: true });

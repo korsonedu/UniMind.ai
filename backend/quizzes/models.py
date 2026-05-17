@@ -76,6 +76,9 @@ class Question(models.Model):
         # 自动同步标签到分值 (如果难度分值为默认或未手动指定，则根据级别映射)
         if self.difficulty_level and (self._state.adding or self.difficulty == 1200):
             self.difficulty = self.DIFFICULTY_MAP.get(self.difficulty_level, 1200)
+        # 标准化 options 为 list 格式（兼容 dict 格式的历史数据）
+        if isinstance(self.options, dict):
+            self.options = [self.options[k] for k in sorted(self.options.keys())]
         super().save(*args, **kwargs)
 
     def get_max_score(self):

@@ -14,6 +14,15 @@ export function formatDuration(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+/** Normalize options to array format — handles legacy dict-format data. */
+export function normalizeOptions(options: any): string[] {
+  if (Array.isArray(options)) return options;
+  if (options && typeof options === 'object') {
+    return Object.keys(options).sort().map(k => options[k]);
+  }
+  return [];
+}
+
 export function processMathContent(content: string) {
   if (!content) return "";
   

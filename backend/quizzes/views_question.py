@@ -21,6 +21,13 @@ from quizzes.ai_workflow import save_confirmed_questions
 logger = logging.getLogger(__name__)
 
 
+def _normalize_options(options):
+    """Normalize options to list format. Handles legacy dict-format data."""
+    if isinstance(options, dict):
+        return [options[k] for k in sorted(options.keys())]
+    return options
+
+
 def _get_descendant_kp_ids(sub_ids):
     """给定 SUB 级知识点 ID 列表，递归收集所有下层 KP 级节点 ID。"""
     from quizzes.models import KnowledgePoint
@@ -254,7 +261,7 @@ class AdminQuestionListView(APIView):
                 'difficulty': q.difficulty,
                 'difficulty_level': q.difficulty_level,
                 'difficulty_level_display': q.get_difficulty_level_display(),
-                'options': q.options,
+                'options': _normalize_options(q.options),
                 'knowledge_point': q.knowledge_point.id if q.knowledge_point else None,
                 'knowledge_point_name': q.knowledge_point.name if q.knowledge_point else '无',
             })
@@ -300,7 +307,7 @@ class ExportStructuredQuestionsView(APIView):
                 "difficulty_elo": q.difficulty,
                 "difficulty_level": q.difficulty_level,
                 "question_text": q.text,
-                "options": q.options,
+                "options": _normalize_options(q.options),
                 "correct_answer": q.correct_answer,
                 "grading_points": q.grading_points,
                 "ai_explanation": q.ai_answer,

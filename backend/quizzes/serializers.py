@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     Question, QuizAttempt, KnowledgePoint, UserQuestionStatus, QuizExam, ExamQuestionResult,
     ContentPipelineTask, TeacherExam, StudentExamSubmission, KnowledgePointAnnotation,
-    PersonalizedMockExam, PromptTemplateVersion,
+    PersonalizedMockExam,
 )
 from users.serializers import UserSerializer
 
@@ -42,6 +42,13 @@ class QuestionSerializer(serializers.ModelSerializer):
             status = UserQuestionStatus.objects.filter(user=request.user, question=obj).first()
             return status.is_mastered if status else False
         return False
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        options = data.get('options')
+        if isinstance(options, dict):
+            data['options'] = [options[k] for k in sorted(options.keys())]
+        return data
 
 class UserQuestionStatusSerializer(serializers.ModelSerializer):
     question_detail = QuestionSerializer(source='question', read_only=True)
