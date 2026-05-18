@@ -18,7 +18,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     nickname = models.CharField(max_length=100, blank=True, verbose_name="昵称")
     elo_score = models.IntegerField(default=1000)
-    elo_points = models.IntegerField(default=0, verbose_name="可消费积分")
+    elo_points = models.IntegerField(default=50, verbose_name="可消费积分")
     has_completed_initial_assessment = models.BooleanField(default=False)
     elo_reset_count = models.IntegerField(default=0)
     avatar_style = models.CharField(max_length=50, default='avataaars')

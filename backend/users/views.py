@@ -132,6 +132,13 @@ class RegisterView(generics.CreateAPIView):
         user.set_password(password)
         user.save()
 
+        # 新用户初始积分
+        from users.models import EloPointsLedger
+        EloPointsLedger.objects.create(
+            user=user, amount=50, balance_after=50,
+            reason='admin_adjust', description='新用户初始积分',
+        )
+
 class UpdateProfileView(generics.UpdateAPIView):
     serializer_class = UserSerializer
     def get_object(self):
