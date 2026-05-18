@@ -63,13 +63,6 @@ class InterviewConsumer(AsyncWebsocketConsumer):
                         return
 
                     user_id = self.scope['user'].id
-                    if not await self._check_points(user_id, 8):
-                        await self.send(text_data=json.dumps({
-                            'type': 'error',
-                            'message': '积分不足，刷几道题就能继续面试啦',
-                        }))
-                        return
-
                     session = await self._get_owned_session(int(self.session_id), user_id)
                     if not session:
                         await self.send(text_data=json.dumps({
@@ -83,8 +76,6 @@ class InterviewConsumer(AsyncWebsocketConsumer):
                     institution = await database_sync_to_async(lambda: session.user.institution)()
                     ai_reply = await self._generate_reply(session.session_type, session.interviewer_style, history, institution)
                     interviewer_turn = await self._append_turn(session.id, 'interviewer', ai_reply)
-
-                    await self._spend_points(user_id, 8)
 
                     await self.send(text_data=json.dumps({
                         'type': 'interviewer_reply',
@@ -119,18 +110,6 @@ class InterviewConsumer(AsyncWebsocketConsumer):
             role = 'assistant' if turn.speaker == 'interviewer' else 'user'
             messages.append({'role': role, 'content': turn.content_text})
         return messages
-
-    @database_sync_to_async
-    def _check_points(self, user_id: int, cost: int) -> bool:
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        user = User.objects.get(id=user_id)
-        return getattr(user, 'elo_points', 0) >= cost
-
-    @database_sync_to_async
-    def _spend_points(self, user_id: int, cost: int):
-        from users.points import spend_elo_points
-        spend_elo_points(user_id, cost, 'shop_redeem', description='模拟面试对话(WS)')
 
     @database_sync_to_async
     def _generate_reply(self, session_type: str, style: str, history: list, institution=None):

@@ -52,7 +52,7 @@ def _serialize_session(session: InterviewSession, include_turns: bool = False) -
 class InterviewSessionListCreateView(APIView):
     permission_classes = [IsMember, HasPlanFeature, HasPointsBalance]
     required_feature = 'interview.mock'
-    points_cost = 15
+    points_cost = 50
 
     def get(self, request):
         sessions = InterviewSession.objects.filter(user=request.user).order_by("-started_at")[:50]
@@ -83,9 +83,9 @@ class InterviewSessionListCreateView(APIView):
             if inst is None or not KnowledgePoint.objects.filter(institution=inst).exists():
                 return Response({"error": "当前机构尚未设置知识结构，请联系机构管理员导入知识树后再使用专业课面试功能"}, status=400)
 
-        # 扣积分
+        # 扣积分：一口价，整场面试全包
         from users.points import spend_elo_points
-        if not spend_elo_points(request.user.id, 15, 'shop_redeem', description='模拟面试开场'):
+        if not spend_elo_points(request.user.id, 50, 'shop_redeem', description='模拟面试门票'):
             return Response({'error': '积分不足'}, status=402)
 
         session = InterviewSession.objects.create(
@@ -127,9 +127,8 @@ class InterviewSessionDetailView(APIView):
 
 
 class InterviewTextTurnView(APIView):
-    permission_classes = [IsMember, HasPlanFeature, HasPointsBalance]
+    permission_classes = [IsMember, HasPlanFeature]
     required_feature = 'interview.mock'
-    points_cost = 8
 
     def post(self, request, session_id: int):
         session = get_object_or_404(InterviewSession, id=session_id, user=request.user)
@@ -139,11 +138,6 @@ class InterviewTextTurnView(APIView):
         user_text = str(request.data.get("text", "")).strip()
         if not user_text:
             return Response({"error": "text 不能为空"}, status=400)
-
-        # 扣积分
-        from users.points import spend_elo_points
-        if not spend_elo_points(request.user.id, 8, 'shop_redeem', description='模拟面试对话'):
-            return Response({'error': '积分不足'}, status=402)
 
         last_turn = session.turns.order_by("-turn_number", "-created_at").first()
         next_turn_number = int(last_turn.turn_number + 1) if last_turn else 1
@@ -205,9 +199,8 @@ class InterviewTextTurnView(APIView):
 
 class InterviewReplyStreamView(APIView):
     """SSE 流式返回面试官追问，前端逐 token 渲染。"""
-    permission_classes = [IsMember, HasPlanFeature, HasPointsBalance]
+    permission_classes = [IsMember, HasPlanFeature]
     required_feature = 'interview.mock'
-    points_cost = 8
 
     def post(self, request, session_id: int):
         session = get_object_or_404(InterviewSession, id=session_id, user=request.user)
@@ -217,11 +210,6 @@ class InterviewReplyStreamView(APIView):
         user_text = str(request.data.get("text", "")).strip()
         if not user_text:
             return Response({"error": "text 不能为空"}, status=400)
-
-        # 扣积分
-        from users.points import spend_elo_points
-        if not spend_elo_points(request.user.id, 8, 'shop_redeem', description='模拟面试对话'):
-            return Response({'error': '积分不足'}, status=402)
 
         last_turn = session.turns.order_by("-turn_number", "-created_at").first()
         next_turn_number = int(last_turn.turn_number + 1) if last_turn else 1
@@ -273,19 +261,13 @@ class InterviewReplyStreamView(APIView):
 
 
 class InterviewFinishView(APIView):
-    permission_classes = [IsMember, HasPlanFeature, HasPointsBalance]
+    permission_classes = [IsMember, HasPlanFeature]
     required_feature = 'interview.mock'
-    points_cost = 25
 
     def post(self, request, session_id: int):
         session = get_object_or_404(InterviewSession, id=session_id, user=request.user)
         if session.status == "completed":
             return Response(_serialize_session(session, include_turns=True))
-
-        # 扣积分
-        from users.points import spend_elo_points
-        if not spend_elo_points(request.user.id, 25, 'shop_redeem', description='模拟面试分析报告'):
-            return Response({'error': '积分不足'}, status=402)
 
         session.status = "analyzing"
         session.save(update_fields=["status"])

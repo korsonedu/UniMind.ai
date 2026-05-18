@@ -292,20 +292,12 @@ export const EloPopover: React.FC = () => {
               </div>
               <div className="space-y-1.5">
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground">AI 助教对话 1 轮</span>
-                  <span className="font-bold text-foreground tabular-nums">8 积分</span>
+                  <span className="text-muted-foreground">AI 助教会话（不限轮数）</span>
+                  <span className="font-bold text-foreground tabular-nums">30 积分</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground">模拟面试开始</span>
-                  <span className="font-bold text-foreground tabular-nums">15 积分</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground">模拟面试 1 轮对话</span>
-                  <span className="font-bold text-foreground tabular-nums">8 积分</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground">面试分析报告</span>
-                  <span className="font-bold text-foreground tabular-nums">25 积分</span>
+                  <span className="text-muted-foreground">模拟面试（全场，含分析）</span>
+                  <span className="font-bold text-foreground tabular-nums">50 积分</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">简历优化</span>

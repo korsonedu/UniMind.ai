@@ -100,7 +100,7 @@ class BotDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class AIChatView(APIView):
     permission_classes = [IsMember, HasPointsBalance]
-    points_cost = 8
+    points_cost = 30
 
     def post(self, request):
         user_message = request.data.get('message')
@@ -110,10 +110,12 @@ class AIChatView(APIView):
         bot = Bot.objects.filter(id=bot_id).first()
         if bot: sync_bot_prompt(bot)
 
-        # 扣积分
-        from users.points import spend_elo_points
-        if not spend_elo_points(request.user.id, 8, 'shop_redeem', description='AI助教对话'):
-            return Response({'error': '积分不足'}, status=402)
+        # 会话制：仅首条消息（无历史）扣积分，后续本条对话免费
+        has_history = AIChatMessage.objects.filter(user=request.user, bot=bot).exists()
+        if not has_history:
+            from users.points import spend_elo_points
+            if not spend_elo_points(request.user.id, 30, 'shop_redeem', description='AI助教会话门票'):
+                return Response({'error': '积分不足'}, status=402)
 
         # 1. Save User Message
         AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot)

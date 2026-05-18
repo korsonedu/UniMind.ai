@@ -133,8 +133,13 @@ export const AIAssistant: React.FC = () => {
     if (!input.trim() || loading) return;
     const text = input;
     setInput('');
-    setPendingMessage(text);
-    setShowPointsConfirm(true);
+    // 会话制：仅首条消息弹确认框，后续直接发送
+    if (messages.length === 0) {
+      setPendingMessage(text);
+      setShowPointsConfirm(true);
+    } else {
+      doSend(text);
+    }
   };
 
   const handleReset = async () => {
@@ -224,8 +229,8 @@ export const AIAssistant: React.FC = () => {
       <PointsConfirmDialog
         open={showPointsConfirm}
         onOpenChange={setShowPointsConfirm}
-        cost={8}
-        featureName="AI 助教对话"
+        cost={30}
+        featureName="AI 助教会话"
         balance={user?.elo_points ?? 0}
         onConfirm={() => {
           setShowPointsConfirm(false);
