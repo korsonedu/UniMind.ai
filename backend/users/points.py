@@ -1,4 +1,5 @@
-from django.db import transaction, models
+import functools
+from django.db import transaction
 from django.db.models import F
 
 
@@ -18,8 +19,9 @@ def _resolve_ref(reference_obj):
     return reference_obj._meta.label, reference_obj.pk
 
 
+@functools.lru_cache(maxsize=128)
 def _get_multiplier(institution_id) -> float:
-    """获取机构积分倍率，未配置则返回 1.0"""
+    """获取机构积分倍率，未配置则返回 1.0。lru_cache 避免热路径重复查 DB。"""
     if institution_id is None:
         return 1.0
     from .models import InstitutionRewardConfig

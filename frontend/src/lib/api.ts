@@ -23,7 +23,7 @@ api.interceptors.response.use(
         duration: 5000,
         action: {
           label: '去刷题',
-          onClick: () => { window.location.href = '/test-ladder'; },
+          onClick: () => { window.location.href = '/tests'; },
         },
       });
     }

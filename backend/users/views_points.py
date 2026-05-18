@@ -47,7 +47,16 @@ class InstitutionRewardConfigView(APIView):
         inst = request.user.institution
         if inst is None:
             return Response({'error': '未绑定机构'}, status=400)
-        cfg, _ = InstitutionRewardConfig.objects.get_or_create(institution=inst)
+        try:
+            cfg = InstitutionRewardConfig.objects.get(institution=inst)
+        except InstitutionRewardConfig.DoesNotExist:
+            return Response({
+                'is_enabled': True,
+                'points_multiplier': 1.0,
+                'monthly_bonus_points': 0,
+                'daily_login_bonus': 5,
+                'updated_at': None,
+            })
         return Response({
             'is_enabled': cfg.is_enabled,
             'points_multiplier': cfg.points_multiplier,

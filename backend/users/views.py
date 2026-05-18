@@ -399,21 +399,27 @@ class HeartbeatView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        from datetime import date as date_cls
+        from django.db.models import F
         user = request.user
         now = timezone.now()
         today = now.date()
 
-        # 每日首次心跳发积分
+        # 每日首次心跳发积分（F() 更新避免 select_for_update）
         daily_bonus = 0
         last_date = user.last_active.date() if user.last_active else None
         if last_date != today:
             from users.points import _get_multiplier
-            base_bonus = 5
-            mult = _get_multiplier(user.institution_id)
-            daily_bonus = max(1, int(base_bonus * mult))
-            from users.points import award_elo_points
-            award_elo_points(user.id, daily_bonus, 'admin_adjust', description='每日登录')
+            daily_bonus = max(1, int(5 * _get_multiplier(user.institution_id)))
+            from users.models import EloPointsLedger, User as UserModel
+            UserModel.objects.filter(id=user.id).update(
+                elo_points=F('elo_points') + daily_bonus,
+            )
+            user.refresh_from_db(fields=['elo_points'])
+            EloPointsLedger.objects.create(
+                user_id=user.id, amount=daily_bonus,
+                balance_after=user.elo_points,
+                reason='admin_adjust', description='每日登录',
+            )
 
         user.last_active = now
         update_fields = ["last_active"]
@@ -457,7 +463,6 @@ class HeartbeatView(APIView):
             "daily_bonus": daily_bonus,
         }
         if daily_bonus > 0:
-            user.refresh_from_db(fields=['elo_points'])
             resp['elo_points'] = user.elo_points
         return Response(resp)
 

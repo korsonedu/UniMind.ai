@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Trophy, Medal, Loader2, Building2, Coins, HelpCircle, ArrowUpRight, ArrowDownRight, History } from 'lucide-react';
 import {
   Popover,
@@ -58,7 +58,7 @@ export const EloPopover: React.FC = () => {
 
   const hasInstitution = !!user?.institution_id;
 
-  const fetchRanking = useCallback(async () => {
+  const fetchRanking = async () => {
     if (!hasInstitution) return;
     setLoading(true);
     setError(null);
@@ -70,9 +70,9 @@ export const EloPopover: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [hasInstitution]);
+  };
 
-  const fetchLedger = useCallback(async () => {
+  const fetchLedger = async () => {
     setLedgerLoading(true);
     try {
       const res = await api.get('/users/me/points/ledger/', { params: { page: 1 } });
@@ -82,14 +82,19 @@ export const EloPopover: React.FC = () => {
     } finally {
       setLedgerLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     if (open && user) {
       fetchRanking();
+    }
+  }, [open, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open && user && activeTab === 'points' && ledger.length === 0) {
       fetchLedger();
     }
-  }, [open, user, fetchRanking, fetchLedger]);
+  }, [open, activeTab, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentUserRank = ranking.findIndex(u => u.id === user?.id) + 1;
   const currentUserInList = currentUserRank > 0;
