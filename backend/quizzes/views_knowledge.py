@@ -389,3 +389,45 @@ def _export_node_md(node, lines, depth):
         lines.append('')
     for child in node.children.all().order_by('order', 'id'):
         _export_node_md(child, lines, depth + 1)
+
+
+# ── Subjects API (for institution onboarding) ──
+
+SUBJECT_CATEGORIES = {
+    '考研专业课': ['金融431', '法学', '计算机408', '教育学311'],
+    '职业资格证': ['CPA', 'CFA', '法考', '教资'],
+    '海外考试': ['SAT', 'ACT', 'MCAT', 'LSAT', 'GRE', 'GMAT', 'USMLE', 'IELTS', 'TOEFL'],
+}
+
+
+class KnowledgePointSubjectsView(APIView):
+    """Return global top-level subjects grouped by category, for institution onboarding."""
+    permission_classes = []  # public endpoint
+
+    def get(self, request):
+        subjects_qs = KnowledgePoint.objects.filter(
+            level='sub',
+            institution__isnull=True,
+        ).values('subject', 'code', 'name').order_by('subject', 'order')
+
+        # group by subject name
+        subject_map = {}
+        for row in subjects_qs:
+            s = row['subject']
+            if s not in subject_map:
+                subject_map[s] = {'subject': s, 'label': s, 'topics': []}
+            subject_map[s]['topics'].append({
+                'code': row['code'],
+                'name': row['name'],
+            })
+
+        categories = []
+        for cat_name, subjects in SUBJECT_CATEGORIES.items():
+            cat_subjects = []
+            for s in subjects:
+                if s in subject_map:
+                    cat_subjects.append(subject_map[s])
+            if cat_subjects:
+                categories.append({'name': cat_name, 'subjects': cat_subjects})
+
+        return Response({'categories': categories})

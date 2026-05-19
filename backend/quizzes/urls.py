@@ -9,16 +9,16 @@ from .views_exam import (
     StudentExamSubmissionView, TeacherExamSubmissionsView, TeacherGradeSubmissionView,
     SubmitExamView, ExamDetailView,
 )
-from .views_fsrs import (
+from .views_memorix import (
     ToggleFavoriteView, ToggleMasteredView, QuizStatsView,
-    StudyPlanView, FSRSCurveView,
-    FSRSOptimizationHistoryView,
+    MemorixCurveView, MemorixOptimizationHistoryView,
     PersonalizedMockExamView,
     WrongQuestionInsightsView,
 )
 from .views_knowledge import (
     KnowledgePointListView, KnowledgePointDetailView,
     KnowledgePointImportMDView, KnowledgePointExportMDView,
+    KnowledgePointSubjectsView,
 )
 from .views_ai import (
     AIPreviewGenerateView, AIConfirmSaveQuestionsView, AIPreviewParseView,
@@ -42,13 +42,13 @@ urlpatterns = [
     path('teacher-exams/<int:pk>/submissions/', TeacherExamSubmissionsView.as_view(), name='teacher-exam-submissions'),
     path('teacher-exams/submissions/<int:pk>/grade/', TeacherGradeSubmissionView.as_view(), name='teacher-exam-grade'),
     path('stats/', QuizStatsView.as_view(), name='quiz-stats'),
-    path('fsrs/curve/', FSRSCurveView.as_view(), name='fsrs-curve'),
-    path('fsrs/optimization-history/', FSRSOptimizationHistoryView.as_view(), name='fsrs-optimization-history'),
-    path('study-plan/', StudyPlanView.as_view(), name='study-plan'),
+    path('memorix/curve/', MemorixCurveView.as_view(), name='memorix-curve'),
+    path('memorix/optimization-history/', MemorixOptimizationHistoryView.as_view(), name='memorix-optimization-history'),
     path('personalized-mock-exams/', PersonalizedMockExamView.as_view(), name='personalized-mock-exams'),
     path('favorite/toggle/', ToggleFavoriteView.as_view(), name='favorite-toggle'),
     path('mastered/toggle/', ToggleMasteredView.as_view(), name='mastered-toggle'),
     path('wrong-questions/insights/', WrongQuestionInsightsView.as_view(), name='wrong-questions-insights'),
+    path('knowledge-points/subjects/', KnowledgePointSubjectsView.as_view(), name='knowledge-point-subjects'),
     path('knowledge-points/', KnowledgePointListView.as_view(), name='knowledge-point-list'),
     path('knowledge-points/<int:pk>/', KnowledgePointDetailView.as_view(), name='knowledge-point-detail'),
     path('knowledge-points/import-md/', KnowledgePointImportMDView.as_view(), name='knowledge-point-import-md'),
