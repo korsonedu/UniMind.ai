@@ -9,7 +9,7 @@ from django.conf import settings
 from ai_engine.config import get_llm_config
 from ai_engine.service import AICallError, AIEngine
 from quizzes.models import KnowledgePoint, Question
-from quizzes import prompt_resources as quizzes_prompt_resources
+# prompt_resources removed — shared constraints now inlined into prompt templates
 
 # Extraction: normalization functions now live in question_normalizer
 from quizzes.services.question_normalizer import (
@@ -57,7 +57,7 @@ class AIService:
         )
 
     @classmethod
-    def simple_chat(cls, system_prompt, user_prompt, temperature=0.4,
+    def simple_chat(cls, system_prompt="", user_prompt="", temperature=0.4,
                     max_tokens=4096, raise_on_error=False, operation='general'):
         messages = [
             {'role': 'system', 'content': system_prompt},
@@ -67,7 +67,7 @@ class AIService:
                            raise_on_error=raise_on_error, operation=operation)
 
     @classmethod
-    def simple_chat_text(cls, system_prompt, user_prompt, temperature=0.4,
+    def simple_chat_text(cls, system_prompt="", user_prompt="", temperature=0.4,
                          max_tokens=4096, operation='general') -> Optional[str]:
         res = cls.simple_chat(system_prompt, user_prompt, temperature=temperature,
                               max_tokens=max_tokens, operation=operation)
@@ -173,13 +173,22 @@ class AIService:
         return text[end + 2:].lstrip('\r\n')
 
     @classmethod
-    def _get_system_prompt(cls, namespace: str, template_name: str, fallback: str) -> str:
-        template = cls.get_template(namespace, template_name)
-        return (template or '').strip() or fallback
-
-    @classmethod
     def format_template(cls, template: str, **kwargs) -> str:
         return template.format_map(_SafeDict(**kwargs))
+
+    # ── Default grading points (inlined, was from prompt_resources) ──
+
+    _DEFAULT_GRADING_POINTS = {
+        'noun': '1. 概念定义准确(2分)；2. 关键机制或假设(2分)；3. 经济含义或应用(1分)。',
+        'essay': '1. 先解释核心原理并写出关键公式/恒等式(6分)；2. 至少3个分论点，每点含机制链条与定量关系(8分)；3. 结论与术语归纳准确(6分)。',
+        'calculate': '1. 公式与方法正确(4分)；2. 过程完整且代入准确(4分)；3. 结果与解释(2分)。',
+        'short': '1. 要点覆盖完整(4分)；2. 相近概念边界辨析准确(3分)；3. 逻辑清晰且结论准确(3分)。',
+    }
+
+    @classmethod
+    def default_grading_points(cls, subjective_type: str) -> str:
+        key = str(subjective_type or 'short').strip().lower()
+        return cls._DEFAULT_GRADING_POINTS.get(key, cls._DEFAULT_GRADING_POINTS['short'])
 
     # ── Normalization (delegates to question_normalizer) ──────────
 
@@ -188,10 +197,6 @@ class AIService:
     normalize_options = staticmethod(normalize_options)
     normalize_objective_answer = staticmethod(normalize_objective_answer)
     normalize_noun_question_text = staticmethod(normalize_noun_question_text)
-
-    @classmethod
-    def default_grading_points(cls, subjective_type: str) -> str:
-        return quizzes_prompt_resources.get_default_grading_points(subjective_type)
 
     # ── Question Generation (delegates to QuestionGenerator) ──────
 
@@ -258,12 +263,6 @@ class AIService:
         )
 
     # ── Legacy private methods (delegated to QuestionGenerator) ──
-    # Used by ai_task_service which receives AIService class as `ai` parameter.
-
-    @classmethod
-    def _build_module_rules(cls, kps_data):
-        gen = QuestionGenerator(cls)
-        return gen._build_module_rules(kps_data)
 
     @classmethod
     def _normalize_generated_question(cls, raw, kp_by_code, kp_by_id,

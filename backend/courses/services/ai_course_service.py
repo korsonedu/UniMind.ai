@@ -146,14 +146,6 @@ class AICourseService:
 
         response = self.ai.call_ai(
             messages=[
-                {
-                    "role": "system",
-                    "content": self.ai._get_system_prompt(
-                        'courses',
-                        'system_transcript_outline_prompt.txt',
-                        '你是课程大纲专家，只输出 JSON 数组。',
-                    ),
-                },
                 {"role": "user", "content": prompt},
             ],
             temperature=0.3,
@@ -191,7 +183,7 @@ class AICourseService:
                 kp_context = f"\n\n【关联知识点】{kp.name}\n知识范围说明：{kp.description or '请基于课程视频内容判断相关考点'}\n"
 
         prompt = (
-            f"你是 431 金融考研的出题专家。请根据以下课程视频的文字记录，"
+            f"你是学科命题专家。请根据以下课程视频的文字记录，"
             f"生成 {num_obj} 道单项选择题、{num_short} 道简答题"
             f"{'、' + str(num_essay) + '道论述题' if num_essay else ''}。"
             f"题目应紧扣视频讲解的核心概念和逻辑推演。"
@@ -202,7 +194,7 @@ class AICourseService:
         try:
             response = self.ai.simple_chat(
                 system_prompt=(
-                    "你是 431 金融学综合出题专家。只输出 JSON 数组，每个元素包含 "
+                    "你是学科出题专家。只输出 JSON 数组，每个元素包含 "
                     "q_type(objective/subjective)、subjective_type(noun/short/essay/calculate)、"
                     "question、options(客观题 ABCD 选项)、answer、grading_points、"
                     "difficulty_level(entry/easy/normal/hard/extreme) 字段。"

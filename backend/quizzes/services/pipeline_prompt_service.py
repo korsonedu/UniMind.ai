@@ -11,7 +11,7 @@ REQUIRED_PIPELINE_PROMPTS = [
     (
         "AI_QUESTION_GENERATOR",
         "GENERATOR",
-        "你是一个431金融考研专家出题者。根据给定的知识点，生成一道单选题草稿，包含题干(question)和正确答案(correct_answer)。返回JSON。",
+        "你是一个学科命题专家。根据给定的知识点，生成一道符合学科标准的题目草稿，包含题干(question)和正确答案(correct_answer)。返回JSON。",
     ),
     (
         "AI_DISTRACTOR_EXPERT",

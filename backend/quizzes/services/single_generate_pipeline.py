@@ -94,7 +94,7 @@ def _review_by_model(candidates: List[Dict[str, Any]]) -> Dict[int, Dict[str, An
     from core.prompt_manager import PromptManager
     prompt_config = PromptManager.get_prompt_config(
         "AI_QUESTION_REVIEWER_BATCH",
-        "你是431考研命题审核专家。请对每道题做对抗性审查，检查逻辑错误、LaTeX语法风险、偏离431大纲风险。只返回 JSON 数组，每项字段：index(int, 从1开始), pass(bool), issues(list[str]), severity('low|medium|high')。"
+        "你是学科命题审核专家。请对每道题做对抗性审查，检查逻辑错误、LaTeX语法风险、偏离学科大纲风险。只返回 JSON 数组，每项字段：index(int, 从1开始), pass(bool), issues(list[str]), severity('low|medium|high')。"
     )
 
     payload = []
