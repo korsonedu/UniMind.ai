@@ -145,11 +145,10 @@ sudo journalctl -u unimind.service -f
 |------|------|
 | `README.md` | 完整系统介绍、部署指南、环境变量全量参考 |
 | `CHANGELOG.md` | 版本更新日志 |
-| `docs/MEMORIX_WHITEPAPER.md` | Memorix 算法论文 |
-| `docs/FSRS_AUTO_TUNING_ALGORITHM.md` | FSRS 自动调参 |
-| `docs/AI_MULTI_AGENT_PIPELINE.md` | 3-Agent 对抗出题管线 |
-| `docs/BUSINESS_VERSION_PERMISSION_ARCHITECTURE.md` | 多租户权限架构 |
-| `docs/PERSONALIZED_PDF_MOCK_EXAM.md` | 模拟考试（AI 组卷 + 教师发布 + 提交评分） |
+| `docs/features/MEMORIX_WHITEPAPER.md` | Memorix 算法论文 |
+| `docs/features/AI_MULTI_AGENT_PIPELINE.md` | 3-Agent 对抗出题管线 |
+| `docs/features/BUSINESS_VERSION_PERMISSION_ARCHITECTURE.md` | 多租户权限架构 |
+| `docs/features/PERSONALIZED_PDF_MOCK_EXAM.md` | 模拟考试（AI 组卷 + 教师发布 + 提交评分） |
 | `docs/incidents/` | 历史事故记录 |
 | `backend/knowledge_tree.md` | 431 金融知识树 |
 | `backend/finance_431.md` | 431 考纲说明 |

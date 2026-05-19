@@ -242,9 +242,154 @@ Fight me in the replies. I'll bring data.
 
 ---
 
+---
+
+## 六、防作弊与考试诚信 → CTA：你的机构怎么考试？
+
+---
+
+### 15
+Be honest: how do your students take online exams right now?
+
+Let me guess:
+→ Send them a link
+→ Hope they don't Google answers
+→ Pretend the honor system works
+
+Here's the truth: if your exam runs in a browser, your students are cheating.
+
+Browser-based testing cannot prevent tab switching, screenshotting, or running a second device. It just can't.
+
+We built a desktop app that locks the exam screen, blocks tab switching, disables screenshots, and detects competing processes.
+
+Not because it's cool tech. Because training centers asked for it.
+
+How do you handle exam integrity right now? DM me — genuinely curious what solutions people are using.
+
+---
+
+### 16
+A training center director told me last week:
+
+"We run exams in the computer lab with the WiFi turned off. Only way to prevent cheating."
+
+They physically disable internet. In 2025.
+
+Why? Because their browser-based exam platform can't enforce anything. So they solve it with a wrench, not with software.
+
+Desktop-native exam apps can:
+→ Cache the entire question bank locally
+→ Run the exam fully offline
+→ Sync all answers when reconnected
+→ Lock the screen the entire time
+
+One sync. One upload. No Google. No ChatGPT. No cheating.
+
+We're building this into UniMind. If your institution runs computer-lab exams and you're tired of playing network police, DM me "offline" — I'll show you how it works.
+
+---
+
+## 七、闭环系统 → CTA：你的工具之间有对话吗
+
+---
+
+### 17
+Quick audit for training center owners:
+
+Does your AI grading tool talk to your review scheduler?
+
+For 99% of platforms, the answer is no.
+
+Grading is grading. Scheduling is scheduling. They don't share data.
+
+Here's what you lose:
+→ Grading output (score, error type, confidence) never informs what to review next
+→ Review scheduler works blind — same interval for every student regardless of performance
+→ Weak spots get discovered but never systematically addressed
+
+A closed-loop system connects:
+📝 Answer → 🤖 Grade → 🧠 Update memory model → 📊 Schedule next review
+
+Every step feeds the next. Data flows. No information dies.
+
+If you're running a training center and your tools don't talk to each other, DM me "loop" — curious how you're handling this gap.
+
+---
+
+## 八、桌面 App / 离线考试 → CTA：Demo 邀请
+
+---
+
+### 18
+We just shipped the first version of UniMind Desktop.
+
+Not a PWA. Not an Electron wrapper around a website.
+
+A native app that can:
+🔒 Lock screen during exams
+📡 Run fully offline (question bank cached locally)
+🔄 Sync all data when back online
+🔔 Send system-level study reminders (not browser notifications that get blocked)
+
+Download link in bio. Currently macOS + Windows.
+
+If you run computer-lab exams, DM me "desktop" — I'll walk you through the offline exam flow in 10 minutes.
+
+---
+
+### 19
+Unpopular opinion: B2B SaaS companies that don't offer a desktop app are leaving money on the table.
+
+Not because users need it. Because BUYERS perceive it differently.
+
+A training center owner evaluating two platforms:
+→ Platform A: "Here's the URL"
+→ Platform B: "Download our app" (double-click → login → everything works)
+
+Same features. Different perception.
+
+Platform B feels like a system. Platform A feels like a website.
+
+This matters when you're charging enterprise money.
+
+We spent two weeks wrapping our web app in Tauri. Zero feature changes. The demo conversion rate improvement was immediate — because the product felt real.
+
+If you're building B2B SaaS, consider: your buyer's perception IS your product.
+
+---
+
+## 九、持续使用的迁移成本壁垒 → CTA：引起思考
+
+---
+
+### 20
+The real reason training centers don't switch platforms isn't features or price.
+
+It's this:
+
+Every student's forgetting curve parameters. Every wrong answer with its error cause. Every knowledge point mastery score. Every review schedule.
+
+That data lives in your platform now. Switching means losing all of it.
+
+AI grading output → Memorix parameters → Personalized schedules. A year of learning data per student.
+
+This is the moat. Not your AI. Not your UI. The data your system generates that cannot be exported.
+
+Most edtech founders don't think about this until year 3. By then, their churn is baked in.
+
+If you lead with "AI grading" in your sales pitch, you're selling a feature. If you lead with "your students' learning data compounds inside our system," you're selling a moat.
+
+What's your platform's switching cost? Reply — I bet it's lower than you think.
+
+
+
 ## 使用说明
 
 1. 每条末尾都有 CTA——根据你的目标（找客户 / 建讨论 / 展示产品）挑着发
 2. 客户找你的 DM 来了之后，用 `docs/X出海商业化打法.md` 第五步的 Demo 流程接住
 3. 10-12 号帖（招募型）不要一次发完，每隔几天发一条
 4. 13-14 号帖（争议型）发之前准备好——可能真的有人来吵，那是好事
+5. **15-16 号帖（防作弊/离线考试）**：适合在机构客户 demo 前后发——先建立痛点认知，再私聊 demo
+6. **17 号帖（闭环系统）**：适合发给已经了解你产品的人——帮他们理解"为什么你不是又一个 AI wrapper"
+7. **18-19 号帖（桌面 App）**：不要在桌面 App 还没 ready 的时候发，发了就要有东西让人下载
+8. **20 号帖（数据壁垒）**：适合发给已经用了你产品一段时间的客户——帮他们意识到切换成本，降低流失

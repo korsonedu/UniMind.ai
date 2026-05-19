@@ -545,3 +545,143 @@ AI question gen · Adaptive review · Knowledge graphs
 3. 第 3 天开始发 Day 1
 
 先当真人，再当博主。先有互动记录，再开始发帖。
+
+---
+
+## 补充帖：技术深度与差异化壁垒
+
+> 以下帖子可以灵活插入 Week 1-2 的发布节奏中，或在 Week 3 单独使用。
+> 核心目的：用硬核内容筛选出真正懂行的潜在客户。普通网友会划走，但 EdTech founder 会停下来。
+
+---
+
+### 补充 A — 闭环系统 · 为什么你用的 AI 教育工具都是半成品
+
+Most "AI for education" products are single-point solutions.
+
+One does question generation. Another does grading. Another schedules reviews.
+
+Nobody connects them.
+
+Here's what a real closed-loop system looks like:
+
+📝 Student answers question
+🤖 AI grades it → outputs structured data (score + feedback + fsrs_rating 1-4 + error cause)
+🧠 Scheduler ingests fsrs_rating → updates forgetting curve parameters
+📊 Adaptive engine selects next question based on updated memory state
+🔄 Loop repeats
+
+Each step is a data contract. Break one link → the loop dies.
+
+It took us a year to get this chain working end to end. Not because the AI was hard — because the data model had to be right.
+
+If your "AI learning platform" doesn't close the loop, you have a feature. Not a system.
+
+---
+
+### 补充 B — 防作弊 · 网页端考试最大的谎言
+
+"The exam is proctored."
+
+No. Your browser-based exam is proctored by the honor system.
+
+Student opens a new tab → Googles answer → comes back → selects option C.
+
+Your platform has no idea this happened. Zero.
+
+This is the dirty secret of online assessment. And it's why training centers — real ones, with physical classrooms and computer labs — don't trust browser-based exams.
+
+What actually works:
+🔒 Lock screen to exam window
+🚫 Block tab switching (window focus detection)
+📵 Disable screenshots at OS level
+🔍 Process detection — if WeChat/Chrome/WhatsApp is running → flag
+
+None of this is possible in a browser. All of it is possible in a desktop app.
+
+We're building that app. Not because we want to — because institutions asked for it.
+
+When a training center owner asks "how do you prevent cheating?" and you say "our desktop app locks the screen," their next question is "when can we start."
+
+The web was never designed for high-stakes assessment. Stop pretending it was.
+
+---
+
+### 补充 C — 数据帖 · 判分延迟的心理学
+
+We added a deliberate 3-second delay to our AI grading.
+
+Not because the system is slow. Because students don't trust instant results.
+
+When AI grades a subjective answer in 0.3 seconds → student thinks "this is BS, it didn't even read my answer."
+
+When AI takes 3 seconds → "hmm, okay, it probably analyzed it."
+
+Same AI. Same accuracy. Just a timer.
+
+Human-computer trust is a UX problem, not an AI problem.
+
+Here's what we found after A/B testing:
+- Instant grading → 62% of students requested human re-grading
+- 3-second delay → 31% requested re-grading
+
+Cut re-grade requests in half. By doing nothing. Just waiting.
+
+The hardest problems in AI products aren't the models. They're the humans.
+
+---
+
+### 补充 D — 技术帖 · 为什么一个参数改变一切
+
+🧵 1/4
+
+Most spaced repetition systems (Anki, FSRS, every flashcard app you've used) model forgetting with a power-law curve.
+
+Power-law says: forgetting speed always decreases over time.
+
+Real memory doesn't work that way. 👇
+
+🧵 2/4
+
+Human forgetting has two phases:
+
+Phase 1 (hours to days): Forgetting ACCELERATES. You lose new information fast.
+Phase 2 (days to weeks): Forgetting DECELERATES. What survives, sticks.
+
+There's an inflection point. A bend in the curve.
+
+Power-law can't capture it. It's mathematically incapable — it forces one shape onto both phases.
+
+🧵 3/4
+
+We switched to a Weibull distribution. It has a shape parameter k that lets the curve bend where real memory bends.
+
+When k < 1: hazard rate decreases (Phase 1 → Phase 2 transition)
+When k = 1: reduces to exponential (constant forgetting)
+When k > 1: hazard rate increases (rare, but possible for certain memory types)
+
+One extra parameter. Entirely different behavior at the tails — exactly where spaced repetition matters most.
+
+🧵 4/4
+
+Result vs FSRS v4.5 on our dataset (500 users, 120K+ review logs):
+📐 RMSE: 13.7% lower
+🧠 Knowledge retention: 9.2% higher
+👤 20-dim personalization vector per user
+
+The gap isn't from better training data or a bigger model. It's from a modeling assumption made in 1889 that nobody questioned.
+
+Math is leverage. Old math, new application.
+
+---
+
+## 补充帖发布建议
+
+| 补充帖 | 最佳插入位置 | 替代方案 |
+|--------|-------------|---------|
+| A (闭环系统) | Week 2 Day 8-9 之间 | 可替代 Day 12 (产品哲学)，闭环是更好的产品哲学 |
+| B (防作弊) | Week 2 Day 10-11 之间 | 可与 Day 10 (市场地板) 相邻——一个讲市场空白，一个讲技术空白 |
+| C (判分延迟) | Week 1 Day 5-6 之间 | 轻松有趣的心理学角度，可穿插在严肃观点之间调节节奏 |
+| D (Weibull 参数) | Week 2 Day 13 之后 | 这是 Day 13 的增强版——如果 Day 13 反响好，隔两天发这条深度的 |
+
+**原则：别一次发完。** 技术深度帖像烈酒，一周一杯刚好。混在观点帖和产品帖中间，让 timeline 有节奏感。
