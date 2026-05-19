@@ -22,6 +22,8 @@ from .serializers_institution import (
     InstitutionStudentSerializer, CreateStudentSerializer, InstitutionFeatureSerializer,
 )
 
+DIRECTION_LIMITS = {'solo': 1, 'plus': 3, 'pro': 999999}
+
 
 def _clone_knowledge_tree(subject_name, institution):
     """Clone all global KnowledgePoints for a subject into an institution scope."""
@@ -787,6 +789,21 @@ class InstitutionCreateView(APIView):
         contact_phone = (request.data.get('contact_phone') or '').strip()
         description = (request.data.get('description') or '').strip()
 
+        # Clone knowledge trees for selected subjects
+        subject_names = (request.data.get('subject_names') or [])
+        if isinstance(subject_names, str):
+            subject_names = [s.strip() for s in subject_names.split(',') if s.strip()]
+
+        # Filter out "custom" — it means user wants empty tree
+        subject_names = [s for s in subject_names if s and s != 'custom']
+
+        max_dirs = DIRECTION_LIMITS.get(plan, 1)
+        if len(subject_names) > max_dirs:
+            return Response(
+                {'error': f'{plan.upper()} 方案最多选择 {max_dirs} 个学科方向'},
+                status=400,
+            )
+
         inst = Institution.objects.create(
             name=name, slug=slug,
             contact_name=contact_name,
@@ -798,22 +815,6 @@ class InstitutionCreateView(APIView):
             created_by=user,
             is_active=True,
         )
-
-        # Clone knowledge trees for selected subjects
-        subject_names = (request.data.get('subject_names') or [])
-        if isinstance(subject_names, str):
-            subject_names = [s.strip() for s in subject_names.split(',') if s.strip()]
-
-        # Filter out "custom" — it means user wants empty tree
-        subject_names = [s for s in subject_names if s and s != 'custom']
-
-        DIRECTION_LIMITS = {'solo': 1, 'plus': 3, 'pro': 999999}
-        max_dirs = DIRECTION_LIMITS.get(plan, 1)
-        if len(subject_names) > max_dirs:
-            return Response(
-                {'error': f'{plan.upper()} 方案最多选择 {max_dirs} 个学科方向'},
-                status=400,
-            )
 
         imported_count = 0
         for s in subject_names:
