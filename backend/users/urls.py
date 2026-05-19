@@ -22,6 +22,7 @@ from .views_institution import (
     CheckInviteView, RegenerateInviteSlugView,
     PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
     ValidateInviteCodeView,
+    UpdateDirectionsView,
     PublicInstitutionView, InstitutionJoinBySlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
 )
@@ -74,6 +75,7 @@ urlpatterns = [
     # Institution — self-service (current user's institution)
     path('institution/me/', InstitutionDashboardView.as_view(), name='institution-me'),
     path('institution/me/update/', InstitutionSelfUpdateView.as_view(), name='institution-self-update'),
+    path('institution/me/directions/', UpdateDirectionsView.as_view(), name='institution-directions-update'),
     path('institution/me/features/', InstitutionFeatureView.as_view(), name='institution-features'),
     path('institution/me/regenerate-invite-slug/', RegenerateInviteSlugView.as_view(), name='regenerate-invite-slug'),
     path('institution/join-by-slug/', InstitutionJoinBySlugView.as_view(), name='institution-join-by-slug'),

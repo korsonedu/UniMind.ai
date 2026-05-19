@@ -650,6 +650,47 @@ class InstitutionSelfUpdateView(APIView):
         })
 
 
+class UpdateDirectionsView(APIView):
+    """机构所有者更新业务方向 —— 删旧 KP，克隆新方向 KP。"""
+    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
+
+    def put(self, request):
+        inst = request.user.institution
+        plan = inst.plan
+
+        subject_names = (request.data.get('subject_names') or [])
+        if isinstance(subject_names, str):
+            subject_names = [s.strip() for s in subject_names.split(',') if s.strip()]
+        subject_names = [s for s in subject_names if s and s != 'custom']
+
+        max_dirs = DIRECTION_LIMITS.get(plan, 1)
+        if len(subject_names) > max_dirs:
+            return Response(
+                {'error': f'{plan.upper()} 方案最多选择 {max_dirs} 个学科方向'},
+                status=400,
+            )
+
+        # Delete existing institution KPs
+        from quizzes.models import KnowledgePoint
+        deleted, _ = KnowledgePoint.objects.filter(institution=inst).delete()
+
+        # Clone selected subjects
+        imported_count = 0
+        for s in subject_names:
+            imported_count += _clone_knowledge_tree(s, inst)
+
+        inst.business_type = ', '.join(subject_names) if subject_names else '自定义'
+        inst.save(update_fields=['business_type'])
+
+        return Response({
+            'status': 'ok',
+            'deleted': deleted,
+            'imported_nodes': imported_count,
+            'subjects': subject_names,
+            'business_type': inst.business_type,
+        })
+
+
 class RegenerateInviteSlugView(APIView):
     """机构所有者重新生成邀请链接 slug"""
     permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
