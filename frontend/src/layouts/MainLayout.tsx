@@ -23,6 +23,7 @@ import {
   Eye,
   EyeOff,
   UserPlus,
+  Users,
   Copy,
   RefreshCw,
 } from 'lucide-react';
@@ -238,9 +239,10 @@ export const MainLayout: React.FC = () => {
         { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams'), minPlan: 3 },
       ];
 
-  // ── 机构成员 —— 机构入口已移至头像下拉菜单 ──
+  // ── 机构管理菜单 ──
   if (!isSuperAdmin && instInfo) {
     if (user?.is_institution_admin) {
+      navItems.push({ to: '/institution/students', icon: Users, label: '成员管理', section: 'institution' });
       navItems.push({ to: '/management', icon: Wrench, label: t('layout:nav.maintenance'), section: 'institution' });
     }
   }

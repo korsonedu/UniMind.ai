@@ -4,12 +4,12 @@ from .models import Article
 from .serializers import ArticleSerializer
 from django.db.models import Count
 from users.views import IsMember
+from users.permissions import is_platform_admin, is_institution_admin
 
 class IsAdminUserOrReadOnly(permissions.BasePermission):
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
-            # 修改这里：GET 请求也需要是会员
-            return bool(request.user and request.user.is_authenticated and (request.user.is_member or request.user.role == 'admin'))
+            return bool(request.user and request.user.is_authenticated and (request.user.is_member or is_platform_admin(request.user) or is_institution_admin(request.user)))
         return bool(request.user and request.user.is_authenticated and request.user.is_staff)
 
 class ArticleListCreateView(generics.ListCreateAPIView):

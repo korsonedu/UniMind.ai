@@ -48,7 +48,7 @@ def is_institution_admin(user) -> bool:
 def is_member_or_admin(user) -> bool:
     if not user or not user.is_authenticated:
         return False
-    if is_platform_admin(user):
+    if is_platform_admin(user) or is_institution_admin(user):
         return True
     if not getattr(user, "is_member", False):
         return False
@@ -68,7 +68,7 @@ def get_user_capabilities(user) -> list[str]:
         return []
 
     caps = [CAP_LEARNING_ACCESS]
-    if getattr(user, "is_member", False) or is_platform_admin(user):
+    if getattr(user, "is_member", False) or is_platform_admin(user) or is_institution_admin(user):
         caps.append(CAP_MEMBER_ACCESS)
     if is_platform_admin(user):
         caps.extend(ADMIN_CAPABILITIES)

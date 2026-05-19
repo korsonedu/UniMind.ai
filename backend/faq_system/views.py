@@ -6,6 +6,7 @@ from .models import Question, Answer
 from .serializers import QuestionSerializer, AnswerSerializer
 from notifications.models import Notification
 from users.views import IsMember
+from users.permissions import is_platform_admin, is_institution_admin
 
 class QuestionListCreateView(generics.ListCreateAPIView):
     serializer_class = QuestionSerializer
@@ -14,8 +15,6 @@ class QuestionListCreateView(generics.ListCreateAPIView):
     search_fields = ['content', 'user__nickname']
 
     def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
         user = self.request.user
         qs = Question.objects.all().select_related('user').prefetch_related('answers__user')
         if not is_platform_admin(user):
@@ -48,8 +47,6 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
         user = self.request.user
         qs = super().get_queryset()
         if not is_platform_admin(user):
@@ -61,14 +58,13 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         return qs
 
     def perform_update(self, serializer):
-        if self.request.user == serializer.instance.user or self.request.user.role == 'admin':
+        if self.request.user == serializer.instance.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             serializer.save()
         else:
             raise permissions.PermissionDenied("无权修改")
 
     def perform_destroy(self, instance):
-        # Allow owner or admin to delete
-        if instance.user == self.request.user or self.request.user.role == 'admin':
+        if instance.user == self.request.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             instance.delete()
         else:
             raise permissions.PermissionDenied("无权删除")
@@ -79,8 +75,6 @@ class AnswerDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
         user = self.request.user
         qs = super().get_queryset().select_related('question')
         if not is_platform_admin(user):
@@ -92,13 +86,13 @@ class AnswerDetailView(generics.RetrieveUpdateDestroyAPIView):
         return qs
 
     def perform_update(self, serializer):
-        if self.request.user == serializer.instance.user or self.request.user.role == 'admin':
+        if self.request.user == serializer.instance.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             serializer.save()
         else:
             raise permissions.PermissionDenied("无权修改")
 
     def perform_destroy(self, instance):
-        if instance.user == self.request.user or self.request.user.role == 'admin':
+        if instance.user == self.request.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             instance.delete()
         else:
             raise permissions.PermissionDenied("无权删除")
@@ -123,7 +117,7 @@ class AnswerCreateView(generics.CreateAPIView):
         except Question.DoesNotExist:
             return Response({'error': 'Question not found'}, status=404)
 
-        is_teacher = request.user.role == 'admin'
+        is_teacher = request.user.institution_role in ('teacher', 'owner') or request.user.role == 'admin'
         
         # 逻辑：首次回答仅允许教师
         if question.answers.count() == 0:
@@ -208,17 +202,17 @@ class QuestionActionView(APIView):
                 is_followed = True
             return Response({'status': 'ok', 'is_followed': is_followed})
 
-        # Star Logic (Only Admin)
+        # Star Logic (Platform admin or institution admin)
         if 'toggle_star' in request.data:
-            if request.user.role != 'admin':
+            if not (is_platform_admin(request.user) or is_institution_admin(request.user)):
                 return Response({'error': 'Permission denied'}, status=403)
             question.is_starred = not question.is_starred
             question.save()
             return Response({'status': 'ok', 'is_starred': question.is_starred})
 
-        # Solve Logic (Owner or Admin)
+        # Solve Logic (Owner, platform admin, or institution admin)
         if 'toggle_solved' in request.data:
-            if request.user != question.user and request.user.role != 'admin':
+            if request.user != question.user and not is_platform_admin(request.user) and not is_institution_admin(request.user):
                 return Response({'error': 'Permission denied'}, status=403)
             question.is_solved = not question.is_solved
             question.save()

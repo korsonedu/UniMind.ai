@@ -32,10 +32,11 @@ class IsMember(permissions.BasePermission):
     message = "您需要先成为学员（激活会员）才能使用此功能。"
 
     def has_permission(self, request, view):
+        from users.permissions import is_platform_admin, is_institution_admin
         return bool(
-            request.user and 
-            request.user.is_authenticated and 
-            (request.user.is_member or request.user.role == 'admin' or request.user.is_superuser)
+            request.user and
+            request.user.is_authenticated and
+            (request.user.is_member or is_platform_admin(request.user) or is_institution_admin(request.user))
         )
 
 class ActivateMembershipView(APIView):
