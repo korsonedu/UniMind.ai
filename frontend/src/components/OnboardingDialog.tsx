@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
 import { GraduationCap, Building2, ArrowRight, Loader2, Check } from 'lucide-react';
 
 export function OnboardingDialog() {
   const { user, updateUser } = useAuthStore();
+  const institution = useInstitutionStore(s => s.institution);
   const { t } = useTranslation(['onboarding', 'common']);
-  const location = useLocation();
   const [step, setStep] = useState<'role' | 'teacher' | 'directions' | 'student'>(user?.institution_role === 'owner' ? 'teacher' : 'role');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -32,13 +32,8 @@ export function OnboardingDialog() {
 
   const PLAN_DIRECTION_LIMITS: Record<string, number> = { solo: 1, plus: 3, pro: 999999 };
 
-  // 路由切换时重新弹出
-  useEffect(() => {
-    setDismissed(false);
-  }, [location.pathname]);
-
-  // 不弹：无用户 / 已有机构 / 已关闭 / 平台超管
-  if (!user || user.institution || user.institution_id || dismissed) return null;
+  // 不弹：无用户 / 已有机构（auth store 或 institution store）/ 已关闭 / 平台超管
+  if (!user || user.institution || user.institution_id || institution || dismissed) return null;
   if (user.is_admin) return null;
 
   // Phase 1: validate invite code, then show direction selector
@@ -94,10 +89,9 @@ export function OnboardingDialog() {
   };
 
   return (
-    <Dialog open={!dismissed} onOpenChange={(open) => { if (!open) setDismissed(true); }} modal={true}>
+    <Dialog open={!dismissed} onOpenChange={(open) => { if (!open) setDismissed(true); }} >
       <DialogContent
         className="sm:max-w-[440px] rounded-2xl border-none shadow-2xl bg-card p-8"
-        onInteractOutside={e => e.preventDefault()}
       >
         {done ? (
           <div className="text-center space-y-5 py-4">

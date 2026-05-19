@@ -35,6 +35,16 @@ def is_platform_admin(user) -> bool:
     )
 
 
+def is_institution_admin(user) -> bool:
+    """机构管理员：owner 或 teacher。"""
+    return bool(
+        user
+        and user.is_authenticated
+        and user.institution is not None
+        and user.institution_role in ('owner', 'teacher')
+    )
+
+
 def is_member_or_admin(user) -> bool:
     if not user or not user.is_authenticated:
         return False
@@ -129,14 +139,14 @@ class IsMemberOrAdmin(permissions.BasePermission):
 class IsAdminWriteMemberRead(permissions.BasePermission):
     """
     SAFE 方法：会员或管理员可读。
-    写方法：仅管理员可写。
+    写方法：平台管理员或机构管理员可写。
     """
     message = "权限不足。"
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return is_member_or_admin(request.user)
-        return is_platform_admin(request.user)
+        return is_platform_admin(request.user) or is_institution_admin(request.user)
 
 
 class IsInstitutionAdmin(permissions.BasePermission):

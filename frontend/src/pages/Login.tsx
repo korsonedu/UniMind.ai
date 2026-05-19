@@ -45,7 +45,10 @@ export const Login: React.FC = () => {
           const meRes = await api.get('/users/me/');
           updateUser(meRes.data);
         } catch (err: any) {
-          toast.error(err.response?.data?.error || t('login.joinInstitutionError'));
+          // Only show error if user still has no institution after login
+          if (!user.institution && !user.institution_id) {
+            toast.error(err.response?.data?.error || t('login.joinInstitutionError'));
+          }
         }
       }
 
