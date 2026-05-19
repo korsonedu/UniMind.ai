@@ -846,7 +846,7 @@ class ValidateInviteCodeView(APIView):
         except PlanInviteCode.DoesNotExist:
             return Response({'error': '无效的方案邀请码'}, status=400)
 
-        if code_obj.max_uses > 0 and code_obj.used_count >= code_obj.max_uses:
+        if code_obj.is_exhausted:
             return Response({'error': '该邀请码已达使用上限'}, status=400)
 
         return Response({
