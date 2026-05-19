@@ -30,6 +30,8 @@ export function OnboardingDialog() {
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [directionError, setDirectionError] = useState('');
 
+  const PLAN_DIRECTION_LIMITS: Record<string, number> = { solo: 1, plus: 3, pro: 999999 };
+
   // 路由切换时重新弹出
   useEffect(() => {
     setDismissed(false);
@@ -63,8 +65,7 @@ export function OnboardingDialog() {
   // Phase 2: create institution with selected directions
   const handleCreateWithDirections = async () => {
     setLoading(true); setDirectionError('');
-    const limits: Record<string, number> = { solo: 1, plus: 3, pro: 999999 };
-    const maxDirs = limits[plan] || 1;
+    const maxDirs = PLAN_DIRECTION_LIMITS[plan] || 1;
 
     if (selectedSubjects.length > 0 && selectedSubjects.length > maxDirs) {
       setDirectionError(`${plan.toUpperCase()} 方案最多选择 ${maxDirs} 个学科方向`);
@@ -212,7 +213,7 @@ export function OnboardingDialog() {
                   <div className="grid grid-cols-2 gap-2">
                     {cat.subjects.map((sub: any) => {
                       const isSelected = selectedSubjects.includes(sub.subject);
-                      const limit = plan === 'solo' ? 1 : plan === 'plus' ? 3 : 999999;
+                      const limit = PLAN_DIRECTION_LIMITS[plan] || 1;
                       const atLimit = selectedSubjects.length >= limit && !isSelected;
                       return (
                         <button
