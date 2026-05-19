@@ -132,7 +132,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
         <div className="hidden md:flex items-center gap-3">
           <LanguageSwitcher variant="full" />
           {token ? (
-            <Button variant="apple" size="sm" onClick={() => navigate('/')}>进入控制台</Button>
+            <Button variant="apple" size="sm" onClick={() => navigate('/courses')}>进入控制台</Button>
           ) : (
             <>
               <button
@@ -169,7 +169,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
           </div>
           <div className="pt-3 border-t border-[#E5E5EA]/60 flex gap-3">
             {token ? (
-              <Button className="w-full" variant="apple" onClick={() => { setOpen(false); navigate('/'); }}>
+              <Button className="w-full" variant="apple" onClick={() => { setOpen(false); navigate('/courses'); }}>
                 进入控制台
               </Button>
             ) : (
