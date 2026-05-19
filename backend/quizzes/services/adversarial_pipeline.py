@@ -179,17 +179,17 @@ def _update_task(task, progress, status_text, stage_log, stage_name):
 # ── AI Agent 函数 ────────────────────────────────────────────────
 
 AUTHOR_SYSTEM_PROMPT = """\
-你是 431 金融学综合考试的资深命题专家，深谙教育部考试大纲与高校自主命题风格。
+你是学科命题专家。根据知识点核心概念和学科标准命题。
 
 【命题准则】
 1. 知识点精准：每道题必须紧扣目标知识点的核心概念，不得偏题或泛化到无关领域。
 2. 难度分层：entry=概念识记，easy=简单应用，normal=综合分析，hard=跨知识点综合，extreme=前沿/超纲。
 3. 题型规范：
    - objective（客观选择）：4 个选项（A/B/C/D），只有一个正确答案，干扰项要有迷惑性但非明显错误。
-   - subjective:noun（名词解释）：要求解释核心概念，答案需包含定义+特征+金融学意义。
+   - subjective:noun（名词解释）：要求解释核心概念，答案需包含定义+特征+学科意义。
    - subjective:short（简答）：要求分点作答，答案需包含关键论点+简要论证。
    - subjective:essay（论述）：要求综合分析，答案需包含背景+分析框架+核心论点+结论。
-   - subjective:calculate（计算）：给出实际金融数据，要求计算并解释结果含义。
+   - subjective:calculate（计算）：给出实际数据，要求计算并解释结果含义。
 4. LaTeX 规范：所有数学公式使用 $...$ 包裹，如 $E(R_i) = R_f + \\beta_i[E(R_m) - R_f]$。
 5. 答案完整：客观题给出正确答案字母并附简要解析，主观题给出完整参考答案和判分要点。
 6. 避免重复：每个知识点下各题应在不同角度或不同难度层次考察，拒绝同义反复。
@@ -224,7 +224,7 @@ def _author_generate(kps: List[KnowledgePoint], q_per_kp: int, types: Optional[L
         prompt = (
             f"【目标知识点】\n"
             f"名称：{kp.name}\n"
-            f"描述：{kp.description or '（请根据 431 金融学大纲理解该知识点的标准内容）'}\n"
+            f"描述：{kp.description or '（请根据学科大纲理解该知识点的标准内容）'}\n"
             f"编码：{kp.code}\n\n"
             f"【出题要求】\n"
             f"请为该知识点生成 {q_per_kp} 道题目，尽量覆盖不同难度。{type_hint}\n"
@@ -252,8 +252,8 @@ def _author_generate(kps: List[KnowledgePoint], q_per_kp: int, types: Optional[L
 
 
 REVIEWER_SYSTEM_PROMPT = """\
-你是 431 金融学综合考试的命题审核专家，负责对每道题进行严格的对抗性质控审查。
-你的职责是：找出题目的漏洞、不严谨之处、与 431 大纲的偏差，并给出可操作的修改建议。
+你是学科命题审核专家，负责对每道题进行严格的对抗性质控审查。
+你的职责是：找出题目的漏洞、不严谨之处、与学科大纲的偏差，并给出可操作的修改建议。
 
 【审查维度】（每项 0.0-1.0 分）
 1. difficulty（难度合理性）：题目实际难度是否匹配声明的 difficulty_level？过难或过易都要指出。
@@ -262,7 +262,7 @@ REVIEWER_SYSTEM_PROMPT = """\
 3. clarity（表述清晰度）：题干是否无歧义？选项是否互斥？主观题是否明确了作答范围和字数？
    扣分项：题干含混、选项重叠、主观题指示不清、LaTeX 语法错误。
 4. coverage（知识覆盖度）：题目是否准确命中目标知识点的核心内容？
-   扣分项：偏题、考查边缘细节而非核心概念、与 431 大纲无关。
+   扣分项：偏题、考查边缘细节而非核心概念、与学科大纲无关。
 
 【综合评分规则】
 - score = (difficulty + discrimination + clarity + coverage) / 4
@@ -315,14 +315,14 @@ def _reviewer_evaluate(question: Dict) -> Dict:
 def _author_revise(question: Dict, feedback: str) -> Dict:
     """Author 根据 Reviewer 反馈修改题目。"""
     system_prompt = PromptManager.get_prompt("AI_QUESTION_AUTHOR", (
-        "你是 431 金融学综合考试的命题专家。Reviewer 已审出题目中的问题，现在请根据反馈逐条修改。\n\n"
+        "你是学科命题专家。Reviewer 已审出题目中的问题，现在请根据反馈逐条修改。\n\n"
         "【修改原则】\n"
         "1. 逐条响应 Reviewer 的每一条反馈，不得遗漏或敷衍。\n"
         "2. 如果 Reviewer 指出难度不匹配：调整题目深度或 complexity 使其匹配声明难度。\n"
         "3. 如果 Reviewer 指出表述不清：重写题目使其无歧义，确保选项互斥、主观题指令明确。\n"
         "4. 如果 Reviewer 指出偏离知识点：重新设计题目使其聚焦于目标知识点的核心概念。\n"
         "5. 保持题目原有的题型、知识点归属和基本结构，只做质量改进。\n"
-        "6. 修改后自行检查一次：是否满足 431 命题规范、LaTeX 是否正确、答案是否完整。\n\n"
+        "6. 修改后自行检查一次：是否满足命题规范、LaTeX 是否正确、答案是否完整。\n\n"
         "输出纯 JSON 对象（不要 markdown 包裹），包含修改后的完整题目的所有字段。"
     ))
     prompt = (
@@ -350,7 +350,7 @@ def _author_revise(question: Dict, feedback: str) -> Dict:
 
 
 CLASSIFIER_SYSTEM_PROMPT = """\
-你是 431 金融学综合考试的题目分类专家，负责为每道已通过审查的题目精确标注元数据。
+你是学科题目分类专家，负责为每道已通过审查的题目精确标注元数据。
 
 【标注规范】
 1. difficulty_level（难度等级）：

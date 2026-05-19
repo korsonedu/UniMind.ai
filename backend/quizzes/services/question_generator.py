@@ -10,7 +10,7 @@ from django.db import transaction
 
 from ai_engine.service import AICallError
 from quizzes.models import KnowledgePoint, Question
-from quizzes import prompt_resources as quizzes_prompt_resources
+# prompt_resources removed — shared constraints now inlined into prompt templates
 from quizzes.services.question_normalizer import (
     normalize_question_type,
     normalize_difficulty_level,
@@ -45,12 +45,6 @@ class QuestionGenerator:
         return max(2200, min(5600, 1200 + c * 1200))
 
     # ------------------------------------------------------------------
-    # 构建模块规则文本
-    # ------------------------------------------------------------------
-
-    def _build_module_rules(self, kps_data: Sequence[Dict[str, Any]]) -> str:
-        return quizzes_prompt_resources.build_module_rules_text(kps_data)
-
     # ------------------------------------------------------------------
     # 单轮批量生成请求
     # ------------------------------------------------------------------
@@ -69,14 +63,10 @@ class QuestionGenerator:
         prompt = self.ai_service.format_template(
             template,
             count_per_kp=max(1, int(count_per_kp or 1)),
-            module_rules=self._build_module_rules(kps_data),
             target_types=', '.join(target_types or []),
             target_difficulty=target_difficulty,
             target_type_ratio=target_type_ratio_text,
             knowledge_points_json=json.dumps(list(kps_data), ensure_ascii=False, indent=2),
-            shared_answer_requirements=quizzes_prompt_resources.get_shared_answer_requirements(),
-            shared_question_shape_constraints=quizzes_prompt_resources.get_shared_question_shape_constraints(),
-            shared_output_schema=quizzes_prompt_resources.get_shared_output_schema(),
         )
 
         logger.info(
@@ -87,11 +77,6 @@ class QuestionGenerator:
         )
 
         response = self.ai_service.simple_chat(
-            system_prompt=self.ai_service._get_system_prompt(
-                'quizzes',
-                'system_bulk_generate_prompt.txt',
-                '你是431金融命题专家。只输出可被 json.loads 解析的 JSON 数组，不输出其他文字。',
-            ),
             user_prompt=prompt,
             temperature=0.35,
             max_tokens=self._estimate_bulk_generate_max_tokens(count_per_kp),
@@ -336,7 +321,7 @@ class QuestionGenerator:
         if q_type == 'objective':
             grading_points = '无'
         else:
-            grading_points = str(raw.get('grading_points') or '').strip() or quizzes_prompt_resources.get_default_grading_points(subjective_type)
+            grading_points = str(raw.get('grading_points') or '').strip() or self.ai_service.default_grading_points(subjective_type)
 
         clean_data = {
             'q_type': q_type,

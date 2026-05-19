@@ -15,7 +15,7 @@ MAX_KP_GROUPS = 8
 MAX_QUESTIONS_PER_KP = 3
 
 SYSTEM_PROMPT = (
-    "你是431金融学综合考试命题专家。你必须输出一个纯 JSON 数组，"
+    "你是学科命题专家。你必须输出一个纯 JSON 数组，"
     "没有任何 markdown 标记（不要 ```json 代码块）、注释或额外文字。"
     "输出必须可直接被 Python json.loads() 解析。"
     "你命制的每一道题都必须是全新的，严禁与错题记录中的原题相同或高度相似。"
@@ -110,7 +110,7 @@ class MockExamGeneratorService:
     @classmethod
     def _format_wrong_question_context(cls, wrong_data: Dict[str, Any]) -> str:
         if wrong_data.get("is_empty"):
-            return "该学生暂无错题记录。请根据431金融学综合核心知识点（货币银行学、国际金融、公司金融、投资学、衍生品）生成综合性模拟题。"
+            return "该学生暂无错题记录。请根据核心知识点体系生成综合性模拟题。"
 
         lines = []
         for i, kp in enumerate(wrong_data["knowledge_points"], 1):

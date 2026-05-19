@@ -5,7 +5,7 @@ from django.conf import settings
 
 from ai_engine.observability import record_schema_event
 from quizzes.models import KnowledgePoint, Question
-from quizzes import prompt_resources as quizzes_prompt_resources
+# prompt_resources removed — shared constraints now inlined into prompt templates
 from quizzes.services.ai_schema_guard import (
     validate_grading_payload,
     validate_question_list_payload,
@@ -167,11 +167,6 @@ class QuizAITaskService:
             correct_answer=question.correct_answer or '',
         )
         return ai.simple_chat_text(
-            system_prompt=ai._get_system_prompt(
-                'quizzes',
-                'system_ai_answer_prompt.txt',
-                '你是金融431课程助教，输出结构清晰、可复习的标准答案与解析。',
-            ),
             user_prompt=prompt,
             temperature=0.35,
             max_tokens=2800,
@@ -213,11 +208,6 @@ class QuizAITaskService:
                 is_correct='正确' if is_correct else '错误',
             )
             response = ai.simple_chat(
-                system_prompt=ai._get_system_prompt(
-                    'quizzes',
-                    'system_ai_answer_prompt.txt',
-                    '你是金融431资深讲师，擅长客观题深度解析。仅输出 JSON 对象。',
-                ),
                 user_prompt=prompt,
                 temperature=0.4,
                 max_tokens=2000,
@@ -334,11 +324,6 @@ class QuizAITaskService:
         )
 
         response = ai.simple_chat(
-            system_prompt=ai._get_system_prompt(
-                'quizzes',
-                'system_grading_prompt.txt',
-                '你是严谨的金融431阅卷老师。仅输出 JSON 对象。',
-            ),
             user_prompt=prompt,
             temperature=0.2,
             max_tokens=2500,
@@ -417,18 +402,9 @@ class QuizAITaskService:
             num_essay=max(0, int(num_essay or 0)),
             num_calc=max(0, int(num_calc or 0)),
             target_kp_json=kp_payload,
-            module_rules=ai._build_module_rules(kps_data),
-            shared_answer_requirements=quizzes_prompt_resources.get_shared_answer_requirements(),
-            shared_question_shape_constraints=quizzes_prompt_resources.get_shared_question_shape_constraints(),
-            shared_output_schema=quizzes_prompt_resources.get_shared_output_schema(),
         )
 
         response = ai.simple_chat(
-            system_prompt=ai._get_system_prompt(
-                'quizzes',
-                'system_generate_from_text_prompt.txt',
-                '你是431金融题库教研员。仅输出 JSON 数组。',
-            ),
             user_prompt=prompt,
             temperature=0.35,
             max_tokens=7000,
@@ -461,11 +437,6 @@ class QuizAITaskService:
         prompt = ai.format_template(template, raw_text=raw_text)
 
         response = ai.simple_chat(
-            system_prompt=ai._get_system_prompt(
-                'quizzes',
-                'system_preview_parse_prompt.txt',
-                '你是题目清洗与结构化专家。仅输出 JSON 数组。',
-            ),
             user_prompt=prompt,
             temperature=0.2,
             max_tokens=3200,

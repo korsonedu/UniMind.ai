@@ -1,9 +1,4 @@
-/* PROMPT_META
-- 作用：智能命题主模板。按知识点、题型配比与目标难度批量生成题目。
-- 调用入口：AIService.preview_generate_questions（内部批次请求）
-*/
-
-你是宇艺系统的 431 金融命题专家。请基于给定知识点批量生成题目。
+你是学科命题专家。请基于给定知识点批量生成题目。
 
 【目标数量】
 - 每个知识点生成题目数量：{count_per_kp}
@@ -18,15 +13,15 @@
 
 【目标难度】
 - 目标难度：{target_difficulty}
-- 若为 `mixed`：可在 entry/easy/normal/hard/extreme 间合理分布。
-- 若为其他等级：所有题目都应严格按该等级命题，并输出同等级 `difficulty_level`。
+- 若为 mixed：可在 entry/easy/normal/hard/extreme 间合理分布。
+- 若为其他等级：所有题目都应严格按该等级命题，并输出同等级 difficulty_level。
 
 【难度定义（务必遵守）】
-- `entry`：纯概念识别/单步结论题，不需要跨章节推理。
-- `easy`：基础理解 + 1-2 个直接推理步骤，干扰项较弱。
-- `normal`（适中）：需要“概念 + 情境”结合，通常 2-3 步推理；干扰项有一定迷惑性，主观题需覆盖关键机制但不做深度拓展。
-- `hard`（困难）：需要跨章节或多模型联动，至少 3 步严谨推理；干扰项高相似，主观题要求比较、边界条件或反例讨论，计算题需要完整推导与校验。
-- `extreme`：高压综合题，涉及模型选择、条件变化或现实约束，需给出严密论证与批判性分析。
+- entry：纯概念识别/单步结论题，不需要跨章节推理。
+- easy：基础理解 + 1-2 个直接推理步骤，干扰项较弱。
+- normal（适中）：需要"概念 + 情境"结合，通常 2-3 步推理；干扰项有一定迷惑性，主观题需覆盖关键机制但不做深度拓展。
+- hard（困难）：需要跨章节或多模型联动，至少 3 步严谨推理；干扰项高相似，主观题要求比较、边界条件或反例讨论，计算题需要完整推导与校验。
+- extreme：高压综合题，涉及模型选择、条件变化或现实约束，需给出严密论证与批判性分析。
 
 【难度自检（输出前必须满足，否则重写该题）】
 - 如果目标难度 = entry/easy：题干字数建议 < 160，答案 < 400 字；推理步骤 ≤ 2；不要出现复杂模型/跨章节比较。
@@ -34,34 +29,51 @@
 - 如果目标难度 = hard/extreme：允许更长文本，但必须体现多步推理、比较/约束/敏感性分析；选项或答案应体现高迷惑度或推导。
 - 任何不满足目标难度的题目不要输出，直接在本地重写直到符合再放入最终 JSON。
 
-【模块命题规则】
-{module_rules}
-
 【知识点数据(JSON)】
 {knowledge_points_json}
+
+【答案体量要求（必须按题型区分）】
+- 客观题：answer 只能是 A/B/C/D 单个字母。
+- 名词解释（noun）：标准答案控制在 120-220 字，必须包含定义、关键机制/假设、经济含义。
+- 简答题（short）：标准答案至少 3 个要点，建议 220-400 字，每点有展开；可采用相似概念对比/辨析结构。
+- 论述题（essay）：标准答案必须采用以下结构（建议 500-900 字）：
+  1) 先解释本题涉及的核心原理（概念 + 关键公式/恒等式 + 变量含义）；
+  2) 给出至少 3 个分论点；
+  3) 每个分论点都要展开"理论机制 → 公式/数量关系 → 结论"，并尽量给出定量表达或比较静态方向判断。
+- 计算题（calculate）：标准答案必须有"已知条件-公式-代入-中间过程-最终结果（含单位/含义）"。
+
+【题干形态约束（必须执行）】
+- subjective_type=noun：question 必须是单个名词/概念词组，不要问句、不要背景材料、不要"请解释/什么是"前缀。
+- subjective_type=short：question 必须带简要业务或政策背景，要求考生分点作答；允许采用比较/辨析相近概念的问法。
+- subjective_type=essay：question 必须带完整现实背景与分析任务，要求系统论证与评价建议。
+
+【输出字段结构】
+[
+  {{
+    "q_type": "objective | subjective",
+    "subjective_type": "",
+    "question": "题干",
+    "options": {{"A": "", "B": "", "C": "", "D": ""}},
+    "answer": "客观题填A/B/C/D；主观题填参考答案",
+    "grading_points": "客观题写'无'；主观题按分值列点",
+    "difficulty_level": "entry | easy | normal | hard | extreme",
+    "related_knowledge_id": "知识点code"
+  }}
+]
 
 【硬性要求】
 1. 输出必须是 JSON 数组，禁止 Markdown 代码块，禁止解释性文本。
 2. 每道题必须可判分、可复核，不得出现模糊问法。
 3. 客观题必须提供 4 个选项（A/B/C/D），且只有一个正确选项。
-4. 主观题必须包含可执行的 `grading_points`（按分值拆分）。
-5. `related_knowledge_id` 必须填写知识点 code（如 MB-1001）。
-6. `difficulty_level` 仅允许：entry, easy, normal, hard, extreme。
-7. 只提供“标准答案”，不要输出“深度解析/拓展讲解/教学口吻”。
-8. `difficulty_level` 必须与“目标难度”一致（仅当目标难度为 mixed 时可分布）。
-9. 题型分布需贴近“题型配比模板”，若无法完全满足需优先保证高权重题型。
-
-【答案体量要求（必须按题型区分）】
-{shared_answer_requirements}
-
-【题干形态约束（必须执行）】
-{shared_question_shape_constraints}
-
-【输出字段结构】
-{shared_output_schema}
+4. 主观题必须包含可执行的 grading_points（按分值拆分）。
+5. related_knowledge_id 必须填写知识点 code。
+6. difficulty_level 仅允许：entry, easy, normal, hard, extreme。
+7. 只提供"标准答案"，不要输出"深度解析/拓展讲解/教学口吻"。
+8. difficulty_level 必须与"目标难度"一致（仅当目标难度为 mixed 时可分布）。
+9. 题型分布需贴近"题型配比模板"，若无法完全满足需优先保证高权重题型。
 
 【题型约束】
 - 若 q_type=objective：subjective_type 必须为 ""，options 必须完整，answer 必须为 A/B/C/D。
 - 若 q_type=subjective：subjective_type 仅允许 noun/short/essay/calculate，options 必须为 {{}}。
-- 严禁输出 `analysis`、`explanation` 等解析字段。
-- 若 subjective_type=noun：question 中不得出现“请解释/什么是/试述/结合背景”等指令性措辞。
+- 严禁输出 analysis、explanation 等解析字段。
+- 若 subjective_type=noun：question 中不得出现"请解释/什么是/试述/结合背景"等指令性措辞。

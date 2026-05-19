@@ -1,18 +1,10 @@
-/* PROMPT_META
-- 作用：从输入语料中抽取并生成结构化训练题（支持指定题量与目标知识点）。
-- 调用入口：AIService.generate_questions_from_text
-*/
-
-你是 431 金融课程的教研命题员。请根据输入语料生成训练题。
+你是课程教研命题员。请根据输入语料生成训练题。
 
 【输入语料】
 {source_text}
 
 【目标知识点】
 {target_kp_json}
-
-【模块命题风格】
-{module_rules}
 
 【题量要求】
 - 客观题：{num_obj}
@@ -26,20 +18,40 @@
 3. 主观题答案需给出高质量参考答案与明确踩分点。
 4. 若涉及公式，使用标准 LaTeX（JSON 中反斜杠需转义）。
 5. 不重复同一考点的同质问题。
-6. 只输出“标准答案”，不要输出“深度解析/扩展讲解”字段。
+6. 只输出"标准答案"，不要输出"深度解析/扩展讲解"字段。
 
 【答案体量要求（必须按题型区分）】
-{shared_answer_requirements}
+- 客观题：answer 只能是 A/B/C/D 单个字母。
+- 名词解释（noun）：标准答案控制在 120-220 字，必须包含定义、关键机制/假设、经济含义。
+- 简答题（short）：标准答案至少 3 个要点，建议 220-400 字，每点有展开；可采用相似概念对比/辨析结构。
+- 论述题（essay）：标准答案必须采用以下结构（建议 500-900 字）：
+  1) 先解释本题涉及的核心原理（概念 + 关键公式/恒等式 + 变量含义）；
+  2) 给出至少 3 个分论点；
+  3) 每个分论点都要展开"理论机制 → 公式/数量关系 → 结论"，并尽量给出定量表达或比较静态方向判断。
+- 计算题（calculate）：标准答案必须有"已知条件-公式-代入-中间过程-最终结果（含单位/含义）"。
 
 【题干形态约束（必须执行）】
-{shared_question_shape_constraints}
+- subjective_type=noun：question 必须是单个名词/概念词组，不要问句、不要背景材料、不要"请解释/什么是"前缀。
+- subjective_type=short：question 必须带简要业务或政策背景，要求考生分点作答；允许采用比较/辨析相近概念的问法。
+- subjective_type=essay：question 必须带完整现实背景与分析任务，要求系统论证与评价建议。
 
 【输出格式】
 只输出 JSON 数组，不要任何额外文本：
-{shared_output_schema}
+[
+  {{
+    "q_type": "objective | subjective",
+    "subjective_type": "",
+    "question": "题干",
+    "options": {{"A": "", "B": "", "C": "", "D": ""}},
+    "answer": "客观题填A/B/C/D；主观题填参考答案",
+    "grading_points": "客观题写'无'；主观题按分值列点",
+    "difficulty_level": "entry | easy | normal | hard | extreme",
+    "related_knowledge_id": "知识点code"
+  }}
+]
 
 【一致性约束】
 - 客观题：subjective_type=""，options 必须有 A/B/C/D，answer 只能是 A/B/C/D。
 - 主观题：options 必须为 {{}}，subjective_type 只能是 noun/short/essay/calculate。
-- 严禁输出 `analysis`、`explanation` 等解析字段。
-- 若 subjective_type=noun：question 中不得出现“请解释/什么是/试述/结合背景”等指令性措辞。
+- 严禁输出 analysis、explanation 等解析字段。
+- 若 subjective_type=noun：question 中不得出现"请解释/什么是/试述/结合背景"等指令性措辞。

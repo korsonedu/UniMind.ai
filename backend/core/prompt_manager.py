@@ -40,13 +40,9 @@ class PromptManager:
         "AI_QUESTION_REVIEWER_BATCH": ("pipeline", "reviewer_single.txt"),
         "AI_QUESTION_CLASSIFIER": ("pipeline", "classifier.txt"),
         "AI_QUESTION_GENERATOR": ("pipeline", "author_generate.txt"),
-        "AI_DISTRACTOR_EXPERT": ("pipeline", "distractor.txt"),
         "AI_REVIEWER": ("pipeline", "reviewer_adversarial.txt"),
         "AI_TAXONOMIST": ("pipeline", "classifier.txt"),
         "AI_RESUME_TUNER": ("interviews", "resume_tuner.txt"),
-        "AI_SPOKEN_ENGLISH_EXAMINER": ("interviews", "english_examiner.txt"),
-        "AI_RESUME_INTERVIEWER": ("interviews", "resume_interviewer.txt"),
-        "AI_MOCK_INTERVIEWER_PRO": ("interviews", "professional_interviewer.txt"),
         "AI_INTERVIEW_ANALYZER": ("interviews", "interview_analyzer.txt"),
         "AI_INTERVIEW_TURN_FEEDBACK": ("interviews", "turn_feedback.txt"),
     }
