@@ -23,6 +23,45 @@ from .serializers_institution import (
 )
 
 
+def _clone_knowledge_tree(subject_name, institution):
+    """Clone all global KnowledgePoints for a subject into an institution scope."""
+    from quizzes.models import KnowledgePoint
+
+    global_kps = list(
+        KnowledgePoint.objects.filter(
+            subject=subject_name,
+            institution__isnull=True,
+        ).order_by('level', 'order')
+    )
+    if not global_kps:
+        return 0
+
+    old_to_new = {}
+    for kp in global_kps:
+        new_kp = KnowledgePoint(
+            code=kp.code,
+            name=kp.name,
+            level=kp.level,
+            prefix_category=kp.prefix_category,
+            description=kp.description,
+            parent=None,
+            institution=institution,
+            order=kp.order,
+            subject=kp.subject,
+        )
+        new_kp.save()
+        old_to_new[kp.id] = new_kp
+
+    # Remap parent FK relationships
+    for kp in global_kps:
+        if kp.parent_id and kp.parent_id in old_to_new:
+            new_kp = old_to_new[kp.id]
+            new_kp.parent_id = old_to_new[kp.parent_id].id
+            new_kp.save(update_fields=['parent'])
+
+    return len(old_to_new)
+
+
 # ── Super Admin: Institution CRUD ──
 
 class InstitutionListView(APIView):
@@ -760,6 +799,30 @@ class InstitutionCreateView(APIView):
             is_active=True,
         )
 
+        # Clone knowledge trees for selected subjects
+        subject_names = (request.data.get('subject_names') or [])
+        if isinstance(subject_names, str):
+            subject_names = [s.strip() for s in subject_names.split(',') if s.strip()]
+
+        # Filter out "custom" — it means user wants empty tree
+        subject_names = [s for s in subject_names if s and s != 'custom']
+
+        DIRECTION_LIMITS = {'solo': 1, 'plus': 3, 'pro': 999999}
+        max_dirs = DIRECTION_LIMITS.get(plan, 1)
+        if len(subject_names) > max_dirs:
+            return Response(
+                {'error': f'{plan.upper()} 方案最多选择 {max_dirs} 个学科方向'},
+                status=400,
+            )
+
+        imported_count = 0
+        for s in subject_names:
+            imported_count += _clone_knowledge_tree(s, inst)
+
+        # Also store business_type
+        inst.business_type = ', '.join(subject_names) if subject_names else '自定义'
+        inst.save(update_fields=['business_type'])
+
         user.institution = inst
         user.institution_role = 'owner'
         user.is_member = True
@@ -772,6 +835,8 @@ class InstitutionCreateView(APIView):
                 'id': inst.id, 'name': inst.name, 'slug': inst.slug,
                 'plan': inst.plan, 'plan_label': inst.get_plan_display(),
             },
+            'imported_nodes': imported_count,
+            'subjects_imported': subject_names,
         }, status=status.HTTP_201_CREATED)
 
 
