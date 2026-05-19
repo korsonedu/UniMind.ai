@@ -5,52 +5,38 @@ from django.conf import settings
 DEFAULT_MODEL = 'deepseek-v4-pro'
 DEFAULT_BASE_URL = 'https://api.deepseek.com/v1/chat/completions'
 
-# Per-task model routing — matched against dot-separated segments of the operation name.
-# First match wins (order matters). Each entry maps a segment prefix to a model name.
-# flash: lightweight / latency-sensitive.  pro: quality-critical or domain expertise.
+# Per-task model routing table — mirrors README model strategy matrix
 _TASK_MODEL_MAP = {
-    # ── Flash ──
-    'chat':              'deepseek-v4-flash',
-    'interviews':        'deepseek-v4-flash',
-    'classifier':        'deepseek-v4-flash',
-    'objective_analysis':'deepseek-v4-flash',
-    'preview_parse':     'deepseek-v4-flash',
-    'generate_ai_answer':'deepseek-v4-flash',
-    'schema_repair':     'deepseek-v4-flash',
-
-    # ── Pro ──
-    'author_revise':     'deepseek-v4-pro',
-    'author':            'deepseek-v4-pro',
-    'bulk_generate':     'deepseek-v4-pro',
-    'mock_exam_generate':'deepseek-v4-pro',
-    'generate_from_text':'deepseek-v4-pro',
-    'generate_knowledge_tree':'deepseek-v4-pro',
-    'generate_outline':  'deepseek-v4-pro',
-    'generate_questions':'deepseek-v4-pro',
-    'grade':             'deepseek-v4-pro',
-
-    # ── Pro + thinking ──
-    'reviewer':          'deepseek-v4-pro',
-    'essay':             'deepseek-v4-pro',
+    # ── Chat / interview (fast response) ──
+    'chat':     ('AI_MODEL_CHAT',              'deepseek-v4-flash'),
+    'interviews': ('AI_MODEL_CHAT',            'deepseek-v4-flash'),
+    # ── Question generation pipeline ──
+    'pipeline.author':    ('AI_MODEL_GENERATE_AUTHOR',    'deepseek-v4-pro'),
+    'pipeline.reviewer':  ('AI_MODEL_GENERATE_REVIEWER',  'deepseek-v4-pro'),
+    'pipeline.author_revise': ('AI_MODEL_GENERATE_AUTHOR', 'deepseek-v4-pro'),
+    'pipeline.classifier':('AI_MODEL_GENERATE_CLASSIFIER', 'deepseek-v4-flash'),
+    # ── Knowledge tree generation ──
+    'generate_knowledge_tree': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'deepseek-v4-pro'),
+    # ── Grading (thinking enabled) ──
+    'grading':  ('AI_MODEL_GRADE_SUBJECTIVE',   'deepseek-v4-pro'),
+    'grade':    ('AI_MODEL_GRADE_SUBJECTIVE',   'deepseek-v4-pro'),
+    'essay':    ('AI_MODEL_ESSAY_GRADE',        'deepseek-v4-pro'),
+    # ── Light tasks ──
+    'answer':   ('AI_MODEL_GENERATE_ANSWER',    'deepseek-v4-flash'),
+    'parse':    ('AI_MODEL_PARSE_TEXT',         'deepseek-v4-flash'),
+    'text_parse': ('AI_MODEL_PARSE_TEXT',       'deepseek-v4-flash'),
+    'schema':   ('AI_MODEL_SCHEMA_REPAIR',       'deepseek-v4-flash'),
+    'repair':   ('AI_MODEL_SCHEMA_REPAIR',       'deepseek-v4-flash'),
 }
 
-# Thinking effort — only for tasks that genuinely need chain-of-thought reasoning.
-# Thinking adds latency + cost + format instability; don't enable unless the benefit is clear.
+# Thinking effort per task prefix (only applies to pro-class models)
 _TASK_THINKING = {
-    'author_revise': 'medium',  # Revise: incorporate reviewer feedback into updated question
-    'reviewer':      'high',    # Adversarial review: deep logic + consistency check
-    'essay':         'max',     # Essay grading: multi-dimensional rubric evaluation
+    'pipeline.reviewer':       'high',
+    'pipeline.author_revise':  'medium',
+    'grading':                 'high',
+    'grade':                   'high',
+    'essay':                   'max',
 }
-
-
-def _match_operation(op_lower: str, prefix: str) -> bool:
-    """Match if *op* starts with *prefix* OR any dot-separated segment starts with *prefix*."""
-    if op_lower.startswith(prefix):
-        return True
-    for segment in op_lower.split('.'):
-        if segment.startswith(prefix):
-            return True
-    return False
 
 
 def get_llm_config():
@@ -65,18 +51,16 @@ def get_llm_config():
 def get_model_for_task(operation: str = 'general'):
     """Select model + optional thinking effort based on operation tag.
 
-    Resolution order: per-task map → global ``LLM_MODEL`` env var → ``deepseek-v4-pro``.
-    Matches against dot-separated segments (e.g. ``quizzes.grade_question``
-    matches the ``grade`` prefix via its ``grade_question`` segment).
+    Resolution order: env-var override → task map → global default.
     """
     model = _get_global_model()
     thinking = None
 
     if operation:
         op_lower = operation.lower()
-        for prefix, task_model in _TASK_MODEL_MAP.items():
-            if _match_operation(op_lower, prefix):
-                model = task_model
+        for prefix, (env_key, fallback) in _TASK_MODEL_MAP.items():
+            if op_lower.startswith(prefix):
+                model = os.getenv(env_key, fallback)
                 thinking = _TASK_THINKING.get(prefix)
                 break
 

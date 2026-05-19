@@ -81,13 +81,17 @@ class Command(BaseCommand):
 
         self.stdout.write(f'正在为「{subject}」生成知识树...')
 
-        result = AIService.simple_chat_text(
-            system_prompt='你是一位资深教育课程设计师，精通知识体系构建。请严格按照指定格式生成内容，不添加任何额外说明。',
-            user_prompt=prompt,
-            temperature=0.3,
-            max_tokens=16384,
-            operation='generate_knowledge_tree',
-        )
+        try:
+            result = AIService.simple_chat_text(
+                system_prompt='你是一位资深教育课程设计师，精通知识体系构建。请严格按照指定格式生成内容，不添加任何额外说明。',
+                user_prompt=prompt,
+                temperature=0.3,
+                max_tokens=16384,
+                operation='generate_knowledge_tree',
+            )
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'AI 调用失败: {e}'))
+            return
 
         if not result:
             self.stdout.write(self.style.ERROR('AI 返回为空，请重试。'))
