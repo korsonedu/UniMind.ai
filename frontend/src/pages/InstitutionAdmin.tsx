@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
@@ -425,12 +425,23 @@ function InstitutionSelfSettings() {
   });
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState('');
+  const [plan, setPlan] = useState('');
   const [planLabel, setPlanLabel] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [studentCount, setStudentCount] = useState(0);
   const [maxStudents, setMaxStudents] = useState(0);
   const [planActive, setPlanActive] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Direction editing
+  const [directionOpen, setDirectionOpen] = useState(false);
+  const [directionSubjects, setDirectionSubjects] = useState<any[]>([]);
+  const [directionSelected, setDirectionSelected] = useState<string[]>([]);
+  const [directionSaving, setDirectionSaving] = useState(false);
+  const [directionError, setDirectionError] = useState('');
+
+  const currentDirections = (form.business_type || '')
+    .split(',').map((s: string) => s.trim()).filter(Boolean);
 
   useEffect(() => {
     api.get('/users/institution/me/update/').then(({ data }) => {
@@ -444,6 +455,7 @@ function InstitutionSelfSettings() {
       });
       setLogoPreview(data.logo_url || '');
       setPlanLabel(data.plan_label || '');
+      setPlan(data.plan || '');
       setExpiresAt(data.plan_expires_at || '');
       setStudentCount(data.student_count || 0);
       setMaxStudents(data.max_students || 0);
@@ -532,9 +544,35 @@ function InstitutionSelfSettings() {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[10px] font-bold uppercase text-muted-foreground">主营业务</Label>
-            <Input value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" placeholder="如：考研英语、高等数学、GRE、IELTS" />
-            <p className="text-[11px] text-muted-foreground">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">业务方向</Label>
+            <div className="flex items-center gap-2 flex-wrap">
+              {currentDirections.length > 0 ? (
+                currentDirections.map((dir: string) => (
+                  <Badge key={dir} variant="outline" className="text-xs font-bold h-7 px-3 rounded-lg border-primary/30 bg-primary/5 text-primary">
+                    {dir}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-sm text-muted-foreground">未设置方向</span>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs font-bold rounded-lg"
+                onClick={async () => {
+                  try {
+                    const { data } = await api.get('/quizzes/knowledge-points/subjects/');
+                    setDirectionSubjects(data.categories || []);
+                    setDirectionSelected(currentDirections);
+                    setDirectionError('');
+                    setDirectionOpen(true);
+                  } catch { /* ignore */ }
+                }}
+              >
+                <Pencil className="h-3 w-3 mr-1" />编辑方向
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">业务方向决定机构的知识树结构，修改将删除旧知识点并导入新方向。</p>
           </div>
 
           <div className="space-y-1.5">
@@ -566,7 +604,178 @@ function InstitutionSelfSettings() {
             保存机构设置
           </Button>
         </Card>
+
+        <DirectionEditDialog
+          open={directionOpen}
+          onClose={() => setDirectionOpen(false)}
+          plan={plan}
+          subjects={directionSubjects}
+          selected={directionSelected}
+          onSelectedChange={setDirectionSelected}
+          onSave={async (names) => {
+            setDirectionSaving(true);
+            setDirectionError('');
+            try {
+              const { data } = await api.put('/users/institution/me/directions/', {
+                subject_names: names,
+              });
+              setForm(f => ({ ...f, business_type: data.business_type }));
+              toast.success(`已更新：删除 ${data.deleted} 个旧知识点，导入 ${data.imported_nodes} 个新知识点`);
+              setDirectionOpen(false);
+            } catch (err: any) {
+              setDirectionError(err.response?.data?.error || '更新失败');
+            } finally {
+              setDirectionSaving(false);
+            }
+          }}
+          saving={directionSaving}
+          error={directionError}
+        />
       </div>
     </div>
+  );
+}
+
+/* ── Direction Edit Dialog ── */
+
+const PLAN_DIRECTION_LIMITS: Record<string, number> = { solo: 1, plus: 3, pro: 999999, free: 0 };
+
+function DirectionEditDialog({
+  open, onClose, plan, subjects, selected, onSelectedChange, onSave, saving, error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  plan: string;
+  subjects: any[];
+  selected: string[];
+  onSelectedChange: (s: string[]) => void;
+  onSave: (names: string[]) => void;
+  saving: boolean;
+  error: string;
+}) {
+  const maxDirs = PLAN_DIRECTION_LIMITS[plan] || 1;
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingNames, setPendingNames] = useState<string[]>([]);
+
+  const handleConfirmSave = () => {
+    const names = selected.length > 0 ? selected : ['custom'];
+    setPendingNames(names);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmed = () => {
+    setConfirmOpen(false);
+    onSave(pendingNames);
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-[480px] rounded-2xl border-none shadow-2xl bg-card p-6">
+          <DialogHeader className="space-y-1 mb-4">
+            <DialogTitle className="text-lg font-black">编辑业务方向</DialogTitle>
+            <DialogDescription className="font-medium text-muted-foreground text-sm">
+              {plan === 'solo'
+                ? 'Solo 方案可选择 1 个学科方向'
+                : plan === 'plus'
+                  ? 'Plus 方案最多选择 3 个学科方向'
+                  : '选择你机构的业务方向'}
+              <span className="block text-red-500 mt-1">修改方向将删除现有知识点并重新导入，请谨慎操作。</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+            {subjects.map((cat: any) => (
+              <div key={cat.name}>
+                <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">
+                  {cat.name}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {cat.subjects.map((sub: any) => {
+                    const isSelected = selected.includes(sub.subject);
+                    const atLimit = selected.length >= maxDirs && !isSelected;
+                    return (
+                      <button
+                        key={sub.subject}
+                        type="button"
+                        disabled={atLimit}
+                        onClick={() => {
+                          if (isSelected) {
+                            onSelectedChange(selected.filter(s => s !== sub.subject));
+                          } else if (!atLimit) {
+                            onSelectedChange([...selected, sub.subject]);
+                          }
+                        }}
+                        className={`text-left p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
+                          isSelected
+                            ? 'border-[#0071E3] bg-[#0071E3]/8 text-[#0071E3]'
+                            : atLimit
+                              ? 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed'
+                              : 'border-border hover:border-[#0071E3]/40 hover:bg-[#0071E3]/3'
+                        }`}
+                      >
+                        {sub.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {/* Custom option */}
+            <button
+              type="button"
+              onClick={() => {
+                if (selected.includes('custom')) {
+                  onSelectedChange([]);
+                } else {
+                  onSelectedChange(['custom']);
+                }
+              }}
+              className={`w-full p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
+                selected.includes('custom')
+                  ? 'border-[#34C759] bg-[#34C759]/8 text-[#34C759]'
+                  : 'border-dashed border-muted-foreground/30 hover:border-[#34C759]/40 hover:bg-[#34C759]/3 text-muted-foreground'
+              }`}
+            >
+              自定义：我自己搭建知识树
+            </button>
+          </div>
+
+          {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+
+          <DialogFooter className="mt-4">
+            <Button type="button" variant="outline" className="h-10 rounded-xl text-sm" onClick={onClose}>
+              取消
+            </Button>
+            <Button type="button" variant="apple" className="h-10 rounded-xl text-sm"
+              onClick={handleConfirmSave} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              保存方向
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm dialog */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="sm:max-w-[380px] rounded-2xl border-none shadow-2xl bg-card p-6">
+          <DialogHeader className="space-y-2 mb-4">
+            <DialogTitle className="text-base font-black">确认修改业务方向</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              此操作将<b>删除</b>机构现有的所有知识点，并重新导入所选方向的知识树。此操作不可撤销，确定继续？
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" className="h-10 rounded-xl text-sm" onClick={() => setConfirmOpen(false)}>
+              取消
+            </Button>
+            <Button variant="destructive" className="h-10 rounded-xl text-sm" onClick={handleConfirmed}>
+              确认修改
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
