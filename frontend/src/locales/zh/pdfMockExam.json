@@ -1,0 +1,88 @@
+{
+  "pageTitle": "模拟考试",
+  "pageSubtitle": "根据薄弱点自动组卷，或下载名师精选密卷。",
+
+  "publishDialog": {
+    "title": "发布新试卷",
+    "titlePlaceholder": "试卷标题（如：2025 模拟卷 A）",
+    "descriptionPlaceholder": "试卷说明（可选）",
+    "cancel": "取消",
+    "saving": "发布中...",
+    "submit": "发布试卷"
+  },
+
+  "submissionsDialog": {
+    "title": "学生提交列表",
+    "loading": "加载中...",
+    "noSubmissions": "暂无学生提交",
+    "submittedOn": "提交于 {{date}}",
+    "studentAnswer": "学生解答",
+    "gradedPdf": "批改件",
+    "score": "分数",
+    "scorePlaceholder": "输入分数",
+    "feedback": "评语",
+    "feedbackPlaceholder": "输入评语",
+    "saving": "保存中...",
+    "saveScore": "保存评分",
+    "uploadHint": "上传批改后带笔迹的PDF"
+  },
+
+  "toast": {
+    "fillTitle": "请填写标题并选择 PDF 文件",
+    "examPublished": "试卷已发布",
+    "publishFailed": "发布失败",
+    "loadSubmissionsFailed": "加载提交列表失败",
+    "scoreSaved": "评分已保存",
+    "saveFailed": "保存失败",
+    "loadDataFailed": "加载数据失败",
+    "aiTaskSubmitted": "已提交 AI 组卷任务，请稍候刷新查看",
+    "generateFailed": "生成失败",
+    "deleted": "已删除",
+    "deleteFailed": "删除失败",
+    "answerUploaded": "解答上传成功，等待老师批改",
+    "uploadFailed": "上传失败",
+    "examDeleted": "试卷已删除"
+  },
+
+  "tabAI": "AI 个性化组卷",
+  "tabTeacher": "名师精选密卷",
+
+  "aiSection": {
+    "title": "生成你的专属模拟卷",
+    "description": "根据你的 MEMORIX 数据和错题本，自动生成 PDF 试卷与解析。",
+    "generating": "生成中...",
+    "generate": "生成本周专属模考",
+    "loading": "加载中...",
+    "noHistory": "暂无历史模考记录",
+    "aiLabel": "AI 自动组卷 #{{id}}",
+    "statusProcessing": "生成中...",
+    "statusReady": "可下载",
+    "statusFailed": "失败",
+    "questionInfo": "题量 {{count}} · 薄弱点命中 {{coverage}}",
+    "downloadExam": "下载试卷版",
+    "downloadAnswer": "下载解析版",
+    "delete": "删除",
+    "publishNew": "发布新试卷"
+  },
+
+  "teacherSection": {
+    "loading": "加载中...",
+    "noExamsPublished": "老师暂未发布试卷",
+    "noExamsAvailable": "暂无已发布试卷",
+    "noDescription": "无详细说明",
+    "publishedOn": "发布于 {{date}}",
+    "downloadPdf": "下载题目 PDF",
+    "viewSubmissions": "查看提交",
+    "deleting": "删除中...",
+    "delete": "删除",
+    "myAnswer": "我的作答与成绩",
+    "score": "成绩: {{score}} 分",
+    "grading": "老师批改中...",
+    "graded": "已批改",
+    "viewMyAnswer": "查看我的解答",
+    "downloadGraded": "下载批改后试卷",
+    "teacherFeedback": "老师评语: {{feedback}}",
+    "uploading": "上传中...",
+    "uploadHint": "做完后拍照转成PDF上传给老师批改"
+  }
+}

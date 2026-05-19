@@ -1,0 +1,14 @@
+{
+  "pageTitle": "AI Lab",
+  "pageSubtitle": "Deep academic conversation with your dedicated digital mentor.",
+  "selectBot": "Select a Bot",
+  "welcomeMessage": "Hi! I'm {{botName}}. Let's begin our academic discussion!",
+  "sessionCleared": "Session history cleared.",
+  "loadBotsFailed": "Failed to load bot list",
+  "loadHistoryFailed": "Failed to load chat history",
+  "sendFailed": "Failed to send message",
+  "selectBotFirst": "Please select an AI bot first",
+  "sessionReset": "Session reset",
+  "resetFailed": "Failed to reset session",
+  "featureName": "AI Assistant Chat"
+}

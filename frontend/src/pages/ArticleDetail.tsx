@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, Calendar, Loader2 } from 'lucide-react';
@@ -17,6 +18,7 @@ export const ArticleDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [scrollProgress, setScrollProgress] = useState(0);
   const viewCounted = useRef(false);
+  const { t, i18n } = useTranslation('common');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -88,7 +90,7 @@ export const ArticleDetail: React.FC = () => {
         <div className="space-y-4">
            <div className="flex items-center gap-3">
               <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-1 rounded-full uppercase tracking-widest border border-indigo-100 dark:border-indigo-900/50">Academic Paper</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(article.created_at).toLocaleDateString('zh-CN')}</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(article.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
            </div>
            <h1 className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tighter text-slate-900 dark:text-white leading-[1.1]">{article.title}</h1>
            <div className="flex flex-wrap gap-2 pt-2">
@@ -111,14 +113,14 @@ export const ArticleDetail: React.FC = () => {
       <footer className="mt-14 md:mt-20 pt-8 md:pt-12 border-t border-border/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
          <div className="flex items-center gap-4 text-left">
             <div className="h-12 w-12 rounded-full bg-black flex items-center justify-center text-white font-bold text-sm shadow-xl uppercase">
-               {article.author_display_name?.[0] || '宇'}
+               {article.author_display_name?.[0] || 'U'}
             </div>
             <div>
-               <p className="text-sm font-bold text-slate-900 dark:text-white">{article.author_display_name || '宇艺学术编辑部'}</p>
+               <p className="text-sm font-bold text-slate-900 dark:text-white">{article.author_display_name || t('articleDefaultAuthor')}</p>
                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Verified Academic Resource</p>
             </div>
          </div>
-         <Button onClick={() => navigate('/articles')} variant="outline" className="rounded-2xl font-bold h-12 w-full md:w-auto px-8 border-border hover:bg-muted transition-colors">返回文章列表</Button>
+         <Button onClick={() => navigate('/articles')} variant="outline" className="rounded-2xl font-bold h-12 w-full md:w-auto px-8 border-border hover:bg-muted transition-colors">{t('articleBackToList')}</Button>
       </footer>
     </div>
   );

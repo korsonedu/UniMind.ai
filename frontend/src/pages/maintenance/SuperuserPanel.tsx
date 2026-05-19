@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +59,7 @@ const EMPTY_EDITOR = {
 };
 
 export const SuperuserPanel: React.FC = () => {
+  const { t } = useTranslation('maintenance');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
@@ -114,7 +116,7 @@ export const SuperuserPanel: React.FC = () => {
         applyUserToEditor(current);
       }
     } catch (e) {
-      toast.error(formatApiErrorToast(e, 'Superuser 列表加载失败'));
+      toast.error(formatApiErrorToast(e, t('superuser.listLoadFailed')));
     } finally {
       setLoading(false);
     }
@@ -148,10 +150,10 @@ export const SuperuserPanel: React.FC = () => {
         blocked_permissions: editor.blocked_permissions_text.split('\n').map((x) => x.trim()).filter(Boolean),
         note: editor.note,
       });
-      toast.success('用户权限档案已更新');
+      toast.success(t('superuser.profileUpdated'));
       await fetchAll();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '保存失败'));
+      toast.error(formatApiErrorToast(e, t('superuser.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -164,7 +166,7 @@ export const SuperuserPanel: React.FC = () => {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索用户名/昵称"
+            placeholder={t('superuser.searchPlaceholder')}
             className="h-10 rounded-xl bg-slate-50 border-none font-bold text-xs"
           />
           <Button onClick={fetchAll} variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
@@ -203,24 +205,24 @@ export const SuperuserPanel: React.FC = () => {
 
       <Card className="xl:col-span-8 p-6 rounded-3xl bg-white border border-black/[0.04] shadow-sm space-y-5">
         {!selectedUser ? (
-          <p className="text-sm font-bold text-slate-400">请选择左侧人员进行编辑</p>
+          <p className="text-sm font-bold text-slate-400">{t('superuser.selectUserHint')}</p>
         ) : (
           <>
             <div className="flex items-center justify-between">
               <div>
-                <p className="label-apple text-black/40">Superuser 人员编辑</p>
+                <p className="label-apple text-black/40">{t('superuser.editTitle')}</p>
                 <h3 className="text-lg font-black text-slate-900 mt-1">{selectedUser.nickname || selectedUser.username}</h3>
                 <p className="text-xs font-bold text-slate-400">{selectedUser.username}</p>
               </div>
               <Button onClick={handleSave} className="rounded-xl bg-black text-white text-xs font-bold" disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                保存变更
+                {t('superuser.saveChanges')}
               </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label className="label-muted">角色</Label>
+                <Label className="label-muted">{t('superuser.role')}</Label>
                 <select
                   value={editor.role}
                   onChange={(e) => setEditor((prev) => ({ ...prev, role: e.target.value as 'student' | 'admin' }))}
@@ -232,16 +234,16 @@ export const SuperuserPanel: React.FC = () => {
               </div>
               <label className="flex items-center gap-2 text-xs font-bold mt-6">
                 <input type="checkbox" checked={editor.is_member} onChange={(e) => setEditor((prev) => ({ ...prev, is_member: e.target.checked }))} />
-                会员权限
+                {t('superuser.memberPermission')}
               </label>
               <label className="flex items-center gap-2 text-xs font-bold mt-6">
                 <input type="checkbox" checked={editor.is_staff} onChange={(e) => setEditor((prev) => ({ ...prev, is_staff: e.target.checked }))} />
-                管理员后台权限
+                {t('superuser.adminAccess')}
               </label>
             </div>
 
             <div>
-              <Label className="label-muted">标签</Label>
+              <Label className="label-muted">{t('superuser.tags')}</Label>
               <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
                 {tags.map((tag) => (
                   <button
@@ -260,7 +262,7 @@ export const SuperuserPanel: React.FC = () => {
             </div>
 
             <div>
-              <Label className="label-muted">权限组</Label>
+              <Label className="label-muted">{t('superuser.permissionGroups')}</Label>
               <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
                 {groups.map((group) => (
                   <button
@@ -281,7 +283,7 @@ export const SuperuserPanel: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label className="label-muted">附加权限（每行一项）</Label>
+                <Label className="label-muted">{t('superuser.extraPermissions')}</Label>
                 <textarea
                   value={editor.extra_permissions_text}
                   onChange={(e) => setEditor((prev) => ({ ...prev, extra_permissions_text: e.target.value }))}
@@ -289,7 +291,7 @@ export const SuperuserPanel: React.FC = () => {
                 />
               </div>
               <div>
-                <Label className="label-muted">屏蔽权限（每行一项）</Label>
+                <Label className="label-muted">{t('superuser.blockedPermissions')}</Label>
                 <textarea
                   value={editor.blocked_permissions_text}
                   onChange={(e) => setEditor((prev) => ({ ...prev, blocked_permissions_text: e.target.value }))}
@@ -299,7 +301,7 @@ export const SuperuserPanel: React.FC = () => {
             </div>
 
             <div>
-              <Label className="label-muted">管理备注</Label>
+              <Label className="label-muted">{t('superuser.adminNote')}</Label>
               <Input
                 value={editor.note}
                 onChange={(e) => setEditor((prev) => ({ ...prev, note: e.target.value }))}
@@ -312,4 +314,3 @@ export const SuperuserPanel: React.FC = () => {
     </div>
   );
 };
-

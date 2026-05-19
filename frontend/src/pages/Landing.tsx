@@ -11,6 +11,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/version';
 
 /* ────────────────────────────────────────────
@@ -129,6 +130,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
+          <LanguageSwitcher variant="full" />
           {token ? (
             <Button variant="apple" size="sm" onClick={() => navigate('/')}>进入控制台</Button>
           ) : (
@@ -162,6 +164,9 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
               {item.label}
             </button>
           ))}
+          <div className="flex justify-center">
+            <LanguageSwitcher variant="full" />
+          </div>
           <div className="pt-3 border-t border-[#E5E5EA]/60 flex gap-3">
             {token ? (
               <Button className="w-full" variant="apple" onClick={() => { setOpen(false); navigate('/'); }}>

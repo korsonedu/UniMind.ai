@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import {
   AlertDialog,
@@ -29,6 +30,7 @@ import {
 export const NotificationBell = () => {
   const { notifications, unreadCount, fetchNotifications, fetchUnreadCount, markAsRead, clearAll } = useNotificationStore();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation(['notifications', 'common']);
   const [isOpen, setIsOpen] = useState(false);
   const [showClearAlert, setShowClearAlert] = useState(false);
 
@@ -73,32 +75,32 @@ export const NotificationBell = () => {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-2xl z-[100]">
         <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
-          <span className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">通知中心 ({unreadCount})</span>
+          <span className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{t('notifications:titleWithCount', { count: unreadCount })}</span>
           <div className="flex gap-1">
             {unreadCount > 0 && (
-                <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={(e) => { e.stopPropagation(); markAsRead(); }} 
+                <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); markAsRead(); }}
                 className="h-6 px-2 text-[11px] font-bold text-indigo-600 gap-1 hover:bg-indigo-50 rounded-lg"
                 >
-                已读
+                {t('notifications:markRead')}
                 </Button>
             )}
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={(e) => { e.stopPropagation(); setShowClearAlert(true); }} 
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); setShowClearAlert(true); }}
               className="h-6 px-2 text-[11px] font-bold text-red-600 gap-1 hover:bg-red-50 rounded-lg"
             >
-              清除
+              {t('notifications:clear')}
             </Button>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-border" />
         <ScrollArea className="h-80">
           {notifications.length === 0 ? (
-            <EmptyState icon={Bell} title="暂无消息通知" className="py-6" />
+            <EmptyState icon={Bell} title={t('notifications:empty')} className="py-6" />
           ) : (
             <div className="p-1 space-y-0.5">
               {notifications.map(notif => (
@@ -119,7 +121,7 @@ export const NotificationBell = () => {
                       <p className="text-[13px] font-black text-foreground leading-tight">{notif.title}</p>
                       <p className="text-[12px] font-medium text-muted-foreground leading-relaxed mt-1 break-words whitespace-pre-wrap">{notif.content}</p>
                       <p className="text-[9px] font-bold text-muted-foreground/30 uppercase tracking-tighter mt-1.5">
-                        {new Date(notif.created_at).toLocaleString('zh-CN', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
+                        {new Date(notif.created_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
                       </p>
                     </div>
                   </div>
@@ -133,18 +135,18 @@ export const NotificationBell = () => {
       <AlertDialog open={showClearAlert} onOpenChange={setShowClearAlert}>
         <AlertDialogContent className="rounded-[2rem] border-none shadow-2xl bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">确认清除所有通知？</AlertDialogTitle>
+            <AlertDialogTitle className="text-lg font-bold">{t('notifications:clearConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription className="text-xs font-medium text-muted-foreground">
-              此操作将永久删除你的所有历史通知记录，不可恢复。
+              {t('notifications:clearConfirmDesc')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel className="rounded-xl font-bold h-10 text-xs">取消</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => { clearAll(); setIsOpen(false); }} 
+            <AlertDialogCancel className="rounded-xl font-bold h-10 text-xs">{t('common:cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { clearAll(); setIsOpen(false); }}
               className="rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold h-10 text-xs"
             >
-              确认清除
+              {t('notifications:confirmClear')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

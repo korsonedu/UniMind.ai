@@ -1,0 +1,149 @@
+{
+  "hero": {
+    "title1": "开启 Memorix UM1-Preview",
+    "title2": "智能评估系统",
+    "mobileSubtitle": "基于你的学习轨迹快速定位薄弱点，直接进入专注训练。",
+    "desktopSubtitle": "Memorix 系统将根据您的历史记录自动定位知识盲区。通过深度学术训练，协助您在有限的时间内构建出色的专业素养与得分能力。"
+  },
+  "memorixDialog": {
+    "title": "这是新一代 Memorix 智能评估系统",
+    "description": "这不是传统的Memorix固定间隔复习，而是更先进、更精确、自进化的新一代记忆算法。",
+    "p1": "我们的 Memorix UM1 会持续学习你的真实作答轨迹，动态拟合你的遗忘曲线，对每道题分别计算“什么时候复习收益最大”，而不是一刀切地按固定节奏推送。",
+    "p2": "相比旧式方案，它在三个方面更强：更细粒度（题级调度）、更高精度（个体化参数迭代）、更高效率（优先命中临界遗忘点，减少无效重复）。",
+    "p3": "这正是“开启 Memorix 智能评估系统”的核心目的：用先进算法把有限训练时间集中在最该练的地方，最大化提分效率。"
+  },
+  "suggestion": "本轮建议：{{recommended}} 题，预计 {{estimated}} 分钟（薄弱强化 {{weakFocus}} 题）",
+  "reminder": {
+    "title": "提醒设置",
+    "questionType": "题型提醒",
+    "testResult": "做题结果提醒"
+  },
+  "questionCount": "题数",
+  "questionCountMobile": "抽题数量",
+  "custom": "自定义",
+  "questionsWithCount": "{{count}} 道题",
+  "difficulty": {
+    "label": "难度",
+    "mixed": "混合难度",
+    "entry": "入门",
+    "easy": "简单",
+    "normal": "适当",
+    "hard": "困难"
+  },
+  "preference": {
+    "label": "偏好",
+    "balanced": "智能混合",
+    "newFirst": "偏新题",
+    "reviewFirst": "偏复习"
+  },
+  "subjectFilter": "学科筛选",
+  "allSubjects": "全部学科",
+  "loading": "加载中...",
+  "clearFilter": "清除筛选",
+  "startTraining": "开启训练",
+  "wrongQuestionReview": "错题复盘",
+  "stats": {
+    "todayReview": "今日复习",
+    "due": "Due",
+    "atRisk": "记忆临界",
+    "atRiskUnit": "At Risk"
+  },
+  "memorix": {
+    "curveTitle": "Memorix 拟合曲线",
+    "curveSubtitle": "记忆预测 vs 实际掌握（近 {{days}} 天）",
+    "sampleCount": "样本量",
+    "predictionAccuracy": "预测准确度",
+    "avgError": "平均误差",
+    "predictedMastery": "预测掌握度",
+    "actualMastery": "实际掌握度",
+    "predictedCurve": "预测曲线",
+    "actualCurve": "实际曲线",
+    "lastOptimized": "最近优化：{{date}}",
+    "notOptimized": "尚未优化",
+    "tuningHistory": "最近调优记录",
+    "noTuningHistory": "暂无调优记录",
+    "accepted": "已采纳",
+    "notAccepted": "未采纳",
+    "improvementRate": "改善率",
+    "samples": "样本",
+    "emptyCurve": "当前复习记录不足，完成几轮训练后这里会显示你的 Memorix 个性化拟合曲线。"
+  },
+  "toast": {
+    "loadReportError": "无法加载评估报告",
+    "addedToFavorites": "已加入收藏",
+    "removedFromFavorites": "已取消收藏",
+    "operationFailed": "操作失败",
+    "mastered": "稳稳拿捏！",
+    "noQuestions": "题库暂无可用题目",
+    "loadQuestionsError": "题目加载失败",
+    "notAllAnswered": "请完成所有题目 ({{answered}}/{{total}})",
+    "exerciseCompleted": "练习已结束",
+    "submissionSent": "试卷已提交 AI 批改",
+    "submissionSentDesc": "完成后请在通知中心点击查看报告。",
+    "submissionFailed": "提交失败",
+    "loadWrongReviewError": "错题复盘加载失败"
+  },
+  "assessment": {
+    "title": "学术能力评估",
+    "questionTypes": {
+      "objective": "客观选择",
+      "calculate": "主观计算",
+      "noun": "名词解释",
+      "subjective": "主观论述"
+    },
+    "mastered": "已拿捏",
+    "notMastered": "拿捏",
+    "questionMatrix": "题号矩阵",
+    "answered": "已答",
+    "prevQuestion": "上一题",
+    "nextQuestion": "下一题",
+    "submitting": "评分中...",
+    "submit": "提交评分",
+    "placeholderMastered": "该题已标记掌握，无需填写答案...",
+    "placeholderDefault": "在此输入您的分析或计算过程..."
+  },
+  "result": {
+    "title": "评估分析报告",
+    "totalScore": "总分统计",
+    "eloChange": "ELO 变动",
+    "myResponse": "My Response",
+    "noAnswer": "(未作答)",
+    "aiFeedback": "AI Feedback",
+    "academicAnalysis": "Academic Analysis",
+    "assessmentMatrix": "评估矩阵",
+    "scoreRate": "得分率",
+    "matrixHint": "点击题号快速切换。绿色代表通过，红色代表挑战。",
+    "testResultReminder": "做题结果提醒",
+    "testResultReminderBody": "总分 {{totalScore}}/{{maxScore}}，ELO {{eloText}}"
+  },
+  "leaderboard": {
+    "title": "全站学术排名",
+    "rank": "位次",
+    "userInfo": "用户信息",
+    "eloScore": "ELO 评分",
+    "activity": "活跃记录"
+  },
+  "wrongReview": {
+    "title": "错题复盘中心",
+    "subtitle": "按错因与考点拆解薄弱点，快速进入下一轮专项训练。",
+    "backToTraining": "返回训练页",
+    "refreshReview": "刷新复盘",
+    "wrongQuestionCount": "错题数",
+    "totalWrongAttempts": "累计错误次数",
+    "recommendedDrills": "推荐专项",
+    "drillTraining": "一键专项训练",
+    "noDrillsAvailable": "暂无可训练专项，继续做题后会自动生成。",
+    "questionCount": "题目 {{count}}，建议本轮 {{suggested}} 题",
+    "cause": "错因",
+    "knowledgePoint": "考点",
+    "startDrill": "开始专项",
+    "causeBreakdown": "按错因复盘",
+    "noCauseData": "暂无错因数据。",
+    "wrongQuestions": "错题 {{count}}，错误次数 {{attempts}}",
+    "kpBreakdown": "按考点复盘",
+    "noKpData": "暂无考点数据。",
+    "avgWrongCount": "错题 {{count}}，平均错误次数 {{avg}}",
+    "noDrillQuestions": "当前专项暂无可训练题目"
+  },
+  "refresh": "刷新"
+}

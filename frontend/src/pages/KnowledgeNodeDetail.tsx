@@ -12,6 +12,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { KnowledgeTrainingDialog } from './knowledge-map/TrainingDialog';
+import { useTranslation } from 'react-i18next';
 
 interface KnowledgePointDetail {
   id: number;
@@ -23,6 +24,7 @@ interface KnowledgePointDetail {
 export const KnowledgeNodeDetail: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { t } = useTranslation('knowledgeMap');
   const [loading, setLoading] = useState(true);
   const [node, setNode] = useState<KnowledgePointDetail | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -48,7 +50,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
   }, [id]);
 
   return (
-    <PageWrapper title="知识点详情" subtitle="知识点与关联题目">
+    <PageWrapper title={t('detailPage.title')} subtitle={t('detailPage.subtitle')}>
       <div className="max-w-3xl mx-auto space-y-4 animate-in fade-in duration-300 text-left">
         <Button
           variant="ghost"
@@ -56,7 +58,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
           className="h-9 rounded-xl px-3 text-xs font-bold text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4 mr-1.5" />
-          返回知识卡片
+          {t('detailPage.backButton')}
         </Button>
 
         {loading ? (
@@ -69,10 +71,10 @@ export const KnowledgeNodeDetail: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Badge className="bg-emerald-500 text-white border-none uppercase text-[9px] font-bold">Knowledge Point</Badge>
               </div>
-              <h1 className="text-lg font-black tracking-tight text-foreground">{node?.name || '知识点'}</h1>
+              <h1 className="text-lg font-black tracking-tight text-foreground">{node?.name || t('detailPage.nodeFallback')}</h1>
               <div className="text-sm leading-relaxed text-muted-foreground">
                 <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {processMathContent(node?.description || '暂无描述')}
+                  {processMathContent(node?.description || t('detailPage.descriptionFallback'))}
                 </ReactMarkdown>
               </div>
             </Card>
@@ -80,7 +82,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
             <Card className="rounded-2xl border border-border/60 bg-card p-5 space-y-3">
               <h2 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                 <Target className="h-3.5 w-3.5" />
-                关联题目 ({questions.length})
+                {t('detailPage.questionsHeading')} ({questions.length})
               </h2>
               <div className="space-y-2">
                 {questions.map((q) => (
@@ -101,7 +103,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
                   </button>
                 ))}
                 {questions.length === 0 && (
-                  <div className="text-xs font-bold text-muted-foreground py-6 text-center">暂无关联题目</div>
+                  <div className="text-xs font-bold text-muted-foreground py-6 text-center">{t('detailPage.noQuestions')}</div>
                 )}
               </div>
             </Card>

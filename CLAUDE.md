@@ -81,13 +81,8 @@ DB_NAME=unimind  DB_USER=unimind  DB_PASSWORD=xxx  DB_HOST=localhost  DB_PORT=54
 # Redis
 REDIS_URL=redis://127.0.0.1:6379/0
 
-# AI 模型覆盖 (可选，默认 deepseek-v4-pro)
+# AI 模型（全局覆盖，可选；按任务路由见 ai_engine/config.py）
 LLM_MODEL=deepseek-v4-pro
-AI_MODEL_CHAT=deepseek-v4-flash
-AI_MODEL_GENERATE_AUTHOR=deepseek-v4-pro
-AI_MODEL_GENERATE_REVIEWER=deepseek-v4-pro
-AI_MODEL_GRADE_SUBJECTIVE=deepseek-v4-pro
-AI_MODEL_ESSAY_GRADE=deepseek-v4-pro
 
 # 邮件 (Resend HTTP API)
 EMAIL_BACKEND=core.email_service.ResendEmailBackend
@@ -134,11 +129,15 @@ sudo journalctl -u unimind.service -f
 | 任务 | 模型 | 思考 | 原因 |
 |------|------|------|------|
 | 对话/面试 | v4-flash | 关 | 快速响应 |
-| 出题 Author | v4-pro | 关 | 高质量+可控 temp |
+| 出题 Author / 生成 | v4-pro | 关 | 高质量内容创作 |
+| 出题 Author Revise | v4-pro | 开(medium) | 基于审题反馈修订 |
 | 出题 Reviewer | v4-pro | 开(high) | 深度逻辑检查 |
-| 主观题评分 | v4-pro | 开(high) | 精准判断 |
+| 主观题判分 | v4-pro | 关 | 结构化 JSON 输出，无需链式推理 |
 | 作文评分 | v4-pro | 开(max) | 最高强度推理 |
-| 解析/分类/修复 | v4-flash | 关 | 轻量任务 |
+| 解析/分类 | v4-flash | 关 | 轻量任务 |
+| Schema 修复 | v4-flash | 关 | JSON 格式修复 |
+
+> 路由来源：`ai_engine/config.py`。`LLM_MODEL` env var 可全局覆盖。
 
 ## 深入文档
 

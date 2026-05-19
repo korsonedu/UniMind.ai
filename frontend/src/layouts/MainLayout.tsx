@@ -36,6 +36,8 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { EloPopover } from '@/components/EloPopover';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 import {
   DropdownMenu,
@@ -75,6 +77,7 @@ import UnimindLogo from '../../Unimind_logo.png';
 import { PersistentUploadToast } from '@/components/PersistentUploadToast';
 
 const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onRestrictedClick }: any) => {
+  const { t } = useTranslation('layout');
   const content = (
     <div className="px-1">
       <Button
@@ -95,7 +98,7 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
           <>
             <div className="relative">
               <Icon className={cn("h-4 w-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} />
-              <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-[#F5F5F7] rounded-full flex items-center justify-center border border-border shadow-sm" title="会员专属">
+              <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-[#F5F5F7] rounded-full flex items-center justify-center border border-border shadow-sm" title={t('lockedTooltip')}>
                 <Lock className="h-2 w-2 text-muted-foreground" />
               </div>
             </div>
@@ -115,7 +118,7 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="right" className="font-bold border-none shadow-xl">{label}{restricted && " (需升级方案)"}</TooltipContent>
+        <TooltipContent side="right" className="font-bold border-none shadow-xl">{label}{restricted && ` (${t('lockedTooltip')})`}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   ) : content;
@@ -135,6 +138,7 @@ export const MainLayout: React.FC = () => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [restrictedFeature, setRestrictedFeature] = useState<string | undefined>(undefined);
 
+  const { t } = useTranslation(['layout', 'common']);
   const { institution: instFromStore, fetchFeatures, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
   const instInfo = instFromStore || user?.institution || null;
 
@@ -164,9 +168,9 @@ export const MainLayout: React.FC = () => {
 
   useEffect(() => {
     document.title = instInfo?.name
-      ? `${instInfo.name} - UniMind.ai - 新一代AI教育基础设施`
-      : 'UniMind.ai - 新一代AI教育基础设施';
-  }, [instInfo?.name]);
+      ? t('layout:docTitle.withInstitution', { name: instInfo.name })
+      : t('layout:docTitle.default');
+  }, [instInfo?.name, t]);
 
   useEffect(() => {
     fetchFeatures();
@@ -190,16 +194,16 @@ export const MainLayout: React.FC = () => {
 
 
   const handleActivate = async () => {
-    if (!activationCode.trim()) return toast.error("请输入激活码");
+    if (!activationCode.trim()) return toast.error(t('layout:activation.enterCodePrompt'));
     setIsActivating(true);
     try {
       const res = await api.post('/users/me/activate/', { code: activationCode });
       updateUser(res.data.user);
-      toast.success("会员激活成功！欢迎加入 UniMind.ai");
+      toast.success(t('layout:activation.success'));
       setShowActivateDialog(false);
       setActivationCode('');
     } catch (e: any) {
-      toast.error(e.response?.data?.error || "激活失败，请检查激活码");
+      toast.error(e.response?.data?.error || t('layout:activation.failed'));
     } finally {
       setIsActivating(false);
     }
@@ -218,41 +222,41 @@ export const MainLayout: React.FC = () => {
   // ── 超级管理员 —— 只看机构管理 + 邀请码 ──
   const navItems: NavItem[] = isSuperAdmin
     ? [
-        { to: '/institution/admin', icon: Building2, label: '机构管理' },
-        { to: '/invite-codes', icon: Sparkles, label: '邀请码' },
-        { to: '/prompt-templates', icon: FileText, label: 'Prompt模板' },
+        { to: '/institution/admin', icon: Building2, label: t('layout:nav.institutionAdmin') },
+        { to: '/invite-codes', icon: Sparkles, label: t('layout:nav.inviteCodes') },
+        { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
       ]
     : [
-        { to: '/courses', icon: BookOpen, label: '课程中心' },
-        { to: '/tests', icon: Trophy, label: '习题训练' },
-        { to: '/knowledge-map', icon: BrainCircuit, label: '知识地图', minPlan: 2 },
-        { to: '/articles', icon: FileText, label: '文章' },
-        { to: '/qa', icon: MessageCircleQuestion, label: '答疑', minPlan: 3 },
-        { to: '/ai', icon: Sparkles, label: 'AI 实验室', minPlan: 2 },
-        { to: '/study', icon: Clock, label: '自习室', minPlan: 3 },
-        { to: '/interviews', icon: Mic, label: '模拟面试', minPlan: 3 },
-        { to: '/mock-exam', icon: FileText, label: '模拟考试', minPlan: 3 },
+        { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
+        { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
+        { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeMap'), minPlan: 2 },
+        { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
+        { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qa'), minPlan: 3 },
+        { to: '/ai', icon: Sparkles, label: t('layout:nav.aiLab'), minPlan: 2 },
+        { to: '/study', icon: Clock, label: t('layout:nav.studyRoom'), minPlan: 3 },
+        { to: '/interviews', icon: Mic, label: t('layout:nav.interviews'), minPlan: 3 },
+        { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams'), minPlan: 3 },
       ];
 
   // ── 机构成员 —— 机构入口已移至头像下拉菜单 ──
   if (!isSuperAdmin && instInfo) {
     if (user?.is_institution_admin) {
-      navItems.push({ to: '/management', icon: Wrench, label: '维护中心', section: '机构' });
+      navItems.push({ to: '/management', icon: Wrench, label: t('layout:nav.maintenance'), section: 'institution' });
     }
   }
 
   const mobileNavItems: NavItem[] = isSuperAdmin
     ? [
-        { to: '/institution', icon: Building2, label: '机构' },
-        { to: '/invite-codes', icon: Sparkles, label: '邀请' },
-        { to: '/prompt-templates', icon: FileText, label: 'Prompt' },
+        { to: '/institution', icon: Building2, label: t('layout:nav.institutionShort') },
+        { to: '/invite-codes', icon: Sparkles, label: t('layout:nav.inviteShort') },
+        { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptShort') },
       ]
     : [
-        { to: '/courses', icon: BookOpen, label: '课程' },
-        { to: '/tests', icon: Trophy, label: '做题' },
-        { to: '/knowledge-map', icon: BrainCircuit, label: '知识', minPlan: 2 },
-        { to: '/articles', icon: FileText, label: '文章' },
-        { to: '/qa', icon: MessageCircleQuestion, label: '答疑', minPlan: 3 },
+        { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
+        { to: '/tests', icon: Trophy, label: t('layout:nav.testsShort') },
+        { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeShort'), minPlan: 2 },
+        { to: '/articles', icon: FileText, label: t('layout:nav.articlesShort') },
+        { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qaShort'), minPlan: 3 },
       ];
 
   // Sidebar onRestrictedClick: show upgrade modal with appropriate feature
@@ -323,41 +327,41 @@ export const MainLayout: React.FC = () => {
                           <p className="text-[12px] font-bold truncate">{user?.nickname || user?.username}</p>
                           {user.is_member && <ShieldCheck className="h-3 w-3 text-amber-500" />}
                         </div>
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{instInfo ? `${instInfo.name} · ${instInfo.plan_label || instInfo.plan}` : isSuperAdmin ? '超级管理员' : (user.is_member ? 'Pro Member' : 'Free Scholar')}</p>
+                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{instInfo ? `${instInfo.name} · ${instInfo.plan_label || instInfo.plan}` : isSuperAdmin ? t('layout:userStatus.superAdmin') : (user.is_member ? t('layout:userMenu.proMember') : t('layout:userMenu.freeScholar'))}</p>
                       </div>
                     )}
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" side={collapsed ? "right" : "top"} className="w-52 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-2xl">
-                  <DropdownMenuLabel className="px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">账户与偏好</DropdownMenuLabel>
+                  <DropdownMenuLabel className="px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{t('layout:userMenu.accountPreferences')}</DropdownMenuLabel>
                   {user && !user.is_member && !isInstStudent && (
                     <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer bg-amber-50 text-amber-700 focus:bg-amber-100 focus:text-amber-800 transition-colors">
                       <Sparkles className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">激活会员</span>
+                      <span className="font-bold text-xs">{t('layout:userMenu.activateMember')}</span>
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                     <UserIcon className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">个人设置</span>
+                    <span className="font-bold text-xs">{t('layout:userMenu.personalSettings')}</span>
                   </DropdownMenuItem>
                   {/* 机构设置：仅机构所有者可见 */}
                   {!isSuperAdmin && instInfo && user?.is_institution_owner && (
                     <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Settings2 className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">机构设置</span>
+                      <span className="font-bold text-xs">{t('layout:userMenu.institutionSettings')}</span>
                     </DropdownMenuItem>
                   )}
-                  {/* 机构看板：所有机构成员可见 */}
-                  {!isSuperAdmin && instInfo && (
+                  {/* 机构看板：管理员可见 */}
+                  {!isSuperAdmin && instInfo && !isInstStudent && (
                     <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <BarChart3 className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">机构看板</span>
+                      <span className="font-bold text-xs">{t('layout:userMenu.institutionDashboard')}</span>
                     </DropdownMenuItem>
                   )}
                   {user?.role === 'admin' && (
                     <DropdownMenuItem onClick={() => navigate('/system-settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Settings2 className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">外观与系统</span>
+                      <span className="font-bold text-xs">{t('layout:userMenu.appearanceSettings')}</span>
                     </DropdownMenuItem>
                   )}
                   {user?.is_member && (
@@ -366,13 +370,13 @@ export const MainLayout: React.FC = () => {
                       className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
                     >
                       <BarChart3 className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">周报</span>
+                      <span className="font-bold text-xs">{t('layout:nav.weeklyReport')}</span>
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator className="my-2 bg-border" />
                   <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
                     <LogOut className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">退出登录</span>
+                    <span className="font-bold text-xs">{t('layout:userMenu.logout')}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -380,7 +384,7 @@ export const MainLayout: React.FC = () => {
               <Link to="/login">
                 <Button variant="outline" className={cn("w-full gap-2", collapsed ? "px-0 justify-center" : "justify-start")}>
                   <LogOut className="h-4 w-4" />
-                  {!collapsed && <span>登录</span>}
+                  {!collapsed && <span>{t('common:login')}</span>}
                 </Button>
               </Link>
             )}
@@ -414,17 +418,17 @@ export const MainLayout: React.FC = () => {
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-[11px] font-bold">
                           <UserPlus className="h-3.5 w-3.5 mr-1" />
-                          邀请学员
+                          {t('layout:invite.trigger')}
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-80 rounded-2xl p-3 bg-card/95 backdrop-blur-xl border-border shadow-2xl">
                         <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">
-                          邀请学员加入 {instInfo.name}
+                          {t('layout:invite.title', { name: instInfo.name })}
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <div className="space-y-3 px-1 py-1">
                           <div className="space-y-1.5">
-                            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">邀请链接</Label>
+                            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{t('layout:invite.linkLabel')}</Label>
                             <div className="flex items-center gap-2">
                               <code className="flex-1 bg-muted px-3 py-2 rounded-lg text-[11px] font-mono font-bold truncate select-all">
                                 {window.location.origin}/api/users/join/{instInfo.invite_slug}/
@@ -435,7 +439,7 @@ export const MainLayout: React.FC = () => {
                                 className="h-8 w-8 shrink-0"
                                 onClick={() => {
                                   navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
-                                  toast.success('邀请链接已复制');
+                                  toast.success(t('layout:invite.copied'));
                                 }}
                               >
                                 <Copy className="h-3.5 w-3.5" />
@@ -443,7 +447,7 @@ export const MainLayout: React.FC = () => {
                             </div>
                           </div>
                           <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            将链接发送给学员，学员点击后注册即可自动加入本机构。
+                            {t('layout:invite.description')}
                           </p>
                           <Button
                             variant="ghost"
@@ -452,15 +456,15 @@ export const MainLayout: React.FC = () => {
                             onClick={async () => {
                               try {
                                 await api.post('/users/institution/me/regenerate-invite-slug/');
-                                toast.success('邀请链接已重置');
+                                toast.success(t('layout:invite.regenerated'));
                                 fetchFeatures();
                               } catch {
-                                toast.error('重置失败');
+                                toast.error(t('layout:invite.regenerateFailed'));
                               }
                             }}
                           >
                             <RefreshCw className="h-3 w-3 mr-1" />
-                            重新生成邀请链接
+                            {t('layout:invite.regenerate')}
                           </Button>
                         </div>
                       </DropdownMenuContent>
@@ -478,9 +482,10 @@ export const MainLayout: React.FC = () => {
                       }}
                     >
                       <Sparkles className="h-3 w-3 mr-1 text-amber-500" />
-                      升级方案
+                      {t('layout:upgradePlan')}
                     </Button>
                   )}
+                  <LanguageSwitcher variant="compact" />
                   <div className="h-6 w-px bg-border mx-1" />
                   {user && <NotificationBell />}
                   <Avatar className={cn("h-8 w-8 border border-border shadow-sm")}>
@@ -510,36 +515,36 @@ export const MainLayout: React.FC = () => {
                     {user && !user.is_member && !isInstStudent && (
                       <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="rounded-xl px-3 py-2 gap-2 cursor-pointer bg-amber-50 text-amber-700 focus:bg-amber-100 focus:text-amber-800 transition-colors">
                         <Sparkles className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">激活会员</span>
+                        <span className="font-bold text-xs">{t('layout:userMenu.activateMember')}</span>
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <UserIcon className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">个人设置</span>
+                      <span className="font-bold text-xs">{t('layout:userMenu.personalSettings')}</span>
                     </DropdownMenuItem>
                     {!isSuperAdmin && instInfo && user?.is_institution_owner && (
                       <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Settings2 className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">机构设置</span>
+                        <span className="font-bold text-xs">{t('layout:userMenu.institutionSettings')}</span>
                       </DropdownMenuItem>
                     )}
-                    {/* 机构看板：所有机构成员可见 */}
-                    {!isSuperAdmin && instInfo && (
+                    {/* 机构看板：管理员可见 */}
+                    {!isSuperAdmin && instInfo && !isInstStudent && (
                       <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <BarChart3 className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">机构看板</span>
+                        <span className="font-bold text-xs">{t('layout:userMenu.institutionDashboard')}</span>
                       </DropdownMenuItem>
                     )}
                     {!isSuperAdmin && instInfo && user?.is_institution_admin && (
                       <DropdownMenuItem
                         onClick={() => {
                           navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
-                          toast.success('邀请链接已复制');
+                          toast.success(t('layout:invite.copied'));
                         }}
                         className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
                       >
                         <UserPlus className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">复制邀请链接</span>
+                        <span className="font-bold text-xs">{t('layout:invite.mobileCopy')}</span>
                       </DropdownMenuItem>
                     )}
                     {user?.is_member && (
@@ -548,13 +553,13 @@ export const MainLayout: React.FC = () => {
                         className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
                       >
                         <BarChart3 className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">周报</span>
+                        <span className="font-bold text-xs">{t('layout:nav.weeklyReport')}</span>
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator className="my-2 bg-border" />
                     <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-2 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
                       <LogOut className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">退出登录</span>
+                      <span className="font-bold text-xs">{t('layout:userMenu.logout')}</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -572,11 +577,11 @@ export const MainLayout: React.FC = () => {
               <div className="flex items-center justify-between bg-[#0071E3] text-white px-4 py-2.5 rounded-xl mb-3">
                 <div className="flex items-center gap-2 text-sm font-bold">
                   <Eye className="h-4 w-4" />
-                  <span>预览模式：{previewInstitution.name}（{previewInstitution.plan_label}）</span>
+                  <span>{t('layout:previewMode', { name: previewInstitution.name, plan: previewInstitution.plan_label })}</span>
                 </div>
                 <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 text-xs"
                   onClick={exitPreview}>
-                  <EyeOff className="h-3.5 w-3.5 mr-1" /> 退出预览
+                  <EyeOff className="h-3.5 w-3.5 mr-1" /> {t('layout:exitPreview')}
                 </Button>
               </div>
             )}
@@ -625,18 +630,18 @@ export const MainLayout: React.FC = () => {
               <div className="h-12 w-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 shadow-inner">
                 <Sparkles className="h-6 w-6" />
               </div>
-              <DialogTitle className="text-2xl font-black tracking-tight uppercase">成为 UniMind 会员</DialogTitle>
+              <DialogTitle className="text-2xl font-black tracking-tight uppercase">{t('layout:activation.title')}</DialogTitle>
               <DialogDescription className="font-medium text-muted-foreground leading-relaxed">
-                解锁所有核心功能：包括视频课程、海量题库、FSRS 记忆调度算法、AI 导师及沉浸式自习室。请输入管理员发放的激活码。
+                {t('layout:activation.description')}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-6 pt-6">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">激活码 (Activation Code)</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">{t('layout:activation.codeLabel')}</Label>
                 <Input
                   value={activationCode}
                   onChange={(e) => setActivationCode(e.target.value)}
-                  placeholder="XXXX-XXXX-XXXX"
+                  placeholder={t('layout:activation.codePlaceholder')}
                   className="h-14 rounded-2xl bg-muted/50 border-none font-mono font-bold text-center text-lg tracking-wider focus-visible:ring-amber-500/20"
                 />
               </div>
@@ -645,10 +650,10 @@ export const MainLayout: React.FC = () => {
                 disabled={isActivating}
                 className="w-full h-14 rounded-2xl bg-black text-white font-black shadow-xl hover:opacity-90 active:scale-[0.98] transition-all uppercase tracking-widest text-xs"
               >
-                {isActivating ? <Loader2 className="h-4 w-4 animate-spin" /> : "立即激活 Pro 权限"}
+                {isActivating ? <Loader2 className="h-4 w-4 animate-spin" /> : t('layout:activation.activateButton')}
               </Button>
               <p className="text-center text-[10px] font-bold text-muted-foreground uppercase opacity-40">
-                UniMind.ai
+                {t('layout:activation.footer')}
               </p>
             </div>
           </DialogContent>
@@ -664,12 +669,12 @@ export const MainLayout: React.FC = () => {
         <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}>
           <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl bg-card">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-xl font-bold text-foreground">确认退出登录？</AlertDialogTitle>
-              <AlertDialogDescription className="font-medium text-muted-foreground">退出后你将需要重新验证身份以访问网校资源。</AlertDialogDescription>
+              <AlertDialogTitle className="text-xl font-bold text-foreground">{t('layout:logout.title')}</AlertDialogTitle>
+              <AlertDialogDescription className="font-medium text-muted-foreground">{t('layout:logout.description')}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="rounded-xl font-bold border-border text-foreground hover:bg-muted">返回</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { logout(); navigate('/login'); }} className="rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90">确认退出</AlertDialogAction>
+              <AlertDialogCancel className="rounded-xl font-bold border-border text-foreground hover:bg-muted">{t('layout:logout.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { logout(); navigate('/login'); }} className="rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90">{t('layout:logout.confirm')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

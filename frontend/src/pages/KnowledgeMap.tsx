@@ -20,6 +20,7 @@ import 'katex/dist/katex.min.css';
 
 // Modularized Components
 import { KnowledgeTrainingDialog } from './knowledge-map/TrainingDialog';
+import { useTranslation } from 'react-i18next';
 
 /* ────────────────────────────────────────────
    Types & Constants
@@ -40,7 +41,6 @@ export interface KPNode {
 }
 
 const LEVEL_ORDER: Record<string, number> = { sub: 0, ch: 1, sec: 2, kp: 3 };
-const LEVEL_LABELS: Record<string, string> = { sub: '学科', ch: '篇章', sec: '小节', kp: '考点' };
 const LEVEL_COLORS: Record<string, string> = {
   sub: 'text-indigo-700 bg-indigo-50 border-indigo-200',
   ch: 'text-blue-700 bg-blue-50 border-blue-200',
@@ -297,7 +297,7 @@ const KnowledgeGraph = ({
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [nodes, transform, isDark, selectedId]);
+  }, [nodes, transform, isDark, selectedId, canvasSize]);
 
   const handleWheel = (e: React.WheelEvent) => {
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -360,7 +360,7 @@ const KnowledgeGraph = ({
           {Object.entries(MASTERY_COLORS).map(([level, color]) => (
             <div key={level} className="flex items-center gap-1" title={level}>
               <span className="h-2.5 w-2.5 rounded-full border border-white/50" style={{ backgroundColor: color }} />
-              <span className="text-[9px] font-bold text-muted-foreground uppercase">{level === 'mastered' ? '掌握' : level === 'stable' ? '稳定' : level === 'learning' ? '学习' : level === 'weak' ? '薄弱' : '未知'}</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase">{level === 'mastered' ? t('graph.legendMastered') : level === 'stable' ? t('graph.legendStable') : level === 'learning' ? t('graph.legendLearning') : level === 'weak' ? t('graph.legendWeak') : t('graph.legendUnknown')}</span>
             </div>
           ))}
         </div>
@@ -393,6 +393,7 @@ const KnowledgeTreePanel: React.FC<{
   onSearchChange: (q: string) => void;
   masteryData?: Record<string, string>;
 }> = ({ nodes, selectedId, onSelect, searchQuery, onSearchChange, masteryData = {} }) => {
+  const { t } = useTranslation('knowledgeMap');
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
   const tree = useMemo(() => {
@@ -509,7 +510,7 @@ const KnowledgeTreePanel: React.FC<{
               LEVEL_COLORS[tn.level] || 'bg-muted',
             )}
           >
-            {LEVEL_LABELS[tn.level] || tn.level}
+            {t(`levels.${tn.level}` as any) || tn.level}
           </Badge>
 
           {/* name */}
@@ -545,7 +546,7 @@ const KnowledgeTreePanel: React.FC<{
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="搜索知识点..."
+            placeholder={t('treePanel.searchPlaceholder')}
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
             className="h-9 pl-9 pr-8 rounded-xl bg-muted/50 border-none text-xs font-medium"
@@ -563,10 +564,10 @@ const KnowledgeTreePanel: React.FC<{
       {/* Mastery legend */}
       <div className="px-3 py-2 border-t border-border/30 flex items-center gap-3 flex-wrap">
         {[
-          { level: 'mastered', label: '掌握', color: MASTERY_DOT_COLORS.mastered },
-          { level: 'stable', label: '稳定', color: MASTERY_DOT_COLORS.stable },
-          { level: 'learning', label: '学习', color: MASTERY_DOT_COLORS.learning },
-          { level: 'weak', label: '薄弱', color: MASTERY_DOT_COLORS.weak },
+          { level: 'mastered', label: t('treePanel.legendMastered'), color: MASTERY_DOT_COLORS.mastered },
+          { level: 'stable', label: t('treePanel.legendStable'), color: MASTERY_DOT_COLORS.stable },
+          { level: 'learning', label: t('treePanel.legendLearning'), color: MASTERY_DOT_COLORS.learning },
+          { level: 'weak', label: t('treePanel.legendWeak'), color: MASTERY_DOT_COLORS.weak },
         ].map(item => (
           <div key={item.level} className="flex items-center gap-1.5">
             <span
@@ -580,7 +581,7 @@ const KnowledgeTreePanel: React.FC<{
       <ScrollArea className="flex-1 p-2" type="always">
         <div className="space-y-0.5 min-w-max">
           {filteredTree.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8">无匹配知识点</p>
+            <p className="text-xs text-muted-foreground text-center py-8">{t('treePanel.noMatch')}</p>
           ) : (
             filteredTree.map(root => renderNode(root, 0))
           )}
@@ -603,9 +604,10 @@ const NodeDetailPanel: React.FC<{
   onClear: () => void;
   masteryData?: Record<string, string>;
 }> = ({ node, details, loading, onQuestionClick, onClear, masteryData = {} }) => {
+  const { t } = useTranslation('knowledgeMap');
 
   const MASTERY_LABELS: Record<string, string> = {
-    mastered: '已掌握', stable: '已稳定', learning: '学习中', weak: '薄弱', unknown: '未知',
+    mastered: t('masteryLevels.mastered'), stable: t('masteryLevels.stable'), learning: t('masteryLevels.learning'), weak: t('masteryLevels.weak'), unknown: t('masteryLevels.unknown'),
   };
   const MASTERY_BG: Record<string, string> = {
     mastered: 'bg-[#34C759]', stable: 'bg-[#0071E3]', learning: 'bg-[#FF9500]', weak: 'bg-[#FF3B30]', unknown: 'bg-[#AEAEB2]',
@@ -614,8 +616,8 @@ const NodeDetailPanel: React.FC<{
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-card rounded-2xl border border-border/50 p-6">
         <Layers className="h-8 w-8 mb-3 opacity-20" />
-        <p className="text-xs font-bold uppercase tracking-widest">选择考点</p>
-        <p className="text-[10px] mt-1 opacity-50">在树状图或关系图中点击考点查看详情</p>
+        <p className="text-xs font-bold uppercase tracking-widest">{t('detailPanel.selectTitle')}</p>
+        <p className="text-[10px] mt-1 opacity-50">{t('detailPanel.selectHint')}</p>
       </div>
     );
   }
@@ -626,7 +628,7 @@ const NodeDetailPanel: React.FC<{
       <div className="p-4 border-b border-border/30 flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <Badge className={cn('text-[9px] py-0 h-5 px-2 font-bold uppercase border', LEVEL_COLORS[node.level] || 'bg-muted')}>
-            {LEVEL_LABELS[node.level] || node.level}
+            {t(`levels.${node.level}` as any) || node.level}
           </Badge>
           <h3 className="text-sm font-bold truncate">{node.name}</h3>
           {masteryData[String(node.id)] && (
@@ -659,11 +661,11 @@ const NodeDetailPanel: React.FC<{
               {/* questions */}
               <section>
                 <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <Target className="w-3 h-3" /> 关联题目 ({details.questions.length})
+                  <Target className="w-3 h-3" /> {t('detailPanel.relatedQuestions')} ({details.questions.length})
                 </h5>
                 <div className="space-y-1.5">
                   {details.questions.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground/50">暂无题目</p>
+                    <p className="text-[10px] text-muted-foreground/50">{t('detailPanel.noQuestions')}</p>
                   )}
                   {details.questions.map((q: any) => (
                     <button
@@ -686,11 +688,11 @@ const NodeDetailPanel: React.FC<{
               {/* courses */}
               <section>
                 <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <Video className="w-3 h-3" /> 课程资源 ({details.courses.length})
+                  <Video className="w-3 h-3" /> {t('detailPanel.courseResources')} ({details.courses.length})
                 </h5>
                 <div className="space-y-1.5">
                   {details.courses.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground/50">暂无课程</p>
+                    <p className="text-[10px] text-muted-foreground/50">{t('detailPanel.noCourses')}</p>
                   )}
                   {details.courses.map((c: any) => (
                     <div key={c.id} className="p-3 bg-emerald-50/50 rounded-xl flex items-center gap-2 border border-emerald-100">
@@ -704,11 +706,11 @@ const NodeDetailPanel: React.FC<{
               {/* articles */}
               <section>
                 <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <FileText className="w-3 h-3" /> 参考文章 ({details.articles.length})
+                  <FileText className="w-3 h-3" /> {t('detailPanel.referenceArticles')} ({details.articles.length})
                 </h5>
                 <div className="space-y-1.5">
                   {details.articles.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground/50">暂无文章</p>
+                    <p className="text-[10px] text-muted-foreground/50">{t('detailPanel.noArticles')}</p>
                   )}
                   {details.articles.map((a: any) => (
                     <div key={a.id} className="p-3 bg-orange-50/50 rounded-xl flex items-center gap-2 border border-orange-100">
@@ -732,6 +734,7 @@ const NodeDetailPanel: React.FC<{
 
 export const KnowledgeMap: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation('knowledgeMap');
   const [allNodes, setAllNodes] = useState<KPNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<KPNode | null>(null);
@@ -891,14 +894,14 @@ export const KnowledgeMap: React.FC = () => {
 
   if (loading) {
     return (
-      <PageWrapper title="知识地图" subtitle="可视化呈现知识载体间的逻辑脉络与关联结构。">
+      <PageWrapper title={t('pageTitle')} subtitle={t('pageLoadingSubtitle')}>
         <div className="text-center opacity-20 font-bold uppercase text-[10px] animate-pulse py-32">Mapping...</div>
       </PageWrapper>
     );
   }
 
   return (
-    <PageWrapper title="知识地图" subtitle="树状结构 · 关系图谱 · 资源详情，三栏联动探索知识体系。">
+    <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
       <div className="w-full text-left animate-in fade-in duration-700">
         {isMobile ? (
           /* ── Mobile: simplified list view ── */
@@ -906,7 +909,7 @@ export const KnowledgeMap: React.FC = () => {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="搜索知识卡片..."
+                placeholder={t('mobile.searchPlaceholder')}
                 value={treeSearch}
                 onChange={e => setTreeSearch(e.target.value)}
                 className="w-full rounded-2xl bg-card border-border shadow-sm h-11 pl-10 pr-4 font-bold"
@@ -928,7 +931,7 @@ export const KnowledgeMap: React.FC = () => {
           </div>
         ) : (
           /* ── Desktop: three-panel layout ── */
-          <div className="flex gap-4" style={{ height: 'calc(100vh - 3.5rem)' }}>
+          <div className="flex gap-4" style={{ height: 'calc(100vh - 7rem)' }}>
             {/* ── Left: Tree Panel ── */}
             <div className="w-[300px] shrink-0 self-stretch">
               <KnowledgeTreePanel
@@ -948,10 +951,10 @@ export const KnowledgeMap: React.FC = () => {
                 <Select value={graphRootId} onValueChange={setGraphRootId}>
                   <SelectTrigger className="w-[200px] h-10 bg-card rounded-xl font-bold border-border shadow-sm text-xs">
                     <GitMerge className="w-3.5 h-3.5 mr-2 text-indigo-500" />
-                    <SelectValue placeholder="全部分支" />
+                    <SelectValue placeholder={t('toolbar.allBranches')} />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
-                    <SelectItem value="all" className="font-bold text-xs">全部分支</SelectItem>
+                    <SelectItem value="all" className="font-bold text-xs">{t('toolbar.allBranches')}</SelectItem>
                     {rootOptions.map(opt => (
                       <SelectItem key={opt.id} value={opt.id.toString()} className="text-xs">
                         {opt.name}
@@ -962,7 +965,7 @@ export const KnowledgeMap: React.FC = () => {
 
                 {viewMode === 'list' && (
                   <Input
-                    placeholder="搜索考点..."
+                    placeholder={t('toolbar.searchKp')}
                     value={treeSearch}
                     onChange={e => setTreeSearch(e.target.value)}
                     className="flex-1 rounded-xl bg-card border-border shadow-sm h-10 px-4 font-bold text-xs"
@@ -975,14 +978,14 @@ export const KnowledgeMap: React.FC = () => {
                     onClick={() => setViewMode('graph')}
                     className="rounded-lg h-8 text-xs font-bold px-4"
                   >
-                    <GitMerge className="w-3.5 h-3.5 mr-1.5" /> 关系图
+                    <GitMerge className="w-3.5 h-3.5 mr-1.5" /> {t('toolbar.graphView')}
                   </Button>
                   <Button
                     variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                     onClick={() => setViewMode('list')}
                     className="rounded-lg h-8 text-xs font-bold px-3"
                   >
-                    <List className="w-3.5 h-3.5 mr-1.5" /> 词条表
+                    <List className="w-3.5 h-3.5 mr-1.5" /> {t('toolbar.listView')}
                   </Button>
                 </div>
               </div>
@@ -1021,7 +1024,7 @@ export const KnowledgeMap: React.FC = () => {
                         ))}
                         {listNodes.length === 0 && (
                           <div className="w-full text-center text-xs font-bold text-muted-foreground py-20">
-                            没有匹配到相关知识点
+                            {t('toolbar.noMatch')}
                           </div>
                         )}
                       </div>

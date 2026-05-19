@@ -1,0 +1,100 @@
+{
+  "tabs": {
+    "lobby": "Interview Lobby",
+    "history": "Sessions & Review"
+  },
+  "loading": "Loading...",
+  "noSessions": "No interview history. Go to the lobby to start a mock interview.",
+  "sessionsSidebar": "Sessions",
+  "selectSessionHint": "Select a session from the sidebar to view details",
+  "sessionNotFound": "Session not found or access denied",
+  "loadDetailFailed": "Failed to load session details",
+
+  "lobby": {
+    "badge": "Multi-Stage Interview Training",
+    "heading": "End-to-End Interview Preparation",
+    "subtitle": "Style selection, real-time follow-up, and post-session radar report.",
+    "styleLabel": "Interviewer Style",
+    "styleFriendly": "Friendly Guide",
+    "stylePressure": "Pressure Test",
+    "checking": "Checking...",
+    "uploadResumeFirst": "Please upload a resume first",
+    "voiceComingSoon": "Voice interview coming soon",
+    "noKnowledgeTree": "No knowledge tree configured for this institution",
+    "enterSession": "Start Session",
+    "creating": "Creating...",
+    "resumeRequiredToast": "Please upload and analyze your resume in the Resume Tuner section below first",
+    "knowledgeTreeRequiredToast": "This institution has not set up a knowledge structure yet. Please contact the admin.",
+    "sessionCreated": "Interview session #{{id}} created",
+    "createSessionFailed": "Failed to create interview session",
+    "typeResume": "Resume Deep Dive",
+    "typeResumeDesc": "Personalized follow-up questions based on your experience.",
+    "typeEnglish": "English Speaking",
+    "typeEnglishDesc": "Simulated English Q&A with fluency feedback. Powered by GLM voice model.",
+    "typeProfessional": "Professional Knowledge",
+    "typeProfessionalDesc": "In-depth questioning on core professional topics."
+  },
+
+  "sessionList": {
+    "typeResume": "Resume Deep Dive",
+    "typeEnglish": "English Speaking",
+    "typeProfessional": "Professional Knowledge",
+    "typeMixed": "Mixed Interview"
+  },
+
+  "sessionChat": {
+    "typeResume": "Resume Deep Dive",
+    "typeEnglish": "English Speaking",
+    "typeProfessional": "Professional Knowledge",
+    "typeMixed": "Mixed Interview",
+    "styleFriendly": "Friendly Mode",
+    "stylePressure": "Pressure Mode",
+    "analyzing": "Analyzing",
+    "endInterview": "End Interview",
+    "generating": "Generating",
+    "completed": "Completed",
+    "overallFeedback": "Overall Feedback",
+    "noFeedback": "No feedback yet",
+    "waitingForInterviewer": "Waiting for the interviewer...",
+    "speakerInterviewer": "Interviewer",
+    "speakerCandidate": "You",
+    "inputPlaceholder": "Type your answer",
+    "sendFailed": "Failed to send",
+    "reviewGenerated": "Review generated",
+    "generateReviewFailed": "Failed to generate review"
+  },
+
+  "radarChart": {
+    "theory": "Theory",
+    "logic": "Logic",
+    "stress": "Composure",
+    "fluency": "Fluency",
+    "english": "English",
+    "score": "Score"
+  },
+
+  "resumeTuner": {
+    "title": "Resume Tuner",
+    "subtitle": "AI Diagnosis · Polish · Predicted Questions",
+    "remove": "Remove",
+    "dragHint": "Drag & drop your resume here",
+    "formatHint": "PDF / DOCX / TXT · Max 10MB",
+    "or": "or",
+    "pastePlaceholder": "Or paste your resume text directly...",
+    "analyzing": "AI analyzing...",
+    "submit": "Submit for Analysis",
+    "history": "Analysis History",
+    "noHistory": "No analysis history",
+    "noHistoryHint": "Submit a resume to start AI analysis",
+    "recordNumber": "Record #{{id}}",
+    "score": "{{score}} pts",
+    "diagnosis": "Diagnosis",
+    "polish": "Polish Suggestions",
+    "predictedQuestions": "Predicted Questions",
+    "noData": "No analysis data yet. Please re-submit your resume for AI analysis.",
+    "fillRequired": "Please enter resume text or upload a file",
+    "analysisComplete": "Resume analysis complete",
+    "analysisFailed": "Resume analysis failed",
+    "unsupportedFormat": "Only PDF / DOCX / TXT formats are supported"
+  }
+}

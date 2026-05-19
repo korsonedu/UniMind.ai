@@ -25,8 +25,7 @@ import { PromptTemplatesAdmin } from './pages/PromptTemplatesAdmin';
 import { Interviews } from './pages/Interviews';
 import { PdfMockExam } from './pages/PdfMockExam';
 import { WrongQuestionReviewPage } from './pages/WrongQuestionReviewPage';
-import { LandingZh } from './pages/LandingZh';
-import { LandingEn } from './pages/LandingEn';
+
 import { useAuthStore } from './store/useAuthStore';
 import { useSystemStore } from './store/useSystemStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
@@ -38,6 +37,15 @@ import api from '@/lib/api';
 import { Toaster } from 'sonner';
 import { WeeklyReportDialog } from './components/WeeklyReportDialog';
 import { Landing } from './pages/Landing';
+import i18n from '@/lib/i18n';
+
+// Language redirect helper
+const LanguageRedirect = ({ lang }: { lang: string }) => {
+  useEffect(() => {
+    i18n.changeLanguage(lang);
+  }, [lang]);
+  return <Navigate to="/" replace />;
+};
 
 // Auth Guard with Persistence
 const RequireAuth = ({ children }: { children: ReactNode }) => {
@@ -186,8 +194,8 @@ const router = createBrowserRouter([
   },
   { path: "/intro/:slug", element: <InstitutionHome /> },
   { path: "/intro", element: <Navigate to="/" replace /> },
-  { path: "/en", element: <LandingEn /> },
-  { path: "/zh", element: <LandingZh /> },
+  { path: "/en", element: <LanguageRedirect lang="en" /> },
+  { path: "/zh", element: <LanguageRedirect lang="zh" /> },
   { path: "/login", element: <Login /> },
   { path: "/register", element: <Register /> },
 ]);

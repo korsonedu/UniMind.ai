@@ -270,16 +270,7 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", os.getenv("LLM_API_KEY", ""))
 LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-pro")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1/chat/completions")
 
-# 按任务模型覆盖 (DeepSeek V4 多模型路由)
-AI_MODEL_CHAT = os.getenv("AI_MODEL_CHAT", "deepseek-v4-flash")
-AI_MODEL_GENERATE_AUTHOR = os.getenv("AI_MODEL_GENERATE_AUTHOR", "deepseek-v4-pro")
-AI_MODEL_GENERATE_REVIEWER = os.getenv("AI_MODEL_GENERATE_REVIEWER", "deepseek-v4-pro")
-AI_MODEL_GENERATE_CLASSIFIER = os.getenv("AI_MODEL_GENERATE_CLASSIFIER", "deepseek-v4-flash")
-AI_MODEL_GRADE_SUBJECTIVE = os.getenv("AI_MODEL_GRADE_SUBJECTIVE", "deepseek-v4-pro")
-AI_MODEL_ESSAY_GRADE = os.getenv("AI_MODEL_ESSAY_GRADE", "deepseek-v4-pro")
-AI_MODEL_GENERATE_ANSWER = os.getenv("AI_MODEL_GENERATE_ANSWER", "deepseek-v4-flash")
-AI_MODEL_PARSE_TEXT = os.getenv("AI_MODEL_PARSE_TEXT", "deepseek-v4-flash")
-AI_MODEL_SCHEMA_REPAIR = os.getenv("AI_MODEL_SCHEMA_REPAIR", "deepseek-v4-flash")
+# 按任务模型路由 → ai_engine/config.py（单一来源，不再通过 env 逐任务覆盖）
 
 # Email
 EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")

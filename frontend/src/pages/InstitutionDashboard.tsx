@@ -34,25 +34,19 @@ const PLAN_COLORS: Record<string, string> = {
   plus: 'bg-[#34C759]', pro: 'bg-[#FF9500]',
 };
 
-const FEATURE_LABELS: Record<string, string> = {
-  'quiz.manual': '习题训练', 'quiz.exam': '模拟考试',
-  'wrong.review': '错题复盘', 'basic.stats': '基础统计',
-  'ai.generate': 'AI 生成题目', 'memorix.review': 'Memorix 记忆复习',
-  'full.report': '完整学情报告', 'knowledge.graph': '交互式知识图谱',
-  'ai.assistant': 'AI 学习助手', 'course.video': '视频课程',
-  'video.outline': 'AI 智能大纲', 'faq.system': '在线答疑系统',
-  'pdf.mock': '模拟考试', 'study.room': '实时自习室',
-  'multi.teacher': '多教师协作', 'class.compare': '班级对比',
-  'data.export': '数据导出', 'brand.custom': '品牌定制',
-  'api.access': 'API 接入', 'student.payment': '学生端收费',
-  'private.deploy': '私有化部署', 'i18n.custom': '多语言 · 国际化',
-  'sso.saml': 'SSO · SAML', 'audit.log': '审计日志',
-  'dedicated.support': '专属支持', 'sla.99.9': 'SLA 99.9%',
-};
 
 export default function InstitutionDashboard() {
   const { t } = useTranslation('dashboard');
   const { user } = useAuthStore();
+  const FEATURE_KEYS = [
+    'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
+    'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
+    'ai.assistant', 'course.video', 'video.outline', 'faq.system',
+    'pdf.mock', 'study.room', 'multi.teacher', 'class.compare',
+    'data.export', 'brand.custom', 'api.access', 'student.payment',
+    'private.deploy', 'i18n.custom', 'sso.saml', 'audit.log',
+    'dedicated.support', 'sla.99.9',
+  ];
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -170,7 +164,7 @@ export default function InstitutionDashboard() {
           </Badge>
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1.5">
-          {FEATURE_LABELS && Object.entries(FEATURE_LABELS).map(([key, label]) => {
+          {FEATURE_KEYS.map((key) => {
             const has = features.includes(key);
             return (
               <div key={key} className="flex items-center gap-2.5 py-1">
@@ -180,7 +174,7 @@ export default function InstitutionDashboard() {
                   <Minus className="h-4 w-4 text-[#E5E5EA] shrink-0" />
                 )}
                 <span className={cn('text-sm font-medium', has ? 'text-[#1D1D1F]' : 'text-[#C7C7CC]')}>
-                  {label}
+                  {t(`features.labels.${key}` as any)}
                 </span>
               </div>
             );

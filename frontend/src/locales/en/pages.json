@@ -1,28 +1,54 @@
 {
-  "个人设置": "Settings",
-  "管理个人身份标识、学术简介及数字化化身。": "Manage your identity, academic profile, and digital avatar.",
-  "知识工作台": "Knowledge Workbench",
-  "浏览知识体系，一键跳转训练、错题或关联资源。": "Browse the knowledge system and jump to practice, mistakes, or related resources.",
-  "综合复试模块": "Interview Simulator",
-  "简历调优、实时追问、逐轮反馈与五维复盘雷达。": "Resume tuning, real-time follow-up, round-by-round feedback & radar review.",
-  "学术天梯": "Academic Ladder",
-  "基于 Memorix 记忆算法的智能评估，精准量化学术成长路径。": "Intelligent assessment powered by Memorix — quantify your academic growth.",
-  "错题复盘中心": "Mistake Review Center",
-  "按错因与考点拆解薄弱点，快速进入下一轮专项训练。": "Break down weak points by error type and knowledge node.",
-  "AI 实验室": "AI Lab",
-  "与您的专属数字导师进行深度学术对话。": "Deep academic conversations with your personal AI tutor.",
-  "系统偏好设置": "System Preferences",
-  "官方品牌名称固定为 unimind.ai，可在此调整主题与全局视觉。": "Brand name is fixed to unimind.ai. Adjust theme and global visuals here.",
-  "答疑": "Q&A",
-  "学术疑问 · 权威解答 · 深度探讨": "Questions · Answers · Deep Discussions",
-  "知识点详情": "Knowledge Node",
-  "知识点与关联题目": "Knowledge point & related questions",
-  "文章中心": "Article Center",
-  "沉淀学术思想，探索知识前沿。": "Academic writing and knowledge exploration.",
-  "模拟考试": "Mock Exam",
-  "根据薄弱点自动组卷，或下载名师精选密卷。": "Auto-generate exams from weak points, or download curated papers.",
-  "课程中心": "Course Center",
-  "精品课程助你构建完整的专业知识体系。": "Premium courses to build your complete knowledge framework.",
-  "启动资料": "Starter Kit",
-  "精选的必备文档与工具，在这里开始起飞": "Essential documents and tools to get you started."
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Manage your identity, academic profile, and digital avatar."
+  },
+  "knowledgeWorkbench": {
+    "title": "Knowledge Workbench",
+    "subtitle": "Browse the knowledge system and jump to practice, mistakes, or related resources."
+  },
+  "interviews": {
+    "title": "Interview Simulator",
+    "subtitle": "Resume tuning, real-time follow-up, round-by-round feedback & radar review."
+  },
+  "academicLadder": {
+    "title": "Academic Ladder",
+    "subtitle": "Intelligent assessment powered by Memorix — quantify your academic growth."
+  },
+  "wrongReview": {
+    "title": "Mistake Review Center",
+    "subtitle": "Break down weak points by error type and knowledge node."
+  },
+  "aiLab": {
+    "title": "AI Lab",
+    "subtitle": "Deep academic conversations with your personal AI tutor."
+  },
+  "systemSettings": {
+    "title": "System Preferences",
+    "subtitle": "Brand name is fixed to unimind.ai. Adjust theme and global visuals here."
+  },
+  "qa": {
+    "title": "Q&A",
+    "subtitle": "Questions · Answers · Deep Discussions"
+  },
+  "knowledgeNode": {
+    "title": "Knowledge Node",
+    "subtitle": "Knowledge point & related questions"
+  },
+  "articleCenter": {
+    "title": "Article Center",
+    "subtitle": "Academic writing and knowledge exploration."
+  },
+  "mockExam": {
+    "title": "Mock Exam",
+    "subtitle": "Auto-generate exams from weak points, or download curated papers."
+  },
+  "courseCenter": {
+    "title": "Course Center",
+    "subtitle": "Premium courses to build your complete knowledge framework."
+  },
+  "startupMaterials": {
+    "title": "Starter Kit",
+    "subtitle": "Essential documents and tools to get you started."
+  }
 }

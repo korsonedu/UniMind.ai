@@ -1,0 +1,106 @@
+{
+  "pageTitle": "Knowledge Map",
+  "pageSubtitle": "Tree structure · Relationship graph · Resource details — three-panel linked exploration of the knowledge system.",
+  "pageLoadingSubtitle": "Visualizing the logical connections and relational structure between knowledge entities.",
+
+  "detailPage": {
+    "title": "Knowledge Point Detail",
+    "subtitle": "Knowledge Point & Related Questions",
+    "backButton": "Back to Knowledge Map",
+    "nodeFallback": "Knowledge Point",
+    "descriptionFallback": "No description available",
+    "questionsHeading": "Related Questions",
+    "noQuestions": "No related questions"
+  },
+
+  "levels": {
+    "sub": "Subject",
+    "ch": "Chapter",
+    "sec": "Section",
+    "kp": "Key Point"
+  },
+
+  "masteryLevels": {
+    "mastered": "Mastered",
+    "stable": "Stable",
+    "learning": "Learning",
+    "weak": "Weak",
+    "unknown": "Unknown"
+  },
+
+  "treePanel": {
+    "searchPlaceholder": "Search knowledge points...",
+    "noMatch": "No matching knowledge points",
+    "legendMastered": "Mastered",
+    "legendStable": "Stable",
+    "legendLearning": "Learning",
+    "legendWeak": "Weak"
+  },
+
+  "graph": {
+    "legendMastered": "Mastered",
+    "legendStable": "Stable",
+    "legendLearning": "Learning",
+    "legendWeak": "Weak",
+    "legendUnknown": "Unknown"
+  },
+
+  "detailPanel": {
+    "selectTitle": "Select a Key Point",
+    "selectHint": "Click a node in the tree or graph to view details",
+    "relatedQuestions": "Related Questions",
+    "courseResources": "Course Resources",
+    "referenceArticles": "Reference Articles",
+    "noQuestions": "No questions available",
+    "noCourses": "No courses available",
+    "noArticles": "No articles available"
+  },
+
+  "toolbar": {
+    "allBranches": "All Branches",
+    "searchKp": "Search key points...",
+    "graphView": "Graph View",
+    "listView": "List View",
+    "noMatch": "No matching knowledge points"
+  },
+
+  "mobile": {
+    "searchPlaceholder": "Search knowledge cards..."
+  },
+
+  "nodeDetailDialog": {
+    "relatedQuestions": "Related Questions",
+    "courseResources": "Course Resources",
+    "referenceArticles": "Reference Articles",
+    "standardAnswer": "Standard Answer",
+    "deepAnalysis": "Deep Academic Analysis"
+  },
+
+  "training": {
+    "title": "Academic Drill",
+    "questionType": {
+      "objective": "Multiple Choice",
+      "calculate": "Calculation",
+      "noun": "Definition",
+      "subjective": "Essay"
+    },
+    "difficultyFallback": "Moderate",
+    "answerPlaceholder": "Enter your analysis or calculation process...",
+    "resultLabel": "Assessment Result",
+    "passed": "Passed",
+    "failed": "Needs Review",
+    "scoreLabel": "Score",
+    "standardAnswer": "Standard Answer (Full Score Demo)",
+    "rationale": "Grading Rationale & Deep Analysis",
+    "fallbackStandardAnswer": "No standard answer available.",
+    "fallbackRationale": "No grading rationale available. Please try again later.",
+    "emptyAnswer": "Please enter or select an answer",
+    "submitSuccess": "Submitted for AI grading. You can work on other tasks meanwhile.",
+    "submitFailed": "Submission failed",
+    "exit": "Exit Drill",
+    "submitting": "Submitting...",
+    "submit": "Submit Assessment",
+    "retry": "Practice Again",
+    "complete": "Complete Drill"
+  }
+}

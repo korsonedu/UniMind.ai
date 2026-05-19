@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useTranslation } from 'react-i18next';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -25,9 +26,11 @@ export function ConfirmDialog({
   title,
   description,
   onConfirm,
-  confirmLabel = '确认',
+  confirmLabel,
   variant = 'destructive',
 }: ConfirmDialogProps) {
+  const { t } = useTranslation('common');
+  const resolvedConfirmLabel = confirmLabel || t('confirm');
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="rounded-apple-3xl border-none shadow-2xl bg-card">
@@ -36,12 +39,12 @@ export function ConfirmDialog({
           <AlertDialogDescription className="font-medium text-muted-foreground">{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="rounded-xl font-bold border-border text-foreground hover:bg-muted">取消</AlertDialogCancel>
+          <AlertDialogCancel className="rounded-xl font-bold border-border text-foreground hover:bg-muted">{t('cancel')}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             className={`rounded-xl font-bold hover:opacity-90 ${variant === 'destructive' ? 'bg-destructive text-destructive-foreground' : 'bg-primary text-primary-foreground'}`}
           >
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

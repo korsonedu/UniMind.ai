@@ -15,7 +15,7 @@ from users.models import User
 from users.views import IsMember
 from users.permissions import IsAdmin, is_platform_admin
 from ai_service import AIService
-from quizzes.services.study_planner import build_adaptive_question_ids
+from quizzes.services.memorix_scheduler import build_adaptive_question_ids
 from quizzes.ai_workflow import save_confirmed_questions
 
 logger = logging.getLogger(__name__)

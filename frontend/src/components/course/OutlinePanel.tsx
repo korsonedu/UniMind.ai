@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2, Clock, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
 import { cn, formatDuration } from '@/lib/utils';
 
@@ -9,6 +10,7 @@ interface OutlinePanelProps {
 }
 
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }) => {
+  const { t } = useTranslation('videoLesson');
   const { outlineStatus, outlineItems, fetchOutline, triggerOutlineGeneration } = useCourseAIStore();
   const [expanded, setExpanded] = useState(true);
   const autoTriggeredRef = useRef(false);
@@ -39,7 +41,7 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }
     return (
       <div className="flex items-center gap-2 py-2 text-muted-foreground/60">
         <Loader2 className="h-3 w-3 animate-spin" />
-        <span className="text-[10px] font-bold uppercase tracking-wider">AI 正在分析课程内容…</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider">{t('aiOutlineLoading')}</span>
       </div>
     );
   }
@@ -55,7 +57,7 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }
         className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
       >
         <Sparkles className="h-3 w-3 text-indigo-500" />
-        AI 智能大纲 ({outlineItems.length} 章节)
+        {t('aiOutlineLabel', { count: outlineItems.length })}
         {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
       </button>
 

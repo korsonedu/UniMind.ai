@@ -66,12 +66,6 @@ class Command(BaseCommand):
                 "agent_role": "TAGGER",
                 "content": "你是一个复试分析专家。根据这轮面试的完整对话记录，输出五维雷达图打分(1-100)和总评。返回JSON: {'radar_scores': {'theory': 80, 'logic': 70, 'stress': 85, 'fluency': 75, 'english': 60}, 'overall_feedback': '...'}"
             },
-            {
-                "name": "AI_WEEKLY_PLANNER",
-                "version": "v1.0",
-                "agent_role": "GENERATOR",
-                "content": "你是一个严谨的考研宏观规划导师。根据考生的剩余时间、学习进度（红绿灯）和薄弱点，为下周生成具体的任务清单。输出JSON: {'weekly_summary': '整体评价与建议', 'tasks': [{'title': '任务名称', 'description': '任务详情描述', 'kp_name': '关联考点名称'}]}。"
-            }
         ]
 
         created_count = 0

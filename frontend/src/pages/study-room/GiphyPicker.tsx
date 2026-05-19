@@ -7,6 +7,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { FileVideo, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 
 interface GiphyPickerProps {
@@ -14,6 +15,7 @@ interface GiphyPickerProps {
 }
 
 export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
+  const { t } = useTranslation('studyRoom');
   const [giphySearch, setGiphySearch] = useState('');
   const [giphyResults, setGiphyResults] = useState<any[]>([]);
   const [isGiphyLoading, setIsGiphyLoading] = useState(false);
@@ -58,7 +60,7 @@ export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
       </PopoverTrigger>
       <PopoverContent side="top" className="w-80 p-3 rounded-2xl border-border shadow-2xl space-y-3 bg-card z-[100]">
         <Input
-          placeholder="搜索 GIPHY..."
+          placeholder={t('giphySearch')}
           value={giphySearch}
           onChange={e => { setGiphySearch(e.target.value); fetchGiphy(e.target.value); }}
           className="h-9 text-xs rounded-xl bg-muted border-none text-foreground placeholder:opacity-50 focus-visible:ring-1 focus-visible:ring-primary/20"

@@ -1,12 +1,16 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Radar, RadarChart as RechartsRadar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 
-const DIMENSION_LABELS: Record<string, string> = {
-  theory: '理论功底',
-  logic: '逻辑表达',
-  stress: '抗压能力',
-  fluency: '语言流畅度',
-  english: '英语水平',
+const getDimensionLabel = (key: string, t: (k: string) => string) => {
+  const map: Record<string, string> = {
+    theory: t('radarChart.theory'),
+    logic: t('radarChart.logic'),
+    stress: t('radarChart.stress'),
+    fluency: t('radarChart.fluency'),
+    english: t('radarChart.english'),
+  };
+  return map[key] || key;
 };
 
 interface Props {
@@ -14,8 +18,10 @@ interface Props {
 }
 
 export const InterviewRadarChart: React.FC<Props> = ({ scores }) => {
-  const data = Object.entries(DIMENSION_LABELS).map(([key, label]) => ({
-    dimension: label,
+  const { t } = useTranslation('interviews');
+  const dims = ['theory', 'logic', 'stress', 'fluency', 'english'];
+  const data = dims.map((key) => ({
+    dimension: getDimensionLabel(key, t),
     score: scores[key] ?? 0,
     fullMark: 100,
   }));
@@ -31,7 +37,7 @@ export const InterviewRadarChart: React.FC<Props> = ({ scores }) => {
           />
           <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
           <Radar
-            name="评分"
+            name={t('radarChart.score')}
             dataKey="score"
             stroke="#171717"
             fill="#171717"

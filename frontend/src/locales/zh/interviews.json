@@ -1,0 +1,100 @@
+{
+  "tabs": {
+    "lobby": "面试大厅",
+    "history": "会话与复盘"
+  },
+  "loading": "加载中...",
+  "noSessions": "暂无面试记录，去面试大厅开始一场模拟面试",
+  "sessionsSidebar": "会话",
+  "selectSessionHint": "选择左侧会话查看详情",
+  "sessionNotFound": "会话不存在或无权限",
+  "loadDetailFailed": "加载会话详情失败",
+
+  "lobby": {
+    "badge": "多阶段复试训练",
+    "heading": "从简历到专业面试的一体化闭环",
+    "subtitle": "支持风格选择、实时追问和结束后雷达报告。",
+    "styleLabel": "导师风格",
+    "styleFriendly": "和蔼引导",
+    "stylePressure": "高压追问",
+    "checking": "检查中...",
+    "uploadResumeFirst": "请先上传简历",
+    "voiceComingSoon": "语音面试即将上线",
+    "noKnowledgeTree": "机构未设置知识结构",
+    "enterSession": "进入会话",
+    "creating": "创建中...",
+    "resumeRequiredToast": "请先在下方「简历调优」中上传并分析简历",
+    "knowledgeTreeRequiredToast": "当前机构尚未设置知识结构，请联系机构管理员",
+    "sessionCreated": "面试会话 #{{id}} 已创建",
+    "createSessionFailed": "创建面试会话失败",
+    "typeResume": "简历深挖",
+    "typeResumeDesc": "结合你的经历生成针对性追问。",
+    "typeEnglish": "英语口语",
+    "typeEnglishDesc": "模拟英文问答并给出流畅度反馈。由 GLM 语音模型驱动。",
+    "typeProfessional": "专业课",
+    "typeProfessionalDesc": "围绕专业核心考点进行深度追问。"
+  },
+
+  "sessionList": {
+    "typeResume": "简历深挖",
+    "typeEnglish": "英语口语",
+    "typeProfessional": "专业课",
+    "typeMixed": "综合面试"
+  },
+
+  "sessionChat": {
+    "typeResume": "简历深挖",
+    "typeEnglish": "英语口语",
+    "typeProfessional": "专业课",
+    "typeMixed": "综合面试",
+    "styleFriendly": "引导模式",
+    "stylePressure": "压力模式",
+    "analyzing": "分析中",
+    "endInterview": "结束面试",
+    "generating": "生成中",
+    "completed": "已完成",
+    "overallFeedback": "综合评价",
+    "noFeedback": "暂无反馈",
+    "waitingForInterviewer": "等待面试官提问…",
+    "speakerInterviewer": "面试官",
+    "speakerCandidate": "你",
+    "inputPlaceholder": "输入回答",
+    "sendFailed": "发送失败",
+    "reviewGenerated": "复盘已生成",
+    "generateReviewFailed": "生成复盘失败"
+  },
+
+  "radarChart": {
+    "theory": "理论功底",
+    "logic": "逻辑表达",
+    "stress": "抗压能力",
+    "fluency": "语言流畅度",
+    "english": "英语水平",
+    "score": "评分"
+  },
+
+  "resumeTuner": {
+    "title": "简历调优",
+    "subtitle": "AI 诊断 · 润色 · 预测面试追问",
+    "remove": "移除",
+    "dragHint": "拖拽简历文件到此处",
+    "formatHint": "PDF / DOCX / TXT · 最大 10MB",
+    "or": "或",
+    "pastePlaceholder": "或直接粘贴简历文本...",
+    "analyzing": "AI 分析中...",
+    "submit": "提交分析",
+    "history": "分析记录",
+    "noHistory": "暂无分析记录",
+    "noHistoryHint": "提交一份简历开始 AI 分析",
+    "recordNumber": "记录 #{{id}}",
+    "score": "{{score}}分",
+    "diagnosis": "诊断",
+    "polish": "润色建议",
+    "predictedQuestions": "预测追问",
+    "noData": "暂无分析数据。请重新提交简历进行 AI 分析。",
+    "fillRequired": "请填写简历文本或上传文件",
+    "analysisComplete": "简历分析完成",
+    "analysisFailed": "简历分析失败",
+    "unsupportedFormat": "仅支持 PDF / DOCX / TXT 格式"
+  }
+}

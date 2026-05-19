@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,6 @@ interface KPNode {
   questions_count: number;
 }
 
-const LEVEL_LABELS: Record<string, string> = { sub: '学科', ch: '模块', sec: '篇章', kp: '考点' };
 const LEVEL_COLORS: Record<string, string> = {
   sub: 'bg-indigo-100 text-indigo-700',
   ch: 'bg-blue-100 text-blue-700',
@@ -44,8 +44,16 @@ function TreeNode({
   onSelect: (id: number) => void; onEdit: (node: KPNode) => void;
   onDelete: (node: KPNode) => void; onRefresh: () => void;
 }) {
+  const { t } = useTranslation('maintenance');
   const [open, setOpen] = useState(depth < 2);
   const hasChildren = node.children && node.children.length > 0;
+
+  const levelLabels: Record<string, string> = {
+    sub: t('knowledgeSystem.levelSub'),
+    ch: t('knowledgeSystem.levelCh'),
+    sec: t('knowledgeSystem.levelSec'),
+    kp: t('knowledgeSystem.levelKp'),
+  };
 
   return (
     <div>
@@ -65,12 +73,12 @@ function TreeNode({
           <span className="w-3 shrink-0" />
         )}
         <Badge className={cn('text-[9px] px-1 py-0 leading-snug font-bold shrink-0', LEVEL_COLORS[node.level] || 'bg-muted')}>
-          {LEVEL_LABELS[node.level] || node.level}
+          {levelLabels[node.level] || node.level}
         </Badge>
         <span className="font-bold text-[11px] truncate flex-1">{node.name}</span>
         {node.code && <span className="text-[9px] text-muted-foreground font-mono shrink-0">{node.code}</span>}
         {node.questions_count > 0 && (
-          <span className="text-[9px] text-muted-foreground shrink-0">{node.questions_count}题</span>
+          <span className="text-[9px] text-muted-foreground shrink-0">{t('knowledgeSystem.nodeQuestions', { count: node.questions_count })}</span>
         )}
         <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
           <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="p-0.5 hover:bg-muted rounded">
@@ -99,6 +107,7 @@ function KPEditDialog({
   open: boolean; node: KPNode | null; onClose: () => void; onSaved: () => void;
   parentOptions: KPNode[];
 }) {
+  const { t } = useTranslation('maintenance');
   const [form, setForm] = useState({ name: '', code: '', level: 'kp', description: '', parent: '0' });
   const [saving, setSaving] = useState(false);
 
@@ -117,7 +126,7 @@ function KPEditDialog({
   }, [node, open]);
 
   const handleSave = async () => {
-    if (!form.name.trim()) { toast.error('名称不能为空'); return; }
+    if (!form.name.trim()) { toast.error(t('knowledgeSystem.nameRequired')); return; }
     setSaving(true);
     try {
       const payload = {
@@ -129,50 +138,50 @@ function KPEditDialog({
       };
       if (node) {
         await api.put(`/quizzes/knowledge-points/${node.id}/`, payload);
-        toast.success('已更新');
+        toast.success(t('knowledgeSystem.updated'));
       } else {
         await api.post('/quizzes/knowledge-points/', payload);
-        toast.success('已创建');
+        toast.success(t('knowledgeSystem.created'));
       }
       onSaved();
       onClose();
-    } catch (e: any) { toast.error(e.response?.data?.error || '保存失败'); }
+    } catch (e: any) { toast.error(e.response?.data?.error || t('knowledgeSystem.saveFailed')); }
     setSaving(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{node ? '编辑知识点' : '新建知识点'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{node ? t('knowledgeSystem.editNode') : t('knowledgeSystem.newNode')}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
-            <Label className="text-[10px] font-bold uppercase text-muted-foreground">名称</Label>
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.name')}</Label>
             <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-9 rounded-xl bg-muted/50 border-none font-bold text-sm" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label className="text-[10px] font-bold uppercase text-muted-foreground">编码</Label>
-              <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="如 MB-1-1" className="h-9 rounded-xl bg-muted/50 border-none text-xs font-mono" />
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.code')}</Label>
+              <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder={t('knowledgeSystem.codePlaceholder')} className="h-9 rounded-xl bg-muted/50 border-none text-xs font-mono" />
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] font-bold uppercase text-muted-foreground">层级</Label>
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.level')}</Label>
               <Select value={form.level} onValueChange={v => setForm({ ...form, level: v })}>
                 <SelectTrigger className="h-9 rounded-xl bg-muted/50 border-none text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sub">学科</SelectItem>
-                  <SelectItem value="ch">模块</SelectItem>
-                  <SelectItem value="sec">篇章</SelectItem>
-                  <SelectItem value="kp">考点</SelectItem>
+                  <SelectItem value="sub">{t('knowledgeSystem.levelSub')}</SelectItem>
+                  <SelectItem value="ch">{t('knowledgeSystem.levelCh')}</SelectItem>
+                  <SelectItem value="sec">{t('knowledgeSystem.levelSec')}</SelectItem>
+                  <SelectItem value="kp">{t('knowledgeSystem.levelKp')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-[10px] font-bold uppercase text-muted-foreground">父节点</Label>
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.parentNode')}</Label>
             <Select value={form.parent} onValueChange={v => setForm({ ...form, parent: v })}>
               <SelectTrigger className="h-9 rounded-xl bg-muted/50 border-none text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">无（顶层）</SelectItem>
+                <SelectItem value="0">{t('knowledgeSystem.noParent')}</SelectItem>
                 {parentOptions.map(p => (
                   <SelectItem key={p.id} value={String(p.id)}>{p.name} {p.code ? `(${p.code})` : ''}</SelectItem>
                 ))}
@@ -180,13 +189,13 @@ function KPEditDialog({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-[10px] font-bold uppercase text-muted-foreground">描述</Label>
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.description')}</Label>
             <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="h-9 rounded-xl bg-muted/50 border-none text-xs" />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose}>取消</Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>{t('knowledgeSystem.cancel')}</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? t('knowledgeSystem.saving') : t('knowledgeSystem.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -195,6 +204,7 @@ function KPEditDialog({
 
 /* ── Main Panel ── */
 export function KnowledgeSystemPanel() {
+  const { t } = useTranslation('maintenance');
   const [tree, setTree] = useState<KPNode[]>([]);
   const [allNodes, setAllNodes] = useState<KPNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,12 +236,12 @@ export function KnowledgeSystemPanel() {
   useEffect(() => { fetchTree(); }, []);
 
   const handleDelete = async (node: KPNode) => {
-    if (!confirm(`删除「${node.name}」？子节点也会一并删除。`)) return;
+    if (!confirm(t('knowledgeSystem.deleteConfirm', { name: node.name }))) return;
     try {
       await api.delete(`/quizzes/knowledge-points/${node.id}/`);
-      toast.success('已删除');
+      toast.success(t('knowledgeSystem.deleted'));
       fetchTree();
-    } catch (e: any) { toast.error('删除失败'); }
+    } catch (e: any) { toast.error(t('knowledgeSystem.deleteFailed')); }
   };
 
   const handleExportMD = async () => {
@@ -242,19 +252,19 @@ export function KnowledgeSystemPanel() {
       const a = document.createElement('a');
       a.href = url; a.download = 'knowledge-tree.md'; a.click();
       URL.revokeObjectURL(url);
-      toast.success('已导出');
-    } catch { toast.error('导出失败'); }
+      toast.success(t('knowledgeSystem.exported'));
+    } catch { toast.error(t('knowledgeSystem.exportFailed')); }
   };
 
   const handleImportMD = async () => {
-    if (!mdText.trim()) { toast.error('请输入 Markdown 内容'); return; }
+    if (!mdText.trim()) { toast.error(t('knowledgeSystem.mdContentRequired')); return; }
     setImporting(true);
     try {
       const { data } = await api.post('/quizzes/knowledge-points/import-md/', { content: mdText });
-      toast.success(`导入完成：新建 ${data.created} 个，更新 ${data.updated} 个`);
+      toast.success(t('knowledgeSystem.importDone', { created: data.created, updated: data.updated }));
       setMdText('');
       fetchTree();
-    } catch (e: any) { toast.error(e.response?.data?.error || '导入失败'); }
+    } catch (e: any) { toast.error(e.response?.data?.error || t('knowledgeSystem.importFailed')); }
     setImporting(false);
   };
 
@@ -266,13 +276,20 @@ export function KnowledgeSystemPanel() {
       const fd = new FormData();
       fd.append('file', file);
       const { data } = await api.post('/quizzes/knowledge-points/import-md/', fd);
-      toast.success(`导入完成：新建 ${data.created} 个，更新 ${data.updated} 个`);
+      toast.success(t('knowledgeSystem.importDone', { created: data.created, updated: data.updated }));
       fetchTree();
-    } catch (e: any) { toast.error(e.response?.data?.error || '导入失败'); }
+    } catch (e: any) { toast.error(e.response?.data?.error || t('knowledgeSystem.importFailed')); }
     setImporting(false);
   };
 
   const selectedNode = allNodes.find(n => n.id === selectedId);
+
+  const levelLabels: Record<string, string> = {
+    sub: t('knowledgeSystem.levelSub'),
+    ch: t('knowledgeSystem.levelCh'),
+    sec: t('knowledgeSystem.levelSec'),
+    kp: t('knowledgeSystem.levelKp'),
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-14rem)]">
@@ -280,17 +297,17 @@ export function KnowledgeSystemPanel() {
       <Card className="p-4 lg:col-span-2 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-extrabold text-[#1D1D1F] flex items-center gap-2">
-            <BrainCircuit className="h-4 w-4 text-indigo-500" /> 知识体系
+            <BrainCircuit className="h-4 w-4 text-indigo-500" /> {t('knowledgeSystem.title')}
           </h3>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={fetchTree}>
-              <RefreshCw className="h-3 w-3 mr-1" /> 刷新
+              <RefreshCw className="h-3 w-3 mr-1" /> {t('knowledgeSystem.refresh')}
             </Button>
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleExportMD}>
-              <Download className="h-3 w-3 mr-1" /> 导出 MD
+              <Download className="h-3 w-3 mr-1" /> {t('knowledgeSystem.exportMd')}
             </Button>
             <Button variant="apple" size="sm" className="h-7 text-xs" onClick={() => setShowCreate(true)}>
-              <Plus className="h-3 w-3 mr-1" /> 新建
+              <Plus className="h-3 w-3 mr-1" /> {t('knowledgeSystem.create')}
             </Button>
           </div>
         </div>
@@ -300,8 +317,8 @@ export function KnowledgeSystemPanel() {
         ) : tree.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2">
             <BrainCircuit className="h-10 w-10 opacity-20" />
-            <p className="text-sm font-bold">暂无知识体系</p>
-            <p className="text-xs">通过 Markdown 导入或手动创建知识点</p>
+            <p className="text-sm font-bold">{t('knowledgeSystem.noTree')}</p>
+            <p className="text-xs">{t('knowledgeSystem.noTreeHint')}</p>
           </div>
         ) : (
           <ScrollArea className="flex-1 -mx-2">
@@ -312,7 +329,7 @@ export function KnowledgeSystemPanel() {
             </div>
           </ScrollArea>
         )}
-        <p className="text-[10px] text-muted-foreground mt-2 text-right">{allNodes.length} 个知识点</p>
+        <p className="text-[10px] text-muted-foreground mt-2 text-right">{t('knowledgeSystem.totalNodes', { count: allNodes.length })}</p>
       </Card>
 
       {/* Right: Detail + Import */}
@@ -323,7 +340,7 @@ export function KnowledgeSystemPanel() {
           <Card className="p-4 space-y-2">
             <div className="flex items-center justify-between">
               <Badge className={cn('text-[9px] font-bold', LEVEL_COLORS[selectedNode.level] || 'bg-muted')}>
-                {LEVEL_LABELS[selectedNode.level] || selectedNode.level}
+                {levelLabels[selectedNode.level] || selectedNode.level}
               </Badge>
               <div className="flex gap-1">
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditNode(selectedNode)}>
@@ -335,46 +352,45 @@ export function KnowledgeSystemPanel() {
             {selectedNode.code && <p className="text-xs font-mono text-muted-foreground">{selectedNode.code}</p>}
             {selectedNode.description && <p className="text-xs text-muted-foreground leading-relaxed">{selectedNode.description}</p>}
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1">
-              <span>题目: {selectedNode.questions_count}</span>
-              <span>子节点: {selectedNode.children?.length || 0}</span>
+              <span>{t('knowledgeSystem.questions', { count: selectedNode.questions_count })}</span>
+              <span>{t('knowledgeSystem.children', { count: selectedNode.children?.length || 0 })}</span>
             </div>
           </Card>
         ) : (
           <Card className="p-4 text-center text-xs text-muted-foreground">
             <BrainCircuit className="h-6 w-6 mx-auto mb-1 opacity-30" />
-            选择左侧知识点查看详情
+            {t('knowledgeSystem.selectHint')}
           </Card>
         )}
 
         {/* MD Import */}
         <Card className="p-4 space-y-3">
           <h4 className="text-xs font-extrabold text-[#1D1D1F] flex items-center gap-1.5">
-            <FileUp className="h-3.5 w-3.5 text-indigo-500" /> Markdown 导入
+            <FileUp className="h-3.5 w-3.5 text-indigo-500" /> {t('knowledgeSystem.mdImport')}
           </h4>
           <div className="relative">
             <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 text-xs font-bold" asChild>
               <label>
                 <Upload className="h-3.5 w-3.5 mr-1.5 opacity-40" />
-                上传 .md 文件
+                {t('knowledgeSystem.uploadMd')}
                 <input type="file" accept=".md,.txt" onChange={handleFileUpload} className="hidden" />
               </label>
             </Button>
           </div>
-          <p className="text-[10px] text-muted-foreground text-center">或直接粘贴内容</p>
+          <p className="text-[10px] text-muted-foreground text-center">{t('knowledgeSystem.orPasteContent')}</p>
           <textarea
             value={mdText}
             onChange={e => setMdText(e.target.value)}
-            placeholder={`# MB - 货币银行学\n## MB-1 - 货币的起源\n### MB-1-1 - 商品交换\n#### MB-1-1-1 - 一般等价物`}
+            placeholder={t('knowledgeSystem.mdPlaceholder')}
             className="w-full h-32 rounded-xl bg-muted/50 border-none p-3 text-xs font-mono resize-none"
           />
           <Button className="w-full h-9 rounded-xl text-xs font-bold" onClick={handleImportMD} disabled={importing}>
             {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
-            导入 Markdown
+            {t('knowledgeSystem.importMd')}
           </Button>
           <div className="bg-muted/50 rounded-lg p-2 text-[9px] text-muted-foreground leading-relaxed">
-            <p className="font-bold mb-1">格式说明：</p>
-            <code># 学科名</code> → 学科 &nbsp; <code>## CODE - 模块</code> → 模块<br />
-            <code>### CODE - 篇章</code> → 篇章 &nbsp; <code>#### CODE - 考点</code> → 考点
+            <p className="font-bold mb-1">{t('knowledgeSystem.formatHelp')}</p>
+            <div dangerouslySetInnerHTML={{ __html: t('knowledgeSystem.formatDetail') }} />
           </div>
         </Card>
       </div>

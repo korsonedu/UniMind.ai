@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,22 +26,23 @@ type TemplateHistoryItem = {
 };
 
 const NAMESPACE_OPTIONS = [
-  { value: 'quizzes', label: '题库模板' },
-  { value: 'ai_assistant', label: '助手模板' },
-  { value: 'pipeline', label: '出题管线' },
+  { value: 'quizzes' },
+  { value: 'ai_assistant' },
+  { value: 'pipeline' },
 ];
 
 const formatTime = (value?: string | number) => {
   if (!value) return '--';
   try {
     const d = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
-    return d.toLocaleString('zh-CN');
+    return d.toLocaleString();
   } catch {
     return String(value);
   }
 };
 
 export const PromptTemplatesPanel: React.FC = () => {
+  const { t } = useTranslation('maintenance');
   const [namespace, setNamespace] = useState('quizzes');
   const [templates, setTemplates] = useState<TemplateListItem[]>([]);
   const [selectedTemplateName, setSelectedTemplateName] = useState('');
@@ -54,6 +56,15 @@ export const PromptTemplatesPanel: React.FC = () => {
   const [latestVersion, setLatestVersion] = useState(0);
   const [history, setHistory] = useState<TemplateHistoryItem[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<number | null>(null);
+
+  const namespaceLabel = (ns: string) => {
+    const map: Record<string, string> = {
+      quizzes: t('promptTemplates.namespaceQuizzes'),
+      ai_assistant: t('promptTemplates.namespaceAssistant'),
+      pipeline: t('promptTemplates.namespacePipeline'),
+    };
+    return map[ns] || ns;
+  };
 
   const dirty = useMemo(() => content !== originalContent, [content, originalContent]);
 
@@ -75,7 +86,7 @@ export const PromptTemplatesPanel: React.FC = () => {
         setSelectedTemplateName(list[0].template_name);
       }
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '模板列表加载失败'));
+      toast.error(formatApiErrorToast(e, t('promptTemplates.listLoadFailed')));
     } finally {
       setLoadingList(false);
     }
@@ -97,7 +108,7 @@ export const PromptTemplatesPanel: React.FC = () => {
       setSelectedHistoryId(rows[0]?.id ?? null);
       setChangeNote('');
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '模板详情加载失败'));
+      toast.error(formatApiErrorToast(e, t('promptTemplates.detailLoadFailed')));
     } finally {
       setLoadingDetail(false);
     }
@@ -123,11 +134,11 @@ export const PromptTemplatesPanel: React.FC = () => {
         content,
         change_note: changeNote,
       });
-      toast.success('模板已保存并生成新版本');
+      toast.success(t('promptTemplates.saved'));
       await fetchTemplateDetail(selectedTemplateName);
       await fetchTemplates();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '模板保存失败'));
+      toast.error(formatApiErrorToast(e, t('promptTemplates.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -142,11 +153,11 @@ export const PromptTemplatesPanel: React.FC = () => {
         template_name: selectedTemplateName,
         version_id: selectedHistoryId,
       });
-      toast.success('已回滚到指定版本并生成新版本记录');
+      toast.success(t('promptTemplates.rolledBack'));
       await fetchTemplateDetail(selectedTemplateName);
       await fetchTemplates();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '回滚失败'));
+      toast.error(formatApiErrorToast(e, t('promptTemplates.rollbackFailed')));
     } finally {
       setRolling(false);
     }
@@ -156,7 +167,7 @@ export const PromptTemplatesPanel: React.FC = () => {
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start text-left">
       <Card className="xl:col-span-3 p-5 rounded-3xl border border-black/[0.04] shadow-sm bg-white space-y-4">
         <div>
-          <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">模板命名空间</p>
+          <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">{t('promptTemplates.namespaceLabel')}</p>
           <div className="mt-2 flex gap-2">
             {NAMESPACE_OPTIONS.map((item) => (
               <Button
@@ -165,13 +176,13 @@ export const PromptTemplatesPanel: React.FC = () => {
                 onClick={() => setNamespace(item.value)}
                 className="h-8 rounded-xl text-[11px] font-bold px-3"
               >
-                {item.label}
+                {namespaceLabel(item.value)}
               </Button>
             ))}
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">模板列表</p>
+          <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">{t('promptTemplates.templateList')}</p>
           <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={fetchTemplates}>
             {loadingList ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 opacity-50" />}
           </Button>
@@ -193,7 +204,7 @@ export const PromptTemplatesPanel: React.FC = () => {
               </button>
             ))}
             {!loadingList && templates.length === 0 ? (
-              <p className="text-[11px] font-bold text-black/25 py-8 text-center">暂无模板</p>
+              <p className="text-[11px] font-bold text-black/25 py-8 text-center">{t('promptTemplates.noTemplates')}</p>
             ) : null}
           </div>
         </ScrollArea>
@@ -202,15 +213,15 @@ export const PromptTemplatesPanel: React.FC = () => {
       <Card className="xl:col-span-6 p-6 rounded-3xl border border-black/[0.04] shadow-sm bg-white space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">模板编辑</p>
-            <p className="text-sm font-bold text-slate-800 mt-1">{selectedTemplateName || '请选择模板'}</p>
+            <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">{t('promptTemplates.templateEditor')}</p>
+            <p className="text-sm font-bold text-slate-800 mt-1">{selectedTemplateName || t('promptTemplates.selectTemplate')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge className="bg-slate-100 text-slate-600 border-none text-[10px] font-black rounded-lg h-6 px-3">
-              当前版本 v{latestVersion}
+              {t('promptTemplates.currentVersion', { version: latestVersion })}
             </Badge>
             <Badge className={`border-none text-[10px] font-black rounded-lg h-6 px-3 ${dirty ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-              {dirty ? '未保存' : '已同步'}
+              {dirty ? t('promptTemplates.unsaved') : t('promptTemplates.synced')}
             </Badge>
           </div>
         </div>
@@ -218,28 +229,28 @@ export const PromptTemplatesPanel: React.FC = () => {
           value={changeNote}
           onChange={(e) => setChangeNote(e.target.value)}
           className="bg-slate-50 border-none h-10 rounded-xl font-bold text-xs"
-          placeholder="变更说明（可选）"
+          placeholder={t('promptTemplates.changeNotePlaceholder')}
         />
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           className="w-full rounded-2xl bg-slate-50 border border-black/[0.04] p-4 font-mono text-xs min-h-[520px]"
-          placeholder="模板内容..."
+          placeholder={t('promptTemplates.contentPlaceholder')}
         />
         <div className="flex justify-end gap-2">
           <Button variant="outline" className="rounded-xl text-xs font-bold" onClick={() => setContent(originalContent)} disabled={!dirty}>
-            还原修改
+            {t('promptTemplates.revertChanges')}
           </Button>
           <Button className="rounded-xl text-xs font-bold bg-black text-white" onClick={handleSave} disabled={!selectedTemplateName || saving || loadingDetail}>
             {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-            保存新版本
+            {t('promptTemplates.saveNewVersion')}
           </Button>
         </div>
       </Card>
 
       <Card className="xl:col-span-3 p-5 rounded-3xl border border-black/[0.04] shadow-sm bg-white space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">版本历史</p>
+          <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">{t('promptTemplates.versionHistory')}</p>
           <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => selectedTemplateName && fetchTemplateDetail(selectedTemplateName)}>
             {loadingDetail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 opacity-50" />}
           </Button>
@@ -255,11 +266,11 @@ export const PromptTemplatesPanel: React.FC = () => {
                 }`}
               >
                 <p className="text-[11px] font-bold text-slate-800">v{item.version}</p>
-                <p className="text-[10px] font-bold text-slate-500 mt-1 truncate">{item.change_note || '无说明'}</p>
+                <p className="text-[10px] font-bold text-slate-500 mt-1 truncate">{item.change_note || t('promptTemplates.noChangeNote')}</p>
                 <p className="text-[10px] font-bold text-slate-400 mt-1">{item.created_by_username || 'system'} · {formatTime(item.created_at)}</p>
               </button>
             ))}
-            {history.length === 0 ? <p className="text-[11px] font-bold text-black/25 py-8 text-center">暂无版本历史</p> : null}
+            {history.length === 0 ? <p className="text-[11px] font-bold text-black/25 py-8 text-center">{t('promptTemplates.noHistory')}</p> : null}
           </div>
         </ScrollArea>
         <Button
@@ -268,7 +279,7 @@ export const PromptTemplatesPanel: React.FC = () => {
           className="w-full rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
         >
           {rolling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RotateCcw className="w-4 h-4 mr-2" />}
-          回滚到所选版本
+          {t('promptTemplates.rollbackToSelected')}
         </Button>
       </Card>
     </div>

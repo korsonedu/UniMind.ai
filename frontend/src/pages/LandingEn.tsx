@@ -129,7 +129,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
           {token ? (
             <button
               className="text-sm font-semibold text-white bg-[#0F1729] hover:bg-[#1E293B] px-4 py-2 rounded-xl transition-all shadow-sm"
-              onClick={() => navigate('/home')}
+              onClick={() => navigate('/')}
             >
               Dashboard
             </button>
@@ -181,7 +181,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
             {token ? (
               <button
                 className="w-full text-sm font-semibold text-white bg-[#0F1729] py-3 rounded-xl"
-                onClick={() => { setOpen(false); navigate('/home'); }}
+                onClick={() => { setOpen(false); navigate('/'); }}
               >
                 Dashboard
               </button>
@@ -270,7 +270,7 @@ const Hero: React.FC = () => {
         </div>
 
         <p className="text-sm text-[#94A3B8] font-medium">
-          No credit card required · 14-day full-feature trial · All subjects
+          No credit card required,14-day full-feature trial,All subjects
         </p>
 
         <div className="max-w-4xl mx-auto pt-10 reveal">
@@ -558,19 +558,19 @@ const TESTIMONIALS = [
   {
     quote: 'Before UniMind, our curriculum team spent 20+ hours per week just writing and reviewing questions. Now the AI produces a full practice set in minutes, our team does a quick quality check, and we\'re done. We\'ve doubled our course offerings without hiring a single person.',
     author: 'Dr. Sarah Chen',
-    meta: 'Director of Curriculum, MedPrep Academy · Boston, MA',
+    meta: 'Director of Curriculum, MedPrep Academy,Boston, MA',
     highlight: 'Doubled output with same team',
   },
   {
     quote: 'We evaluated five platforms. Memorix was the differentiator. Our students using adaptive review scored 12 percentile points higher on the actual exam than the control group. That\'s not incremental improvement — that\'s transformational. Our enrollment is up 40% because outcomes sell.',
     author: 'Marcus Williams',
-    meta: 'Founder, Williams Test Prep · Austin, TX',
+    meta: 'Founder, Williams Test Prep,Austin, TX',
     highlight: '12-point score improvement',
   },
   {
     quote: 'We used to juggle Google Classroom, Quizlet, a separate testing platform, and spreadsheets to track everything. UniMind consolidated it all. One login, one dashboard, one place where our 40+ tutors collaborate. The operational overhead savings alone paid for the subscription in month one.',
     author: 'James Harrington',
-    meta: 'CEO, Harrington Education Group · London, UK',
+    meta: 'CEO, Harrington Education Group,London, UK',
     highlight: 'Consolidated 5 tools into 1',
   },
 ];
@@ -743,7 +743,9 @@ const PLANS = [
       'Basic question bank',
       'Mistake review center',
       'Basic analytics',
-      '30 students · 1 teacher',
+      'Study room, Pomodoro timer',
+      'Online Q&A system',
+      '30 students, 1 teacher',
     ],
   },
   {
@@ -758,10 +760,12 @@ const PLANS = [
       'Smart exam assembly',
       'Memorix adaptive review',
       'Interactive knowledge graph',
-      'AI assistant · Multi-bot',
+      'AI assistant, 1 general bot',
       'AI outline generator',
+      'Study room + Pomodoro timer',
+      'Online Q&A system',
       'Full personal analytics',
-      '50 students · 1 teacher',
+      '50 students / 1 teacher',
     ],
   },
   {
@@ -772,13 +776,20 @@ const PLANS = [
     cta: 'Start Free Trial',
     popular: true,
     features: [
-      'Everything in Solo',
+      'Unlimited AI generation',
+      'Smart exam assembly',
+      'Memorix adaptive review',
+      'Interactive knowledge graph',
+      'AI outline generator',
+      'Study room + Pomodoro timer',
       'Online Q&A system',
-      'Multi-teacher · Permissions',
-      'Study room · Pomodoro timer',
-      'Mock exam generator',
-      'Class comparison · Data export',
-      '200 students · 5 teachers',
+      'Full analytics & reports',
+      'Personalized AI assistant',
+      '3 expert subject-matter bots',
+      'Multi-teacher, role-based permissions',
+      'AI mock exam generator',
+      'AI mock interview + 5-dim radar',
+      '200 students / 5 teachers',
     ],
   },
   {
@@ -791,13 +802,14 @@ const PLANS = [
     features: [
       'Everything in Plus',
       'Unlimited students & teachers',
-      'White-label · Custom branding',
-      'Private deployment · Data sovereignty',
-      'API access · System integration',
-      'Multi-language · i18n support',
-      'Open-source SDK · Extendability',
-      'SSO · SAML single sign-on',
-      'Audit logs · Compliance ready',
+      'White-label, custom branding',
+      'Private deployment, data sovereignty',
+      'API access, system integration',
+      'Multi-language, i18n support',
+      'Open-source SDK, extendability',
+      'Private knowledge injection, local inference',
+      'SSO, SAML single sign-on',
+      'Audit logs, compliance ready',
       'Dedicated customer success manager',
       'SLA 99.9% uptime guarantee',
       'Student-side payments',
@@ -862,10 +874,12 @@ const Pricing: React.FC = () => {
                 <div className="mb-5">
                   <span className="text-4xl font-bold text-[#0F1729] tracking-tight">{price}</span>
                   {plan.monthly !== '$0' && <span className="text-sm font-semibold text-[#94A3B8] ml-0.5">/mo</span>}
-                  {annual && plan.yearly !== '$0' && (
+                  {annual && plan.yearly !== '$0' ? (
                     <p className="text-xs text-[#94A3B8] mt-1">
                       ${parseInt(plan.yearly.replace('$', '')) * 12}/year
                     </p>
+                  ) : (
+                    <div className="mt-1 h-4" />
                   )}
                 </div>
 
@@ -1008,7 +1022,7 @@ const Footer: React.FC = () => (
           <a href="#faq" className="text-sm font-medium text-[#64748B] hover:text-[#0F1729] transition-colors">FAQ</a>
         </div>
         <p className="text-xs font-medium text-[#94A3B8]">
-          &copy; {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}
+          &copy; {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY},{APP_VERSION}
         </p>
       </div>
     </div>

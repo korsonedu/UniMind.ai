@@ -20,6 +20,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { PageWrapper } from '@/components/PageWrapper';
 import { toast } from "sonner";
+import { useTranslation } from 'react-i18next';
 import {
   Select,
   SelectContent,
@@ -39,18 +40,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const AVATAR_STYLES = [
-  { id: 'avataaars', label: '简约角色' },
-  { id: 'bottts', label: '机器人' },
-  { id: 'pixel-art', label: '像素艺术' },
-  { id: 'adventurer', label: '冒险家' },
-  { id: 'big-smile', label: '大笑脸' },
-  { id: 'micah', label: '扁平化' },
-  { id: 'lorelei', label: '手绘风格' },
-  { id: 'notionists', label: '极简主义' },
-];
+const AVATAR_STYLE_IDS = ['avataaars', 'bottts', 'pixel-art', 'adventurer', 'big-smile', 'micah', 'lorelei', 'notionists'];
 
 export const Settings: React.FC = () => {
+  const { t } = useTranslation(['settings', 'common']);
   const { user, updateUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
@@ -82,8 +75,8 @@ export const Settings: React.FC = () => {
         avatar_seed: avatar.seed
       });
       updateUser(res.data);
-      toast.success("个人账户信息已同步");
-    } catch (err) { toast.error("保存失败"); }
+      toast.success(t('profile.saved'));
+    } catch (err) { toast.error(t('common:failed')); }
     finally { setLoading(false); }
   };
 
@@ -91,33 +84,33 @@ export const Settings: React.FC = () => {
     try {
       const res = await api.post('/users/me/reset-elo/');
       updateUser(res.data);
-      toast.success("ELO 已重置", { description: "你现在可以重新进行学术评估。" });
+      toast.success(t('elo.saved'), { description: t('elo.savedDesc') });
     } catch (e: any) {
-      toast.error(e.response?.data?.error || "重置失败");
+      toast.error(e.response?.data?.error || t('common:failed'));
     }
   };
 
   const handleUpdateEmail = async () => {
-    if (!email) return toast.error("请输入新邮箱");
+    if (!email) return toast.error(t('security.emailEmpty'));
     try {
       const res = await api.patch('/users/me/email/', { email });
       updateUser(res.data);
-      toast.success("邮箱更新成功");
+      toast.success(t('security.emailSaved'));
       setEmail('');
-    } catch (e) { toast.error("更新失败"); }
+    } catch (e) { toast.error(t('common:failed')); }
   };
 
   const handleUpdatePassword = async () => {
-    if (!passwords.old || !passwords.new) return toast.error("请完善密码信息");
+    if (!passwords.old || !passwords.new) return toast.error(t('security.passwordEmpty'));
     try {
       await api.patch('/users/me/password/', { old_password: passwords.old, new_password: passwords.new });
-      toast.success("密码重置成功");
+      toast.success(t('security.passwordSaved'));
       setPasswords({ old: '', new: '' });
-    } catch (e) { toast.error("原始密码错误"); }
+    } catch (e) { toast.error(t('security.passwordError')); }
   };
 
   return (
-    <PageWrapper title="个人设置" subtitle="管理个人身份标识、学术简介及数字化化身。">
+    <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 text-left animate-in fade-in duration-700">
         <div className="lg:col-span-4 space-y-6">
           <Card className="border-none shadow-sm rounded-3xl bg-white p-8 flex flex-col items-center text-center border border-black/[0.03]">
@@ -129,18 +122,18 @@ export const Settings: React.FC = () => {
               <Sheet>
                 <SheetTrigger asChild><button className="absolute bottom-0 right-0 bg-black text-white p-2.5 rounded-full shadow-xl border-4 border-white transition-transform hover:scale-110"><Camera className="h-4 w-4" /></button></SheetTrigger>
                 <SheetContent side="right" className="rounded-l-[2.5rem] border-none bg-white/95 backdrop-blur-2xl shadow-2xl w-[450px]">
-                  <SheetHeader className="p-8 border-b border-black/[0.03]"><SheetTitle className="text-2xl font-bold text-left">化身实验室</SheetTitle></SheetHeader>
+                  <SheetHeader className="p-8 border-b border-black/[0.03]"><SheetTitle className="text-2xl font-bold text-left">{t('avatar.lab')}</SheetTitle></SheetHeader>
                   <div className="p-8 space-y-10">
                     <div className="flex justify-center py-10 bg-slate-50 rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-white shadow-2xl"><AvatarImage src={previewUrl} /></Avatar></div>
                     <div className="space-y-6 text-left">
-                      <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">风格选择</Label>
+                      <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('avatar.styleLabel')}</Label>
                         <Select value={avatar.style} onValueChange={(v) => setAvatar({...avatar, style: v})}>
                           <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-none font-bold"><SelectValue /></SelectTrigger>
                           <SelectContent className="rounded-2xl border-none shadow-2xl">
-                            {AVATAR_STYLES.map(s => <SelectItem key={s.id} value={s.id} className="rounded-xl py-3 px-4"><div className="flex items-center gap-3 font-bold">{s.label}</div></SelectItem>)}
+                            {AVATAR_STYLE_IDS.map(id => <SelectItem key={id} value={id} className="rounded-xl py-3 px-4"><div className="flex items-center gap-3 font-bold">{t(`avatar.styles.${id}` as any)}</div></SelectItem>)}
                           </SelectContent>
                         </Select></div>
-                      <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">特征种子 (Seed)</Label>
+                      <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('avatar.seedLabel')}</Label>
                         <div className="flex gap-3"><Input value={avatar.seed} onChange={e => setAvatar({ ...avatar, seed: e.target.value })} className="bg-slate-50 border-none h-12 rounded-2xl font-bold" /><Button variant="outline" onClick={() => setAvatar({...avatar, seed: Math.random().toString(36).substring(7)})} className="rounded-2xl h-12 w-12 border-black/5"><RefreshCcw className="h-4 w-4" /></Button></div></div>
                     </div>
                   </div>
@@ -148,27 +141,27 @@ export const Settings: React.FC = () => {
               </Sheet>
             </div>
             <h3 className="mt-6 text-xl font-bold text-foreground">{user?.nickname || user?.username}</h3>
-            <p className="text-xs text-muted-foreground font-bold mt-1 uppercase tracking-widest leading-none text-emerald-600">ELO Rank: {user?.elo_score}</p>
+            <p className="text-xs text-muted-foreground font-bold mt-1 uppercase tracking-widest leading-none text-emerald-600">{t('profile.eloRank', { score: user?.elo_score })}</p>
           </Card>
 
           <Card className="border-none shadow-sm rounded-3xl bg-white p-8 space-y-6 border border-black/[0.03]">
              <div className="space-y-6 text-left">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">安全与重置</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('security.title')}</h4>
                 <div className="space-y-4">
-                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">修改邮箱</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder="New Email" className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">Update</Button></div></div>
-                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">安全密码</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder="Old Password" className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder="New Password" className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">Reset</Button></div></div>
+                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.emailLabel')}</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder={t('security.emailPlaceholder')} className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.emailUpdate')}</Button></div></div>
+                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.passwordLabel')}</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder={t('security.oldPassword')} className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder={t('security.newPassword')} className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.passwordReset')}</Button></div></div>
                 </div>
              </div>
           </Card>
 
           <Card className="border-none shadow-sm rounded-3xl bg-white p-8 space-y-4 border border-black/[0.03] text-left">
-             <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">天梯定位校准</h4>
-             <p className="text-[10px] text-[#86868B] font-medium leading-relaxed">每个账户仅有一次机会重置分位记录。</p>
+             <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('elo.title')}</h4>
+             <p className="text-[10px] text-[#86868B] font-medium leading-relaxed">{t('elo.description')}</p>
              <AlertDialog>
-                <AlertDialogTrigger asChild><Button variant="outline" disabled={(user?.elo_reset_count ?? 0) >= 1} className="w-full rounded-2xl h-11 border-black/5 font-bold text-xs"><RotateCcw className="h-3.5 w-3.5 mr-2" /> 重置分位 ({1 - (user?.elo_reset_count || 0)}/1)</Button></AlertDialogTrigger>
+                <AlertDialogTrigger asChild><Button variant="outline" disabled={(user?.elo_reset_count ?? 0) >= 1} className="w-full rounded-2xl h-11 border-black/5 font-bold text-xs"><RotateCcw className="h-3.5 w-3.5 mr-2" /> {t('elo.resetBtn', { remaining: 1 - (user?.elo_reset_count || 0) })}</Button></AlertDialogTrigger>
                 <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl">
-                  <AlertDialogHeader><div className="h-12 w-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-2"><ShieldAlert className="h-6 w-6"/></div><AlertDialogTitle>确认重置 ELO 吗？</AlertDialogTitle><AlertDialogDescription>重置后需重新进行评估赛。此操作不可撤回。</AlertDialogDescription></AlertDialogHeader>
-                  <AlertDialogFooter><AlertDialogCancel className="rounded-xl font-bold">取消</AlertDialogCancel><AlertDialogAction onClick={handleResetElo} className="rounded-xl bg-black text-white font-bold">确定重置</AlertDialogAction></AlertDialogFooter>
+                  <AlertDialogHeader><div className="h-12 w-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-2"><ShieldAlert className="h-6 w-6"/></div><AlertDialogTitle>{t('elo.confirmTitle')}</AlertDialogTitle><AlertDialogDescription>{t('elo.confirmDesc')}</AlertDialogDescription></AlertDialogHeader>
+                  <AlertDialogFooter><AlertDialogCancel className="rounded-xl font-bold">{t('common:cancel')}</AlertDialogCancel><AlertDialogAction onClick={handleResetElo} className="rounded-xl bg-black text-white font-bold">{t('elo.confirmReset')}</AlertDialogAction></AlertDialogFooter>
                 </AlertDialogContent>
              </AlertDialog>
           </Card>
@@ -178,15 +171,15 @@ export const Settings: React.FC = () => {
           <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden p-10 border border-black/[0.03]">
              <div className="space-y-8 text-left">
                <div className="space-y-3">
-                 <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">我的昵称 (公开显示)</Label>
+                 <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.nicknameLabel')}</Label>
                  <Input value={profile.nickname} onChange={e => setProfile({...profile, nickname: e.target.value})} className="bg-[#F5F5F7] border-none h-12 rounded-2xl font-bold px-5" />
-                 <p className="text-[10px] text-muted-foreground font-bold ml-1 uppercase">登录账号: {user?.username} (不可修改)</p>
+                 <p className="text-[10px] text-muted-foreground font-bold ml-1 uppercase">{t('profile.usernameNote', { username: user?.username })}</p>
                </div>
                <div className="space-y-3">
-                 <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">个人履历 / Bio</Label>
-                 <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-[#F5F5F7] border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder="写下你的学术格言与研究方向..." />
+                 <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.bioLabel')}</Label>
+                 <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-[#F5F5F7] border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder={t('profile.bioPlaceholder')} />
                </div>
-               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow-xl transition-all hover:scale-[1.01]"><Save className="mr-2 h-4 w-4" /> 保存所有个人资料</Button>
+               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow-xl transition-all hover:scale-[1.01]"><Save className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
              </div>
           </Card>
         </div>

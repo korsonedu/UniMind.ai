@@ -1,0 +1,64 @@
+{
+  "pageTitle": "答疑",
+  "pageSubtitle": "学术疑问 · 权威解答 · 深度探讨",
+
+  "replyUpdated": "回复已更新",
+  "updateFailed": "更新失败",
+  "deleteConfirm": "确认删除这条回复？",
+  "replyDeleted": "回复已删除",
+  "deleteFailed": "删除失败",
+  "operationFailed": "操作失败",
+
+  "edit": "编辑",
+  "delete": "删除",
+  "cancel": "取消",
+  "save": "保存",
+  "replyToTeacher": "回复老师",
+
+  "followed": "已关注",
+  "unfollowed": "已取消关注",
+  "followQuestion": "关注问题",
+  "unfollowQuestion": "取消关注",
+  "starQuestion": "设为精选",
+  "unstarQuestion": "取消星标",
+  "markUnsolved": "标记未解决",
+  "markSolved": "标记已解决",
+  "editContent": "编辑内容",
+  "deleteQuestion": "删除提问",
+
+  "updated": "已更新",
+  "questionDeleted": "提问已删除",
+  "statusUpdated": "状态已更新",
+  "replySubmitted": "回复已提交",
+  "replyFailed": "回复失败",
+
+  "resolved": "已解决",
+  "pending": "待解答",
+
+  "downloadAttachments": "附件下载",
+  "answerStudent": "回答学员",
+  "collapseReplies": "收起回复",
+  "viewReplies": "查看 {{count}} 条追问回复",
+
+  "teacherReplyPlaceholder": "教师回复... (Enter发送，Shift+Enter换行)",
+  "studentReplyPlaceholder": "回复... (Enter发送，Shift+Enter换行)",
+
+  "loadFailed": "加载失败",
+  "enterContent": "请输入问题内容",
+  "questionSent": "提问已发送",
+  "sendFailed": "发送失败",
+
+  "deleteQuestionConfirm": "确认删除这个提问？",
+  "questionPlaceholder": "请详细描述你的疑问...",
+  "addAttachment": "添加附件 (图片/文档)",
+  "submitQuestion": "提交问题",
+
+  "filterAll": "全部",
+  "filterFollowed": "关注",
+  "filterUnsolved": "待解答",
+  "filterSolved": "已解决",
+  "filterStarred": "精选",
+
+  "searchHistory": "搜索历史问答...",
+  "noResults": "暂无相关问题"
+}

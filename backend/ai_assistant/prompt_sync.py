@@ -13,25 +13,17 @@ def _base_dir() -> Path:
 
 
 def get_bots_prompt_dir() -> Path:
-    path = _base_dir() / 'core' / 'prompts' / 'bots'
+    path = _base_dir() / 'prompts' / 'ai_assistant' / 'bots'
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def get_legacy_bots_prompt_dir() -> Path:
-    return _base_dir() / 'ai_assistant' / 'templates' / 'bots'
-
-
-def get_bot_prompt_template_name(bot) -> str:
-    return f'bots/bot_{bot.id}_prompt.txt'
 
 
 def get_bot_prompt_path(bot) -> Path:
     return get_bots_prompt_dir() / f'bot_{bot.id}_prompt.txt'
 
 
-def _get_legacy_bot_prompt_path(bot) -> Path:
-    return get_legacy_bots_prompt_dir() / f'bot_{bot.id}_prompt.txt'
+def get_bot_prompt_template_name(bot) -> str:
+    return f'bots/bot_{bot.id}_prompt.txt'
 
 
 def read_bot_prompt_file(bot) -> Optional[str]:
@@ -52,29 +44,11 @@ def write_bot_prompt_file(bot, content: str) -> Path:
 
 
 def sync_bot_prompt(bot):
-    """
-    双向同步规则：
-    1) 若新路径存在，文件优先 -> 覆盖数据库。
-    2) 若新路径不存在但旧路径存在，迁移旧文件 -> 覆盖数据库。
-    3) 若都不存在，按数据库内容创建新文件。
-    """
-    new_path = get_bot_prompt_path(bot)
-    legacy_path = _get_legacy_bot_prompt_path(bot)
-
-    source_text = None
-    if new_path.exists():
-        source_text = read_bot_prompt_file(bot)
-    elif legacy_path.exists():
-        try:
-            source_text = legacy_path.read_text(encoding='utf-8')
-            write_bot_prompt_file(bot, source_text)
-            logger.info('已迁移机器人 Prompt 到 core/prompts: bot_id=%s', bot.id)
-        except Exception:
-            logger.exception('迁移旧机器人 Prompt 失败: %s', legacy_path)
-
-    if source_text is not None:
-        if bot.system_prompt != source_text:
-            bot.system_prompt = source_text
+    """文件优先覆盖 DB，文件不存在则从 DB 创建文件。"""
+    file_content = read_bot_prompt_file(bot)
+    if file_content is not None:
+        if bot.system_prompt != file_content:
+            bot.system_prompt = file_content
             bot.save(update_fields=['system_prompt'])
         return
 

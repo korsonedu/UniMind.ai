@@ -80,17 +80,40 @@ class AIService:
         parsed = AIEngine.extract_json(text)
         if parsed is not None:
             return parsed
-        candidates = [
-            re.search(r'\{[\s\S]*\}', text),
-            re.search(r'\[[\s\S]*\]', text),
-        ]
-        for match in candidates:
-            if not match:
+        # 括号匹配兜底：跳过字符串内容，定位最外层 JSON 对象/数组
+        for left, right in [('{', '}'), ('[', ']')]:
+            start = text.find(left)
+            if start < 0:
                 continue
-            try:
-                return json.loads(match.group(0).strip())
-            except Exception:
-                continue
+            depth = 0
+            in_string = False
+            escape = False
+            end = -1
+            for i in range(start, len(text)):
+                ch = text[i]
+                if escape:
+                    escape = False
+                    continue
+                if ch == '\\':
+                    escape = True
+                    continue
+                if ch == '"':
+                    in_string = not in_string
+                    continue
+                if in_string:
+                    continue
+                if ch == left:
+                    depth += 1
+                elif ch == right:
+                    depth -= 1
+                    if depth == 0:
+                        end = i
+                        break
+            if end > start:
+                try:
+                    return json.loads(text[start:end + 1])
+                except Exception:
+                    continue
         return None
 
     @classmethod
@@ -106,8 +129,10 @@ class AIService:
             if not choices:
                 return None
             message = choices[0].get('message', {})
-            # 优先取 content，思考模式下可能为空，回退到 reasoning_content
-            content = (message.get('content') or message.get('reasoning_content') or '').strip()
+            content = message.get('content')
+            if content is None:
+                content = message.get('reasoning_content')
+            content = (content or '').strip()
             return content or None
         except Exception:
             return None
@@ -121,16 +146,9 @@ class AIService:
         name = Path(template_name).name
         ns = (namespace or '').strip('/ ')
 
-        # 统一路径: prompts/<namespace>/<template_name>
         candidates = [
             base_dir / 'prompts' / ns / name,
         ]
-
-        # 兼容旧路径（过渡期）
-        if ns == 'ai_assistant':
-            candidates.append(base_dir / 'core' / 'prompts' / name)
-        elif ns == 'quizzes':
-            candidates.append(base_dir / 'quizzes' / 'templates' / name)
 
         for path in candidates:
             if not path.exists():

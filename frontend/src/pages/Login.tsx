@@ -5,10 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 import api from '@/lib/api';
 
 export const Login: React.FC = () => {
+  const { t } = useTranslation('auth');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,14 +45,14 @@ export const Login: React.FC = () => {
           const meRes = await api.get('/users/me/');
           updateUser(meRes.data);
         } catch (err: any) {
-          toast.error(err.response?.data?.error || '加入机构失败，可稍后在设置中重试');
+          toast.error(err.response?.data?.error || t('login.joinInstitutionError'));
         }
       }
 
       navigate('/');
     } catch (err: any) {
       const errorData = err.response?.data;
-      setError(errorData?.error || errorData?.non_field_errors?.[0] || errorData?.detail || '登录失败，请检查用户名或密码');
+      setError(errorData?.error || errorData?.non_field_errors?.[0] || errorData?.detail || t('login.error'));
     } finally {
       setLoading(false);
     }
@@ -60,15 +62,15 @@ export const Login: React.FC = () => {
     <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center p-4">
       <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl bg-white/80 backdrop-blur-xl p-4">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight">欢迎回来</CardTitle>
-          <CardDescription>登录你的网校账号，继续你的学习之旅</CardDescription>
+          <CardTitle className="text-2xl font-bold tracking-tight">{t('login.title')}</CardTitle>
+          <CardDescription>{t('login.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             {error && <p className="text-red-500 text-xs text-center">{error}</p>}
             <div className="space-y-2">
-              <Input 
-                placeholder="邮箱或用户名" 
+              <Input
+                placeholder={t('login.usernamePlaceholder')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
@@ -76,9 +78,9 @@ export const Login: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <Input 
-                type="password" 
-                placeholder="密码" 
+              <Input
+                type="password"
+                placeholder={t('login.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
@@ -86,13 +88,13 @@ export const Login: React.FC = () => {
               />
             </div>
             <Button className="w-full h-12 bg-black text-white rounded-xl font-medium hover:bg-black/90 transition-all" disabled={loading}>
-              {loading ? "登录中..." : "立即登录"}
+              {loading ? t('login.loggingIn') : t('login.submit')}
             </Button>
           </form>
           <div className="mt-6 text-center text-sm text-muted-foreground">
-            还没有账号？{" "}
+            {t('login.noAccount')}{" "}
             <Link to={institutionSlug ? `/register?institution=${institutionSlug}` : '/register'} className="text-black font-semibold hover:underline">
-              立即注册
+              {t('login.registerLink')}
             </Link>
           </div>
         </CardContent>

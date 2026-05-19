@@ -1,0 +1,69 @@
+{
+  "pageTitle": "Study Room",
+  "pageSubtitle": "Stay focused, evolve academically",
+  "deepFocus": "Deep Focus Study",
+  "preferencesUpdated": "Preferences updated",
+  "updateFailed": "Update failed",
+  "undo": "Undo",
+  "undoSuccess": "Undone",
+  "undoFailed": "Undo failed",
+  "gifSendFailed": "Failed to send GIF",
+  "imageProcessing": "Processing image...",
+  "imageReady": "Image ready, click send to post",
+  "imageProcessFailed": "Image processing failed",
+  "sendFailed": "Send failed",
+  "enterTaskName": "Please enter a task name",
+  "taskStarted": "{{emoji}} started \"{{taskName}}\" ({{duration}} min)",
+  "taskAborted": "{{emoji}} aborted \"{{taskName}}\" ({{focusedMins}} min focused)",
+  "planCompleted": "{{emoji}} completed plan: {{plan}}",
+  "taskCompleted": "{{emoji}} completed \"{{taskName}}\" ({{duration}} min)",
+  "focusAchieved": "Focus session completed!",
+  "chatRoomTitle": "Study Café",
+  "timer": {
+    "duration": "Duration",
+    "min": "Min",
+    "taskGoal": "Task Goal",
+    "taskPlaceholder": "What do you want to accomplish?",
+    "pause": "Pause",
+    "startStudy": "Start Study"
+  },
+  "privacy": {
+    "title": "Privacy & Mode",
+    "description": "Control visibility of your task status in the co-study area",
+    "broadcastTasks": "Broadcast my tasks",
+    "receiveBroadcasts": "Receive broadcasts"
+  },
+  "mobile": {
+    "pomodoro": "Pomodoro",
+    "taskPlaceholder": "Task name...",
+    "duration": "Duration",
+    "durationFormat": "{{duration}} min",
+    "enterFullscreen": "Enter Fullscreen Focus"
+  },
+  "giphySearch": "Search GIPHY...",
+  "onlineUsers": {
+    "title": "Online Now",
+    "self": "(you)",
+    "online": "Online",
+    "todayFocus": "Today: {{minutes}} min",
+    "todayCompleted": "Done: {{count}} tasks"
+  },
+  "planList": {
+    "title": "Plan List",
+    "planDeleted": "Plan deleted",
+    "deleteFailed": "Delete failed",
+    "deletePlan": "Delete plan",
+    "planCreated": "{{emoji}} created plan: {{plan}}",
+    "addTarget": "ADD TARGET..."
+  },
+  "focusMode": {
+    "title": "Focus Mode",
+    "pause": "Pause",
+    "start": "Start",
+    "end": "End",
+    "confirmTitle": "Abort this task?",
+    "confirmDesc": "Leaving this page will count as an incomplete task and broadcast to the chat. Are you sure?",
+    "keepFocusing": "Keep Focusing",
+    "abortAndLeave": "Abort & Leave"
+  }
+}

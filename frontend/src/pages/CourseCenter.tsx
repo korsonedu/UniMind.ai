@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, PlayCircle, BookOpen } from 'lucide-react';
@@ -14,6 +15,7 @@ import api from '@/lib/api';
 export const CourseCenter: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const { data: courses, loading, error, refetch } = useFetch<any[]>(
     (signal) => api.get('/courses/', { signal }).then(r => r.data)
   );
@@ -23,18 +25,18 @@ export const CourseCenter: React.FC = () => {
       onClick={() => navigate('/management')}
       className="bg-primary text-primary-foreground hover:opacity-90 rounded-2xl px-6 h-11 font-bold shadow-lg transition-all hover:scale-[1.02]"
     >
-      <PlusCircle className="mr-2 h-4 w-4" /> 发布新课程
+      <PlusCircle className="mr-2 h-4 w-4" /> {t('publishCourse')}
     </Button>
   ) : null;
 
   if (loading) return <Loading message="Synchronizing Catalog..." />;
   if (error) return <InlineError message={error} onRetry={refetch} />;
-  if (!courses?.length) return <EmptyState icon={BookOpen} title="暂无课程" description="管理员发布课程后将在此显示" className="h-[60vh]" />;
+  if (!courses?.length) return <EmptyState icon={BookOpen} title={t('noCourses')} description={t('noCoursesHint')} className="h-[60vh]" />;
 
   return (
     <PageWrapper 
-      title="课程中心" 
-      subtitle="精品课程助你构建完整的专业知识体系。"
+      title={t('pages:courseCenter.title')}
+      subtitle={t('pages:courseCenter.subtitle')}
       action={ActionBtn}
     >
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 text-left animate-in fade-in duration-700">

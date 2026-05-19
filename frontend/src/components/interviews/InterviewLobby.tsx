@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { FileText, Globe, GraduationCap, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatApiErrorToast } from '@/lib/apiError';
+import { useTranslation } from 'react-i18next';
 import { ResumeTuner } from './ResumeTuner';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
@@ -15,12 +16,13 @@ interface Props {
 }
 
 const INTERVIEW_TYPES = [
-  { id: 'resume', icon: FileText, title: '简历深挖', desc: '结合你的经历生成针对性追问。' },
-  { id: 'english', icon: Globe, title: '英语口语', desc: '模拟英文问答并给出流畅度反馈。由 GLM 语音模型驱动。' },
-  { id: 'professional', icon: GraduationCap, title: '专业课', desc: '围绕专业核心考点进行深度追问。' },
+  { id: 'resume', icon: FileText },
+  { id: 'english', icon: Globe },
+  { id: 'professional', icon: GraduationCap },
 ];
 
 export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessionCreated }) => {
+  const { t } = useTranslation('interviews');
   const [startingType, setStartingType] = useState<string | null>(null);
   const [hasResume, setHasResume] = useState<boolean | null>(null);
   const [hasKnowledgeTree, setHasKnowledgeTree] = useState<boolean | null>(null);
@@ -59,11 +61,11 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
   const startInterview = async (type: string) => {
     // 前端前置校验（加载中也不允许操作，防止竞态绕过）
     if (type === 'resume' && hasResume !== true) {
-      toast.error('请先在下方「简历调优」中上传并分析简历');
+      toast.error(t('lobby.resumeRequiredToast'));
       return;
     }
     if (type === 'professional' && hasKnowledgeTree !== true) {
-      toast.error('当前机构尚未设置知识结构，请联系机构管理员');
+      toast.error(t('lobby.knowledgeTreeRequiredToast'));
       return;
     }
 
@@ -72,10 +74,10 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
       const res = await api.post('/interviews/sessions/', { session_type: type, interviewer_style: style });
       const sessionId = Number(res.data?.id || 0);
       if (!sessionId) throw new Error('missing_session_id');
-      toast.success(`面试会话 #${sessionId} 已创建`);
+      toast.success(t('lobby.sessionCreated', { id: sessionId }));
       onSessionCreated(sessionId);
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '创建面试会话失败'));
+      toast.error(formatApiErrorToast(e, t('lobby.createSessionFailed')));
     } finally {
       setStartingType(null);
     }
@@ -84,16 +86,16 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
   const getCardState = (typeId: string) => {
     // 加载中：所有卡片禁用
     if (checking) {
-      return { disabled: true, hint: '检查中...' };
+      return { disabled: true, hint: t('lobby.checking') };
     }
     if (typeId === 'resume' && !hasResume) {
-      return { disabled: true, hint: '请先上传简历' };
+      return { disabled: true, hint: t('lobby.uploadResumeFirst') };
     }
     if (typeId === 'english') {
-      return { disabled: true, hint: '语音面试即将上线' };
+      return { disabled: true, hint: t('lobby.voiceComingSoon') };
     }
     if (typeId === 'professional' && !hasKnowledgeTree) {
-      return { disabled: true, hint: '机构未设置知识结构' };
+      return { disabled: true, hint: t('lobby.noKnowledgeTree') };
     }
     return { disabled: false, hint: null };
   };
@@ -102,17 +104,17 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
     <div className="space-y-4">
       <Card className="p-6 rounded-3xl bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 border-indigo-200/60">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-700 text-xs font-bold">
-          <Sparkles className="w-4 h-4" /> 多阶段复试训练
+          <Sparkles className="w-4 h-4" /> {t('lobby.badge')}
         </div>
-        <h2 className="text-2xl font-black mt-3">从简历到专业面试的一体化闭环</h2>
-        <p className="text-sm text-muted-foreground mt-2">支持风格选择、实时追问和结束后雷达报告。</p>
+        <h2 className="text-2xl font-black mt-3">{t('lobby.heading')}</h2>
+        <p className="text-sm text-muted-foreground mt-2">{t('lobby.subtitle')}</p>
       </Card>
 
       <Card className="p-5 rounded-2xl border border-border/60 space-y-3">
-        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">导师风格</p>
+        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t('lobby.styleLabel')}</p>
         <div className="flex gap-2">
-          <Button size="sm" variant={style === 'friendly' ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => onStyleChange('friendly')}>和蔼引导</Button>
-          <Button size="sm" variant={style === 'pressure' ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => onStyleChange('pressure')}>高压追问</Button>
+          <Button size="sm" variant={style === 'friendly' ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => onStyleChange('friendly')}>{t('lobby.styleFriendly')}</Button>
+          <Button size="sm" variant={style === 'pressure' ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => onStyleChange('pressure')}>{t('lobby.stylePressure')}</Button>
         </div>
       </Card>
 
@@ -122,14 +124,14 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
           return (
             <Card key={type.id} className={`p-5 rounded-2xl border border-border/60 ${state.disabled ? 'opacity-60' : ''}`}>
               <type.icon className="w-7 h-7 text-indigo-600" />
-              <h4 className="text-lg font-bold mt-3">{type.title}</h4>
-              <p className="text-sm text-muted-foreground mt-2 min-h-10">{type.desc}</p>
+              <h4 className="text-lg font-bold mt-3">{t(`lobby.type${type.id.charAt(0).toUpperCase() + type.id.slice(1)}`)}</h4>
+              <p className="text-sm text-muted-foreground mt-2 min-h-10">{t(`lobby.type${type.id.charAt(0).toUpperCase() + type.id.slice(1)}Desc`)}</p>
               <Button
                 className="w-full mt-4 rounded-xl bg-slate-900 text-white text-xs font-bold"
                 onClick={() => startInterview(type.id)}
                 disabled={startingType === type.id || state.disabled}
               >
-                {startingType === type.id ? '创建中...' : state.hint || '进入会话'}
+                {startingType === type.id ? t('lobby.creating') : state.hint || t('lobby.enterSession')}
               </Button>
             </Card>
           );

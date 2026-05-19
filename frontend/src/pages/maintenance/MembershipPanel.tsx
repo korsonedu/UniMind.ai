@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ShieldCheck, Loader2, Sparkles, RefreshCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 export const MembershipPanel = ({ 
   codes, 
@@ -25,16 +26,17 @@ export const MembershipPanel = ({
   handleDeleteCode: (id: number) => void,
   fetchCodes: () => void
 }) => {
+  const { t } = useTranslation('maintenance');
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start text-left">
       <Card className="lg:col-span-4 border-none shadow-sm rounded-3xl p-10 bg-white border border-black/[0.03] space-y-8">
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-6 w-6 text-amber-600" />
-          <h3 className="text-xl font-bold tracking-tight text-[#1D1D1F]">批量生成激活码</h3>
+          <h3 className="text-xl font-bold tracking-tight text-[#1D1D1F]">{t('membership.batchGenerateCodes')}</h3>
         </div>
         <div className="space-y-6">
           <div className="space-y-2.5">
-            <Label className="text-[11px] font-bold uppercase tracking-widest opacity-40 ml-1">生成数量</Label>
+            <Label className="text-[11px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('membership.generateCount')}</Label>
             <Input 
               type="number" 
               min="1" 
@@ -53,14 +55,14 @@ export const MembershipPanel = ({
             Generate Codes
           </Button>
           <p className="text-[11px] font-medium text-muted-foreground leading-relaxed px-2">
-            提示：生成后激活码将立即出现在右侧列表中。你可以将其发送给已缴费的学员。
+            {t('membership.hint')}
           </p>
         </div>
       </Card>
 
       <Card className="lg:col-span-8 border-none shadow-sm rounded-3xl p-10 bg-[#F5F5F7]/50 border border-black/[0.03] space-y-6">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-black/40">激活码库存与状态</h3>
+          <h3 className="text-sm font-bold uppercase tracking-widest text-black/40">{t('membership.codeInventory')}</h3>
           <Button variant="ghost" size="icon" onClick={fetchCodes} className="rounded-full h-10 w-10">
             <RefreshCcw className="w-4 h-4 opacity-40" />
           </Button>
@@ -68,7 +70,7 @@ export const MembershipPanel = ({
         <ScrollArea className="h-[520px]">
           <div className="grid gap-3 pr-4">
             {codes.length === 0 ? (
-              <div className="py-20 text-center opacity-20 font-bold uppercase text-[11px] tracking-widest">暂无数据</div>
+              <div className="py-20 text-center opacity-20 font-bold uppercase text-[11px] tracking-widest">{t('membership.noData')}</div>
             ) : (
               codes.map(c => (
                 <div key={c.id} className="p-4 bg-white rounded-2xl border border-black/[0.02] shadow-sm flex items-center justify-between group">
@@ -81,11 +83,11 @@ export const MembershipPanel = ({
                     </div>
                     <div className="flex flex-col">
                       <span className={cn("text-[11px] font-bold uppercase", c.is_used ? "text-red-500" : "text-emerald-500")}>
-                        {c.is_used ? '已失效' : '待使用'}
+                        {c.is_used ? t('membership.expired') : t('membership.pending')}
                       </span>
                       {c.is_used && (
                         <span className="text-[11px] font-medium text-muted-foreground italic">
-                          由 {c.used_by_username || '未知用户'} 激活于 {new Date(c.used_at).toLocaleDateString()}
+                          {t('membership.activatedBy', { user: c.used_by_username || '?', date: new Date(c.used_at).toLocaleDateString() })}
                         </span>
                       )}
                     </div>
@@ -97,7 +99,7 @@ export const MembershipPanel = ({
                         size="sm" 
                         onClick={() => {
                           navigator.clipboard.writeText(c.code);
-                          toast.success("已复制到剪贴板");
+                          toast.success(t('membership.copiedToClipboard'));
                         }}
                         className="h-8 rounded-lg font-bold text-[11px] uppercase text-indigo-600 hover:bg-indigo-50"
                       >

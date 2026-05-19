@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import {
   CheckCircle2, Circle, ListTodo, Plus, Trash2
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -22,10 +23,11 @@ interface PlanListProps {
 const PlanList: React.FC<PlanListProps> = (props) => {
   const { plans, allowBroadcast, onRefresh, onStartPlan, onPlanCompleted, onPlanDeleted } = props;
   const [newPlan, setNewPlan] = useState('');
+  const { t } = useTranslation('studyRoom');
 
   return (
     <Card className="border-none shadow-sm rounded-2xl md:rounded-3xl bg-card overflow-hidden p-4 md:p-6 md:flex-1 min-h-0 flex flex-col border border-border">
-      <header className="mb-4 flex items-center justify-between border-b border-border pb-4"><CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">计划清单</CardTitle><ListTodo className="h-4 w-4 text-muted-foreground opacity-20" /></header>
+      <header className="mb-4 flex items-center justify-between border-b border-border pb-4"><CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{t('planList.title')}</CardTitle><ListTodo className="h-4 w-4 text-muted-foreground opacity-20" /></header>
       <div className="flex-1 overflow-y-auto space-y-1.5 pr-2 scrollbar-none">
         {plans.map(p => (
           <div key={p.id} className={cn("group flex items-center gap-3 p-2 rounded-2xl transition-all border border-transparent", p.is_completed ? "bg-muted/30 opacity-60" : "hover:bg-muted hover:border-border")}>
@@ -39,7 +41,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
                   onRefresh();
                   if (allowBroadcast) {
                     await api.post('/study/messages/', {
-                      content: `✅ 完成了计划：${p.content}`,
+                      content: t('planCompleted', { emoji: '✅', plan: p.content }),
                       related_plan_id: p.id
                     });
                   }
@@ -57,12 +59,12 @@ const PlanList: React.FC<PlanListProps> = (props) => {
                 try {
                   await api.delete(`/users/plans/${p.id}/`);
                   onRefresh();
-                  toast.success("计划已删除");
+                  toast.success(t('planList.planDeleted'));
                   onPlanDeleted(p.id);
-                } catch (e) { toast.error(formatApiErrorToast(e, "删除失败")); }
+                } catch (e) { toast.error(formatApiErrorToast(e, t('planList.deleteFailed'))); }
               }}
               className="opacity-0 group-hover:opacity-100 transition-all p-1.5 hover:bg-red-100 rounded-lg text-muted-foreground/50 hover:text-red-500 cursor-pointer"
-              title="删除计划"
+              title={t('planList.deletePlan')}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -79,7 +81,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
               const res = await api.post('/users/plans/', { content: newPlan });
               if (allowBroadcast) {
                 await api.post('/study/messages/', {
-                  content: `📅 制定了计划：${newPlan}`,
+                  content: t('planList.planCreated', { emoji: '📅', plan: newPlan }),
                   related_plan_id: res.data.id
                 });
               }
@@ -87,7 +89,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
               setNewPlan('');
             }
           }}
-          placeholder="ADD TARGET..."
+          placeholder={t('planList.addTarget')}
           className="bg-muted border-none h-8 rounded-lg text-[11px] font-bold px-3 text-foreground focus-visible:ring-1 focus-visible:ring-primary/20"
         />
         <Button
@@ -96,7 +98,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             const res = await api.post('/users/plans/', { content: newPlan });
             if (allowBroadcast) {
               await api.post('/study/messages/', {
-                content: `📅 制定了计划：${newPlan}`,
+                content: t('planList.planCreated', { emoji: '📅', plan: newPlan }),
                 related_plan_id: res.data.id
               });
             }

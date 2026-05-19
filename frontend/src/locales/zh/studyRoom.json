@@ -1,0 +1,69 @@
+{
+  "pageTitle": "自习室",
+  "pageSubtitle": "保持专注，学术进化",
+  "deepFocus": "深度专注学习",
+  "preferencesUpdated": "偏好已更新",
+  "updateFailed": "更新失败",
+  "undo": "撤销",
+  "undoSuccess": "已撤回",
+  "undoFailed": "撤回失败",
+  "gifSendFailed": "发送 GIF 失败",
+  "imageProcessing": "正在处理图片...",
+  "imageReady": "图片已就绪，点击发送即可",
+  "imageProcessFailed": "图片处理失败",
+  "sendFailed": "发送失败",
+  "enterTaskName": "请输入任务名称",
+  "taskStarted": "{{emoji}} 开始了「{{taskName}}」任务 (计划 {{duration}} 分钟)",
+  "taskAborted": "{{emoji}} 中止了「{{taskName}}」任务 (专注 {{focusedMins}} 分钟)",
+  "planCompleted": "{{emoji}} 完成了计划：{{plan}}",
+  "taskCompleted": "{{emoji}} 完成了「{{taskName}}」任务 (专注 {{duration}} 分钟)",
+  "focusAchieved": "专注已达成！",
+  "chatRoomTitle": "学习咖啡厅",
+  "timer": {
+    "duration": "时长设定",
+    "min": "Min",
+    "taskGoal": "任务目标",
+    "taskPlaceholder": "你想完成什么？",
+    "pause": "暂停",
+    "startStudy": "开始学习"
+  },
+  "privacy": {
+    "title": "隐私与模式",
+    "description": "控制任务状态在共学区的可见性",
+    "broadcastTasks": "广播我的任务",
+    "receiveBroadcasts": "接收他人广播"
+  },
+  "mobile": {
+    "pomodoro": "番茄钟",
+    "taskPlaceholder": "任务名称...",
+    "duration": "时长",
+    "durationFormat": "{{duration}} 分钟",
+    "enterFullscreen": "进入全屏专注"
+  },
+  "giphySearch": "搜索 GIPHY...",
+  "onlineUsers": {
+    "title": "实时共学",
+    "self": "(你)",
+    "online": "在线中",
+    "todayFocus": "今日专注: {{minutes}} min",
+    "todayCompleted": "今日已完成: {{count}} tasks"
+  },
+  "planList": {
+    "title": "计划清单",
+    "planDeleted": "计划已删除",
+    "deleteFailed": "删除失败",
+    "deletePlan": "删除计划",
+    "planCreated": "{{emoji}} 制定了计划：{{plan}}",
+    "addTarget": "ADD TARGET..."
+  },
+  "focusMode": {
+    "title": "Focus Mode",
+    "pause": "暂停",
+    "start": "开始",
+    "end": "结束",
+    "confirmTitle": "确定要中止任务吗？",
+    "confirmDesc": "离开当前页面将视为一次未完成的任务，并向讨论区广播。确定离开吗？",
+    "keepFocusing": "继续专注",
+    "abortAndLeave": "中止并离开"
+  }
+}

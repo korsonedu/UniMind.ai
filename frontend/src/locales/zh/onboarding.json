@@ -1,0 +1,44 @@
+{
+  "done": {
+    "title": "设置完成！",
+    "teacherDesc": "你的机构已创建成功，现在可以邀请学员、生成题目了。",
+    "studentDesc": "你已成功加入机构，现在可以开始学习了。",
+    "enter": "进入 UniMind"
+  },
+  "role": {
+    "title": "设置你的身份",
+    "subtitle": "选择你的角色，开始你的 UniMind 之旅",
+    "teacherLabel": "我是老师/机构",
+    "teacherDesc": "创建你的专属机构，管理学员和课程",
+    "studentLabel": "我是学生",
+    "studentDesc": "加入已有的机构，开始刷题学习"
+  },
+  "teacher": {
+    "title": "创建你的机构",
+    "subtitle": "填写机构基本信息，开始管理你的教学团队",
+    "inviteCodeLabel": "方案邀请码 *（由 UniMind 提供）",
+    "inviteCodePlaceholder": "请输入邀请码",
+    "nameLabel": "机构名称 *",
+    "namePlaceholder": "请输入机构名称",
+    "descPlaceholder": "一句话简介（如：专注金融考研辅导）",
+    "phoneLabel": "联系电话",
+    "phonePlaceholder": "请输入联系电话",
+    "create": "创建机构",
+    "errors": {
+      "enterInviteCode": "请输入方案邀请码",
+      "enterName": "请输入机构名称",
+      "createFailed": "创建失败"
+    }
+  },
+  "student": {
+    "title": "加入机构",
+    "subtitle": "输入机构邀请码，立即加入并开始学习",
+    "instruction": "请向你的老师或机构管理员索要邀请码。",
+    "inviteCodePlaceholder": "请输入机构邀请码",
+    "join": "加入机构",
+    "errors": {
+      "enterInviteCode": "请输入机构邀请码",
+      "joinFailed": "加入失败，请检查邀请码是否正确"
+    }
+  }
+}

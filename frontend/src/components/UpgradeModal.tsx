@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowRight, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 const PLAN_ORDER = ['free', 'solo', 'plus', 'pro'] as const;
 
@@ -50,6 +51,7 @@ interface UpgradeModalProps {
 
 export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free' }: UpgradeModalProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation('layout');
 
   // Determine target plan
   const requiredPlan = feature ? FEATURE_REQUIRED_PLAN[feature] : null;
@@ -72,7 +74,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
               {meta.label}
             </Badge>
             <DialogTitle className="text-xl font-black tracking-tight">
-              升级到 {meta.label} 方案
+              {t('upgradeModal.upgradeTo', { plan: meta.label })}
             </DialogTitle>
             <DialogDescription className="font-medium text-muted-foreground leading-relaxed text-sm">
               {unlockSummary}
@@ -83,7 +85,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
         {/* Features */}
         <div className="px-8 py-4 space-y-3">
           <p className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-[0.2em]">
-            {meta.label} 核心功能
+            {t('upgradeModal.coreFeatures', { plan: meta.label })}
           </p>
           <div className="bg-[#F5F5F7] rounded-2xl p-4 space-y-2">
             {features.map((f, i) => (
@@ -103,7 +105,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
             className="flex-1 h-11 rounded-xl text-sm font-bold"
             onClick={() => onOpenChange(false)}
           >
-            稍后再说
+            {t('upgradeModal.later')}
           </Button>
           <Button
             variant="apple"
@@ -116,7 +118,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
               }, 200);
             }}
           >
-            了解详情
+            {t('upgradeModal.learnMore')}
             <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
         </div>

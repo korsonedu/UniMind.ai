@@ -3,6 +3,13 @@ from typing import Dict, Sequence
 
 class AssistantChatService:
     @classmethod
+    def build_system_prompt(cls, bot, student_context: str = '') -> str:
+        prompt = (bot.system_prompt or '你是UniMind.ai的AI学术助教。') if bot else '你是UniMind.ai的AI学术助教。'
+        if bot and bot.is_exclusive:
+            prompt = prompt.replace('{student_context}', student_context or '暂无学业画像。')
+        return prompt
+
+    @classmethod
     def chat_with_assistant(
         cls,
         ai,
@@ -11,20 +18,9 @@ class AssistantChatService:
         user_message: str,
         student_context: str = '',
     ):
-        system_prompt = ai.get_template('ai_assistant', 'system_prompt.txt') or '你是一位专业助教。'
-        assistant_prompt = ai.get_template('ai_assistant', 'base_assistant_prompt.txt') or ''
+        system_prompt = cls.build_system_prompt(bot, student_context)
 
-        prompt_parts = [system_prompt, assistant_prompt]
-
-        if bot and getattr(bot, 'system_prompt', None):
-            prompt_parts.append(str(bot.system_prompt))
-
-        if bot and getattr(bot, 'is_exclusive', False):
-            exclusive_template = ai.get_template('ai_assistant', 'exclusive_mentor_prompt.txt') or ''
-            if exclusive_template:
-                prompt_parts.append(ai.format_template(exclusive_template, student_context=student_context or '暂无学业画像。'))
-
-        messages = [{'role': 'system', 'content': '\n\n'.join(part for part in prompt_parts if part)}]
+        messages = [{'role': 'system', 'content': system_prompt}]
 
         for msg in history_messages or []:
             role = str(msg.get('role', '')).strip()

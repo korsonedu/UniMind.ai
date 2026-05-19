@@ -1,0 +1,10 @@
+{
+  "title": "通知中心",
+  "titleWithCount": "通知中心 ({{count}})",
+  "markRead": "已读",
+  "clear": "清除",
+  "empty": "暂无消息通知",
+  "clearConfirmTitle": "确认清除所有通知？",
+  "clearConfirmDesc": "此操作将永久删除你的所有历史通知记录，不可恢复。",
+  "confirmClear": "确认清除"
+}

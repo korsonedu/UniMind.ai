@@ -8,6 +8,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Bot as BotIcon, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useTranslation } from 'react-i18next';
 
 interface Bot {
   id: number;
@@ -23,6 +24,8 @@ interface BotSelectorProps {
 }
 
 export const BotSelector: React.FC<BotSelectorProps> = React.memo(({ bots, selectedBot, onSelect }) => {
+  const { t } = useTranslation('aiAssistant');
+
   return (
     <div className="flex items-center gap-4 text-left">
       <DropdownMenu modal={false}>
@@ -33,7 +36,7 @@ export const BotSelector: React.FC<BotSelectorProps> = React.memo(({ bots, selec
             </div>
             <div className="flex flex-col text-left">
               <div className="flex items-center gap-1.5">
-                <h2 className="text-sm font-bold tracking-tight text-foreground">{selectedBot?.name || '选择助教'}</h2>
+                <h2 className="text-sm font-bold tracking-tight text-foreground">{selectedBot?.name || t('selectBot')}</h2>
                 <ChevronDown className="w-3 h-3 opacity-30" />
               </div>
               {selectedBot && (

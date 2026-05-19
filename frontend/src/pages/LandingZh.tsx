@@ -129,7 +129,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
           {token ? (
             <button
               className="text-sm font-semibold text-white bg-[#0F1729] hover:bg-[#1E293B] px-4 py-2 rounded-xl transition-all shadow-sm"
-              onClick={() => navigate('/home')}
+              onClick={() => navigate('/')}
             >
               进入控制台
             </button>
@@ -181,7 +181,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
             {token ? (
               <button
                 className="w-full text-sm font-semibold text-white bg-[#0F1729] py-3 rounded-xl"
-                onClick={() => { setOpen(false); navigate('/home'); }}
+                onClick={() => { setOpen(false); navigate('/'); }}
               >
                 进入控制台
               </button>
@@ -270,7 +270,7 @@ const Hero: React.FC = () => {
         </div>
 
         <p className="text-sm text-[#94A3B8] font-medium">
-          无需绑定信用卡 · 14 天全功能试用 · 学科不限
+          无需绑定信用卡,14 天全功能试用,学科不限
         </p>
 
         <div className="max-w-4xl mx-auto pt-10 reveal">
@@ -391,7 +391,7 @@ const FEATURES = [
   {
     icon: Cpu,
     title: 'AI 智能出题',
-    subtitle: 'ARC 对抗管线 · 生成即用',
+    subtitle: 'ARC 对抗管线,生成即用',
     desc: '我们采用多智能体对抗生成架构——Author、Reviewer、Classifier 三个 AI Agent 围绕同一道题目进行迭代博弈。生成不达标的题目自动回退重做，直至质量评分超过阈值。相比单次 LLM 调用，对抗管线将题目可用率从约 60% 提升至 85%+。支持选择题、计算题、案例分析等全题型，学科不限。',
     points: [
       'Author → Reviewer → Classifier 三智能体对抗，最多 3 轮迭代',
@@ -545,19 +545,19 @@ const TESTIMONIALS = [
   {
     quote: '以前一套卷子要教研坐一整天。现在 AI 出题 10 分钟搞定初稿，教研只需做最后审校。学生错题数据实时同步，老师第一时间知道班级薄弱点在哪。',
     author: '某金融考研机构教学总监',
-    meta: '金融 431 · 200+ 学员',
+    meta: '金融 431,200+ 学员',
     highlight: '出题时间节省 90%',
   },
   {
     quote: 'Memorix 的记忆算法是我们选 UniMind 的关键。同样刷 100 道题，用自适应复习的学生知识留存明显更高——续费率就是最好的证明。',
     author: '某连锁考研品牌联合创始人',
-    meta: '多学科 · 500+ 学员',
+    meta: '多学科,500+ 学员',
     highlight: '续费率提升 23%',
   },
   {
     quote: '以前管理不同学科老师用一个 Excel 到处发。现在 UniMind 分学科权限、出题、布置作业、看学情——一个平台全搞定。',
     author: '某职业教育机构校长',
-    meta: '职业资格证 · 300+ 学员',
+    meta: '职业资格证,300+ 学员',
     highlight: '管理效率提升 10×',
   },
 ];
@@ -727,10 +727,12 @@ const PLANS = [
     features: [
       'AI 出题 20 次/月',
       '视频课程',
-      '基础题库 · 手动组卷',
+      '基础题库,手动组卷',
       '错题复盘中心',
       '基础学情统计',
-      '30 名学员 · 1 名教师',
+      '在线自习室,番茄钟',
+      '在线答疑系统',
+      '30 名学员,1 名教师',
     ],
   },
   {
@@ -742,13 +744,15 @@ const PLANS = [
     popular: false,
     features: [
       'AI 出题无限制',
-      '智能组卷 · 自动生成',
+      '智能组卷，自动生成',
       'Memorix 自适应复习',
       '交互式知识图谱',
-      'AI 学习助手 · 多 Bot',
+      'AI 学习助手，1 位通用助教',
       'AI 智能大纲生成',
+      '在线自习室 + 番茄钟',
+      '在线答疑系统',
       '个人完整学情报告',
-      '50 名学员 · 1 名教师',
+      '50 名学员 / 1 名教师',
     ],
   },
   {
@@ -759,36 +763,43 @@ const PLANS = [
     cta: '14 天免费试用',
     popular: true,
     features: [
-      '含 Solo 全部功能',
+      'AI 出题无限制',
+      '智能组卷，自动生成',
+      'Memorix 自适应复习',
+      '交互式知识图谱',
+      'AI 智能大纲生成',
+      '在线自习室 + 番茄钟',
       '在线答疑系统',
-      '多教师协作 · 权限管理',
-      '实时自习室 · 番茄钟',
-      '模拟考试',
-      'AI 模拟面试 · 五维雷达图',
-      '班级对比报表 · 数据导出',
-      '200 名学员 · 5 名教师',
+      '完整学情报告',
+      'AI 助教个性化配置',
+      '3 位专属学科助教',
+      '多教师协作与权限管理',
+      'AI 模拟考试',
+      'AI 模拟面试 + 五维雷达图',
+      '200 名学员 / 5 名教师',
     ],
   },
   {
     name: 'Pro',
-    desc: '企业级旗舰方案，满足规模化与定制需求',
+    desc: '企业级方案，本地化、规模化与定制',
     monthly: '¥3,999',
     yearly: '¥2,999',
     cta: '预约演示',
     popular: false,
     features: [
       '含 Plus 全部功能',
-      '学员数不限 · 教师数不限',
-      '品牌定制 · 白标部署',
-      '私有化部署 · 数据主权',
-      'API 接入 · 系统集成',
-      '多语言 · 国际化支持',
-      '开源组件 · 二次开发',
-      'SSO · SAML 单点登录',
-      '审计日志 · 合规就绪',
+      '学员数不限,教师数不限',
+      '品牌定制,白标部署',
+      '私有化部署,数据主权',
+      'API 接入,系统集成',
+      '多语言,国际化支持',
+      '开源组件,二次开发',
+      '私有知识注入,本地推理',
+      'SSO,SAML 单点登录',
+      '审计日志,合规就绪',
       '专属客户成功经理',
       'SLA 99.9% 可用性保障',
-      '学生端收费 · 自主定价',
+      '学生端收费,自主定价',
     ],
   },
 ];
@@ -850,10 +861,12 @@ const Pricing: React.FC = () => {
                 <div className="mb-5">
                   <span className="text-4xl font-bold text-[#0F1729] tracking-tight">{price}</span>
                   {plan.monthly !== '¥0' && <span className="text-sm font-semibold text-[#94A3B8] ml-0.5">/月</span>}
-                  {annual && plan.yearly !== '¥0' && (
+                  {annual && plan.yearly !== '¥0' ? (
                     <p className="text-xs text-[#94A3B8] mt-1">
                       年付 ¥{parseInt(plan.yearly.replace('¥', '')) * 12}
                     </p>
+                  ) : (
+                    <div className="mt-1 h-4" />
                   )}
                 </div>
 
@@ -996,7 +1009,7 @@ const Footer: React.FC = () => (
           <a href="#faq" className="text-sm font-medium text-[#64748B] hover:text-[#0F1729] transition-colors">常见问题</a>
         </div>
         <p className="text-xs font-medium text-[#94A3B8]">
-          &copy; {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}
+          &copy; {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY},{APP_VERSION}
         </p>
       </div>
     </div>

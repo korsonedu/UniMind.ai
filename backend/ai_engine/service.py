@@ -255,21 +255,49 @@ class AIEngine:
 
     @classmethod
     def extract_json(cls, text):
-        """通用的 JSON 提取工具，支持 Markdown 包裹和纯文本"""
+        """通用的 JSON 提取工具，支持 Markdown 包裹、混合文本和常见 JSON 瑕疵"""
         if not text:
             return None
+        s = text.strip()
+
+        # 1) 直接解析
         try:
-            # 尝试直接解析
-            return json.loads(text.strip())
+            return json.loads(s)
         except json.JSONDecodeError:
-            # 尝试正则提取 Markdown 代码块
-            content = re.sub(r'^```(json)?\s*', '', text.strip(), flags=re.I)
-            content = re.sub(r'\s*```$', '', content)
+            pass
+
+        # 2) 提取 markdown ```json ... ``` 代码块（可在文本任意位置）
+        fence_m = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', s, flags=re.I)
+        if fence_m:
             try:
-                return json.loads(content)
-            except Exception as e:
-                logger.warning("JSON 提取失败: %s", e)
-                return None
+                return json.loads(fence_m.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # 3) 用括号匹配定位最外层 JSON 对象或数组
+        for left, right in [('{', '}'), ('[', ']')]:
+            start = s.find(left)
+            if start < 0:
+                continue
+            depth = 0
+            end = -1
+            for i in range(start, len(s)):
+                ch = s[i]
+                if ch == left:
+                    depth += 1
+                elif ch == right:
+                    depth -= 1
+                    if depth == 0:
+                        end = i
+                        break
+            if end > start:
+                try:
+                    return json.loads(s[start:end + 1])
+                except json.JSONDecodeError:
+                    pass
+
+        logger.warning("JSON 提取失败: %s", text[:200])
+        return None
 
     @classmethod
     def call_ai_stream(cls, messages, temperature=0.7, max_tokens=8192, operation='general'):

@@ -1152,6 +1152,33 @@
     postcss "^8.4.41"
     tailwindcss "4.1.18"
 
+"@tauri-apps/api@^2.11.0":
+  version "2.11.0"
+  resolved "https://registry.npmjs.org/@tauri-apps/api/-/api-2.11.0.tgz"
+  integrity sha512-7CinYODhky9lmO23xHnUFv0Xt43fbtWMyxZcLcRBlFkcgXKuEirBvHpmtJ89YMhyeGcq20Wuc47Fa4XjyniywA==
+
+"@tauri-apps/cli-darwin-arm64@2.11.2":
+  version "2.11.2"
+  resolved "https://registry.npmjs.org/@tauri-apps/cli-darwin-arm64/-/cli-darwin-arm64-2.11.2.tgz"
+  integrity sha512-+4UZzLt+eOAEQCwgd+TqKgyUJMrvx+BgdXLLaqJYmPqzP+nE6YZr/hY6CWLYGQb8jFn99jEkmC6uA3tNvamA1w==
+
+"@tauri-apps/cli@^2.11.2":
+  version "2.11.2"
+  resolved "https://registry.npmjs.org/@tauri-apps/cli/-/cli-2.11.2.tgz"
+  integrity sha512-bk3HemqvGRoy+5D/dVMUQHKMYLglD0jVnMm/0iGMH6ufZ+p8r14m6BpIixwij3PBvZdvORUp1YifTD8QxVZ1Nw==
+  optionalDependencies:
+    "@tauri-apps/cli-darwin-arm64" "2.11.2"
+    "@tauri-apps/cli-darwin-x64" "2.11.2"
+    "@tauri-apps/cli-linux-arm-gnueabihf" "2.11.2"
+    "@tauri-apps/cli-linux-arm64-gnu" "2.11.2"
+    "@tauri-apps/cli-linux-arm64-musl" "2.11.2"
+    "@tauri-apps/cli-linux-riscv64-gnu" "2.11.2"
+    "@tauri-apps/cli-linux-x64-gnu" "2.11.2"
+    "@tauri-apps/cli-linux-x64-musl" "2.11.2"
+    "@tauri-apps/cli-win32-arm64-msvc" "2.11.2"
+    "@tauri-apps/cli-win32-ia32-msvc" "2.11.2"
+    "@tauri-apps/cli-win32-x64-msvc" "2.11.2"
+
 "@tiptap/core@^3.0.1", "@tiptap/core@^3.23.4", "@tiptap/core@3.23.4":
   version "3.23.4"
   resolved "https://registry.npmjs.org/@tiptap/core/-/core-3.23.4.tgz"

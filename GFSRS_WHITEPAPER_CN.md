@@ -245,7 +245,7 @@ For each user group:
                         ↓                                    ↓
                 FSRSProfile.weights                   FSRSOptimizationLog
                         ↓                                    ↓
-              调度器 (StudyPlan)  ←──── UserKnowledgeState (掌握度)
+              Memorix 调度器  ←──── UserKnowledgeState (掌握度)
                         ↓
               PersonalizedMockExam (个性化模考 PDF)
 ```

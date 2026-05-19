@@ -1,0 +1,64 @@
+{
+  "pageTitle": "Q&A",
+  "pageSubtitle": "Academic Questions · Expert Answers · In-Depth Discussion",
+
+  "replyUpdated": "Reply updated",
+  "updateFailed": "Update failed",
+  "deleteConfirm": "Confirm deleting this reply?",
+  "replyDeleted": "Reply deleted",
+  "deleteFailed": "Delete failed",
+  "operationFailed": "Operation failed",
+
+  "edit": "Edit",
+  "delete": "Delete",
+  "cancel": "Cancel",
+  "save": "Save",
+  "replyToTeacher": "Reply to Teacher",
+
+  "followed": "Following",
+  "unfollowed": "Unfollowed",
+  "followQuestion": "Follow",
+  "unfollowQuestion": "Unfollow",
+  "starQuestion": "Feature",
+  "unstarQuestion": "Unfeature",
+  "markUnsolved": "Mark Unsolved",
+  "markSolved": "Mark Solved",
+  "editContent": "Edit Content",
+  "deleteQuestion": "Delete Question",
+
+  "updated": "Updated",
+  "questionDeleted": "Question deleted",
+  "statusUpdated": "Status updated",
+  "replySubmitted": "Reply submitted",
+  "replyFailed": "Reply failed",
+
+  "resolved": "Resolved",
+  "pending": "Pending",
+
+  "downloadAttachments": "Download Attachments",
+  "answerStudent": "Answer Student",
+  "collapseReplies": "Collapse Replies",
+  "viewReplies": "View {{count}} follow-up replies",
+
+  "teacherReplyPlaceholder": "Teacher reply... (Enter to send, Shift+Enter for new line)",
+  "studentReplyPlaceholder": "Reply... (Enter to send, Shift+Enter for new line)",
+
+  "loadFailed": "Load failed",
+  "enterContent": "Please enter question content",
+  "questionSent": "Question posted",
+  "sendFailed": "Failed to send",
+
+  "deleteQuestionConfirm": "Confirm deleting this question?",
+  "questionPlaceholder": "Describe your question in detail...",
+  "addAttachment": "Add Attachment (Image/Document)",
+  "submitQuestion": "Submit Question",
+
+  "filterAll": "All",
+  "filterFollowed": "Following",
+  "filterUnsolved": "Unsolved",
+  "filterSolved": "Solved",
+  "filterStarred": "Featured",
+
+  "searchHistory": "Search Q&A history...",
+  "noResults": "No matching questions"
+}

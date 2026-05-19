@@ -1,0 +1,88 @@
+{
+  "pageTitle": "Mock Exams",
+  "pageSubtitle": "Auto-generate exams based on weak points, or download teacher-curated test papers.",
+
+  "publishDialog": {
+    "title": "Publish New Exam",
+    "titlePlaceholder": "Exam title (e.g. 2025 Mock Exam A)",
+    "descriptionPlaceholder": "Description (optional)",
+    "cancel": "Cancel",
+    "saving": "Publishing...",
+    "submit": "Publish Exam"
+  },
+
+  "submissionsDialog": {
+    "title": "Student Submissions",
+    "loading": "Loading...",
+    "noSubmissions": "No student submissions yet",
+    "submittedOn": "Submitted on {{date}}",
+    "studentAnswer": "Student Answer",
+    "gradedPdf": "Graded PDF",
+    "score": "Score",
+    "scorePlaceholder": "Enter score",
+    "feedback": "Feedback",
+    "feedbackPlaceholder": "Enter feedback",
+    "saving": "Saving...",
+    "saveScore": "Save Score",
+    "uploadHint": "Upload graded PDF with annotations"
+  },
+
+  "toast": {
+    "fillTitle": "Please enter a title and select a PDF file",
+    "examPublished": "Exam published",
+    "publishFailed": "Publish failed",
+    "loadSubmissionsFailed": "Failed to load submissions",
+    "scoreSaved": "Score saved",
+    "saveFailed": "Save failed",
+    "loadDataFailed": "Failed to load data",
+    "aiTaskSubmitted": "AI exam generation submitted. Please refresh shortly.",
+    "generateFailed": "Generation failed",
+    "deleted": "Deleted",
+    "deleteFailed": "Delete failed",
+    "answerUploaded": "Answer uploaded. Waiting for teacher grading.",
+    "uploadFailed": "Upload failed",
+    "examDeleted": "Exam deleted"
+  },
+
+  "tabAI": "AI Personalized Exam",
+  "tabTeacher": "Teacher-Curated Exams",
+
+  "aiSection": {
+    "title": "Generate Your Personalized Mock Exam",
+    "description": "Automatically generate PDF exam papers with solutions based on your MEMORIX data and mistake history.",
+    "generating": "Generating...",
+    "generate": "Generate Weekly Mock Exam",
+    "loading": "Loading...",
+    "noHistory": "No mock exam history",
+    "aiLabel": "AI Auto-Generated #{{id}}",
+    "statusProcessing": "Processing...",
+    "statusReady": "Ready",
+    "statusFailed": "Failed",
+    "questionInfo": "{{count}} questions · {{coverage}} weak points covered",
+    "downloadExam": "Download Exam",
+    "downloadAnswer": "Download Solutions",
+    "delete": "Delete",
+    "publishNew": "Publish New Exam"
+  },
+
+  "teacherSection": {
+    "loading": "Loading...",
+    "noExamsPublished": "No exams published by teacher yet",
+    "noExamsAvailable": "No published exams available",
+    "noDescription": "No description",
+    "publishedOn": "Published on {{date}}",
+    "downloadPdf": "Download Question PDF",
+    "viewSubmissions": "View Submissions",
+    "deleting": "Deleting...",
+    "delete": "Delete",
+    "myAnswer": "My Answer & Score",
+    "score": "Score: {{score}}",
+    "grading": "Grading in progress...",
+    "graded": "Graded",
+    "viewMyAnswer": "View My Answer",
+    "downloadGraded": "Download Graded Exam",
+    "teacherFeedback": "Teacher feedback: {{feedback}}",
+    "uploading": "Uploading...",
+    "uploadHint": "Take photo, convert to PDF and upload for teacher to grade"
+  }
+}

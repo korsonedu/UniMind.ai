@@ -19,7 +19,35 @@
     "permanent": "永久有效"
   },
   "features": {
-    "title": "当前方案功能"
+    "title": "当前方案功能",
+    "labels": {
+      "quiz.manual": "习题训练",
+      "quiz.exam": "模拟考试",
+      "wrong.review": "错题复盘",
+      "basic.stats": "基础统计",
+      "ai.generate": "AI 生成题目",
+      "memorix.review": "Memorix 记忆复习",
+      "full.report": "完整学情报告",
+      "knowledge.graph": "交互式知识图谱",
+      "ai.assistant": "AI 学习助手",
+      "course.video": "视频课程",
+      "video.outline": "AI 智能大纲",
+      "faq.system": "在线答疑系统",
+      "pdf.mock": "模拟考试",
+      "study.room": "实时自习室",
+      "multi.teacher": "多教师协作",
+      "class.compare": "班级对比",
+      "data.export": "数据导出",
+      "brand.custom": "品牌定制",
+      "api.access": "API 接入",
+      "student.payment": "学生端收费",
+      "private.deploy": "私有化部署",
+      "i18n.custom": "多语言 · 国际化",
+      "sso.saml": "SSO · SAML",
+      "audit.log": "审计日志",
+      "dedicated.support": "专属支持",
+      "sla.99.9": "SLA 99.9%"
+    }
   },
   "comparison": {
     "title": "方案对比"

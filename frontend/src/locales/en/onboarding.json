@@ -1,0 +1,44 @@
+{
+  "done": {
+    "title": "All Set!",
+    "teacherDesc": "Your institution has been created. You can now invite students and generate questions.",
+    "studentDesc": "You've successfully joined the institution. Start learning now.",
+    "enter": "Enter UniMind"
+  },
+  "role": {
+    "title": "Set Up Your Identity",
+    "subtitle": "Choose your role to get started with UniMind",
+    "teacherLabel": "I'm a Teacher / Institution",
+    "teacherDesc": "Create your institution and manage students and courses",
+    "studentLabel": "I'm a Student",
+    "studentDesc": "Join an existing institution and start practicing"
+  },
+  "teacher": {
+    "title": "Create Your Institution",
+    "subtitle": "Fill in your institution details to start managing your teaching team",
+    "inviteCodeLabel": "Invite Code * (provided by UniMind)",
+    "inviteCodePlaceholder": "Enter invite code",
+    "nameLabel": "Institution Name *",
+    "namePlaceholder": "Enter institution name",
+    "descPlaceholder": "Short description (e.g., CFA exam prep)",
+    "phoneLabel": "Contact Phone",
+    "phonePlaceholder": "Enter phone number",
+    "create": "Create Institution",
+    "errors": {
+      "enterInviteCode": "Please enter an invite code",
+      "enterName": "Please enter institution name",
+      "createFailed": "Creation failed"
+    }
+  },
+  "student": {
+    "title": "Join an Institution",
+    "subtitle": "Enter your institution's invite code to join and start learning",
+    "instruction": "Ask your teacher or institution admin for an invite code.",
+    "inviteCodePlaceholder": "Enter institution invite code",
+    "join": "Join Institution",
+    "errors": {
+      "enterInviteCode": "Please enter invite code",
+      "joinFailed": "Failed to join. Please check your invite code."
+    }
+  }
+}

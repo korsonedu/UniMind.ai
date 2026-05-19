@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -68,11 +69,12 @@ function PublishExamDialog({
   const [desc, setDesc] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
+  const { t } = useTranslation('pdfMockExam');
 
   const submit = async () => {
     const file = fileRef.current?.files?.[0];
     if (!file || !title.trim()) {
-      toast.error('请填写标题并选择 PDF 文件');
+      toast.error(t('toast.fillTitle'));
       return;
     }
     setSaving(true);
@@ -82,14 +84,14 @@ function PublishExamDialog({
       fd.append('description', desc.trim());
       fd.append('exam_pdf', file);
       await api.post('/quizzes/teacher-exams/create/', fd);
-      toast.success('试卷已发布');
+      toast.success(t('toast.examPublished'));
       setTitle('');
       setDesc('');
       if (fileRef.current) fileRef.current.value = '';
       onOpenChange(false);
       onPublished();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '发布失败'));
+      toast.error(formatApiErrorToast(e, t('toast.publishFailed')));
     } finally {
       setSaving(false);
     }
@@ -99,17 +101,17 @@ function PublishExamDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>发布新试卷</DialogTitle>
+          <DialogTitle>{t('publishDialog.title')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <Input
-            placeholder="试卷标题（如：2025 模拟卷 A）"
+            placeholder={t('publishDialog.titlePlaceholder')}
             className="h-9 text-sm"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
           <textarea
-            placeholder="试卷说明（可选）"
+            placeholder={t('publishDialog.descriptionPlaceholder')}
             className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             rows={2}
             value={desc}
@@ -118,9 +120,9 @@ function PublishExamDialog({
           <Input ref={fileRef} type="file" accept=".pdf" className="h-9 text-xs" />
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{t('publishDialog.cancel')}</Button>
           <Button size="sm" onClick={submit} disabled={saving}>
-            {saving ? '发布中...' : '发布试卷'}
+            {saving ? t('publishDialog.saving') : t('publishDialog.submit')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -145,6 +147,7 @@ function SubmissionsDialog({
   const [feedbacks, setFeedbacks] = useState<Record<number, string>>({});
   const [gradedFiles, setGradedFiles] = useState<Record<number, File | null>>({});
   const [savingIds, setSavingIds] = useState<Set<number>>(new Set());
+  const { t, i18n } = useTranslation('pdfMockExam');
 
   useEffect(() => {
     if (!open || !examId) return;
@@ -162,7 +165,7 @@ function SubmissionsDialog({
         setScores(sm);
         setFeedbacks(fm);
       })
-      .catch(() => toast.error('加载提交列表失败'))
+      .catch(() => toast.error(t('toast.loadSubmissionsFailed')))
       .finally(() => setLoading(false));
   }, [open, examId]);
 
@@ -177,10 +180,10 @@ function SubmissionsDialog({
         fd.append('graded_pdf', file);
       }
       await api.post(`/quizzes/teacher-exams/submissions/${subId}/grade/`, fd);
-      toast.success('评分已保存');
+      toast.success(t('toast.scoreSaved'));
       onGraded();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '保存失败'));
+      toast.error(formatApiErrorToast(e, t('toast.saveFailed')));
     } finally {
       setSavingIds((prev) => {
         const next = new Set(prev);
@@ -194,12 +197,12 @@ function SubmissionsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>学生提交列表</DialogTitle>
+          <DialogTitle>{t('submissionsDialog.title')}</DialogTitle>
         </DialogHeader>
         {loading ? (
-          <p className="text-sm text-muted-foreground text-center py-8">加载中...</p>
+          <p className="text-sm text-muted-foreground text-center py-8">{t('submissionsDialog.loading')}</p>
         ) : subs.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">暂无学生提交</p>
+          <p className="text-sm text-muted-foreground text-center py-8">{t('submissionsDialog.noSubmissions')}</p>
         ) : (
           <div className="space-y-4">
             {subs.map((s) => (
@@ -209,8 +212,7 @@ function SubmissionsDialog({
                     <p className="text-sm font-bold">{s.student_name}</p>
                     <p className="text-xs text-muted-foreground">{s.student_email}</p>
                     <p className="text-xs text-muted-foreground/60">
-                      提交于 {new Date(s.created_at).toLocaleString('zh-CN')}
-                    </p>
+                      {t('submissionsDialog.submittedOn', { date: new Date(s.created_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US') })}                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {s.answer_pdf_url && (
@@ -220,7 +222,7 @@ function SubmissionsDialog({
                         className="h-8 text-xs"
                         onClick={() => window.open(s.answer_pdf_url, '_blank')}
                       >
-                        学生解答
+                        {t('submissionsDialog.studentAnswer')}
                       </Button>
                     )}
                     {s.graded_pdf_url && (
@@ -230,7 +232,7 @@ function SubmissionsDialog({
                         className="h-8 text-xs text-green-700 border-green-300"
                         onClick={() => window.open(s.graded_pdf_url, '_blank')}
                       >
-                        批改件
+                        {t('submissionsDialog.gradedPdf')}
                       </Button>
                     )}
                   </div>
@@ -238,20 +240,20 @@ function SubmissionsDialog({
                 <div className="space-y-2">
                   <div className="flex items-end gap-3">
                     <div className="flex-1 space-y-1">
-                      <label className="text-xs font-bold text-muted-foreground">分数</label>
+                      <label className="text-xs font-bold text-muted-foreground">{t('submissionsDialog.score')}</label>
                       <Input
                         type="number"
                         className="h-9 text-sm"
-                        placeholder="输入分数"
+                        placeholder={t('submissionsDialog.scorePlaceholder')}
                         value={scores[s.id] ?? ''}
                         onChange={(e) => setScores((prev) => ({ ...prev, [s.id]: e.target.value }))}
                       />
                     </div>
                     <div className="flex-[2] space-y-1">
-                      <label className="text-xs font-bold text-muted-foreground">评语</label>
+                      <label className="text-xs font-bold text-muted-foreground">{t('submissionsDialog.feedback')}</label>
                       <Input
                         className="h-9 text-sm"
-                        placeholder="输入评语"
+                        placeholder={t('submissionsDialog.feedbackPlaceholder')}
                         value={feedbacks[s.id] ?? ''}
                         onChange={(e) => setFeedbacks((prev) => ({ ...prev, [s.id]: e.target.value }))}
                       />
@@ -262,7 +264,7 @@ function SubmissionsDialog({
                       disabled={savingIds.has(s.id)}
                       onClick={() => saveGrade(s.id)}
                     >
-                      {savingIds.has(s.id) ? '保存中...' : '保存评分'}
+                      {savingIds.has(s.id) ? t('submissionsDialog.saving') : t('submissionsDialog.saveScore')}
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
@@ -272,7 +274,7 @@ function SubmissionsDialog({
                       className="h-8 text-xs flex-1"
                       onChange={(e) => setGradedFiles((prev) => ({ ...prev, [s.id]: e.target.files?.[0] || null }))}
                     />
-                    <span className="text-[10px] text-muted-foreground shrink-0">上传批改后带笔迹的PDF</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{t('submissionsDialog.uploadHint')}</span>
                   </div>
                 </div>
               </div>
@@ -292,6 +294,7 @@ export const PdfMockExam: React.FC = () => {
   const [teacherItems, setTeacherItems] = useState<TeacherExamItem[]>([]);
   const [failed, setFailed] = useState('');
   const [uploadingExamId, setUploadingExamId] = useState<number | null>(null);
+  const { t, i18n } = useTranslation('pdfMockExam');
   const user = useAuthStore((s) => s.user);
   const isAdmin = isAdminUser(user);
 
@@ -304,7 +307,7 @@ export const PdfMockExam: React.FC = () => {
       const tRes = await api.get('/quizzes/teacher-exams/');
       setTeacherItems((tRes.data?.results || []) as TeacherExamItem[]);
     } catch (e) {
-      setFailed(formatApiErrorToast(e, '加载数据失败'));
+      setFailed(formatApiErrorToast(e, t('toast.loadDataFailed')));
     } finally {
       setLoading(false);
     }
@@ -326,10 +329,10 @@ export const PdfMockExam: React.FC = () => {
     setCreating(true);
     try {
       await api.post('/quizzes/personalized-mock-exams/', {});
-      toast.success('已提交 AI 组卷任务，请稍候刷新查看');
+      toast.success(t('toast.aiTaskSubmitted'));
       await loadData();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '生成失败'));
+      toast.error(formatApiErrorToast(e, t('toast.generateFailed')));
     } finally {
       setCreating(false);
     }
@@ -338,10 +341,10 @@ export const PdfMockExam: React.FC = () => {
   const deleteExam = async (examId: number) => {
     try {
       await api.delete(`/quizzes/personalized-mock-exams/?id=${examId}`);
-      toast.success('已删除');
+      toast.success(t('toast.deleted'));
       await loadData();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '删除失败'));
+      toast.error(formatApiErrorToast(e, t('toast.deleteFailed')));
     }
   };
 
@@ -353,10 +356,10 @@ export const PdfMockExam: React.FC = () => {
       const fd = new FormData();
       fd.append('file', file);
       await api.post(`/quizzes/teacher-exams/${examId}/submit/`, fd);
-      toast.success('解答上传成功，等待老师批改');
+      toast.success(t('toast.answerUploaded'));
       await loadData();
     } catch (err) {
-      toast.error(formatApiErrorToast(err, '上传失败'));
+      toast.error(formatApiErrorToast(err, t('toast.uploadFailed')));
     } finally {
       setUploadingExamId(null);
     }
@@ -372,55 +375,55 @@ export const PdfMockExam: React.FC = () => {
     setDeletingId(examId);
     try {
       await api.delete(`/quizzes/teacher-exams/${examId}/delete/`);
-      toast.success('试卷已删除');
+      toast.success(t('toast.examDeleted'));
       await loadData();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '删除失败'));
+      toast.error(formatApiErrorToast(e, t('toast.deleteFailed')));
     } finally {
       setDeletingId(null);
     }
   };
 
   return (
-    <PageWrapper title="模拟考试" subtitle="根据薄弱点自动组卷，或下载名师精选密卷。">
+    <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
       <div className="max-w-4xl mx-auto space-y-4 pb-16">
         <div className="flex items-center gap-4 border-b border-border pb-3">
-          <button onClick={() => setActiveTab('ai')} className={`text-sm font-bold pb-2 border-b-2 ${activeTab === 'ai' ? 'border-indigo-600' : 'border-transparent text-muted-foreground'}`}>AI 个性化组卷</button>
-          <button onClick={() => setActiveTab('teacher')} className={`text-sm font-bold pb-2 border-b-2 ${activeTab === 'teacher' ? 'border-indigo-600' : 'border-transparent text-muted-foreground'}`}>名师精选密卷</button>
+          <button onClick={() => setActiveTab('ai')} className={`text-sm font-bold pb-2 border-b-2 ${activeTab === 'ai' ? 'border-indigo-600' : 'border-transparent text-muted-foreground'}`}>{t('tabAI')}</button>
+          <button onClick={() => setActiveTab('teacher')} className={`text-sm font-bold pb-2 border-b-2 ${activeTab === 'teacher' ? 'border-indigo-600' : 'border-transparent text-muted-foreground'}`}>{t('tabTeacher')}</button>
         </div>
 
         {activeTab === 'ai' ? (
           <>
             <Card className="p-5 rounded-2xl border border-border/60 flex items-center justify-between">
               <div>
-                <p className="text-sm font-black">个性化纸质模考</p>
-                <p className="text-xs text-muted-foreground mt-1">根据你的 FSRS 数据和错题本，自动生成 PDF 试卷与解析。</p>
+                <p className="text-sm font-black">{t('aiSection.title')}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('aiSection.description')}</p>
               </div>
               <Button className="rounded-xl text-xs font-bold bg-black text-white" onClick={createExam} disabled={creating}>
-                {creating ? '生成中...' : '生成本周专属模考'}
+                {creating ? t('aiSection.generating') : t('aiSection.generate')}
               </Button>
             </Card>
 
             {loading ? (
-              <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">加载中...</Card>
+              <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">{t('aiSection.loading')}</Card>
             ) : failed ? (
               <Card className="p-10 rounded-2xl border border-red-200 bg-red-50/70 text-center text-sm font-bold text-red-700">{failed}</Card>
             ) : items.length === 0 ? (
-              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title="暂无历史模考记录" className="py-4" /></Card>
+              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title={t('aiSection.noHistory')} className="py-4" /></Card>
             ) : (
               items.map((item) => (
                 <Card key={item.id} className={`p-4 rounded-2xl border ${item.status === 'processing' ? 'border-amber-200 bg-amber-50/40' : 'border-border/60'}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-black">
-                        AI 自动组卷 #{item.id}
-                        {item.status === 'processing' && <span className="ml-2 text-amber-600 text-xs font-bold animate-pulse">生成中...</span>}
-                        {item.status === 'ready' && <span className="ml-2 text-green-600 text-xs">可下载</span>}
-                        {item.status === 'failed' && <span className="ml-2 text-red-600 text-xs">失败</span>}
+                        {t('aiSection.aiLabel', { id: item.id })}
+                        {item.status === 'processing' && <span className="ml-2 text-amber-600 text-xs font-bold animate-pulse">{t('aiSection.statusProcessing')}</span>}
+                        {item.status === 'ready' && <span className="ml-2 text-green-600 text-xs">{t('aiSection.statusReady')}</span>}
+                        {item.status === 'failed' && <span className="ml-2 text-red-600 text-xs">{t('aiSection.statusFailed')}</span>}
                       </p>
                       {item.status !== 'processing' && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          题量 {item.question_count} · 薄弱点命中 {item.weak_coverage} · {new Date(item.created_at).toLocaleString('zh-CN')}
+                          {t('aiSection.questionInfo', { count: item.question_count, coverage: item.weak_coverage })} · {new Date(item.created_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}
                         </p>
                       )}
                       {item.error_message ? <p className="text-xs text-red-600 mt-1">{item.error_message}</p> : null}
@@ -429,15 +432,15 @@ export const PdfMockExam: React.FC = () => {
                       {item.status === 'ready' && (
                         <>
                           <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => window.open(item.exam_pdf_url, '_blank')}>
-                            下载试卷版
+                            {t('aiSection.downloadExam')}
                           </Button>
                           <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => window.open(item.answer_pdf_url, '_blank')}>
-                            下载解析版
+                            {t('aiSection.downloadAnswer')}
                           </Button>
                         </>
                       )}
                       <Button size="sm" variant="ghost" className="h-8 text-[11px] text-red-500 hover:text-red-700" onClick={() => deleteExam(item.id)}>
-                        删除
+                        {t('aiSection.delete')}
                       </Button>
                     </div>
                   </div>
@@ -450,7 +453,7 @@ export const PdfMockExam: React.FC = () => {
             {isAdmin && (
               <div className="flex justify-end">
                 <Button size="sm" variant="apple" onClick={() => setPublishOpen(true)}>
-                  发布新试卷
+                  {t('aiSection.publishNew')}
                 </Button>
               </div>
             )}
@@ -462,25 +465,25 @@ export const PdfMockExam: React.FC = () => {
             />
 
             {loading ? (
-              <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">加载中...</Card>
+              <Card className="p-10 rounded-2xl border border-border/60 text-center text-sm font-bold text-muted-foreground">{t('teacherSection.loading')}</Card>
             ) : failed ? (
               <Card className="p-10 rounded-2xl border border-red-200 bg-red-50/70 text-center text-sm font-bold text-red-700">{failed}</Card>
             ) : teacherItems.length === 0 && !isAdmin ? (
-              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title="老师暂未发布试卷" className="py-4" /></Card>
+              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title={t('teacherSection.noExamsPublished')} className="py-4" /></Card>
             ) : teacherItems.length === 0 ? (
-              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title="暂无已发布试卷" className="py-4" /></Card>
+              <Card className="p-6 rounded-2xl border border-border/60"><EmptyState title={t('teacherSection.noExamsAvailable')} className="py-4" /></Card>
             ) : (
               teacherItems.map((item) => (
                 <Card key={item.id} className="p-5 rounded-2xl border border-border/60 space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-base font-black">{item.title}</p>
-                      <p className="text-sm text-muted-foreground mt-1">{item.description || '无详细说明'}</p>
-                      <p className="text-xs text-muted-foreground/60 mt-1">发布于 {new Date(item.created_at).toLocaleString('zh-CN')}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{item.description || t('teacherSection.noDescription')}</p>
+                      <p className="text-xs text-muted-foreground/60 mt-1">{t('teacherSection.publishedOn', { date: new Date(item.created_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US') })}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Button size="sm" variant="default" className="h-9 text-xs" disabled={!item.exam_pdf_url} onClick={() => window.open(item.exam_pdf_url, '_blank')}>
-                        下载题目 PDF
+                        {t('teacherSection.downloadPdf')}
                       </Button>
                       {isAdmin && (
                         <>
@@ -490,7 +493,7 @@ export const PdfMockExam: React.FC = () => {
                             className="h-9 text-xs"
                             onClick={() => { setSubmissionsExamId(item.id); setSubmissionsOpen(true); }}
                           >
-                            查看提交
+                            {t('teacherSection.viewSubmissions')}
                           </Button>
                           <Button
                             size="sm"
@@ -499,7 +502,7 @@ export const PdfMockExam: React.FC = () => {
                             disabled={deletingId === item.id}
                             onClick={() => deleteTeacherExam(item.id)}
                           >
-                            {deletingId === item.id ? '删除中...' : '删除'}
+                            {deletingId === item.id ? t('teacherSection.deleting') : t('teacherSection.delete')}
                           </Button>
                         </>
                       )}
@@ -507,32 +510,32 @@ export const PdfMockExam: React.FC = () => {
                   </div>
                   {!isAdmin && (
                     <div className="p-4 bg-muted/40 rounded-xl border border-border/50">
-                      <p className="text-xs font-black tracking-widest text-muted-foreground uppercase mb-3">我的作答与成绩</p>
+                      <p className="text-xs font-black tracking-widest text-muted-foreground uppercase mb-3">{t('teacherSection.myAnswer')}</p>
                       {item.submission ? (
                         <div className="space-y-2">
                           <div className="flex items-center gap-3">
                              <span className="text-sm font-bold">
-                               {item.submission.score !== null ? `成绩: ${item.submission.score} 分` : '老师批改中...'}
+                               {item.submission.score !== null ? t('teacherSection.score', { score: item.submission.score }) : t('teacherSection.grading')}
                                {item.submission.graded_pdf_url && (
-                                 <span className="ml-2 text-green-600 text-xs bg-green-50 px-2 py-0.5 rounded-full">已批改</span>
+                                 <span className="ml-2 text-green-600 text-xs bg-green-50 px-2 py-0.5 rounded-full">{t('teacherSection.graded')}</span>
                                )}
                              </span>
-                             <Button size="sm" variant="link" className="h-6 px-0 text-xs" onClick={() => window.open(item.submission!.answer_pdf_url, '_blank')}>查看我的解答</Button>
+                             <Button size="sm" variant="link" className="h-6 px-0 text-xs" onClick={() => window.open(item.submission!.answer_pdf_url, '_blank')}>{t('teacherSection.viewMyAnswer')}</Button>
                              {item.submission.graded_pdf_url && (
-                               <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => window.open(item.submission!.graded_pdf_url, '_blank')}>下载批改后试卷</Button>
+                               <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => window.open(item.submission!.graded_pdf_url, '_blank')}>{t('teacherSection.downloadGraded')}</Button>
                              )}
                           </div>
                           {item.submission.feedback && (
                              <div className="text-sm text-indigo-900 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                               老师评语: {item.submission.feedback}
+                               {t('teacherSection.teacherFeedback', { feedback: item.submission.feedback })}
                              </div>
                           )}
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">
                           <Input type="file" accept=".pdf,.jpg,.png" className="w-[260px] h-9 text-xs" onChange={(e) => uploadSubmission(item.id, e)} />
-                          {uploadingExamId === item.id && <span className="text-xs text-muted-foreground">上传中...</span>}
-                          <span className="text-xs text-muted-foreground">做完后拍照转成PDF上传给老师批改</span>
+                          {uploadingExamId === item.id && <span className="text-xs text-muted-foreground">{t('teacherSection.uploading')}</span>}
+                          <span className="text-xs text-muted-foreground">{t('teacherSection.uploadHint')}</span>
                         </div>
                       )}
                     </div>

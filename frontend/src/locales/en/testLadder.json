@@ -1,0 +1,149 @@
+{
+  "hero": {
+    "title1": "Memorix UM1-Preview",
+    "title2": "Smart Assessment System",
+    "mobileSubtitle": "Quickly pinpoint weak areas based on your learning trajectory and dive into focused practice.",
+    "desktopSubtitle": "The Memorix system automatically identifies your knowledge blind spots from your learning history. Through deep academic training, it helps you build outstanding subject mastery and scoring ability within limited time."
+  },
+  "memorixDialog": {
+    "title": "Next-Gen Memorix Smart Assessment System",
+    "description": "This is not the traditional fixed-interval Memorix review — it's a more advanced, more precise, self-evolving memory algorithm.",
+    "p1": "Our Memorix UM1 continuously learns from your real answering trajectory, dynamically fits your forgetting curve, and calculates for each question \"when is the optimal time to review\" — rather than pushing reviews on a fixed schedule.",
+    "p2": "Compared to older approaches, it excels in three dimensions: finer granularity (question-level scheduling), higher precision (individualized parameter iteration), and greater efficiency (prioritizing borderline forgetting points to reduce wasted repetition).",
+    "p3": "This is the core purpose of the Memorix Smart Assessment System: using advanced algorithms to concentrate limited study time on the areas that need it most, maximizing score improvement efficiency."
+  },
+  "suggestion": "Recommendation: {{recommended}} questions, ~{{estimated}} min ({{weakFocus}} weak-point focus)",
+  "reminder": {
+    "title": "Reminder Settings",
+    "questionType": "Question Type Reminder",
+    "testResult": "Test Result Reminder"
+  },
+  "questionCount": "Questions",
+  "questionCountMobile": "Question Count",
+  "custom": "Custom",
+  "questionsWithCount": "{{count}} questions",
+  "difficulty": {
+    "label": "Difficulty",
+    "mixed": "Mixed",
+    "entry": "Entry",
+    "easy": "Easy",
+    "normal": "Normal",
+    "hard": "Hard"
+  },
+  "preference": {
+    "label": "Preference",
+    "balanced": "Smart Mix",
+    "newFirst": "New First",
+    "reviewFirst": "Review First"
+  },
+  "subjectFilter": "Subject Filter",
+  "allSubjects": "All Subjects",
+  "loading": "Loading...",
+  "clearFilter": "Clear Filter",
+  "startTraining": "Start Training",
+  "wrongQuestionReview": "Wrong Question Review",
+  "stats": {
+    "todayReview": "Today's Review",
+    "due": "Due",
+    "atRisk": "Memory at Risk",
+    "atRiskUnit": "At Risk"
+  },
+  "memorix": {
+    "curveTitle": "Memorix Fit Curve",
+    "curveSubtitle": "Predicted vs Actual Mastery (last {{days}} days)",
+    "sampleCount": "Sample Size",
+    "predictionAccuracy": "Prediction Accuracy",
+    "avgError": "Avg Error",
+    "predictedMastery": "Predicted Mastery",
+    "actualMastery": "Actual Mastery",
+    "predictedCurve": "Predicted Curve",
+    "actualCurve": "Actual Curve",
+    "lastOptimized": "Last optimized: {{date}}",
+    "notOptimized": "Not yet optimized",
+    "tuningHistory": "Recent Tuning History",
+    "noTuningHistory": "No tuning history yet",
+    "accepted": "Accepted",
+    "notAccepted": "Rejected",
+    "improvementRate": "improvement",
+    "samples": "samples",
+    "emptyCurve": "Not enough review data yet. Complete a few training rounds and your personalized Memorix fit curve will appear here."
+  },
+  "toast": {
+    "loadReportError": "Failed to load assessment report",
+    "addedToFavorites": "Added to favorites",
+    "removedFromFavorites": "Removed from favorites",
+    "operationFailed": "Operation failed",
+    "mastered": "Mastered!",
+    "noQuestions": "No questions available in the bank",
+    "loadQuestionsError": "Failed to load questions",
+    "notAllAnswered": "Please answer all questions ({{answered}}/{{total}})",
+    "exerciseCompleted": "Exercise completed",
+    "submissionSent": "Submission sent for AI grading",
+    "submissionSentDesc": "Check the notification center for your report when ready.",
+    "submissionFailed": "Submission failed",
+    "loadWrongReviewError": "Failed to load wrong question review"
+  },
+  "assessment": {
+    "title": "Academic Assessment",
+    "questionTypes": {
+      "objective": "Multiple Choice",
+      "calculate": "Calculation",
+      "noun": "Definition",
+      "subjective": "Essay"
+    },
+    "mastered": "Mastered",
+    "notMastered": "Master",
+    "questionMatrix": "Question Matrix",
+    "answered": "Answered",
+    "prevQuestion": "Previous",
+    "nextQuestion": "Next",
+    "submitting": "Submitting...",
+    "submit": "Submit",
+    "placeholderMastered": "Question marked as mastered — no answer needed...",
+    "placeholderDefault": "Enter your analysis or solution here..."
+  },
+  "result": {
+    "title": "Assessment Report",
+    "totalScore": "Total Score",
+    "eloChange": "ELO Change",
+    "myResponse": "My Response",
+    "noAnswer": "(Unanswered)",
+    "aiFeedback": "AI Feedback",
+    "academicAnalysis": "Academic Analysis",
+    "assessmentMatrix": "Assessment Matrix",
+    "scoreRate": "Score Rate",
+    "matrixHint": "Click a question number to switch. Green = passed, red = needs work.",
+    "testResultReminder": "Test Result Reminder",
+    "testResultReminderBody": "Score {{totalScore}}/{{maxScore}}, ELO {{eloText}}"
+  },
+  "leaderboard": {
+    "title": "Global Academic Ranking",
+    "rank": "Rank",
+    "userInfo": "User Info",
+    "eloScore": "ELO Score",
+    "activity": "Activity"
+  },
+  "wrongReview": {
+    "title": "Wrong Question Review Center",
+    "subtitle": "Break down weak points by cause and exam topic to quickly enter the next round of focused practice.",
+    "backToTraining": "Back to Training",
+    "refreshReview": "Refresh",
+    "wrongQuestionCount": "Wrong Questions",
+    "totalWrongAttempts": "Total Wrong Attempts",
+    "recommendedDrills": "Recommended Drills",
+    "drillTraining": "One-Tap Drill Training",
+    "noDrillsAvailable": "No drills available yet. Drills are auto-generated as you practice.",
+    "questionCount": "{{count}} questions, {{suggested}} suggested",
+    "cause": "Cause",
+    "knowledgePoint": "Topic",
+    "startDrill": "Start Drill",
+    "causeBreakdown": "By Cause",
+    "noCauseData": "No cause data yet.",
+    "wrongQuestions": "{{count}} wrong, {{attempts}} attempts",
+    "kpBreakdown": "By Exam Topic",
+    "noKpData": "No topic data yet.",
+    "avgWrongCount": "{{count}} wrong, avg {{avg}} attempts",
+    "noDrillQuestions": "No questions available for this drill"
+  },
+  "refresh": "Refresh"
+}

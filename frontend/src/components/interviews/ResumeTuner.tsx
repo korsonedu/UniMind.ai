@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +26,7 @@ export const ResumeTuner: React.FC = () => {
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const { t, i18n } = useTranslation('interviews');
   const dropRef = useRef<HTMLDivElement>(null);
 
   const fetchRecords = useCallback(async () => {
@@ -42,7 +44,7 @@ export const ResumeTuner: React.FC = () => {
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
 
   const handleSubmit = async () => {
-    if (!text.trim() && !file) { toast.error('请填写简历文本或上传文件'); return; }
+    if (!text.trim() && !file) { toast.error(t('resumeTuner.fillRequired')); return; }
     setSaving(true);
     try {
       const fd = new FormData();
@@ -52,9 +54,9 @@ export const ResumeTuner: React.FC = () => {
       setText('');
       setFile(null);
       await fetchRecords();
-      toast.success('简历分析完成');
+      toast.success(t('resumeTuner.analysisComplete'));
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '简历分析失败'));
+      toast.error(formatApiErrorToast(e, t('resumeTuner.analysisFailed')));
     } finally {
       setSaving(false);
     }
@@ -73,7 +75,7 @@ export const ResumeTuner: React.FC = () => {
     if (f && ['.pdf', '.docx', '.doc', '.txt'].some(ext => f.name.toLowerCase().endsWith(ext))) {
       setFile(f); setText('');
     } else {
-      toast.error('仅支持 PDF / DOCX / TXT 格式');
+      toast.error(t('resumeTuner.unsupportedFormat'));
     }
   }, []);
 
@@ -91,7 +93,7 @@ export const ResumeTuner: React.FC = () => {
       {!hasContent && (
         <div className="rounded-2xl bg-slate-50/80 border border-slate-200/60 p-4">
           <p className="text-[13px] text-muted-foreground text-center">
-            暂无分析数据。请重新提交简历进行 AI 分析。
+            {t('resumeTuner.noData')}
           </p>
         </div>
       )}
@@ -100,7 +102,7 @@ export const ResumeTuner: React.FC = () => {
         <div className="rounded-2xl bg-amber-50/80 border border-amber-200/60 p-4">
           <div className="flex items-center gap-2 mb-2">
             <Target className="h-3.5 w-3.5 text-amber-600" />
-            <p className="text-[11px] font-black text-amber-700 uppercase tracking-widest">诊断</p>
+            <p className="text-[11px] font-black text-amber-700 uppercase tracking-widest">{t('resumeTuner.diagnosis')}</p>
           </div>
           <p className="text-[13px] text-amber-800 leading-relaxed">{r.diagnostics}</p>
         </div>
@@ -110,7 +112,7 @@ export const ResumeTuner: React.FC = () => {
         <div className="rounded-2xl bg-emerald-50/80 border border-emerald-200/60 p-4">
           <div className="flex items-center gap-2 mb-2">
             <PenLine className="h-3.5 w-3.5 text-emerald-600" />
-            <p className="text-[11px] font-black text-emerald-700 uppercase tracking-widest">润色建议</p>
+            <p className="text-[11px] font-black text-emerald-700 uppercase tracking-widest">{t('resumeTuner.polish')}</p>
           </div>
           <div className="space-y-2">
             {optimizedEntries.map(([key, val]) => (
@@ -127,7 +129,7 @@ export const ResumeTuner: React.FC = () => {
         <div className="rounded-2xl bg-indigo-50/80 border border-indigo-200/60 p-4">
           <div className="flex items-center gap-2 mb-2">
             <Lightbulb className="h-3.5 w-3.5 text-indigo-600" />
-            <p className="text-[11px] font-black text-indigo-700 uppercase tracking-widest">预测追问</p>
+            <p className="text-[11px] font-black text-indigo-700 uppercase tracking-widest">{t('resumeTuner.predictedQuestions')}</p>
           </div>
           <ul className="space-y-1.5">
             {r.predicted_questions.map((q, i) => (
@@ -152,8 +154,8 @@ export const ResumeTuner: React.FC = () => {
             <Sparkles className="h-4 w-4 text-indigo-600" />
           </div>
           <div>
-            <p className="text-sm font-black tracking-tight">简历调优</p>
-            <p className="text-[11px] text-muted-foreground font-medium">AI 诊断 · 润色 · 预测面试追问</p>
+            <p className="text-sm font-black tracking-tight">{t('resumeTuner.title')}</p>
+            <p className="text-[11px] text-muted-foreground font-medium">{t('resumeTuner.subtitle')}</p>
           </div>
         </div>
 
@@ -184,7 +186,7 @@ export const ResumeTuner: React.FC = () => {
                 className="text-[11px] font-bold text-muted-foreground hover:text-destructive transition-colors"
                 onClick={(e) => { e.stopPropagation(); setFile(null); }}
               >
-                移除
+                {t('resumeTuner.remove')}
               </button>
             </div>
           ) : (
@@ -192,8 +194,8 @@ export const ResumeTuner: React.FC = () => {
               <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto">
                 <Upload className="h-5 w-5 text-slate-400" />
               </div>
-              <p className="text-[13px] font-bold text-muted-foreground">拖拽简历文件到此处</p>
-              <p className="text-[11px] text-muted-foreground/60 font-medium">PDF / DOCX / TXT · 最大 10MB</p>
+              <p className="text-[13px] font-bold text-muted-foreground">{t('resumeTuner.dragHint')}</p>
+              <p className="text-[11px] text-muted-foreground/60 font-medium">{t('resumeTuner.formatHint')}</p>
             </div>
           )}
         </div>
@@ -208,7 +210,7 @@ export const ResumeTuner: React.FC = () => {
         {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-border/60" />
-          <span className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-widest">或</span>
+          <span className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-widest">{t('resumeTuner.or')}</span>
           <div className="flex-1 h-px bg-border/60" />
         </div>
 
@@ -218,7 +220,7 @@ export const ResumeTuner: React.FC = () => {
             value={text}
             onChange={(e) => { setText(e.target.value); if (e.target.value) setFile(null); }}
             className="w-full min-h-[100px] rounded-2xl border border-border/60 bg-slate-50/50 p-4 text-[13px] leading-relaxed resize-none placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
-            placeholder="或直接粘贴简历文本..."
+            placeholder={t('resumeTuner.pastePlaceholder')}
           />
           {text && (
             <button
@@ -236,14 +238,14 @@ export const ResumeTuner: React.FC = () => {
           disabled={saving || (!text.trim() && !file)}
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
-          {saving ? 'AI 分析中...' : '提交分析'}
+          {saving ? t('resumeTuner.analyzing') : t('resumeTuner.submit')}
         </Button>
       </Card>
 
       {/* Right: history */}
       <div className="rounded-2xl border border-border/60 bg-card text-card-foreground shadow-sm flex flex-col" style={{ height: '500px' }}>
         <div className="flex items-center justify-between p-5 pb-3 shrink-0">
-          <p className="text-sm font-black tracking-tight">分析记录</p>
+          <p className="text-sm font-black tracking-tight">{t('resumeTuner.history')}</p>
           {records.length > 0 && (
             <Badge variant="secondary" className="text-[10px] font-bold">{records.length}</Badge>
           )}
@@ -258,8 +260,8 @@ export const ResumeTuner: React.FC = () => {
             <div className="h-10 w-10 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto">
               <FileText className="h-5 w-5 text-slate-300" />
             </div>
-            <p className="text-[13px] font-bold text-muted-foreground">暂无分析记录</p>
-            <p className="text-[11px] text-muted-foreground/50 font-medium">提交一份简历开始 AI 分析</p>
+            <p className="text-[13px] font-bold text-muted-foreground">{t('resumeTuner.noHistory')}</p>
+            <p className="text-[11px] text-muted-foreground/50 font-medium">{t('resumeTuner.noHistoryHint')}</p>
           </div>
         ) : (
           <div className="space-y-2 flex-1 overflow-y-auto px-5 pb-5 min-h-0">
@@ -279,15 +281,15 @@ export const ResumeTuner: React.FC = () => {
                         r.score >= 60 ? 'bg-amber-100 text-amber-700' :
                         'bg-red-100 text-red-700'
                       }`}>
-                        {r.score}分
+                        {t('resumeTuner.score', { score: r.score })}
                       </span>
                     )}
                     <div className="min-w-0">
                       <p className="text-[13px] font-bold truncate">
-                        记录 #{r.id}
+                        {t('resumeTuner.recordNumber', { id: r.id })}
                       </p>
                       <p className="text-[10px] text-muted-foreground/50 font-medium">
-                        {new Date(r.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(r.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>

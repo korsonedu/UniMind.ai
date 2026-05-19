@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { InterviewRadarChart } from './RadarChart';
 import { toast } from 'sonner';
 import { formatApiErrorToast } from '@/lib/apiError';
@@ -27,14 +28,8 @@ interface Props {
   onRefresh: () => void;
 }
 
-const TYPE_LABEL: Record<string, string> = {
-  resume: '简历深挖', english: '英语口语', professional: '专业课', mixed: '综合面试',
-};
-const STYLE_LABEL: Record<string, string> = {
-  friendly: '引导模式', pressure: '压力模式',
-};
-
 export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
+  const { t } = useTranslation('interviews');
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState('');
@@ -101,7 +96,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
         onRefresh();
       }
     } catch (e: any) {
-      toast.error(formatApiErrorToast(e, '发送失败'));
+      toast.error(formatApiErrorToast(e, t('sessionChat.sendFailed')));
       setStreamingText('');
       setLocalCandidateTurn(null);
     } finally {
@@ -113,10 +108,10 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
     setFinishing(true);
     try {
       await api.post(`/interviews/sessions/${session.id}/finish/`, {});
-      toast.success('复盘已生成');
+      toast.success(t('sessionChat.reviewGenerated'));
       onRefresh();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '生成复盘失败'));
+      toast.error(formatApiErrorToast(e, t('sessionChat.generateReviewFailed')));
     } finally {
       setFinishing(false);
     }
@@ -138,13 +133,13 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
             Session {session.id}
           </span>
           <span className="text-[11px] text-neutral-400">
-            {TYPE_LABEL[session.session_type] || session.session_type}
+            {{ resume: t('sessionChat.typeResume'), english: t('sessionChat.typeEnglish'), professional: t('sessionChat.typeProfessional'), mixed: t('sessionChat.typeMixed') }[session.session_type] || session.session_type}
           </span>
           <span className="text-[11px] text-neutral-400">
-            {STYLE_LABEL[session.interviewer_style] || session.interviewer_style}
+            {{ friendly: t('sessionChat.styleFriendly'), pressure: t('sessionChat.stylePressure') }[session.interviewer_style] || session.interviewer_style}
           </span>
         </div>
-        {isAnalyzing && <span className="text-[11px] text-amber-600 font-medium animate-pulse">分析中</span>}
+        {isAnalyzing && <span className="text-[11px] text-amber-600 font-medium animate-pulse">{t('sessionChat.analyzing')}</span>}
         {!isCompleted && !isAnalyzing && (
           <button
             className="text-[11px] font-medium text-neutral-400 hover:text-neutral-800 transition-colors flex items-center gap-1"
@@ -152,10 +147,10 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
             disabled={finishing}
           >
             <StopCircle className="h-3 w-3" />
-            {finishing ? '生成中' : '结束面试'}
+            {finishing ? t('sessionChat.generating') : t('sessionChat.endInterview')}
           </button>
         )}
-        {isCompleted && <span className="text-[11px] font-medium text-emerald-600">已完成</span>}
+        {isCompleted && <span className="text-[11px] font-medium text-emerald-600">{t('sessionChat.completed')}</span>}
       </div>
 
       {/* Review header — shown only when completed */}
@@ -167,17 +162,17 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
                 <InterviewRadarChart scores={session.radar_scores} />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mb-1.5">综合评价</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mb-1.5">{t('sessionChat.overallFeedback')}</p>
                 <p className="text-[13px] text-neutral-700 leading-relaxed">
-                  {session.overall_feedback || '暂无反馈'}
+                  {session.overall_feedback || t('sessionChat.noFeedback')}
                 </p>
               </div>
             </div>
           ) : (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mb-1.5">综合评价</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mb-1.5">{t('sessionChat.overallFeedback')}</p>
               <p className="text-[13px] text-neutral-700 leading-relaxed">
-                {session.overall_feedback || '暂无反馈'}
+                {session.overall_feedback || t('sessionChat.noFeedback')}
               </p>
             </div>
           )}
@@ -187,7 +182,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
       {/* Conversation transcript */}
       <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 min-h-0">
         {turns.length === 0 && !localCandidateTurn && (
-          <p className="text-[13px] text-neutral-400 text-center py-16">等待面试官提问…</p>
+          <p className="text-[13px] text-neutral-400 text-center py-16">{t('sessionChat.waitingForInterviewer')}</p>
         )}
 
         {turns.map((turn) => (
@@ -195,7 +190,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
             <p className={`text-[10px] font-semibold uppercase tracking-widest mb-1 ${
               turn.speaker === 'interviewer' ? 'text-stone-400' : 'text-neutral-400'
             }`}>
-              {turn.speaker === 'interviewer' ? '面试官' : '你'}
+              {turn.speaker === 'interviewer' ? t('sessionChat.speakerInterviewer') : t('sessionChat.speakerCandidate')}
             </p>
             <div className={
               turn.speaker === 'interviewer'
@@ -218,7 +213,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
 
         {localCandidateTurn && (
           <div className="opacity-50">
-            <p className="text-[10px] font-semibold uppercase tracking-widest mb-1 text-neutral-400">你</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest mb-1 text-neutral-400">{t('sessionChat.speakerCandidate')}</p>
             <div className="pl-3 ml-0.5">
               <p className="text-[14px] text-neutral-700 whitespace-pre-wrap leading-relaxed">
                 {localCandidateTurn.text}
@@ -229,7 +224,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
 
         {streamingText && (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest mb-1 text-stone-400">面试官</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest mb-1 text-stone-400">{t('sessionChat.speakerInterviewer')}</p>
             <div className="border-l-2 border-amber-400 pl-3 ml-0.5">
               <p className="text-[14px] font-serif text-neutral-900 whitespace-pre-wrap leading-relaxed">
                 {streamingText}
@@ -249,7 +244,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入回答"
+            placeholder={t('sessionChat.inputPlaceholder')}
             rows={2}
             disabled={sending}
             className="flex-1 resize-none text-[14px] leading-relaxed bg-transparent border-0 outline-none placeholder:text-neutral-300 text-neutral-900 py-1"

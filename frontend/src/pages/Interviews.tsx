@@ -9,6 +9,7 @@ import { InterviewLobby } from '@/components/interviews/InterviewLobby';
 import { SessionList } from '@/components/interviews/SessionList';
 import { SessionChat } from '@/components/interviews/SessionChat';
 import { InlineError } from '@/components/InlineError';
+import { useTranslation } from 'react-i18next';
 
 interface Turn {
   id: number;
@@ -29,6 +30,7 @@ interface SessionItem {
 }
 
 export const Interviews: React.FC = () => {
+  const { t } = useTranslation('interviews');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeSessionId = Number(searchParams.get('session_id') || 0);
@@ -62,7 +64,7 @@ export const Interviews: React.FC = () => {
       }
       refetch();
     } catch (e) {
-      toast.error(formatApiErrorToast(e, '加载会话详情失败'));
+      toast.error(formatApiErrorToast(e, t('loadDetailFailed')));
     }
   }, [refetch]);
 
@@ -97,15 +99,15 @@ export const Interviews: React.FC = () => {
     }`;
 
   return (
-    <PageWrapper title="模拟面试" subtitle="简历调优、实时追问、逐轮反馈与五维复盘雷达。">
+    <PageWrapper title={t('pages:interviews.title')} subtitle={t('pages:interviews.subtitle')}>
       <div className="max-w-6xl mx-auto space-y-5 pb-20">
         {/* Tab bar */}
         <div className="flex items-center gap-5 border-b border-neutral-200">
           <button onClick={() => setActiveTab('lobby')} className={tabClass(activeTab === 'lobby')}>
-            面试大厅
+            {t('tabs.lobby')}
           </button>
           <button onClick={() => setActiveTab('history')} className={tabClass(activeTab === 'history')}>
-            会话与复盘
+            {t('tabs.history')}
           </button>
         </div>
 
@@ -113,7 +115,7 @@ export const Interviews: React.FC = () => {
           <InterviewLobby style={style} onStyleChange={setStyle} onSessionCreated={handleSessionCreated} />
         ) : historyLoading && (!sessions || sessions.length === 0) ? (
           <div className="flex items-center justify-center py-20">
-            <p className="text-[13px] text-neutral-400">加载中...</p>
+            <p className="text-[13px] text-neutral-400">{t('loading')}</p>
           </div>
         ) : historyFailed ? (
           <div className="py-10">
@@ -121,24 +123,24 @@ export const Interviews: React.FC = () => {
           </div>
         ) : !sessions || sessions.length === 0 ? (
           <div className="flex items-center justify-center py-20">
-            <p className="text-[13px] text-neutral-400">暂无面试记录，去面试大厅开始一场模拟面试</p>
+            <p className="text-[13px] text-neutral-400">{t('noSessions')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-[200px_1fr] gap-0 border border-neutral-200 rounded-lg overflow-hidden" style={{ height: '580px' }}>
             {/* Sidebar */}
             <div className="border-r border-neutral-200 bg-neutral-50/50 p-3 overflow-y-auto">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mb-2 px-3">会话</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400 mb-2 px-3">{t('sessionsSidebar')}</p>
               <SessionList sessions={sessions} activeId={activeSessionId} onSelect={handleSessionSelect} />
             </div>
             {/* Main content */}
             <div className="p-4 bg-white overflow-hidden">
               {!activeSessionId ? (
                 <div className="flex items-center justify-center h-full min-h-[480px]">
-                  <p className="text-[13px] text-neutral-400">选择左侧会话查看详情</p>
+                  <p className="text-[13px] text-neutral-400">{t('selectSessionHint')}</p>
                 </div>
               ) : !activeSession ? (
                 <div className="flex items-center justify-center h-full min-h-[480px]">
-                  <p className="text-[13px] text-neutral-400">会话不存在或无权限</p>
+                  <p className="text-[13px] text-neutral-400">{t('sessionNotFound')}</p>
                 </div>
               ) : (
                 <SessionChat session={activeSession} onRefresh={handleRefresh} />

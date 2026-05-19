@@ -1,0 +1,106 @@
+{
+  "pageTitle": "知识地图",
+  "pageSubtitle": "树状结构 · 关系图谱 · 资源详情，三栏联动探索知识体系。",
+  "pageLoadingSubtitle": "可视化呈现知识载体间的逻辑脉络与关联结构。",
+
+  "detailPage": {
+    "title": "知识点详情",
+    "subtitle": "知识点与关联题目",
+    "backButton": "返回知识卡片",
+    "nodeFallback": "知识点",
+    "descriptionFallback": "暂无描述",
+    "questionsHeading": "关联题目",
+    "noQuestions": "暂无关联题目"
+  },
+
+  "levels": {
+    "sub": "学科",
+    "ch": "篇章",
+    "sec": "小节",
+    "kp": "考点"
+  },
+
+  "masteryLevels": {
+    "mastered": "已掌握",
+    "stable": "已稳定",
+    "learning": "学习中",
+    "weak": "薄弱",
+    "unknown": "未知"
+  },
+
+  "treePanel": {
+    "searchPlaceholder": "搜索知识点...",
+    "noMatch": "无匹配知识点",
+    "legendMastered": "掌握",
+    "legendStable": "稳定",
+    "legendLearning": "学习",
+    "legendWeak": "薄弱"
+  },
+
+  "graph": {
+    "legendMastered": "掌握",
+    "legendStable": "稳定",
+    "legendLearning": "学习",
+    "legendWeak": "薄弱",
+    "legendUnknown": "未知"
+  },
+
+  "detailPanel": {
+    "selectTitle": "选择考点",
+    "selectHint": "在树状图或关系图中点击考点查看详情",
+    "relatedQuestions": "关联题目",
+    "courseResources": "课程资源",
+    "referenceArticles": "参考文章",
+    "noQuestions": "暂无题目",
+    "noCourses": "暂无课程",
+    "noArticles": "暂无文章"
+  },
+
+  "toolbar": {
+    "allBranches": "全部分支",
+    "searchKp": "搜索考点...",
+    "graphView": "关系图",
+    "listView": "词条表",
+    "noMatch": "没有匹配到相关知识点"
+  },
+
+  "mobile": {
+    "searchPlaceholder": "搜索知识卡片..."
+  },
+
+  "nodeDetailDialog": {
+    "relatedQuestions": "关联题目",
+    "courseResources": "课程资源",
+    "referenceArticles": "参考文章",
+    "standardAnswer": "标准答案",
+    "deepAnalysis": "深度学术解析"
+  },
+
+  "training": {
+    "title": "学术特训",
+    "questionType": {
+      "objective": "客观选择",
+      "calculate": "主观计算",
+      "noun": "名词解释",
+      "subjective": "主观论述"
+    },
+    "difficultyFallback": "适当",
+    "answerPlaceholder": "在此输入您的分析或计算过程...",
+    "resultLabel": "评估结果",
+    "passed": "通过评估",
+    "failed": "需加强记忆",
+    "scoreLabel": "得分",
+    "standardAnswer": "标准答案（满分示范）",
+    "rationale": "判分依据与深度解析",
+    "fallbackStandardAnswer": "暂无标准答案。",
+    "fallbackRationale": "暂无判分依据，请稍后重试。",
+    "emptyAnswer": "请输入或选择答案",
+    "submitSuccess": "已提交后台判分，你可以先去做别的事。",
+    "submitFailed": "提交失败",
+    "exit": "退出特训",
+    "submitting": "提交中...",
+    "submit": "提交评估",
+    "retry": "再次练习",
+    "complete": "完成特训"
+  }
+}

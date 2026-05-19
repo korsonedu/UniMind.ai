@@ -1,0 +1,14 @@
+{
+  "pageTitle": "AI 实验室",
+  "pageSubtitle": "与您的专属数字导师进行深度学术对话。",
+  "selectBot": "选择助教",
+  "welcomeMessage": "你好！我是{{botName}}。开始我们的学术交流吧！",
+  "sessionCleared": "会话历史已清空。",
+  "loadBotsFailed": "加载助教列表失败",
+  "loadHistoryFailed": "加载历史失败",
+  "sendFailed": "发送失败",
+  "selectBotFirst": "请选择 AI 助教",
+  "sessionReset": "会话已重置",
+  "resetFailed": "重置失败",
+  "featureName": "AI 助教会话"
+}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sparkles, Trophy, Medal, Loader2, Building2, Coins, HelpCircle, ArrowUpRight, ArrowDownRight, History } from 'lucide-react';
 import {
   Popover,
@@ -29,16 +30,6 @@ interface LedgerEntry {
   created_at: string;
 }
 
-const REASON_LABELS: Record<string, string> = {
-  exam_complete: '测验完成',
-  question_graded: '题目判分',
-  course_complete: '课程完成',
-  course_reward_claim: '课程奖励',
-  shop_redeem: '积分兑换',
-  admin_adjust: '管理员调整',
-  elo_reset: 'ELO重置',
-};
-
 const rankBadge = (rank: number) => {
   if (rank === 1) return <Trophy className="h-4 w-4 text-amber-500 fill-amber-500" />;
   if (rank === 2) return <Medal className="h-4 w-4 text-slate-400 fill-slate-400" />;
@@ -48,6 +39,7 @@ const rankBadge = (rank: number) => {
 
 export const EloPopover: React.FC = () => {
   const { user } = useAuthStore();
+  const { t } = useTranslation('elo');
   const [ranking, setRanking] = useState<RankedUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -132,7 +124,7 @@ export const EloPopover: React.FC = () => {
             onClick={() => setActiveTab('ranking')}
           >
             <Trophy className="h-3.5 w-3.5 inline mr-1.5" />
-            ELO 排名
+            {t('rankingTab')}
           </button>
           <button
             className={cn(
@@ -142,7 +134,7 @@ export const EloPopover: React.FC = () => {
             onClick={() => setActiveTab('points')}
           >
             <Coins className="h-3.5 w-3.5 inline mr-1.5" />
-            积分
+            {t('pointsTab')}
           </button>
         </div>
 
@@ -152,7 +144,7 @@ export const EloPopover: React.FC = () => {
             <div className="px-5 pt-5 pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">ELO 评分</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">{t('eloScore')}</p>
                   <p className="text-2xl font-black text-foreground tracking-tight">{user?.elo_score}</p>
                 </div>
                 <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
@@ -161,11 +153,11 @@ export const EloPopover: React.FC = () => {
               </div>
               {currentUserInList && (
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  本机构排名第 <span className="font-black text-foreground">{currentUserRank}</span> / {ranking.length} 人
+                  {t('rankOfTotal', { rank: currentUserRank, total: ranking.length })}
                 </p>
               )}
               <p className="text-[11px] text-muted-foreground leading-relaxed mt-2">
-                ELO 评分根据答题正确率、题目难度动态计算，反应你的真实学术水平。
+                {t('eloDescription')}
               </p>
             </div>
 
@@ -174,14 +166,14 @@ export const EloPopover: React.FC = () => {
             <div className="px-1 py-2">
               <div className="flex items-center gap-2 px-4 pb-2">
                 <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">机构排名</span>
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">{t('institutionRank')}</span>
               </div>
 
               {!hasInstitution && (
                 <div className="px-4 py-6 text-center">
                   <Building2 className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-muted-foreground">暂未加入机构</p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-1">加入机构后可查看内部排名</p>
+                  <p className="text-xs font-bold text-muted-foreground">{t('noInstitution')}</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">{t('noInstitutionDesc')}</p>
                 </div>
               )}
 
@@ -193,7 +185,7 @@ export const EloPopover: React.FC = () => {
 
               {hasInstitution && error === 'failed' && (
                 <div className="px-4 py-6 text-center">
-                  <p className="text-xs text-muted-foreground">排名加载失败，请稍后重试</p>
+                  <p className="text-xs text-muted-foreground">{t('rankError')}</p>
                 </div>
               )}
 
@@ -220,7 +212,7 @@ export const EloPopover: React.FC = () => {
                           isMe ? "text-primary" : "text-foreground"
                         )}>
                           {u.nickname || u.username}
-                          {isMe && <span className="text-[10px] text-muted-foreground ml-1">(你)</span>}
+                          {isMe && <span className="text-[10px] text-muted-foreground ml-1">{t('self')}</span>}
                         </span>
                         <span className={cn(
                           "text-xs font-black tabular-nums",
@@ -245,7 +237,7 @@ export const EloPopover: React.FC = () => {
                         </Avatar>
                         <span className="flex-1 text-xs font-bold text-primary truncate">
                           {user?.nickname || user?.username}
-                          <span className="text-[10px] text-muted-foreground ml-1">(你)</span>
+                          <span className="text-[10px] text-muted-foreground ml-1">{t('self')}</span>
                         </span>
                         <span className="text-xs font-black tabular-nums text-primary">{user?.elo_score}</span>
                       </div>
@@ -256,7 +248,7 @@ export const EloPopover: React.FC = () => {
 
               {hasInstitution && !loading && !error && ranking.length === 0 && (
                 <div className="px-4 py-6 text-center">
-                  <p className="text-xs text-muted-foreground">暂无排名数据</p>
+                  <p className="text-xs text-muted-foreground">{t('noRankingData')}</p>
                 </div>
               )}
             </div>
@@ -270,7 +262,7 @@ export const EloPopover: React.FC = () => {
             <div className="px-5 pt-5 pb-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">可用积分</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">{t('availablePoints')}</p>
                   <p className="text-2xl font-black text-foreground tracking-tight">{points}</p>
                 </div>
                 <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
@@ -278,7 +270,7 @@ export const EloPopover: React.FC = () => {
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed mt-2">
-                刷题和看课可获得积分，积分可用于解锁 AI 功能。学得越多，能用越多。
+                {t('pointsEarnDesc')}
               </p>
             </div>
 
@@ -288,20 +280,20 @@ export const EloPopover: React.FC = () => {
             <div className="px-5 py-3">
               <div className="flex items-center gap-2 mb-2">
                 <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">积分能做什么</span>
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">{t('whatCanPointsDo')}</span>
               </div>
               <div className="space-y-1.5">
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground">AI 助教会话（不限轮数）</span>
-                  <span className="font-bold text-foreground tabular-nums">30 积分</span>
+                  <span className="text-muted-foreground">{t('aiSession')}</span>
+                  <span className="font-bold text-foreground tabular-nums">{t('aiSessionCost', { cost: 30 })}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground">模拟面试（全场，含分析）</span>
-                  <span className="font-bold text-foreground tabular-nums">50 积分</span>
+                  <span className="text-muted-foreground">{t('mockInterview')}</span>
+                  <span className="font-bold text-foreground tabular-nums">{t('mockInterviewCost')}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-muted-foreground">简历优化</span>
-                  <span className="font-bold text-foreground tabular-nums">15 积分</span>
+                  <span className="text-muted-foreground">{t('resumeOptimization')}</span>
+                  <span className="font-bold text-foreground tabular-nums">{t('resumeOptimizationCost')}</span>
                 </div>
               </div>
             </div>
@@ -312,12 +304,12 @@ export const EloPopover: React.FC = () => {
             <div className="px-5 py-3">
               <div className="flex items-center gap-2 mb-2">
                 <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">如何获得积分</span>
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">{t('howToEarnPoints')}</span>
               </div>
               <div className="space-y-1">
-                <p className="text-[11px] text-muted-foreground">• 刷题 ELO 上涨时 1:1 获得</p>
-                <p className="text-[11px] text-muted-foreground">• 完成视频课程 +50 积分</p>
-                <p className="text-[11px] text-muted-foreground">• 每日登录 +5 积分</p>
+                <p className="text-[11px] text-muted-foreground">• {t('earnRule1')}</p>
+                <p className="text-[11px] text-muted-foreground">• {t('earnRule2')}</p>
+                <p className="text-[11px] text-muted-foreground">• {t('earnRule3')}</p>
               </div>
             </div>
 
@@ -327,7 +319,7 @@ export const EloPopover: React.FC = () => {
             <div className="px-1 py-2">
               <div className="flex items-center gap-2 px-4 pb-2">
                 <History className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">最近流水</span>
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">{t('recentLedger')}</span>
               </div>
 
               {ledgerLoading && (
@@ -338,8 +330,8 @@ export const EloPopover: React.FC = () => {
 
               {!ledgerLoading && ledger.length === 0 && (
                 <div className="px-4 py-4 text-center">
-                  <p className="text-[11px] text-muted-foreground">暂无积分记录</p>
-                  <p className="text-[10px] text-muted-foreground/60 mt-1">开始刷题获得第一笔积分吧</p>
+                  <p className="text-[11px] text-muted-foreground">{t('noLedger')}</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-1">{t('noLedgerDesc')}</p>
                 </div>
               )}
 
@@ -358,7 +350,7 @@ export const EloPopover: React.FC = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-bold text-foreground truncate">
-                          {REASON_LABELS[entry.reason] || entry.reason}
+                          {t(`ledger.reasons.${entry.reason}`, entry.reason)}
                         </p>
                         {entry.description && (
                           <p className="text-[10px] text-muted-foreground truncate">{entry.description}</p>

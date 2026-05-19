@@ -31,12 +31,14 @@
     "emailPlaceholder": "New Email",
     "emailUpdate": "Update",
     "emailSaved": "Email updated",
+    "emailEmpty": "Please enter a new email",
     "passwordLabel": "Password",
     "oldPassword": "Old Password",
     "newPassword": "New Password",
     "passwordReset": "Reset",
     "passwordSaved": "Password changed",
-    "passwordError": "Incorrect current password"
+    "passwordError": "Incorrect current password",
+    "passwordEmpty": "Please fill in both password fields"
   },
   "elo": {
     "title": "ELO Recalibration",
@@ -44,6 +46,7 @@
     "resetBtn": "Reset ELO ({{remaining}}/1)",
     "confirmTitle": "Confirm ELO Reset?",
     "confirmDesc": "You will need to take placement assessments again. This cannot be undone.",
+    "confirmReset": "Confirm Reset",
     "saved": "ELO Reset",
     "savedDesc": "You may now retake the placement assessment."
   },
@@ -56,5 +59,19 @@
     "phoneLabel": "Contact Phone",
     "saveBtn": "Save Institution Info",
     "saved": "Institution info updated"
+  },
+  "visual": {
+    "title": "Visual Customization",
+    "description": "Adjust site-wide theme mode and brand accent color.",
+    "darkMode": "Dark Mode (Beta)",
+    "darkModeAdminOnly": "Admin beta testing only",
+    "brandAccent": "Brand Accent",
+    "colors": {
+      "minimalBlack": "Minimal Black",
+      "academicBlue": "Academic Blue",
+      "ivyGreen": "Ivy Green",
+      "oxfordRed": "Oxford Red",
+      "amberOrange": "Amber Orange"
+    }
   }
 }

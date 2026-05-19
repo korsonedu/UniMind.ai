@@ -59,7 +59,7 @@ class QuizAITaskService:
                 user_prompt=prompt,
                 temperature=0.0,
                 max_tokens=3200,
-                operation=f'{operation}.schema_repair',
+                operation=f'schema_repair.{operation}',
             )
             content = ai.extract_content(res)
             parsed = ai.extract_json(content)

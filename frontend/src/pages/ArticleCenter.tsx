@@ -9,11 +9,14 @@ import { InlineError } from '@/components/InlineError';
 import { useFetch } from '@/lib/useFetch';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+import { useTranslation } from 'react-i18next';
 
 export const ArticleCenter: React.FC = () => {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showAllTags, setShowAllTags] = useState(false);
   const [page, setPage] = useState(1);
+
+  const { t, i18n } = useTranslation('common');
 
   const navigate = useNavigate();
 
@@ -45,7 +48,7 @@ export const ArticleCenter: React.FC = () => {
   if (error) return <InlineError message={error} onRetry={refetch} />;
 
   return (
-    <PageWrapper title="文章中心" subtitle="沉淀学术思想，探索知识前沿。">
+    <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')}>
       <div className="flex flex-col gap-5 md:gap-8 w-full text-left">
         
         {/* Tags */}
@@ -59,7 +62,7 @@ export const ArticleCenter: React.FC = () => {
               variant={selectedTag === null ? "default" : "outline"}
               className="rounded-full h-7 px-4 text-[11px] font-bold uppercase tracking-widest transition-all"
             >
-              全部
+              {t('all')}
             </Button>
             {tagStats && Array.isArray(tagStats) && tagStats.map((tag) => (
               <Button 
@@ -79,7 +82,7 @@ export const ArticleCenter: React.FC = () => {
                 variant="ghost"
                 className="h-6 px-2 text-[11px] font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 group"
               >
-                {showAllTags ? "收起全部分类" : `查看更多分类 (${tagStats.length - 4})`}
+                {showAllTags ? t('collapseTags') : t('expandTags', { count: tagStats.length - 4 })}
                 <div className={cn("transition-transform duration-300", showAllTags ? "rotate-180" : "rotate-0")}>
                   <ChevronRight className={cn("w-3 h-3 transform rotate-90")} />
                 </div>
@@ -92,10 +95,10 @@ export const ArticleCenter: React.FC = () => {
         <div className="flex flex-col border border-border/50 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden shadow-sm">
           {/* List Header */}
           <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-muted/30 text-[11px] font-black uppercase tracking-widest border-b border-border/50">
-            <div className="col-span-2">日期</div>
-            <div className="col-span-2">作者</div>
-            <div className="col-span-6">标题</div>
-            <div className="col-span-2 text-right pr-4">观看量</div>
+            <div className="col-span-2">{t('articleDate')}</div>
+            <div className="col-span-2">{t('articleAuthor')}</div>
+            <div className="col-span-6">{t('articleTitle')}</div>
+            <div className="col-span-2 text-right pr-4">{t('articleViews')}</div>
           </div>
 
           <div className="flex flex-col animate-in fade-in duration-500">
@@ -108,8 +111,8 @@ export const ArticleCenter: React.FC = () => {
               <div key={article.id} onClick={() => navigate(`/article/${article.id}`)} className="hover:bg-muted/50 transition-all border-b border-border last:border-0 cursor-pointer group">
                 <div className="md:hidden px-4 py-4 space-y-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-bold text-muted-foreground tabular-nums">{new Date(article.created_at).toLocaleDateString('zh-CN')}</span>
-                    <span className="text-[11px] font-bold text-muted-foreground/60">{article.views || 0} 浏览</span>
+                    <span className="text-[11px] font-bold text-muted-foreground tabular-nums">{new Date(article.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
+                    <span className="text-[11px] font-bold text-muted-foreground/60">{t('viewsCount', { count: article.views || 0 })}</span>
                   </div>
                   <h3 className="font-bold text-foreground group-hover:text-primary transition-colors text-sm leading-relaxed">
                     {article.title}
@@ -120,7 +123,7 @@ export const ArticleCenter: React.FC = () => {
                 </div>
                 <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-5 items-center">
                   <div className="col-span-2 text-[11px] font-bold text-muted-foreground tabular-nums">
-                    {new Date(article.created_at).toLocaleDateString('zh-CN')}
+                    {new Date(article.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}
                   </div>
                   <div className="col-span-2">
                     <span className="inline-flex px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/30 text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter truncate max-w-full">

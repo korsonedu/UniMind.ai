@@ -67,7 +67,7 @@
 
 - **多 Bot 架构**：管理员可部署具有不同性格和学术背景的 AI 助教，学生自由切换
 - **专属导师模式**：AI 深度钩稽学生个人数据——ELO 积分、错题记录、知识图谱掌握度——提供定制化辅导。学生说"检查错题"时，AI 直接调出最近错题并分析思维误区
-- **DeepSeek V4 驱动**：评分与审核任务启用深度思考模式（Chain-of-Thought），出题与对话使用高速响应模式，按任务智能分配算力
+- **DeepSeek V4 驱动**：出题审核、作文评分启用深度思考模式（Chain-of-Thought）；判分、对话使用高速响应模式；按任务难度智能分配 v4-pro / v4-flash 算力
 - **LaTeX 原生渲染**：数学公式、经济学模型完美展示（KaTeX）
 
 ### 2. FSRS 智能天梯
@@ -659,34 +659,28 @@ USE_X_FORWARDED_PROTO=true
 ### AI 模型配置 (可选)
 
 ```bash
-# 模型路由优先级: 任务专属模型 → 全局默认 (LLM_MODEL) → 回退 (v4-flash)
+# 全局模型覆盖 — 不设置则使用 ai_engine/config.py 中的按任务路由默认值
 LLM_MODEL=deepseek-v4-pro
 LLM_BASE_URL=https://api.deepseek.com
 LLM_REQUEST_TIMEOUT_SECONDS=120
 LLM_REQUEST_MAX_RETRIES=1
-
-# 各任务模型覆盖
-AI_MODEL_CHAT=deepseek-v4-flash                  # 对话（快速响应）
-AI_MODEL_GENERATE_AUTHOR=deepseek-v4-pro         # 出题 Author（无思考）
-AI_MODEL_GENERATE_REVIEWER=deepseek-v4-pro       # 出题 Reviewer（思考 high）
-AI_MODEL_GENERATE_CLASSIFIER=deepseek-v4-flash   # 出题 Classifier
-AI_MODEL_GRADE_SUBJECTIVE=deepseek-v4-pro        # 主观题评分（思考 high）
-AI_MODEL_ESSAY_GRADE=deepseek-v4-pro             # 作文评分（思考 max）
-AI_MODEL_GENERATE_ANSWER=deepseek-v4-flash       # 答案解析
-AI_MODEL_PARSE_TEXT=deepseek-v4-flash            # 文本解析
-AI_MODEL_SCHEMA_REPAIR=deepseek-v4-flash         # JSON 修复
 ```
+
+> **模型路由已收敛至 `ai_engine/config.py`**，按 operation 名称逐段匹配，决定 flash / pro / thinking。
+> 只需设置 `LLM_MODEL` 即可全局覆盖所有任务的默认模型；如无特殊需求，无需其他配置。
 
 **模型策略速查：**
 
 | 任务 | 默认模型 | 思考 | 原因 |
 |------|---------|------|------|
-| 对话/面试 | v4-flash | 关 | 快速响应 |
-| 出题 Author | v4-pro | 关 | 高质量 + 可控 temperature |
+| 对话 / 面试 | v4-flash | 关 | 快速响应 |
+| 出题 Author / 生成 | v4-pro | 关 | 高质量内容创作 |
+| 出题 Author Revise | v4-pro | 开(medium) | 基于审题反馈修订 |
 | 出题 Reviewer | v4-pro | 开(high) | 深度逻辑检查 |
-| 主观题评分 | v4-pro | 开(high) | 精准判断 |
-| 作文评分 | v4-pro | 开(max) | 最高强度推理 |
-| 解析/分类/修复 | v4-flash | 关 | 轻量任务 |
+| 主观题判分 | v4-pro | 关 | 结构化 JSON 输出，无需链式推理 |
+| 作文评分 | v4-pro | 开(max) | 最高强度多维推理 |
+| 解析 / 分类 | v4-flash | 关 | 轻量文本处理 |
+| Schema 修复 | v4-flash | 关 | JSON 格式修复 |
 
 ### 邮件
 

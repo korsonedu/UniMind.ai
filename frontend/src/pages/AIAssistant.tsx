@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 import { PageWrapper } from '@/components/PageWrapper';
 import { PointsConfirmDialog } from '@/components/PointsConfirmDialog';
+import { useTranslation } from 'react-i18next';
 
 // Modularized Components
 import { BotSelector } from './ai-assistant/BotSelector';
@@ -30,6 +31,7 @@ interface Bot {
 
 export const AIAssistant: React.FC = () => {
   const { user } = useAuthStore();
+  const { t } = useTranslation('aiAssistant');
   const [bots, setBots] = useState<Bot[]>([]);
   const [selectedBot, setSelectedBot] = useState<Bot | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -52,7 +54,7 @@ export const AIAssistant: React.FC = () => {
           if (savedBot) setSelectedBot(savedBot);
         }
       } catch (e: any) {
-        toast.error("加载助教列表失败");
+        toast.error(t('loadBotsFailed'));
       } finally {
         setIsInitialLoading(false);
       }
@@ -70,9 +72,9 @@ export const AIAssistant: React.FC = () => {
             content: processMathContent(m.content)
           })));
         } else {
-          setMessages([{ role: 'assistant', content: `你好！我是${selectedBot.name}。开始我们的学术交流吧！` }]);
+          setMessages([{ role: 'assistant', content: t('welcomeMessage', { botName: selectedBot.name }) }]);
         }
-      }).catch(e => { toast.error("加载历史失败"); });
+      }).catch(e => { toast.error(t('loadHistoryFailed')); });
     }
   }, [selectedBot]);
 
@@ -120,7 +122,7 @@ export const AIAssistant: React.FC = () => {
     } catch (err: any) {
       // 402 积分不足 由 api 拦截器处理 toast
       if (err.response?.status !== 402) {
-        toast.error("发送失败");
+        toast.error(t('sendFailed'));
       }
       setInput(text);
     } finally {
@@ -129,7 +131,7 @@ export const AIAssistant: React.FC = () => {
   };
 
   const handleSend = async () => {
-    if (!selectedBot) return toast.error("请选择 AI 助教");
+    if (!selectedBot) return toast.error(t('selectBotFirst'));
     if (!input.trim() || loading) return;
     const text = input;
     setInput('');
@@ -146,13 +148,13 @@ export const AIAssistant: React.FC = () => {
     if (!selectedBot) return;
     try {
       await api.post('/ai/reset/', { bot_id: selectedBot.id });
-      setMessages([{ role: 'assistant', content: '会话历史已清空。' }]);
-      toast.success("会话已重置");
-    } catch (e) { toast.error("重置失败"); }
+      setMessages([{ role: 'assistant', content: t('sessionCleared') }]);
+      toast.success(t('sessionReset'));
+    } catch (e) { toast.error(t('resetFailed')); }
   };
 
   if (isInitialLoading) return (
-    <PageWrapper title="AI 实验室" subtitle="与您的专属数字导师进行深度学术对话。">
+    <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
       <div className="h-[calc(100vh-6.5rem)] flex flex-col items-center justify-center gap-4 opacity-20">
         <Loader2 className="h-8 w-8 animate-spin text-foreground" />
         <p className="text-[11px] font-bold uppercase tracking-widest text-foreground">Initializing AI Laboratory...</p>
@@ -161,7 +163,7 @@ export const AIAssistant: React.FC = () => {
   );
 
   return (
-    <PageWrapper title="AI 实验室" subtitle="与您的专属数字导师进行深度学术对话。">
+    <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
       <div className="h-[calc(100vh-6.5rem)] flex flex-col animate-in fade-in duration-300 max-w-5xl mx-auto text-left relative text-foreground px-4">
         <Card className="flex-1 flex flex-col bg-card rounded-3xl shadow-sm border border-border overflow-hidden relative">
           <header className="px-8 py-3 border-b border-border flex items-center justify-between bg-card/80 backdrop-blur-md sticky top-0 z-10">
@@ -230,7 +232,7 @@ export const AIAssistant: React.FC = () => {
         open={showPointsConfirm}
         onOpenChange={setShowPointsConfirm}
         cost={30}
-        featureName="AI 助教会话"
+        featureName={t('featureName')}
         balance={user?.elo_points ?? 0}
         onConfirm={() => {
           setShowPointsConfirm(false);

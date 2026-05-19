@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Download, File, CheckSquare, Square, Loader2, Info } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 
 const StartupMaterials: React.FC = () => {
+  const { t } = useTranslation('common');
   const [files, setFiles] = useState<any[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -43,8 +45,8 @@ const StartupMaterials: React.FC = () => {
 
   return (
     <PageWrapper 
-      title="启动资料" 
-      subtitle="精选的必备文档与工具，在这里开始起飞"
+      title={t('pages:startupMaterials.title')}
+      subtitle={t('pages:startupMaterials.subtitle')}
       action={
         <Button 
           onClick={handleDownload} 
@@ -52,7 +54,7 @@ const StartupMaterials: React.FC = () => {
           className="rounded-xl font-bold bg-primary text-primary-foreground h-9 text-xs"
         >
           <Download className="mr-2 h-3.5 w-3.5" />
-          下载选中 ({selectedFiles.size})
+          {t('downloadSelected', { count: selectedFiles.size })}
         </Button>
       }
     >
@@ -64,9 +66,9 @@ const StartupMaterials: React.FC = () => {
               <Info className="h-5 w-5" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-sm font-bold text-indigo-950 uppercase tracking-widest">使用指南</h3>
+              <h3 className="text-sm font-bold text-indigo-950 uppercase tracking-widest">{t('startupGuideTitle')}</h3>
               <p className="text-xs text-indigo-900/70 font-medium leading-relaxed max-w-3xl">
-                欢迎下载启动资料，这是用于金融硕士入门必备的一些教材、课件、工具等，由我们精选并对外公开展示。请选中你想要下载的文件（支持多选），然后点击右上角的“下载选中”按钮进行批量获取。
+                {t('startupGuideDesc')}
               </p>
             </div>
           </CardContent>
@@ -109,7 +111,7 @@ const StartupMaterials: React.FC = () => {
       </div>
       
       {files.length === 0 && (
-        <EmptyState icon={File} title="暂无资料" className="h-64 border-2 border-dashed border-border/50 rounded-3xl bg-muted/10 mt-6" />
+        <EmptyState icon={File} title={t('startupNoFiles')} className="h-64 border-2 border-dashed border-border/50 rounded-3xl bg-muted/10 mt-6" />
       )}
     </PageWrapper>
   );

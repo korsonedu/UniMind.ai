@@ -5,7 +5,7 @@
     "qa": "答疑",
     "tests": "习题训练",
     "knowledgeMap": "知识地图",
-    "interviews": "复试模拟",
+    "interviews": "模拟面试",
     "mockExams": "模拟考试",
     "studyRoom": "自习室",
     "aiLab": "AI 实验室",
@@ -17,15 +17,28 @@
     "maintenance": "维护中心",
     "institutionAdmin": "机构后台",
     "settings": "外观与系统",
-    "weeklyReport": "周报"
+    "weeklyReport": "周报",
+    "promptTemplates": "Prompt模板",
+    "inviteCodes": "邀请码",
+    "coursesShort": "课程",
+    "testsShort": "做题",
+    "knowledgeShort": "知识",
+    "articlesShort": "文章",
+    "qaShort": "答疑",
+    "institutionShort": "机构",
+    "inviteShort": "邀请",
+    "promptShort": "Prompt"
   },
   "userMenu": {
     "accountPreferences": "账户与偏好",
     "activateMember": "激活会员",
     "personalSettings": "个人设置",
     "appearanceSettings": "外观与系统",
+    "institutionSettings": "机构设置",
+    "institutionDashboard": "机构看板",
     "proMember": "Pro Member",
-    "freeScholar": "Free Scholar"
+    "freeScholar": "Free Scholar",
+    "logout": "退出登录"
   },
   "expiryBanner": {
     "expired": "服务已到期，功能受限。请续费恢复完整功能",
@@ -43,6 +56,43 @@
   "unlockUpgrade": "解锁 {{plan}} 版功能",
   "leaderboard": "全站学术排名",
   "thisFeature": "此功能",
+  "upgradePlan": "升级方案",
+  "invite": {
+    "trigger": "邀请学员",
+    "title": "邀请学员加入 {{name}}",
+    "linkLabel": "邀请链接",
+    "description": "将链接发送给学员，学员点击后注册即可自动加入本机构。",
+    "regenerate": "重新生成邀请链接",
+    "copied": "邀请链接已复制",
+    "regenerated": "邀请链接已重置",
+    "regenerateFailed": "重置失败",
+    "mobileCopy": "复制邀请链接"
+  },
+  "activation": {
+    "title": "成为 UniMind 会员",
+    "description": "解锁所有核心功能：包括视频课程、海量题库、FSRS 记忆调度算法、AI 导师及沉浸式自习室。请输入管理员发放的激活码。",
+    "codeLabel": "激活码 (Activation Code)",
+    "codePlaceholder": "XXXX-XXXX-XXXX",
+    "activateButton": "立即激活 Pro 权限",
+    "activating": "激活中...",
+    "enterCodePrompt": "请输入激活码",
+    "success": "会员激活成功！欢迎加入 UniMind.ai",
+    "failed": "激活失败，请检查激活码",
+    "footer": "UniMind.ai"
+  },
+  "logout": {
+    "title": "确认退出登录？",
+    "description": "退出后你将需要重新验证身份以访问网校资源。",
+    "confirm": "确认退出",
+    "cancel": "返回"
+  },
+  "userStatus": {
+    "superAdmin": "超级管理员"
+  },
+  "docTitle": {
+    "default": "UniMind.ai - 新一代AI教育基础设施",
+    "withInstitution": "{{name}} - UniMind.ai - 新一代AI教育基础设施"
+  },
   "upgradeModal": {
     "title": "升级以解锁{{feature}}",
     "requires": "{{feature}}需要 {{plan}} 版本。",
@@ -50,6 +100,9 @@
     "plusDesc": "每月 ¥1,299，解锁完整机构教学平台。",
     "proDesc": "企业旗舰版，解锁品牌定制与 API 接入。",
     "coreFeatures": "{{plan}} 版核心功能",
-    "freeTrialNote": "所有方案均含 14 天免费试用"
+    "freeTrialNote": "所有方案均含 14 天免费试用",
+    "upgradeTo": "升级到 {{plan}} 方案",
+    "later": "稍后再说",
+    "learnMore": "了解详情"
   }
 }

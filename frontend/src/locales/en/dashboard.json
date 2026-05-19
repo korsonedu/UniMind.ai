@@ -19,7 +19,35 @@
     "permanent": "Never"
   },
   "features": {
-    "title": "Current Plan Features"
+    "title": "Current Plan Features",
+    "labels": {
+      "quiz.manual": "Quiz Practice",
+      "quiz.exam": "Mock Exams",
+      "wrong.review": "Wrong Answer Review",
+      "basic.stats": "Basic Statistics",
+      "ai.generate": "AI Question Generation",
+      "memorix.review": "Memorix Review",
+      "full.report": "Full Learning Report",
+      "knowledge.graph": "Interactive Knowledge Graph",
+      "ai.assistant": "AI Learning Assistant",
+      "course.video": "Video Courses",
+      "video.outline": "AI Smart Outline",
+      "faq.system": "Q&A System",
+      "pdf.mock": "PDF Mock Exam",
+      "study.room": "Study Room",
+      "multi.teacher": "Multi-Teacher Collaboration",
+      "class.compare": "Class Comparison",
+      "data.export": "Data Export",
+      "brand.custom": "Brand Customization",
+      "api.access": "API Access",
+      "student.payment": "Student Payments",
+      "private.deploy": "Private Deployment",
+      "i18n.custom": "i18n / Internationalization",
+      "sso.saml": "SSO / SAML",
+      "audit.log": "Audit Log",
+      "dedicated.support": "Dedicated Support",
+      "sla.99.9": "SLA 99.9%"
+    }
   },
   "comparison": {
     "title": "Plan Comparison"

@@ -6,7 +6,7 @@
     "tests": "Practice",
     "knowledgeMap": "Knowledge Map",
     "interviews": "Mock Interview",
-    "mockExams": "PDF Exam",
+    "mockExams": "Mock Exam",
     "studyRoom": "Study Room",
     "aiLab": "AI Lab",
     "startupMaterials": "Materials",
@@ -17,22 +17,35 @@
     "maintenance": "Maintenance",
     "institutionAdmin": "Institution Admin",
     "settings": "Appearance",
-    "weeklyReport": "Weekly Report"
+    "weeklyReport": "Weekly Report",
+    "promptTemplates": "Prompts",
+    "inviteCodes": "Invite Codes",
+    "coursesShort": "Courses",
+    "testsShort": "Practice",
+    "knowledgeShort": "Knowledge",
+    "articlesShort": "Articles",
+    "qaShort": "Q&A",
+    "institutionShort": "Institution",
+    "inviteShort": "Invite",
+    "promptShort": "Prompts"
   },
   "userMenu": {
     "accountPreferences": "Account & Preferences",
     "activateMember": "Activate Membership",
-    "personalSettings": "Personal Settings",
-    "appearanceSettings": "Appearance & System",
+    "personalSettings": "Settings",
+    "appearanceSettings": "Appearance",
+    "institutionSettings": "Institution Settings",
+    "institutionDashboard": "Dashboard",
     "proMember": "Pro Member",
-    "freeScholar": "Free Scholar"
+    "freeScholar": "Free Scholar",
+    "logout": "Log Out"
   },
   "expiryBanner": {
     "expired": "Your plan has expired. Features are limited. Renew to restore full access.",
     "renewNow": "Renew Now"
   },
   "quotaBanner": {
-    "exhausted": "Monthly AI quota exhausted ({{used}}/{{limit}}). Upgrade to Solo for unlimited — only ¥299/mo.",
+    "exhausted": "Monthly AI quota exhausted ({{used}}/{{limit}}). Upgrade for unlimited access.",
     "low": "AI quota: {{remaining}}/{{limit}} remaining this month",
     "upgradeNow": "Upgrade Now",
     "upgradeUnlimited": "Unlock Unlimited"
@@ -43,13 +56,53 @@
   "unlockUpgrade": "Unlock {{plan}}",
   "leaderboard": "Leaderboard",
   "thisFeature": "this feature",
+  "upgradePlan": "Upgrade Plan",
+  "invite": {
+    "trigger": "Invite Students",
+    "title": "Invite students to join {{name}}",
+    "linkLabel": "Invite Link",
+    "description": "Share this link with students. They will automatically join your institution upon registration.",
+    "regenerate": "Regenerate Link",
+    "copied": "Invite link copied",
+    "regenerated": "Invite link regenerated",
+    "regenerateFailed": "Regeneration failed",
+    "mobileCopy": "Copy Invite Link"
+  },
+  "activation": {
+    "title": "Become a UniMind Member",
+    "description": "Unlock all core features: video courses, massive question bank, FSRS scheduling, AI tutor, and immersive study room. Enter the activation code provided by your admin.",
+    "codeLabel": "Activation Code",
+    "codePlaceholder": "XXXX-XXXX-XXXX",
+    "activateButton": "Activate Pro Now",
+    "activating": "Activating...",
+    "enterCodePrompt": "Please enter an activation code",
+    "success": "Membership activated! Welcome to UniMind.ai",
+    "failed": "Activation failed. Please check your code.",
+    "footer": "UniMind.ai"
+  },
+  "logout": {
+    "title": "Confirm Logout?",
+    "description": "You will need to re-authenticate to access resources.",
+    "confirm": "Log Out",
+    "cancel": "Cancel"
+  },
+  "userStatus": {
+    "superAdmin": "Super Admin"
+  },
+  "docTitle": {
+    "default": "UniMind.ai - Next-Gen AI Education Infrastructure",
+    "withInstitution": "{{name}} - UniMind.ai"
+  },
   "upgradeModal": {
     "title": "Upgrade to unlock {{feature}}",
-    "requires": "{{feature}} requires the {{plan}} plan. ",
+    "requires": "{{feature}} requires the {{plan}} plan.",
     "soloDesc": "Only ¥299/mo — unlock the full AI-powered learning suite.",
     "plusDesc": "¥1,299/mo — complete teaching platform for institutions.",
     "proDesc": "Enterprise flagship — brand customization & API access.",
     "coreFeatures": "{{plan}} Core Features",
-    "freeTrialNote": "All plans include a 14-day free trial"
+    "freeTrialNote": "All plans include a 14-day free trial",
+    "upgradeTo": "Upgrade to {{plan}}",
+    "later": "Maybe Later",
+    "learnMore": "Learn More"
   }
 }

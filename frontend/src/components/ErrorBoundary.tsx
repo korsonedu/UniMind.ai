@@ -1,6 +1,7 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
+import i18n from '@/lib/i18n';
 
 interface Props {
   children: ReactNode;
@@ -42,9 +43,9 @@ export class ErrorBoundary extends Component<Props, State> {
             <AlertTriangle className="h-7 w-7 text-destructive" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-lg font-bold text-foreground">页面加载异常</h2>
+            <h2 className="text-lg font-bold text-foreground">{i18n.t('common:pageLoadError')}</h2>
             <p className="text-sm text-muted-foreground max-w-md">
-              尝试刷新页面恢复。如问题持续，请联系管理员。
+              {i18n.t('common:pageLoadErrorDesc')}
             </p>
           </div>
           <Button
@@ -53,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
             className="rounded-xl gap-2"
           >
             <RefreshCw className="h-4 w-4" />
-            重试
+            {i18n.t('common:retry')}
           </Button>
         </div>
       );

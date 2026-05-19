@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Activity } from 'lucide-react';
@@ -9,11 +10,12 @@ interface LeaderboardProps {
 }
 
 export const Leaderboard: React.FC<LeaderboardProps> = ({ leaderboard }) => {
+  const { t } = useTranslation('testLadder');
   return (
     <div className="space-y-6 pt-6">
       <div className="flex items-center justify-between px-4">
         <div className="space-y-1">
-          <h3 className="text-2xl font-black text-foreground tracking-tight">全站学术排名</h3>
+          <h3 className="text-2xl font-black text-foreground tracking-tight">{t('leaderboard.title')}</h3>
           <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] leading-none">Global Meritocracy Ranking</p>
         </div>
       </div>
@@ -22,10 +24,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ leaderboard }) => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                <th className="px-12 py-6 text-[13px] font-bold uppercase tracking-[0.2em] text-muted-foreground">位次</th>
-                <th className="px-12 py-6 text-[13px] font-bold uppercase tracking-[0.2em] text-muted-foreground">用户信息</th>
-                <th className="px-12 py-6 text-[13px] font-bold uppercase tracking-[0.2em] text-muted-foreground text-center">ELO 评分</th>
-                <th className="px-12 py-6 text-[13px] font-bold uppercase tracking-[0.2em] text-muted-foreground text-right">活跃记录</th>
+                <th className="px-12 py-6 text-[13px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('leaderboard.rank')}</th>
+                <th className="px-12 py-6 text-[13px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('leaderboard.userInfo')}</th>
+                <th className="px-12 py-6 text-[13px] font-bold uppercase tracking-[0.2em] text-muted-foreground text-center">{t('leaderboard.eloScore')}</th>
+                <th className="px-12 py-6 text-[13px] font-bold uppercase tracking-[0.2em] text-muted-foreground text-right">{t('leaderboard.activity')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

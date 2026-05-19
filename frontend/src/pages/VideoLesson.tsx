@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +25,7 @@ const formatTime = (s: number) => {
 export const VideoLesson: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation('videoLesson');
   const { updateUser } = useAuthStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
@@ -118,8 +120,8 @@ export const VideoLesson: React.FC = () => {
       const res = await api.post(`/courses/${courseId}/progress/`, { is_finished: true });
       if (res.data.elo_added > 0) {
         setHasAwarded(true);
-        toast.success(`观看完成！奖励 ${res.data.elo_added} ELO`, {
-          description: `当前积分: ${res.data.new_score}`
+        toast.success(t('watchComplete', { elo: res.data.elo_added }), {
+          description: t('currentPoints', { score: res.data.new_score })
         });
         const me = await api.get('/users/me/');
         updateUser(me.data);
@@ -155,11 +157,11 @@ export const VideoLesson: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center gap-4 text-center bg-background">
       <div className="h-10 w-10 border-4 border-border border-t-primary rounded-full animate-spin" />
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">加载课程...</p>
+      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">{t('loading')}</p>
     </div>
   );
 
-  if (!course) return <div className="h-screen flex items-center justify-center font-bold">课程未找到</div>;
+  if (!course) return <div className="h-screen flex items-center justify-center font-bold">{t('notFound')}</div>;
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 text-left p-6">
@@ -172,13 +174,13 @@ export const VideoLesson: React.FC = () => {
             <h2 className="text-3xl font-bold tracking-tight text-foreground">{course.title}</h2>
             <div className="flex items-center gap-4 opacity-40 font-bold text-[10px] uppercase tracking-widest leading-none mt-1">
                {course.album && <span className="flex items-center gap-1.5 text-foreground"><Layers className="w-3 h-3"/> {course.album}</span>}
-               <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(course.created_at).toLocaleDateString('zh-CN')}</span>
+               <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(course.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
             </div>
           </div>
         </div>
         <div className="flex gap-3">
-           <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm"><Share2 className="h-4 w-4 mr-2"/> 分享</Button>
-           <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm text-amber-500"><Star className="h-4 w-4 mr-2"/> 收藏</Button>
+           <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm"><Share2 className="h-4 w-4 mr-2"/> {t('share')}</Button>
+           <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm text-amber-500"><Star className="h-4 w-4 mr-2"/> {t('favorite')}</Button>
         </div>
       </header>
 
@@ -217,16 +219,16 @@ export const VideoLesson: React.FC = () => {
                  <div className="flex items-center justify-between">
                    <span className="text-[11px] font-medium text-white/70 tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
                    <div className="flex items-center gap-0.5">
-                     <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isMuted ? '取消静音' : '静音'}>
+                     <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isMuted ? t('unmute') : t('mute')}>
                        {isMuted ? <VolumeX className="h-[18px] w-[18px]" /> : <Volume2 className="h-[18px] w-[18px]" />}
                      </button>
-                     <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-all min-w-[32px] text-center" title="播放速度">
+                     <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-all min-w-[32px] text-center" title={t('playbackSpeed')}>
                        {playbackRate}x
                      </button>
-                     <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-all ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} title={subtitlesVisible ? '关闭字幕' : '开启字幕'}>
+                     <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-all ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} title={subtitlesVisible ? t('hideSubtitles') : t('showSubtitles')}>
                        <ClosedCaption className="h-[18px] w-[18px]" />
                      </button>
-                     <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isFullscreen ? '退出全屏' : '全屏'}>
+                     <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isFullscreen ? t('exitFullscreen') : t('fullscreen')}>
                        {isFullscreen ? <Minimize className="h-[18px] w-[18px]" /> : <Maximize className="h-[18px] w-[18px]" />}
                      </button>
                    </div>
@@ -234,7 +236,7 @@ export const VideoLesson: React.FC = () => {
                </div>
                </>
              ) : (
-               <div className="flex flex-col items-center gap-4 opacity-20"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">暂无视频</p></div>
+               <div className="flex flex-col items-center gap-4 opacity-20"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">{t('noVideo')}</p></div>
              )}
            </div>
 
@@ -242,7 +244,7 @@ export const VideoLesson: React.FC = () => {
           <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-4 w-4 text-indigo-500" />
-              <h3 className="text-sm font-bold text-foreground">AI 智能大纲</h3>
+              <h3 className="text-sm font-bold text-foreground">{t('aiOutline')}</h3>
             </div>
             <OutlinePanel courseId={courseId} videoRef={videoRef} />
           </Card>
@@ -251,22 +253,22 @@ export const VideoLesson: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
              <div className="md:col-span-2 space-y-8">
                 <section className="space-y-6">
-                   <div className="flex items-center gap-3 border-b border-border pb-4"><BookOpen className="h-5 w-5 text-emerald-600"/><h3 className="text-xl font-bold text-foreground">课程简介</h3></div>
+                   <div className="flex items-center gap-3 border-b border-border pb-4"><BookOpen className="h-5 w-5 text-emerald-600"/><h3 className="text-xl font-bold text-foreground">{t('courseIntro')}</h3></div>
                    <p className="text-muted-foreground text-base font-medium leading-relaxed whitespace-pre-wrap">{course.description}</p>
                 </section>
 
                 <section className="space-y-4">
-                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">教学资源下载</h4>
+                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('teachingResources')}</h4>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {course.courseware && (
                         <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
-                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><FileText className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">教学课件</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
+                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><FileText className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">{t('courseware')}</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
                            <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.courseware} download><Download className="w-4 h-4"/></a></Button>
                         </div>
                       )}
                       {course.reference_materials && (
                         <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
-                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><BookOpen className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">参考文献</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
+                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><BookOpen className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">{t('references')}</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
                            <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.reference_materials} download><Download className="w-4 h-4"/></a></Button>
                         </div>
                       )}
@@ -275,8 +277,8 @@ export const VideoLesson: React.FC = () => {
              </div>
              <div className="space-y-6">
                 <Card className="border-none shadow-sm rounded-3xl bg-card p-8 space-y-6 text-left">
-                   <div className="space-y-1"><h4 className="text-xs font-bold uppercase tracking-widest text-foreground">学习奖励</h4><p className="text-2xl font-bold text-green-700">+{course.elo_reward} ELO</p></div>
-                   <p className="text-xs font-medium text-muted-foreground leading-relaxed">完整观看后自动结算并同步至您的学术分位。</p>
+                   <div className="space-y-1"><h4 className="text-xs font-bold uppercase tracking-widest text-foreground">{t('learningReward')}</h4><p className="text-2xl font-bold text-green-700">+{course.elo_reward} ELO</p></div>
+                   <p className="text-xs font-medium text-muted-foreground leading-relaxed">{t('rewardDesc')}</p>
                 </Card>
              </div>
           </div>
@@ -284,7 +286,7 @@ export const VideoLesson: React.FC = () => {
 
         {/* Right Side: Album & Related */}
         <div className="lg:col-span-3 space-y-6">
-           <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">同专辑系列</h4><ListVideo className="w-4 h-4 opacity-40"/></div>
+           <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('sameSeries')}</h4><ListVideo className="w-4 h-4 opacity-40"/></div>
            <ScrollArea className="h-[750px] pr-4">
               <div className="space-y-3">
                  {relatedCourses.map((c, i) => (
@@ -294,13 +296,13 @@ export const VideoLesson: React.FC = () => {
                            {c.cover_image && <img src={c.cover_image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
                         </div>
                         <div className="space-y-1">
-                           <span className="text-[9px] font-bold opacity-30 uppercase">第 {i+1} 课</span>
+                           <span className="text-[9px] font-bold opacity-30 uppercase">{t('lessonNumber', { i: i + 1 })}</span>
                            <p className="text-xs font-bold leading-relaxed text-foreground line-clamp-2">{c.title}</p>
                         </div>
                      </div>
                    </Link>
                  ))}
-                 {relatedCourses.length === 0 && <div className="py-20 text-center text-muted-foreground italic text-[10px] font-bold uppercase">暂未收录其他课程</div>}
+                 {relatedCourses.length === 0 && <div className="py-20 text-center text-muted-foreground italic text-[10px] font-bold uppercase">{t('noRelatedCourses')}</div>}
               </div>
            </ScrollArea>
         </div>

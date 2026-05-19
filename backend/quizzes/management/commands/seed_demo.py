@@ -91,15 +91,15 @@ def build_knowledge_tree():
     all_kps = {}
     for subject, chapters in tree.items():
         subj, _ = KnowledgePoint.objects.get_or_create(
-            name=subject, defaults={'level': 'sub', 'code': f'SUBJ-{subject[:2]}'})
+            name=subject, level='sub', defaults={'code': f'SUBJ-{subject[:2]}'})
         all_kps.setdefault(subject, []).append(subj)
         for chapter, sections in chapters.items():
             ch, _ = KnowledgePoint.objects.get_or_create(
-                name=chapter, defaults={'level': 'ch', 'parent': subj, 'code': f'CH-{chapter[:4]}'})
+                name=chapter, level='ch', parent=subj, defaults={'code': f'CH-{chapter[:4]}'})
             all_kps.setdefault(subject, []).append(ch)
             for section in sections:
                 sec, _ = KnowledgePoint.objects.get_or_create(
-                    name=section, defaults={'level': 'kp', 'parent': ch, 'code': f'KP-{section[:6]}'})
+                    name=section, level='kp', parent=ch, defaults={'code': f'KP-{section[:6]}'})
                 all_kps.setdefault(subject, []).append(sec)
     return all_kps
 
@@ -189,9 +189,10 @@ def seed_exams_and_fsrs(admin, students, all_questions):
     if not all_qs:
         return
 
-    for student in students:
+    all_users = [admin] + list(students)
+    for user in all_users:
         # FSRS profile
-        FSRSProfile.objects.get_or_create(user=student, defaults={
+        FSRSProfile.objects.get_or_create(user=user, defaults={
             'weights': [0.5, 0.5, 1.0, 2.0, 0.1, 1.5, 0.2, 0.8,
                        0.01, 0.6, 1.2, 0.05, 0.3, 1.0, 0.15, 1.8, 0.0],
             'last_optimized_at': days_ago(2), 'total_reviews_used': random.randint(150, 400),
@@ -205,7 +206,7 @@ def seed_exams_and_fsrs(admin, students, all_questions):
             note = f'FSRS参数第{random.randint(1,5)}次在线调优'
             # Don't include created_at in filter — auto_now_add would break get_or_create
             opt_log, created = FSRSOptimizationLog.objects.get_or_create(
-                user=student, note=note,
+                user=user, note=note,
                 defaults={'previous_loss': prev, 'new_loss': new,
                           'improvement_ratio': round((prev - new) / prev * 100, 1),
                           'reviews_used': random.randint(40, 180), 'accepted': True})
@@ -221,7 +222,7 @@ def seed_exams_and_fsrs(admin, students, all_questions):
             scores_trend.append(score)
             exam_ts = days_ago(day, random.randint(9, 21))
             exam = QuizExam.objects.create(
-                user=student, total_score=score, max_score=100,
+                user=user, total_score=score, max_score=100,
                 elo_change=random.randint(-5, 20),
                 summary=f'第{8 - day}天 · 模拟练习',
             )
@@ -236,7 +237,7 @@ def seed_exams_and_fsrs(admin, students, all_questions):
                     score=mx if correct else random.randint(0, int(mx * 0.6)),
                     max_score=mx, is_correct=correct,
                     feedback='回答正确！' if correct else '请注意该知识点。')
-            attempt = QuizAttempt.objects.create(user=student, score=score,
+            attempt = QuizAttempt.objects.create(user=user, score=score,
                                                   elo_change=exam.elo_change)
             fix_auto_now(QuizAttempt, attempt.pk, created_at=exam_ts)
 
@@ -244,7 +245,7 @@ def seed_exams_and_fsrs(admin, students, all_questions):
         for q in all_qs:
             wc = random.randint(0, 3)
             reps = random.randint(1, 7)
-            UserQuestionStatus.objects.get_or_create(user=student, question=q, defaults={
+            UserQuestionStatus.objects.get_or_create(user=user, question=q, defaults={
                 'is_favorite': random.random() > 0.7, 'is_mastered': random.random() > 0.5,
                 'wrong_count': wc, 'stability': round(random.uniform(0.8, 18.0), 2),
                 'difficulty': round(random.uniform(0.1, 0.9), 2),
@@ -258,7 +259,7 @@ def seed_exams_and_fsrs(admin, students, all_questions):
             if q.knowledge_point and q.knowledge_point.id not in seen:
                 seen.add(q.knowledge_point.id)
                 UserKnowledgeState.objects.get_or_create(
-                    user=student, knowledge_point=q.knowledge_point,
+                    user=user, knowledge_point=q.knowledge_point,
                     defaults={'mastery_score': round(random.uniform(0.25, 0.95), 2)})
 
         # ── ReviewLogs: ~3 per day for last 7 days ──
@@ -268,7 +269,7 @@ def seed_exams_and_fsrs(admin, students, all_questions):
         for day in range(7):
             for _ in range(3):
                 log = ReviewLog.objects.create(
-                    user=student,
+                    user=user,
                     knowledge_point=random.choice(kp_list),
                     grade=random.choices([1, 2, 3, 4], weights=[10, 18, 42, 30])[0],
                     elapsed_days=round(random.uniform(0.5, 14.0), 1),
@@ -375,22 +376,7 @@ def seed_qa_threads(admin, students):
 # ── study room (last 7 days) ──
 
 def seed_study_room(admin, students):
-    from study_room.models import ChatMessage, StudyPlan, WeeklyTask
-
-    for student in students[:3]:
-        StudyPlan.objects.get_or_create(user=student, defaults={
-            'target_date': (timezone.now() + timedelta(days=random.randint(90, 180))).date(),
-            'target_score': random.choice([120, 130, 140]),
-            'daily_hours': round(random.uniform(3.0, 6.0), 1),
-            'weekly_summary': '本周重点复习货币政策与汇率理论，完成对应题库练习。',
-        })
-        for title, status in [('完成货币银行学选择题 50 道', 'pending'),
-                              ('复习国际金融汇率理论', 'in_progress'),
-                              ('整理错题笔记', 'completed')]:
-            WeeklyTask.objects.get_or_create(user=student, title=title, defaults={
-                'status': status, 'week_start': date.today() - timedelta(days=3),
-                'week_end': date.today() + timedelta(days=4),
-            })
+    from study_room.models import ChatMessage
 
     # Chat: 2-3 messages per day over last 7 days
     chat_templates = [

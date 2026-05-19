@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +27,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
   currentReportIdx,
   setCurrentReportIdx
 }) => {
+  const { t } = useTranslation('testLadder');
   const [isMobile, setIsMobile] = useState(false);
   const resultReminderKeyRef = useRef<string>('');
 
@@ -47,8 +49,8 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
     const elo = Number(examSummary.elo_change || 0);
     const eloText = elo >= 0 ? `+${elo}` : `${elo}`;
     sendLearningReminder(
-      '做题结果提醒',
-      `总分 ${examSummary.total_score}/${examSummary.max_score}，ELO ${eloText}`
+      t('result.testResultReminder'),
+      t('result.testResultReminderBody', { totalScore: examSummary.total_score, maxScore: examSummary.max_score, eloText })
     );
   }, [examSummary, isMobile, open]);
 
@@ -61,18 +63,18 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
         <DialogHeader className="px-4 md:px-8 py-4 border-b border-border shrink-0 bg-card">
           <div className="flex flex-col md:flex-row justify-between md:items-center gap-3">
             <div className="space-y-0.5 text-left">
-              <DialogTitle className="text-xl font-black tracking-tight text-foreground uppercase">评估分析报告</DialogTitle>
+              <DialogTitle className="text-xl font-black tracking-tight text-foreground uppercase">{t('result.title')}</DialogTitle>
               <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-indigo-600">Academic Audit</p>
             </div>
             {examSummary && (
               <div className="flex items-center gap-6">
                 <div className="text-right">
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">总分统计</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{t('result.totalScore')}</p>
                   <p className="text-lg font-black text-foreground tabular-nums">{examSummary.total_score} / {examSummary.max_score}</p>
                 </div>
                 <div className="h-6 w-px bg-border" />
                 <div className="text-right">
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">ELO 变动</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{t('result.eloChange')}</p>
                   <p className={cn("text-lg font-black tabular-nums", examSummary.elo_change >= 0 ? "text-emerald-500" : "text-rose-500")}>
                     {examSummary.elo_change >= 0 ? `+${examSummary.elo_change}` : examSummary.elo_change}
                   </p>
@@ -106,7 +108,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
                       <div className="space-y-1 text-left">
                         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground ml-1">My Response</p>
                         <div className="p-3.5 bg-muted rounded-xl border border-border text-[13px] font-medium text-foreground leading-relaxed whitespace-pre-wrap">
-                          {results[currentReportIdx].user_answer || "(未作答)"}
+                          {results[currentReportIdx].user_answer || t('result.noAnswer')}
                         </div>
                       </div>
                       
@@ -137,7 +139,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
           </div>
 
           <div className={cn("w-full md:w-64 bg-muted/50 p-4 md:p-6 md:flex flex-col shrink-0 border-t md:border-t-0 border-border", isMobile ? "hidden" : "flex")}>
-            <h5 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4 text-left">评估矩阵</h5>
+            <h5 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4 text-left">{t('result.assessmentMatrix')}</h5>
             <ScrollArea className="flex-1 pr-2">
               <div className="grid grid-cols-4 gap-2">
                 {results.map((res, i) => (
@@ -162,7 +164,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
 
             <div className="mt-6 space-y-3 pt-4 border-t border-border text-left">
               <div className="flex justify-between items-center text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                <span>得分率</span>
+                <span>{t('result.scoreRate')}</span>
                 <span className="text-foreground">
                   {examSummary ? Math.round((examSummary.total_score / examSummary.max_score) * 100) : 0}%
                 </span>
@@ -174,7 +176,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
                 />
               </div>
               <p className="text-[11px] font-medium text-muted-foreground leading-tight pt-1">
-                点击题号快速切换。绿色代表通过，红色代表挑战。
+                {t('result.matrixHint')}
               </p>
             </div>
           </div>

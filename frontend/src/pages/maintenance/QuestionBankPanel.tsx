@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ChangeEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,73 +14,41 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 
 const AI_TYPE_OPTIONS = [
-  { label: '单项选择题', icon: '🎯' },
-  { label: '名词解释', icon: '📝' },
-  { label: '简答题', icon: '📄' },
-  { label: '论述题', icon: '💡' },
-  { label: '计算题', icon: '🔢' },
+  { typeKey: 'objective', icon: '🎯' },
+  { typeKey: 'noun', icon: '📝' },
+  { typeKey: 'short', icon: '📄' },
+  { typeKey: 'essay', icon: '💡' },
+  { typeKey: 'calculate', icon: '🔢' },
 ];
 
 const AI_DIFFICULTY_OPTIONS = [
-  { value: 'entry', label: '入门' },
-  { value: 'easy', label: '简单' },
-  { value: 'normal', label: '适中' },
-  { value: 'hard', label: '困难' },
-  { value: 'extreme', label: '极限' },
-  { value: 'mixed', label: '混合' },
+  { value: 'entry' },
+  { value: 'easy' },
+  { value: 'normal' },
+  { value: 'hard' },
+  { value: 'extreme' },
+  { value: 'mixed' },
 ];
 
-const AI_DIFFICULTY_LABEL_MAP: Record<string, string> = {
-  entry: '入门',
-  easy: '简单',
-  normal: '适中',
-  hard: '困难',
-  extreme: '极限',
-  mixed: '混合',
-};
-
 const AI_TYPE_RATIO_PRESET_OPTIONS = [
-  { value: 'balanced', label: '平衡模板' },
-  { value: 'objective_focus', label: '客观强化' },
-  { value: 'subjective_focus', label: '主观强化' },
-  { value: 'sprint_mix', label: '冲刺综合' },
+  { value: 'balanced' },
+  { value: 'objective_focus' },
+  { value: 'subjective_focus' },
+  { value: 'sprint_mix' },
 ];
 
 const AI_TYPE_RATIO_PRESET_MAP: Record<string, Record<string, number>> = {
-  balanced: {
-    '单项选择题': 0.3,
-    '名词解释': 0.15,
-    '简答题': 0.2,
-    '论述题': 0.2,
-    '计算题': 0.15,
-  },
-  objective_focus: {
-    '单项选择题': 0.55,
-    '名词解释': 0.1,
-    '简答题': 0.15,
-    '论述题': 0.1,
-    '计算题': 0.1,
-  },
-  subjective_focus: {
-    '单项选择题': 0.15,
-    '名词解释': 0.2,
-    '简答题': 0.3,
-    '论述题': 0.25,
-    '计算题': 0.1,
-  },
-  sprint_mix: {
-    '单项选择题': 0.2,
-    '名词解释': 0.1,
-    '简答题': 0.2,
-    '论述题': 0.25,
-    '计算题': 0.25,
-  },
+  balanced: { objective: 0.3, noun: 0.15, short: 0.2, essay: 0.2, calculate: 0.15 },
+  objective_focus: { objective: 0.55, noun: 0.1, short: 0.15, essay: 0.1, calculate: 0.1 },
+  subjective_focus: { objective: 0.15, noun: 0.2, short: 0.3, essay: 0.25, calculate: 0.1 },
+  sprint_mix: { objective: 0.2, noun: 0.1, short: 0.2, essay: 0.25, calculate: 0.25 },
 };
 
 export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[], onEdit: (q: any) => void, onDelete: (id: number) => void }) => {
+  const { t } = useTranslation('maintenance');
   const DEFAULT_AI_TYPES: string[] = [];
-  // 防止一次请求量过大导致 AI 超时/失败
-  const MAX_AI_TOTAL = 10; // 单次最多生成的题目总数
+  // Prevent AI timeout/failure from too many questions per request
+  const MAX_AI_TOTAL = 10; // Max total questions per generation
   const [bankSearch, setBankSearch] = useState('');
   const [bankKP, setBankKP] = useState('0');
   const [bankType, setBankType] = useState('all');
@@ -103,6 +72,39 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
 
   const invalidDifficultyCount = previewQuestions.filter(q => q.difficulty_check_passed === false).length;
 
+  const getTypeLabel = (typeKey: string) => {
+    const map: Record<string, string> = {
+      objective: t('questionBank.typeObjective'),
+      noun: t('questionBank.typeNoun'),
+      short: t('questionBank.typeShort'),
+      essay: t('questionBank.typeEssay'),
+      calculate: t('questionBank.typeCalculate'),
+    };
+    return map[typeKey] || typeKey;
+  };
+
+  const getDifficultyLabel = (value: string) => {
+    const map: Record<string, string> = {
+      entry: t('questionBank.difficultyEntry'),
+      easy: t('questionBank.difficultyEasy'),
+      normal: t('questionBank.difficultyNormal'),
+      hard: t('questionBank.difficultyHard'),
+      extreme: t('questionBank.difficultyExtreme'),
+      mixed: t('questionBank.difficultyMixed'),
+    };
+    return map[value] || value;
+  };
+
+  const getPresetLabel = (value: string) => {
+    const map: Record<string, string> = {
+      balanced: t('questionBank.ratioBalanced'),
+      objective_focus: t('questionBank.ratioObjectiveFocus'),
+      subjective_focus: t('questionBank.ratioSubjectiveFocus'),
+      sprint_mix: t('questionBank.ratioSprintMix'),
+    };
+    return map[value] || value;
+  };
+
   const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
     el.style.height = 'auto';
@@ -112,20 +114,20 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
   const buildTypeRatioPayload = () => {
     const baseRatio = AI_TYPE_RATIO_PRESET_MAP[selectedTypeRatioPreset] || AI_TYPE_RATIO_PRESET_MAP.balanced;
     const enabledSet = new Set(selectedTypes);
-    const filteredEntries = Object.entries(baseRatio).filter(([label, weight]) => enabledSet.has(label) && weight > 0);
+    const filteredEntries = Object.entries(baseRatio).filter(([typeKey, weight]) => enabledSet.has(typeKey) && weight > 0);
     const total = filteredEntries.reduce((sum, [, weight]) => sum + weight, 0);
 
     if (total > 0) {
       const normalized: Record<string, number> = {};
-      filteredEntries.forEach(([label, weight]) => {
-        normalized[label] = Number((weight / total).toFixed(4));
+      filteredEntries.forEach(([typeKey, weight]) => {
+        normalized[typeKey] = Number((weight / total).toFixed(4));
       });
       return normalized;
     }
 
     if (selectedTypes.length > 0) {
       const equalWeight = Number((1 / selectedTypes.length).toFixed(4));
-      return selectedTypes.reduce((acc, label) => ({ ...acc, [label]: equalWeight }), {} as Record<string, number>);
+      return selectedTypes.reduce((acc, typeKey) => ({ ...acc, [typeKey]: equalWeight }), {} as Record<string, number>);
     }
 
     return {};
@@ -141,7 +143,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
         }
       });
       setBankData(res.data);
-    } catch (e) { toast.error('加载失败'); }
+    } catch (e) { toast.error(t('questionBank.loadFailed')); }
     setLoading(false);
   };
 
@@ -150,8 +152,8 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
   const handleExport = async () => {
     try {
       const res = await api.get('/quizzes/admin/export-structured/', { params: { kp_id: bankKP !== '0' ? bankKP : undefined } });
-      toast.success(res.data.message || `已同步 ${res.data.total} 道题至服务器`);
-    } catch (e) { toast.error('导出失败'); }
+      toast.success(res.data.message || t('questionBank.exportSuccess', { total: res.data.total }));
+    } catch (e) { toast.error(t('questionBank.exportFailed')); }
   };
 
   const handleImportCSV = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -161,28 +163,28 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
       fd.append('file', file);
       try {
           const res = await api.post('/quizzes/import-csv/', fd);
-          toast.success(`成功导入 ${res.data.count} 道题目`);
+          toast.success(t('questionBank.importSuccess', { count: res.data.count }));
           fetchBank(1);
       } catch (e: any) {
-          toast.error(e.response?.data?.error || "导入失败");
+          toast.error(e.response?.data?.error || t('questionBank.importFailed'));
       }
       e.target.value = '';
   };
 
   const handleAIGenerate = async () => {
-    if (selectedKPs.length === 0) return toast.error("请选择至少一个知识点");
-    if (selectedTypes.length === 0) return toast.error("请选择至少一种题型");
+    if (selectedKPs.length === 0) return toast.error(t('questionBank.pleaseSelectKp'));
+    if (selectedTypes.length === 0) return toast.error(t('questionBank.pleaseSelectType'));
     const totalRequested = selectedKPs.length * genCount;
     if (totalRequested > MAX_AI_TOTAL) {
-      return toast.error(`单次最多生成 ${MAX_AI_TOTAL} 题，请减少知识点数量或生成数量`);
+      return toast.error(t('questionBank.maxGenExceeded', { max: MAX_AI_TOTAL }));
     }
     if (totalRequested > MAX_AI_TOTAL - 2) {
-      toast.warning(`本次将生成 ${totalRequested} 题，可能稍慢，请耐心等待`);
+      toast.warning(t('questionBank.genSlowWarning', { total: totalRequested }));
     }
     setIsGenerating(true);
     try {
-      const res = await api.post('/quizzes/ai-smart-generate-preview/', { 
-          kp_ids: selectedKPs, 
+      const res = await api.post('/quizzes/ai-smart-generate-preview/', {
+          kp_ids: selectedKPs,
           count: genCount,
           types: selectedTypes,
           difficulty_level: selectedDifficulty,
@@ -192,7 +194,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
       setShowAIModal(false);
       setShowPreview(true);
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || "生成失败，请稍后重试");
+      toast.error(e?.response?.data?.error || t('questionBank.generateFailed'));
     }
     finally { setIsGenerating(false); }
   };
@@ -207,11 +209,11 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
         const failedIndexes = new Set<number>((data.errors || []).map((item: any) => Number(item.index) - 1));
         const failedQuestions = previewQuestions.filter((_, index) => failedIndexes.has(index));
         setPreviewQuestions(failedQuestions);
-        toast.warning(
-          `${data.error || "部分题目入库失败"}${data.errors?.[0]?.error ? `，示例: ${data.errors[0].error}` : ''}`
-        );
+        const errMsg = data.error || t('questionBank.partialFail');
+        const sampleInfo = data.errors?.[0]?.error ? ` — ${data.errors[0].error}` : '';
+        toast.warning(errMsg + sampleInfo);
       } else {
-        toast.success(`题目已成功入库（${data.count ?? previewQuestions.length}题）`);
+        toast.success(t('questionBank.importSuccess', { count: data.count ?? previewQuestions.length }));
         setShowPreview(false);
         setPreviewQuestions([]);
       }
@@ -219,7 +221,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
     } catch (e: any) {
       const errData = e?.response?.data;
       const firstErr = errData?.errors?.[0]?.error;
-      toast.error(errData?.error || firstErr || "入库失败");
+      toast.error(errData?.error || firstErr || t('questionBank.importFailed'));
     }
     finally { setIsSaving(false); }
   };
@@ -244,7 +246,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
       setSelectedTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
   };
 
-  // 递归展平知识树，提取所有末级考点 (KP)
+  // Recursively flatten knowledge tree, extract all leaf KP nodes
   const getAllLeafKPs = (list: any[]) => {
     let leafs: any[] = [];
     list.forEach(item => {
@@ -277,12 +279,12 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
   }, [previewQuestions]);
 
   const getQuestionTypeLabel = (q: any) => {
-    if (q.q_type === 'objective') return '单项选择题';
-    if (q.subjective_type === 'noun') return '名词解释';
-    if (q.subjective_type === 'short') return '简答题';
-    if (q.subjective_type === 'essay') return '论述题';
-    if (q.subjective_type === 'calculate') return '计算题';
-    return '主观题';
+    if (q.q_type === 'objective') return t('questionBank.typeObjective');
+    if (q.subjective_type === 'noun') return t('questionBank.typeNoun');
+    if (q.subjective_type === 'short') return t('questionBank.typeShort');
+    if (q.subjective_type === 'essay') return t('questionBank.typeEssay');
+    if (q.subjective_type === 'calculate') return t('questionBank.typeCalculate');
+    return t('questionBank.typeSubjective');
   };
 
   return (
@@ -290,34 +292,34 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
       <div className="p-4 border-b border-black/[0.03] bg-slate-50/50 space-y-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-black/40 uppercase tracking-widest">题库浏览</span>
+            <span className="text-[11px] font-bold text-black/40 uppercase tracking-widest">{t('questionBank.browseTitle')}</span>
             <span className="text-[11px] font-bold bg-black text-white rounded-full px-2 py-0.5">{bankData.total}</span>
           </div>
           <div className="flex gap-2">
             <Button onClick={() => { resetAIGenerateState(); setShowAIModal(true); }} variant="outline" className="h-8 px-3 rounded-xl text-[11px] font-bold border-indigo-200 bg-indigo-50/50 text-indigo-600 gap-1.5 hover:bg-indigo-100/50 transition-colors">
-                <Sparkles className="w-3 h-3" /> 智能出题
+                <Sparkles className="w-3 h-3" /> {t('questionBank.aiGenerate')}
             </Button>
             <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="h-8 px-3 rounded-xl text-[11px] font-bold border-black/10 gap-1.5">
-                <Upload className="w-3 h-3" /> 导入CSV
+                <Upload className="w-3 h-3" /> {t('questionBank.importCsv')}
             </Button>
             <input type="file" ref={fileInputRef} onChange={handleImportCSV} className="hidden" accept=".csv" />
             <Button onClick={handleExport} variant="outline" className="h-8 px-3 rounded-xl text-[11px] font-bold border-black/10 gap-1.5">
-                <FileUp className="w-3 h-3" /> 导出AI结构化
+                <FileUp className="w-3 h-3" /> {t('questionBank.exportAiStructured')}
             </Button>
           </div>
         </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 opacity-30" />
-            <Input value={bankSearch} onChange={e => setBankSearch(e.target.value)} placeholder="搜索题干..." className="pl-8 h-8 bg-white border-none rounded-xl font-bold text-xs shadow-sm" />
+            <Input value={bankSearch} onChange={e => setBankSearch(e.target.value)} placeholder={t('questionBank.searchPlaceholder')} className="pl-8 h-8 bg-white border-none rounded-xl font-bold text-xs shadow-sm" />
           </div>
           <Select value={bankKP} onValueChange={setBankKP}>
-            <SelectTrigger className="h-8 w-32 rounded-xl bg-white border-none font-bold text-[11px] shadow-sm"><SelectValue placeholder="全部知识点" /></SelectTrigger>
-            <SelectContent className="rounded-xl"><SelectItem value="0" className="text-xs">全部知识点</SelectItem>{kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()} className="text-xs">{kp.name}</SelectItem>)}</SelectContent>
+            <SelectTrigger className="h-8 w-32 rounded-xl bg-white border-none font-bold text-[11px] shadow-sm"><SelectValue placeholder={t('questionBank.allKp')} /></SelectTrigger>
+            <SelectContent className="rounded-xl"><SelectItem value="0" className="text-xs">{t('questionBank.allKp')}</SelectItem>{kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()} className="text-xs">{kp.name}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={bankType} onValueChange={setBankType}>
             <SelectTrigger className="h-8 w-24 rounded-xl bg-white border-none font-bold text-[11px] shadow-sm"><SelectValue /></SelectTrigger>
-            <SelectContent className="rounded-xl"><SelectItem value="all" className="text-xs">全部题型</SelectItem><SelectItem value="objective" className="text-xs">客观题</SelectItem><SelectItem value="subjective" className="text-xs">主观题</SelectItem></SelectContent>
+            <SelectContent className="rounded-xl"><SelectItem value="all" className="text-xs">{t('questionBank.allTypes')}</SelectItem><SelectItem value="objective" className="text-xs">{t('questionBank.objective')}</SelectItem><SelectItem value="subjective" className="text-xs">{t('questionBank.subjective')}</SelectItem></SelectContent>
           </Select>
           <Button onClick={() => fetchBank(bankPage)} variant="ghost" size="icon" className="h-8 w-8 rounded-xl shrink-0">
             <RefreshCcw className={cn('w-3.5 h-3.5 opacity-40', loading && 'animate-spin')} />
@@ -327,14 +329,14 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
 
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-1.5">
-          {loading && <div className="py-10 text-center text-xs font-bold opacity-20">加载中...</div>}
-          {!loading && bankData.results.length === 0 && <div className="py-10 text-center text-xs font-bold opacity-20">暂无题目</div>}
+          {loading && <div className="py-10 text-center text-xs font-bold opacity-20">{t('questionBank.loading')}</div>}
+          {!loading && bankData.results.length === 0 && <div className="py-10 text-center text-xs font-bold opacity-20">{t('questionBank.noQuestions')}</div>}
           {bankData.results.map(q => (
             <div key={q.id} className="rounded-2xl bg-[#F5F5F7]/70 hover:bg-[#F5F5F7] transition-colors border border-transparent hover:border-black/[0.04]">
               <div className="p-3 flex items-start gap-3 cursor-pointer" onClick={() => setExpanded(expanded === q.id ? null : q.id)}>
                 <div className="flex flex-col gap-1 shrink-0 pt-0.5">
-                  <Badge className={cn('text-[11px] py-0 h-4 px-1.5 rounded-md border-none font-bold', q.q_type === 'objective' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>{q.q_type === 'objective' ? '客' : '主'}</Badge>
-                  {q.subjective_type && <Badge className="text-[11px] py-0 h-3.5 px-1 rounded-md border-none bg-black/5 text-black/40 font-bold">{q.subjective_type}</Badge>}
+                  <Badge className={cn('text-[11px] py-0 h-4 px-1.5 rounded-md border-none font-bold', q.q_type === 'objective' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>{q.q_type === 'objective' ? t('questionBank.objectiveBadge') : t('questionBank.subjectiveBadge')}</Badge>
+                  {q.subjective_type && <Badge className="text-[11px] py-0 h-3.5 px-1 rounded-md border-none bg-black/5 text-black/40 font-bold">{getTypeLabel(q.subjective_type)}</Badge>}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-bold text-[#1D1D1F] leading-relaxed line-clamp-2">{q.text}</p>
@@ -348,8 +350,8 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
               </div>
               {expanded === q.id && (
                 <div className="px-4 pb-4 space-y-2 border-t border-black/[0.04] mt-0 pt-3">
-                  {q.correct_answer && <div><p className="text-[11px] font-bold opacity-30 uppercase tracking-widest mb-1">答案</p><p className="text-[11px] font-medium text-black/70 whitespace-pre-wrap bg-emerald-50/50 rounded-xl p-3">{q.correct_answer}</p></div>}
-                  {q.grading_points && <div><p className="text-[11px] font-bold opacity-30 uppercase tracking-widest mb-1">判分点</p><p className="text-[11px] font-medium text-black/70 bg-blue-50/50 rounded-xl p-3">{q.grading_points}</p></div>}
+                  {q.correct_answer && <div><p className="text-[11px] font-bold opacity-30 uppercase tracking-widest mb-1">{t('questionBank.answer')}</p><p className="text-[11px] font-medium text-black/70 whitespace-pre-wrap bg-emerald-50/50 rounded-xl p-3">{q.correct_answer}</p></div>}
+                  {q.grading_points && <div><p className="text-[11px] font-bold opacity-30 uppercase tracking-widest mb-1">{t('questionBank.gradingPoints')}</p><p className="text-[11px] font-medium text-black/70 bg-blue-50/50 rounded-xl p-3">{q.grading_points}</p></div>}
                 </div>
               )}
             </div>
@@ -359,9 +361,9 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
 
       {bankData.total_pages > 1 && (
         <div className="p-3 border-t border-black/[0.03] flex items-center justify-between shrink-0">
-          <Button onClick={() => { const p = Math.max(1, bankPage - 1); setBankPage(p); fetchBank(p); }} disabled={bankPage === 1} variant="ghost" className="h-8 px-4 rounded-xl text-xs font-bold">← 上一页</Button>
+          <Button onClick={() => { const p = Math.max(1, bankPage - 1); setBankPage(p); fetchBank(p); }} disabled={bankPage === 1} variant="ghost" className="h-8 px-4 rounded-xl text-xs font-bold">{t('questionBank.prevPage')}</Button>
           <span className="text-[11px] font-bold opacity-40">{bankPage} / {bankData.total_pages}</span>
-          <Button onClick={() => { const p = Math.min(bankData.total_pages, bankPage + 1); setBankPage(p); fetchBank(p); }} disabled={bankPage === bankData.total_pages} variant="ghost" className="h-8 px-4 rounded-xl text-xs font-bold">下一页 →</Button>
+          <Button onClick={() => { const p = Math.min(bankData.total_pages, bankPage + 1); setBankPage(p); fetchBank(p); }} disabled={bankPage === bankData.total_pages} variant="ghost" className="h-8 px-4 rounded-xl text-xs font-bold">{t('questionBank.nextPage')}</Button>
         </div>
       )}
 
@@ -376,14 +378,14 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
           <DialogContent className="rounded-[2.5rem] border-none shadow-2xl p-8 max-w-xl bg-white text-left overflow-hidden max-h-[90vh] flex flex-col">
               <DialogHeader>
                   <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-indigo-500" /> 智能题目工坊
+                      <Sparkles className="w-5 h-5 text-indigo-500" /> {t('questionBank.aiWorkshopTitle')}
                   </DialogTitle>
-                  <DialogDescription className="text-xs font-medium text-black/40">选择末级考点，AI 将根据前缀逻辑自动命制考研题目。</DialogDescription>
+                  <DialogDescription className="text-xs font-medium text-black/40">{t('questionBank.aiWorkshopDesc')}</DialogDescription>
               </DialogHeader>
               <div className="flex-1 overflow-y-auto mt-6 space-y-6 pr-2 scrollbar-thin">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
-                      <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest mb-2">生成数量 (每考点)</p>
+                      <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest mb-2">{t('questionBank.genCountPerKp')}</p>
                       <Input
                         type="number"
                         min={1}
@@ -394,7 +396,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                       />
                     </div>
                     <div>
-                      <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest mb-2">目标难度</p>
+                      <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest mb-2">{t('questionBank.targetDifficulty')}</p>
                       <Select value={selectedDifficulty} onValueChange={setSelectedDifficulty}>
                         <SelectTrigger className="h-10 rounded-xl border-black/5 bg-slate-50 font-bold text-xs shadow-inner">
                           <SelectValue />
@@ -402,14 +404,14 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                         <SelectContent className="rounded-xl">
                           {AI_DIFFICULTY_OPTIONS.map(item => (
                             <SelectItem key={item.value} value={item.value} className="text-xs">
-                              {item.label}
+                              {getDifficultyLabel(item.value)}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest mb-2">题型配比模板</p>
+                      <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest mb-2">{t('questionBank.typeRatioPreset')}</p>
                       <Select value={selectedTypeRatioPreset} onValueChange={setSelectedTypeRatioPreset}>
                         <SelectTrigger className="h-10 rounded-xl border-black/5 bg-slate-50 font-bold text-xs shadow-inner">
                           <SelectValue />
@@ -417,35 +419,35 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                         <SelectContent className="rounded-xl">
                           {AI_TYPE_RATIO_PRESET_OPTIONS.map(item => (
                             <SelectItem key={item.value} value={item.value} className="text-xs">
-                              {item.label}
+                              {getPresetLabel(item.value)}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="md:col-span-3">
-                        <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest mb-3">目标命题题型 (多选)</p>
+                        <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest mb-3">{t('questionBank.targetTypes')}</p>
                         <div className="grid grid-cols-5 gap-2">
-                            {AI_TYPE_OPTIONS.map(t => (
-                                <div 
-                                    key={t.label} 
-                                    onClick={() => toggleType(t.label)} 
+                            {AI_TYPE_OPTIONS.map(t_opt => (
+                                <div
+                                    key={t_opt.typeKey}
+                                    onClick={() => toggleType(t_opt.typeKey)}
                                     className={cn(
                                         "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer gap-2 select-none h-20",
-                                        selectedTypes.includes(t.label) 
-                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100 scale-[1.02]" 
+                                        selectedTypes.includes(t_opt.typeKey)
+                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100 scale-[1.02]"
                                             : "bg-slate-50 border-black/[0.03] text-slate-500 hover:border-indigo-200 hover:bg-white"
                                     )}
                                 >
-                                    <span className="text-xl">{t.icon}</span>
-                                    <span className="text-[10px] font-black uppercase text-center">{t.label}</span>
+                                    <span className="text-xl">{t_opt.icon}</span>
+                                    <span className="text-[10px] font-black uppercase text-center">{getTypeLabel(t_opt.typeKey)}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                   </div>
                   <div className="space-y-2">
-                      <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest">选择出题考点 ({selectedKPs.length})</p>
+                      <p className="text-[11px] font-bold text-black/30 uppercase tracking-widest">{t('questionBank.selectKpTitle', { count: selectedKPs.length })}</p>
                       <div className="grid grid-cols-2 gap-1.5 p-4 bg-slate-50/50 rounded-[2rem] border border-black/5 min-h-[300px]">
                           {leafKPs.map(kp => (
                               <div key={kp.id} onClick={() => toggleKP(kp.id)} className={cn("p-2 px-3 rounded-xl border cursor-pointer transition-all flex items-center gap-2", selectedKPs.includes(kp.id) ? "bg-indigo-600 border-indigo-600 text-white shadow-md scale-[1.02]" : "bg-white border-black/5 text-black/70 hover:border-indigo-200")}>
@@ -456,15 +458,15 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                       </div>
                   </div>
               </div>
-              
+
               <DialogFooter className="mt-6 border-t border-black/5 pt-6">
-                  <Button variant="ghost" onClick={() => setShowAIModal(false)} className="rounded-xl h-11 font-bold text-xs px-6">取消</Button>
+                  <Button variant="ghost" onClick={() => setShowAIModal(false)} className="rounded-xl h-11 font-bold text-xs px-6">{t('questionBank.cancel')}</Button>
                   <Button
                     onClick={handleAIGenerate}
                     disabled={isGenerating || selectedKPs.length === 0 || selectedTypes.length === 0}
                     className="rounded-xl h-11 bg-indigo-600 text-white font-bold text-xs px-10 shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
                   >
-                      {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : "开始命题"}
+                      {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('questionBank.startGenerate')}
                   </Button>
               </DialogFooter>
           </DialogContent>
@@ -475,18 +477,18 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
           <DialogContent className="rounded-[3rem] border-none shadow-2xl p-0 max-w-4xl bg-[#F5F5F7] text-left overflow-hidden h-[90vh] flex flex-col">
               <div className="p-8 pb-4 bg-white/80 backdrop-blur-xl border-b border-black/[0.03] z-10 sticky top-0">
                   <DialogHeader>
-                      <DialogTitle className="text-2xl font-black tracking-tight text-[#1D1D1F]">命题审核预检</DialogTitle>
-                      <DialogDescription className="text-sm font-medium text-black/30">请对 AI 命制的题目进行最后的学术校验，确认无误后入库。</DialogDescription>
+                      <DialogTitle className="text-2xl font-black tracking-tight text-[#1D1D1F]">{t('questionBank.previewTitle')}</DialogTitle>
+                      <DialogDescription className="text-sm font-medium text-black/30">{t('questionBank.previewDesc')}</DialogDescription>
                   </DialogHeader>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <Badge className="bg-indigo-50 text-indigo-600 border-none text-[10px] font-black rounded-lg h-6 px-3">
-                      目标难度：{AI_DIFFICULTY_LABEL_MAP[selectedDifficulty] || selectedDifficulty}
+                      {t('questionBank.targetDifficultyLabel')}{getDifficultyLabel(selectedDifficulty)}
                     </Badge>
                     <Badge className="bg-slate-100 text-slate-600 border-none text-[10px] font-black rounded-lg h-6 px-3">
-                      总题数：{previewQuestions.length}
+                      {t('questionBank.totalQuestionsLabel')}{previewQuestions.length}
                     </Badge>
                     <Badge className={cn("border-none text-[10px] font-black rounded-lg h-6 px-3", invalidDifficultyCount > 0 ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600")}>
-                      难度校验未通过：{invalidDifficultyCount}
+                      {t('questionBank.difficultyCheckFailed')}{invalidDifficultyCount}
                     </Badge>
                     {invalidDifficultyCount > 0 && (
                       <Button
@@ -494,7 +496,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                         onClick={() => setPreviewQuestions(prev => prev.filter(q => q.difficulty_check_passed !== false))}
                         className="h-6 rounded-lg text-[10px] font-bold px-3 border-rose-200 text-rose-600 hover:bg-rose-50"
                       >
-                        移除未通过
+                        {t('questionBank.removeFailed')}
                       </Button>
                     )}
                   </div>
@@ -511,21 +513,21 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                                               <Badge className="bg-indigo-600 text-white text-[10px] font-black rounded-lg h-5 px-2 uppercase border-none shadow-sm">{q.related_knowledge_id}</Badge>
                                               <span className="text-xs font-bold text-black/40">{q.kp_name}</span>
                                               <Badge className="bg-amber-100 text-amber-700 text-[10px] font-black rounded-lg h-5 px-2 uppercase border-none">{getQuestionTypeLabel(q)}</Badge>
-                                              <Badge className="bg-slate-100 text-slate-500 text-[10px] font-black rounded-lg h-5 px-2 uppercase border-none">{AI_DIFFICULTY_LABEL_MAP[q.difficulty_level] || q.difficulty_level}</Badge>
+                                              <Badge className="bg-slate-100 text-slate-500 text-[10px] font-black rounded-lg h-5 px-2 uppercase border-none">{getDifficultyLabel(q.difficulty_level)}</Badge>
                                               {q.difficulty_estimated_level && (
                                                 <Badge className="bg-cyan-100 text-cyan-700 text-[10px] font-black rounded-lg h-5 px-2 uppercase border-none">
-                                                  估计：{AI_DIFFICULTY_LABEL_MAP[q.difficulty_estimated_level] || q.difficulty_estimated_level}
+                                                  {t('questionBank.estimatedLabel')}{getDifficultyLabel(q.difficulty_estimated_level)}
                                                 </Badge>
                                               )}
                                               <Badge className={cn("text-[10px] font-black rounded-lg h-5 px-2 uppercase border-none", q.difficulty_check_passed === false ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600")}>
-                                                {q.difficulty_check_passed === false ? "难度偏差" : "难度通过"}
+                                                {q.difficulty_check_passed === false ? t('questionBank.difficultyDeviation') : t('questionBank.difficultyPassed')}
                                               </Badge>
                                           </div>
-                                          <textarea 
-                                              value={q.question} 
-                                              onChange={e => updatePreviewQuestion(idx, 'question', e.target.value)} 
-                                              className="w-full bg-slate-50 border-none rounded-2xl p-5 text-[14px] font-bold text-[#1D1D1F] leading-relaxed resize-none focus:ring-1 focus:ring-indigo-100 min-h-[100px]" 
-                                              placeholder="请输入题干..." 
+                                          <textarea
+                                              value={q.question}
+                                              onChange={e => updatePreviewQuestion(idx, 'question', e.target.value)}
+                                              className="w-full bg-slate-50 border-none rounded-2xl p-5 text-[14px] font-bold text-[#1D1D1F] leading-relaxed resize-none focus:ring-1 focus:ring-indigo-100 min-h-[100px]"
+                                              placeholder={t('questionBank.enterQuestionStem')}
                                           />
                                       </div>
                                       <Button onClick={() => setPreviewQuestions(prev => prev.filter((_, i) => i !== idx))} variant="ghost" size="icon" className="h-10 w-10 rounded-full text-red-400 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><X className="w-5 h-5" /></Button>
@@ -543,15 +545,15 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                                                   onInput={e => autoResizeTextarea(e.currentTarget)}
                                                   onChange={e => updatePreviewQuestion(idx, 'option', { key: opt, val: e.target.value })}
                                                   className="flex-1 bg-transparent border-none p-0 text-xs font-bold text-[#1D1D1F] leading-relaxed focus:ring-0 placeholder:text-black/20 resize-none min-h-0 overflow-hidden whitespace-pre-wrap break-words"
-                                                  placeholder="选项内容..."
+                                                  placeholder={t('questionBank.optionContent')}
                                                 />
                                             </div>
                                         ))}
                                     </div>
                                   ) : (
                                       <div className="space-y-3">
-                                          <p className="text-[11px] font-bold text-black/20 uppercase tracking-widest px-1">参考答案</p>
-                                          <textarea value={q.answer} onChange={e => updatePreviewQuestion(idx, 'answer', e.target.value)} className="w-full bg-emerald-50/30 border border-emerald-100/50 rounded-2xl p-5 text-xs font-bold text-emerald-900 leading-relaxed min-h-[100px] focus:ring-1 focus:ring-emerald-100 whitespace-pre-wrap break-words" placeholder="输入参考答案..." />
+                                          <p className="text-[11px] font-bold text-black/20 uppercase tracking-widest px-1">{t('questionBank.referenceAnswer')}</p>
+                                          <textarea value={q.answer} onChange={e => updatePreviewQuestion(idx, 'answer', e.target.value)} className="w-full bg-emerald-50/30 border border-emerald-100/50 rounded-2xl p-5 text-xs font-bold text-emerald-900 leading-relaxed min-h-[100px] focus:ring-1 focus:ring-emerald-100 whitespace-pre-wrap break-words" placeholder={t('questionBank.enterReferenceAnswer')} />
                                       </div>
                                   )}
 
@@ -565,14 +567,14 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                   <div className="flex items-center gap-4">
                       <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600"><Check className="w-5 h-5" /></div>
                       <div>
-                          <p className="text-sm font-black text-[#1D1D1F]">就绪待审</p>
-                          <p className="text-[11px] font-bold text-black/30">共计 {previewQuestions.length} 道命题待入库</p>
+                          <p className="text-sm font-black text-[#1D1D1F]">{t('questionBank.readyForReview')}</p>
+                          <p className="text-[11px] font-bold text-black/30">{t('questionBank.questionsPending', { count: previewQuestions.length })}</p>
                       </div>
                   </div>
                   <div className="flex gap-4">
-                    <Button variant="ghost" onClick={() => setShowPreview(false)} className="rounded-xl h-12 font-bold text-xs px-8 hover:bg-slate-50">放弃</Button>
+                    <Button variant="ghost" onClick={() => setShowPreview(false)} className="rounded-xl h-12 font-bold text-xs px-8 hover:bg-slate-50">{t('questionBank.abandon')}</Button>
                     <Button onClick={handleConfirmSave} disabled={isSaving || previewQuestions.length === 0} className="rounded-xl h-12 bg-indigo-600 text-white font-bold text-xs px-12 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "确认入库"}
+                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : t('questionBank.confirmImport')}
                     </Button>
                   </div>
               </div>

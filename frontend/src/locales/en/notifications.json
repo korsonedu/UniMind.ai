@@ -1,0 +1,10 @@
+{
+  "title": "Notifications",
+  "titleWithCount": "Notifications ({{count}})",
+  "markRead": "Mark Read",
+  "clear": "Clear",
+  "empty": "No notifications",
+  "clearConfirmTitle": "Clear all notifications?",
+  "clearConfirmDesc": "This will permanently delete all your notifications. This cannot be undone.",
+  "confirmClear": "Clear All"
+}
