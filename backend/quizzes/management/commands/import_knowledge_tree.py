@@ -15,6 +15,7 @@ class Command(BaseCommand):
         parser.add_argument('--institution', type=str, help='机构 slug，将此知识树分配给指定机构')
         parser.add_argument('--institution-id', type=int, help='机构 ID，将此知识树分配给指定机构')
         parser.add_argument('--global', action='store_true', help='导入为全局知识树（不属于任何机构）')
+        parser.add_argument('--subject', type=str, help='学科名称（如 金融431、法学），用于多学科全局共存')
 
     def handle(self, *args, **kwargs):
         file_path = kwargs['file_path']
@@ -44,8 +45,20 @@ class Command(BaseCommand):
             return
 
         # 只删除同一 institution 的知识点（NULL 也视为一组）
-        scope_filter = {'institution': institution} if institution else {'institution__isnull': True}
-        scope_label = f'机构「{institution.name}」' if institution else '全局'
+        if institution:
+            scope_filter = {'institution': institution}
+            scope_label = f'机构「{institution.name}」'
+        elif kwargs.get('global'):
+            subject = kwargs.get('subject') or ''
+            if subject:
+                scope_filter = {'institution__isnull': True, 'subject': subject}
+                scope_label = f'全局「{subject}」'
+            else:
+                scope_filter = {'institution__isnull': True}
+                scope_label = '全局'
+        else:
+            scope_filter = {'institution__isnull': True}
+            scope_label = '全局'
         existing = KnowledgePoint.objects.filter(**scope_filter).count()
 
         if not kwargs.get('force'):
@@ -109,6 +122,7 @@ class Command(BaseCommand):
                 parent=parent,
                 order=order_counter[order_key],
                 institution=institution,
+                subject=kwargs.get('subject') or '',
             )
 
             # 更新当前深度的父节点栈
