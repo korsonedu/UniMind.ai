@@ -21,6 +21,7 @@ from .views_institution import (
     InstitutionSelfUpdateView,
     CheckInviteView, RegenerateInviteSlugView,
     PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
+    ValidateInviteCodeView,
     PublicInstitutionView, InstitutionJoinBySlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
 )
@@ -98,4 +99,7 @@ urlpatterns = [
     path('admin/plan-invite-codes/', PlanInviteCodeListView.as_view(), name='plan-invite-codes'),
     path('admin/plan-invite-codes/generate/', PlanInviteCodeGenerateView.as_view(), name='plan-invite-codes-generate'),
     path('admin/plan-invite-codes/<int:pk>/deactivate/', PlanInviteCodeDeactivateView.as_view(), name='plan-invite-codes-deactivate'),
+
+    # Validate invite code (for onboarding flow)
+    path('institutions/validate-invite-code/', ValidateInviteCodeView.as_view(), name='validate-invite-code'),
 ]

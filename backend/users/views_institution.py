@@ -830,3 +830,27 @@ class PlanInviteCodeDeactivateView(APIView):
         code.is_active = False
         code.save(update_fields=['is_active'])
         return Response({'status': 'deactivated'})
+
+
+class ValidateInviteCodeView(APIView):
+    """Validate a PlanInviteCode without consuming it — returns plan info for UI gating."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        invite_code = (request.data.get('invite_code') or '').strip().upper()
+        if not invite_code:
+            return Response({'error': '请输入方案邀请码'}, status=400)
+
+        try:
+            code_obj = PlanInviteCode.objects.get(code=invite_code, is_active=True)
+        except PlanInviteCode.DoesNotExist:
+            return Response({'error': '无效的方案邀请码'}, status=400)
+
+        if code_obj.max_uses > 0 and code_obj.used_count >= code_obj.max_uses:
+            return Response({'error': '该邀请码已达使用上限'}, status=400)
+
+        return Response({
+            'plan': code_obj.plan,
+            'plan_label': code_obj.get_plan_display(),
+            'duration_days': code_obj.duration_days,
+        })
