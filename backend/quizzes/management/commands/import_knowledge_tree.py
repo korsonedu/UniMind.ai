@@ -37,6 +37,12 @@ class Command(BaseCommand):
                 '   如需分配给机构，请使用 --institution=<slug> 或 --institution-id=<id>'
             ))
 
+        subject = kwargs.get('subject') or ''
+
+        if subject and not institution and not kwargs.get('global'):
+            self.stdout.write(self.style.ERROR('--subject 要求同时使用 --global 或 --institution'))
+            return
+
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
@@ -46,10 +52,13 @@ class Command(BaseCommand):
 
         # 只删除同一 institution 的知识点（NULL 也视为一组）
         if institution:
-            scope_filter = {'institution': institution}
-            scope_label = f'机构「{institution.name}」'
+            if subject:
+                scope_filter = {'institution': institution, 'subject': subject}
+                scope_label = f'机构「{institution.name}」「{subject}」'
+            else:
+                scope_filter = {'institution': institution}
+                scope_label = f'机构「{institution.name}」'
         elif kwargs.get('global'):
-            subject = kwargs.get('subject') or ''
             if subject:
                 scope_filter = {'institution__isnull': True, 'subject': subject}
                 scope_label = f'全局「{subject}」'
@@ -122,7 +131,7 @@ class Command(BaseCommand):
                 parent=parent,
                 order=order_counter[order_key],
                 institution=institution,
-                subject=kwargs.get('subject') or '',
+                subject=subject,
             )
 
             # 更新当前深度的父节点栈
