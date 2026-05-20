@@ -9,10 +9,10 @@ import { useTranslation } from 'react-i18next';
 const PLAN_ORDER = ['free', 'solo', 'plus', 'pro'] as const;
 
 const PLAN_META: Record<string, { label: string; price: string; color: string }> = {
-  free: { label: 'Free', price: '免费', color: 'bg-[#AEAEB2]' },
-  solo: { label: 'Solo', price: '¥299/月', color: 'bg-[#0071E3]' },
-  plus: { label: 'Plus', price: '¥1,299/月', color: 'bg-[#34C759]' },
-  pro:  { label: 'Pro', price: '¥3,999/月', color: 'bg-[#FF9500]' },
+  free: { label: 'Free', price: '免费', color: 'bg-unimind-text-quaternary' },
+  solo: { label: 'Solo', price: '¥299/月', color: 'bg-primary' },
+  plus: { label: 'Plus', price: '¥1,299/月', color: 'bg-unimind-green' },
+  pro:  { label: 'Pro', price: '¥3,999/月', color: 'bg-amber-500' },
 };
 
 const PLAN_UNLOCK_SUMMARY: Record<string, string> = {
@@ -68,7 +68,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px] rounded-apple-3xl border-none shadow-2xl bg-card p-0 overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-br from-[#0071E3]/6 via-[#0071E3]/3 to-transparent px-8 pt-8 pb-4">
+        <div className="bg-gradient-to-br from-primary/6 via-primary/3 to-transparent px-8 pt-8 pb-4">
           <DialogHeader className="space-y-2 text-left">
             <Badge className={cn('text-[10px] font-bold text-white mb-1', meta.color)}>
               {meta.label}
@@ -87,11 +87,11 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
           <p className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-[0.2em]">
             {t('upgradeModal.coreFeatures', { plan: meta.label })}
           </p>
-          <div className="bg-[#F5F5F7] rounded-2xl p-4 space-y-2">
+          <div className="bg-unimind-bg-secondary rounded-2xl p-4 space-y-2">
             {features.map((f, i) => (
               <div key={i} className="flex items-start gap-2.5">
-                <Check className="h-4 w-4 text-[#34C759] shrink-0 mt-0.5" />
-                <span className="text-[13px] font-bold text-[#1D1D1F]">{f}</span>
+                <Check className="h-4 w-4 text-unimind-green shrink-0 mt-0.5" />
+                <span className="text-[13px] font-bold text-foreground">{f}</span>
               </div>
             ))}
           </div>

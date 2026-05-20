@@ -24,10 +24,10 @@ interface InviteCode {
 }
 
 const PLAN_COLORS: Record<string, string> = {
-  free: 'bg-[#AEAEB2]',
-  solo: 'bg-[#0071E3]',
-  plus: 'bg-[#34C759]',
-  pro: 'bg-[#FF9500]',
+  free: 'bg-unimind-text-quaternary',
+  solo: 'bg-primary',
+  plus: 'bg-unimind-green',
+  pro: 'bg-amber-500',
 };
 
 const DEFAULT_DURATION_DAYS = 30;
@@ -86,18 +86,18 @@ export default function InviteCodeAdmin() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-extrabold text-[#1D1D1F] tracking-tight">邀请码管理</h1>
-        <p className="text-sm text-[#8E8E93] mt-1">{activeCount} 条可用</p>
+        <h1 className="text-2xl font-extrabold text-foreground tracking-tight">邀请码管理</h1>
+        <p className="text-sm text-unimind-text-tertiary mt-1">{activeCount} 条可用</p>
       </div>
 
       {/* Generator */}
       <Card variant="apple" className="p-5">
-        <h3 className="text-sm font-extrabold text-[#1D1D1F] mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-extrabold text-foreground mb-4 flex items-center gap-2">
           <Plus className="h-4 w-4" /> 生成邀请码
         </h3>
         <div className="flex items-end gap-2.5 flex-wrap">
           <div className="space-y-1">
-            <p className="text-[10px] font-bold text-[#AEAEB2] uppercase">方案</p>
+            <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">方案</p>
             <select value={plan} onChange={e => setPlan(e.target.value)}
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-bold">
               <option value="free">Free 免费</option>
@@ -107,25 +107,25 @@ export default function InviteCodeAdmin() {
             </select>
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-bold text-[#AEAEB2] uppercase">有效期(天)</p>
+            <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">有效期(天)</p>
             <Input type="number" min={0} max={3650} value={durationDays}
               onChange={e => setDurationDays(parseInt(e.target.value, 10) || 0)}
               className="h-10 w-22 rounded-xl text-sm" />
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-bold text-[#AEAEB2] uppercase">数量</p>
+            <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">数量</p>
             <Input type="number" min={1} max={100} value={count}
               onChange={e => setCount(parseInt(e.target.value, 10) || 1)}
               className="h-10 w-20 rounded-xl text-sm" />
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-bold text-[#AEAEB2] uppercase">可用次数</p>
+            <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">可用次数</p>
             <Input type="number" min={1} max={1000} value={maxUses}
               onChange={e => setMaxUses(parseInt(e.target.value) || 1)}
               className="h-10 w-20 rounded-xl text-sm" />
           </div>
           <div className="space-y-1 flex-1 min-w-[120px]">
-            <p className="text-[10px] font-bold text-[#AEAEB2] uppercase">备注</p>
+            <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">备注</p>
             <Input placeholder="" value={note}
               onChange={e => setNote(e.target.value)}
               className="h-10 rounded-xl text-sm" />
@@ -136,9 +136,9 @@ export default function InviteCodeAdmin() {
         </div>
 
         {generated.length > 0 && (
-          <div className="mt-4 bg-[#34C759]/6 border border-[#34C759]/20 rounded-xl p-3">
+          <div className="mt-4 bg-unimind-green/6 border border-unimind-green/20 rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-extrabold text-[#34C759]">新生成 {generated.length} 条</span>
+              <span className="text-xs font-extrabold text-unimind-green">新生成 {generated.length} 条</span>
               <Button variant="ghost" size="sm" className="h-6 text-[10px]"
                 onClick={() => { navigator.clipboard.writeText(generated.join('\n')); toast.success('已复制全部'); }}>
                 一键复制
@@ -146,7 +146,7 @@ export default function InviteCodeAdmin() {
             </div>
             <div className="flex flex-wrap gap-1.5">
               {generated.map(c => (
-                <code key={c} className="font-mono text-xs font-bold bg-white px-2.5 py-1 rounded-lg border cursor-pointer hover:bg-[#F5F5F7]"
+                <code key={c} className="font-mono text-xs font-bold bg-white px-2.5 py-1 rounded-lg border cursor-pointer hover:bg-unimind-bg-secondary"
                   onClick={() => copyCode(c)}>{c}</code>
               ))}
             </div>
@@ -156,7 +156,7 @@ export default function InviteCodeAdmin() {
 
       {/* Code list */}
       <Card variant="apple" className="p-5">
-        <h3 className="text-sm font-extrabold text-[#1D1D1F] mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-extrabold text-foreground mb-4 flex items-center gap-2">
           <Ticket className="h-4 w-4" /> 全部邀请码
         </h3>
         {loading ? (
@@ -164,31 +164,31 @@ export default function InviteCodeAdmin() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : codes.length === 0 ? (
-          <p className="text-xs text-[#AEAEB2] text-center py-8">暂无邀请码，先生成几条</p>
+          <p className="text-xs text-unimind-text-quaternary text-center py-8">暂无邀请码，先生成几条</p>
         ) : (
           <div className="space-y-1.5">
             {codes.map(c => (
-              <div key={c.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-[#F5F5F7] text-sm">
+              <div key={c.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-unimind-bg-secondary text-sm">
                 <div className="flex items-center gap-3 min-w-0">
-                  <code className="font-mono font-extrabold text-[#1D1D1F] cursor-pointer select-all">{c.code}</code>
-                  <Badge className={cn('text-[10px] font-bold text-white shrink-0', PLAN_COLORS[c.plan] || 'bg-[#AEAEB2]')}>
+                  <code className="font-mono font-extrabold text-foreground cursor-pointer select-all">{c.code}</code>
+                  <Badge className={cn('text-[10px] font-bold text-white shrink-0', PLAN_COLORS[c.plan] || 'bg-unimind-text-quaternary')}>
                     {c.plan_label}
                   </Badge>
-                  <span className="text-[10px] font-bold text-[#AEAEB2]">
+                  <span className="text-[10px] font-bold text-unimind-text-quaternary">
                     {formatDuration(c.duration_days)}
                   </span>
-                  <span className={cn('text-xs font-bold', c.is_exhausted ? 'text-red-400' : 'text-[#AEAEB2]')}>
+                  <span className={cn('text-xs font-bold', c.is_exhausted ? 'text-red-400' : 'text-unimind-text-quaternary')}>
                     {c.used_count}/{c.max_uses}
                   </span>
-                  {c.note && <span className="text-xs text-[#AEAEB2] truncate hidden sm:inline">{c.note}</span>}
-                  <span className="text-[10px] text-[#C7C7CC] hidden sm:inline">{c.created_at?.slice(0, 10)}</span>
+                  {c.note && <span className="text-xs text-unimind-text-quaternary truncate hidden sm:inline">{c.note}</span>}
+                  <span className="text-[10px] text-unimind-text-quaternary hidden sm:inline">{c.created_at?.slice(0, 10)}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyCode(c.code)}>
-                    <Copy className="h-3.5 w-3.5 text-[#AEAEB2]" />
+                    <Copy className="h-3.5 w-3.5 text-unimind-text-quaternary" />
                   </Button>
                   {(!c.is_active || c.is_exhausted) ? (
-                    <span className="text-[10px] text-[#C7C7CC] font-bold">
+                    <span className="text-[10px] text-unimind-text-quaternary font-bold">
                       {!c.is_active ? '已停用' : '已用完'}
                     </span>
                   ) : (

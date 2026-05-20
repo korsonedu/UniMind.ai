@@ -77,14 +77,6 @@ const toNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getWeekNumber = (d: Date) => {
-  const date = new Date(d.getTime());
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
-  const week1 = new Date(date.getFullYear(), 0, 4);
-  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-};
-
 const formatMetricValue = (key: TrendMetricKey, value: number) => {
   if (key === 'accuracy') return `${value.toFixed(1)}%`;
   if (key === 'question_count') return `${value.toFixed(0)} 题`;
@@ -112,14 +104,6 @@ export const WeeklyReportDialog: React.FC = () => {
 
   useEffect(() => {
     if (!user?.is_member) return;
-
-    const now = new Date();
-    const currentWeekKey = `seen_report_${now.getFullYear()}_W${getWeekNumber(now)}`;
-    const hasSeenThisWeek = localStorage.getItem(currentWeekKey);
-
-    if (!hasSeenThisWeek) {
-      void fetchReport();
-    }
 
     const handleManualOpen = () => {
       void fetchReport(true);
@@ -153,9 +137,6 @@ export const WeeklyReportDialog: React.FC = () => {
 
   const handleClose = () => {
     setIsOpen(false);
-    const now = new Date();
-    const currentWeekKey = `seen_report_${now.getFullYear()}_W${getWeekNumber(now)}`;
-    localStorage.setItem(currentWeekKey, 'true');
   };
 
   const safeDailySeries = useMemo(() => {

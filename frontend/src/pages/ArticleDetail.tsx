@@ -57,23 +57,23 @@ export const ArticleDetail: React.FC = () => {
   return (
     <div className="w-full max-w-4xl mx-auto animate-in fade-in duration-700 text-left p-4 md:p-10 pb-24 md:pb-32 relative">
       <style>{`
-        .article-content h1 { font-size: 1.5rem; font-weight: 900; line-height: 1.2; margin-top: 1.5rem; margin-bottom: 0.75rem; letter-spacing: -0.05em; color: #0f172a; }
-        .article-content h2 { font-size: 1.25rem; font-weight: 900; line-height: 1.3; margin-top: 1.25rem; margin-bottom: 0.5rem; color: #0f172a; }
-        .article-content h3 { font-size: 1rem; font-weight: 800; margin-top: 1rem; margin-bottom: 0.4rem; color: #0f172a; }
-        .article-content p { margin-bottom: 1.25rem; line-height: 1.7; font-size: 1rem; color: #374151; }
-        .article-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.25rem; color: #374151; }
-        .article-content ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1.25rem; color: #374151; }
+        .article-content h1 { font-size: 1.5rem; font-weight: 900; line-height: 1.2; margin-top: 1.5rem; margin-bottom: 0.75rem; letter-spacing: -0.05em; color: hsl(var(--foreground)); }
+        .article-content h2 { font-size: 1.25rem; font-weight: 900; line-height: 1.3; margin-top: 1.25rem; margin-bottom: 0.5rem; color: hsl(var(--foreground)); }
+        .article-content h3 { font-size: 1rem; font-weight: 800; margin-top: 1rem; margin-bottom: 0.4rem; color: hsl(var(--foreground)); }
+        .article-content p { margin-bottom: 1.25rem; line-height: 1.7; font-size: 1rem; color: hsl(var(--muted-foreground)); }
+        .article-content ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.25rem; color: hsl(var(--muted-foreground)); }
+        .article-content ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1.25rem; color: hsl(var(--muted-foreground)); }
         .article-content .katex-display { display: block; text-align: center; margin: 1.5em 0; overflow-x: auto; overflow-y: hidden; }
         .article-content li { margin-bottom: 0.5rem; }
-        .article-content blockquote { border-left: 4px solid #ec4899; padding: 0.75rem 1.5rem; font-style: italic; background: #f9fafb; margin-bottom: 1.25rem; border-radius: 0 0.75rem 0.75rem 0; color: #4b5563; }
-        .article-content code { background: #f3f4f6; color: #db2777; padding: 0.2rem 0.4rem; border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem; }
-        .article-content pre { background: #1e293b; color: #f8fafc; padding: 1.5rem; border-radius: 1rem; font-family: monospace; margin-bottom: 1.25rem; overflow-x: auto; }
+        .article-content blockquote { border-left: 4px solid hsl(var(--primary)); padding: 0.75rem 1.5rem; font-style: italic; background: hsl(var(--unimind-bg-secondary)); margin-bottom: 1.25rem; border-radius: 0 0.75rem 0.75rem 0; color: hsl(var(--muted-foreground)); }
+        .article-content code { background: hsl(var(--unimind-bg-secondary)); color: hsl(var(--primary)); padding: 0.2rem 0.4rem; border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem; }
+        .article-content pre { background: hsl(var(--foreground)); color: hsl(var(--unimind-bg-secondary)); padding: 1.5rem; border-radius: 1rem; font-family: monospace; margin-bottom: 1.25rem; overflow-x: auto; }
         .article-content pre code { background: transparent; color: inherit; padding: 0; }
         .article-content img { border-radius: 1.5rem; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); margin: 2rem 0; max-width: 100%; }
-        
+
         .dark .article-content h1, .dark .article-content h2, .dark .article-content h3 { color: white; }
-        .dark .article-content p, .dark .article-content ul, .dark .article-content ol { color: #e5e7eb; }
-        .dark .article-content blockquote { background: rgba(255,255,255,0.05); color: #9ca3af; }
+        .dark .article-content p, .dark .article-content ul, .dark .article-content ol { color: hsl(var(--border)); }
+        .dark .article-content blockquote { background: rgba(255,255,255,0.05); color: hsl(var(--muted-foreground)); }
       `}</style>
 
       <div className="fixed top-0 left-0 w-full h-1 z-[110] bg-muted/20">

@@ -148,15 +148,15 @@ export const Settings: React.FC = () => {
              <div className="space-y-6 text-left">
                 <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('security.title')}</h4>
                 <div className="space-y-4">
-                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.emailLabel')}</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder={t('security.emailPlaceholder')} className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.emailUpdate')}</Button></div></div>
-                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.passwordLabel')}</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder={t('security.oldPassword')} className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder={t('security.newPassword')} className="bg-[#F5F5F7] border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.passwordReset')}</Button></div></div>
+                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.emailLabel')}</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder={t('security.emailPlaceholder')} className="bg-unimind-bg-secondary border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.emailUpdate')}</Button></div></div>
+                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.passwordLabel')}</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder={t('security.oldPassword')} className="bg-unimind-bg-secondary border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder={t('security.newPassword')} className="bg-unimind-bg-secondary border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.passwordReset')}</Button></div></div>
                 </div>
              </div>
           </Card>
 
           <Card className="border-none shadow-sm rounded-3xl bg-white p-8 space-y-4 border border-black/[0.03] text-left">
              <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('elo.title')}</h4>
-             <p className="text-[10px] text-[#86868B] font-medium leading-relaxed">{t('elo.description')}</p>
+             <p className="text-[10px] text-muted-foreground font-medium leading-relaxed">{t('elo.description')}</p>
              <AlertDialog>
                 <AlertDialogTrigger asChild><Button variant="outline" disabled={(user?.elo_reset_count ?? 0) >= 1} className="w-full rounded-2xl h-11 border-black/5 font-bold text-xs"><RotateCcw className="h-3.5 w-3.5 mr-2" /> {t('elo.resetBtn', { remaining: 1 - (user?.elo_reset_count || 0) })}</Button></AlertDialogTrigger>
                 <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl">
@@ -172,12 +172,12 @@ export const Settings: React.FC = () => {
              <div className="space-y-8 text-left">
                <div className="space-y-3">
                  <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.nicknameLabel')}</Label>
-                 <Input value={profile.nickname} onChange={e => setProfile({...profile, nickname: e.target.value})} className="bg-[#F5F5F7] border-none h-12 rounded-2xl font-bold px-5" />
+                 <Input value={profile.nickname} onChange={e => setProfile({...profile, nickname: e.target.value})} className="bg-unimind-bg-secondary border-none h-12 rounded-2xl font-bold px-5" />
                  <p className="text-[10px] text-muted-foreground font-bold ml-1 uppercase">{t('profile.usernameNote', { username: user?.username })}</p>
                </div>
                <div className="space-y-3">
                  <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.bioLabel')}</Label>
-                 <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-[#F5F5F7] border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder={t('profile.bioPlaceholder')} />
+                 <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-unimind-bg-secondary border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder={t('profile.bioPlaceholder')} />
                </div>
                <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow-xl transition-all hover:scale-[1.01]"><Save className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
              </div>

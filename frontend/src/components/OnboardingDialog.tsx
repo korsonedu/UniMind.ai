@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
-import { GraduationCap, Building2, ArrowRight, Loader2, Check } from 'lucide-react';
+import { GraduationCap, Building2, ArrowRight, Loader2 } from 'lucide-react';
+import { DirectionSelector } from '@/components/DirectionSelector';
 
 export function OnboardingDialog() {
   const { user, updateUser } = useAuthStore();
@@ -119,34 +120,34 @@ export function OnboardingDialog() {
             <div className="grid gap-3">
               <button
                 onClick={() => setStep('teacher')}
-                className="text-left p-5 rounded-xl border-2 border-border hover:border-[#0071E3] hover:bg-[#0071E3]/3 transition-all group"
+                className="text-left p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/3 transition-all group"
               >
                 <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-[#0071E3]/8 flex items-center justify-center shrink-0 group-hover:bg-[#0071E3]/15">
-                    <Building2 className="h-5 w-5 text-[#0071E3]" />
+                  <div className="h-10 w-10 rounded-xl bg-primary/8 flex items-center justify-center shrink-0 group-hover:bg-primary/15">
+                    <Building2 className="h-5 w-5 text-primary" />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-extrabold text-[#1D1D1F] flex items-center gap-2">
-                      {t('role.teacherLabel')} <ArrowRight className="h-3.5 w-3.5 text-[#0071E3] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <p className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                      {t('role.teacherLabel')} <ArrowRight className="h-3.5 w-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                     </p>
-                    <p className="text-xs text-[#8E8E93] font-medium">{t('role.teacherDesc')}</p>
+                    <p className="text-xs text-unimind-text-tertiary font-medium">{t('role.teacherDesc')}</p>
                   </div>
                 </div>
               </button>
 
               <button
                 onClick={() => setStep('student')}
-                className="text-left p-5 rounded-xl border-2 border-border hover:border-[#34C759] hover:bg-[#34C759]/3 transition-all group"
+                className="text-left p-5 rounded-xl border-2 border-border hover:border-unimind-green hover:bg-unimind-green/3 transition-all group"
               >
                 <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-[#34C759]/8 flex items-center justify-center shrink-0 group-hover:bg-[#34C759]/15">
-                    <GraduationCap className="h-5 w-5 text-[#34C759]" />
+                  <div className="h-10 w-10 rounded-xl bg-unimind-green/8 flex items-center justify-center shrink-0 group-hover:bg-unimind-green/15">
+                    <GraduationCap className="h-5 w-5 text-unimind-green" />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-extrabold text-[#1D1D1F] flex items-center gap-2">
-                      {t('role.studentLabel')} <ArrowRight className="h-3.5 w-3.5 text-[#34C759] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <p className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                      {t('role.studentLabel')} <ArrowRight className="h-3.5 w-3.5 text-unimind-green opacity-0 group-hover:opacity-100 transition-opacity" />
                     </p>
-                    <p className="text-xs text-[#8E8E93] font-medium">{t('role.studentDesc')}</p>
+                    <p className="text-xs text-unimind-text-tertiary font-medium">{t('role.studentDesc')}</p>
                   </div>
                 </div>
               </button>
@@ -198,63 +199,13 @@ export function OnboardingDialog() {
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
-              {subjects.map((cat: any) => (
-                <div key={cat.name}>
-                  <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">
-                    {cat.name}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {cat.subjects.map((sub: any) => {
-                      const isSelected = selectedSubjects.includes(sub.subject);
-                      const limit = PLAN_DIRECTION_LIMITS[plan] || 1;
-                      const atLimit = selectedSubjects.length >= limit && !isSelected;
-                      return (
-                        <button
-                          key={sub.subject}
-                          type="button"
-                          disabled={atLimit}
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedSubjects(prev => prev.filter(s => s !== sub.subject));
-                            } else if (!atLimit) {
-                              setSelectedSubjects(prev => [...prev, sub.subject]);
-                            }
-                          }}
-                          className={`text-left p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
-                            isSelected
-                              ? 'border-[#0071E3] bg-[#0071E3]/8 text-[#0071E3]'
-                              : atLimit
-                                ? 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed'
-                                : 'border-border hover:border-[#0071E3]/40 hover:bg-[#0071E3]/3'
-                          }`}
-                        >
-                          {sub.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-
-              {/* Custom option */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (selectedSubjects.includes('custom')) {
-                    setSelectedSubjects([]);
-                  } else {
-                    setSelectedSubjects(['custom']);
-                  }
-                }}
-                className={`w-full p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  selectedSubjects.includes('custom')
-                    ? 'border-[#34C759] bg-[#34C759]/8 text-[#34C759]'
-                    : 'border-dashed border-muted-foreground/30 hover:border-[#34C759]/40 hover:bg-[#34C759]/3 text-muted-foreground'
-                }`}
-              >
-                自定义：我自己搭建知识树
-              </button>
+            <div className="max-h-[360px] overflow-y-auto pr-1 -mx-1 px-1">
+              <DirectionSelector
+                categories={subjects}
+                selected={selectedSubjects}
+                onSelectionChange={setSelectedSubjects}
+                maxSelections={PLAN_DIRECTION_LIMITS[plan] || 1}
+              />
             </div>
 
             {directionError && <p className="text-xs text-red-500 mt-2">{directionError}</p>}

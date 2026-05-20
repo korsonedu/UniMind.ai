@@ -13,6 +13,7 @@ import {
   Upload, ShieldCheck,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import { DirectionSelector } from '@/components/DirectionSelector';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -37,7 +38,7 @@ interface Institution {
 }
 
 const PLAN_COLORS: Record<string, string> = {
-  free: 'bg-muted-foreground', solo: 'bg-primary', plus: 'bg-[#34C759]', pro: 'bg-[#FF9500]',
+  free: 'bg-muted-foreground', solo: 'bg-primary', plus: 'bg-unimind-green', pro: 'bg-amber-500',
 };
 
 export default function InstitutionAdmin() {
@@ -300,7 +301,7 @@ function CreateInstitutionDialog({
           </div>
           <Input placeholder="联系电话"
             value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
-          <Input placeholder="主营业务，如：考研英语、高等数学、GRE、IELTS"
+          <Input placeholder="主营业务，如：金融431、CPA、法考、教资等"
             value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} />
           <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
           <div className="grid grid-cols-2 gap-2">
@@ -384,7 +385,7 @@ function EditInstitutionDialog({
             value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} />
           <Input placeholder="联系电话"
             value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
-          <Input placeholder="主营业务，如：考研英语、高等数学、GRE、IELTS"
+          <Input placeholder="主营业务，如：金融431、CPA、法考、教资等"
             value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} />
           <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
           <div className="grid grid-cols-2 gap-2">
@@ -671,7 +672,7 @@ function DirectionEditDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[480px] rounded-2xl border-none shadow-2xl bg-card p-6">
+        <DialogContent className="sm:max-w-[500px] rounded-2xl border-none shadow-2xl bg-card p-6">
           <DialogHeader className="space-y-1 mb-4">
             <DialogTitle className="text-lg font-black">编辑业务方向</DialogTitle>
             <DialogDescription className="font-medium text-muted-foreground text-sm">
@@ -684,62 +685,13 @@ function DirectionEditDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
-            {subjects.map((cat: any) => (
-              <div key={cat.name}>
-                <p className="text-xs font-bold text-muted-foreground mb-2 uppercase tracking-wide">
-                  {cat.name}
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {cat.subjects.map((sub: any) => {
-                    const isSelected = selected.includes(sub.subject);
-                    const atLimit = selected.length >= maxDirs && !isSelected;
-                    return (
-                      <button
-                        key={sub.subject}
-                        type="button"
-                        disabled={atLimit}
-                        onClick={() => {
-                          if (isSelected) {
-                            onSelectedChange(selected.filter(s => s !== sub.subject));
-                          } else if (!atLimit) {
-                            onSelectedChange([...selected, sub.subject]);
-                          }
-                        }}
-                        className={`text-left p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
-                          isSelected
-                            ? 'border-[#0071E3] bg-[#0071E3]/8 text-[#0071E3]'
-                            : atLimit
-                              ? 'border-border bg-muted/30 text-muted-foreground cursor-not-allowed'
-                              : 'border-border hover:border-[#0071E3]/40 hover:bg-[#0071E3]/3'
-                        }`}
-                      >
-                        {sub.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            {/* Custom option */}
-            <button
-              type="button"
-              onClick={() => {
-                if (selected.includes('custom')) {
-                  onSelectedChange([]);
-                } else {
-                  onSelectedChange(['custom']);
-                }
-              }}
-              className={`w-full p-3 rounded-xl border-2 text-sm font-semibold transition-all ${
-                selected.includes('custom')
-                  ? 'border-[#34C759] bg-[#34C759]/8 text-[#34C759]'
-                  : 'border-dashed border-muted-foreground/30 hover:border-[#34C759]/40 hover:bg-[#34C759]/3 text-muted-foreground'
-              }`}
-            >
-              自定义：我自己搭建知识树
-            </button>
+          <div className="max-h-[380px] overflow-y-auto pr-1 -mx-1 px-1">
+            <DirectionSelector
+              categories={subjects}
+              selected={selected}
+              onSelectionChange={onSelectedChange}
+              maxSelections={maxDirs}
+            />
           </div>
 
           {error && <p className="text-xs text-red-500 mt-2">{error}</p>}

@@ -113,9 +113,9 @@ function PlatformUserManagement() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
           { label: '用户总数', value: users.length, icon: Users, color: 'text-primary', bg: 'bg-primary/6' },
-          { label: '管理员', value: users.filter(u => u.role === 'admin').length, icon: Shield, color: 'text-[#FF9500]', bg: 'bg-[#FF9500]/6' },
+          { label: '管理员', value: users.filter(u => u.role === 'admin').length, icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/6' },
           { label: '超级用户', value: users.filter(u => u.is_superuser).length, icon: Shield, color: 'text-purple-500', bg: 'bg-purple-50' },
-          { label: '学员', value: users.filter(u => u.role === 'student').length, icon: GraduationCap, color: 'text-[#34C759]', bg: 'bg-[#34C759]/6' },
+          { label: '学员', value: users.filter(u => u.role === 'student').length, icon: GraduationCap, color: 'text-unimind-green', bg: 'bg-unimind-green/6' },
         ].map(s => (
           <Card key={s.label} variant="apple" className="p-4 space-y-1">
             <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center', s.bg)}>
@@ -146,7 +146,7 @@ function PlatformUserManagement() {
                 {users.map(u => (
                   <button key={u.id} onClick={() => setSelected(u)}
                     className={cn('w-full text-left p-3 rounded-xl border transition-colors',
-                      selected?.id === u.id ? 'border-[#0071E3] bg-primary/4' : 'border-transparent hover:bg-muted')}>
+                      selected?.id === u.id ? 'border-primary bg-primary/4' : 'border-transparent hover:bg-muted')}>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold text-foreground">{u.nickname || u.username}</span>
                       <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded',
@@ -382,9 +382,9 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {[
           { label: '学员', value: studentCount, icon: GraduationCap, color: 'text-primary', bg: 'bg-primary/6' },
-          { label: '教师', value: teacherCount, icon: Shield, color: 'text-[#FF9500]', bg: 'bg-[#FF9500]/6' },
+          { label: '教师', value: teacherCount, icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/6' },
           { label: '版本上限', value: institution.max_students, icon: Hash, color: 'text-muted-foreground/60', bg: 'bg-muted-foreground/10' },
-          { label: '平均 ELO', value: avgElo, icon: TrendingUp, color: 'text-[#34C759]', bg: 'bg-[#34C759]/6' },
+          { label: '平均 ELO', value: avgElo, icon: TrendingUp, color: 'text-unimind-green', bg: 'bg-unimind-green/6' },
           { label: '版本', value: institution.plan_label, icon: Clock, color: 'text-muted-foreground/60', bg: 'bg-muted-foreground/10' },
         ].map(s => (
           <Card key={s.label} variant="apple" className="p-4 space-y-1">
@@ -426,14 +426,14 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
           {filtered.map(s => (
             <Card key={s.id} variant="apple"
               className={cn('p-4 cursor-pointer transition-all',
-                selectedId === s.id ? 'ring-2 ring-[#0071E3]' : 'hover:shadow-apple')}
+                selectedId === s.id ? 'ring-2 ring-primary' : 'hover:shadow-apple')}
               onClick={() => setSelectedId(selectedId === s.id ? null : s.id)}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={cn('h-9 w-9 rounded-full flex items-center justify-center shrink-0',
-                    s.institution_role === 'teacher' ? 'bg-[#FF9500]/10' : 'bg-primary/10')}>
+                    s.institution_role === 'teacher' ? 'bg-amber-500/10' : 'bg-primary/10')}>
                     {s.institution_role === 'teacher'
-                      ? <Shield className="h-4 w-4 text-[#FF9500]" />
+                      ? <Shield className="h-4 w-4 text-amber-500" />
                       : <GraduationCap className="h-4 w-4 text-primary" />
                     }
                   </div>
@@ -441,7 +441,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-foreground truncate">{s.nickname || s.username}</p>
                       <Badge className={cn('text-[10px]',
-                        s.institution_role === 'teacher' ? 'bg-[#FF9500]/10 text-[#FF9500]' : 'bg-muted text-muted-foreground/60')}>
+                        s.institution_role === 'teacher' ? 'bg-amber-500/10 text-amber-500' : 'bg-muted text-muted-foreground/60')}>
                         {s.institution_role === 'teacher' ? '教师' : '学员'}
                       </Badge>
                     </div>
@@ -614,10 +614,10 @@ function StudentDetailPanel({ studentId }: { studentId: number }) {
           <h4 className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">知识点掌握分布</h4>
           <div className="flex h-5 rounded-full overflow-hidden bg-muted">
             {[
-              { key: 'mastered', label: '掌握', color: 'bg-[#34C759]', count: mastery.mastered },
+              { key: 'mastered', label: '掌握', color: 'bg-unimind-green', count: mastery.mastered },
               { key: 'stable', label: '稳定', color: 'bg-primary', count: mastery.stable },
-              { key: 'learning', label: '学习中', color: 'bg-[#FF9500]', count: mastery.learning },
-              { key: 'weak', label: '薄弱', color: 'bg-[#FF3B30]', count: mastery.weak },
+              { key: 'learning', label: '学习中', color: 'bg-amber-500', count: mastery.learning },
+              { key: 'weak', label: '薄弱', color: 'bg-destructive', count: mastery.weak },
               { key: 'unknown', label: '未知', color: 'bg-muted-foreground/40', count: mastery.unknown },
             ].map(m => (
               <div key={m.key} className={cn(m.color, 'transition-all')}
@@ -650,7 +650,7 @@ function StudentDetailPanel({ studentId }: { studentId: number }) {
                 <div key={i} className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">{s.created_at ? new Date(s.created_at).toLocaleDateString('zh-CN') : ''}</span>
                   <span className="font-bold text-foreground">{s.total_score}/{s.max_score}</span>
-                  <span className={cn('font-bold', (s.total_score / s.max_score) >= 0.7 ? 'text-[#34C759]' : 'text-[#FF9500]')}>
+                  <span className={cn('font-bold', (s.total_score / s.max_score) >= 0.7 ? 'text-unimind-green' : 'text-amber-500')}>
                     {Math.round(s.total_score / s.max_score * 100)}%
                   </span>
                 </div>

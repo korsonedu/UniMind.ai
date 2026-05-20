@@ -39,7 +39,7 @@ export const InsightsPanel = ({ biData, isLoadingBI, fetchBI }: { biData: any, i
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Target className="h-6 w-6 text-red-600" />
-              <h3 className="text-xl font-bold tracking-tight text-[#1D1D1F]">{t('insights.academicBottleneck')}</h3>
+              <h3 className="text-xl font-bold tracking-tight text-foreground">{t('insights.academicBottleneck')}</h3>
             </div>
             <Badge variant="outline" className="text-[11px] font-bold border-red-100 text-red-600">{t('insights.sortedByErrors')}</Badge>
           </div>
@@ -47,7 +47,7 @@ export const InsightsPanel = ({ biData, isLoadingBI, fetchBI }: { biData: any, i
             {biData?.kp_errors?.map((item: any, i: number) => (
               <div key={i} className="space-y-2">
                 <div className="flex justify-between items-center px-1">
-                  <span className="text-xs font-bold text-[#1D1D1F]">{item.question__knowledge_point__name}</span>
+                  <span className="text-xs font-bold text-foreground">{item.question__knowledge_point__name}</span>
                   <span className="text-[11px] font-bold tabular-nums text-red-500">{t('insights.errorCount', { count: item.total_errors })}</span>
                 </div>
                 <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden">
@@ -64,11 +64,11 @@ export const InsightsPanel = ({ biData, isLoadingBI, fetchBI }: { biData: any, i
           </div>
         </Card>
 
-        <Card className="border-none shadow-sm rounded-[2.5rem] p-10 bg-[#F5F5F7]/50 border border-black/[0.03] space-y-8">
+        <Card className="border-none shadow-sm rounded-[2.5rem] p-10 bg-unimind-bg-secondary/50 border border-black/[0.03] space-y-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Video className="h-6 w-6 text-emerald-600" />
-              <h3 className="text-xl font-bold tracking-tight text-[#1D1D1F]">{t('insights.courseEngagement')}</h3>
+              <h3 className="text-xl font-bold tracking-tight text-foreground">{t('insights.courseEngagement')}</h3>
             </div>
             <Button variant="ghost" size="icon" onClick={fetchBI} className="rounded-full h-8 w-8"><RefreshCw className={cn("w-3.5 h-3.5 opacity-40", isLoadingBI && "animate-spin")} /></Button>
           </div>
@@ -76,7 +76,7 @@ export const InsightsPanel = ({ biData, isLoadingBI, fetchBI }: { biData: any, i
             {biData?.course_stats?.map((item: any, i: number) => (
               <div key={i} className="p-5 bg-white rounded-2xl border border-black/[0.02] shadow-sm flex items-center justify-between group">
                 <div className="min-w-0 flex-1 pr-4">
-                  <p className="text-xs font-bold text-[#1D1D1F] truncate">{item.course__title}</p>
+                  <p className="text-xs font-bold text-foreground truncate">{item.course__title}</p>
                   <p className="text-[11px] font-medium text-muted-foreground mt-1 uppercase tracking-tighter">
                     {t('insights.viewsAndCompletions', { views: item.total_views, completions: item.completions })}
                   </p>

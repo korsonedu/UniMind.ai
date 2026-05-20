@@ -34,7 +34,7 @@ export function LanguageSwitcher({ variant = 'compact', className }: LanguageSwi
     <button
       onClick={toggle}
       className={cn(
-        "flex items-center gap-1.5 text-[13px] font-medium text-[#6E6E73] hover:text-[#1D1D1F] transition-colors",
+        "flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors",
         className
       )}
     >

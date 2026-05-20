@@ -24,7 +24,7 @@ export const TagInput = ({ tags, setTags, compact = false }: { tags: string[], s
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
           placeholder={t('components.tagPlaceholder')}
-          className={cn("bg-[#F5F5F7] border-none rounded-xl font-bold text-[11px]", compact ? "h-8 px-3" : "h-9 px-4")}
+          className={cn("bg-unimind-bg-secondary border-none rounded-xl font-bold text-[11px]", compact ? "h-8 px-3" : "h-9 px-4")}
         />
       </div>
       <div className="flex flex-wrap gap-1 min-h-[1rem]">
@@ -50,7 +50,7 @@ export const KPTreeNode = ({ node, allNodes, onDelete, onEdit }: { node: any, al
           {hasChildren ? (
             isOpen ? <ChevronDown className="w-3 h-3 opacity-30" /> : <ChevronRight className="w-3 h-3 opacity-30" />
           ) : <div className="w-3" />}
-          <p className="text-[11px] font-bold text-[#1D1D1F] truncate text-left">{node.name}</p>
+          <p className="text-[11px] font-bold text-foreground truncate text-left">{node.name}</p>
         </div>
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <Button onClick={() => onEdit(node)} variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-white shadow-sm text-blue-600"><Edit3 className="w-3 h-3" /></Button>

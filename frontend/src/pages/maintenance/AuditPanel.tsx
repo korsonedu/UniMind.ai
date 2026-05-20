@@ -63,8 +63,8 @@ export const AuditPanel = ({
       <ScrollArea className="h-[600px] p-6">
         <div className="grid gap-2">
           {auditMode === 'courses' && courseList.map(c => (
-            <div key={c.id} className="p-4 bg-[#F5F5F7]/50 rounded-2xl flex items-center justify-between group border border-transparent hover:border-black/5 transition-all">
-              <p className="text-sm font-bold text-[#1D1D1F]">{c.title}</p>
+            <div key={c.id} className="p-4 bg-unimind-bg-secondary/50 rounded-2xl flex items-center justify-between group border border-transparent hover:border-black/5 transition-all">
+              <p className="text-sm font-bold text-foreground">{c.title}</p>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button onClick={() => onEdit('courses', c)} variant="ghost" size="icon" className="rounded-xl h-8 w-8 hover:bg-white text-blue-600 shadow-sm"><Edit3 className="w-4 h-4" /></Button>
                 <Button onClick={() => onDelete('courses', c.id)} variant="ghost" size="icon" className="rounded-xl h-8 w-8 hover:bg-white text-red-500 shadow-sm"><Trash2 className="w-4 h-4" /></Button>
@@ -72,8 +72,8 @@ export const AuditPanel = ({
             </div>
           ))}
           {auditMode === 'articles' && articleList.map(a => (
-            <div key={a.id} className="p-4 bg-[#F5F5F7]/50 rounded-2xl flex items-center justify-between group border border-transparent hover:border-black/5 transition-all">
-              <p className="text-sm font-bold text-[#1D1D1F]">{a.title}</p>
+            <div key={a.id} className="p-4 bg-unimind-bg-secondary/50 rounded-2xl flex items-center justify-between group border border-transparent hover:border-black/5 transition-all">
+              <p className="text-sm font-bold text-foreground">{a.title}</p>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button onClick={() => onEdit('articles', a)} variant="ghost" size="icon" className="rounded-xl h-8 w-8 hover:bg-white text-blue-600 shadow-sm"><Edit3 className="w-4 h-4" /></Button>
                 <Button onClick={() => onDelete('articles', a.id)} variant="ghost" size="icon" className="rounded-xl h-8 w-8 hover:bg-white text-red-500 shadow-sm"><Trash2 className="w-4 h-4" /></Button>
@@ -81,8 +81,8 @@ export const AuditPanel = ({
             </div>
           ))}
           {auditMode === 'kp' && kpList.map(kp => (
-            <div key={kp.id} className="p-4 bg-[#F5F5F7]/50 rounded-2xl flex items-center justify-between group border border-transparent hover:border-black/5 transition-all">
-              <p className="text-sm font-bold text-[#1D1D1F]">{kp.name}</p>
+            <div key={kp.id} className="p-4 bg-unimind-bg-secondary/50 rounded-2xl flex items-center justify-between group border border-transparent hover:border-black/5 transition-all">
+              <p className="text-sm font-bold text-foreground">{kp.name}</p>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                 <Button onClick={() => onEdit('kp', kp)} variant="ghost" size="icon" className="rounded-xl h-8 w-8 hover:bg-white text-blue-600 shadow-sm"><Edit3 className="w-4 h-4" /></Button>
                 <Button onClick={() => onDelete('kp', kp.id)} variant="ghost" size="icon" className="rounded-xl h-8 w-8 hover:bg-white text-red-500 shadow-sm"><Trash2 className="w-4 h-4" /></Button>
@@ -90,8 +90,8 @@ export const AuditPanel = ({
             </div>
           ))}
           {auditMode === 'sm' && smList.map(sm => (
-            <div key={sm.id} className="p-4 bg-[#F5F5F7]/50 rounded-2xl flex items-center justify-between group border border-transparent hover:border-black/5 transition-all">
-              <p className="text-sm font-bold text-[#1D1D1F]">{sm.name}</p>
+            <div key={sm.id} className="p-4 bg-unimind-bg-secondary/50 rounded-2xl flex items-center justify-between group border border-transparent hover:border-black/5 transition-all">
+              <p className="text-sm font-bold text-foreground">{sm.name}</p>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                 <Button onClick={() => onEdit('sm', sm)} variant="ghost" size="icon" className="rounded-xl h-8 w-8 hover:bg-white text-blue-600 shadow-sm"><Edit3 className="w-4 h-4" /></Button>
                 <Button onClick={() => onDelete('sm', sm.id)} variant="ghost" size="icon" className="rounded-xl h-8 w-8 hover:bg-white text-red-500 shadow-sm"><Trash2 className="w-4 h-4" /></Button>

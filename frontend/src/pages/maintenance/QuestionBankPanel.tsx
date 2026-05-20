@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Search, Upload, FileUp, RefreshCcw, ChevronDown, ChevronRight, Edit3, Trash2, Sparkles, Check, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+import 'katex/dist/katex.min.css';
 import { toast } from 'sonner';
 
 const AI_TYPE_OPTIONS = [
@@ -332,14 +333,14 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
           {loading && <div className="py-10 text-center text-xs font-bold opacity-20">{t('questionBank.loading')}</div>}
           {!loading && bankData.results.length === 0 && <div className="py-10 text-center text-xs font-bold opacity-20">{t('questionBank.noQuestions')}</div>}
           {bankData.results.map(q => (
-            <div key={q.id} className="rounded-2xl bg-[#F5F5F7]/70 hover:bg-[#F5F5F7] transition-colors border border-transparent hover:border-black/[0.04]">
+            <div key={q.id} className="rounded-2xl bg-unimind-bg-secondary/70 hover:bg-unimind-bg-secondary transition-colors border border-transparent hover:border-black/[0.04]">
               <div className="p-3 flex items-start gap-3 cursor-pointer" onClick={() => setExpanded(expanded === q.id ? null : q.id)}>
                 <div className="flex flex-col gap-1 shrink-0 pt-0.5">
                   <Badge className={cn('text-[11px] py-0 h-4 px-1.5 rounded-md border-none font-bold', q.q_type === 'objective' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>{q.q_type === 'objective' ? t('questionBank.objectiveBadge') : t('questionBank.subjectiveBadge')}</Badge>
                   {q.subjective_type && <Badge className="text-[11px] py-0 h-3.5 px-1 rounded-md border-none bg-black/5 text-black/40 font-bold">{getTypeLabel(q.subjective_type)}</Badge>}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-bold text-[#1D1D1F] leading-relaxed line-clamp-2">{q.text}</p>
+                  <p className="text-[11px] font-bold text-foreground leading-relaxed line-clamp-2">{q.text}</p>
                   <p className="text-[11px] font-bold text-black/30 mt-1">{q.knowledge_point_name} · {q.difficulty_level_display} (ELO {q.difficulty})</p>
                 </div>
                 <div className="flex gap-1 shrink-0">
@@ -474,10 +475,10 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
 
       {/* Preview & Edit Modal */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-          <DialogContent className="rounded-[3rem] border-none shadow-2xl p-0 max-w-4xl bg-[#F5F5F7] text-left overflow-hidden h-[90vh] flex flex-col">
+          <DialogContent className="rounded-[3rem] border-none shadow-2xl p-0 max-w-4xl bg-unimind-bg-secondary text-left overflow-hidden h-[90vh] flex flex-col">
               <div className="p-8 pb-4 bg-white/80 backdrop-blur-xl border-b border-black/[0.03] z-10 sticky top-0">
                   <DialogHeader>
-                      <DialogTitle className="text-2xl font-black tracking-tight text-[#1D1D1F]">{t('questionBank.previewTitle')}</DialogTitle>
+                      <DialogTitle className="text-2xl font-black tracking-tight text-foreground">{t('questionBank.previewTitle')}</DialogTitle>
                       <DialogDescription className="text-sm font-medium text-black/30">{t('questionBank.previewDesc')}</DialogDescription>
                   </DialogHeader>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -526,9 +527,10 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                                           <textarea
                                               value={q.question}
                                               onChange={e => updatePreviewQuestion(idx, 'question', e.target.value)}
-                                              className="w-full bg-slate-50 border-none rounded-2xl p-5 text-[14px] font-bold text-[#1D1D1F] leading-relaxed resize-none focus:ring-1 focus:ring-indigo-100 min-h-[100px]"
+                                              className="w-full bg-slate-50 border-none rounded-2xl p-5 text-[14px] font-bold text-foreground leading-relaxed resize-none focus:ring-1 focus:ring-indigo-100 min-h-[100px]"
                                               placeholder={t('questionBank.enterQuestionStem')}
                                           />
+                                          <p className="text-[10px] text-muted-foreground mt-1 ml-1">支持 LaTeX 公式：<code className="text-[10px] bg-muted/30 px-1 rounded">$...$</code> 行内、<code className="text-[10px] bg-muted/30 px-1 rounded">$$...$$</code> 块级</p>
                                       </div>
                                       <Button onClick={() => setPreviewQuestions(prev => prev.filter((_, i) => i !== idx))} variant="ghost" size="icon" className="h-10 w-10 rounded-full text-red-400 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><X className="w-5 h-5" /></Button>
                                   </div>
@@ -544,7 +546,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                                                   rows={1}
                                                   onInput={e => autoResizeTextarea(e.currentTarget)}
                                                   onChange={e => updatePreviewQuestion(idx, 'option', { key: opt, val: e.target.value })}
-                                                  className="flex-1 bg-transparent border-none p-0 text-xs font-bold text-[#1D1D1F] leading-relaxed focus:ring-0 placeholder:text-black/20 resize-none min-h-0 overflow-hidden whitespace-pre-wrap break-words"
+                                                  className="flex-1 bg-transparent border-none p-0 text-xs font-bold text-foreground leading-relaxed focus:ring-0 placeholder:text-black/20 resize-none min-h-0 overflow-hidden whitespace-pre-wrap break-words"
                                                   placeholder={t('questionBank.optionContent')}
                                                 />
                                             </div>
@@ -567,7 +569,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                   <div className="flex items-center gap-4">
                       <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600"><Check className="w-5 h-5" /></div>
                       <div>
-                          <p className="text-sm font-black text-[#1D1D1F]">{t('questionBank.readyForReview')}</p>
+                          <p className="text-sm font-black text-foreground">{t('questionBank.readyForReview')}</p>
                           <p className="text-[11px] font-bold text-black/30">{t('questionBank.questionsPending', { count: previewQuestions.length })}</p>
                       </div>
                   </div>

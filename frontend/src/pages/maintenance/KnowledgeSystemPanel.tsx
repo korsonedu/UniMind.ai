@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -213,6 +213,42 @@ export function KnowledgeSystemPanel() {
   const [showCreate, setShowCreate] = useState(false);
   const [mdText, setMdText] = useState('');
   const [importing, setImporting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const dragCounter = useRef(0);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    if (e.type === 'dragenter') {
+      dragCounter.current += 1;
+      if (dragCounter.current === 1) setDragOver(true);
+    } else if (e.type === 'dragleave') {
+      dragCounter.current -= 1;
+      if (dragCounter.current === 0) setDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    dragCounter.current = 0;
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.md') && !file.name.endsWith('.txt') && !file.name.endsWith('.markdown')) {
+      toast.error('仅支持 .md / .txt / .markdown 文件');
+      return;
+    }
+    setImporting(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    api.post('/quizzes/knowledge-points/import-md/', fd)
+      .then(({ data }) => {
+        toast.success(t('knowledgeSystem.importDone', { created: data.created, updated: data.updated }));
+        fetchTree();
+      })
+      .catch((e: any) => toast.error(e.response?.data?.error || t('knowledgeSystem.importFailed')))
+      .finally(() => setImporting(false));
+  }, []);
 
   const fetchTree = async () => {
     setLoading(true);
@@ -296,7 +332,7 @@ export function KnowledgeSystemPanel() {
       {/* Left: Tree */}
       <Card className="p-4 lg:col-span-2 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-extrabold text-[#1D1D1F] flex items-center gap-2">
+          <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
             <BrainCircuit className="h-4 w-4 text-indigo-500" /> {t('knowledgeSystem.title')}
           </h3>
           <div className="flex items-center gap-1">
@@ -348,7 +384,7 @@ export function KnowledgeSystemPanel() {
                 </Button>
               </div>
             </div>
-            <h4 className="text-sm font-extrabold text-[#1D1D1F]">{selectedNode.name}</h4>
+            <h4 className="text-sm font-extrabold text-foreground">{selectedNode.name}</h4>
             {selectedNode.code && <p className="text-xs font-mono text-muted-foreground">{selectedNode.code}</p>}
             {selectedNode.description && <p className="text-xs text-muted-foreground leading-relaxed">{selectedNode.description}</p>}
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1">
@@ -365,18 +401,47 @@ export function KnowledgeSystemPanel() {
 
         {/* MD Import */}
         <Card className="p-4 space-y-3">
-          <h4 className="text-xs font-extrabold text-[#1D1D1F] flex items-center gap-1.5">
+          <h4 className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
             <FileUp className="h-3.5 w-3.5 text-indigo-500" /> {t('knowledgeSystem.mdImport')}
           </h4>
-          <div className="relative">
-            <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 text-xs font-bold" asChild>
-              <label>
-                <Upload className="h-3.5 w-3.5 mr-1.5 opacity-40" />
-                {t('knowledgeSystem.uploadMd')}
-                <input type="file" accept=".md,.txt" onChange={handleFileUpload} className="hidden" />
-              </label>
-            </Button>
+
+          {/* Drag & drop zone */}
+          <div
+            ref={dropRef}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={cn(
+              'relative rounded-xl border-2 border-dashed transition-all duration-200',
+              dragOver
+                ? 'border-primary bg-primary/5 scale-[1.02] shadow-md'
+                : 'border-muted-foreground/25 hover:border-primary/30 hover:bg-accent/30',
+            )}
+          >
+            <div className="flex flex-col items-center justify-center py-5 px-4 pointer-events-none">
+              {importing ? (
+                <Loader2 className="h-6 w-6 animate-spin text-primary mb-1" />
+              ) : dragOver ? (
+                <FileUp className="h-6 w-6 text-primary mb-1" strokeWidth={1.5} />
+              ) : (
+                <Upload className="h-5 w-5 text-muted-foreground/50 mb-1" strokeWidth={1.5} />
+              )}
+              <p className="text-[11px] font-bold text-center">
+                {dragOver ? '松开以导入文件' : t('knowledgeSystem.uploadMd')}
+              </p>
+              <p className="text-[9px] text-muted-foreground mt-0.5">
+                支持 .md / .txt / .markdown
+              </p>
+            </div>
+            <input
+              type="file"
+              accept=".md,.txt,.markdown"
+              onChange={handleFileUpload}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
           </div>
+
           <p className="text-[10px] text-muted-foreground text-center">{t('knowledgeSystem.orPasteContent')}</p>
           <textarea
             value={mdText}

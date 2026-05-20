@@ -32,7 +32,7 @@ export const MembershipPanel = ({
       <Card className="lg:col-span-4 border-none shadow-sm rounded-3xl p-10 bg-white border border-black/[0.03] space-y-8">
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-6 w-6 text-amber-600" />
-          <h3 className="text-xl font-bold tracking-tight text-[#1D1D1F]">{t('membership.batchGenerateCodes')}</h3>
+          <h3 className="text-xl font-bold tracking-tight text-foreground">{t('membership.batchGenerateCodes')}</h3>
         </div>
         <div className="space-y-6">
           <div className="space-y-2.5">
@@ -43,7 +43,7 @@ export const MembershipPanel = ({
               max="50" 
               value={newCodeCount} 
               onChange={e => setNewCodeCount(parseInt(e.target.value) || 1)} 
-              className="bg-[#F5F5F7] border-none h-12 rounded-xl font-bold px-5" 
+              className="bg-unimind-bg-secondary border-none h-12 rounded-xl font-bold px-5" 
             />
           </div>
           <Button 
@@ -60,7 +60,7 @@ export const MembershipPanel = ({
         </div>
       </Card>
 
-      <Card className="lg:col-span-8 border-none shadow-sm rounded-3xl p-10 bg-[#F5F5F7]/50 border border-black/[0.03] space-y-6">
+      <Card className="lg:col-span-8 border-none shadow-sm rounded-3xl p-10 bg-unimind-bg-secondary/50 border border-black/[0.03] space-y-6">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold uppercase tracking-widest text-black/40">{t('membership.codeInventory')}</h3>
           <Button variant="ghost" size="icon" onClick={fetchCodes} className="rounded-full h-10 w-10">

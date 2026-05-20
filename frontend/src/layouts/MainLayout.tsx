@@ -99,7 +99,7 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
           <>
             <div className="relative">
               <Icon className={cn("h-4 w-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} />
-              <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-[#F5F5F7] rounded-full flex items-center justify-center border border-border shadow-sm" title={t('lockedTooltip')}>
+              <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-unimind-bg-secondary rounded-full flex items-center justify-center border border-border shadow-sm" title={t('lockedTooltip')}>
                 <Lock className="h-2 w-2 text-muted-foreground" />
               </div>
             </div>
@@ -212,7 +212,7 @@ export const MainLayout: React.FC = () => {
 
   // ── 身份与方案层级 ──
   const isSuperAdmin = user?.role === 'admin' && !instInfo;
-  const isInstStudent = user?.institution_role === 'student';
+  const isInstStudent = Boolean(instInfo) && user?.institution_role === 'student';
   const instPlan = instInfo?.plan || 'free';
   const planLevel = (p: string) => ({ free: 1, solo: 2, plus: 3, pro: 4 })[p] || 1;
   const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
@@ -247,6 +247,11 @@ export const MainLayout: React.FC = () => {
     }
   }
 
+  // 学生不看到锁定的功能入口——方案升级是教师/机构的事
+  const visibleNavItems = isInstStudent
+    ? navItems.filter(item => !item.minPlan || atLeast(item.minPlan))
+    : navItems;
+
   const mobileNavItems: NavItem[] = isSuperAdmin
     ? [
         { to: '/institution', icon: Building2, label: t('layout:nav.institutionShort') },
@@ -260,6 +265,10 @@ export const MainLayout: React.FC = () => {
         { to: '/articles', icon: FileText, label: t('layout:nav.articlesShort') },
         { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qaShort'), minPlan: 3 },
       ];
+
+  const visibleMobileNavItems = isInstStudent
+    ? mobileNavItems.filter(item => !item.minPlan || atLeast(item.minPlan))
+    : mobileNavItems;
 
   // Sidebar onRestrictedClick: show upgrade modal with appropriate feature
   const PATH_FEATURE_MAP: Record<string, string> = {
@@ -301,7 +310,7 @@ export const MainLayout: React.FC = () => {
           </div>
 
           <nav className="flex-1 space-y-0.5">
-            {navItems.map(item => (
+            {visibleNavItems.map(item => (
               <SidebarItem
                 key={item.to}
                 {...item}
@@ -576,7 +585,7 @@ export const MainLayout: React.FC = () => {
           )}>
             {/* Preview mode banner */}
             {previewMode && previewInstitution && (
-              <div className="flex items-center justify-between bg-[#0071E3] text-white px-4 py-2.5 rounded-xl mb-3">
+              <div className="flex items-center justify-between bg-primary text-white px-4 py-2.5 rounded-xl mb-3">
                 <div className="flex items-center gap-2 text-sm font-bold">
                   <Eye className="h-4 w-4" />
                   <span>{t('layout:previewMode', { name: previewInstitution.name, plan: previewInstitution.plan_label })}</span>
@@ -596,7 +605,7 @@ export const MainLayout: React.FC = () => {
           hideMobileBottomNav && "hidden"
         )}>
           <div className="grid grid-cols-5 gap-1 px-2 py-2">
-            {mobileNavItems.map((item) => {
+            {visibleMobileNavItems.map((item) => {
               const active =
                 item.to === '/articles'
                   ? location.pathname === '/articles' || location.pathname.startsWith('/article/')
@@ -661,12 +670,14 @@ export const MainLayout: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        <UpgradeModal
-          open={showUpgradeModal}
-          onOpenChange={setShowUpgradeModal}
-          feature={restrictedFeature}
-          currentPlan={user?.membership_tier || instPlan || 'free'}
-        />
+        {!isInstStudent && (
+          <UpgradeModal
+            open={showUpgradeModal}
+            onOpenChange={setShowUpgradeModal}
+            feature={restrictedFeature}
+            currentPlan={user?.membership_tier || instPlan || 'free'}
+          />
+        )}
 
         <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}>
           <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl bg-card">

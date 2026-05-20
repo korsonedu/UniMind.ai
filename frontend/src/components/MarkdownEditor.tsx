@@ -83,24 +83,24 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
         .ProseMirror h1 { font-size: 1.5rem; font-weight: 900; line-height: 1.2; margin-top: 1.5rem; margin-bottom: 0.75rem; tracking: -0.05em; }
         .ProseMirror h2 { font-size: 1.25rem; font-weight: 900; line-height: 1.3; margin-top: 1.25rem; margin-bottom: 0.5rem; }
         .ProseMirror h3 { font-size: 1rem; font-weight: 800; margin-top: 1rem; margin-bottom: 0.4rem; }
-        .ProseMirror p { margin-bottom: 1.25rem; line-height: 1.7; font-size: 1rem; color: #374151; }
+        .ProseMirror p { margin-bottom: 1.25rem; line-height: 1.7; font-size: 1rem; color: hsl(var(--muted-foreground)); }
         .ProseMirror ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1.25rem; }
         .ProseMirror ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1.25rem; }
         .ProseMirror li { margin-bottom: 0.5rem; }
-        .ProseMirror blockquote { border-left: 4px solid #ec4899; padding-left: 1.5rem; font-style: italic; background: #f9fafb; padding-top: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 1.25rem; border-radius: 0 0.75rem 0.75rem 0; }
-        .ProseMirror code { background: #f3f4f6; color: #db2777; padding: 0.2rem 0.4rem; border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem; }
-        .ProseMirror pre { background: #1e293b; color: #f8fafc; padding: 1.5rem; border-radius: 1rem; font-family: monospace; margin-bottom: 1.25rem; }
+        .ProseMirror blockquote { border-left: 4px solid hsl(var(--primary)); padding-left: 1.5rem; font-style: italic; background: hsl(var(--unimind-bg-secondary)); padding-top: 0.5rem; padding-bottom: 0.5rem; margin-bottom: 1.25rem; border-radius: 0 0.75rem 0.75rem 0; }
+        .ProseMirror code { background: hsl(var(--unimind-bg-secondary)); color: hsl(var(--primary)); padding: 0.2rem 0.4rem; border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem; }
+        .ProseMirror pre { background: hsl(var(--foreground)); color: hsl(var(--unimind-bg-secondary)); padding: 1.5rem; border-radius: 1rem; font-family: monospace; margin-bottom: 1.25rem; }
         .ProseMirror pre code { background: transparent; color: inherit; padding: 0; }
         
         .dark .ProseMirror h1, .dark .ProseMirror h2, .dark .ProseMirror h3 { color: white; }
-        .dark .ProseMirror p { color: #e5e7eb; }
+        .dark .ProseMirror p { color: hsl(var(--muted-foreground)); }
         .dark .ProseMirror blockquote { background: rgba(255,255,255,0.05); }
         .dark .ProseMirror code { background: rgba(255,255,255,0.1); }
 
         .ProseMirror p.is-editor-empty:first-child::before {
           content: attr(data-placeholder);
           float: left;
-          color: #adb5bd;
+          color: hsl(var(--muted-foreground));
           pointer-events: none;
           height: 0;
         }
