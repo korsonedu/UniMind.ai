@@ -4,12 +4,14 @@ import { cn } from "@/lib/utils"
 import { cva, type VariantProps } from "class-variance-authority"
 
 const cardVariants = cva(
-  "rounded-xl border bg-card text-card-foreground shadow",
+  "rounded-lg border bg-card text-card-foreground",
   {
     variants: {
       variant: {
         default: "",
-        apple: "border-blue-100 shadow-blue-100/50 shadow-lg",
+        apple: "border-primary/20",
+        elevated: "shadow-sm",
+        ghost: "border-transparent bg-transparent",
       },
     },
     defaultVariants: {
