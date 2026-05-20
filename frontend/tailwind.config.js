@@ -49,6 +49,17 @@ export default {
   				'3': 'hsl(var(--chart-3))',
   				'4': 'hsl(var(--chart-4))',
   				'5': 'hsl(var(--chart-5))'
+  			},
+  			unimind: {
+  				blue: 'hsl(var(--unimind-blue))',
+  				red: 'hsl(var(--unimind-red))',
+  				green: 'hsl(var(--unimind-green))',
+  				text: 'hsl(var(--unimind-text))',
+  				'text-secondary': 'hsl(var(--unimind-text-secondary))',
+  				'text-tertiary': 'hsl(var(--unimind-text-tertiary))',
+  				'text-quaternary': 'hsl(var(--unimind-text-quaternary))',
+  				border: 'hsl(var(--unimind-border))',
+  				'bg-secondary': 'hsl(var(--unimind-bg-secondary))',
   			}
   		}
   	}
