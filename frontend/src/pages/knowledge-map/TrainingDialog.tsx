@@ -121,7 +121,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
               <DialogTitle className="text-2xl font-black tracking-tight text-foreground uppercase">{t('training.title')}</DialogTitle>
               <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-indigo-600 animate-pulse">Smart Evaluation Active</p>
             </div>
-            <div className="px-6 py-2 bg-slate-900 rounded-2xl text-white font-mono font-bold text-sm tabular-nums shadow-xl">
+            <div className="px-6 py-2 bg-slate-900 rounded-2xl text-white font-mono font-bold text-sm tabular-nums shadow-sm">
               ELO {question.difficulty || 1200}
             </div>
           </div>
@@ -167,7 +167,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                         className={cn(
                           "w-full p-4 rounded-2xl border text-left font-bold transition-all flex items-center gap-5 group/opt",
                           answer === opt.key
-                            ? "bg-slate-900 text-white border-slate-900 shadow-xl scale-[1.01]"
+                            ? "bg-slate-900 text-white border-slate-900 shadow scale-[1.01]"
                             : "bg-card border-border hover:border-indigo-400 hover:bg-muted"
                         )}
                       >
@@ -237,7 +237,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                   <h5 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                     <Sparkles className="w-3.5 h-3.5" /> {t('training.rationale')}
                   </h5>
-                  <div className="p-8 bg-slate-900 text-slate-200 rounded-[2.5rem] text-sm leading-relaxed shadow-xl">
+                  <div className="p-8 bg-slate-900 text-slate-200 rounded-[2.5rem] text-sm leading-relaxed shadow-sm">
                     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                       {processMathContent(rationaleText)}
                     </ReactMarkdown>
@@ -262,7 +262,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
               <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !answer.trim()}
-                className="rounded-2xl px-12 bg-indigo-600 text-white hover:bg-indigo-700 font-black h-14 shadow-xl shadow-indigo-100 transition-all active:scale-95"
+                className="rounded-2xl px-12 bg-indigo-600 text-white hover:bg-indigo-700 font-black h-14 shadow transition-all active:scale-95"
               >
                 {isSubmitting ? (
                   <>

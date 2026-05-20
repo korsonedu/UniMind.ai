@@ -49,7 +49,7 @@ export const MembershipPanel = ({
           <Button 
             onClick={handleGenerateCodes} 
             disabled={isGeneratingCodes}
-            className="w-full bg-black text-white h-14 rounded-2xl font-bold shadow-xl uppercase text-xs tracking-widest gap-2"
+            className="w-full bg-black text-white h-14 rounded-2xl font-bold shadow uppercase text-xs tracking-widest gap-2"
           >
             {isGeneratingCodes ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             Generate Codes

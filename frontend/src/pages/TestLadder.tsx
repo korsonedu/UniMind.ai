@@ -483,7 +483,7 @@ export const TestLadder: React.FC = () => {
 
                 {/* ── CTA 按钮行 ── */}
                 <div className={cn("flex flex-wrap items-center gap-3 pt-2 w-full", isMobile && "flex-col")}>
-                  <Button onClick={startTest} className={cn("text-white rounded-xl font-bold shadow-2xl transition-all active:scale-95 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 border-0 flex-1", isMobile ? "h-12 px-6 text-sm" : "h-14 px-12 text-lg")}>
+                  <Button onClick={startTest} className={cn("text-white rounded-xl font-bold shadow-lg transition-all active:scale-95 bg-primary hover:opacity-90 border-0 flex-1", isMobile ? "h-12 px-6 text-sm" : "h-14 px-12 text-lg")}>
                     <BrainCircuit className="mr-2 h-5 w-5" />{t('startTraining')}<ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                   <Button variant="outline" onClick={() => navigate('/tests/review')} className={cn("rounded-xl font-bold border-border shadow-sm hover:shadow-md transition-all", isMobile ? "h-10 text-sm flex-1" : "h-14 px-6 text-sm")}>

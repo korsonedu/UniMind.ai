@@ -26,7 +26,15 @@ export const Login: React.FC = () => {
     if (cookie) return cookie.split('=')[1];
     return '';
   };
+  const getInstitutionRole = (): string => {
+    const fromParam = searchParams.get('role');
+    if (fromParam) return fromParam;
+    const cookie = document.cookie.split('; ').find(r => r.startsWith('institution_invite_role='));
+    if (cookie) return cookie.split('=')[1];
+    return 'student';
+  };
   const institutionSlug = getInstitutionSlug();
+  const institutionRole = getInstitutionRole();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +49,7 @@ export const Login: React.FC = () => {
       // Auto-join institution from invite link or registration flow
       if (institutionSlug) {
         try {
-          await api.post('/users/institution/join-by-slug/', { slug: institutionSlug });
+          await api.post('/users/institution/join-by-slug/', { slug: institutionSlug, role: institutionRole });
           const meRes = await api.get('/users/me/');
           updateUser(meRes.data);
         } catch (err: any) {
@@ -63,7 +71,7 @@ export const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-unimind-bg-secondary flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl bg-white/80 backdrop-blur-xl p-4">
+      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-white/80 backdrop-blur-xl p-4">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">{t('login.title')}</CardTitle>
           <CardDescription>{t('login.subtitle')}</CardDescription>

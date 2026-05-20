@@ -53,7 +53,7 @@ export const CourseCenter: React.FC = () => {
                      <div className="w-full h-full flex items-center justify-center text-muted-foreground font-bold uppercase tracking-widest text-[11px]">No Preview</div>
                    )}
                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="h-8 w-8 rounded-full bg-background border border-border flex items-center justify-center shadow-2xl scale-75 group-hover:scale-100 transition-transform">
+                      <div className="h-8 w-8 rounded-full bg-background border border-border flex items-center justify-center shadow-lg scale-75 group-hover:scale-100 transition-transform">
                         <PlayCircle className="h-4 w-4 text-foreground" />
                       </div>
                    </div>

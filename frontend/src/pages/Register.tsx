@@ -27,7 +27,13 @@ export const Register: React.FC = () => {
     if (cookie) return cookie.split('=')[1];
     return '';
   };
+  const getInstitutionRole = (): string => {
+    const cookie = document.cookie.split('; ').find(r => r.startsWith('institution_invite_role='));
+    if (cookie) return cookie.split('=')[1];
+    return 'student';
+  };
   const institutionSlug = getInstitutionSlug();
+  const institutionRole = getInstitutionRole();
 
   const handleSendCode = async () => {
     if (!email.trim()) { setError(t('register.errors.enterEmail')); return; }
@@ -50,7 +56,7 @@ export const Register: React.FC = () => {
     setError('');
     try {
       await api.post('/users/register/', { email, code, nickname, password });
-      navigate(institutionSlug ? `/login?institution=${institutionSlug}` : '/login');
+      navigate(institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login');
     } catch (err: any) {
       setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat()[0] as string || t('register.errors.registerFailed'));
     } finally {
@@ -60,7 +66,7 @@ export const Register: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-unimind-bg-secondary flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl bg-white/80 backdrop-blur-xl p-4">
+      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-white/80 backdrop-blur-xl p-4">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">{t('register.title')}</CardTitle>
           <CardDescription>{t('register.subtitle')}</CardDescription>
@@ -126,7 +132,7 @@ export const Register: React.FC = () => {
           </form>
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {t('register.hasAccount')}{" "}
-            <Link to={institutionSlug ? `/login?institution=${institutionSlug}` : '/login'} className="text-black font-semibold hover:underline">
+            <Link to={institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login'} className="text-black font-semibold hover:underline">
               {t('register.loginLink')}
             </Link>
           </div>

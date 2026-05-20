@@ -9,6 +9,7 @@ import { cn, processMathContent } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface AssessmentProps {
   open: boolean;
@@ -66,7 +67,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
                   <DialogTitle className="text-xl md:text-2xl font-black tracking-tight text-foreground uppercase">{t('assessment.title')}</DialogTitle>
                   <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-indigo-600 animate-pulse">Smart Evaluation Active</p>
                 </div>
-                <div className="self-start md:self-auto px-4 md:px-6 py-2 bg-slate-900 rounded-xl md:rounded-2xl text-white font-mono font-bold text-sm tabular-nums shadow-xl">
+                <div className="self-start md:self-auto px-4 md:px-6 py-2 bg-slate-900 rounded-xl md:rounded-2xl text-white font-mono font-bold text-sm tabular-nums shadow-sm">
                   {currentIdx + 1} / {questions.length}
                 </div>
               </div>
@@ -135,7 +136,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
                               onClick={() => handleSelect(currentQ.id, opt)}
                               className={cn(
                                 "w-full p-3 md:p-4 rounded-xl md:rounded-2xl border text-left font-bold transition-all flex items-center gap-3 md:gap-5 group/opt",
-                                answers[currentQ.id] === opt ? "bg-slate-900 text-white border-slate-900 shadow-xl scale-[1.01]" : "bg-card border-border hover:border-indigo-400 hover:bg-muted",
+                                answers[currentQ.id] === opt ? "bg-slate-900 text-white border-slate-900 shadow scale-[1.01]" : "bg-card border-border hover:border-indigo-400 hover:bg-muted",
                                 currentQ.is_mastered && "cursor-not-allowed"
                               )}
                             >
@@ -211,7 +212,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
                 {gradingMessage && <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 rounded-full"><Loader2 className="h-4 w-4 animate-spin text-indigo-500" /><span className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest">{gradingMessage}</span></div>}
               </div>
               {currentIdx === questions.length - 1 ? (
-                <Button onClick={handleSubmit} disabled={isSubmitting} className="rounded-xl md:rounded-2xl w-full md:w-auto px-8 md:px-12 bg-indigo-600 text-white hover:bg-indigo-700 font-black h-12 md:h-14 shadow-xl shadow-indigo-100 transition-all active:scale-95">
+                <Button onClick={handleSubmit} disabled={isSubmitting} className="rounded-xl md:rounded-2xl w-full md:w-auto px-8 md:px-12 bg-indigo-600 text-white hover:bg-indigo-700 font-black h-12 md:h-14 shadow transition-all active:scale-95">
                   {isSubmitting ? t('assessment.submitting') : t('assessment.submit')}
                 </Button>
               ) : (

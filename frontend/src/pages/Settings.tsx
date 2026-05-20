@@ -115,21 +115,21 @@ export const Settings: React.FC = () => {
         <div className="lg:col-span-4 space-y-6">
           <Card className="border-none shadow-sm rounded-3xl bg-white p-8 flex flex-col items-center text-center border border-black/[0.03]">
             <div className="relative group">
-              <Avatar className="h-32 w-32 border-4 border-white shadow-2xl ring-1 ring-black/5">
+              <Avatar className="h-32 w-32 border-4 border-white shadow-lg ring-1 ring-black/5">
                 <AvatarImage src={previewUrl} />
                 <AvatarFallback className="text-4xl font-bold">{(profile.nickname || user?.username || "?")[0]}</AvatarFallback>
               </Avatar>
               <Sheet>
-                <SheetTrigger asChild><button className="absolute bottom-0 right-0 bg-black text-white p-2.5 rounded-full shadow-xl border-4 border-white transition-transform hover:scale-110"><Camera className="h-4 w-4" /></button></SheetTrigger>
+                <SheetTrigger asChild><button className="absolute bottom-0 right-0 bg-black text-white p-2.5 rounded-full shadow-sm border-4 border-white transition-transform hover:scale-110"><Camera className="h-4 w-4" /></button></SheetTrigger>
                 <SheetContent side="right" className="rounded-l-[2.5rem] border-none bg-white/95 backdrop-blur-2xl shadow-2xl w-[450px]">
                   <SheetHeader className="p-8 border-b border-black/[0.03]"><SheetTitle className="text-2xl font-bold text-left">{t('avatar.lab')}</SheetTitle></SheetHeader>
                   <div className="p-8 space-y-10">
-                    <div className="flex justify-center py-10 bg-slate-50 rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-white shadow-2xl"><AvatarImage src={previewUrl} /></Avatar></div>
+                    <div className="flex justify-center py-10 bg-slate-50 rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-white shadow-lg"><AvatarImage src={previewUrl} /></Avatar></div>
                     <div className="space-y-6 text-left">
                       <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('avatar.styleLabel')}</Label>
                         <Select value={avatar.style} onValueChange={(v) => setAvatar({...avatar, style: v})}>
                           <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-none font-bold"><SelectValue /></SelectTrigger>
-                          <SelectContent className="rounded-2xl border-none shadow-2xl">
+                          <SelectContent className="rounded-2xl border-none shadow-lg">
                             {AVATAR_STYLE_IDS.map(id => <SelectItem key={id} value={id} className="rounded-xl py-3 px-4"><div className="flex items-center gap-3 font-bold">{t(`avatar.styles.${id}` as any)}</div></SelectItem>)}
                           </SelectContent>
                         </Select></div>
@@ -179,7 +179,7 @@ export const Settings: React.FC = () => {
                  <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.bioLabel')}</Label>
                  <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-unimind-bg-secondary border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder={t('profile.bioPlaceholder')} />
                </div>
-               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow-xl transition-all hover:scale-[1.01]"><Save className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
+               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><Save className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
              </div>
           </Card>
         </div>

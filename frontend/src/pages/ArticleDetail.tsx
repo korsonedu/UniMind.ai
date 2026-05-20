@@ -112,7 +112,7 @@ export const ArticleDetail: React.FC = () => {
 
       <footer className="mt-14 md:mt-20 pt-8 md:pt-12 border-t border-border/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
          <div className="flex items-center gap-4 text-left">
-            <div className="h-12 w-12 rounded-full bg-black flex items-center justify-center text-white font-bold text-sm shadow-xl uppercase">
+            <div className="h-12 w-12 rounded-full bg-black flex items-center justify-center text-white font-bold text-sm shadow-sm uppercase">
                {article.author_display_name?.[0] || 'U'}
             </div>
             <div>

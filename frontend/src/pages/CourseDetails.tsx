@@ -42,7 +42,7 @@ export const CourseDetails: React.FC = () => {
           <div className="space-y-4">
             <h1 className="text-4xl md:text-6xl lg:text-[80px] font-black tracking-tighter text-slate-900 dark:text-white leading-[1.1]">
               重构金融应试<br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-600 font-black">定义效率极致</span>
+              <span className="text-primary font-black">定义效率极致</span>
             </h1>
             
             <div className="flex flex-col items-center pt-6">
@@ -59,7 +59,7 @@ export const CourseDetails: React.FC = () => {
           </p>
 
           <div className="pt-6 flex justify-center gap-4">
-             <Button size="lg" className="rounded-full px-10 h-14 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-base shadow-2xl hover:scale-105 transition-all" onClick={() => navigate('/register')}>
+             <Button size="lg" className="rounded-full px-10 h-14 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-base shadow-lg hover:scale-105 transition-all" onClick={() => navigate('/register')}>
                 立即开启学习
               </Button>
               <Button size="lg" variant="ghost" className="rounded-full px-10 h-14 font-bold text-base" onClick={() => navigate('/')}>
@@ -169,7 +169,7 @@ export const CourseDetails: React.FC = () => {
       {/* Bottom CTA Card */}
       <section className="py-32 bg-white dark:bg-[#0F1115]">
         <div className="max-w-5xl mx-auto px-6">
-          <Card className="p-16 md:p-24 rounded-[4rem] bg-slate-900 text-white border-slate-800 shadow-2xl relative overflow-hidden">
+          <Card className="p-16 md:p-24 rounded-[4rem] bg-slate-900 text-white border-slate-800 shadow-lg relative overflow-hidden">
             <div className="relative z-10 space-y-12 text-center">
               <div className="space-y-6">
                 <h3 className="text-5xl font-black uppercase tracking-tight">K2 全程班计划</h3>
@@ -191,7 +191,7 @@ export const CourseDetails: React.FC = () => {
               </div>
 
               <div className="pt-6">
-                <Button size="lg" className="w-full md:w-auto px-20 h-20 rounded-full bg-white text-slate-900 font-bold text-2xl hover:bg-slate-100 shadow-xl" onClick={() => navigate('/register')}>
+                <Button size="lg" className="w-full md:w-auto px-20 h-20 rounded-full bg-white text-slate-900 font-bold text-2xl hover:bg-slate-100 shadow" onClick={() => navigate('/register')}>
                   开始学习 · ¥8150
                 </Button>
               </div>

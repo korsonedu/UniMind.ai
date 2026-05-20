@@ -223,7 +223,7 @@ export const AIAssistant: React.FC = () => {
                 className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-9 px-4 font-medium" 
                 disabled={loading || !selectedBot}
               />
-              <Button onClick={handleSend} disabled={loading || !input.trim() || !selectedBot} size="icon" className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow-xl active:scale-95 transition-all shrink-0"><Send className="h-3.5 w-3.5" /></Button>
+              <Button onClick={handleSend} disabled={loading || !input.trim() || !selectedBot} size="icon" className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow active:scale-95 transition-all shrink-0"><Send className="h-3.5 w-3.5" /></Button>
             </div>
           </footer>
         </Card>

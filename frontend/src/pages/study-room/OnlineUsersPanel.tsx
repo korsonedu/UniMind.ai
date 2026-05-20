@@ -51,7 +51,7 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
             </HoverCardTrigger>
             <HoverCardContent
               side="left"
-              className="w-80 rounded-apple-2xl p-6 border-none shadow-2xl bg-card/95 backdrop-blur-xl z-50 text-left text-foreground"
+              className="w-80 rounded-apple-2xl p-6 border-none shadow-lg bg-card/95 backdrop-blur-xl z-50 text-left text-foreground"
             >
               <div className="flex space-x-4">
                 <Avatar className="h-12 w-12 border border-border shadow-sm">

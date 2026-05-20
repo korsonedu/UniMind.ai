@@ -18,6 +18,8 @@
   "noVideo": "暂无视频",
   "mute": "静音",
   "unmute": "取消静音",
+  "play": "播放",
+  "pause": "暂停",
   "playbackSpeed": "播放速度",
   "showSubtitles": "开启字幕",
   "hideSubtitles": "关闭字幕",

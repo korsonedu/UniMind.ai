@@ -58,7 +58,7 @@ export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
           <FileVideo className="h-4 w-4" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent side="top" className="w-80 p-3 rounded-2xl border-border shadow-2xl space-y-3 bg-card z-[100]">
+      <PopoverContent side="top" className="w-80 p-3 rounded-2xl border-border shadow-lg space-y-3 bg-card z-[100]">
         <Input
           placeholder={t('giphySearch')}
           value={giphySearch}
@@ -76,7 +76,7 @@ export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
                 <img src={g.images.fixed_height_small.url} className="w-full h-full object-cover" />
               </button>
               <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 scale-0 group-hover/gif:scale-100 transition-all z-[110] pointer-events-none origin-bottom">
-                <div className="w-32 aspect-square rounded-xl overflow-hidden shadow-2xl border-2 border-primary bg-card">
+                <div className="w-32 aspect-square rounded-xl overflow-hidden shadow-lg border-2 border-primary bg-card">
                   <img src={g.images.fixed_height_small.url} className="w-full h-full object-cover" />
                 </div>
               </div>

@@ -506,7 +506,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
               <ScrollArea className="flex-1 p-8">
                   <div className="space-y-10 pb-10">
                       {previewQuestions.map((q, idx) => (
-                          <div key={idx} className="bg-white rounded-[2.5rem] shadow-sm border border-black/[0.03] overflow-hidden transition-all hover:shadow-xl hover:scale-[1.01] group relative">
+                          <div key={idx} className="bg-white rounded-[2.5rem] shadow-sm border border-black/[0.03] overflow-hidden transition-all hover:shadow hover:scale-[1.01] group relative">
                               <div className="p-8 space-y-6">
                                   <div className="flex justify-between items-start gap-4">
                                       <div className="flex-1">
@@ -575,7 +575,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                   </div>
                   <div className="flex gap-4">
                     <Button variant="ghost" onClick={() => setShowPreview(false)} className="rounded-xl h-12 font-bold text-xs px-8 hover:bg-slate-50">{t('questionBank.abandon')}</Button>
-                    <Button onClick={handleConfirmSave} disabled={isSaving || previewQuestions.length === 0} className="rounded-xl h-12 bg-indigo-600 text-white font-bold text-xs px-12 shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+                    <Button onClick={handleConfirmSave} disabled={isSaving || previewQuestions.length === 0} className="rounded-xl h-12 bg-indigo-600 text-white font-bold text-xs px-12 shadow hover:bg-indigo-700 transition-all active:scale-95">
                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : t('questionBank.confirmImport')}
                     </Button>
                   </div>

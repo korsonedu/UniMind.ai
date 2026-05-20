@@ -577,7 +577,7 @@ export const QASystem: React.FC = () => {
                   accept="image/*,application/pdf,.doc,.docx,.txt"
                 />
               </div>
-              <Button onClick={handlePost} disabled={isPosting} className={cn("h-10 rounded-xl bg-primary text-primary-foreground font-bold shadow-xl hover:scale-[1.02] transition-transform text-xs uppercase tracking-widest", isMobile ? "shrink-0 px-5" : "px-8")}>
+              <Button onClick={handlePost} disabled={isPosting} className={cn("h-10 rounded-xl bg-primary text-primary-foreground font-bold shadow hover:scale-[1.02] transition-transform text-xs uppercase tracking-widest", isMobile ? "shrink-0 px-5" : "px-8")}>
                 {isPosting ? <Loader2 className="h-4 w-4 animate-spin"/> : t('submitQuestion')}
               </Button>
             </div>

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  ChevronLeft, Play, Calendar, BookOpen,
+  ChevronLeft, Play, Pause, Calendar, BookOpen,
   Share2, Star, FileText, Download,
   ListVideo, Layers, Sparkles, Maximize, Minimize, ClosedCaption,
   Volume2, VolumeX,
@@ -33,6 +34,7 @@ export const VideoLesson: React.FC = () => {
   const [relatedCourses, setRelatedCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasAwarded, setHasAwarded] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [subtitlesVisible, setSubtitlesVisible] = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -49,10 +51,24 @@ export const VideoLesson: React.FC = () => {
 
   useEffect(() => {
     const onFSChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const isFS = !!document.fullscreenElement;
+      setIsFullscreen(isFS);
+      // 退出全屏时解锁方向（进入时的 lock 在 toggleFullscreen 手势上下文里调用）
+      if (!isFS) {
+        try { screen.orientation?.unlock?.(); } catch {}
+      }
     };
+    // iOS Safari webkit 全屏事件（原生播放器自动处理横屏）
+    const onWebkitFSEnter = () => setIsFullscreen(true);
+    const onWebkitFSExit = () => setIsFullscreen(false);
     document.addEventListener('fullscreenchange', onFSChange);
-    return () => document.removeEventListener('fullscreenchange', onFSChange);
+    document.addEventListener('webkitbeginfullscreen', onWebkitFSEnter);
+    document.addEventListener('webkitendfullscreen', onWebkitFSExit);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFSChange);
+      document.removeEventListener('webkitbeginfullscreen', onWebkitFSEnter);
+      document.removeEventListener('webkitendfullscreen', onWebkitFSExit);
+    };
   }, []);
 
   const scheduleHideControls = () => {
@@ -65,11 +81,30 @@ export const VideoLesson: React.FC = () => {
     scheduleHideControls();
   };
 
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
+  const toggleFullscreen = async () => {
+    const v = videoRef.current;
+    // 退出全屏（标准全屏或 iOS Safari webkit 全屏）
+    if (document.fullscreenElement || (v as any)?.webkitDisplayingFullscreen) {
       document.exitFullscreen().catch(() => {});
-    } else {
-      videoContainerRef.current?.requestFullscreen().catch(() => {});
+      (v as any)?.webkitExitFullscreen?.();
+      return;
+    }
+    if (!v) return;
+    // iOS Safari：使用原生播放器全屏，自动处理横屏
+    if ((v as any).webkitEnterFullscreen) {
+      (v as any).webkitEnterFullscreen();
+      return;
+    }
+    // 标准浏览器：全屏容器 div 使视频可自由撑满
+    const container = videoContainerRef.current;
+    if (!container) return;
+    flushSync(() => setIsFullscreen(true));
+    try {
+      await container.requestFullscreen();
+      // 紧跟在 requestFullscreen 后锁横屏，必须在此处（用户手势上下文中）调用
+      try { await screen.orientation?.lock?.('landscape'); } catch {}
+    } catch {
+      setIsFullscreen(false);
     }
   };
 
@@ -164,147 +199,162 @@ export const VideoLesson: React.FC = () => {
   if (!course) return <div className="h-screen flex items-center justify-center font-bold">{t('notFound')}</div>;
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700 text-left p-6">
-      <header className="flex items-center justify-between border-b border-border pb-6">
-        <div className="flex items-center gap-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl hover:bg-muted shadow-sm border border-border h-12 w-12">
-            <ChevronLeft className="h-6 w-6"/>
-          </Button>
-          <div>
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">{course.title}</h2>
-            <div className="flex items-center gap-4 opacity-40 font-bold text-[10px] uppercase tracking-widest leading-none mt-1">
-               {course.album && <span className="flex items-center gap-1.5 text-foreground"><Layers className="w-3 h-3"/> {course.album}</span>}
-               <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(course.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-3">
-           <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm"><Share2 className="h-4 w-4 mr-2"/> {t('share')}</Button>
-           <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm text-amber-500"><Star className="h-4 w-4 mr-2"/> {t('favorite')}</Button>
-        </div>
-      </header>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Left: Video + AI Tools */}
-        <div className="lg:col-span-9 space-y-8">
-           <div
-             ref={videoContainerRef}
-             className="bg-black overflow-hidden relative flex items-center justify-center shadow-2xl group"
-             onMouseMove={handleVideoInteraction}
-             onMouseLeave={() => setShowControls(false)}
-           >
-             {course.video_file ? (
-               <>
-               <video
-                 ref={videoRef}
-                 onEnded={handleVideoEnd}
-                 onTimeUpdate={handleTimeUpdate}
-                 onLoadedMetadata={handleLoadedMetadata}
-                 onPlay={() => scheduleHideControls()}
-                 onPause={() => setShowControls(true)}
-                 onClick={() => { videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause(); }}
-                 src={course.video_file}
-                 className="w-full max-h-[70vh] cursor-pointer"
-                 preload="metadata"
-                 poster={course.cover_image || undefined}
-               />
-               <SubtitlesOverlay courseId={courseId} videoRef={videoRef} visible={subtitlesVisible} />
-               {/* 自定义控制栏：进度条 + 按钮，整体显示/隐藏 */}
-               <div className={`absolute bottom-0 inset-x-0 z-20 px-3 pb-3 pt-8 bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                 <div ref={progressRef} onClick={handleSeek} className="w-full h-5 flex items-center cursor-pointer group/progress mb-1">
-                   <div className="w-full h-1 rounded-full bg-white/20 group-hover/progress:h-1.5 transition-all">
-                     <div className="h-full rounded-full bg-white transition-all" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }} />
-                   </div>
-                 </div>
-                 <div className="flex items-center justify-between">
-                   <span className="text-[11px] font-medium text-white/70 tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
-                   <div className="flex items-center gap-0.5">
-                     <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isMuted ? t('unmute') : t('mute')}>
-                       {isMuted ? <VolumeX className="h-[18px] w-[18px]" /> : <Volume2 className="h-[18px] w-[18px]" />}
-                     </button>
-                     <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-all min-w-[32px] text-center" title={t('playbackSpeed')}>
-                       {playbackRate}x
-                     </button>
-                     <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-all ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} title={subtitlesVisible ? t('hideSubtitles') : t('showSubtitles')}>
-                       <ClosedCaption className="h-[18px] w-[18px]" />
-                     </button>
-                     <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isFullscreen ? t('exitFullscreen') : t('fullscreen')}>
-                       {isFullscreen ? <Minimize className="h-[18px] w-[18px]" /> : <Maximize className="h-[18px] w-[18px]" />}
-                     </button>
-                   </div>
-                 </div>
-               </div>
-               </>
-             ) : (
-               <div className="flex flex-col items-center gap-4 opacity-20"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">{t('noVideo')}</p></div>
-             )}
-           </div>
-
-          {/* AI 智能大纲 */}
-          <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4 text-indigo-500" />
-              <h3 className="text-sm font-bold text-foreground">{t('aiOutline')}</h3>
-            </div>
-            <OutlinePanel courseId={courseId} videoRef={videoRef} />
-          </Card>
-
-          {/* Course info + downloads */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-             <div className="md:col-span-2 space-y-8">
-                <section className="space-y-6">
-                   <div className="flex items-center gap-3 border-b border-border pb-4"><BookOpen className="h-5 w-5 text-emerald-600"/><h3 className="text-xl font-bold text-foreground">{t('courseIntro')}</h3></div>
-                   <p className="text-muted-foreground text-base font-medium leading-relaxed whitespace-pre-wrap">{course.description}</p>
-                </section>
-
-                <section className="space-y-4">
-                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('teachingResources')}</h4>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {course.courseware && (
-                        <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
-                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><FileText className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">{t('courseware')}</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
-                           <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.courseware} download><Download className="w-4 h-4"/></a></Button>
-                        </div>
-                      )}
-                      {course.reference_materials && (
-                        <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
-                           <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><BookOpen className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">{t('references')}</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
-                           <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.reference_materials} download><Download className="w-4 h-4"/></a></Button>
-                        </div>
-                      )}
-                   </div>
-                </section>
-             </div>
-             <div className="space-y-6">
-                <Card className="border-none shadow-sm rounded-3xl bg-card p-8 space-y-6 text-left">
-                   <div className="space-y-1"><h4 className="text-xs font-bold uppercase tracking-widest text-foreground">{t('learningReward')}</h4><p className="text-2xl font-bold text-green-700">+{course.elo_reward} ELO</p></div>
-                   <p className="text-xs font-medium text-muted-foreground leading-relaxed">{t('rewardDesc')}</p>
-                </Card>
-             </div>
-          </div>
-        </div>
-
-        {/* Right Side: Album & Related */}
-        <div className="lg:col-span-3 space-y-6">
-           <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('sameSeries')}</h4><ListVideo className="w-4 h-4 opacity-40"/></div>
-           <ScrollArea className="h-[750px] pr-4">
-              <div className="space-y-3">
-                 {relatedCourses.map((c, i) => (
-                   <Link key={c.id} to={`/course/${c.id}`}>
-                     <div className="p-4 rounded-2xl border bg-transparent border-transparent hover:bg-card hover:border-border hover:shadow-md transition-all text-left mb-2 group">
-                        <div className="aspect-video bg-slate-100 rounded-xl mb-3 overflow-hidden">
-                           {c.cover_image && <img src={c.cover_image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
-                        </div>
-                        <div className="space-y-1">
-                           <span className="text-[9px] font-bold opacity-30 uppercase">{t('lessonNumber', { i: i + 1 })}</span>
-                           <p className="text-xs font-bold leading-relaxed text-foreground line-clamp-2">{c.title}</p>
-                        </div>
-                     </div>
-                   </Link>
-                 ))}
-                 {relatedCourses.length === 0 && <div className="py-20 text-center text-muted-foreground italic text-[10px] font-bold uppercase">{t('noRelatedCourses')}</div>}
+    <div className="animate-in fade-in duration-700 text-left">
+      {/* 视频播放器 — 移动端左右顶到头，桌面端有 max-w 约束 */}
+      <div className="lg:max-w-[1600px] lg:mx-auto lg:px-6">
+        <div
+          ref={videoContainerRef}
+          className={isFullscreen ? 'fixed inset-0 z-50 bg-black' : 'bg-black overflow-hidden relative flex items-center justify-center shadow-lg group lg:rounded-2xl'}
+          onMouseMove={handleVideoInteraction}
+          onMouseLeave={() => setShowControls(false)}
+          onTouchStart={handleVideoInteraction}
+        >
+          {course.video_file ? (
+            <>
+            <video
+              ref={videoRef}
+              playsInline
+              onEnded={handleVideoEnd}
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onPlay={() => { setIsPlaying(true); scheduleHideControls(); }}
+              onPause={() => { setIsPlaying(false); setShowControls(true); }}
+              onClick={() => { videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause(); }}
+              src={course.video_file}
+              className={isFullscreen ? 'absolute inset-0 w-full h-full object-contain' : 'w-full lg:max-h-[70vh] cursor-pointer'}
+              preload="metadata"
+              poster={course.cover_image || undefined}
+            />
+            <SubtitlesOverlay courseId={courseId} videoRef={videoRef} visible={subtitlesVisible} />
+            {/* 自定义控制栏：全屏/非全屏均保留 */}
+            <div className={`absolute bottom-0 inset-x-0 z-20 px-3 pb-3 pt-8 bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <div ref={progressRef} onClick={handleSeek} className="w-full h-5 flex items-center cursor-pointer group/progress mb-1">
+                <div className="w-full h-1 rounded-full bg-white/20 group-hover/progress:h-1.5 transition-all">
+                  <div className="h-full rounded-full bg-white transition-all" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }} />
+                </div>
               </div>
-           </ScrollArea>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-white/70 tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => { videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause(); }}
+                    className="rounded-md p-1.5 text-white/70 hover:text-white transition-all"
+                    title={isPlaying ? t('pause') : t('play')}
+                  >
+                    {isPlaying ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
+                  </button>
+                  <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isMuted ? t('unmute') : t('mute')}>
+                    {isMuted ? <VolumeX className="h-[18px] w-[18px]" /> : <Volume2 className="h-[18px] w-[18px]" />}
+                  </button>
+                  <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-all min-w-[32px] text-center" title={t('playbackSpeed')}>
+                    {playbackRate}x
+                  </button>
+                  <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-all ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} title={subtitlesVisible ? t('hideSubtitles') : t('showSubtitles')}>
+                    <ClosedCaption className="h-[18px] w-[18px]" />
+                  </button>
+                  <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isFullscreen ? t('exitFullscreen') : t('fullscreen')}>
+                    {isFullscreen ? <Minimize className="h-[18px] w-[18px]" /> : <Maximize className="h-[18px] w-[18px]" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-4 opacity-20 py-24"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">{t('noVideo')}</p></div>
+          )}
+        </div>
+      </div>
+
+      {/* 视频下方内容 */}
+      <div className="max-w-[1600px] mx-auto space-y-8 p-6">
+        <header className="flex items-center justify-between border-b border-border pb-6">
+          <div className="flex items-center gap-6">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl hover:bg-muted shadow-sm border border-border h-12 w-12">
+              <ChevronLeft className="h-6 w-6"/>
+            </Button>
+            <div>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground">{course.title}</h2>
+              <div className="flex items-center gap-4 opacity-40 font-bold text-[10px] uppercase tracking-widest leading-none mt-1">
+                 {course.album && <span className="flex items-center gap-1.5 text-foreground"><Layers className="w-3 h-3"/> {course.album}</span>}
+                 <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(course.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-3">
+             <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm"><Share2 className="h-4 w-4 mr-2"/> {t('share')}</Button>
+             <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm text-amber-500"><Star className="h-4 w-4 mr-2"/> {t('favorite')}</Button>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+          {/* Left: AI Tools + Course Info */}
+          <div className="lg:col-span-9 space-y-8">
+            {/* AI 智能大纲 */}
+            <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4 text-indigo-500" />
+                <h3 className="text-sm font-bold text-foreground">{t('aiOutline')}</h3>
+              </div>
+              <OutlinePanel courseId={courseId} videoRef={videoRef} />
+            </Card>
+
+            {/* Course info + downloads */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+               <div className="md:col-span-2 space-y-8">
+                  <section className="space-y-6">
+                     <div className="flex items-center gap-3 border-b border-border pb-4"><BookOpen className="h-5 w-5 text-emerald-600"/><h3 className="text-xl font-bold text-foreground">{t('courseIntro')}</h3></div>
+                     <p className="text-muted-foreground text-base font-medium leading-relaxed whitespace-pre-wrap">{course.description}</p>
+                  </section>
+
+                  <section className="space-y-4">
+                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{t('teachingResources')}</h4>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {course.courseware && (
+                          <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
+                             <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><FileText className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">{t('courseware')}</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
+                             <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.courseware} download><Download className="w-4 h-4"/></a></Button>
+                          </div>
+                        )}
+                        {course.reference_materials && (
+                          <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
+                             <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><BookOpen className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">{t('references')}</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
+                             <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.reference_materials} download><Download className="w-4 h-4"/></a></Button>
+                          </div>
+                        )}
+                     </div>
+                  </section>
+               </div>
+               <div className="space-y-6">
+                  <Card className="border-none shadow-sm rounded-3xl bg-card p-8 space-y-6 text-left">
+                     <div className="space-y-1"><h4 className="text-xs font-bold uppercase tracking-widest text-foreground">{t('learningReward')}</h4><p className="text-2xl font-bold text-green-700">+{course.elo_reward} ELO</p></div>
+                     <p className="text-xs font-medium text-muted-foreground leading-relaxed">{t('rewardDesc')}</p>
+                  </Card>
+               </div>
+            </div>
+          </div>
+
+          {/* Right Side: Album & Related */}
+          <div className="lg:col-span-3 space-y-6">
+             <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('sameSeries')}</h4><ListVideo className="w-4 h-4 opacity-40"/></div>
+             <ScrollArea className="h-[750px] pr-4">
+                <div className="space-y-3">
+                   {relatedCourses.map((c, i) => (
+                     <Link key={c.id} to={`/course/${c.id}`}>
+                       <div className="p-4 rounded-2xl border bg-transparent border-transparent hover:bg-card hover:border-border hover:shadow-md transition-all text-left mb-2 group">
+                          <div className="aspect-video bg-slate-100 rounded-xl mb-3 overflow-hidden">
+                             {c.cover_image && <img src={c.cover_image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
+                          </div>
+                          <div className="space-y-1">
+                             <span className="text-[9px] font-bold opacity-30 uppercase">{t('lessonNumber', { i: i + 1 })}</span>
+                             <p className="text-xs font-bold leading-relaxed text-foreground line-clamp-2">{c.title}</p>
+                          </div>
+                       </div>
+                     </Link>
+                   ))}
+                   {relatedCourses.length === 0 && <div className="py-20 text-center text-muted-foreground italic text-[10px] font-bold uppercase">{t('noRelatedCourses')}</div>}
+                </div>
+             </ScrollArea>
+          </div>
         </div>
       </div>
     </div>

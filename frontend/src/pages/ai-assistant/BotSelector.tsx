@@ -47,7 +47,7 @@ export const BotSelector: React.FC<BotSelectorProps> = React.memo(({ bots, selec
             </div>
           </div>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-64 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-2xl" align="start">
+        <DropdownMenuContent className="w-64 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg" align="start">
            {bots.map(b => (
              <DropdownMenuItem key={b.id} onClick={() => onSelect(b)} className="rounded-xl py-3 px-4 flex items-center gap-3 cursor-pointer">
                 <Avatar className="h-8 w-8 border border-border"><AvatarImage src={b.avatar}/><AvatarFallback>{b.name[0]}</AvatarFallback></Avatar>

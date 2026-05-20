@@ -60,7 +60,7 @@ const StartupMaterials: React.FC = () => {
     >
       <div className="space-y-6 animate-in fade-in duration-500">
         {/* User Guide Card */}
-        <Card className="border-none shadow-sm bg-gradient-to-br from-indigo-50 to-white border border-indigo-100/50 rounded-3xl overflow-hidden">
+        <Card className="border-none shadow-sm bg-card border border-indigo-100/50 rounded-3xl overflow-hidden">
           <CardContent className="p-6 flex items-start gap-4">
             <div className="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
               <Info className="h-5 w-5" />

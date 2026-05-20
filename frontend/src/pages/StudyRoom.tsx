@@ -484,8 +484,8 @@ export const StudyRoom: React.FC = () => {
           <div className="flex items-center gap-2">
             {!isMobile && (
               <Popover open={isTimerOpen} onOpenChange={setIsTimerOpen}>
-                <PopoverTrigger asChild><Button className={cn("rounded-2xl h-10 px-5 gap-3 transition-all duration-500 shadow-xl border border-black/5", isActive ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground hover:opacity-90")}><Timer className="h-4 w-4" /><span className="font-mono font-bold text-sm tracking-tight tabular-nums">{formatTime(timeLeft)}</span></Button></PopoverTrigger>
-                <PopoverContent className="w-80 rounded-[2.5rem] p-8 border-none shadow-2xl bg-card/95 backdrop-blur-xl z-[100]" side="bottom" align="end">
+                <PopoverTrigger asChild><Button className={cn("rounded-2xl h-10 px-5 gap-3 transition-all duration-500 shadow border border-black/5", isActive ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground hover:opacity-90")}><Timer className="h-4 w-4" /><span className="font-mono font-bold text-sm tracking-tight tabular-nums">{formatTime(timeLeft)}</span></Button></PopoverTrigger>
+                <PopoverContent className="w-80 rounded-[2.5rem] p-8 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[100]" side="bottom" align="end">
                   <div className="space-y-5 text-center">
                     <div className="text-5xl font-mono font-bold tracking-tighter text-foreground tabular-nums">{formatTime(timeLeft)}</div>
                     <div className="space-y-4 text-left">
@@ -498,7 +498,7 @@ export const StudyRoom: React.FC = () => {
                     </div>
                     <div className="flex justify-center gap-2.5 pt-1">
                       <Button size="lg" onClick={isActive ? () => setIsActive(false) : handleStartTask} className={cn("rounded-2xl flex-1 font-bold h-12 shadow-lg", isActive ? "bg-muted text-foreground" : "bg-primary text-primary-foreground shadow-primary/10")}>{isActive ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}{isActive ? t('timer.pause') : t('timer.startStudy')}</Button>
-                      {isActive && <Button variant="destructive" onClick={() => setShowStopAlert(true)} className="rounded-2xl h-12 w-12 shadow-xl shadow-red-500/20"><XCircle className="h-5 w-5" /></Button>}
+                      {isActive && <Button variant="destructive" onClick={() => setShowStopAlert(true)} className="rounded-2xl h-12 w-12 shadow"><XCircle className="h-5 w-5" /></Button>}
                     </div>
                   </div>
                 </PopoverContent>
@@ -509,7 +509,7 @@ export const StudyRoom: React.FC = () => {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-xl h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><MoreHorizontal className="h-4 w-4"/></Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 rounded-2xl p-4 space-y-4 bg-card border-border shadow-2xl">
+              <DropdownMenuContent align="end" className="w-64 rounded-2xl p-4 space-y-4 bg-card border-border shadow-lg">
                 <div className="space-y-1">
                   <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t('privacy.title')}</h4>
                   <p className="text-[11px] text-muted-foreground/50">{t('privacy.description')}</p>
@@ -616,7 +616,7 @@ export const StudyRoom: React.FC = () => {
         </div>
 
         {!isAtBottom && (
-          <Button onClick={() => scrollToBottom(true)} size="icon" className="absolute bottom-24 right-8 rounded-full h-10 w-10 shadow-2xl bg-primary text-primary-foreground z-50 hover:scale-110 transition-transform opacity-80 hover:opacity-100 border border-white/10"><ArrowDown className="h-5 w-5"/></Button>
+          <Button onClick={() => scrollToBottom(true)} size="icon" className="absolute bottom-24 right-8 rounded-full h-10 w-10 shadow-lg bg-primary text-primary-foreground z-50 hover:scale-110 transition-transform opacity-80 hover:opacity-100 border border-white/10"><ArrowDown className="h-5 w-5"/></Button>
         )}
 
         <footer className={cn(
@@ -641,7 +641,7 @@ export const StudyRoom: React.FC = () => {
                       <Timer className="h-4 w-4" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-2xl bg-card/95 backdrop-blur-xl z-[100]">
+                  <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[100]">
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t('mobile.pomodoro')}</p>
@@ -664,11 +664,11 @@ export const StudyRoom: React.FC = () => {
               )}
               <Popover>
                 <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><Smile className="h-4 w-4"/></Button></PopoverTrigger>
-                <PopoverContent side="top" className="w-64 p-2 rounded-2xl border-border shadow-2xl bg-card"><div className="grid grid-cols-8 gap-1">{['😊','😂','🤣','😍','😒','🤔','😭','👍','🙌','🔥','✨','💯','📚','🎓','💪','🎯','❤️','✔️','❌','⚠️','🚀','💡','🌟','🎉'].map(e => (<button key={e} onClick={() => setChatInput(prev => prev + e)} className="h-8 w-8 flex items-center justify-center hover:bg-muted rounded-lg text-lg transition-colors">{e}</button>))}</div></PopoverContent>
+                <PopoverContent side="top" className="w-64 p-2 rounded-2xl border-border shadow-lg bg-card"><div className="grid grid-cols-8 gap-1">{['😊','😂','🤣','😍','😒','🤔','😭','👍','🙌','🔥','✨','💯','📚','🎓','💪','🎯','❤️','✔️','❌','⚠️','🚀','💡','🌟','🎉'].map(e => (<button key={e} onClick={() => setChatInput(prev => prev + e)} className="h-8 w-8 flex items-center justify-center hover:bg-muted rounded-lg text-lg transition-colors">{e}</button>))}</div></PopoverContent>
               </Popover>
               <Popover onOpenChange={(open) => open && giphyResults.length === 0 && fetchGiphy('')}>
                 <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><FileVideo className="h-4 w-4"/></Button></PopoverTrigger>
-                <PopoverContent side="top" className="w-80 p-3 rounded-2xl border-border shadow-2xl space-y-3 bg-card z-[100]">
+                <PopoverContent side="top" className="w-80 p-3 rounded-2xl border-border shadow-lg space-y-3 bg-card z-[100]">
                   <Input placeholder={t('giphySearch')} value={giphySearch} onChange={e => { setGiphySearch(e.target.value); fetchGiphy(e.target.value); }} className="h-9 text-xs rounded-xl bg-muted border-none text-foreground placeholder:opacity-50 focus-visible:ring-1 focus-visible:ring-primary/20" />
                   <div onScroll={handleGiphyScroll} className="grid grid-cols-4 gap-2 h-72 overflow-y-auto pr-1 scrollbar-thin">
                     {giphyResults.map(g => (
@@ -681,7 +681,7 @@ export const StudyRoom: React.FC = () => {
                           <img src={g.images.fixed_height_small.url} className="w-full h-full object-cover" />
                         </button>
                         <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 scale-0 group-hover/gif:scale-100 transition-all z-[110] pointer-events-none origin-bottom">
-                          <div className="w-32 aspect-square rounded-xl overflow-hidden shadow-2xl border-2 border-primary bg-card">
+                          <div className="w-32 aspect-square rounded-xl overflow-hidden shadow-lg border-2 border-primary bg-card">
                             <img src={g.images.fixed_height_small.url} className="w-full h-full object-cover" />
                           </div>
                         </div>
@@ -725,7 +725,7 @@ export const StudyRoom: React.FC = () => {
                 )}
                 rows={1}
               />
-              <Button onClick={sendMessage} size="icon" className="rounded-xl h-10 w-10 bg-primary text-primary-foreground shadow-xl shrink-0 hover:opacity-90 active:scale-95 transition-transform"><Send className="h-4 w-4" /></Button>
+              <Button onClick={sendMessage} size="icon" className="rounded-xl h-10 w-10 bg-primary text-primary-foreground shadow shrink-0 hover:opacity-90 active:scale-95 transition-transform"><Send className="h-4 w-4" /></Button>
             </div>
           </div>
         </footer>
@@ -736,7 +736,7 @@ export const StudyRoom: React.FC = () => {
         <Card className="border-none shadow-sm rounded-2xl md:rounded-3xl bg-card overflow-hidden p-4 md:p-6 md:flex-1 min-h-0 flex flex-col border border-border">
           <header className="mb-4 flex items-center justify-between"><CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{t('onlineUsers.title')}</CardTitle><Users className="h-4 w-4 text-muted-foreground opacity-20" /></header>
           <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-none">
-            {onlineUsers.map((u, i) => (<HoverCard key={i}><HoverCardTrigger asChild><div className="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-muted transition-all cursor-pointer border border-transparent hover:border-border group"><div className="relative shrink-0"><Avatar className="h-9 w-9 border border-border shadow-sm group-hover:ring-2 ring-emerald-500/20 transition-all"><AvatarImage src={u.avatar_url}/></Avatar><span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-background shadow-sm"/></div><div className="flex-1 min-w-0"><p className="text-xs font-bold text-foreground truncate">{u.nickname || u.username} {u.username === user?.username && t('onlineUsers.self')}</p><p className="text-[11px] text-emerald-600 font-bold truncate mt-0.5 uppercase tracking-tight">{u.current_task || t('onlineUsers.online')}</p></div></div></HoverCardTrigger><HoverCardContent side="left" className="w-80 rounded-[2rem] p-6 border-none shadow-2xl bg-card/95 backdrop-blur-xl z-50 text-left text-foreground"><div className="flex space-x-4"><Avatar className="h-12 w-12 border border-border shadow-sm"><AvatarImage src={u.avatar_url}/></Avatar><div className="space-y-3 flex-1 text-left"><div className="flex justify-between items-center"><h4 className="text-sm font-bold">{u.nickname || u.username}</h4><Badge variant="outline" className="text-[11px] border-emerald-500/20 text-emerald-600 rounded-full">ELO {u.elo_score}</Badge></div><div className="space-y-2 pt-2 border-t border-border"><div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-3.5 w-3.5"/><span className="text-[11px] font-bold uppercase tracking-widest">{t('onlineUsers.todayFocus', { minutes: u.today_focused_minutes })}</span></div><div className="flex items-center gap-2 text-muted-foreground"><CheckCircle2 className="h-3.5 w-3.5"/><span className="text-[11px] font-bold uppercase tracking-widest">{t('onlineUsers.todayCompleted', { count: u.today_completed_tasks?.length || 0 })}</span></div></div></div></div></HoverCardContent></HoverCard>))}</div>
+            {onlineUsers.map((u, i) => (<HoverCard key={i}><HoverCardTrigger asChild><div className="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-muted transition-all cursor-pointer border border-transparent hover:border-border group"><div className="relative shrink-0"><Avatar className="h-9 w-9 border border-border shadow-sm group-hover:ring-2 ring-emerald-500/20 transition-all"><AvatarImage src={u.avatar_url}/></Avatar><span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-background shadow-sm"/></div><div className="flex-1 min-w-0"><p className="text-xs font-bold text-foreground truncate">{u.nickname || u.username} {u.username === user?.username && t('onlineUsers.self')}</p><p className="text-[11px] text-emerald-600 font-bold truncate mt-0.5 uppercase tracking-tight">{u.current_task || t('onlineUsers.online')}</p></div></div></HoverCardTrigger><HoverCardContent side="left" className="w-80 rounded-[2rem] p-6 border-none shadow-lg bg-card/95 backdrop-blur-xl z-50 text-left text-foreground"><div className="flex space-x-4"><Avatar className="h-12 w-12 border border-border shadow-sm"><AvatarImage src={u.avatar_url}/></Avatar><div className="space-y-3 flex-1 text-left"><div className="flex justify-between items-center"><h4 className="text-sm font-bold">{u.nickname || u.username}</h4><Badge variant="outline" className="text-[11px] border-emerald-500/20 text-emerald-600 rounded-full">ELO {u.elo_score}</Badge></div><div className="space-y-2 pt-2 border-t border-border"><div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-3.5 w-3.5"/><span className="text-[11px] font-bold uppercase tracking-widest">{t('onlineUsers.todayFocus', { minutes: u.today_focused_minutes })}</span></div><div className="flex items-center gap-2 text-muted-foreground"><CheckCircle2 className="h-3.5 w-3.5"/><span className="text-[11px] font-bold uppercase tracking-widest">{t('onlineUsers.todayCompleted', { count: u.today_completed_tasks?.length || 0 })}</span></div></div></div></div></HoverCardContent></HoverCard>))}</div>
         </Card>
         <Card className="border-none shadow-sm rounded-2xl md:rounded-3xl bg-card overflow-hidden p-4 md:p-6 md:flex-1 min-h-0 flex flex-col border border-border">
           <header className="mb-4 flex items-center justify-between border-b border-border pb-4"><CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{t('planList.title')}</CardTitle><ListTodo className="h-4 w-4 text-muted-foreground opacity-20" /></header>

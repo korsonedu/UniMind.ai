@@ -348,7 +348,7 @@ export const PipelinePanel: React.FC = () => {
       </div>
 
       {/* ── Metrics ── */}
-      <Card className="p-6 rounded-3xl border-none shadow-sm bg-gradient-to-br from-white to-slate-50 space-y-4">
+      <Card className="p-6 rounded-3xl border-none shadow-sm bg-card space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">{t('pipeline.qualityOverview')}</p>
           <Badge className="bg-slate-100 text-slate-700 border-none text-[10px] font-black rounded-lg">
@@ -373,7 +373,7 @@ export const PipelinePanel: React.FC = () => {
       </Card>
 
       {/* ── Pipeline Trigger ── */}
-      <Card className="p-6 rounded-3xl border border-indigo-200 shadow-sm bg-gradient-to-br from-indigo-50 to-white">
+      <Card className="p-6 rounded-3xl border border-indigo-200 shadow-sm bg-card">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="max-w-xl">
             <p className="text-sm font-bold">{t('pipeline.aiSmartGenerate')}</p>
@@ -393,7 +393,7 @@ export const PipelinePanel: React.FC = () => {
 
       {/* ── Review Queue ── */}
       {reviewTasks.length > 0 && (
-        <Card className="p-6 rounded-3xl border border-amber-200 shadow-sm bg-gradient-to-br from-amber-50 to-white space-y-4">
+        <Card className="p-6 rounded-3xl border border-amber-200 shadow-sm bg-card space-y-4">
           <div className="flex items-center gap-2">
             <Badge className="bg-amber-100 text-amber-700 border-none text-[10px] font-black rounded-lg">{t('pipeline.itemsPendingReview', { count: reviewTasks.length })}</Badge>
             <p className="text-sm font-bold">{t('pipeline.reviewQueue')}</p>

@@ -8,6 +8,7 @@ import { cn, processMathContent } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { isLearningReminderEnabled, sendLearningReminder } from '@/lib/learningReminders';
 
 interface ResultReportProps {
@@ -123,7 +124,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
 
                       <div className="space-y-1 text-left">
                         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-500 ml-1">Academic Analysis</p>
-                        <div className="p-6 bg-slate-900 rounded-[1.5rem] text-[14px] font-medium text-slate-200 leading-relaxed shadow-xl text-left">
+                        <div className="p-6 bg-slate-900 rounded-[1.5rem] text-[14px] font-medium text-slate-200 leading-relaxed shadow-sm text-left">
                           <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed">
                             <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                               {processMathContent(results[currentReportIdx].analysis || results[currentReportIdx].ai_answer || "")}

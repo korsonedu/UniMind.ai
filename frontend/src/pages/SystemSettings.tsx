@@ -89,7 +89,7 @@ export const SystemSettings: React.FC = () => {
                     className={cn(
                       "group relative h-24 rounded-[1.5rem] border-2 transition-all flex flex-col items-center justify-center gap-3 overflow-hidden",
                       primaryColor === color.hex
-                        ? "border-primary shadow-xl scale-105 bg-card"
+                        ? "border-primary shadow scale-105 bg-card"
                         : "border-transparent bg-muted/60 hover:border-border"
                     )}
                   >

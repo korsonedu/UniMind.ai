@@ -105,7 +105,7 @@ export const QuestionDetailDialog: React.FC<QuestionDetailDialogProps> = ({
           {question?.ai_answer && (
             <div className="space-y-3 text-left">
               <h5 className="text-[11px] font-bold uppercase tracking-widest text-indigo-600">{t('nodeDetailDialog.deepAnalysis')}</h5>
-              <div className="p-8 bg-slate-900 text-slate-200 rounded-[2rem] text-sm leading-relaxed shadow-xl text-left">
+              <div className="p-8 bg-slate-900 text-slate-200 rounded-[2rem] text-sm leading-relaxed shadow-sm text-left">
                 <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed">
                   <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                     {processMathContent(question.ai_answer)}

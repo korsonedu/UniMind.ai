@@ -42,7 +42,7 @@ export const AuditPanel = ({
           { id: 'kp', label: t('audit.hubKnowledge'), icon: BrainCircuit, color: 'text-purple-600', bg: 'bg-purple-50' },
           { id: 'sm', label: t('audit.hubStartupMaterials'), icon: Rocket, color: 'text-red-600', bg: 'bg-red-50' },
         ].map(item => (
-          <Card key={item.id} onClick={() => setAuditMode(item.id)} className="p-8 rounded-[2rem] bg-white border border-black/5 flex flex-col items-center gap-4 cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all group text-left">
+          <Card key={item.id} onClick={() => setAuditMode(item.id)} className="p-8 rounded-[2rem] bg-white border border-black/5 flex flex-col items-center gap-4 cursor-pointer hover:shadow hover:-translate-y-1 transition-all group text-left">
             <div className={cn("h-16 w-16 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform", item.bg, item.color)}><item.icon className="w-8 h-8" /></div>
             <div className="text-center"><h4 className="text-sm font-bold tracking-tight">{item.label}</h4></div>
           </Card>
