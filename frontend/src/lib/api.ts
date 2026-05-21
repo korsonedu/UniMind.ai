@@ -24,7 +24,6 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => {
-    // 积分获取提示：heartbeat 返回 daily_bonus
     const bonus = response.data?.daily_bonus;
     if (bonus > 0) {
       toast.success(`+${bonus} 积分 · 每日登录奖励`, { duration: 3000 });
@@ -32,7 +31,14 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    // 积分不足
+    if (error.response?.status === 401) {
+      localStorage.removeItem('auth-storage');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 402) {
       const msg = error.response?.data?.error || '积分不足，刷几道题就能解锁此功能';
       toast.error(msg, {
