@@ -47,6 +47,11 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
             if pending_msg:
                 pending_msg.content = ai_content
                 pending_msg.save()
+
+            # 计入 AI 调用总次数
+            from users.quota import increment_quota
+            if user.institution:
+                increment_quota(user.institution, 'ai_call_total')
         else:
             if pending_msg:
                 pending_msg.content = "AI 助教暂时无法响应，请稍后再试。"

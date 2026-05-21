@@ -4,11 +4,17 @@ from .models import Article
 from .serializers import ArticleSerializer
 from django.db.models import Count
 from users.views import IsMember
-from users.permissions import is_platform_admin, IsAdminWriteMemberRead
+from users.permissions import is_platform_admin, IsAdminWriteMemberRead, HasQuota
 
 class ArticleListCreateView(generics.ListCreateAPIView):
     serializer_class = ArticleSerializer
     permission_classes = [IsAdminWriteMemberRead]
+    quota_resource = 'article'
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAdmin(), HasQuota()]
+        return [IsAdminWriteMemberRead()]
 
     def get_queryset(self):
         from users.permissions import is_platform_admin

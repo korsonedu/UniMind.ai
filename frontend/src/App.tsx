@@ -25,6 +25,8 @@ import { PromptTemplatesAdmin } from './pages/PromptTemplatesAdmin';
 import { Interviews } from './pages/Interviews';
 import { PdfMockExam } from './pages/PdfMockExam';
 import { WrongQuestionReviewPage } from './pages/WrongQuestionReviewPage';
+import { BillingPage } from './pages/Billing';
+import { PaymentResult } from './pages/PaymentResult';
 
 import { useAuthStore } from './store/useAuthStore';
 import { useSystemStore } from './store/useSystemStore';
@@ -177,6 +179,8 @@ const router = createBrowserRouter([
           { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}><KnowledgeMap /></FeatureGuard> },
           { path: "knowledge-map/node/:id", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}><KnowledgeNodeDetail /></FeatureGuard> },
           { path: "settings", element: <Settings /> },
+          { path: "billing", element: <BillingPage /> },
+          { path: "payments/result", element: <PaymentResult /> },
           { path: "system-settings", element: <RequireAdmin><SystemSettings /></RequireAdmin> },
           { path: "management", element: <RequireAdmin><Maintenance /></RequireAdmin> },
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}><VideoLesson /></FeatureGuard> },

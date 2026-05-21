@@ -75,6 +75,7 @@ urlpatterns = [
     path("api/qa/", include("faq_system.urls")),
     path("api/notifications/", include("notifications.urls")),
     path("api/interviews/", include("interviews.urls")),
+    path("api/payments/", include("payments.urls")),
     re_path(r'^media/(?P<path>.*)$', media_serve, name='media-serve'),
     re_path(r'^(?!api/|admin/|media/|static/).*$', serve_spa, name='spa-catchall'),
 ] + static(settings.STATIC_URL, document_root=settings.BASE_DIR / 'static')

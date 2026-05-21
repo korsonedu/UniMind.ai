@@ -17,7 +17,6 @@ import {
   BarChart3,
   Building2,
   MessageCircleQuestion,
-  Lock,
   Mic,
   Wrench,
   Eye,
@@ -71,16 +70,12 @@ import { toast } from 'sonner';
 import UnimindLogo from '../../Unimind_logo.png';
 import { PersistentUploadToast } from '@/components/PersistentUploadToast';
 
-const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onRestrictedClick }: any) => {
-  const { t } = useTranslation('layout');
+const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: any) => {
   const content = (
     <div className="px-1">
       <Button
         variant="ghost"
-        onClick={() => {
-          if (restricted) onRestrictedClick();
-        }}
-        asChild={!restricted}
+        asChild
         className={cn(
           "w-full justify-start gap-3 h-10 px-3 transition-all duration-200 rounded-lg cursor-pointer",
           active
@@ -89,22 +84,10 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
           collapsed && "justify-center px-0"
         )}
       >
-        {restricted ? (
-          <>
-            <div className="relative">
-              <Icon className={cn("h-4 w-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} />
-              <div className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-unimind-bg-secondary rounded-full flex items-center justify-center border border-border shadow-sm" title={t('lockedTooltip')}>
-                <Lock className="h-2 w-2 text-muted-foreground" />
-              </div>
-            </div>
-            {!collapsed && <span className="font-bold text-[13px] tracking-tight">{label}</span>}
-          </>
-        ) : (
-          <Link to={to} className="flex items-center gap-3 w-full h-full">
-            <Icon className={cn("h-4 w-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} />
-            {!collapsed && <span className="font-bold text-[13px] tracking-tight">{label}</span>}
-          </Link>
-        )}
+        <Link to={to} className="flex items-center gap-3 w-full h-full">
+          <Icon className={cn("h-4 w-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} />
+          {!collapsed && <span className="font-bold text-[13px] tracking-tight">{label}</span>}
+        </Link>
       </Button>
     </div>
   );
@@ -113,7 +96,7 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="right" className="font-bold border-none shadow">{label}{restricted && ` (${t('lockedTooltip')})`}</TooltipContent>
+        <TooltipContent side="right" className="font-bold border-none shadow">{label}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   ) : content;
@@ -128,11 +111,10 @@ export const MainLayout: React.FC = () => {
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [restrictedFeature, setRestrictedFeature] = useState<string | undefined>(undefined);
   const [inviteRole, setInviteRole] = useState<'student' | 'teacher'>('student');
 
   const { t } = useTranslation(['layout', 'common']);
-  const { institution: instFromStore, fetchFeatures, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
+  const { institution: instFromStore, fetchFeatures, hasFeature, loading: featuresLoading, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
   const instInfo = instFromStore || user?.institution || null;
 
   const isFullPage = ['/management'].includes(location.pathname);
@@ -197,9 +179,27 @@ export const MainLayout: React.FC = () => {
   const instPlan = instInfo?.plan || 'free';
   const planLevel = (p: string) => ({ free: 1, solo: 2, plus: 3, pro: 4 })[p] || 1;
   const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
-  const atLeast = (lvl: number) => myPlanLevel >= lvl;
 
-  type NavItem = { to: string; icon: any; label: string; minPlan?: number; section?: string };
+  type NavItem = { to: string; icon: any; label: string };
+
+  // ── 路由 → 功能标志映射（与 App.tsx FeatureGuard 一致）──
+  const NAV_FEATURE_MAP: Record<string, string> = {
+    '/tests': 'quiz.exam',
+    '/knowledge-map': 'knowledge.graph',
+    '/qa': 'faq.system',
+    '/ai': 'ai.assistant',
+    '/study': 'study.room',
+    '/interviews': 'interview.mock',
+    '/mock-exam': 'pdf.mock',
+  };
+
+  // 功能可见性：有 feature 要求的项，必须 hasFeature 通过才显示
+  const itemVisible = (item: NavItem) => {
+    const feat = NAV_FEATURE_MAP[item.to];
+    if (!feat) return true;
+    if (featuresLoading) return false;
+    return hasFeature(feat);
+  };
 
   // ── 超级管理员 —— 只看机构管理 + 邀请码 ──
   const navItems: NavItem[] = isSuperAdmin
@@ -211,27 +211,24 @@ export const MainLayout: React.FC = () => {
     : [
         { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
-        { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeMap'), minPlan: 2 },
+        { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeMap') },
         { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
-        { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qa'), minPlan: 3 },
-        { to: '/ai', icon: Sparkles, label: t('layout:nav.aiLab'), minPlan: 2 },
-        { to: '/study', icon: Clock, label: t('layout:nav.studyRoom'), minPlan: 3 },
-        { to: '/interviews', icon: Mic, label: t('layout:nav.interviews'), minPlan: 3 },
-        { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams'), minPlan: 3 },
+        { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qa') },
+        { to: '/ai', icon: Sparkles, label: t('layout:nav.aiLab') },
+        { to: '/study', icon: Clock, label: t('layout:nav.studyRoom') },
+        { to: '/interviews', icon: Mic, label: t('layout:nav.interviews') },
+        { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams') },
       ];
 
   // ── 机构管理菜单 ──
   if (!isSuperAdmin && instInfo) {
     if (user?.is_institution_admin) {
-      navItems.push({ to: '/institution/students', icon: Users, label: '成员管理', section: 'institution' });
-      navItems.push({ to: '/management', icon: Wrench, label: t('layout:nav.maintenance'), section: 'institution' });
+      navItems.push({ to: '/institution/students', icon: Users, label: '成员管理' });
+      navItems.push({ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') });
     }
   }
 
-  // 学生不看到锁定的功能入口——方案升级是教师/机构的事
-  const visibleNavItems = isInstStudent
-    ? navItems.filter(item => !item.minPlan || atLeast(item.minPlan))
-    : navItems;
+  const visibleNavItems = navItems.filter(itemVisible);
 
   const mobileNavItems: NavItem[] = isSuperAdmin
     ? [
@@ -242,28 +239,12 @@ export const MainLayout: React.FC = () => {
     : [
         { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.testsShort') },
-        { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeShort'), minPlan: 2 },
+        { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeShort') },
         { to: '/articles', icon: FileText, label: t('layout:nav.articlesShort') },
-        { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qaShort'), minPlan: 3 },
+        { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qaShort') },
       ];
 
-  const visibleMobileNavItems = isInstStudent
-    ? mobileNavItems.filter(item => !item.minPlan || atLeast(item.minPlan))
-    : mobileNavItems;
-
-  // Sidebar onRestrictedClick: show upgrade modal with appropriate feature
-  const PATH_FEATURE_MAP: Record<string, string> = {
-    '/knowledge-map': 'knowledge.graph',
-    '/ai': 'ai.assistant',
-    '/qa': 'faq.system',
-    '/study': 'study.room',
-    '/interviews': 'interview.mock',
-    '/mock-exam': 'pdf.mock',
-  };
-  const handleRestrictedClick = (item: NavItem) => {
-    setRestrictedFeature(PATH_FEATURE_MAP[item.to]);
-    setShowUpgradeModal(true);
-  };
+  const visibleMobileNavItems = mobileNavItems.filter(itemVisible);
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -297,8 +278,6 @@ export const MainLayout: React.FC = () => {
                 {...item}
                 active={location.pathname === item.to}
                 collapsed={collapsed}
-                restricted={Boolean((item as any).minPlan && !atLeast((item as any).minPlan))}
-                onRestrictedClick={() => handleRestrictedClick(item)}
               />
             ))}
 
@@ -491,10 +470,7 @@ export const MainLayout: React.FC = () => {
                       variant="outline"
                       size="sm"
                       className="h-8 rounded-full px-3 text-[11px] font-bold bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 transition-all"
-                      onClick={() => {
-                        setRestrictedFeature(undefined);
-                        setShowUpgradeModal(true);
-                      }}
+                      onClick={() => setShowUpgradeModal(true)}
                     >
                       <Sparkles className="h-3 w-3 mr-1 text-amber-500" />
                       {t('layout:upgradePlan')}
@@ -621,17 +597,10 @@ export const MainLayout: React.FC = () => {
                 if (item.to === '/qa') return p.startsWith('/qa');
                 return p === item.to || p.startsWith(`${item.to}/`);
               })();
-              const restricted = Boolean((item as any).minPlan && !atLeast((item as any).minPlan));
               return (
                 <Link
                   key={item.to}
-                  to={restricted ? location.pathname : item.to}
-                  onClick={(e) => {
-                    if (restricted) {
-                      e.preventDefault();
-                      handleRestrictedClick(item);
-                    }
-                  }}
+                  to={item.to}
                   className={cn(
                     "relative flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-lg transition-colors min-h-[44px] min-w-[44px]",
                     isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
@@ -650,7 +619,6 @@ export const MainLayout: React.FC = () => {
           <UpgradeModal
             open={showUpgradeModal}
             onOpenChange={setShowUpgradeModal}
-            feature={restrictedFeature}
             currentPlan={user?.membership_tier || instPlan || 'free'}
           />
         )}

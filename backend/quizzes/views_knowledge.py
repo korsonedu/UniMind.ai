@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import KnowledgePoint, KnowledgePointAnnotation
 from quizzes.serializers import KnowledgePointSerializer, KnowledgePointAnnotationSerializer
-from users.permissions import IsAdminWriteMemberRead, IsMemberOrAdmin, HasPlanFeature, HasAIQuota, IsAdmin, IsInstitutionAdmin
+from users.permissions import IsAdminWriteMemberRead, IsMemberOrAdmin, HasPlanFeature, HasAIQuota, IsAdmin, IsInstitutionAdmin, HasQuota
 from users.quota import increment_ai_quota
 from ai_service import AIService
 
@@ -24,6 +24,12 @@ class KnowledgePointListView(generics.ListCreateAPIView):
     queryset = KnowledgePoint.objects.filter(parent__isnull=True).order_by('order', 'id')
     serializer_class = KnowledgePointSerializer
     permission_classes = [IsAdminWriteMemberRead]
+    quota_resource = 'knowledge_point'
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAdmin(), HasQuota()]
+        return [IsAdminWriteMemberRead()]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -315,7 +321,8 @@ def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix='', instit
 
 class KnowledgePointImportMDView(APIView):
     """从 Markdown 文件导入知识体系。平台管理员或机构管理员可操作。"""
-    permission_classes = [IsAdmin | IsInstitutionAdmin]
+    permission_classes = [IsAdmin | IsInstitutionAdmin, HasQuota]
+    quota_resource = 'knowledge_point'
 
     @transaction.atomic
     def post(self, request):

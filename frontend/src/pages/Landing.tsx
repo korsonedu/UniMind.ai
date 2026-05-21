@@ -6,7 +6,7 @@ import {
   ArrowRight, Check, ChevronDown, ChevronUp,
   BrainCircuit, BarChart3,
   Globe, Clock, TrendingUp,
-  Menu, X, Layers, Gauge, Cpu, Image
+  Menu, X, Gauge, Cpu, Image
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -111,9 +111,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className="flex items-center gap-2"
         >
-          <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
-            <Layers className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
-          </div>
+          <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
           <span className="font-extrabold text-base text-foreground tracking-tight">UniMind</span>
           <span className="text-[11px] font-bold text-unimind-text-tertiary hidden sm:inline">.ai</span>
         </button>
@@ -556,7 +554,13 @@ const Pricing: React.FC = () => {
                 <Button
                   variant={isPopular ? 'apple' : 'apple-outline'}
                   className="w-full h-10 rounded-xl text-sm font-extrabold"
-                  onClick={() => navigate('/register')}
+                  onClick={() => {
+                    if (pi === 3) {
+                      document.querySelector('#cta')?.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      navigate('/register');
+                    }
+                  }}
                 >
                   {plan.cta}
                 </Button>
@@ -639,7 +643,7 @@ const FinalCTA: React.FC = () => {
   const { t } = useTranslation('landing');
   const navigate = useNavigate();
   return (
-    <section className="py-24 md:py-32 bg-white">
+    <section id="cta" className="py-24 md:py-32 bg-white">
       <div className="max-w-3xl mx-auto px-6 text-center space-y-8 reveal">
         <h2 className="text-3xl md:text-5xl font-extrabold tracking-tightest text-foreground leading-[1.12]">
           {t('cta.title')}
@@ -678,9 +682,7 @@ const Footer: React.FC = () => {
       <div className="max-w-6xl mx-auto px-6 reveal">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-              <Layers className="h-4 w-4 text-white" strokeWidth={2.5} />
-            </div>
+            <img src="/Unimind_logo.png" alt="UniMind" className="h-8 w-8 rounded-lg object-contain" />
             <div className="leading-tight">
               <p className="font-extrabold text-sm text-foreground tracking-tight">UniMind.ai</p>
               <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase tracking-[0.1em]">{t('footer.tagline')}</p>

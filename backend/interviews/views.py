@@ -9,8 +9,9 @@ from django.http import StreamingHttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from users.permissions import HasPlanFeature, HasPointsBalance
+from users.permissions import HasPlanFeature, HasPointsBalance, HasQuota
 from users.views import IsMember
+from users.quota import increment_quota
 from quizzes.models import KnowledgePoint
 from .models import InterviewSession, InterviewTurn, ResumeRecord
 from .services import InterviewAIService
@@ -50,9 +51,10 @@ def _serialize_session(session: InterviewSession, include_turns: bool = False) -
 
 
 class InterviewSessionListCreateView(APIView):
-    permission_classes = [IsMember, HasPlanFeature, HasPointsBalance]
+    permission_classes = [IsMember, HasPlanFeature, HasPointsBalance, HasQuota]
     required_feature = 'interview.mock'
     points_cost = 50
+    quota_resource = 'interview'
 
     def get(self, request):
         sessions = InterviewSession.objects.filter(user=request.user).order_by("-started_at")[:50]
@@ -187,6 +189,10 @@ class InterviewTextTurnView(APIView):
             latency_ms=latency_ms,
         )
 
+        # 计入 AI 调用总次数
+        if request.user.institution:
+            increment_quota(request.user.institution, 'ai_call_total')
+
         return Response(
             {
                 "session_id": session.id,
@@ -252,6 +258,9 @@ class InterviewReplyStreamView(APIView):
                     latency_ms=0,
                 )
                 yield f"data: {json.dumps({'done': True})}\n\n"
+                # 计入 AI 调用总次数
+                if collected and session.user.institution:
+                    increment_quota(session.user.institution, 'ai_call_total')
 
         return StreamingHttpResponse(
             generate(),

@@ -15,6 +15,8 @@ from quizzes.models import (
 )
 from quizzes.serializers import UserQuestionStatusSerializer, QuizExamSerializer
 from users.views import IsMember
+from users.permissions import HasQuota
+from users.quota import increment_quota
 from quizzes.services.wrong_question_insights import build_wrong_question_insights
 from quizzes.services.memorix_scheduler import get_memorix_session_plan, build_adaptive_question_ids
 from quizzes.tasks import generate_personalized_pdf_mock_exam
@@ -264,7 +266,8 @@ class MemorixOptimizationHistoryView(APIView):
 
 
 class PersonalizedMockExamView(APIView):
-    permission_classes = [IsMember]
+    permission_classes = [IsMember, HasQuota]
+    quota_resource = 'pdf_export'
 
     def get(self, request):
         rows = PersonalizedMockExam.objects.filter(user=request.user).order_by("-created_at")[:20]
@@ -290,6 +293,9 @@ class PersonalizedMockExamView(APIView):
             status='processing',
         )
         generate_personalized_pdf_mock_exam.delay(record_id=record.id)
+        # 计入 PDF 导出配额
+        if request.user.institution:
+            increment_quota(request.user.institution, 'pdf_export')
 
         payload = {
             "id": record.id,

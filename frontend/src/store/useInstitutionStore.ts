@@ -16,9 +16,47 @@ interface InstitutionInfo {
   business_type: string;
 }
 
-interface UsageInfo {
+export interface QuotaItem {
+  used: number;
+  limit: number | null; // null = 无限制
+  pct: number;          // 0-100
+  status: 'normal' | 'warning' | 'exhausted';
+}
+
+export interface UsageInfo {
+  course: QuotaItem;
+  question: QuotaItem;
+  knowledge_point: QuotaItem;
+  article: QuotaItem;
+  ai_question: QuotaItem;
+  ai_call_total: QuotaItem;
+  pdf_export: QuotaItem;
+  interview: QuotaItem;
+  // backward compat
   used: number;
   limit: number | null;
+}
+
+export const QUOTA_LABELS: Record<string, string> = {
+  course: '课程数',
+  question: '题目总数',
+  knowledge_point: '知识图谱节点',
+  article: '文章数',
+  ai_question: 'AI 出题次数',
+  ai_call_total: 'AI 调用总次数',
+  pdf_export: '模拟考试 PDF',
+  interview: '面试场次',
+};
+
+export function quotaStatus(resource: QuotaItem): 'normal' | 'warning' | 'exhausted' {
+  if (resource.limit === null) return 'normal';
+  if (resource.used >= resource.limit) return 'exhausted';
+  if (resource.pct >= 80) return 'warning';
+  return 'normal';
+}
+
+export function quotaLabel(key: string): string {
+  return QUOTA_LABELS[key] || key;
 }
 
 interface InstitutionState {
@@ -50,7 +88,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
 
   fetchFeatures: async () => {
     const state = get();
-    if (state.previewMode) return; // preview mode takes precedence
+    if (state.previewMode) return;
     const isInitial = state.features.length === 0 && !state.isPlatformAdmin;
     if (isInitial) {
       set({ loading: true });
@@ -88,7 +126,6 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
 
   exitPreview: async () => {
     set({ previewMode: false, previewInstitution: null, loading: true });
-    // Re-fetch real features
     try {
       const { data } = await api.get('/users/institution/me/features/');
       set({
@@ -105,9 +142,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
 
   hasFeature: (feature: string) => {
     const { isPlatformAdmin, institution, features } = get();
-    // Platform admin without institution → all features unlocked
     if (isPlatformAdmin && !institution) return true;
-    // Otherwise check against institution plan features
     return features.includes(feature);
   },
 

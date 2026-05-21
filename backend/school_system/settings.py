@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "notifications",
     "interviews",
     "core",
+    "payments",
 ]
 
 MIDDLEWARE = [

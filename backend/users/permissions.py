@@ -216,18 +216,34 @@ class IsInstitutionMember(permissions.BasePermission):
                 and request.user.institution is not None)
 
 
-class HasAIQuota(permissions.BasePermission):
-    """检查 AI 出题配额（Free 版 20 次/月）"""
-    message = "本月 AI 出题次数已用完（20次/月），请升级到 Solo 版解锁无限次。Solo 版每月仅需 ¥299/月。"
-
+class HasQuota(permissions.BasePermission):
+    """
+    通用配额检查。
+    usage: permission_classes = [HasQuota]
+           quota_resource = 'course'
+    """
     def has_permission(self, request, view):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        if user.is_platform_admin:
+        if getattr(user, 'is_platform_admin', False):
             return True
-        from users.quota import check_ai_quota
-        return check_ai_quota(user.institution)
+        resource = getattr(view, 'quota_resource', None)
+        if resource is None:
+            return True
+        from users.quota import check_quota, get_quota_message
+        if not check_quota(user.institution, resource):
+            self.message = get_quota_message(user.institution, resource)
+            return False
+        return True
+
+
+class HasAIQuota(permissions.BasePermission):
+    """检查 AI 出题配额。已废弃，请使用 HasQuota + quota_resource='ai_question'"""
+
+    def has_permission(self, request, view):
+        view.quota_resource = 'ai_question'
+        return HasQuota().has_permission(request, view)
 
 
 class HasPointsBalance(permissions.BasePermission):

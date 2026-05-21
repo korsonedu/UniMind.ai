@@ -13,7 +13,7 @@ from quizzes.models import Question, UserQuestionStatus, KnowledgePoint
 from quizzes.serializers import QuestionSerializer
 from users.models import User
 from users.views import IsMember
-from users.permissions import IsAdmin, is_platform_admin
+from users.permissions import IsAdmin, is_platform_admin, HasQuota
 from ai_service import AIService
 from quizzes.services.memorix_scheduler import build_adaptive_question_ids
 from quizzes.ai_workflow import save_confirmed_questions
@@ -47,10 +47,11 @@ def _get_descendant_kp_ids(sub_ids):
 
 class QuestionListView(generics.ListCreateAPIView):
     serializer_class = QuestionSerializer
+    quota_resource = 'question'
 
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [IsAdmin()]
+            return [IsAdmin(), HasQuota()]
         return [IsMember()]
 
     def get_queryset(self):
@@ -198,7 +199,8 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class BulkImportQuestionsView(APIView):
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdmin, HasQuota]
+    quota_resource = 'question'
     def post(self, request):
         questions_data = request.data.get('questions', [])
         kp_id = request.data.get('kp_id')
@@ -348,7 +350,8 @@ class ExportStructuredQuestionsView(APIView):
 
 class ImportCSVQuestionsView(APIView):
     MAX_SIZE = 5 * 1024 * 1024  # 5MB
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdmin, HasQuota]
+    quota_resource = 'question'
 
     def post(self, request):
         file_obj = request.FILES.get('file')

@@ -11,7 +11,8 @@ from .views_admin import (
     SuperuserUserListView, UserTagListView, PermissionGroupListView,
 )
 from .views_institution import (
-    InstitutionDashboardView, InstitutionListView, InstitutionDetailView,
+    InstitutionDashboardView, PlatformAdminInstitutionOverviewView,
+    InstitutionListView, InstitutionDetailView,
     InstitutionCreateView, InstitutionActivateView, InstitutionDeactivateView,
     InstitutionChangePlanView,
     InstitutionStudentListView, InstitutionStudentDetailView,
@@ -21,6 +22,7 @@ from .views_institution import (
     InstitutionSelfUpdateView,
     CheckInviteView, RegenerateInviteSlugView,
     PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
+    InstitutionPaymentConfigView,
     ValidateInviteCodeView,
     UpdateDirectionsView,
     PublicInstitutionView, InstitutionJoinBySlugView,
@@ -72,6 +74,8 @@ urlpatterns = [
     path('institutions/<int:pk>/change-plan/', InstitutionChangePlanView.as_view(), name='institution-change-plan'),
     path('institutions/<int:pk>/preview/', InstitutionPreviewView.as_view(), name='institution-preview'),
 
+    path('institutions/overview/', PlatformAdminInstitutionOverviewView.as_view(), name='institution-overview'),
+
     # Institution — self-service (current user's institution)
     path('institution/me/', InstitutionDashboardView.as_view(), name='institution-me'),
     path('institution/me/update/', InstitutionSelfUpdateView.as_view(), name='institution-self-update'),
@@ -92,6 +96,9 @@ urlpatterns = [
     # Institution — members (owner + teacher management)
     path('institution/me/members/', InstitutionMemberListView.as_view(), name='institution-member-list'),
     path('institution/me/members/<int:pk>/role/', InstitutionMemberRoleView.as_view(), name='institution-member-role'),
+
+    # Institution — payment config (Pro)
+    path('institution/me/payment-config/', InstitutionPaymentConfigView.as_view(), name='institution-payment-config'),
 
     # Institution — rewards
     path('institution/me/rewards/config/', InstitutionRewardConfigView.as_view(), name='institution-rewards-config'),

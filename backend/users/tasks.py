@@ -120,3 +120,29 @@ def monthly_points_bonus():
 
     if total_awarded > 0:
         logger.info("monthly_points_bonus: %s students received bonus", total_awarded)
+
+
+@shared_task
+def notify_trial_expiring():
+    """提前 3 天提醒试用即将到期，提前 1 天再次提醒。"""
+    from notifications.models import Notification
+
+    now = timezone.now()
+    for days_left in (3, 1):
+        target_date = now + timedelta(days=days_left)
+        users = User.objects.filter(
+            is_member=True,
+            membership_tier='free',
+            trial_ends_at__date=target_date.date(),
+            membership_expires_at__isnull=True,
+        )
+        for user in users:
+            Notification.objects.create(
+                recipient=user,
+                ntype='system',
+                title='试用即将到期' if days_left == 3 else '试用明天到期',
+                content=f'您的 {days_left} 天免费试用即将结束，到期后将降级为 Free 方案。升级方案即可保留全部功能。',
+                link='/settings/billing',
+            )
+        if users:
+            logger.info("notify_trial_expiring: %s users notified for %s days left", users.count(), days_left)

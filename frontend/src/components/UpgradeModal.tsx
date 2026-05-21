@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowRight, Check } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { CheckoutModal } from './CheckoutModal';
 
 const PLAN_ORDER = ['free', 'solo', 'plus', 'pro'] as const;
 
@@ -50,7 +51,7 @@ interface UpgradeModalProps {
 }
 
 export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free' }: UpgradeModalProps) {
-  const navigate = useNavigate();
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const { t } = useTranslation('layout');
 
   // Determine target plan
@@ -65,64 +66,64 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
   const unlockSummary = PLAN_UNLOCK_SUMMARY[targetPlan] || '';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] rounded-apple-3xl border-none shadow-2xl bg-card p-0 overflow-hidden">
-        {/* Header */}
-        <div className="bg-card px-8 pt-8 pb-4">
-          <DialogHeader className="space-y-2 text-left">
-            <Badge className={cn('text-[10px] font-bold text-white mb-1', meta.color)}>
-              {meta.label}
-            </Badge>
-            <DialogTitle className="text-xl font-black tracking-tight">
-              {t('upgradeModal.upgradeTo', { plan: meta.label })}
-            </DialogTitle>
-            <DialogDescription className="font-medium text-muted-foreground leading-relaxed text-sm">
-              {unlockSummary}
-            </DialogDescription>
-          </DialogHeader>
-        </div>
-
-        {/* Features */}
-        <div className="px-8 py-4 space-y-3">
-          <p className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-[0.2em]">
-            {t('upgradeModal.coreFeatures', { plan: meta.label })}
-          </p>
-          <div className="bg-unimind-bg-secondary rounded-2xl p-4 space-y-2">
-            {features.map((f, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <Check className="h-4 w-4 text-unimind-green shrink-0 mt-0.5" />
-                <span className="text-[13px] font-bold text-foreground">{f}</span>
-              </div>
-            ))}
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[480px] rounded-apple-3xl border-none shadow-2xl bg-card p-0 overflow-hidden">
+          {/* Header */}
+          <div className="bg-card px-8 pt-8 pb-4">
+            <DialogHeader className="space-y-2 text-left">
+              <Badge className={cn('text-[10px] font-bold text-white mb-1', meta.color)}>
+                {meta.label}
+              </Badge>
+              <DialogTitle className="text-xl font-black tracking-tight">
+                {t('upgradeModal.upgradeTo', { plan: meta.label })}
+              </DialogTitle>
+              <DialogDescription className="font-medium text-muted-foreground leading-relaxed text-sm">
+                {unlockSummary}
+              </DialogDescription>
+            </DialogHeader>
           </div>
 
-        </div>
+          {/* Features */}
+          <div className="px-8 py-4 space-y-3">
+            <p className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-[0.2em]">
+              {t('upgradeModal.coreFeatures', { plan: meta.label })}
+            </p>
+            <div className="bg-unimind-bg-secondary rounded-2xl p-4 space-y-2">
+              {features.map((f, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <Check className="h-4 w-4 text-unimind-green shrink-0 mt-0.5" />
+                  <span className="text-[13px] font-bold text-foreground">{f}</span>
+                </div>
+              ))}
+            </div>
 
-        {/* Footer */}
-        <div className="px-8 pb-8 pt-2 flex gap-3">
-          <Button
-            variant="outline"
-            className="flex-1 h-11 rounded-xl text-sm font-bold"
-            onClick={() => onOpenChange(false)}
-          >
-            {t('upgradeModal.later')}
-          </Button>
-          <Button
-            variant="apple"
-            className="flex-1 h-11 rounded-xl text-sm font-extrabold"
-            onClick={() => {
-              onOpenChange(false);
-              navigate('/?upgrade=1');
-              setTimeout(() => {
-                document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth' });
-              }, 200);
-            }}
-          >
-            {t('upgradeModal.learnMore')}
-            <ArrowRight className="ml-1.5 h-4 w-4" />
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+
+          {/* Footer */}
+          <div className="px-8 pb-8 pt-2 flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1 h-11 rounded-xl text-sm font-bold"
+              onClick={() => onOpenChange(false)}
+            >
+              {t('upgradeModal.later')}
+            </Button>
+            <Button
+              variant="apple"
+              className="flex-1 h-11 rounded-xl text-sm font-extrabold"
+              onClick={() => {
+                onOpenChange(false);
+                setCheckoutOpen(true);
+              }}
+            >
+              {t('upgradeModal.learnMore')}
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <CheckoutModal open={checkoutOpen} onOpenChange={setCheckoutOpen} preselectedPlan={targetPlan} currentPlan={currentPlan} />
+    </>
   );
 }

@@ -10,9 +10,10 @@ from quizzes.models import Question, QuizAttempt, QuizExam, TeacherExam, Student
 from quizzes.serializers import QuizAttemptSerializer, QuizExamSerializer, TeacherExamSerializer
 from users.models import User
 from users.serializers import UserSerializer
-from users.permissions import IsAdmin
+from users.permissions import IsAdmin, HasQuota
 from users.views import IsMember
 from quizzes.ai_workflow import grade_single_question_submission, mark_questions_reviewed
+from users.quota import increment_quota
 from quizzes.services.task_dispatcher import dispatch_exam_grading
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,8 @@ class TeacherExamListView(APIView):
 
 class TeacherExamCreateView(APIView):
     """教师/管理员上传发布试卷 PDF"""
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdmin, HasQuota]
+    quota_resource = 'pdf_export'
 
     def post(self, request):
         title = request.data.get('title', '').strip()
@@ -105,6 +107,9 @@ class TeacherExamCreateView(APIView):
             created_by=request.user,
             institution=request.user.institution,
         )
+        # 计入 PDF 导出配额
+        if request.user.institution:
+            increment_quota(request.user.institution, 'pdf_export')
         return Response(TeacherExamSerializer(exam).data, status=201)
 
 

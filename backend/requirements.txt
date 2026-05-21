@@ -41,3 +41,7 @@ typing_extensions==4.15.0
 ujson==5.11.0
 urllib3==2.6.3
 zope.interface==8.2
+# Payment gateways
+stripe>=13.0.0
+wechatpayv3>=0.3.0
+alipay>=0.7.4

@@ -416,8 +416,12 @@ class InstitutionFeatureView(APIView):
         else:
             features = []
 
-        from users.quota import get_ai_quota_info
-        usage = get_ai_quota_info(inst)
+        from users.quota import get_all_quota_info
+        usage = get_all_quota_info(inst) if inst else {}
+        # 向后兼容：顶层 used/limit → ai_question
+        ai_q = usage.get('ai_question', {})
+        usage.setdefault('used', ai_q.get('used', 0))
+        usage.setdefault('limit', ai_q.get('limit', 0))
 
         return Response(InstitutionFeatureSerializer({
             'is_platform_admin': user.is_platform_admin,
@@ -430,106 +434,106 @@ class InstitutionFeatureView(APIView):
 # ── Institution Dashboard ──
 
 class InstitutionDashboardView(APIView):
-    """机构管理员仪表盘 / 平台超管机构总览"""
-    permission_classes = [IsAuthenticated]
+    """机构管理员仪表盘"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
 
     def get(self, request):
         user = request.user
         inst = user.institution
 
-        # Platform admin without institution → list all institutions for overview
-        if user.is_platform_admin and inst is None:
-            qs = Institution.objects.all()
-            return Response({
-                'mode': 'platform_admin',
-                'institutions': [
-                    {
-                        'id': i.id, 'name': i.name, 'plan': i.plan,
-                        'plan_label': i.get_plan_display(),
-                        'plan_expires_at': i.plan_expires_at,
-                        'is_active': i.is_active,
-                        'is_plan_active': i.is_plan_active,
-                        'max_students': i.max_students,
-                        'student_count': i.student_count,
-                        'staff_count': i.students.filter(institution_role__in=('owner', 'teacher')).count(),
-                    }
-                    for i in qs
-                ],
-                'plan_matrix': {p: get_plan_features(p) for p in ['free', 'solo', 'plus', 'pro']},
-            })
+        # 7-day active student count
+        from django.utils import timezone
+        from datetime import timedelta
+        from django.db.models import Count, Q
+        week_ago = timezone.now() - timedelta(days=7)
+        student_ids = inst.students.filter(institution_role='student').values_list('id', flat=True)
+        weekly_active = 0
+        if student_ids:
+            from quizzes.models import ReviewLog
+            weekly_active = ReviewLog.objects.filter(
+                user_id__in=student_ids, review_time__gte=week_ago
+            ).values('user_id').distinct().count()
 
-        # Institution admin or platform admin with institution → their dashboard
-        if inst and (user.institution_role in ('owner', 'teacher') or user.is_platform_admin):
-            # 7-day active student count
-            from django.utils import timezone
-            from datetime import timedelta
-            from django.db.models import Count, Q
-            week_ago = timezone.now() - timedelta(days=7)
-            student_ids = inst.students.filter(institution_role='student').values_list('id', flat=True)
-            weekly_active = 0
-            if student_ids:
-                from quizzes.models import ReviewLog
-                weekly_active = ReviewLog.objects.filter(
-                    user_id__in=student_ids, review_time__gte=week_ago
-                ).values('user_id').distinct().count()
+        # 配额用量
+        from users.quota import get_all_quota_info
+        quota_info = get_all_quota_info(inst) if inst else {}
 
-            # AI 用量
-            from users.quota import get_ai_quota_info
-            ai_usage = get_ai_quota_info(inst)
+        # 薄弱知识点排行
+        top_weak = []
+        if student_ids:
+            from quizzes.models import UserQuestionStatus
+            from quizzes.memorix.service import predict_retrievability as weibull_r
+            now = timezone.now()
+            statuses = UserQuestionStatus.objects.filter(
+                user_id__in=student_ids, stability__gt=0, last_review__isnull=False,
+            ).select_related('question__knowledge_point')
+            user_kp_scores: dict[tuple[int, int], list[float]] = {}
+            kp_name_map: dict[int, str] = {}
+            for s in statuses:
+                kp = s.question.knowledge_point
+                if kp is None:
+                    continue
+                kp_name_map[kp.id] = kp.name
+                elapsed = max(0.0, (now - s.last_review).total_seconds() / 86400.0)
+                r = weibull_r(stability=s.stability, elapsed_days=elapsed)
+                user_kp_scores.setdefault((s.user_id, kp.id), []).append(r)
+            weak_counts: dict[int, int] = {}
+            for (uid, kp_id), scores in user_kp_scores.items():
+                avg_r = sum(scores) / len(scores)
+                if avg_r < 0.4:
+                    weak_counts[kp_id] = weak_counts.get(kp_id, 0) + 1
+            top_weak = sorted(
+                [{'label': kp_name_map.get(kp_id, '?'), 'weak_count': c}
+                 for kp_id, c in weak_counts.items()],
+                key=lambda x: x['weak_count'], reverse=True,
+            )[:5]
 
-            # 薄弱知识点排行 (Memorix Weibull retrievability, R < 0.4 即为薄弱)
-            top_weak = []
-            if student_ids:
-                from quizzes.models import UserQuestionStatus
-                from quizzes.memorix.service import predict_retrievability as weibull_r
-                now = timezone.now()
-                statuses = UserQuestionStatus.objects.filter(
-                    user_id__in=student_ids, stability__gt=0, last_review__isnull=False,
-                ).select_related('question__knowledge_point')
-                user_kp_scores: dict[tuple[int, int], list[float]] = {}
-                kp_name_map: dict[int, str] = {}
-                for s in statuses:
-                    kp = s.question.knowledge_point
-                    if kp is None:
-                        continue
-                    kp_name_map[kp.id] = kp.name
-                    elapsed = max(0.0, (now - s.last_review).total_seconds() / 86400.0)
-                    r = weibull_r(stability=s.stability, elapsed_days=elapsed)
-                    user_kp_scores.setdefault((s.user_id, kp.id), []).append(r)
-                # Count weak users per KP
-                weak_counts: dict[int, int] = {}
-                for (uid, kp_id), scores in user_kp_scores.items():
-                    avg_r = sum(scores) / len(scores)
-                    if avg_r < 0.4:
-                        weak_counts[kp_id] = weak_counts.get(kp_id, 0) + 1
-                top_weak = sorted(
-                    [{'label': kp_name_map.get(kp_id, '?'), 'weak_count': c}
-                     for kp_id, c in weak_counts.items()],
-                    key=lambda x: x['weak_count'], reverse=True,
-                )[:5]
+        return Response({
+            'mode': 'institution_admin',
+            'institution': {
+                'id': inst.id, 'name': inst.name, 'plan': inst.plan,
+                'plan_label': inst.get_plan_display(),
+                'plan_expires_at': inst.plan_expires_at,
+                'is_active': inst.is_active,
+                'is_plan_active': inst.is_plan_active,
+                'max_students': inst.max_students,
+                'student_count': inst.student_count,
+                'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher')).count(),
+            },
+            'stats': {
+                'weekly_active_students': weekly_active,
+                'ai_usage': {'used': quota_info.get('ai_question', {}).get('used', 0), 'limit': quota_info.get('ai_question', {}).get('limit', 0)},
+                'quota': quota_info,
+                'top_weak_points': top_weak,
+            },
+            'features': get_plan_features(inst.plan),
+            'plan_matrix': {p: get_plan_features(p) for p in ['free', 'solo', 'plus', 'pro']},
+        })
 
-            return Response({
-                'mode': 'institution_admin',
-                'institution': {
-                    'id': inst.id, 'name': inst.name, 'plan': inst.plan,
-                    'plan_label': inst.get_plan_display(),
-                    'plan_expires_at': inst.plan_expires_at,
-                    'is_active': inst.is_active,
-                    'is_plan_active': inst.is_plan_active,
-                    'max_students': inst.max_students,
-                    'student_count': inst.student_count,
-                    'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher')).count(),
-                },
-                'stats': {
-                    'weekly_active_students': weekly_active,
-                    'ai_usage': ai_usage,
-                    'top_weak_points': top_weak,
-                },
-                'features': get_plan_features(inst.plan),
-                'plan_matrix': {p: get_plan_features(p) for p in ['free', 'solo', 'plus', 'pro']},
-            })
 
-        return Response({'error': '无机构管理权限'}, status=403)
+class PlatformAdminInstitutionOverviewView(APIView):
+    """平台管理员机构总览"""
+    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+
+    def get(self, request):
+        qs = Institution.objects.all()
+        return Response({
+            'mode': 'platform_admin',
+            'institutions': [
+                {
+                    'id': i.id, 'name': i.name, 'plan': i.plan,
+                    'plan_label': i.get_plan_display(),
+                    'plan_expires_at': i.plan_expires_at,
+                    'is_active': i.is_active,
+                    'is_plan_active': i.is_plan_active,
+                    'max_students': i.max_students,
+                    'student_count': i.student_count,
+                    'staff_count': i.students.filter(institution_role__in=('owner', 'teacher')).count(),
+                }
+                for i in qs
+            ],
+            'plan_matrix': {p: get_plan_features(p) for p in ['free', 'solo', 'plus', 'pro']},
+        })
 
 
 # ── Preview as Institution (平台超管专用) ──
@@ -973,4 +977,49 @@ class ValidateInviteCodeView(APIView):
             'plan': code_obj.plan,
             'plan_label': code_obj.get_plan_display(),
             'duration_days': code_obj.duration_days,
+        })
+
+
+# ── Institution Payment Config (Pro 机构专属) ──
+
+class InstitutionPaymentConfigView(APIView):
+    """Pro 机构读写自有收款配置。仅机构 owner 可访问。"""
+    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        from users.models_commercial import InstitutionPaymentConfig
+        cfg, _ = InstitutionPaymentConfig.objects.get_or_create(institution=inst)
+        return Response({
+            'is_enabled': cfg.is_enabled,
+            'wechat_merchant_id': cfg.wechat_merchant_id,
+            'wechat_cert_serial': cfg.wechat_cert_serial,
+            'alipay_app_id': cfg.alipay_app_id,
+            # Keys are encrypted — only return masked versions
+            'wechat_has_key': bool(cfg.wechat_api_v3_key),
+            'alipay_has_key': bool(cfg.alipay_private_key),
+        })
+
+    def put(self, request):
+        inst = request.user.institution
+        if inst.plan != 'pro':
+            return Response({'error': '仅 Pro 方案支持自有收款配置'}, status=403)
+
+        from users.models_commercial import InstitutionPaymentConfig
+        cfg, _ = InstitutionPaymentConfig.objects.get_or_create(institution=inst)
+
+        allowed = ['wechat_merchant_id', 'wechat_api_v3_key', 'wechat_cert_serial',
+                   'alipay_app_id', 'alipay_private_key', 'is_enabled']
+        for field in allowed:
+            if field in request.data:
+                setattr(cfg, field, request.data[field])
+        cfg.save()
+
+        return Response({
+            'is_enabled': cfg.is_enabled,
+            'wechat_merchant_id': cfg.wechat_merchant_id,
+            'wechat_cert_serial': cfg.wechat_cert_serial,
+            'alipay_app_id': cfg.alipay_app_id,
+            'wechat_has_key': bool(cfg.wechat_api_v3_key),
+            'alipay_has_key': bool(cfg.alipay_private_key),
         })

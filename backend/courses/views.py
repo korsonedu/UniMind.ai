@@ -14,7 +14,7 @@ from django.core.files import File
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics, permissions
-from users.permissions import IsAdmin
+from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
@@ -200,7 +200,8 @@ class ChunkedUploadChunkView(APIView):
 
 
 class ChunkedUploadCompleteView(APIView):
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdmin, HasQuota]
+    quota_resource = 'course'
 
     def post(self, request, upload_id):
         meta = _load_meta(upload_id)
@@ -342,10 +343,11 @@ class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class CourseListCreateView(generics.ListCreateAPIView):
     serializer_class = CourseSerializer
-    
+    quota_resource = 'course'
+
     def get_permissions(self):
         if self.request.method == 'POST':
-            return [IsAdmin()]
+            return [IsAdmin(), HasQuota()]
         return [IsMember()]
 
     def get_queryset(self):
