@@ -46,7 +46,7 @@ function CardForm({ orderId, onSuccess, onError }: {
   );
 }
 
-function CardFormWrapper({ onSuccess, onBack }: {
+function CardFormWrapper({ orderId, onSuccess, onBack }: {
   clientSecret: string;
   orderId: number;
   onSuccess: () => void;

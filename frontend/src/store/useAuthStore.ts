@@ -16,6 +16,8 @@ interface User {
   show_others_broadcast: boolean;
   is_member: boolean;
   membership_tier?: string;
+  trial_ends_at?: string;
+  membership_expires_at?: string;
   has_completed_initial_assessment: boolean;
   elo_reset_count: number;
   current_task?: string;
