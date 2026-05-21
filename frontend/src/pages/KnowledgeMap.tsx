@@ -417,23 +417,26 @@ const KnowledgeTreePanel: React.FC<{
       list.forEach(t => sortTree(t.children));
     };
     sortTree(roots);
-
-    // Auto-expand to show selected node
-    if (selectedId && nodeMap.has(selectedId)) {
-      const path: number[] = [];
-      let cur: TreeNodeData | undefined = nodeMap.get(selectedId);
-      while (cur) {
-        path.push(cur.id);
-        cur = cur.parent ? nodeMap.get(cur.parent) : undefined;
-      }
-      setExpandedIds(prev => {
-        const next = new Set(prev);
-        path.forEach(id => next.add(id));
-        return next;
-      });
-    }
     return roots;
-  }, [nodes, selectedId]);
+  }, [nodes]);
+
+  // Auto-expand to show selected node (moved from useMemo to avoid setState during render)
+  useEffect(() => {
+    if (!selectedId) return;
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+    if (!nodeMap.has(selectedId)) return;
+    const path: number[] = [];
+    let cur: KPNode | undefined = nodeMap.get(selectedId);
+    while (cur) {
+      path.push(cur.id);
+      cur = cur.parent ? nodeMap.get(cur.parent) : undefined;
+    }
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      path.forEach(id => next.add(id));
+      return next;
+    });
+  }, [selectedId, nodes]);
 
   const toggleExpand = (id: number) => {
     setExpandedIds(prev => {
@@ -474,7 +477,7 @@ const KnowledgeTreePanel: React.FC<{
     const isKp = tn.level === 'kp';
 
     return (
-      <div key={tn.id}>
+      <div key={tn.id} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 36px' }}>
         <button
           onClick={() => {
             if (hasChildren) toggleExpand(tn.id);
@@ -752,6 +755,30 @@ export const KnowledgeMap: React.FC = () => {
   const [graphRootId, setGraphRootId] = useState<string>('all');
   const [masteryData, setMasteryData] = useState<Record<string, string>>({});
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
+  const [mobileVisibleCount, setMobileVisibleCount] = useState(40);
+  const mobileSentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when search changes or toggling to tree
+  useEffect(() => {
+    setMobileVisibleCount(40);
+  }, [treeSearch, mobileTreeOpen]);
+
+  // IntersectionObserver: load more grid items as user scrolls
+  useEffect(() => {
+    if (!isMobile || mobileTreeOpen) return;
+    const sentinel = mobileSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setMobileVisibleCount(prev => Math.min(prev + 40, allNodes.length));
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isMobile, mobileTreeOpen, allNodes.length]);
 
   useEffect(() => {
     fetchMap();
@@ -944,18 +971,29 @@ export const KnowledgeMap: React.FC = () => {
                 />
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2 p-2 bg-muted/50 rounded-[2rem] min-h-[400px] content-start">
-                {allNodes
-                  .filter(n => n.name.toLowerCase().includes(treeSearch.toLowerCase()))
-                  .map(node => (
-                    <button
-                      key={node.id}
-                      onClick={() => handleNodeSelect(node)}
-                      className="flex items-center justify-between bg-card border border-border/50 hover:border-indigo-500/30 hover:shadow-md px-2.5 py-2 rounded-xl transition-all active:scale-[0.99] text-left min-h-[58px]"
-                    >
-                      <span className="text-[12px] font-bold truncate pr-2 leading-snug">{node.name}</span>
-                    </button>
-                  ))}
+              <div className="h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain rounded-2xl bg-muted/50 p-2">
+                <div className="grid grid-cols-2 gap-2 content-start">
+                  {(() => {
+                    const filtered = allNodes.filter(n => n.name.toLowerCase().includes(treeSearch.toLowerCase()));
+                    const visible = filtered.slice(0, mobileVisibleCount);
+                    return (
+                      <>
+                        {visible.map(node => (
+                          <button
+                            key={node.id}
+                            onClick={() => handleNodeSelect(node)}
+                            className="flex items-center justify-between bg-card border border-border/50 hover:border-indigo-500/30 hover:shadow-md px-2.5 py-2 rounded-xl transition-all active:scale-[0.99] text-left min-h-[58px]"
+                          >
+                            <span className="text-[12px] font-bold truncate pr-2 leading-snug">{node.name}</span>
+                          </button>
+                        ))}
+                        {visible.length < filtered.length && (
+                          <div ref={mobileSentinelRef} className="col-span-2 h-4" />
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
             )}
           </div>
