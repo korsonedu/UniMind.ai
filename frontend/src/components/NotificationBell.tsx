@@ -65,8 +65,8 @@ export const NotificationBell = () => {
     <DropdownMenu open={isOpen} onOpenChange={handleOpen} modal={false}>
       <DropdownMenuTrigger asChild>
         <div className="relative cursor-pointer group">
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground relative">
-            <Bell className={cn("h-4 w-4 transition-transform", unreadCount > 0 && "animate-pulse")} />
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground relative" aria-label="Notifications">
+            <Bell className={cn("h-4 w-4 transition-[transform]", unreadCount > 0 && "animate-pulse")} />
             {unreadCount > 0 && (
               <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 border-2 border-background" />
             )}
@@ -104,11 +104,11 @@ export const NotificationBell = () => {
           ) : (
             <div className="p-1 space-y-0.5">
               {notifications.map(notif => (
-                <div
+                <button
                   key={notif.id}
                   onClick={() => handleItemClick(notif)}
                   className={cn(
-                    "p-2.5 rounded-xl cursor-pointer transition-all border border-transparent",
+                    "w-full text-left p-2.5 rounded-xl cursor-pointer transition-all border border-transparent",
                     notif.is_read ? "opacity-50" : "bg-muted/40 border-border/10 hover:bg-muted/60",
                     "group/item"
                   )}
@@ -125,7 +125,7 @@ export const NotificationBell = () => {
                       </p>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}

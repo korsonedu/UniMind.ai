@@ -371,8 +371,18 @@ python manage.py createsuperuser
 # 收集静态文件
 python manage.py collectstatic --noinput
 
-# 导入知识树
-python manage.py import_knowledge_tree --force
+# 导入知识树（全局）
+python manage.py import_knowledge_tree backend/knowledge_trees/金融431.md --global --subject=金融431 --force
+
+# 导入高中学科知识树
+python manage.py import_knowledge_tree backend/knowledge_trees/高中数学.md --global --subject=高中数学 --force
+python manage.py import_knowledge_tree backend/knowledge_trees/高中物理.md --global --subject=高中物理 --force
+
+# AI 生成新的学科知识树（自动调 DeepSeek V4）
+python manage.py generate_knowledge_tree --subject=高中数学
+
+# 导出知识树为 MD
+python manage.py export_knowledge_tree --global --subject=金融431
 ```
 
 ### 6. Systemd 服务配置
@@ -768,11 +778,23 @@ prompts/
 
 ### 知识点管理
 
-所有功能（题库、课程、文章、知识地图、AI出题）的知识点数据均来自 **`backend/knowledge_tree.md`**。修改后运行导入命令即可更新全系统。
+所有功能（题库、课程、文章、知识地图、AI出题）的知识点数据均来自 **`backend/knowledge_trees/`** 目录下的 Markdown 文件。修改后运行导入命令即可更新全系统。
 
 ```bash
-# 修改 knowledge_tree.md 后，运行此命令更新所有功能
-python manage.py import_knowledge_tree --force
+# 导入指定学科知识树到全局（所有机构可见）
+python manage.py import_knowledge_tree backend/knowledge_trees/金融431.md --global --subject=金融431 --force
+
+# 导入到特定机构（机构管理员可见）
+python manage.py import_knowledge_tree backend/knowledge_trees/金融431.md --institution=<slug> --force
+
+# 批量导入所有预设学科
+for f in backend/knowledge_trees/*.md; do
+  subject=$(basename "$f" .md)
+  python manage.py import_knowledge_tree "$f" --global --subject="$subject" --force
+done
+
+# 使用 AI 生成新学科的知识树
+python manage.py generate_knowledge_tree --subject=高中数学
 
 # Markdown 格式要求：
 #   # [SUB-01] 模块名         → sub 级别（学科模块）
@@ -824,6 +846,81 @@ python manage.py import_knowledge_tree --force
 ---
 
 ## 运维管理
+
+### 本地 SSH 快捷操作
+
+在本地 `~/.ssh/config` 配置免密登录和别名：
+
+```
+Host srv
+  HostName 47.104.77.217
+  User root
+  IdentityFile ~/.ssh/id_ed25519
+```
+
+首次传密钥到服务器：
+
+```bash
+ssh-copy-id -i ~/.ssh/id_ed25519.pub root@47.104.77.217
+```
+
+在 `~/.zshrc` 中添加一键操作别名：
+
+```bash
+alias srv='ssh srv'
+alias srv-pull='ssh srv "cd /opt/unimind && git pull && cd frontend && npm run build && sudo systemctl restart unimind.service unimind-celery.service"'
+alias srv-log='ssh srv "sudo journalctl -u unimind.service -f"'
+alias srv-status='ssh srv "sudo systemctl status unimind.service unimind-celery.service"'
+alias srv-reload='ssh srv "sudo systemctl restart unimind.service unimind-celery.service"'
+```
+
+日常使用：
+
+```bash
+srv              # 连服务器，免密
+srv-pull         # git pull + npm build + 重启所有服务
+srv-log          # 实时看生产日志
+srv-status       # 看服务运行状态
+srv-reload       # 纯重启，不动代码
+```
+
+### SSH 防断连与 tmux 会话保持
+
+**问题：** SSH 长时间无操作会被防火墙/NAT 断开，笔记本合盖也会导致断连，长任务（训练、部署）中断后前台进程丢失。
+
+**解决：** keepalive 保连接 + tmux 保状态，两者配合。
+
+**keepalive（`~/.ssh/config`）：**
+
+```
+Host *
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+```
+
+每 60 秒发心跳包，连续 3 次无响应才判定断开（3 分钟后）。
+
+**tmux 工作流：**
+
+```bash
+# 首次 SSH 进服务器，创建 session
+ssh srv
+tmux new -s work
+
+# 之后每次 SSH，一键恢复现场
+ssh srv -t tmux a -t work
+
+# 在 tmux 内常用操作
+Ctrl+b d         脱离 session（后台运行，SSH 断了会自动脱离）
+Ctrl+b [         翻页/滚动（q 退出滚动模式）
+Ctrl+b c         创建新窗口
+Ctrl+b 0/1/2    跳到指定窗口
+Ctrl+b ,         重命名当前窗口
+```
+
+tmux 脱离或 SSH 断开后，服务器上的所有进程（vim、脚本、训练任务）继续运行。重连后 `tmux a -t work` 恢复全部现场，包括未保存的编辑器内容。
+
+> 服务器需安装 tmux：`sudo apt install tmux`
 
 ### 查看日志
 

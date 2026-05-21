@@ -247,9 +247,11 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
             placeholder={t('sessionChat.inputPlaceholder')}
             rows={2}
             disabled={sending}
+            aria-label={t('sessionChat.inputPlaceholder')}
             className="flex-1 resize-none text-[14px] leading-relaxed bg-transparent border-0 outline-none placeholder:text-neutral-300 text-neutral-900 py-1"
           />
           <button
+            aria-label="Send message"
             className="shrink-0 h-9 w-9 rounded-full bg-neutral-900 text-white flex items-center justify-center hover:bg-neutral-800 transition-colors disabled:opacity-30"
             disabled={sending || !input.trim()}
             onClick={sendTurn}

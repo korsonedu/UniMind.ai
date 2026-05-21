@@ -105,8 +105,14 @@ cd backend && python manage.py runserver
 cd frontend && npm run dev
 celery -A school_system worker -l info
 
-# 知识树导入
-python manage.py import_knowledge_tree --force
+# 知识树导入（全局，示例）
+python manage.py import_knowledge_tree backend/knowledge_trees/金融431.md --global --subject=金融431 --force
+python manage.py import_knowledge_tree backend/knowledge_trees/高中数学.md --global --subject=高中数学 --force
+python manage.py import_knowledge_tree backend/knowledge_trees/高中物理.md --global --subject=高中物理 --force
+# AI 生成新学科知识树
+python manage.py generate_knowledge_tree --subject=高中数学
+# 批量导入所有预设
+for f in backend/knowledge_trees/*.md; do subject=$(basename "$f" .md); python manage.py import_knowledge_tree "$f" --global --subject="$subject" --force; done
 
 # 机构管理
 python manage.py assign_default_institution     # 将无机构用户批量归入宇艺示范学员

@@ -15,7 +15,7 @@ class KnowledgePoint(models.Model):
     description = models.TextField(blank=True, verbose_name="知识点描述")
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children', verbose_name="上级知识点")
     institution = models.ForeignKey('users.Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='knowledge_points', verbose_name="所属机构")
-    subject = models.CharField(max_length=100, blank=True, null=True, verbose_name="学科名称", help_text="如 金融431、法学、IELTS 等")
+    subject = models.CharField(max_length=100, blank=True, null=True, verbose_name="学科名称", help_text="如 金融431、法学、CPA 等")
     order = models.PositiveIntegerField(default=0, verbose_name="排序", help_text="同级节点中的显示顺序，数字越小越靠前")
     created_at = models.DateTimeField(auto_now_add=True)
 

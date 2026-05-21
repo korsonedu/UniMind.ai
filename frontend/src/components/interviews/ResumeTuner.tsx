@@ -166,7 +166,10 @@ export const ResumeTuner: React.FC = () => {
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          className={`relative rounded-2xl border-2 border-dashed transition-all duration-200 p-6 text-center cursor-pointer ${
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); document.getElementById('resume-file-input')?.click(); } }}
+          className={`relative rounded-2xl border-2 border-dashed transition-[border-color,transform] duration-200 p-6 text-center cursor-pointer ${
             dragOver
               ? 'border-indigo-400 bg-indigo-50/50 scale-[1.01]'
               : file
@@ -219,11 +222,13 @@ export const ResumeTuner: React.FC = () => {
           <textarea
             value={text}
             onChange={(e) => { setText(e.target.value); if (e.target.value) setFile(null); }}
+            aria-label={t('resumeTuner.pastePlaceholder')}
             className="w-full min-h-[100px] rounded-2xl border border-border/60 bg-slate-50/50 p-4 text-[13px] leading-relaxed resize-none placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
             placeholder={t('resumeTuner.pastePlaceholder')}
           />
           {text && (
             <button
+              aria-label="Clear text"
               className="absolute top-3 right-3 h-6 w-6 rounded-full bg-slate-200/80 flex items-center justify-center hover:bg-slate-300 transition-colors"
               onClick={() => setText('')}
             >

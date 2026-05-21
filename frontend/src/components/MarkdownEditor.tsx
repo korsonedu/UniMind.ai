@@ -16,14 +16,15 @@ interface MarkdownEditorProps {
   placeholder?: string;
 }
 
-const ToolbarButton = ({ onClick, isActive, children }: any) => (
+const ToolbarButton = ({ onClick, isActive, label, children }: any) => (
   <button
     type="button"
     onClick={onClick}
+    aria-label={label}
     className={cn(
-      "p-2 rounded-lg transition-all active:scale-95",
-      isActive 
-        ? "bg-slate-900 text-white shadow-md dark:bg-white dark:text-black" 
+      "p-2 rounded-lg transition-colors active:scale-95",
+      isActive
+        ? "bg-slate-900 text-white shadow-md dark:bg-white dark:text-black"
         : "text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10"
     )}
   >
@@ -61,7 +62,7 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
     editorProps: {
       attributes: {
         class: cn(
-          "prose prose-slate dark:prose-invert max-w-none focus:outline-none min-h-[400px] p-10",
+          "prose prose-slate dark:prose-invert max-w-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:outline-none min-h-[400px] p-10",
           "prose-headings:font-black prose-headings:tracking-tighter prose-headings:text-slate-900 dark:prose-headings:text-white",
           "prose-h1:text-2xl prose-h2:text-xl prose-h3:text-base",
           "prose-p:text-slate-600 dark:prose-p:text-slate-300 prose-p:leading-relaxed",
@@ -74,7 +75,7 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
   if (!editor) return null
 
   return (
-    <div className="w-full flex flex-col rounded-2xl bg-white dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-sm overflow-hidden transition-all focus-within:shadow-lg focus-within:border-primary/20">
+    <div className="w-full flex flex-col rounded-2xl bg-white dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-sm overflow-hidden transition-[box-shadow,colors] focus-within:shadow-lg focus-within:border-primary/20">
       <style>{`
         .ProseMirror {
           outline: none !important;
@@ -108,73 +109,82 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
 
       {/* Professional Fixed Toolbar */}
       <div className="flex items-center flex-wrap gap-1 p-2 px-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/5 backdrop-blur-md">
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleBold().run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBold().run()}
           isActive={editor.isActive('bold')}
+          label="Bold"
         >
           <Bold className="w-4 h-4" />
         </ToolbarButton>
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleItalic().run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleItalic().run()}
           isActive={editor.isActive('italic')}
+          label="Italic"
         >
           <Italic className="w-4 h-4" />
         </ToolbarButton>
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleUnderline().run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
           isActive={editor.isActive('underline')}
+          label="Underline"
         >
           <UnderlineIcon className="w-4 h-4" />
         </ToolbarButton>
         
         <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-2" />
         
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
           isActive={editor.isActive('heading', { level: 1 })}
+          label="Heading 1"
         >
           <Heading1 className="w-4 h-4" />
         </ToolbarButton>
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
           isActive={editor.isActive('heading', { level: 2 })}
+          label="Heading 2"
         >
           <Heading2 className="w-4 h-4" />
         </ToolbarButton>
         
         <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-2" />
         
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleBulletList().run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
           isActive={editor.isActive('bulletList')}
+          label="Bullet List"
         >
           <List className="w-4 h-4" />
         </ToolbarButton>
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleOrderedList().run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
           isActive={editor.isActive('orderedList')}
+          label="Ordered List"
         >
           <ListOrdered className="w-4 h-4" />
         </ToolbarButton>
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleBlockquote().run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleBlockquote().run()}
           isActive={editor.isActive('blockquote')}
+          label="Blockquote"
         >
           <Quote className="w-4 h-4" />
         </ToolbarButton>
-        <ToolbarButton 
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()} 
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
           isActive={editor.isActive('codeBlock')}
+          label="Code Block"
         >
           <Code className="w-4 h-4" />
         </ToolbarButton>
 
         <div className="flex-1" />
 
-        <ToolbarButton onClick={() => editor.chain().focus().undo().run()}>
+        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} label="Undo">
           <Undo className="w-4 h-4" />
         </ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().redo().run()}>
+        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} label="Redo">
           <Redo className="w-4 h-4" />
         </ToolbarButton>
       </div>

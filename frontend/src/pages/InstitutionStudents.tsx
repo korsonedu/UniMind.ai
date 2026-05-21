@@ -468,7 +468,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
                   <ResetPasswordDialog userId={s.id} username={s.nickname || s.username} />
                   {/* Remove: owner can remove anyone except self; teacher can remove students only */}
                   {(isOwner || user?.is_institution_admin) && s.id !== user?.id && s.institution_role !== 'teacher' && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8"
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Remove ${s.nickname || s.username}`}
                       onClick={async () => {
                         if (!confirm(`确认移除「${s.nickname || s.username}」？`)) return;
                         await api.delete(`/users/institution/me/students/${s.id}/`);
@@ -479,7 +479,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
                   )}
                   {/* Owner can also remove teachers */}
                   {isOwner && s.id !== user?.id && s.institution_role === 'teacher' && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8"
+                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Remove teacher ${s.nickname || s.username}`}
                       onClick={async () => {
                         if (!confirm(`确认移除教师「${s.nickname || s.username}」？`)) return;
                         await api.delete(`/users/institution/me/students/${s.id}/`);
@@ -745,7 +745,7 @@ function ResetPasswordDialog({ userId, username }: { userId: number; username: s
 
   return (
     <>
-      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpen(true)} title="重置密码">
+      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpen(true)} aria-label={`Reset password for ${username}`} title="重置密码">
         <Key className="h-3.5 w-3.5 text-muted-foreground" />
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>

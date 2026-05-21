@@ -282,11 +282,21 @@ def _reviewer_evaluate(question: Dict) -> Dict:
     """Reviewer Agent：从四个维度评估题目质量。"""
     system_prompt = PromptManager.get_prompt("AI_QUESTION_REVIEWER", REVIEWER_SYSTEM_PROMPT)
 
+    # 构建选项文本（客观题必须有选项）
+    options = question.get('options')
+    options_text = ""
+    if options:
+        if isinstance(options, list):
+            options_text = "\n".join(options)
+        elif isinstance(options, dict):
+            options_text = "\n".join(f"{k}. {v}" for k, v in sorted(options.items()))
+
     prompt = (
         f"【待审题目】\n"
         f"题干：{question.get('question')}\n"
         f"题型：{question.get('q_type')}/{question.get('subjective_type', '')}\n"
         f"声明难度：{question.get('difficulty_level', 'normal')}\n"
+        f"{f'选项：\n{options_text}\n' if options_text else ''}"
         f"参考答案：{question.get('answer')}\n"
         f"判分点：{question.get('grading_points', '无')}\n"
         f"目标知识点：{question.get('kp_name')} ({question.get('kp_code', '')})\n\n"

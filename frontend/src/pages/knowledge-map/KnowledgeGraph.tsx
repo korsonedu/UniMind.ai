@@ -170,9 +170,9 @@ export const KnowledgeGraph = ({ nodes, onNodeClick }: { nodes: KPNode[], onNode
         onClick={handleClick}
       />
       <div className="absolute bottom-8 left-8 flex flex-col gap-2">
-        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 1.2 }))}><ZoomIn className="h-4 w-4" /></Button>
-        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 0.8 }))}><ZoomOut className="h-4 w-4" /></Button>
-        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform({ x: 0, y: 0, k: 1 })}><Maximize2 className="h-4 w-4" /></Button>
+        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 1.2 }))} aria-label="Zoom in"><ZoomIn className="h-4 w-4" /></Button>
+        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 0.8 }))} aria-label="Zoom out"><ZoomOut className="h-4 w-4" /></Button>
+        <Button variant="secondary" size="icon" className="rounded-xl shadow-lg" onClick={() => setTransform({ x: 0, y: 0, k: 1 })} aria-label="Reset zoom"><Maximize2 className="h-4 w-4" /></Button>
       </div>
       <div className="absolute top-8 right-8">
         <div className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-md rounded-2xl border border-border/50 shadow-sm">

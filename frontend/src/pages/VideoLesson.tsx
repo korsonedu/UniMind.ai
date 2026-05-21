@@ -238,21 +238,22 @@ export const VideoLesson: React.FC = () => {
                 <div className="flex items-center gap-0.5">
                   <button
                     onClick={() => { videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause(); }}
-                    className="rounded-md p-1.5 text-white/70 hover:text-white transition-all"
+                    className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors"
+                    aria-label={isPlaying ? t('pause') : t('play')}
                     title={isPlaying ? t('pause') : t('play')}
                   >
                     {isPlaying ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
                   </button>
-                  <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isMuted ? t('unmute') : t('mute')}>
+                  <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isMuted ? t('unmute') : t('mute')} title={isMuted ? t('unmute') : t('mute')}>
                     {isMuted ? <VolumeX className="h-[18px] w-[18px]" /> : <Volume2 className="h-[18px] w-[18px]" />}
                   </button>
-                  <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-all min-w-[32px] text-center" title={t('playbackSpeed')}>
+                  <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-colors min-w-[32px] text-center" aria-label={t('playbackSpeed')} title={t('playbackSpeed')}>
                     {playbackRate}x
                   </button>
-                  <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-all ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} title={subtitlesVisible ? t('hideSubtitles') : t('showSubtitles')}>
+                  <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-colors ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} aria-label={subtitlesVisible ? t('hideSubtitles') : t('showSubtitles')} title={subtitlesVisible ? t('hideSubtitles') : t('showSubtitles')}>
                     <ClosedCaption className="h-[18px] w-[18px]" />
                   </button>
-                  <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-all" title={isFullscreen ? t('exitFullscreen') : t('fullscreen')}>
+                  <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isFullscreen ? t('exitFullscreen') : t('fullscreen')} title={isFullscreen ? t('exitFullscreen') : t('fullscreen')}>
                     {isFullscreen ? <Minimize className="h-[18px] w-[18px]" /> : <Maximize className="h-[18px] w-[18px]" />}
                   </button>
                 </div>

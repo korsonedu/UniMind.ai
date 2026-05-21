@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, PlayCircle, BookOpen } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Loading } from '@/components/Loading';
 import { EmptyState } from '@/components/EmptyState';
@@ -41,10 +41,10 @@ export const CourseCenter: React.FC = () => {
     >
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 text-left animate-in fade-in duration-700">
            {courses.map(course => (
-             <Card 
-              key={course.id} 
-              onClick={() => navigate(`/course/${course.id}`)}
-              className="border-none shadow-sm rounded-2xl overflow-hidden bg-card border border-border group hover:shadow-lg transition-all duration-500 cursor-pointer"
+             <Link
+              key={course.id}
+              to={`/course/${course.id}`}
+              className="border-none shadow-sm rounded-2xl overflow-hidden bg-card border border-border group hover:shadow-lg transition-[box-shadow,transform] duration-300 cursor-pointer block"
              >
                 <div className="aspect-video bg-slate-100 relative overflow-hidden">
                    {course.cover_image ? (
@@ -64,7 +64,7 @@ export const CourseCenter: React.FC = () => {
                    </div>
                    <p className="text-[11px] text-muted-foreground line-clamp-2 font-medium leading-relaxed min-h-[28px]">{course.description}</p>
                 </CardContent>
-             </Card>
+             </Link>
            ))}
         </div>
     </PageWrapper>

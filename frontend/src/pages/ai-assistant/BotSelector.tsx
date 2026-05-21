@@ -30,7 +30,7 @@ export const BotSelector: React.FC<BotSelectorProps> = React.memo(({ bots, selec
     <div className="flex items-center gap-4 text-left">
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
-          <div className="flex items-center gap-3 cursor-pointer group text-left">
+          <div className="flex items-center gap-3 cursor-pointer group text-left" aria-haspopup="menu" aria-expanded="false">
             <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shadow-lg overflow-hidden border border-white/10 group-hover:scale-105 transition-transform">
               {selectedBot?.avatar ? <img src={selectedBot.avatar} className="w-full h-full object-cover" /> : <BotIcon className="h-5 w-5 text-primary-foreground" />}
             </div>

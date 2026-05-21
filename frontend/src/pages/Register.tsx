@@ -81,6 +81,8 @@ export const Register: React.FC = () => {
                 placeholder={t('register.email')}
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setCodeSent(false); }}
+                autoComplete="email"
+                spellCheck={false}
                 className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black flex-1"
                 required
               />
@@ -99,6 +101,8 @@ export const Register: React.FC = () => {
                 placeholder={t('register.code')}
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
+                autoComplete="one-time-code"
+                spellCheck={false}
                 className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black text-lg tracking-widest font-mono"
                 maxLength={6}
                 required
@@ -120,6 +124,8 @@ export const Register: React.FC = () => {
                 placeholder={t('register.password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                spellCheck={false}
                 className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
                 minLength={6}
                 required

@@ -291,7 +291,7 @@ export const MainLayout: React.FC = () => {
     <TooltipProvider delayDuration={0}>
       <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
         <aside className={cn(
-          "relative border-r border-border flex-col p-2 bg-card/70 backdrop-blur-2xl transition-all duration-500 ease-in-out z-30 shrink-0 hidden md:flex",
+          "relative border-r border-border flex-col p-2 bg-card/70 backdrop-blur-2xl transition-[width] duration-300 ease-in-out z-30 shrink-0 hidden md:flex",
           collapsed ? "w-16 min-w-16 max-w-16" : "w-48 min-w-48 max-w-48"
         )}>
           {/* Header Section */}

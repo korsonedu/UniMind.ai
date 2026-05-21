@@ -213,17 +213,18 @@ export const AIAssistant: React.FC = () => {
 
           <footer className="p-4 bg-card/80 backdrop-blur-md border-t border-border z-20">
             <div className={cn("max-w-4xl mx-auto flex gap-3 bg-muted rounded-2xl p-1.5 pr-2 transition-all shadow-inner border border-border", !selectedBot && "opacity-50 grayscale pointer-events-none")}>
-              <Input 
+              <Input
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onCompositionStart={() => setIsComposition(true)}
                 onCompositionEnd={() => setIsComposition(false)}
                 onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); handleSend(); } }}
-                placeholder={selectedBot ? "Ask a question..." : "Select an assistant first"} 
-                className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-9 px-4 font-medium" 
+                placeholder={selectedBot ? "Ask a question..." : "Select an assistant first"}
+                autoComplete="off"
+                className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-9 px-4 font-medium"
                 disabled={loading || !selectedBot}
               />
-              <Button onClick={handleSend} disabled={loading || !input.trim() || !selectedBot} size="icon" className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow active:scale-95 transition-all shrink-0"><Send className="h-3.5 w-3.5" /></Button>
+              <Button onClick={handleSend} disabled={loading || !input.trim() || !selectedBot} size="icon" className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow active:scale-95 transition-[transform,colors] shrink-0" aria-label="Send message"><Send className="h-3.5 w-3.5" /></Button>
             </div>
           </footer>
         </Card>

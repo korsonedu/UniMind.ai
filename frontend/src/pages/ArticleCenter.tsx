@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { FileText, ChevronRight, ChevronLeft } from 'lucide-react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Button } from '@/components/ui/button';
@@ -108,7 +108,7 @@ export const ArticleCenter: React.FC = () => {
                 <p className="text-muted-foreground font-bold text-xs uppercase tracking-widest">No articles found</p>
               </div>
             ) : articles.map(article => (
-              <div key={article.id} onClick={() => navigate(`/article/${article.id}`)} className="hover:bg-muted/50 transition-all border-b border-border last:border-0 cursor-pointer group">
+              <Link key={article.id} to={`/article/${article.id}`} className="hover:bg-muted/50 transition-all border-b border-border last:border-0 cursor-pointer group block">
                 <div className="md:hidden px-4 py-4 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] font-bold text-muted-foreground tabular-nums">{new Date(article.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
@@ -140,7 +140,7 @@ export const ArticleCenter: React.FC = () => {
                     <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/20 group-hover:text-primary transition-all group-hover:translate-x-1" />
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
 

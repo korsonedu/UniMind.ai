@@ -164,9 +164,10 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
                 </ReactMarkdown>
                 
                 {answer.is_teacher && (
-                <button 
+                <button
                     onClick={(e) => { e.stopPropagation(); onReplyClick(); }}
                     className="absolute -bottom-2 -right-2 h-6 w-6 rounded-full bg-card shadow-sm border border-border flex items-center justify-center text-muted-foreground hover:text-indigo-600 hover:border-indigo-200 transition-all cursor-pointer z-10"
+                    aria-label={t('replyToTeacher')}
                     title={t('replyToTeacher')}
                 >
                     <MessageCircle className="h-3 w-3" />
@@ -467,16 +468,17 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
             }}
           />
           <div className="flex gap-1 justify-end sm:justify-start">
-            <Button 
-              onMouseDown={(e) => e.preventDefault()} // Prevent blur before click
-              disabled={isSubmitting} 
-              onClick={handleReply} 
-              size="icon" 
+            <Button
+              onMouseDown={(e) => e.preventDefault()}
+              disabled={isSubmitting}
+              onClick={handleReply}
+              size="icon"
+              aria-label={t('sendReply') || 'Send reply'}
               className="h-10 w-10 rounded-xl bg-primary text-primary-foreground shrink-0 shadow-lg hover:opacity-90 send-button"
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4" />}
             </Button>
-            <Button onClick={() => setShowInput(false)} size="icon" variant="ghost" className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-muted">
+            <Button onClick={() => setShowInput(false)} size="icon" variant="ghost" aria-label={t('cancel') || 'Close'} className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-muted">
               <X className="h-4 w-4" />
             </Button>
           </div>

@@ -31,9 +31,9 @@ interface LedgerEntry {
 }
 
 const rankBadge = (rank: number) => {
-  if (rank === 1) return <Trophy className="h-4 w-4 text-amber-500 fill-amber-500" />;
-  if (rank === 2) return <Medal className="h-4 w-4 text-slate-400 fill-slate-400" />;
-  if (rank === 3) return <Medal className="h-4 w-4 text-orange-600 fill-orange-600" />;
+  if (rank === 1) return <Trophy className="h-4 w-4 text-amber-500 fill-amber-500" aria-hidden="true" />;
+  if (rank === 2) return <Medal className="h-4 w-4 text-slate-400 fill-slate-400" aria-hidden="true" />;
+  if (rank === 3) return <Medal className="h-4 w-4 text-orange-600 fill-orange-600" aria-hidden="true" />;
   return <span className="text-[11px] font-black text-muted-foreground tabular-nums w-4 text-center">{rank}</span>;
 };
 
@@ -96,17 +96,18 @@ export const EloPopover: React.FC = () => {
     <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setActiveTab('ranking'); }}>
       <PopoverTrigger asChild>
         <button
+          aria-label="ELO score and ranking"
           className={cn(
             "flex items-center gap-2 px-3.5 py-1.5 bg-card rounded-full shadow-sm border border-border",
-            "hover:bg-muted hover:border-primary/30 transition-all duration-200 cursor-pointer",
-            "focus:outline-none focus:ring-2 focus:ring-primary/20",
+            "hover:bg-muted hover:border-primary/30 transition-colors duration-200 cursor-pointer",
+            "focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:outline-none",
             open && "border-primary/40 bg-muted"
           )}
         >
-          <Sparkles className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+          <Sparkles className="h-3.5 w-3.5 text-amber-500 fill-amber-500" aria-hidden="true" />
           <span className="text-xs font-bold text-foreground">{user?.elo_score}</span>
           <span className="text-[10px] font-semibold text-muted-foreground">| {points}</span>
-          <HelpCircle className="h-3 w-3 text-muted-foreground/50" />
+          <HelpCircle className="h-3 w-3 text-muted-foreground/50" aria-hidden="true" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -123,7 +124,7 @@ export const EloPopover: React.FC = () => {
             )}
             onClick={() => setActiveTab('ranking')}
           >
-            <Trophy className="h-3.5 w-3.5 inline mr-1.5" />
+            <Trophy className="h-3.5 w-3.5 inline mr-1.5" aria-hidden="true" />
             {t('rankingTab')}
           </button>
           <button
@@ -178,13 +179,13 @@ export const EloPopover: React.FC = () => {
               )}
 
               {hasInstitution && loading && (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-8" aria-live="polite" aria-busy="true">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               )}
 
               {hasInstitution && error === 'failed' && (
-                <div className="px-4 py-6 text-center">
+                <div className="px-4 py-6 text-center" aria-live="polite">
                   <p className="text-xs text-muted-foreground">{t('rankError')}</p>
                 </div>
               )}
@@ -323,7 +324,7 @@ export const EloPopover: React.FC = () => {
               </div>
 
               {ledgerLoading && (
-                <div className="flex items-center justify-center py-6">
+                <div className="flex items-center justify-center py-6" aria-live="polite" aria-busy="true">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               )}

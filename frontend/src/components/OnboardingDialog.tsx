@@ -162,19 +162,27 @@ export function OnboardingDialog() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleValidateAndNext} className="space-y-3">
-              <Input placeholder={t('teacher.inviteCodeLabel')} required value={teacherCode}
+              <label className="sr-only" htmlFor="invite-code">{t('teacher.inviteCodeLabel')}</label>
+              <Input id="invite-code" placeholder={t('teacher.inviteCodeLabel')} required value={teacherCode}
                 onChange={e => setTeacherCode(e.target.value.toUpperCase())}
-                className="h-11 rounded-xl font-mono text-center tracking-widest" />
-              <Input placeholder={t('teacher.nameLabel')} required value={instName}
+                spellCheck={false} autoComplete="off"
+                className="h-11 rounded-xl font-mono text-center tracking-widest" aria-describedby={error ? 'onboarding-error' : undefined} />
+              <label className="sr-only" htmlFor="inst-name">{t('teacher.nameLabel')}</label>
+              <Input id="inst-name" placeholder={t('teacher.nameLabel')} required value={instName}
                 onChange={e => setInstName(e.target.value)}
+                autoComplete="organization"
                 className="h-11 rounded-xl" />
-              <Input placeholder={t('teacher.descPlaceholder')} value={instDesc}
+              <label className="sr-only" htmlFor="inst-desc">{t('teacher.descPlaceholder')}</label>
+              <Input id="inst-desc" placeholder={t('teacher.descPlaceholder')} value={instDesc}
                 onChange={e => setInstDesc(e.target.value)}
+                autoComplete="off"
                 className="h-11 rounded-xl" />
-              <Input placeholder={t('teacher.phoneLabel')} value={instPhone}
+              <label className="sr-only" htmlFor="inst-phone">{t('teacher.phoneLabel')}</label>
+              <Input id="inst-phone" placeholder={t('teacher.phoneLabel')} value={instPhone}
                 onChange={e => setInstPhone(e.target.value)}
+                type="tel" autoComplete="tel"
                 className="h-11 rounded-xl" />
-              {error && <p className="text-xs text-red-500">{error}</p>}
+              {error && <p id="onboarding-error" className="text-xs text-red-500" role="alert">{error}</p>}
               <div className="flex gap-2 pt-2">
                 <Button type="button" variant="outline" className="flex-1 h-11 rounded-xl"
                   onClick={() => { setStep('role'); setError(''); }}>

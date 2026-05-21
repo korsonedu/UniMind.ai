@@ -394,9 +394,9 @@ def _export_node_md(node, lines, depth):
 # ── Subjects API (for institution onboarding) ──
 
 SUBJECT_CATEGORIES = {
+    '高中学科': ['高中数学', '高中物理'],
     '考研专业课': ['金融431', '法学', '计算机408', '教育学311'],
-    '职业资格证': ['CPA', 'CFA', '法考', '教资'],
-    '海外考试': ['SAT', 'ACT', 'MCAT', 'LSAT', 'GRE', 'GMAT', 'USMLE', 'IELTS', 'TOEFL'],
+    '职业资格证': ['CPA', 'CFA', '法考', '教资', 'USMLE'],
 }
 
 

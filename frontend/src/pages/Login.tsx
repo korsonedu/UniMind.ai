@@ -84,6 +84,8 @@ export const Login: React.FC = () => {
                 placeholder={t('login.usernamePlaceholder')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                spellCheck={false}
                 className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
                 required
               />
@@ -94,6 +96,8 @@ export const Login: React.FC = () => {
                 placeholder={t('login.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                spellCheck={false}
                 className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
                 required
               />

@@ -20,7 +20,7 @@ const Checkbox = React.forwardRef<
       )}
       {...props}
     >
-      {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+      {checked && <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />}
     </button>
   )
 })

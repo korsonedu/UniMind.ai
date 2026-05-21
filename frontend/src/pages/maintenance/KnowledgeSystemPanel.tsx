@@ -66,7 +66,7 @@ function TreeNode({
         onClick={() => onSelect(node.id)}
       >
         {hasChildren ? (
-          <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }} className="shrink-0">
+          <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }} className="shrink-0" aria-label={open ? 'Collapse' : 'Expand'}>
             {open ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
           </button>
         ) : (
@@ -81,10 +81,10 @@ function TreeNode({
           <span className="text-[9px] text-muted-foreground shrink-0">{t('knowledgeSystem.nodeQuestions', { count: node.questions_count })}</span>
         )}
         <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
-          <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="p-0.5 hover:bg-muted rounded">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="p-0.5 hover:bg-muted rounded" aria-label={`Edit ${node.name}`}>
             <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="p-0.5 hover:bg-red-50 rounded">
+          <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="p-0.5 hover:bg-red-50 rounded" aria-label={`Delete ${node.name}`}>
             <Trash2 className="h-2.5 w-2.5 text-red-400" />
           </button>
         </div>
@@ -156,12 +156,12 @@ function KPEditDialog({
         <div className="space-y-3">
           <div className="space-y-1">
             <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.name')}</Label>
-            <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-9 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+            <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} autoComplete="off" className="h-9 rounded-xl bg-muted/50 border-none font-bold text-sm" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.code')}</Label>
-              <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder={t('knowledgeSystem.codePlaceholder')} className="h-9 rounded-xl bg-muted/50 border-none text-xs font-mono" />
+              <Input value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder={t('knowledgeSystem.codePlaceholder')} autoComplete="off" className="h-9 rounded-xl bg-muted/50 border-none text-xs font-mono" />
             </div>
             <div className="space-y-1">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.level')}</Label>

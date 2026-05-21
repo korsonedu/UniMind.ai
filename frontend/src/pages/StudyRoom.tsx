@@ -663,11 +663,11 @@ export const StudyRoom: React.FC = () => {
                 </Popover>
               )}
               <Popover>
-                <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><Smile className="h-4 w-4"/></Button></PopoverTrigger>
+                <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Emoji"><Smile className="h-4 w-4"/></Button></PopoverTrigger>
                 <PopoverContent side="top" className="w-64 p-2 rounded-2xl border-border shadow-lg bg-card"><div className="grid grid-cols-8 gap-1">{['😊','😂','🤣','😍','😒','🤔','😭','👍','🙌','🔥','✨','💯','📚','🎓','💪','🎯','❤️','✔️','❌','⚠️','🚀','💡','🌟','🎉'].map(e => (<button key={e} onClick={() => setChatInput(prev => prev + e)} className="h-8 w-8 flex items-center justify-center hover:bg-muted rounded-lg text-lg transition-colors">{e}</button>))}</div></PopoverContent>
               </Popover>
               <Popover onOpenChange={(open) => open && giphyResults.length === 0 && fetchGiphy('')}>
-                <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><FileVideo className="h-4 w-4"/></Button></PopoverTrigger>
+                <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="GIPHY"><FileVideo className="h-4 w-4"/></Button></PopoverTrigger>
                 <PopoverContent side="top" className="w-80 p-3 rounded-2xl border-border shadow-lg space-y-3 bg-card z-[100]">
                   <Input placeholder={t('giphySearch')} value={giphySearch} onChange={e => { setGiphySearch(e.target.value); fetchGiphy(e.target.value); }} className="h-9 text-xs rounded-xl bg-muted border-none text-foreground placeholder:opacity-50 focus-visible:ring-1 focus-visible:ring-primary/20" />
                   <div onScroll={handleGiphyScroll} className="grid grid-cols-4 gap-2 h-72 overflow-y-auto pr-1 scrollbar-thin">
@@ -696,9 +696,9 @@ export const StudyRoom: React.FC = () => {
                   <p className="text-[11px] text-center text-muted-foreground font-bold opacity-50 uppercase tracking-tighter">Powered by GIPHY</p>
                 </PopoverContent>
               </Popover>
-              <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><ImageIcon className="h-4 w-4"/></Button>
+              <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Upload image"><ImageIcon className="h-4 w-4"/></Button>
               {isMobile && (
-                <Button variant="ghost" size="icon" onClick={() => cameraInputRef.current?.click()} className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                <Button variant="ghost" size="icon" onClick={() => cameraInputRef.current?.click()} className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Take photo">
                   <Camera className="h-4 w-4" />
                 </Button>
               )}

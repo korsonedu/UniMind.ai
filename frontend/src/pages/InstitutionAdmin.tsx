@@ -528,19 +528,19 @@ function InstitutionSelfSettings() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构名称</Label>
-              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} autoComplete="organization" className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系人</Label>
-              <Input value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+              <Input value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} autoComplete="name" className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系邮箱</Label>
-              <Input value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+              <Input value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} autoComplete="email" spellCheck={false} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系电话</Label>
-              <Input value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
+              <Input value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} type="tel" autoComplete="tel" className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
           </div>
 

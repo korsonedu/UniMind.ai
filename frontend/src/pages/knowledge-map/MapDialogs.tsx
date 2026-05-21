@@ -41,10 +41,11 @@ export const NodeDetailDialog: React.FC<NodeDetailDialogProps> = ({
             <div className="space-y-4 text-left">
               <h5 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2"><Target className="w-3.5 h-3.5" /> {t('nodeDetailDialog.relatedQuestions')} ({details.questions.length})</h5>
               <div className="grid gap-2">{details.questions.map(q => (
-                <div
+                <button
                   key={q.id}
+                  type="button"
                   onClick={() => onQuestionClick(q)}
-                  className="p-4 bg-muted/60 rounded-2xl flex items-center gap-3 border border-border cursor-pointer hover:bg-muted transition-colors group"
+                  className="w-full text-left p-4 bg-muted/60 rounded-2xl flex items-center gap-3 border border-border cursor-pointer hover:bg-muted transition-colors group"
                 >
                   <Badge variant="outline" className="text-[11px] py-0 h-4 uppercase">{q.subjective_type || q.q_type}</Badge>
                   <div className="text-xs font-bold text-foreground truncate flex-1 text-left">
@@ -53,7 +54,7 @@ export const NodeDetailDialog: React.FC<NodeDetailDialogProps> = ({
                     </ReactMarkdown>
                   </div>
                   <Maximize2 className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all" />
-                </div>))}
+                </button>))}
               </div>
             </div>
             <div className="space-y-4 text-left">

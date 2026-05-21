@@ -564,15 +564,24 @@ from rest_framework.permissions import AllowAny
 
 
 class JoinInstitutionView(APIView):
-    """邀请链接：/join/{invite_slug} → 种 cookie → 重定向到 /register"""
+    """邀请链接：/join/{invite_slug}?role=teacher → 种 cookie → 重定向到 /register"""
     permission_classes = [AllowAny]
 
     def get(self, request, invite_slug):
         institution = get_object_or_404(Institution, invite_slug=invite_slug, is_active=True)
+        role = request.GET.get('role', 'student')
+        if role not in ('student', 'teacher'):
+            role = 'student'
         frontend_url = getattr(settings, 'FRONTEND_URL', '')
         response = redirect(f'{frontend_url}/register')
         response.set_cookie(
             'institution_invite', invite_slug,
+            max_age=7 * 24 * 3600,
+            httponly=False,
+            samesite='Lax',
+        )
+        response.set_cookie(
+            'institution_invite_role', role,
             max_age=7 * 24 * 3600,
             httponly=False,
             samesite='Lax',
@@ -750,7 +759,7 @@ class PublicInstitutionView(APIView):
 
 
 class InstitutionJoinBySlugView(APIView):
-    """学生通过机构标识（slug 或 invite_slug）加入机构"""
+    """通过机构标识（slug 或 invite_slug）加入机构，role 由邀请链接或请求参数决定"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -772,7 +781,11 @@ class InstitutionJoinBySlugView(APIView):
         if not inst.is_plan_active:
             return Response({'error': '该机构服务已到期'}, status=403)
 
-        if inst.student_count >= inst.max_students:
+        role = str(request.data.get('role', 'student')).strip()
+        if role not in ('student', 'teacher'):
+            role = 'student'
+
+        if role == 'student' and inst.student_count >= inst.max_students:
             return Response({'error': '该机构学员数已达上限'}, status=403)
 
         user = request.user
@@ -782,7 +795,7 @@ class InstitutionJoinBySlugView(APIView):
             return Response({'error': '你已加入其他机构，请先退出'}, status=409)
 
         user.institution = inst
-        user.institution_role = 'student'
+        user.institution_role = role
         user.is_member = True
         user.membership_tier = inst.plan
         user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
