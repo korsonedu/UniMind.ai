@@ -51,11 +51,15 @@ class PromptManager:
 
     @classmethod
     def _resolve_path(cls, namespace: str, name: str) -> Optional[Path]:
-        """将 namespace + name 解析为文件路径。"""
-        clean_name = Path(name).name
-        path = cls.PROMPTS_DIR / namespace / clean_name
-        if path.exists():
-            return path
+        """将 namespace + name 解析为文件路径，防止路径遍历攻击。"""
+        candidate = (cls.PROMPTS_DIR / namespace / name).resolve()
+        root = (cls.PROMPTS_DIR / namespace).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return None
+        if candidate.exists():
+            return candidate
         return None
 
     @classmethod
@@ -115,14 +119,17 @@ class PromptManager:
 
     @classmethod
     def list_prompts(cls, namespace: str) -> list:
-        """列出某个 namespace 下的所有 prompt 文件名。"""
+        """递归列出某个 namespace 下的所有 prompt 文件名（含子目录相对路径）。"""
         dir_path = cls.PROMPTS_DIR / namespace
         if not dir_path.exists():
             return []
-        return sorted([
-            f.name for f in dir_path.iterdir()
-            if f.is_file() and f.suffix in {'.txt', '.json', '.html'}
-        ])
+        valid_suffixes = {'.txt', '.json', '.html'}
+        results = []
+        for f in dir_path.rglob('*'):
+            if f.is_file() and f.suffix in valid_suffixes:
+                rel = f.relative_to(dir_path)
+                results.append(str(rel))
+        return sorted(results)
 
     @classmethod
     def list_namespaces(cls) -> list:
