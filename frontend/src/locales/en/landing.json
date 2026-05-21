@@ -9,143 +9,207 @@
     "enterConsole": "Dashboard"
   },
   "hero": {
-    "badge": "AI Operations System for Tutoring Institutions",
-    "title1": "Your teachers teach.",
-    "title2": "We handle the rest.",
-    "subtitle": "Question generation, exam assembly, adaptive review, analytics, Q&A, study rooms, mock exams, knowledge graphs — UniMind is the all-in-one AI operations system for tutoring institutions. Your teachers stand in front of the class. We take care of everything behind the scenes. Finance, law, medicine, CPA, grad exams — one platform does it all.",
+    "badge": "AI Infrastructure for Tutoring Institutions",
+    "titleLine1": "Your teachers teach.",
+    "titleLine2": "We handle questions and review.",
+    "subtitle": "UniMind is the AI infrastructure for tutoring institutions — plug in and unlock three core capabilities: AI question generation, Memorix adaptive review, and the Knowledge Workbench. Whether you teach finance, law, medicine, CPA, or grad exam prep, input your knowledge points and AI generates the questions.",
     "cta": "Start 14-Day Free Trial",
     "secondary": "Learn More",
     "footnote": "No credit card required · 14-day full-feature trial · All subjects"
   },
-  "The Problem": "The Problem",
-  "培训机构最大的三个隐性成本": "The Three Biggest Hidden Costs of Tutoring Institutions",
-  "不是房租，不是获客，而是被忽视的教研效率、复习效果和数据盲区。": "Not rent. Not acquisition. It's neglected teaching efficiency, review effectiveness, and data blind spots.",
-  "出题太慢": "Question Creation is Slow",
-  "一道好题 = 选题材 + 编题干 + 写选项 + 写解析。老师一道题花 30 分钟，一套卷子要一整天。": "A good question = topic selection + stem writing + options + explanation. 30 minutes per question, a full day per exam.",
-  "复习太笨": "Review is Dumb",
-  "所有学生刷同一套题。学霸浪费时间在已掌握的知识上，薄弱生在新知识面前无效挣扎。": "Every student drills the same set. Top students waste time on what they know; weak students struggle blindly with new material.",
-  "数据太盲": "Data is Blind",
-  "月底翻 Excel 才看到正确率。哪个学生在哪个知识点反复出错？不知道。等到发现，考试已过。": "You check Excel at month-end for accuracy rates. Which student keeps failing which topic? You don't know — until the exam is over.",
-  "Core Features": "Core Features",
-  "三大核心能力": "Everything Beyond Teaching",
-  "AI 出题引擎生成内容，Memorix 算法管理复习节奏，知识工作台呈现学情全貌——从内容生产到学习交付的完整闭环。": "AI question generation, smart exam assembly, adaptive review, online Q&A, study rooms, mock exams, knowledge graphs — teachers stand in front of the class. We handle everything else.",
-  "AI 智能出题": "AI Question Generation",
-  "ARC 对抗管线 · 生成即用": "ARC Adversarial Pipeline · Ready to Use",
-  "我们采用多智能体对抗生成架构——Author（出题者）、Reviewer（审题者）、Classifier（分类者）三个 AI Agent 围绕同一道题目进行迭代博弈。生成不达标的题目自动回退重做，直至质量评分超过阈值。相比单次 LLM 调用，对抗管线将题目可用率从约 60% 提升至 85%+。支持选择题、计算题、案例分析等全题型，学科不限——金融、法学、医学、CPA，AI 均能按对应学术风格生成。": "Our multi-agent adversarial architecture — Author, Reviewer, and Classifier — iterate on every question. Substandard generations are automatically rejected and retried until the quality score exceeds the threshold. Compared to single LLM calls, the adversarial pipeline boosts question usability from ~60% to 85%+. All question types supported across all subjects.",
-  "我们采用多智能体对抗生成架构——Author、Reviewer、Classifier 三个 AI Agent 围绕同一道题目进行迭代博弈。生成不达标的题目自动回退重做，直至质量评分超过阈值。相比单次 LLM 调用，对抗管线将题目可用率从约 60% 提升至 85%+。支持选择题、计算题、案例分析等全题型，学科不限。": "Our multi-agent adversarial architecture — Author, Reviewer, and Classifier — iterate on every question. Substandard generations are automatically rejected and retried until the quality score exceeds the threshold. Compared to single LLM calls, the adversarial pipeline boosts question usability from ~60% to 85%+. All question types supported across all subjects.",
-  "Author → Reviewer → Classifier 三智能体对抗，最多 3 轮迭代": "Author → Reviewer → Classifier adversarial pipeline, up to 3 iterations",
-  "质量阈值自动把关，可用率 85%+": "Auto quality gating, 85%+ usability rate",
-  "全学科全题型，按学术风格生成": "All subjects, all question types, discipline-specific style",
-  "Memorix 自适应复习": "Memorix Adaptive Review",
-  "论文级遗忘建模，在遗忘前精准推送": "Research-grade forgetting models, precise review before you forget",
-  "Memorix 是我们自研的记忆调度算法。与传统间隔重复不同，它采用 Weibull 分布替代幂律模型来刻画遗忘曲线——更精确地捕捉\"先快后稳\"的人类记忆衰减规律。每次作答后，算法通过在线随机梯度下降（SGD with Nesterov Momentum）实时更新 20 维个性化参数，用 Brier 评分校准预测置信度。在我们的 431 金融考试数据集（500+ 用户、12 万条复习日志）上，Memorix 相较 FSRS v4.5 将预测 RMSE 降低了 13.7%，用户知识留存率提升 9.2%。": "Memorix is our proprietary memory scheduling algorithm. Unlike traditional spaced repetition, it models forgetting with a Weibull distribution — more accurately capturing real human memory decay. After each answer, the algorithm updates 20 personalized parameters via online SGD with Nesterov Momentum, calibrated with Brier scores. On our 431 Finance dataset (500+ users, 120K review logs), Memorix reduced prediction RMSE by 13.7% vs FSRS v4.5 and improved knowledge retention by 9.2%.",
-  "Memorix 是我们自研的记忆调度算法。采用 Weibull 分布替代幂律模型来刻画遗忘曲线，更精确地捕捉人类记忆衰减规律。每次作答后，算法通过在线随机梯度下降实时更新 20 维个性化参数，用 Brier 评分校准预测置信度。相较 FSRS v4.5 将预测 RMSE 降低 13.7%，用户知识留存率提升 9.2%。": "Memorix is our proprietary memory scheduling algorithm. It models forgetting with a Weibull distribution — more accurately capturing real human memory decay than traditional power-law models. After each answer, the algorithm updates 20 personalized parameters via online SGD, calibrated with Brier scores. Compared to FSRS v4.5, Memorix reduced prediction RMSE by 13.7% and improved knowledge retention by 9.2%.",
-  "Weibull 遗忘建模 — 比传统幂律模型更贴合真实记忆衰减": "Weibull forgetting model — more accurate than traditional power-law models",
-  "在线 SGD + Nesterov 动量 — 每次作答=一次参数自进化": "Online SGD + Nesterov — every answer evolves your memory profile",
-  "在线 SGD + Nesterov 动量 — 每次作答 = 一次参数自进化": "Online SGD + Nesterov — every answer evolves your memory profile",
-  "Brier Score 概率校准 — 让\"遗忘预测\"有数学保证": "Brier Score calibration — mathematically guaranteed forgetting predictions",
-  "Brier Score 概率校准 — 让遗忘预测有数学保证": "Brier Score calibration — mathematically guaranteed forgetting predictions",
-  "20 维个性化参数 — 每人独立的记忆画像，而非群体均值": "20-dimension personal parameters — individual memory portrait, not group average",
-  "知识工作台": "Knowledge Workbench",
-  "可视化知识图谱，掌握度一目了然": "Visual knowledge graph, mastery at a glance",
-  "每个知识点以彩色节点呈现在交互式知识图谱上——绿色代表已掌握，红色代表薄弱点，灰色代表尚未涉及。点击任意节点即可查看关联题目、错题记录和课程资源。学生能直观看到自己的知识结构，教师能精准定位班级薄弱环节。": "Each knowledge point appears as a colored node on the interactive graph — green for mastered, red for weak, gray for untouched. Click any node to see related questions, mistake records, and course resources. Students see their knowledge structure; teachers pinpoint class weaknesses.",
-  "交互式 SVG 知识图谱": "Interactive SVG knowledge graph",
-  "按掌握度着色，薄弱点自动标红": "Color-coded by mastery, weak points auto-highlighted",
-  "知识点关联题目、错题、课程一键跳转": "One-click jump to questions, mistakes, and courses",
-  "How It Works": "How It Works",
-  "三步开始，10 分钟上线": "Three Steps, Live in 10 Minutes",
-  "不需要技术团队，不需要 AI 工程师。注册 → 出题 → 让学生做题。就这三步。": "No tech team needed. No AI engineers. Register → Generate → Students practice. That's it.",
-  "选择学科": "Choose Subject",
-  "注册机构账号，选择学科方向。系统预置了考研、考证、语言等 10+ 学科的知识点框架，也支持自定义。": "Register your institution, choose a subject. We pre-built frameworks for 10+ disciplines — grad exams, certifications, languages — with custom support.",
-  "AI 出题": "AI Generates",
-  "进入 AI 出题中心，选择知识点和题型，AI 三智能体对抗管线自动生成题目。审核通过后一键入库。": "Enter the AI generation center, pick knowledge points and question types. The three-agent pipeline auto-generates. Review and approve with one click.",
-  "学生练习 + 查看学情": "Students Practice + Analytics",
-  "学生通过微信链接即可做题，无需下载 App。作答后自动批改，知识工作台实时更新每个人的掌握度图谱。": "Students practice via WeChat link — no app download. Auto-grading after each answer. The knowledge workbench updates every student's mastery map in real time.",
-  "All Subjects": "All Subjects",
-  "不限于任何一个学科": "Not Limited to Any One Subject",
-  "UniMind 的 AI 引擎本质上是\"如何出一道好题\"的专家——你给它哪个学科的知识点，它就按那个学科的风格出题。": "UniMind's AI engine is an expert at \"how to write a good question\" — give it any subject's knowledge points, and it generates questions in that discipline's style.",
-  "考研专业课": "Grad Entrance",
-  "职业资格证": "Professional Certifications",
-  "语言培训": "Language Training",
-  "公考 / 其他": "Civil Service & More",
-  "Pricing": "Pricing",
-  "选择适合你的方案": "Choose Your Plan",
-  "所有方案均包含 14 天免费试用。无需绑定信用卡。": "All plans include a 14-day free trial. No credit card required.",
-  "月付": "Monthly",
-  "年付": "Annual",
-  "前 20 个付费客户锁定早期用户价格，终身不涨价。": "First 20 paying customers lock in early-adopter pricing for life.",
-  "免费版有什么限制？": "What are the limits of the free plan?",
-  "免费版支持 30 名学员、每月 50 次 AI 出题。你能完整地体验出题→学生做题→看学情数据的闭环，足够一个小班验证产品效果。当需要更多学生或更多出题次数时，升级到 Solo 版即可解锁全部限制。": "The Free plan supports 30 students and 50 AI generations per month. You can experience the full loop — generate → practice → analytics — enough to validate the product with a small class. Upgrade to Solo to remove all limits.",
-  "AI 出的题质量能保证吗？": "Can AI-generated questions be trusted?",
-  "我们采用三智能体对抗机制——一个出题、一个审题、一个分类。质量不达标的题目会自动打回重做。建议机构教研负责人对 AI 生成的题目做最终审阅——AI 帮你省掉 90% 的初稿时间，最后 10% 的审核仍需你的专业判断。": "We use a three-agent adversarial mechanism — one generates, one reviews, one classifies. Substandard questions are automatically rejected and retried. We recommend your teaching staff do a final review — AI saves 90% of drafting time; the last 10% still needs your professional judgment.",
-  "支持哪些学科？": "Which subjects are supported?",
-  "平台本身不限制学科。我们预置了考研专业课（金融/法学/医学/计算机等）、职业资格证（CPA/CFA/法考/教资等）、语言培训（雅思/托福/四六级）、公考等方向的知识点框架。你也可以自定义学科和知识点树。": "The platform is subject-agnostic. We pre-built knowledge frameworks for grad entrance (Finance/Law/Medicine/CS), professional certifications (CPA/CFA/Bar/Teaching), language training (IELTS/TOEFL/CET), and civil service exams. You can also customize your own subjects and knowledge trees.",
-  "学生怎么使用？需要下载 App 吗？": "How do students use it? Do they need an app?",
-  "不需要。学生用微信打开你分享的链接就能做题。我们提供的是 H5/小程序体验，学生端零门槛。": "No. Students open a link you share in WeChat and start practicing. We provide an H5/Mini Program experience — zero friction for students.",
-  "试用到期后数据还在吗？": "What happens to my data after the trial ends?",
-  "在。你所有的题目、学生数据、学习记录都会保留。续费后立即恢复访问。不续费的话数据只读，你不会丢失任何东西。": "Everything stays. All your questions, student data, and learning records are preserved. Renew to restore full access. Without renewal, data is read-only — you lose nothing.",
-  "可以月付吗？": "Can I pay monthly?",
-  "可以。月付和年付都支持。年付有 23-33% 的折扣。建议先月付一个月深度体验，确认产品适合你的机构后再转年付省钱。": "Yes. Both monthly and annual billing are supported. Annual billing includes a 23-33% discount. We recommend starting monthly for a deep trial, then switching to annual once you're confident.",
-  "和通用考试工具有什么区别？": "How is this different from generic exam tools?",
-  "通用考试工具是\"把纸质考试搬到线上\"。UniMind 是\"AI 帮你生产和优化教学内容\"——出题是 AI 自动生成的、复习是算法个性化的、学情是实时可视化的。我们解决的不是\"怎么考\"，而是\"怎么教和怎么学\"。": "Generic exam tools \"move paper tests online.\" UniMind is \"AI that produces and optimizes your teaching content\" — questions are AI-generated, review is algorithm-personalized, analytics are real-time. We don't solve \"how to test\" — we solve \"how to teach and how to learn.\"",
-  "我是个人教师，适合哪个版本？": "I'm an individual teacher. Which plan should I choose?",
-  "建议从 Free 版开始。30 个学生、每月 50 次 AI 出题足够日常使用。当你学生超过 30 人或需要更多出题次数时，升级到 Solo 版（¥299/月，年付 ¥199/月）。": "Start with the Free plan. 30 students and 50 AI generations per month cover daily needs. Upgrade to Solo (¥299/mo, ¥199/mo annual) when you exceed 30 students or need more generations.",
-  "你的机构准备好 AI 化了吗？": "Your teachers teach. We handle the rest.",
-  "14 天全功能免费试用。不绑卡，不收费。学科不限。看看 AI 能为你的机构省下多少出题时间。": "14-day full-feature free trial. No card, no charge. All subjects. Question generation, exam assembly, review, Q&A, analytics — let AI handle it all, so your teachers can focus on teaching.",
-  "已有 50+ 机构在使用 UniMind": "50+ institutions already use UniMind",
-  "Customer Results": "Customer Results",
-  "了解我们的解决方案如何带来实际成效": "See How Our Solution Delivers Real Results",
-  "不是 PPT 数据，来自真实机构的实际使用反馈。": "Not slideshow numbers — real feedback from real institutions.",
-  "出题时间节省": "Time Saved on Question Creation",
-  "从 30 分钟降至不到 3 分钟": "From 30 minutes to under 3",
-  "题目一次可用率": "First-Pass Question Usability",
-  "ARC 对抗管线质量把关": "ARC adversarial pipeline quality gating",
-  "学生知识留存率": "Student Knowledge Retention",
-  "Memorix 较传统间隔重复": "Memorix vs traditional spaced repetition",
-  "机构已接入": "Institutions Onboarded",
-  "从独立教师到连锁品牌": "From solo teachers to chain brands",
-  "覆盖学科类型": "Disciplines Covered",
-  "以前一套卷子要教研坐一整天。现在 AI 出题 10 分钟搞定初稿，教研只需做最后审校。学生错题数据实时同步，老师第一时间知道班级薄弱点在哪。": "Before, a teaching researcher would spend a full day on one exam. Now AI drafts in 10 minutes — staff just do final review. Student mistake data syncs in real time, so teachers know class weak spots instantly.",
-  "某金融考研机构教学总监": "Teaching Director, Finance Grad Exam Institution",
-  "金融 431 · 200+ 学员": "Finance 431 · 200+ students",
-  "出题时间节省 90%": "90% time saved on question creation",
-  "Memorix 的记忆算法是我们选 UniMind 的关键。同样刷 100 道题，用自适应复习的学生知识留存明显更高——续费率就是最好的证明。": "Memorix was the key reason we chose UniMind. Same 100 questions drilled, but students using adaptive review show noticeably higher retention — renewal rates prove it.",
-  "某连锁考研品牌联合创始人": "Co-founder, Chain Grad Exam Brand",
-  "多学科 · 500+ 学员": "Multi-discipline · 500+ students",
-  "续费率提升 23%": "23% higher retention rate",
-  "以前管理不同学科老师用一个 Excel 到处发。现在 UniMind 分学科权限、出题、布置作业、看学情——一个平台全搞定。": "We used to manage teachers across disciplines with spreadsheets. Now UniMind handles permissions, question generation, assignments, and analytics — all in one platform.",
-  "某职业教育机构校长": "Principal, Vocational Education Institution",
-  "职业资格证 · 300+ 学员": "Professional certs · 300+ students",
-  "管理效率提升 10×": "10× management efficiency gain",
-  "没有你的学科？自定义知识点树，AI 即刻适配。": "Don't see your subject? Customize your knowledge tree — AI adapts instantly.",
-  "支持学科": "Subjects Supported",
-  "AI 题目已生成": "AI Questions Generated",
-  "入驻机构": "Institutions Onboarded",
-  "出题效率提升": "Efficiency Boost",
-  "最受欢迎": "Most Popular",
-  "免费体验": "Free forever",
-  "AI 智能学习": "AI-Powered Learning",
-  "机构教学平台": "Teaching Platform",
-  "企业版 · 含学生收费": "Enterprise · Student Payments",
-  "joining": "Joining",
-  "创建账号": "Create Account",
-  "开启你的 UniMind 学术之旅": "Start your UniMind journey",
-  "邮箱地址": "Email address",
-  "发送中": "Sending",
-  "已发送": "Sent",
-  "获取验证码": "Get Code",
-  "验证码": "Verification code",
-  "昵称（选填）": "Nickname (optional)",
-  "设置密码（至少 6 位）": "Set password (min 6 chars)",
-  "注册中...": "Creating account...",
-  "立即注册 · 免费试用": "Register · Free Trial",
-  "已有账号？": "Already have an account?",
-  "去登录": "Log in",
-  "欢迎回来": "Welcome back",
-  "登录你的 UniMind 账号，继续学习之旅": "Log in to your UniMind account and continue learning",
-  "密码": "Password",
-  "登录中...": "Logging in...",
-  "立即登录": "Log In",
-  "还没有账号？": "Don't have an account?",
-  "立即注册": "Register"
+  "stats": [
+    { "label": "Subjects Supported", "desc": "Grad · Certification · Civil Service" },
+    { "label": "AI Questions Generated", "desc": "Three-agent adversarial quality assurance" },
+    { "label": "Institutions Onboarded", "desc": "From solo teachers to chain brands" },
+    { "label": "Efficiency Boost", "desc": "From 30 minutes to 10 seconds" }
+  ],
+  "pain": {
+    "label": "The Problem",
+    "title": "The Three Biggest Hidden Costs of Tutoring Institutions",
+    "subtitle": "Not rent. Not acquisition. It's neglected teaching efficiency, review effectiveness, and data blind spots.",
+    "items": [
+      {
+        "title": "Question Creation is Slow",
+        "desc": "A good question = topic selection + stem writing + options + explanation. 30 minutes per question, a full day per exam."
+      },
+      {
+        "title": "Review is Dumb",
+        "desc": "Every student drills the same set. Top students waste time on what they know; weak students struggle blindly with new material."
+      },
+      {
+        "title": "Data is Blind",
+        "desc": "You check Excel at month-end for accuracy rates. Which student keeps failing which topic? You don't know — until the exam is over."
+      }
+    ]
+  },
+  "features": {
+    "label": "Core Features",
+    "title": "Three Core Capabilities",
+    "subtitle": "AI question engine produces content, Memorix manages review rhythm, Knowledge Workbench visualizes mastery — a complete loop from content production to learning delivery.",
+    "items": [
+      {
+        "title": "AI Question Generation",
+        "subtitle": "ARC Adversarial Pipeline · Ready to Use",
+        "desc": "Our multi-agent adversarial architecture — Author, Reviewer, and Classifier — iterates on every question. Substandard generations are automatically rejected and retried until the quality score exceeds the threshold. Compared to single LLM calls, the adversarial pipeline boosts question usability from ~60% to 85%+. All question types supported — multiple choice, calculation, case analysis — across all subjects. Finance, law, medicine, CPA — AI generates in each discipline's academic style.",
+        "points": [
+          "Author → Reviewer → Classifier adversarial pipeline, up to 3 iterations",
+          "Auto quality gating, 85%+ usability rate",
+          "All subjects, all question types, discipline-specific style"
+        ],
+        "screenshotAlt": "AI Question Generation Center"
+      },
+      {
+        "title": "Memorix Adaptive Review",
+        "subtitle": "Research-grade forgetting models, precise review before you forget",
+        "desc": "Memorix is our proprietary memory scheduling algorithm. Unlike traditional spaced repetition, it models forgetting with a Weibull distribution — more accurately capturing the \"fast then slow\" human memory decay pattern. After each answer, the algorithm updates 20 personalized parameters via online SGD with Nesterov Momentum, calibrated with Brier scores. On our Finance 431 dataset (500+ users, 120K review logs), Memorix reduced prediction RMSE by 13.7% vs FSRS v4.5 and improved knowledge retention by 9.2%.",
+        "points": [
+          "Weibull forgetting model — more accurate than traditional power-law models",
+          "Online SGD + Nesterov — every answer evolves your memory profile",
+          "Brier Score calibration — mathematically guaranteed forgetting predictions",
+          "20-dimension personal parameters — individual memory portrait, not group average"
+        ],
+        "screenshotAlt": "Academic Ladder page"
+      },
+      {
+        "title": "Knowledge Workbench",
+        "subtitle": "Visual knowledge graph, mastery at a glance",
+        "desc": "Each knowledge point appears as a colored node on the interactive graph — green for mastered, red for weak, gray for untouched. Click any node to see related questions, mistake records, and course resources. Students visualize their knowledge structure; teachers pinpoint class weaknesses instantly.",
+        "points": [
+          "Interactive SVG knowledge graph",
+          "Color-coded by mastery, weak points auto-highlighted",
+          "One-click jump to questions, mistakes, and courses"
+        ],
+        "screenshotAlt": "Knowledge Workbench page"
+      }
+    ]
+  },
+  "how": {
+    "label": "How It Works",
+    "title": "Three Steps, Live in 10 Minutes",
+    "subtitle": "No tech team needed. No AI engineers. Register → Generate → Students practice. That's it.",
+    "steps": [
+      {
+        "title": "Choose Subject",
+        "desc": "Register your institution, choose a subject. We pre-built frameworks for 10+ disciplines — grad exams, certifications, civil service — with custom support."
+      },
+      {
+        "title": "AI Generates",
+        "desc": "Enter the AI generation center, pick knowledge points and question types. The three-agent pipeline auto-generates. Review and approve with one click."
+      },
+      {
+        "title": "Students Practice + Analytics",
+        "desc": "Students practice via a shared link — no app download needed. Auto-grading after each answer. The Knowledge Workbench updates every student's mastery map in real time."
+      }
+    ]
+  },
+  "subjects": {
+    "label": "All Subjects",
+    "title": "Not Limited to Any One Subject",
+    "subtitle": "UniMind's AI engine is an expert at \"how to write a good question\" — give it any subject's knowledge points, and it generates questions in that discipline's style.",
+    "categories": [
+      {
+        "name": "Grad Entrance Exams",
+        "tags": ["Finance 431", "Law", "Medicine", "CS 408", "Education 311", "Psychology 312"]
+      },
+      {
+        "name": "Professional Certifications",
+        "tags": ["CPA", "CFA", "Bar Exam", "Medical License", "Teaching License", "Civil Engineering"]
+      },
+      {
+        "name": "Civil Service & More",
+        "tags": ["Aptitude Test", "Essay Writing", "General Knowledge", "Military Civilian"]
+      }
+    ],
+    "footer": "Don't see your subject? Customize your knowledge tree — AI adapts instantly."
+  },
+  "pricing": {
+    "label": "Pricing",
+    "title": "Choose Your Plan",
+    "subtitle": "All plans include a 14-day free trial. No credit card required.",
+    "monthly": "Monthly",
+    "annually": "Annual",
+    "saveBadge": "Save 23-33%",
+    "perMonth": "/mo",
+    "annualTotal": "Annual total ¥",
+    "popularBadge": "Most Popular",
+    "footer": "First 20 paying customers lock in early-adopter pricing for life.",
+    "plans": [
+      { "label": "Free", "desc": "For individual teachers to explore", "cta": "Sign Up Free" },
+      { "label": "Solo", "desc": "Independent teacher edition", "cta": "14-Day Free Trial" },
+      { "label": "Plus", "desc": "Institution edition · Full features", "cta": "14-Day Free Trial" },
+      { "label": "Pro", "desc": "Enterprise · White-label deployment", "cta": "Request Demo" }
+    ],
+    "rows": [
+      ["AI Gen 20/mo", "AI Gen 50/mo", "Unlimited AI Gen ✨", "Unlimited AI Gen ✨"],
+      ["FSRS 4.5 Algorithm", "Memorix Adaptive Review", "Memorix Adaptive Review", "Memorix Adaptive Review"],
+      ["Question Bank · Manual", "Question Bank · Manual", "Question Bank · Manual+Auto", "Question Bank · Manual+Auto"],
+      ["Mistake Review Center", "Mistake Review Center", "Mistake Review Center", "Mistake Review Center"],
+      ["Basic Analytics", "Personal Full Reports", "Class Comparison · Data Export", "Advanced Dashboard · AI Tips"],
+      ["30 Students Max", "50 Students Max", "200 Students Max", "Unlimited Students"],
+      ["1 Teacher · 1 Subject", "1 Teacher · 3 Subjects", "5 Teachers · Unlimited Subjects", "Unlimited Teachers & Subjects"],
+      ["—", "—", "Course Videos + AI Outlines", "Course Videos + AI Outlines"],
+      ["—", "—", "Interactive Knowledge Graph", "Interactive Knowledge Graph"],
+      ["—", "—", "Online Q&A System", "Online Q&A System"],
+      ["—", "—", "Teacher Collaboration · Roles", "Teacher Collaboration · Roles"],
+      ["—", "—", "Live Study Rooms · Pomodoro", "Live Study Rooms · Pomodoro"],
+      ["—", "—", "AI Assistant · Multi-Bot Chat", "AI Assistant · Multi-Bot Chat"],
+      ["—", "—", "Mock Exams", "Mock Exams"],
+      ["—", "—", "AI Mock Interviews · Radar Chart", "AI Mock Interviews · Radar Chart"],
+      ["—", "—", "—", "Brand Customization · White-Label"],
+      ["—", "—", "—", "Data Privatization"],
+      ["—", "—", "—", "Personalization Settings"],
+      ["—", "—", "—", "REST API Access"],
+      ["—", "—", "—", "Dedicated Account Manager"]
+    ]
+  },
+  "faq": {
+    "label": "FAQ",
+    "title": "Frequently Asked Questions",
+    "items": [
+      {
+        "q": "What are the limits of the free plan?",
+        "a": "The Free plan supports 30 students and 50 AI generations per month. You can experience the full loop — generate → practice → analytics — enough to validate the product with a small class. Upgrade to Solo to remove all limits."
+      },
+      {
+        "q": "Can AI-generated questions be trusted?",
+        "a": "We use a three-agent adversarial mechanism — one generates, one reviews, one classifies. Substandard questions are automatically rejected and retried. We recommend your teaching staff do a final review — AI saves 90% of drafting time; the last 10% still needs your professional judgment."
+      },
+      {
+        "q": "Which subjects are supported?",
+        "a": "The platform is subject-agnostic. We pre-built knowledge frameworks for grad entrance exams (Finance, Law, Medicine, CS, etc.), professional certifications (CPA, CFA, Bar, Teaching, etc.), and civil service exams. You can also customize your own subjects and knowledge trees."
+      },
+      {
+        "q": "How do students use it? Do they need an app?",
+        "a": "No. Students open a link you share and start practicing. We provide a mobile web experience — zero friction for students. No app download required."
+      },
+      {
+        "q": "What happens to my data after the trial ends?",
+        "a": "Everything stays. All your questions, student data, and learning records are preserved. Renew to restore full access. Without renewal, data is read-only — you lose nothing."
+      },
+      {
+        "q": "Can I pay monthly?",
+        "a": "Yes. Both monthly and annual billing are supported. Annual billing includes a 23-33% discount. We recommend starting monthly for a deep trial, then switching to annual once you're confident."
+      },
+      {
+        "q": "How is this different from generic exam tools?",
+        "a": "Generic exam tools \"move paper tests online.\" UniMind is \"AI that produces and optimizes your teaching content\" — questions are AI-generated, review is algorithm-personalized, analytics are real-time. We don't solve \"how to test\" — we solve \"how to teach and how to learn.\""
+      },
+      {
+        "q": "I'm an individual teacher. Which plan should I choose?",
+        "a": "Start with the Free plan. 30 students and 50 AI generations per month cover daily needs. Upgrade to Solo (¥299/mo, ¥199/mo annual) when you exceed 30 students or need more generations."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Ready to bring AI to your institution?",
+    "subtitle": "14-day full-feature free trial. No card, no charge. All subjects. See how much time AI can save your institution on question creation.",
+    "button": "Start 14-Day Free Trial",
+    "footnote": "50+ institutions already use UniMind"
+  },
+  "footer": {
+    "tagline": "AI Infrastructure for Tutoring Institutions",
+    "features": "Features",
+    "pricing": "Pricing",
+    "faq": "FAQ"
+  }
 }

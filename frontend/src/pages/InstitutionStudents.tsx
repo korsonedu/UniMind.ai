@@ -133,7 +133,7 @@ function PlatformUserManagement() {
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="搜索用户..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input placeholder="搜索用户…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <Button variant="ghost" size="icon" onClick={fetchAll}><RefreshCw className="h-4 w-4" /></Button>
           </div>
@@ -366,7 +366,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, institution_role: newRole } : m));
       toast.success(newRole === 'teacher' ? '已设为教师' : '已设为学员');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || '操作失败');
+      toast.error(err.response?.data?.error || '修改角色失败，请重试');
     }
     setRoleUpdating(null);
   };
@@ -401,7 +401,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
       <div className="flex items-center gap-3 flex-wrap mb-4">
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="搜索成员..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input placeholder="搜索成员…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <AddStudentDialog onAdded={fetch} disabled={studentCount >= institution.max_students} />
         <BatchImportDialog onImported={fetch} />
@@ -519,7 +519,7 @@ function AddStudentDialog({ onAdded, disabled }: { onAdded: () => void; disabled
       await api.post('/users/institution/me/students/', form);
       setForm({ username: '', email: '', nickname: '', password: '' });
       onAdded(); setOpen(false);
-    } catch (err: any) { setError(err.response?.data?.error || '创建失败'); }
+    } catch (err: any) { setError(err.response?.data?.error || '添加学员失败，请检查信息后重试'); }
     setSaving(false);
   };
 

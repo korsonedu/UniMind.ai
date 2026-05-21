@@ -150,7 +150,7 @@ export const ResumeTuner: React.FC = () => {
       {/* Left: submit form */}
       <Card className="p-5 rounded-2xl border border-border/60 space-y-4">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center">
+          <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
             <Sparkles className="h-4 w-4 text-indigo-600" />
           </div>
           <div>

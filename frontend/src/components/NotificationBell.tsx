@@ -73,7 +73,7 @@ export const NotificationBell = () => {
           </Button>
         </div>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-2xl z-[100]">
+      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg z-[100]">
         <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
           <span className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{t('notifications:titleWithCount', { count: unreadCount })}</span>
           <div className="flex gap-1">

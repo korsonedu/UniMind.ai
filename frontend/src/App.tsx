@@ -74,7 +74,7 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
     }
   }, [user, token, theme, setTheme]);
 
-  if (loading) return <Loading message="Synchronizing Secure Session..." fullScreen size="lg" />;
+  if (loading) return <Loading message="Synchronizing Secure Session…" fullScreen size="lg" />;
 
   if (!token) return <Navigate to="/login" replace />;
   return children;
@@ -150,7 +150,7 @@ const RootRedirect = () => {
       .finally(() => setCheckingInvite(false));
   }, [token, user]);
 
-  if (loading || checkingInvite) return <Loading message="Authenticating Secure Session..." fullScreen size="lg" />;
+  if (loading || checkingInvite) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
   if (token && user) return <Outlet />;
 

@@ -26,6 +26,7 @@ import {
   Users,
   Copy,
   RefreshCw,
+  GraduationCap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -119,7 +120,7 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="right" className="font-bold border-none shadow-xl">{label}{restricted && ` (${t('lockedTooltip')})`}</TooltipContent>
+        <TooltipContent side="right" className="font-bold border-none shadow">{label}{restricted && ` (${t('lockedTooltip')})`}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   ) : content;
@@ -138,6 +139,7 @@ export const MainLayout: React.FC = () => {
   const [isMobile, setIsMobile] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [restrictedFeature, setRestrictedFeature] = useState<string | undefined>(undefined);
+  const [inviteRole, setInviteRole] = useState<'student' | 'teacher'>('student');
 
   const { t } = useTranslation(['layout', 'common']);
   const { institution: instFromStore, fetchFeatures, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
@@ -161,6 +163,7 @@ export const MainLayout: React.FC = () => {
     pathname.startsWith('/course/');
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && location.pathname.startsWith('/tests/session');
+  const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/');
   const hideMobileBottomNav = isMobile && location.pathname.startsWith('/tests/session');
 
   useEffect(() => {
@@ -343,7 +346,7 @@ export const MainLayout: React.FC = () => {
                     )}
                   </div>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side={collapsed ? "right" : "top"} className="w-52 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-2xl">
+                <DropdownMenuContent align="end" side={collapsed ? "right" : "top"} className="w-52 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg">
                   <DropdownMenuLabel className="px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{t('layout:userMenu.accountPreferences')}</DropdownMenuLabel>
                   {user && !user.is_member && !isInstStudent && (
                     <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer bg-amber-50 text-amber-700 focus:bg-amber-100 focus:text-amber-800 transition-colors">
@@ -432,24 +435,49 @@ export const MainLayout: React.FC = () => {
                           {t('layout:invite.trigger')}
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-3 bg-card/95 backdrop-blur-xl border-border shadow-2xl">
+                      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-3 bg-card/95 backdrop-blur-xl border-border shadow-lg">
                         <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">
                           {t('layout:invite.title', { name: instInfo.name })}
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <div className="space-y-3 px-1 py-1">
+                          {/* Role selector */}
+                          <div className="space-y-1.5">
+                            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">邀请角色</Label>
+                            <div className="flex gap-1.5">
+                              <Button
+                                variant={inviteRole === 'student' ? 'default' : 'outline'}
+                                size="sm"
+                                className="flex-1 h-8 rounded-lg text-[11px] font-bold"
+                                onClick={() => setInviteRole('student')}
+                              >
+                                <GraduationCap className="h-3 w-3 mr-1" />
+                                学员
+                              </Button>
+                              <Button
+                                variant={inviteRole === 'teacher' ? 'default' : 'outline'}
+                                size="sm"
+                                className="flex-1 h-8 rounded-lg text-[11px] font-bold"
+                                onClick={() => setInviteRole('teacher')}
+                              >
+                                <UserPlus className="h-3 w-3 mr-1" />
+                                教师
+                              </Button>
+                            </div>
+                          </div>
                           <div className="space-y-1.5">
                             <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{t('layout:invite.linkLabel')}</Label>
                             <div className="flex items-center gap-2">
                               <code className="flex-1 bg-muted px-3 py-2 rounded-lg text-[11px] font-mono font-bold truncate select-all">
-                                {window.location.origin}/api/users/join/{instInfo.invite_slug}/
+                                {window.location.origin}/api/users/join/{instInfo.invite_slug}/{inviteRole === 'teacher' ? '?role=teacher' : ''}
                               </code>
                               <Button
                                 variant="outline"
                                 size="icon"
                                 className="h-8 w-8 shrink-0"
                                 onClick={() => {
-                                  navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
+                                  const suffix = inviteRole === 'teacher' ? '?role=teacher' : '';
+                                  navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/${suffix}`);
                                   toast.success(t('layout:invite.copied'));
                                 }}
                               >
@@ -458,7 +486,7 @@ export const MainLayout: React.FC = () => {
                             </div>
                           </div>
                           <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            {t('layout:invite.description')}
+                            {inviteRole === 'teacher' ? '通过此链接注册的用户将自动成为教师角色。' : t('layout:invite.description')}
                           </p>
                           <Button
                             variant="ghost"
@@ -486,7 +514,7 @@ export const MainLayout: React.FC = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 rounded-full px-3 text-[11px] font-bold bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-700 hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 transition-all"
+                      className="h-8 rounded-full px-3 text-[11px] font-bold bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 transition-all"
                       onClick={() => {
                         setRestrictedFeature(undefined);
                         setShowUpgradeModal(true);
@@ -522,7 +550,7 @@ export const MainLayout: React.FC = () => {
                       </Avatar>
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-2xl">
+                  <DropdownMenuContent align="end" className="w-48 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg">
                     {user && !user.is_member && !isInstStudent && (
                       <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="rounded-xl px-3 py-2 gap-2 cursor-pointer bg-amber-50 text-amber-700 focus:bg-amber-100 focus:text-amber-800 transition-colors">
                         <Sparkles className="h-3.5 w-3.5" />
@@ -581,7 +609,9 @@ export const MainLayout: React.FC = () => {
             "flex-1 w-full relative",
             (isMobileImmersivePage || isMobileStudyPage)
               ? "px-0 py-0 h-full overflow-hidden"
-              : !isFullPage && "px-4 py-4 md:px-8 md:py-6"
+              : isMobileVideoPage
+                ? "px-0 py-4"
+                : !isFullPage && "px-4 py-4 md:px-8 md:py-6"
           )}>
             {/* Preview mode banner */}
             {previewMode && previewInstitution && (
@@ -659,7 +689,7 @@ export const MainLayout: React.FC = () => {
               <Button
                 onClick={handleActivate}
                 disabled={isActivating}
-                className="w-full h-14 rounded-2xl bg-black text-white font-black shadow-xl hover:opacity-90 active:scale-[0.98] transition-all uppercase tracking-widest text-xs"
+                className="w-full h-14 rounded-2xl bg-black text-white font-black shadow hover:opacity-90 active:scale-[0.98] transition-all uppercase tracking-widest text-xs"
               >
                 {isActivating ? <Loader2 className="h-4 w-4 animate-spin" /> : t('layout:activation.activateButton')}
               </Button>

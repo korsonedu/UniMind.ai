@@ -45,7 +45,7 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
         tightLists: true,
       }),
       Placeholder.configure({
-        placeholder: placeholder || '在此输入内容，支持 Markdown 快捷键...',
+        placeholder: placeholder || '在此输入内容，支持 Markdown 快捷键…',
       }),
     ],
     content: content ? content.replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&') : '',
@@ -74,7 +74,7 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
   if (!editor) return null
 
   return (
-    <div className="w-full flex flex-col rounded-2xl bg-white dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-sm overflow-hidden transition-all focus-within:shadow-2xl focus-within:border-primary/20">
+    <div className="w-full flex flex-col rounded-2xl bg-white dark:bg-black/20 border border-slate-200 dark:border-white/5 shadow-sm overflow-hidden transition-all focus-within:shadow-lg focus-within:border-primary/20">
       <style>{`
         .ProseMirror {
           outline: none !important;

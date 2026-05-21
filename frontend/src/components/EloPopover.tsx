@@ -112,7 +112,7 @@ export const EloPopover: React.FC = () => {
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-[360px] rounded-2xl p-0 bg-card/95 backdrop-blur-xl border-border shadow-2xl overflow-hidden"
+        className="w-[360px] rounded-2xl p-0 bg-card/95 backdrop-blur-xl border-border shadow-lg overflow-hidden"
       >
         {/* Tabs */}
         <div className="flex border-b border-border">
@@ -226,7 +226,7 @@ export const EloPopover: React.FC = () => {
 
                   {!currentUserInList && (
                     <div className="px-4 py-3 text-center">
-                      <div className="text-[10px] text-muted-foreground/60 mb-1">...</div>
+                      <div className="text-[10px] text-muted-foreground/60 mb-1">…</div>
                       <div className="flex items-center gap-3 px-4 py-2 mx-1 rounded-xl bg-primary/5 border border-primary/10">
                         <div className="w-6 flex justify-center">
                           <span className="text-[11px] font-black text-muted-foreground tabular-nums">-</span>

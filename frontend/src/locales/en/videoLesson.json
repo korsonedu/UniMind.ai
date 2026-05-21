@@ -18,6 +18,8 @@
   "noVideo": "No video available",
   "mute": "Mute",
   "unmute": "Unmute",
+  "play": "Play",
+  "pause": "Pause",
   "playbackSpeed": "Playback Speed",
   "showSubtitles": "Show Subtitles",
   "hideSubtitles": "Hide Subtitles",

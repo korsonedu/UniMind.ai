@@ -46,7 +46,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
                     });
                   }
                   onPlanCompleted(p.id);
-                } catch (e) { toast.error('操作失败，请重试'); }
+                } catch (e) { toast.error('标记完成失败，请稍后重试'); }
               }}
             >
               {p.is_completed ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-4 w-4 text-muted-foreground/20 group-hover:text-emerald-500" />}

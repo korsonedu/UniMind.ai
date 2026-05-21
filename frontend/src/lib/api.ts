@@ -2,8 +2,24 @@ import axios from 'axios';
 import { toast } from 'sonner';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   withCredentials: true,
+});
+
+api.interceptors.request.use((config) => {
+  const stored = localStorage.getItem('auth-storage');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      const token = parsed?.state?.token;
+      if (token) {
+        config.headers.Authorization = `Token ${token}`;
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return config;
 });
 
 api.interceptors.response.use(

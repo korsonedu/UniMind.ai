@@ -18,7 +18,7 @@ function getHeaderValue(headers: unknown, key: string): string | undefined {
   return undefined;
 }
 
-export function normalizeApiError(error: unknown, fallbackMessage = '请求失败'): NormalizedApiError {
+export function normalizeApiError(error: unknown, fallbackMessage = '请求失败，请检查网络后重试'): NormalizedApiError {
   if (!axios.isAxiosError(error)) {
     return {
       message: fallbackMessage,
@@ -52,7 +52,7 @@ export function normalizeApiError(error: unknown, fallbackMessage = '请求失�
   };
 }
 
-export function formatApiErrorToast(error: unknown, fallbackMessage = '请求失败'): string {
+export function formatApiErrorToast(error: unknown, fallbackMessage = '请求失败，请检查网络后重试'): string {
   const normalized = normalizeApiError(error, fallbackMessage);
   if (normalized.requestId) return `${normalized.message} (RID: ${normalized.requestId})`;
   return normalized.message;

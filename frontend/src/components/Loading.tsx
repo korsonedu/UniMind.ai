@@ -11,7 +11,7 @@ type LoadingProps = {
 const sizeMap = { sm: 'h-5 w-5', md: 'h-8 w-8', lg: 'h-12 w-12' };
 
 export const Loading: React.FC<LoadingProps> = ({
-  message = 'Loading...',
+  message = 'Loading…',
   fullScreen = false,
   size = 'md',
   className,

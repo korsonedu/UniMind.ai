@@ -67,7 +67,7 @@ export default function InviteCodeAdmin() {
       setGenerated(data.codes.map((c: any) => c.code));
       fetchCodes();
       toast.success(`已生成 ${data.generated} 条 ${data.plan_label} 邀请码`);
-    } catch { toast.error('生成失败'); }
+    } catch { toast.error('生成邀请码失败，请重试'); }
     setGenerating(false);
   };
 

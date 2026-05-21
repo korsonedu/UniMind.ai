@@ -102,7 +102,7 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
 
   return (
     <div className="space-y-4">
-      <Card className="p-6 rounded-3xl bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 border-indigo-200/60">
+      <Card className="p-6 rounded-3xl bg-card border-indigo-200/60">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-700 text-xs font-bold">
           <Sparkles className="w-4 h-4" /> {t('lobby.badge')}
         </div>

@@ -68,7 +68,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px] rounded-apple-3xl border-none shadow-2xl bg-card p-0 overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-br from-primary/6 via-primary/3 to-transparent px-8 pt-8 pb-4">
+        <div className="bg-card px-8 pt-8 pb-4">
           <DialogHeader className="space-y-2 text-left">
             <Badge className={cn('text-[10px] font-bold text-white mb-1', meta.color)}>
               {meta.label}

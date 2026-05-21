@@ -140,7 +140,7 @@ export default function InstitutionAdmin() {
         <div className="relative flex-1 max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="搜索机构名称..."
+            placeholder="搜索机构名称…"
             className="pl-9"
             value={search} onChange={e => setSearch(e.target.value)}
           />
@@ -281,7 +281,7 @@ function CreateInstitutionDialog({
       await api.post('/users/institutions/', payload);
       onCreated();
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.response?.data?.error || '创建失败');
+      setError(err.response?.data?.detail || err.response?.data?.error || '创建机构失败，请检查信息后重试');
     }
     setSaving(false);
   };
@@ -322,7 +322,7 @@ function CreateInstitutionDialog({
           <DialogFooter>
             <Button type="button" variant="outline" size="sm" onClick={onClose}>取消</Button>
             <Button type="submit" variant="apple" size="sm" disabled={saving}>
-              {saving ? '创建中...' : '创建'}
+              {saving ? '创建中…' : '创建'}
             </Button>
           </DialogFooter>
         </form>
@@ -367,7 +367,7 @@ function EditInstitutionDialog({
       }
       onUpdated();
     } catch (err: any) {
-      setError(err.response?.data?.detail || '保存失败');
+      setError(err.response?.data?.detail || '保存机构信息失败，请重试');
     }
     setSaving(false);
   };
@@ -408,7 +408,7 @@ function EditInstitutionDialog({
           <DialogFooter>
             <Button type="button" variant="outline" size="sm" onClick={onClose}>取消</Button>
             <Button type="submit" variant="apple" size="sm" disabled={saving}>
-              {saving ? '保存中...' : '保存'}
+              {saving ? '保存中…' : '保存'}
             </Button>
           </DialogFooter>
         </form>
@@ -480,7 +480,7 @@ function InstitutionSelfSettings() {
       setLogo(null);
       toast.success('机构信息已更新');
     } catch (e: any) {
-      toast.error(e.response?.data?.error || '保存失败');
+      toast.error(e.response?.data?.error || '保存机构设置失败，请重试');
     } finally {
       setSaving(false);
     }
@@ -578,7 +578,7 @@ function InstitutionSelfSettings() {
 
           <div className="space-y-1.5">
             <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构简介</Label>
-            <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" placeholder="简短介绍你的机构..." />
+            <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" placeholder="简短介绍你的机构…" />
           </div>
 
           <div className="space-y-1.5">

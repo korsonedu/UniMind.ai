@@ -325,7 +325,7 @@ export const WeeklyReportDialog: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-3">
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
                   <div className="pb-1">
                     <svg
                       viewBox={`0 0 ${chart.graphWidth} ${chart.graphHeight}`}
