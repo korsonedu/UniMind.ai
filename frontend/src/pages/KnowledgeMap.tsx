@@ -142,6 +142,7 @@ const KnowledgeGraph = ({
   onNodeClick: (node: KPNode) => void;
   masteryData?: Record<string, string>;
 }) => {
+  const { t } = useTranslation('knowledgeMap');
 
   const MASTERY_COLORS: Record<string, string> = {
     mastered: '#34C759',

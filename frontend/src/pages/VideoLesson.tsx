@@ -102,7 +102,7 @@ export const VideoLesson: React.FC = () => {
     try {
       await container.requestFullscreen();
       // 紧跟在 requestFullscreen 后锁横屏，必须在此处（用户手势上下文中）调用
-      try { await screen.orientation?.lock?.('landscape'); } catch {}
+      try { await (screen.orientation as any)?.lock?.('landscape'); } catch {}
     } catch {
       setIsFullscreen(false);
     }

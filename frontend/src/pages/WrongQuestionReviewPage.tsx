@@ -62,7 +62,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
           <Link to="/tests"><Button variant="outline" className="rounded-xl">
             <ArrowLeft className="h-4 w-4 mr-1" />
             {t('wrongReview.backToTraining')}
-          </Button>
+          </Button></Link>
           <Button variant="ghost" className="rounded-xl" onClick={fetchInsights}>
             {t('wrongReview.refreshReview')}
           </Button>

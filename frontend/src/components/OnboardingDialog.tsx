@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
-import { GraduationCap, Building2, ArrowRight, Loader2 } from 'lucide-react';
+import { GraduationCap, Building2, ArrowRight, Loader2, Check } from 'lucide-react';
 import { DirectionSelector } from '@/components/DirectionSelector';
 
 export function OnboardingDialog() {

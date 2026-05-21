@@ -175,7 +175,7 @@ export const TestSessionPage: React.FC = () => {
         <Link to="/tests"><Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-bold">
           <ArrowLeft className="h-4 w-4 mr-1" />
           {t('back')}
-        </Button>
+        </Button></Link>
         <div className="flex items-center gap-2">
           {isMobile && (
             <Popover>
