@@ -51,7 +51,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
 
   return (
     <PageWrapper title={t('detailPage.title')} subtitle={t('detailPage.subtitle')}>
-      <div className="max-w-3xl mx-auto space-y-4 animate-in fade-in duration-300 text-left">
+      <div className="max-w-3xl mx-auto px-4 space-y-4 animate-in fade-in duration-300 text-left">
         <Button
           variant="ghost"
           asChild
