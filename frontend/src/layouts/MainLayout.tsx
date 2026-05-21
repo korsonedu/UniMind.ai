@@ -8,6 +8,7 @@ import {
   User as UserIcon,
   LogOut,
   ShieldCheck,
+  CreditCard,
   ChevronLeft,
   ChevronRight,
   Sparkles,
@@ -37,6 +38,7 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { NotificationBell } from '@/components/NotificationBell';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
@@ -152,7 +154,11 @@ export const MainLayout: React.FC = () => {
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && location.pathname.startsWith('/tests/session');
   const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/');
-  const hideMobileBottomNav = isMobile && location.pathname.startsWith('/tests/session');
+  const hideMobileBottomNav = isMobile && (
+    location.pathname.startsWith('/tests/session') ||
+    location.pathname.startsWith('/course/') ||
+    location.pathname === '/study'
+  );
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-override', primaryColor);
@@ -323,6 +329,10 @@ export const MainLayout: React.FC = () => {
                   <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                     <UserIcon className="h-3.5 w-3.5" />
                     <span className="font-bold text-xs">{t('layout:userMenu.personalSettings')}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span className="font-bold text-xs">方案与账单</span>
                   </DropdownMenuItem>
                   {/* 机构设置：仅机构所有者可见 */}
                   {!isSuperAdmin && instInfo && user?.is_institution_owner && (
@@ -521,6 +531,10 @@ export const MainLayout: React.FC = () => {
                       <UserIcon className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:userMenu.personalSettings')}</span>
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                      <CreditCard className="h-3.5 w-3.5" />
+                      <span className="font-bold text-xs">方案与账单</span>
+                    </DropdownMenuItem>
                     {!isSuperAdmin && instInfo && user?.is_institution_owner && (
                       <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Settings2 className="h-3.5 w-3.5" />
@@ -565,13 +579,15 @@ export const MainLayout: React.FC = () => {
               )}
             </header>
           )}
+          <TrialBanner />
           <div className={cn(
             "flex-1 w-full relative",
             (isMobileImmersivePage || isMobileStudyPage)
               ? "px-0 py-0 h-full overflow-hidden"
               : isMobileVideoPage
                 ? "px-0 py-4"
-                : !isFullPage && "px-4 py-4 md:px-8 md:py-6"
+                : !isFullPage && "px-4 py-4 md:px-8 md:py-6",
+            isMobile && !hideMobileBottomNav && "pb-20",
           )}>
             {/* Preview mode banner */}
             {previewMode && previewInstitution && (
@@ -594,31 +610,37 @@ export const MainLayout: React.FC = () => {
           "md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]",
           hideMobileBottomNav && "hidden"
         )}>
-          <div className="grid grid-cols-5 gap-1 px-2 py-2">
+          <div className="flex items-center justify-around px-1 py-2">
             {visibleMobileNavItems.map((item) => {
-              const active =
-                item.to === '/articles'
-                  ? location.pathname === '/articles' || location.pathname.startsWith('/article/')
-                  : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
+              const isActive = (() => {
+                const p = location.pathname;
+                if (item.to === '/courses') return p.startsWith('/courses') || p.startsWith('/course');
+                if (item.to === '/tests') return p.startsWith('/tests');
+                if (item.to === '/knowledge-map') return p.startsWith('/knowledge-map');
+                if (item.to === '/articles') return p === '/articles' || p.startsWith('/article/');
+                if (item.to === '/qa') return p.startsWith('/qa');
+                return p === item.to || p.startsWith(`${item.to}/`);
+              })();
               const restricted = Boolean((item as any).minPlan && !atLeast((item as any).minPlan));
               return (
-                <button
+                <Link
                   key={item.to}
-                  onClick={() => {
+                  to={restricted ? location.pathname : item.to}
+                  onClick={(e) => {
                     if (restricted) {
+                      e.preventDefault();
                       handleRestrictedClick(item);
-                      return;
                     }
-                    navigate(item.to);
                   }}
                   className={cn(
-                    "h-14 rounded-xl flex flex-col items-center justify-center gap-1 transition-colors",
-                    active ? "bg-white shadow-sm border border-border text-foreground" : "text-muted-foreground"
+                    "relative flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-lg transition-colors min-h-[44px] min-w-[44px]",
+                    isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
+                  {isActive && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}
+                  <item.icon className="h-5 w-5" />
                   <span className="text-[10px] font-bold">{item.label}</span>
-                </button>
+                </Link>
               );
             })}
           </div>
