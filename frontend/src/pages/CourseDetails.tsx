@@ -29,7 +29,7 @@ export const CourseDetails: React.FC = () => {
   }, []);
 
   return (
-    <div className="w-full bg-white dark:bg-[#0F1115] font-sans selection:bg-pink-500 selection:text-white antialiased">
+    <div className="w-full bg-white dark:bg-[#0F1115] font-sans selection:bg-pink-500 selection:text-white antialiased px-0 lg:px-6">
       
       {/* Apple Style Hero */}
       <section className="pt-20 pb-20 px-6 text-center overflow-hidden min-h-[80vh] flex flex-col justify-center relative">

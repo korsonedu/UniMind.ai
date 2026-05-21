@@ -110,7 +110,7 @@ function PlatformUserManagement() {
 
   return (
     <div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {[
           { label: '用户总数', value: users.length, icon: Users, color: 'text-primary', bg: 'bg-primary/6' },
           { label: '管理员', value: users.filter(u => u.role === 'admin').length, icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/6' },
@@ -379,7 +379,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
       </p>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
         {[
           { label: '学员', value: studentCount, icon: GraduationCap, color: 'text-primary', bg: 'bg-primary/6' },
           { label: '教师', value: teacherCount, icon: Shield, color: 'text-amber-500', bg: 'bg-amber-500/6' },
@@ -593,7 +593,7 @@ function StudentDetailPanel({ studentId }: { studentId: number }) {
         <p className="text-xs text-muted-foreground">{student.email} · ELO {student.elo_score}</p>
       </DialogHeader>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: '总答题', value: questions.total_answered, sub: `${questions.correct_rate}% 正确` },
           { label: '已掌握', value: questions.mastered, sub: `共 ${questions.total} 题` },

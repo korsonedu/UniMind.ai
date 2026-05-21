@@ -135,7 +135,7 @@ export default function InstitutionDashboard() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: t('stats.students'), value: `${inst.student_count} / ${inst.max_students}`,
             icon: Users, color: 'text-primary', bg: 'bg-primary/6' },

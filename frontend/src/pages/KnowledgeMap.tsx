@@ -751,6 +751,7 @@ export const KnowledgeMap: React.FC = () => {
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph');
   const [graphRootId, setGraphRootId] = useState<string>('all');
   const [masteryData, setMasteryData] = useState<Record<string, string>>({});
+  const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
 
   useEffect(() => {
     fetchMap();
@@ -905,30 +906,58 @@ export const KnowledgeMap: React.FC = () => {
     <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
       <div className="w-full text-left animate-in fade-in duration-700">
         {isMobile ? (
-          /* ── Mobile: simplified list view ── */
+          /* ── Mobile: toggle between tree panel and grid list ── */
           <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={t('mobile.searchPlaceholder')}
-                value={treeSearch}
-                onChange={e => setTreeSearch(e.target.value)}
-                className="w-full rounded-2xl bg-card border-border shadow-sm h-11 pl-10 pr-4 font-bold"
-              />
+            {/* Toggle + Search */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant={mobileTreeOpen ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setMobileTreeOpen(!mobileTreeOpen)}
+                className="rounded-xl h-9 text-xs font-bold shrink-0"
+              >
+                {mobileTreeOpen ? <List className="h-3.5 w-3.5 mr-1" /> : <GitMerge className="h-3.5 w-3.5 mr-1" />}
+                {mobileTreeOpen ? '网格' : '知识树'}
+              </Button>
+              {!mobileTreeOpen && (
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder={t('mobile.searchPlaceholder')}
+                    value={treeSearch}
+                    onChange={e => setTreeSearch(e.target.value)}
+                    className="w-full rounded-2xl bg-card border-border shadow-sm h-11 pl-10 pr-4 font-bold"
+                  />
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-2 p-2 bg-muted/50 rounded-[2rem] min-h-[400px] content-start">
-              {allNodes
-                .filter(n => n.name.toLowerCase().includes(treeSearch.toLowerCase()))
-                .map(node => (
-                  <button
-                    key={node.id}
-                    onClick={() => handleNodeSelect(node)}
-                    className="flex items-center justify-between bg-card border border-border/50 hover:border-indigo-500/30 hover:shadow-md px-2.5 py-2 rounded-xl transition-all active:scale-[0.99] text-left min-h-[58px]"
-                  >
-                    <span className="text-[12px] font-bold truncate pr-2 leading-snug">{node.name}</span>
-                  </button>
-                ))}
-            </div>
+
+            {mobileTreeOpen ? (
+              <div className="h-[calc(100dvh-12rem)] overflow-hidden rounded-2xl">
+                <KnowledgeTreePanel
+                  nodes={allNodes}
+                  selectedId={selectedNode?.id ?? null}
+                  onSelect={handleNodeSelect}
+                  searchQuery={treeSearch}
+                  onSearchChange={setTreeSearch}
+                  masteryData={masteryData}
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 p-2 bg-muted/50 rounded-[2rem] min-h-[400px] content-start">
+                {allNodes
+                  .filter(n => n.name.toLowerCase().includes(treeSearch.toLowerCase()))
+                  .map(node => (
+                    <button
+                      key={node.id}
+                      onClick={() => handleNodeSelect(node)}
+                      className="flex items-center justify-between bg-card border border-border/50 hover:border-indigo-500/30 hover:shadow-md px-2.5 py-2 rounded-xl transition-all active:scale-[0.99] text-left min-h-[58px]"
+                    >
+                      <span className="text-[12px] font-bold truncate pr-2 leading-snug">{node.name}</span>
+                    </button>
+                  ))}
+              </div>
+            )}
           </div>
         ) : (
           /* ── Desktop: three-panel layout ── */
