@@ -56,6 +56,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             <button
               onClick={async (e) => {
                 e.stopPropagation();
+                if (!window.confirm(t('planList.deleteConfirm'))) return;
                 try {
                   await api.delete(`/users/plans/${p.id}/`);
                   onRefresh();
@@ -63,7 +64,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
                   onPlanDeleted(p.id);
                 } catch (e) { toast.error(formatApiErrorToast(e, t('planList.deleteFailed'))); }
               }}
-              className="opacity-0 group-hover:opacity-100 transition-all p-1.5 hover:bg-red-100 rounded-lg text-muted-foreground/50 hover:text-red-500 cursor-pointer"
+              className="opacity-100 transition-all p-1.5 hover:bg-red-100 rounded-lg text-muted-foreground/50 hover:text-red-500 cursor-pointer"
               title={t('planList.deletePlan')}
             >
               <Trash2 className="h-3.5 w-3.5" />

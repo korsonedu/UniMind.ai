@@ -16,7 +16,6 @@ import {
   BarChart3,
   Building2,
   MessageCircleQuestion,
-  Loader2,
   Lock,
   Mic,
   Wrench,
@@ -65,15 +64,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import UnimindLogo from '../../Unimind_logo.png';
 import { PersistentUploadToast } from '@/components/PersistentUploadToast';
@@ -129,13 +119,10 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed, restricted, onR
 export const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, updateUser } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { primaryColor, pageTitle, pageSubtitle } = useSystemStore();
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
-  const [showActivateDialog, setShowActivateDialog] = useState(false);
-  const [activationCode, setActivationCode] = useState('');
-  const [isActivating, setIsActivating] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [restrictedFeature, setRestrictedFeature] = useState<string | undefined>(undefined);
@@ -196,22 +183,6 @@ export const MainLayout: React.FC = () => {
     }
   }, [isMobile, location.pathname, navigate]);
 
-
-  const handleActivate = async () => {
-    if (!activationCode.trim()) return toast.error(t('layout:activation.enterCodePrompt'));
-    setIsActivating(true);
-    try {
-      const res = await api.post('/users/me/activate/', { code: activationCode });
-      updateUser(res.data.user);
-      toast.success(t('layout:activation.success'));
-      setShowActivateDialog(false);
-      setActivationCode('');
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('layout:activation.failed'));
-    } finally {
-      setIsActivating(false);
-    }
-  };
 
   // ── 身份与方案层级 ──
   const isSuperAdmin = user?.role === 'admin' && !instInfo;
@@ -348,12 +319,6 @@ export const MainLayout: React.FC = () => {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" side={collapsed ? "right" : "top"} className="w-52 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg">
                   <DropdownMenuLabel className="px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{t('layout:userMenu.accountPreferences')}</DropdownMenuLabel>
-                  {user && !user.is_member && !isInstStudent && (
-                    <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer bg-amber-50 text-amber-700 focus:bg-amber-100 focus:text-amber-800 transition-colors">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:userMenu.activateMember')}</span>
-                    </DropdownMenuItem>
-                  )}
                   <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                     <UserIcon className="h-3.5 w-3.5" />
                     <span className="font-bold text-xs">{t('layout:userMenu.personalSettings')}</span>
@@ -551,12 +516,6 @@ export const MainLayout: React.FC = () => {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg">
-                    {user && !user.is_member && !isInstStudent && (
-                      <DropdownMenuItem onClick={() => setShowActivateDialog(true)} className="rounded-xl px-3 py-2 gap-2 cursor-pointer bg-amber-50 text-amber-700 focus:bg-amber-100 focus:text-amber-800 transition-colors">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{t('layout:userMenu.activateMember')}</span>
-                      </DropdownMenuItem>
-                    )}
                     <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <UserIcon className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:userMenu.personalSettings')}</span>
@@ -663,42 +622,6 @@ export const MainLayout: React.FC = () => {
             })}
           </div>
         </nav>
-
-        {/* 激活会员弹窗 */}
-        <Dialog open={showActivateDialog} onOpenChange={setShowActivateDialog}>
-          <DialogContent className="sm:max-w-[450px] rounded-[2.5rem] border-none shadow-2xl bg-card p-10">
-            <DialogHeader className="space-y-3">
-              <div className="h-12 w-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-2 shadow-inner">
-                <Sparkles className="h-6 w-6" />
-              </div>
-              <DialogTitle className="text-2xl font-black tracking-tight uppercase">{t('layout:activation.title')}</DialogTitle>
-              <DialogDescription className="font-medium text-muted-foreground leading-relaxed">
-                {t('layout:activation.description')}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-6 pt-6">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">{t('layout:activation.codeLabel')}</Label>
-                <Input
-                  value={activationCode}
-                  onChange={(e) => setActivationCode(e.target.value)}
-                  placeholder={t('layout:activation.codePlaceholder')}
-                  className="h-14 rounded-2xl bg-muted/50 border-none font-mono font-bold text-center text-lg tracking-wider focus-visible:ring-amber-500/20"
-                />
-              </div>
-              <Button
-                onClick={handleActivate}
-                disabled={isActivating}
-                className="w-full h-14 rounded-2xl bg-black text-white font-black shadow hover:opacity-90 active:scale-[0.98] transition-all uppercase tracking-widest text-xs"
-              >
-                {isActivating ? <Loader2 className="h-4 w-4 animate-spin" /> : t('layout:activation.activateButton')}
-              </Button>
-              <p className="text-center text-[10px] font-bold text-muted-foreground uppercase opacity-40">
-                {t('layout:activation.footer')}
-              </p>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {!isInstStudent && (
           <UpgradeModal

@@ -6,7 +6,7 @@ import {
   ClipboardList, Cpu, MessageSquare, Users, 
   Trophy, GraduationCap, Zap
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY, BRAND_DESC } from '@/constants/version';
 
 const FeatureItem = ({ icon: Icon, title, description }: any) => (
@@ -59,11 +59,13 @@ export const CourseDetails: React.FC = () => {
           </p>
 
           <div className="pt-6 flex justify-center gap-4">
-             <Button size="lg" className="rounded-full px-10 h-14 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-base shadow-lg hover:scale-105 transition-all" onClick={() => navigate('/register')}>
+             <Link to="/register"><Button size="lg" className="rounded-full px-10 h-14 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold text-base shadow-lg hover:scale-105 transition-all">
                 立即开启学习
-              </Button>
-              <Button size="lg" variant="ghost" className="rounded-full px-10 h-14 font-bold text-base" onClick={() => navigate('/')}>
-                返回主页
+              </Button></Link>
+              <Button size="lg" variant="ghost" asChild className="rounded-full px-10 h-14 font-bold text-base">
+                <Link to="/">
+                  返回主页
+                </Link>
               </Button>
           </div>
         </div>
@@ -191,9 +193,9 @@ export const CourseDetails: React.FC = () => {
               </div>
 
               <div className="pt-6">
-                <Button size="lg" className="w-full md:w-auto px-20 h-20 rounded-full bg-white text-slate-900 font-bold text-2xl hover:bg-slate-100 shadow" onClick={() => navigate('/register')}>
+                <Button asChild size="lg" className="w-full md:w-auto px-20 h-20 rounded-full bg-white text-slate-900 font-bold text-2xl hover:bg-slate-100 shadow"><Link to="/register">
                   开始学习 · ¥8150
-                </Button>
+                </Link></Button>
               </div>
             </div>
           </Card>

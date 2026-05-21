@@ -92,7 +92,7 @@ export const MembershipPanel = ({
                       )}
                     </div>
                   </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity text-left">
+                  <div className="flex gap-1 opacity-100 transition-opacity text-left">
                     {!c.is_used && (
                       <Button 
                         variant="ghost" 

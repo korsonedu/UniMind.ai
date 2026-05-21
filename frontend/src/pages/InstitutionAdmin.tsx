@@ -515,7 +515,7 @@ function InstitutionSelfSettings() {
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase text-muted-foreground">到期时间</p>
-              <p className="text-sm font-bold mt-1">{expiresAt ? new Date(expiresAt).toLocaleDateString('zh-CN') : '永久'}</p>
+              <p className="text-sm font-bold mt-1">{expiresAt ? new Date(expiresAt).toLocaleDateString(navigator.language || 'zh-CN') : '永久'}</p>
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase text-muted-foreground">学员数</p>

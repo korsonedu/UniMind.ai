@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, Maximize2, Target } from 'lucide-react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
@@ -54,11 +54,13 @@ export const KnowledgeNodeDetail: React.FC = () => {
       <div className="max-w-3xl mx-auto space-y-4 animate-in fade-in duration-300 text-left">
         <Button
           variant="ghost"
-          onClick={() => navigate('/knowledge-map')}
+          asChild
           className="h-9 rounded-xl px-3 text-xs font-bold text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4 mr-1.5" />
-          {t('detailPage.backButton')}
+          <Link to="/knowledge-map">
+            <ArrowLeft className="h-4 w-4 mr-1.5" />
+            {t('detailPage.backButton')}
+          </Link>
         </Button>
 
         {loading ? (

@@ -111,7 +111,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
             </span>
             {answer.is_teacher && <Badge variant="secondary" className="h-4 px-1 text-[11px] bg-indigo-50 text-indigo-600 border-indigo-100">TEACHER</Badge>}
             <span className="text-[11px] text-muted-foreground tabular-nums">
-              {new Date(answer.created_at).toLocaleString('zh-CN', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
+              {new Date(answer.created_at).toLocaleString(navigator.language || 'zh-CN', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
             </span>
           </div>
 
@@ -119,7 +119,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
           {(user?.username === answer.user_detail.username || user?.role === 'admin') && !isEditing && (
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover/answer:opacity-100 transition-opacity">
+                <Button variant="ghost" size="icon" className="h-5 w-5 opacity-100 transition-opacity">
                   <MoreHorizontal className="h-3 w-3 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>

@@ -15,7 +15,6 @@ import {
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { EmptyState } from '@/components/EmptyState';
-import { isAdminUser } from '@/lib/authz';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 
@@ -296,7 +295,7 @@ export const PdfMockExam: React.FC = () => {
   const [uploadingExamId, setUploadingExamId] = useState<number | null>(null);
   const { t, i18n } = useTranslation('pdfMockExam');
   const user = useAuthStore((s) => s.user);
-  const isAdmin = isAdminUser(user);
+  const isAdmin = user?.is_admin || user?.is_institution_admin || user?.role === 'admin';
 
   const loadData = async () => {
     setLoading(true);

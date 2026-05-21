@@ -61,7 +61,7 @@ const SheetContent = React.forwardRef<
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
-      className={cn(sheetVariants({ side }), "rounded-l-[2.5rem] border-none bg-white/95 dark:bg-background/95 backdrop-blur-2xl shadow-2xl", className)}
+      className={cn(sheetVariants({ side }), "rounded-l-[2.5rem] border-none bg-white/95 dark:bg-background/95 backdrop-blur-2xl shadow-2xl overscroll-contain", className)}
       {...props}
     >
       <SheetPrimitive.Close className="absolute right-6 top-6 rounded-full p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">

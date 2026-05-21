@@ -768,13 +768,14 @@ export const StudyRoom: React.FC = () => {
                 <button
                   onClick={async (e) => {
                     e.stopPropagation();
+                    if (!window.confirm('确定删除此学习计划？')) return;
                     try {
                       await api.delete(`/users/plans/${p.id}/`);
                       fetchPlans();
                       toast.success(t('planList.planDeleted'));
                     } catch (e) { toast.error(t('planList.deleteFailed')); }
                   }}
-                  className="opacity-0 group-hover:opacity-100 transition-all p-1.5 hover:bg-red-100 rounded-lg text-muted-foreground/50 hover:text-red-500 cursor-pointer"
+                  className="opacity-100 transition-all p-1.5 hover:bg-red-100 rounded-lg text-muted-foreground/50 hover:text-red-500 cursor-pointer"
                   title={t('planList.deletePlan')}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

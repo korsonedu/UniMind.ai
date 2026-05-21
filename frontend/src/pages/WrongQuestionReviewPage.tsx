@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, BrainCircuit, Target, BookOpenCheck, Loader2 } from 'lucide-react';
 import { PageWrapper } from '@/components/PageWrapper';
@@ -59,7 +59,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
     <PageWrapper title={t('pages:wrongReview.title')} subtitle={t('pages:wrongReview.subtitle')}>
       <div className="max-w-6xl mx-auto pb-20 space-y-6 text-left">
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="rounded-xl" onClick={() => navigate('/tests')}>
+          <Link to="/tests"><Button variant="outline" className="rounded-xl">
             <ArrowLeft className="h-4 w-4 mr-1" />
             {t('wrongReview.backToTraining')}
           </Button>

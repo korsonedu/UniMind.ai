@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
 import {
   Building2, Users, Calendar, Loader2,
@@ -37,7 +37,7 @@ const PLAN_COLORS: Record<string, string> = {
 
 export default function InstitutionDashboard() {
   const { t } = useTranslation('dashboard');
-  const { user } = useAuthStore();
+  const { isPlatformAdmin, institution } = useInstitutionStore();
   const FEATURE_KEYS = [
     'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
     'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
@@ -51,11 +51,14 @@ export default function InstitutionDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/users/institution/me/')
+    const endpoint = isPlatformAdmin && !institution
+      ? '/users/institutions/overview/'
+      : '/users/institution/me/';
+    api.get(endpoint)
       .then(res => { setData(res.data); })
       .catch(() => { /* redirect handled by RequireAuth */ })
       .finally(() => setLoading(false));
-  }, []);
+  }, [isPlatformAdmin, institution]);
 
   if (loading) {
     return (

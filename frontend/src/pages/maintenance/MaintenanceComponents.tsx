@@ -52,7 +52,7 @@ export const KPTreeNode = ({ node, allNodes, onDelete, onEdit }: { node: any, al
           ) : <div className="w-3" />}
           <p className="text-[11px] font-bold text-foreground truncate text-left">{node.name}</p>
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <div className="flex gap-1 opacity-100 transition-opacity shrink-0">
           <Button onClick={() => onEdit(node)} variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-white shadow-sm text-blue-600"><Edit3 className="w-3 h-3" /></Button>
           <Button onClick={() => onDelete(node.id)} variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-white shadow-sm text-red-500"><Trash2 className="w-3 h-3" /></Button>
         </div>

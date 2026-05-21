@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft, Bell, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -172,7 +172,7 @@ export const TestSessionPage: React.FC = () => {
   return (
     <div className="h-full min-h-0 bg-background text-foreground flex flex-col overflow-hidden">
       <header className="h-12 shrink-0 border-b border-border px-3 flex items-center justify-between bg-background/90 backdrop-blur-md">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/tests')} className="h-8 px-2 rounded-lg text-xs font-bold">
+        <Link to="/tests"><Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-bold">
           <ArrowLeft className="h-4 w-4 mr-1" />
           {t('back')}
         </Button>

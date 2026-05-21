@@ -80,7 +80,7 @@ function TreeNode({
         {node.questions_count > 0 && (
           <span className="text-[9px] text-muted-foreground shrink-0">{t('knowledgeSystem.nodeQuestions', { count: node.questions_count })}</span>
         )}
-        <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-0.5 shrink-0">
           <button onClick={(e) => { e.stopPropagation(); onEdit(node); }} className="p-0.5 hover:bg-muted rounded" aria-label={`Edit ${node.name}`}>
             <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
           </button>

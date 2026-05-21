@@ -532,7 +532,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete }: { kpList: any[],
                                           />
                                           <p className="text-[10px] text-muted-foreground mt-1 ml-1">支持 LaTeX 公式：<code className="text-[10px] bg-muted/30 px-1 rounded">$...$</code> 行内、<code className="text-[10px] bg-muted/30 px-1 rounded">$$...$$</code> 块级</p>
                                       </div>
-                                      <Button onClick={() => setPreviewQuestions(prev => prev.filter((_, i) => i !== idx))} variant="ghost" size="icon" className="h-10 w-10 rounded-full text-red-400 hover:text-red-500 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"><X className="w-5 h-5" /></Button>
+                                      <Button onClick={() => setPreviewQuestions(prev => prev.filter((_, i) => i !== idx))} variant="ghost" size="icon" className="h-10 w-10 rounded-full text-red-400 hover:text-red-500 hover:bg-red-50 transition-all opacity-100"><X className="w-5 h-5" /></Button>
                                   </div>
 
                                   {q.q_type === 'objective' ? (

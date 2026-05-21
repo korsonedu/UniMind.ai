@@ -648,7 +648,7 @@ function StudentDetailPanel({ studentId }: { studentId: number }) {
             <div className="space-y-1.5">
               {recent_scores.map((s, i) => (
                 <div key={i} className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">{s.created_at ? new Date(s.created_at).toLocaleDateString('zh-CN') : ''}</span>
+                  <span className="text-muted-foreground">{s.created_at ? new Date(s.created_at).toLocaleDateString(navigator.language || 'zh-CN') : ''}</span>
                   <span className="font-bold text-foreground">{s.total_score}/{s.max_score}</span>
                   <span className={cn('font-bold', (s.total_score / s.max_score) >= 0.7 ? 'text-unimind-green' : 'text-amber-500')}>
                     {Math.round(s.total_score / s.max_score * 100)}%

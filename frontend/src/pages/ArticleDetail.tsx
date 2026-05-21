@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, Calendar, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
@@ -120,7 +120,7 @@ export const ArticleDetail: React.FC = () => {
                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">Verified Academic Resource</p>
             </div>
          </div>
-         <Button onClick={() => navigate('/articles')} variant="outline" className="rounded-2xl font-bold h-12 w-full md:w-auto px-8 border-border hover:bg-muted transition-colors">{t('articleBackToList')}</Button>
+         <Button asChild variant="outline" className="rounded-2xl font-bold h-12 w-full md:w-auto px-8 border-border hover:bg-muted transition-colors"><Link to="/articles">{t('articleBackToList')}</Link></Button>
       </footer>
     </div>
   );
