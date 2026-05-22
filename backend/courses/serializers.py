@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Course, Album, StartupMaterial
+from .models import Course, Album, StartupMaterial, CourseTag, CourseTagRelation
 
 
 class RelativeFileField(serializers.FileField):
@@ -33,9 +33,15 @@ class CourseSerializer(serializers.ModelSerializer):
     courseware = RelativeFileField(required=False)
     reference_materials = RelativeFileField(required=False)
 
+    tags = serializers.SerializerMethodField()
+
+    def get_tags(self, obj):
+        relations = obj.tag_relations.select_related('tag').all()
+        return CourseTagSerializer([r.tag for r in relations], many=True).data
+
     class Meta:
         model = Course
-        fields = ('id', 'title', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'institution', 'created_at', 'updated_at', 'author')
+        fields = ('id', 'title', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'institution', 'tags', 'created_at', 'updated_at', 'author')
         read_only_fields = ('author',)
 
 class StartupMaterialSerializer(serializers.ModelSerializer):
@@ -44,3 +50,15 @@ class StartupMaterialSerializer(serializers.ModelSerializer):
     class Meta:
         model = StartupMaterial
         fields = ('id', 'name', 'description', 'file', 'created_at')
+
+
+class CourseTagSerializer(serializers.ModelSerializer):
+    course_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CourseTag
+        fields = ('id', 'name', 'slug', 'course_count', 'created_at')
+        read_only_fields = ('slug', 'created_at')
+
+    def get_course_count(self, obj):
+        return getattr(obj, 'course_count', obj.course_relations.count())
