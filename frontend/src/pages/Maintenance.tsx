@@ -25,6 +25,7 @@ import { MarkdownEditor } from '@/components/MarkdownEditor';
 
 // Sub-components
 import { TagInput } from './maintenance/MaintenanceComponents';
+import { TagAutocomplete } from '@/components/TagAutocomplete';
 import { QuestionBankPanel } from './maintenance/QuestionBankPanel';
 import { InsightsPanel } from './maintenance/InsightsPanel';
 import { AuditPanel } from './maintenance/AuditPanel';
@@ -60,7 +61,7 @@ export const Maintenance: React.FC = () => {
   const [kpCreationTarget, setKPCreationTarget] = useState<'course' | 'article' | 'none'>('course');
 
   // Forms
-  const [courseForm, setCourseForm] = useState({ title: '', album_obj: '0', desc: '', elo_reward: 50, knowledge_point: '0', video: null as File | null, cover: null as File | null, courseware: null as File | null });
+  const [courseForm, setCourseForm] = useState({ title: '', album_obj: '0', desc: '', elo_reward: 50, knowledge_point: '0', video: null as File | null, cover: null as File | null, courseware: null as File | null, tags: [] as string[] });
   const [articleForm, setArticleForm] = useState({ title: '', content: '', author_display_name: '', tags: [] as string[], knowledge_point: '0' });
   const [botForm, setBotForm] = useState({ name: '', prompt: '', avatar: null as File | null, is_exclusive: false });
   const [albumForm, setAlbumForm] = useState({ name: '', description: '', cover: null as File | null });
@@ -116,6 +117,7 @@ export const Maintenance: React.FC = () => {
     const knowledgePoint = courseForm.knowledge_point;
     const cover = courseForm.cover;
     const courseware = courseForm.courseware;
+    const tags = courseForm.tags;
 
     const controller = new AbortController();
     const uploadId = `${Date.now()}-${file.name}`;
@@ -123,7 +125,7 @@ export const Maintenance: React.FC = () => {
     const { addTask, updateProgress, setStatus } = useUploadStore.getState();
     addTask({ id: uploadId, fileName: file.name, progress: 0, status: 'uploading', controller });
 
-    setCourseForm({ title: '', album_obj: '0', desc: '', elo_reward: 50, knowledge_point: '0', video: null, cover: null, courseware: null });
+    setCourseForm({ title: '', album_obj: '0', desc: '', elo_reward: 50, knowledge_point: '0', video: null, cover: null, courseware: null, tags: [] });
     setIsCourseSubmitting(false);
 
     try {
@@ -133,6 +135,7 @@ export const Maintenance: React.FC = () => {
         eloReward,
         albumObj: albumObj !== '0' ? albumObj : undefined,
         knowledgePoint: knowledgePoint !== '0' ? knowledgePoint : undefined,
+        tags,
         video: file,
         cover,
         courseware,
@@ -318,6 +321,10 @@ export const Maintenance: React.FC = () => {
                 <div className="space-y-2"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">{t('course.knowledgePoint')}</Label><Select value={courseForm.knowledge_point} onValueChange={v => v === 'NEW_KP' ? (setKPCreationTarget('course'), setShowNewKPDialog(true)) : setCourseForm({ ...courseForm, knowledge_point: v })}><SelectTrigger className="h-10 rounded-xl bg-unimind-bg-secondary border-none font-bold px-4 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">{t('course.noAlbum')}</SelectItem><SelectItem value="NEW_KP" className="text-indigo-600 font-bold">{t('course.newKnowledgePoint')}</SelectItem>{kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()}>{kp.name}</SelectItem>)}</SelectContent></Select></div>
               </div>
               <div className="space-y-2"><Label className="text-[11px] font-bold uppercase opacity-40 ml-1">{t('course.description')}</Label><MarkdownEditor content={courseForm.desc} onChange={v => setCourseForm({ ...courseForm, desc: v })} /></div>
+              <div className="space-y-2">
+                <Label className="text-[11px] font-bold uppercase opacity-40 ml-1">标签</Label>
+                <TagAutocomplete tags={courseForm.tags} setTags={(t: string[]) => setCourseForm({ ...courseForm, tags: t })} />
+              </div>
             </Card>
             <Card className="lg:col-span-4 p-8 bg-white rounded-3xl border-none shadow-sm space-y-6">
               <div className="space-y-3"><Label className="text-[11px] font-bold uppercase opacity-40">{t('course.rewardSetting')}</Label><div className="flex items-center gap-3"><Input type="number" value={courseForm.elo_reward} onChange={e => setCourseForm({ ...courseForm, elo_reward: parseInt(e.target.value) || 0 })} className="bg-unimind-bg-secondary border-none h-10 rounded-xl font-bold w-20 text-center" /><span className="text-[11px] font-bold opacity-40 uppercase">ELO Reward</span></div></div>
@@ -523,7 +530,7 @@ export const Maintenance: React.FC = () => {
           <div className="space-y-5 pt-6">
             <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40">{t('quickCreate.albumName')}</Label><Input value={newAlbumName} onChange={e => setNewAlbumName(e.target.value)} placeholder={t('quickCreate.albumNamePlaceholder')} className="bg-unimind-bg-secondary border-none h-11 rounded-xl font-bold px-4 text-sm" /></div>
             <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40">{t('quickCreate.albumDesc')}</Label><textarea value={newAlbumDesc} onChange={e => setNewAlbumDesc(e.target.value)} className="w-full bg-unimind-bg-secondary border-none rounded-xl p-4 min-h-[80px] font-bold text-xs" placeholder={t('quickCreate.albumDescPlaceholder')} /></div>
-            <div className="flex gap-3 pt-2"><Button variant="outline" onClick={() => setShowNewAlbumDialog(false)} className="flex-1 h-12 rounded-xl font-bold text-xs">{t('quickCreate.cancel')}</Button><Button onClick={handleQuickCreateAlbum} className="flex-[2] h-12 rounded-xl bg-black text-white font-black shadow text-xs uppercase tracking-widest">{t('quickCreate.confirmCreate')}</Button></div>
+            <div className="flex gap-3 pt-2"><Button variant="outline" onClick={() => setShowNewAlbumDialog(false)} className="flex-1 h-12 rounded-xl font-bold text-xs">{t('quickCreate.cancel')}</Button><Button onClick={handleQuickCreateAlbum} className="flex-[2] h-12 rounded-xl bg-zinc-900 text-white font-semibold shadow text-xs">{t('quickCreate.confirmCreate')}</Button></div>
           </div>
         </DialogContent>
       </Dialog>
@@ -535,7 +542,7 @@ export const Maintenance: React.FC = () => {
             <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40">{t('quickCreate.nodeName')}</Label><Input value={newKPForm.name} onChange={e => setNewKPForm({ ...newKPForm, name: e.target.value })} placeholder={t('quickCreate.nodeNamePlaceholder')} className="bg-unimind-bg-secondary border-none h-11 rounded-xl font-bold px-4 text-sm" /></div>
             <div className="space-y-1.5"><Label className="text-[11px] font-bold uppercase opacity-40">{t('quickCreate.parent')}</Label><Select value={newKPForm.parent} onValueChange={v => setNewKPForm({ ...newKPForm, parent: v })}><SelectTrigger className="h-11 rounded-xl bg-unimind-bg-secondary border-none font-bold text-xs px-4"><SelectValue placeholder={t('quickCreate.topLevel')} /></SelectTrigger><SelectContent>{kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()} className="text-xs">{kp.name}</SelectItem>)}</SelectContent></Select></div>
             <textarea value={newKPForm.description} onChange={e => setNewKPForm({ ...newKPForm, description: e.target.value })} className="w-full bg-unimind-bg-secondary border-none rounded-xl p-4 min-h-[100px] font-bold text-xs" placeholder={t('quickCreate.descPlaceholder')} />
-            <div className="flex gap-3 pt-2"><Button variant="outline" onClick={() => setShowNewKPDialog(false)} className="flex-1 h-12 rounded-xl font-bold text-xs">{t('quickCreate.cancel')}</Button><Button onClick={handleQuickCreateKP} className="flex-[2] h-12 rounded-xl bg-black text-white font-black shadow text-xs uppercase tracking-widest">{t('quickCreate.confirmSave')}</Button></div>
+            <div className="flex gap-3 pt-2"><Button variant="outline" onClick={() => setShowNewKPDialog(false)} className="flex-1 h-12 rounded-xl font-bold text-xs">{t('quickCreate.cancel')}</Button><Button onClick={handleQuickCreateKP} className="flex-[2] h-12 rounded-xl bg-zinc-900 text-white font-semibold shadow text-xs">{t('quickCreate.confirmSave')}</Button></div>
           </div>
         </DialogContent>
       </Dialog>
