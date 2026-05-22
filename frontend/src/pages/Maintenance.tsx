@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   BookOpen, FileText, Target, Video, Image as ImageIcon,
-  Upload, Trash2, Edit3, Settings2, Bot, Sparkles, Bell, Send, Loader2,
+  Upload, Trash2, Edit3, Settings2, Bot, Sparkles, Bell, Send, Loader2, Tag,
   BrainCircuit, Layers, FileUp, Rocket, BarChart3
 } from 'lucide-react';
 import api from '@/lib/api';
@@ -46,11 +46,14 @@ export const Maintenance: React.FC = () => {
   const [kpList, setKpList] = useState<any[]>([]);
   const [albumList, setAlbumList] = useState<any[]>([]);
   const [smList, setSmList] = useState<any[]>([]);
+  const [tagList, setTagList] = useState<any[]>([]);
 
   // UI State
-  const [auditMode, setAuditMode] = useState<'hub' | 'courses' | 'articles' | 'kp' | 'sm'>('hub');
+  const [auditMode, setAuditMode] = useState<'hub' | 'courses' | 'articles' | 'kp' | 'sm' | 'tags'>('hub');
   const [qSearch, setQSearch] = useState('');
   const [editingItem, setEditingItem] = useState<{ type: string, data: any } | null>(null);
+  const [newTagName, setNewTagName] = useState('');
+  const [showNewTagDialog, setShowNewTagDialog] = useState(false);
 
   // Quick Create Logic
   const [showNewKPDialog, setShowNewKPDialog] = useState(false);
@@ -75,11 +78,11 @@ export const Maintenance: React.FC = () => {
 
   const fetchLists = async () => {
     try {
-      const [c, a, b, k, al, sm] = await Promise.all([
+      const [c, a, b, k, al, sm, tg] = await Promise.all([
         api.get('/courses/'), api.get('/articles/'), api.get('/ai/bots/'),
-        api.get('/quizzes/knowledge-points/'), api.get('/courses/albums/'), api.get('/courses/startup-materials/')
+        api.get('/quizzes/knowledge-points/'), api.get('/courses/albums/'), api.get('/courses/startup-materials/'), api.get('/courses/tags/')
       ]);
-      setCourseList(c.data); setArticleList(a.data.articles || []); setBotList(b.data); setKpList(k.data); setAlbumList(al.data); setSmList(sm.data);
+      setCourseList(c.data); setArticleList(a.data.articles || []); setBotList(b.data); setKpList(k.data); setAlbumList(al.data); setSmList(sm.data); setTagList(tg.data);
     } catch (e) { }
   };
 
@@ -91,6 +94,17 @@ export const Maintenance: React.FC = () => {
     finally { setIsLoadingBI(false); }
   };
 
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return toast.error('请输入标签名');
+    try {
+      await api.post('/courses/tags/', { name: newTagName.trim() });
+      toast.success('标签已创建');
+      setNewTagName('');
+      setShowNewTagDialog(false);
+      fetchLists();
+    } catch (e: any) { toast.error(e?.response?.data?.detail || '创建失败'); }
+  };
+
   useEffect(() => { fetchLists(); fetchBI(); }, []);
 
   const handleDelete = async (type: string, id: number) => {
@@ -99,6 +113,7 @@ export const Maintenance: React.FC = () => {
       if (type === 'kp') endpoint = `/quizzes/knowledge-points/${id}/`;
       if (type === 'quizzes') endpoint = `/quizzes/questions/${id}/`;
       if (type === 'sm') endpoint = `/courses/startup-materials/${id}/`;
+      if (type === 'tags') endpoint = `/courses/tags/${id}/`;
       await api.delete(endpoint);
       toast.success(t('commonActions.removed')); fetchLists();
     } catch (e) { toast.error(t('commonActions.deleteFailed')); }
@@ -306,6 +321,9 @@ export const Maintenance: React.FC = () => {
           <TabsTrigger value="albums" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Layers className="w-3.5 h-3.5 mr-2" />{t('tabs.albumManager')}</TabsTrigger>
           <TabsTrigger value="bots" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Bot className="w-3.5 h-3.5 mr-2" />{t('tabs.aiBot')}</TabsTrigger>
           <TabsTrigger value="sm" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Rocket className="w-3.5 h-3.5 mr-2" />{t('tabs.startupMaterials')}</TabsTrigger>
+          <TabsTrigger value="tags" className="text-[11px] font-bold px-4 py-2 rounded-lg data-[state=active]:bg-black data-[state=active]:text-white gap-2">
+            <Tag className="w-3.5 h-3.5" /> 标签
+          </TabsTrigger>
           <TabsTrigger value="notifications" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Bell className="w-3.5 h-3.5 mr-2" />{t('tabs.siteBroadcast')}</TabsTrigger>
           <TabsTrigger value="insights" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><BarChart3 className="w-3.5 h-3.5 mr-2" />{t('tabs.insights')}</TabsTrigger>
           <TabsTrigger value="manage" className="rounded-xl px-4 py-2 text-[11px] font-bold uppercase"><Settings2 className="w-3.5 h-3.5 mr-2" />{t('tabs.audit')}</TabsTrigger>
@@ -443,6 +461,33 @@ export const Maintenance: React.FC = () => {
             </Card>
             <Card className="p-10 bg-unimind-bg-secondary/50 rounded-3xl border-none shadow-sm space-y-6"><h3 className="text-sm font-bold uppercase tracking-widest opacity-40">{t('startupMaterial.existingMaterials')}</h3><ScrollArea className="h-[520px]"><div className="grid gap-3 pr-4">{smList.map(sm => (<div key={sm.id} className="p-5 bg-white rounded-2xl flex items-center justify-between group"><p className="text-sm font-bold">{sm.name}</p><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><Button onClick={() => setEditingItem({ type: 'sm', data: { ...sm } })} variant="ghost" size="icon" className="h-8 w-8 text-blue-600"><Edit3 className="w-3.5 h-3.5" /></Button><Button onClick={() => handleDelete('sm', sm.id)} variant="ghost" size="icon" className="h-8 w-8 text-red-500"><Trash2 className="w-3.5 h-3.5" /></Button></div></div>))}</div></ScrollArea></Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="tags" className="space-y-4">
+          <div className="flex gap-3 items-end">
+            <div className="space-y-1 flex-1">
+              <Label className="text-[11px] font-bold uppercase opacity-40 ml-1">新标签名称</Label>
+              <Input value={newTagName} onChange={e => setNewTagName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCreateTag()} placeholder="输入标签名" className="bg-unimind-bg-secondary border-none h-10 rounded-xl font-bold px-4 text-xs" />
+            </div>
+            <Button onClick={handleCreateTag} className="h-10 rounded-xl bg-black text-white font-bold text-[11px] px-6">创建</Button>
+          </div>
+          {tagList.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground text-center py-8">暂无标签，请创建第一个</p>
+          ) : (
+            <div className="space-y-1.5">
+              {tagList.map((tag: any) => (
+                <div key={tag.id} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold">{tag.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{tag.course_count ?? 0} 个课程</span>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-red-50" onClick={() => { if (confirm(`删除标签「${tag.name}」？此操作仅解除关联，不影响课程。`)) handleDelete('tags', tag.id); }}>
+                    <Trash2 className="w-3 h-3 text-red-500" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="notifications">
