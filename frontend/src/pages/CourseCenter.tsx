@@ -11,13 +11,27 @@ import { EmptyState } from '@/components/EmptyState';
 import { InlineError } from '@/components/InlineError';
 import { useFetch } from '@/lib/useFetch';
 import api from '@/lib/api';
+import { useState, useEffect } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export const CourseCenter: React.FC = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const [allTags, setAllTags] = useState<any[]>([]);
+  const [activeTags, setActiveTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    api.get('/courses/tags/').then(r => setAllTags(r.data || [])).catch(() => {});
+  }, []);
+
   const { t } = useTranslation('common');
+  const tagQuery = activeTags.length > 0 ? '?' + activeTags.map(t => `tag=${encodeURIComponent(t)}`).join('&') : '';
+  const fetchKey = 'courses' + activeTags.join(',');
+
   const { data: courses, loading, error, refetch } = useFetch<any[]>(
-    (signal) => api.get('/courses/', { signal }).then(r => r.data)
+    (signal) => api.get(`/courses/${tagQuery}`, { signal }).then(r => r.data),
+    fetchKey
   );
 
   const ActionBtn = user?.role === 'admin' ? (
@@ -39,6 +53,39 @@ export const CourseCenter: React.FC = () => {
       subtitle={t('pages:courseCenter.subtitle')}
       action={ActionBtn}
     >
+      {allTags.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-none">
+          {activeTags.length > 0 && (
+            <Badge
+              className="cursor-pointer bg-black text-white hover:bg-black/80 px-3 py-1 rounded-full text-[11px] font-bold shrink-0"
+              onClick={() => setActiveTags([])}
+            >
+              全部 ×
+            </Badge>
+          )}
+          {allTags.map((tag: any) => {
+            const isActive = activeTags.includes(tag.slug);
+            return (
+              <Badge
+                key={tag.id}
+                className={cn(
+                  "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
+                  isActive ? "bg-black text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                )}
+                onClick={() => {
+                  if (isActive) {
+                    setActiveTags(activeTags.filter(t => t !== tag.slug));
+                  } else {
+                    setActiveTags([...activeTags, tag.slug]);
+                  }
+                }}
+              >
+                {tag.name}
+              </Badge>
+            );
+          })}
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 text-left animate-in fade-in duration-700">
            {courses.map(course => (
              <Link
@@ -63,6 +110,15 @@ export const CourseCenter: React.FC = () => {
                       <h3 className="font-bold text-sm leading-tight group-hover:text-emerald-600 transition-colors line-clamp-1 flex-1">{course.title}</h3>
                    </div>
                    <p className="text-[11px] text-muted-foreground line-clamp-2 font-medium leading-relaxed min-h-[28px]">{course.description}</p>
+                   {course.tags && course.tags.length > 0 && (
+                     <div className="flex flex-wrap gap-1 mt-1">
+                       {course.tags.map((t: any) => (
+                         <span key={t.id} className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">
+                           #{t.name}
+                         </span>
+                       ))}
+                     </div>
+                   )}
                 </CardContent>
              </Link>
            ))}
