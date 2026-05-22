@@ -112,3 +112,31 @@ class VideoProgress(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.course.title} ({'完成' if self.is_finished else '进行中'})"
+
+
+class CourseTag(models.Model):
+    institution = models.ForeignKey("users.Institution", on_delete=models.CASCADE, related_name="course_tags")
+    name = models.CharField(max_length=50, verbose_name="标签名")
+    slug = models.SlugField(max_length=60, verbose_name="URL标识")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('institution', 'slug')
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class CourseTagRelation(models.Model):
+    course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='tag_relations')
+    tag = models.ForeignKey(CourseTag, on_delete=models.CASCADE, related_name='course_relations')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('course', 'tag')
