@@ -365,6 +365,15 @@ class CourseListCreateView(generics.ListCreateAPIView):
         kp = self.request.query_params.get('kp')
         if q: qs = qs.filter(title__icontains=q)
         if kp: qs = qs.filter(knowledge_point_id=kp)
+        tag = self.request.query_params.getlist('tag')
+        if tag:
+            from courses.models import CourseTagRelation
+            from django.db.models import Count
+            matching_qs = CourseTagRelation.objects.filter(
+                tag__slug__in=tag,
+                tag__institution=self.request.user.institution,
+            ).values('course_id').annotate(n=Count('id')).filter(n=len(tag))
+            qs = qs.filter(id__in=[m['course_id'] for m in matching_qs])
         return qs
 
     def perform_create(self, serializer):
