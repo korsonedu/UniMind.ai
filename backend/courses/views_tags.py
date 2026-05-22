@@ -9,6 +9,27 @@ from .serializers import CourseTagSerializer
 from users.permissions import IsAdmin
 
 
+def _assign_tags(course, tag_names, institution):
+    """Assign tags to a course. Create new tags as needed. Returns list of tag ids."""
+    from django.utils.text import slugify
+    from .models import CourseTagRelation
+    tag_ids = []
+    for name in tag_names:
+        name = name.strip()
+        if not name:
+            continue
+        slug = slugify(name)
+        tag, _ = CourseTag.objects.get_or_create(
+            institution=institution, slug=slug,
+            defaults={'name': name}
+        )
+        relation, _ = CourseTagRelation.objects.get_or_create(
+            course=course, tag=tag
+        )
+        tag_ids.append(tag.id)
+    course.tag_relations.exclude(tag_id__in=tag_ids).delete()
+
+
 class TagListCreateView(generics.ListCreateAPIView):
     serializer_class = CourseTagSerializer
 
@@ -58,23 +79,7 @@ class BatchAssignTagsView(APIView):
             return Response({"error": "Course not found"}, status=404)
 
         inst = request.user.institution
-        tag_ids = []
-        for name in tag_names:
-            name = name.strip()
-            if not name:
-                continue
-            slug = slugify(name)
-            tag, _ = CourseTag.objects.get_or_create(
-                institution=inst, slug=slug,
-                defaults={'name': name}
-            )
-            relation, _ = CourseTagRelation.objects.get_or_create(
-                course=course, tag=tag
-            )
-            tag_ids.append(tag.id)
-
-        # Remove relations for tags not in the new list
-        course.tag_relations.exclude(tag_id__in=tag_ids).delete()
+        _assign_tags(course, tag_names, inst)
 
         relations = course.tag_relations.select_related('tag').all()
         return Response(CourseTagSerializer([r.tag for r in relations], many=True).data)

@@ -262,6 +262,16 @@ class ChunkedUploadCompleteView(APIView):
         finally:
             shutil.rmtree(upload_path, ignore_errors=True)
 
+        # Assign tags from chunked upload
+        tags_json = request.data.get("tags", "")
+        if tags_json:
+            try:
+                tag_names = json.loads(tags_json)
+                from .views_tags import _assign_tags
+                _assign_tags(course, tag_names, request.user.institution)
+            except Exception:
+                pass
+
         # 未上传封面 → 后台线程提取第一帧
         if not cover_image:
             _extract_cover_async(course.id)
@@ -382,6 +392,16 @@ class CourseListCreateView(generics.ListCreateAPIView):
         # 未上传封面 → 后台线程提取第一帧
         if not course.cover_image and course.video_file:
             _extract_cover_async(course.id)
+
+        # Assign tags from request
+        tags_json = self.request.data.get('tags', '')
+        if tags_json:
+            try:
+                tag_names = json.loads(tags_json)
+                from .views_tags import _assign_tags
+                _assign_tags(course, tag_names, self.request.user.institution)
+            except Exception:
+                pass
 
         # 后台触发 ASR 转录
         try:

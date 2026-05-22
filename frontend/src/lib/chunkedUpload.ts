@@ -148,6 +148,7 @@ export interface CreateCourseWithUploadParams {
   eloReward: number;
   albumObj?: string;
   knowledgePoint?: string;
+  tags?: string[];
   video: File;
   cover?: File | null;
   courseware?: File | null;
@@ -166,6 +167,7 @@ export async function createCourseWithSmartUpload(params: CreateCourseWithUpload
     eloReward,
     albumObj,
     knowledgePoint,
+    tags,
     video,
     cover,
     courseware,
@@ -210,6 +212,7 @@ export async function createCourseWithSmartUpload(params: CreateCourseWithUpload
     fd.append('elo_reward', String(eloReward));
     if (albumObj && albumObj !== '0') fd.append('album_obj', albumObj);
     if (knowledgePoint && knowledgePoint !== '0') fd.append('knowledge_point', knowledgePoint);
+    if (tags && tags.length > 0) fd.append('tags', JSON.stringify(tags));
   };
 
   if (video.size <= thresholdBytes) {
