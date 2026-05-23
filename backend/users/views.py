@@ -77,11 +77,7 @@ class ActivationCodeDetailView(generics.DestroyAPIView):
     permission_classes = [IsAdmin]
 
     def perform_destroy(self, instance):
-        # 如果已被使用，需要收回用户的会员权限
-        if instance.is_used and instance.used_by:
-            user = instance.used_by
-            user.is_member = False
-            user.save()
+        # 删除激活码不撤销已激活会员的权限（避免管理误操作影响用户）
         instance.delete()
 
 class RegisterView(generics.CreateAPIView):

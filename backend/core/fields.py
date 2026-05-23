@@ -35,6 +35,8 @@ class EncryptedCharField(models.CharField):
         try:
             return _get_fernet().decrypt(value.encode()).decode()
         except Exception:
+            import logging
+            logging.getLogger(__name__).error("EncryptedCharField decrypt failed, returning empty string")
             return ''
 
     def to_python(self, value):
