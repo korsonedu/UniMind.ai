@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import KnowledgePoint, KnowledgePointAnnotation
 from quizzes.serializers import KnowledgePointSerializer, KnowledgePointAnnotationSerializer
-from users.permissions import IsAdminWriteMemberRead, IsMemberOrAdmin, HasPlanFeature, HasAIQuota, IsAdmin, IsInstitutionAdmin, HasQuota
+from users.permissions import IsAdminWriteMemberRead, IsMember, HasPlanFeature, IsAdmin, IsInstitutionAdmin, HasQuota, is_platform_admin
 from users.quota import increment_ai_quota
 from ai_service import AIService
 
@@ -37,7 +37,7 @@ class KnowledgePointListView(generics.ListCreateAPIView):
         if not user.is_authenticated:
             return qs.none()
         # 平台管理员：只看全局知识树（institution=NULL），不得接触机构资产
-        if getattr(user, 'is_platform_admin', False) and user.institution is None:
+        if is_platform_admin(user) and user.institution is None:
             return qs.filter(institution__isnull=True)
         # 机构用户：只看本机构知识树
         if user.institution:
@@ -47,7 +47,7 @@ class KnowledgePointListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         user = self.request.user
         institution = None
-        if user.is_authenticated and not getattr(user, 'is_platform_admin', False) and user.institution:
+        if user.is_authenticated and not is_platform_admin(user) and user.institution:
             institution = user.institution
         serializer.save(institution=institution)
 
@@ -69,7 +69,7 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not user.is_authenticated:
             return qs.none()
         # 平台管理员：只接触全局节点
-        if getattr(user, 'is_platform_admin', False) and user.institution is None:
+        if is_platform_admin(user) and user.institution is None:
             return qs.filter(institution__isnull=True)
         # 机构用户：只接触本机构节点
         if user.institution:
@@ -79,7 +79,7 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         user = self.request.user
         institution = None
-        if not getattr(user, 'is_platform_admin', False) and user.institution:
+        if not is_platform_admin(user) and user.institution:
             institution = user.institution
         serializer.save(institution=institution)
 
@@ -91,7 +91,7 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class MyKnowledgePointAnnotationView(APIView):
-    permission_classes = [IsMemberOrAdmin]
+    permission_classes = [IsMember]
 
     def get(self, request, pk):
         kp = get_object_or_404(KnowledgePoint, pk=pk)
@@ -133,7 +133,7 @@ class MyKnowledgePointAnnotationView(APIView):
 
 class MyKnowledgePointAnnotationListView(generics.ListAPIView):
     serializer_class = KnowledgePointAnnotationSerializer
-    permission_classes = [IsMemberOrAdmin]
+    permission_classes = [IsMember]
 
     def get_queryset(self):
         qs = KnowledgePointAnnotation.objects.select_related("knowledge_point").filter(user=self.request.user).order_by("-updated_at")
@@ -147,8 +147,9 @@ class MyKnowledgePointAnnotationListView(generics.ListAPIView):
 
 
 class GenerateBulkQuestionsView(APIView):
-    permission_classes = [HasPlanFeature, HasAIQuota]
+    permission_classes = [HasPlanFeature, HasQuota]
     required_feature = 'ai.generate'
+    quota_resource = 'ai_question'
     def post(self, request, pk):
         try:
             kp = KnowledgePoint.objects.get(pk=pk)
@@ -346,7 +347,7 @@ class KnowledgePointImportMDView(APIView):
         # 机构管理员自动关联本机构，平台管理员导入为全局树（不得接触机构资产）
         institution = None
         user = request.user
-        if not getattr(user, 'is_platform_admin', False) and user.institution:
+        if not is_platform_admin(user) and user.institution:
             institution = user.institution
 
         created, updated = _create_or_update_knowledge_tree(tree, institution=institution)
@@ -366,7 +367,7 @@ class KnowledgePointExportMDView(APIView):
     def get(self, request):
         user = request.user
         # 平台管理员导出全局树，机构管理员导出本机构树
-        if getattr(user, 'is_platform_admin', False) and user.institution is None:
+        if is_platform_admin(user) and user.institution is None:
             root_filter = {'institution__isnull': True}
         elif user.institution:
             root_filter = {'institution': user.institution}

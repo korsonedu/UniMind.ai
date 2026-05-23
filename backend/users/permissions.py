@@ -129,7 +129,7 @@ class IsAdmin(permissions.BasePermission):
         return (user.institution is not None and user.institution_role in ('owner', 'teacher'))
 
 
-class IsMemberOrAdmin(permissions.BasePermission):
+class IsMember(permissions.BasePermission):
     message = "您需要先成为学员（激活会员）才能使用此功能。"
 
     def has_permission(self, request, view):
@@ -179,7 +179,7 @@ class IsInstitutionActive(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        if user.is_platform_admin:
+        if is_platform_admin(user):
             return True
         inst = user.institution
         if inst is None:
@@ -198,7 +198,7 @@ class HasPlanFeature(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        if user.is_platform_admin:
+        if is_platform_admin(user):
             return True
         required = getattr(view, 'required_feature', None)
         if required is None:
@@ -226,7 +226,7 @@ class HasQuota(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        if getattr(user, 'is_platform_admin', False):
+        if is_platform_admin(user) or is_institution_admin(user):
             return True
         resource = getattr(view, 'quota_resource', None)
         if resource is None:
@@ -238,25 +238,4 @@ class HasQuota(permissions.BasePermission):
         return True
 
 
-class HasAIQuota(permissions.BasePermission):
-    """检查 AI 出题配额。已废弃，请使用 HasQuota + quota_resource='ai_question'"""
 
-    def has_permission(self, request, view):
-        view.quota_resource = 'ai_question'
-        return HasQuota().has_permission(request, view)
-
-
-class HasPointsBalance(permissions.BasePermission):
-    """检查用户积分余额是否足够消费指定 AI 服务"""
-    message = "积分不足。刷几道题就能解锁此功能，加油！"
-
-    def has_permission(self, request, view):
-        user = request.user
-        if not user or not user.is_authenticated:
-            return False
-        if getattr(user, 'is_platform_admin', False):
-            return True
-        cost = getattr(view, 'points_cost', 0)
-        if cost <= 0:
-            return True
-        return getattr(user, 'elo_points', 0) >= cost

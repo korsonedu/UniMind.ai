@@ -36,7 +36,7 @@
 - subjective_type=essay：question 必须带完整现实背景与分析任务，要求系统论证与评价建议。
 
 【输出格式】
-只输出 JSON 数组，不要任何额外文本：
+调用 submit_questions 函数提交题目列表，不要输出 Markdown 或其他文字：
 [
   {{
     "q_type": "objective | subjective",

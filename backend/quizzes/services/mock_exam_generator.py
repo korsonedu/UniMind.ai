@@ -5,6 +5,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
+from ai_engine.tools import QUESTION_LIST_SCHEMA
 from ai_service import AIService
 from quizzes.models import ExamQuestionResult, UserQuestionStatus
 from quizzes.services.review_insights import CAUSE_LABELS, infer_primary_cause
@@ -132,6 +133,25 @@ class MockExamGeneratorService:
     def _call_ai_and_parse(cls, system_prompt: str, user_prompt: str, max_tokens: int = 8000) -> List[Dict[str, Any]]:
         """单次 AI 调用，解析 JSON 并返回题目列表"""
         try:
+            result = AIService.structured_output(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                schema=QUESTION_LIST_SCHEMA,
+                tool_name="submit_questions",
+                tool_description="提交生成的题目列表",
+                temperature=0.4,
+                max_tokens=max_tokens,
+                raise_on_error=True,
+                operation="quizzes.mock_exam_generate",
+            )
+            if isinstance(result, list):
+                return result
+        except Exception as exc:
+            logger.exception("AI mock exam generation failed")
+            raise RuntimeError(f"AI 命题服务暂时不可用: {str(exc)}") from exc
+
+        # fallback: old extract_json path
+        try:
             response = AIService.simple_chat(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
@@ -141,19 +161,17 @@ class MockExamGeneratorService:
                 operation="quizzes.mock_exam_generate",
             )
         except Exception as exc:
-            logger.exception("AI mock exam generation failed")
+            logger.exception("AI mock exam generation fallback failed")
             raise RuntimeError(f"AI 命题服务暂时不可用: {str(exc)}") from exc
 
         content = AIService.extract_content(response)
         if not content:
             raise RuntimeError("AI 命题服务返回空内容，请稍后重试")
 
-        # 先尝试 AIService.extract_json（处理 markdown 包裹情况）
         parsed = AIService.extract_json(content)
         if parsed is not None and isinstance(parsed, list):
             return parsed
 
-        # 再尝试直接 json.loads
         try:
             parsed = json.loads(content)
             if isinstance(parsed, list):
@@ -161,7 +179,6 @@ class MockExamGeneratorService:
         except json.JSONDecodeError:
             pass
 
-        # 最后尝试用正则提取 JSON 数组
         match = re.search(r'\[.*\]', content, re.DOTALL)
         if match:
             try:

@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChevronLeft, ChevronRight, CheckCircle2, Star, Loader2 } from 'lucide-react';
 import { cn, processMathContent } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
@@ -40,7 +39,6 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
   isSubmitting,
   gradingMessage
 }) => {
-  const currentQ = questions[currentIdx];
   const { t } = useTranslation('testLadder');
   const [isMobile, setIsMobile] = useState(false);
 
@@ -53,176 +51,268 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
     return () => media.removeEventListener('change', sync);
   }, []);
 
+  if (questions.length === 0) return null;
+
+  const currentQ = questions[currentIdx];
+  if (!currentQ) return null;
+
+  const answeredCount = Object.keys(answers).length;
+  const totalCount = questions.length;
+  const progress = totalCount > 0 ? (answeredCount / totalCount) * 100 : 0;
+  const isLast = currentIdx === totalCount - 1;
+  const isFirst = currentIdx === 0;
+
+  const typeLabel = currentQ.q_type === 'objective'
+    ? t('assessment.questionTypes.objective')
+    : currentQ.subjective_type === 'calculate'
+      ? t('assessment.questionTypes.calculate')
+      : currentQ.subjective_type === 'noun'
+        ? t('assessment.questionTypes.noun')
+        : t('assessment.questionTypes.subjective');
+
+  const diffLabel = currentQ.difficulty_level_display || t('difficulty.normal');
+
   return (
     <Dialog open={open} onOpenChange={(open) => { if (!open && !isSubmitting) onOpenChange(false); }}>
       <DialogContent
         onInteractOutside={(e) => e.preventDefault()}
-        className="w-[96vw] sm:max-w-[1200px] rounded-2xl md:rounded-[3rem] border-none bg-card p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] md:h-[800px] z-[100]"
+        className="w-[96vw] max-w-5xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] max-h-[860px] z-[100]"
       >
-        {questions.length > 0 && currentQ && (
-          <>
-            <DialogHeader className="p-4 md:p-10 md:pb-6 border-b border-border shrink-0 bg-card">
-              <div className="flex flex-col md:flex-row justify-between md:items-center gap-3">
-                <div className="space-y-1.5 text-left">
-                  <DialogTitle className="text-xl md:text-2xl font-black tracking-tight text-foreground uppercase">{t('assessment.title')}</DialogTitle>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-indigo-600 animate-pulse">Smart Evaluation Active</p>
-                </div>
-                <div className="self-start md:self-auto px-4 md:px-6 py-2 bg-slate-900 rounded-xl md:rounded-2xl text-white font-mono font-bold text-sm tabular-nums shadow-sm">
-                  {currentIdx + 1} / {questions.length}
-                </div>
-              </div>
-            </DialogHeader>
+        <DialogTitle className="sr-only">{t('assessment.title')}</DialogTitle>
 
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-              <div className="flex-1 overflow-y-auto p-4 md:p-8 md:pt-1 bg-card scrollbar-thin md:border-r border-border">
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                  <div className="space-y-4">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border pb-4 gap-3">
-                      <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                        <Badge variant="secondary" className="rounded-lg px-2 py-0.5 text-[11px] font-black uppercase tracking-widest bg-muted text-muted-foreground border-none">
-                          {currentQ.q_type === 'objective' ? t('assessment.questionTypes.objective') :
-                            currentQ.subjective_type === 'calculate' ? t('assessment.questionTypes.calculate') :
-                              currentQ.subjective_type === 'noun' ? t('assessment.questionTypes.noun') : t('assessment.questionTypes.subjective')}
-                        </Badge>
-                        <Badge variant="outline" className="rounded-lg px-2 py-0.5 text-[11px] font-bold text-indigo-500 border-indigo-100 bg-indigo-50/30">
-                          {currentQ.difficulty_level_display || t('difficulty.normal')} (ELO {currentQ.difficulty || 1200})
-                        </Badge>
-                        {currentQ.knowledge_point_detail && (
-                          <div className="flex items-center gap-2 ml-2">
-                            <div className="h-1 w-1 rounded-full bg-muted-foreground/50" />
-                            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{currentQ.knowledge_point_detail.name}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => toggleMastered(currentQ.id)} 
+        {/* ── Header ── */}
+        <div className="px-6 py-3 border-b border-stone-100 flex items-center justify-between shrink-0 bg-white">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Badge className="rounded-md px-2 py-0 h-5 text-[10px] font-semibold bg-stone-100 text-stone-600 border-none hover:bg-stone-100">
+              {typeLabel}
+            </Badge>
+            <span aria-hidden className="text-stone-300 select-none">·</span>
+            <span className="text-[11px] font-medium text-stone-500 whitespace-nowrap">
+              {diffLabel} · ELO {currentQ.difficulty || 1200}
+            </span>
+            {currentQ.knowledge_point_detail && (
+              <>
+                <span aria-hidden className="text-stone-300 select-none">·</span>
+                <span className="text-[11px] font-medium text-stone-400 truncate">
+                  {currentQ.knowledge_point_detail.name}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => toggleMastered(currentQ.id)}
+              className={cn(
+                "h-7.5 px-2.5 rounded-lg text-[11px] font-medium gap-1.5 transition-colors",
+                currentQ.is_mastered
+                  ? "text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
+                  : "text-stone-400 hover:text-emerald-600 hover:bg-emerald-50/50"
+              )}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {currentQ.is_mastered ? t('assessment.mastered') : t('assessment.notMastered')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => toggleFavorite(currentQ.id)}
+              className={cn(
+                "h-7.5 w-7.5 rounded-lg transition-colors",
+                currentQ.is_favorite
+                  ? "text-amber-500 bg-amber-50 hover:bg-amber-100"
+                  : "text-stone-400 hover:text-amber-500 hover:bg-amber-50/50"
+              )}
+            >
+              <Star className={cn("h-3.5 w-3.5", currentQ.is_favorite && "fill-current")} />
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div className="flex-1 flex min-h-0">
+          {/* ── Main Content ── */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-6 md:px-10 py-6 md:py-8 max-w-2xl">
+              {/* Question number */}
+              <div className="flex items-baseline gap-2 mb-5">
+                <span className="font-display text-[2.5rem] font-bold italic text-stone-200 leading-none select-none">
+                  {(currentIdx + 1).toString().padStart(2, '0')}
+                </span>
+                <span className="text-xs font-medium text-stone-400">/ {totalCount}</span>
+              </div>
+
+              {/* Mastered banner */}
+              {currentQ.is_mastered && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50/70 border border-emerald-100 rounded-lg text-xs font-medium text-emerald-700 mb-5 -mt-3">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {t('assessment.mastered')}
+                </div>
+              )}
+
+              {/* Question text */}
+              <div className="text-[15px] font-medium text-stone-800 leading-relaxed mb-8">
+                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                  {processMathContent(currentQ.text)}
+                </ReactMarkdown>
+              </div>
+
+              {/* Answer area */}
+              <div className={cn(currentQ.is_mastered && "pointer-events-none")}>
+                {currentQ.q_type === 'objective' ? (
+                  <div className="space-y-2.5">
+                    {currentQ.options?.map((opt: string, i: number) => {
+                      const selected = answers[currentQ.id] === opt;
+                      return (
+                        <button
+                          key={i}
+                          disabled={currentQ.is_mastered}
+                          onClick={() => handleSelect(currentQ.id, opt)}
                           className={cn(
-                            "rounded-xl h-9 px-3 gap-2 border transition-all", 
-                            currentQ.is_mastered 
-                              ? "text-emerald-600 bg-emerald-50 border-emerald-100" 
-                              : "text-muted-foreground border-border hover:text-emerald-500 hover:bg-emerald-50/50"
+                            "w-full flex items-center gap-4 p-3.5 rounded-xl border text-left transition-all duration-200 group",
+                            "active:scale-[0.995]",
+                            selected
+                              ? "bg-zinc-900 border-zinc-900 text-white shadow-lg shadow-zinc-900/5"
+                              : "bg-white border-stone-200 hover:border-stone-400 hover:bg-stone-50/80",
+                            currentQ.is_mastered && "opacity-50"
                           )}
                         >
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span className="text-[11px] font-black uppercase tracking-widest">{currentQ.is_mastered ? t('assessment.mastered') : t('assessment.notMastered')}</span>
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => toggleFavorite(currentQ.id)} className={cn("rounded-xl h-9 w-9 shrink-0 border border-border transition-all", currentQ.is_favorite ? "text-amber-500 fill-amber-500 bg-amber-50" : "text-muted-foreground hover:text-foreground hover:bg-muted")}>
-                          <Star className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
+                          <span className={cn(
+                            "font-display text-lg font-bold italic w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                            selected
+                              ? "bg-white/10 text-white"
+                              : "bg-stone-100 text-stone-500 group-hover:bg-stone-200 group-hover:text-stone-700"
+                          )}>
+                            {String.fromCharCode(65 + i)}
+                          </span>
+                          <span className={cn(
+                            "text-sm leading-relaxed",
+                            selected ? "text-white" : "text-stone-700"
+                          )}>
+                            {opt}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <textarea
+                    value={answers[currentQ.id] || ''}
+                    disabled={currentQ.is_mastered}
+                    onChange={(e) => handleSelect(currentQ.id, e.target.value)}
+                    className={cn(
+                      "w-full bg-stone-50 border border-stone-200 rounded-xl p-5 min-h-[220px] text-sm font-medium leading-relaxed",
+                      "focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-stone-400",
+                      "placeholder:text-stone-400 resize-none transition-all",
+                      currentQ.is_mastered && "opacity-50"
+                    )}
+                    placeholder={currentQ.is_mastered ? t('assessment.placeholderMastered') : t('assessment.placeholderDefault')}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
 
-                    <div className="flex items-start gap-4 md:gap-8 relative mt-2 text-left">
-                      <span className="text-6xl font-black text-muted-foreground/20 tabular-nums select-none absolute -left-4 -top-4 -z-10 opacity-50">{(currentIdx + 1).toString().padStart(2, '0')}</span>
-                      <div className="flex-1 pt-0 min-w-0">
-                        <div className="text-base md:text-xl font-bold text-foreground leading-relaxed text-left">
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {processMathContent(currentQ.text)}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    </div>
+          {/* ── Sidebar ── */}
+          <div className={cn(
+            "w-52 border-l border-stone-100 bg-stone-50/60 flex flex-col shrink-0",
+            isMobile ? "hidden" : "flex"
+          )}>
+            <div className="p-5 flex flex-col items-center flex-1">
+              {/* Progress display */}
+              <div className="text-center mb-3">
+                <span className="font-display text-[2.75rem] font-bold text-stone-800 leading-none tabular-nums">
+                  {answeredCount}
+                </span>
+                <span className="text-sm text-stone-400 font-medium"> / {totalCount}</span>
+              </div>
 
-                    <div className={cn("mt-4 transition-opacity", currentQ.is_mastered && "opacity-40")}>
-                      {currentQ.q_type === 'objective' ? (
-                        <div className="grid grid-cols-1 gap-3 max-w-3xl">
-                          {currentQ.options?.map((opt: string, i: number) => (
-                            <button
-                              key={i}
-                              disabled={currentQ.is_mastered}
-                              onClick={() => handleSelect(currentQ.id, opt)}
-                              className={cn(
-                                "w-full p-3 md:p-4 rounded-xl md:rounded-2xl border text-left font-bold transition-all flex items-center gap-3 md:gap-5 group/opt",
-                                answers[currentQ.id] === opt ? "bg-slate-900 text-white border-slate-900 shadow scale-[1.01]" : "bg-card border-border hover:border-indigo-400 hover:bg-muted",
-                                currentQ.is_mastered && "cursor-not-allowed"
-                              )}
-                            >
-                              <div className={cn("h-7 w-7 rounded-xl border-2 flex items-center justify-center transition-all", answers[currentQ.id] === opt ? "border-white/20 bg-indigo-600" : "border-border bg-muted group-hover/opt:border-indigo-200")}>
-                                <span className={cn("text-[11px] font-black", answers[currentQ.id] === opt ? "text-white" : "text-muted-foreground")}>{String.fromCharCode(65 + i)}</span>
-                              </div>
-                              <span className="text-xs md:text-sm tracking-tight">{opt}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="max-w-4xl space-y-6 text-left">
-                          <textarea
-                            value={answers[currentQ.id] || ''}
-                            disabled={currentQ.is_mastered}
-                            onChange={(e) => handleSelect(currentQ.id, e.target.value)}
-                            className={cn(
-                              "w-full bg-muted border border-border rounded-2xl md:rounded-[2rem] p-4 md:p-8 min-h-[180px] md:min-h-[250px] font-bold text-sm md:text-base focus:ring-4 focus:ring-indigo-500/20 transition-all placeholder:text-muted-foreground resize-none shadow-inner text-foreground",
-                              currentQ.is_mastered && "cursor-not-allowed"
-                            )}
-                            placeholder={currentQ.is_mastered ? t('assessment.placeholderMastered') : t('assessment.placeholderDefault')}
-                          />
-                        </div>
+              {/* Progress bar */}
+              <div className="w-full h-1 bg-stone-200 rounded-full overflow-hidden mb-5">
+                <div
+                  className="h-full bg-zinc-800 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+
+              {/* Question grid */}
+              <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-2.5 w-full">
+                {t('assessment.questionMatrix')}
+              </p>
+              <div className="grid grid-cols-4 gap-1.5 w-full">
+                {questions.map((q, i) => {
+                  const isCurrent = i === currentIdx;
+                  const isAnswered = !!answers[q.id];
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentIdx(i)}
+                      className={cn(
+                        "aspect-square rounded-lg text-xs font-semibold transition-all duration-200 flex items-center justify-center",
+                        isCurrent && "bg-zinc-900 text-white shadow-sm scale-105",
+                        !isCurrent && isAnswered && "bg-stone-200 text-stone-600 hover:bg-stone-300",
+                        !isCurrent && !isAnswered && "bg-white border border-stone-200 text-stone-400 hover:border-stone-400 hover:text-stone-600"
                       )}
-                    </div>
-                  </div>
-                </div>
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
               </div>
 
-              <div className={cn("w-full md:w-64 bg-muted/30 p-4 md:p-8 md:flex flex-col shrink-0 border-t md:border-t-0 border-border", isMobile ? "hidden" : "flex")}>
-                <h5 className="text-[12px] md:text-[13px] font-bold text-muted-foreground uppercase tracking-widest mb-3 md:mb-6 text-left">{t('assessment.questionMatrix')}</h5>
-                <ScrollArea className="flex-1 pr-1 md:pr-2">
-                  <div className="grid grid-cols-6 md:grid-cols-4 gap-2">
-                    {questions.map((q, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setCurrentIdx(i)}
-                        className={cn(
-                          "h-10 w-10 rounded-xl font-bold text-xs transition-all border flex items-center justify-center",
-                          i === currentIdx
-                            ? "bg-slate-900 text-white border-slate-900 shadow-lg scale-110 z-10"
-                            : answers[q.id]
-                              ? "bg-indigo-50 text-indigo-600 border-indigo-100"
-                              : "bg-card border-border text-muted-foreground hover:border-muted-foreground/50"
-                        )}
-                      >
-                        {i + 1}
-                      </button>
-                    ))}
-                  </div>
-                </ScrollArea>
-
-                <div className="mt-8 space-y-4 pt-6 border-t border-border text-left">
-                  <div className="flex justify-between items-center text-[13px] font-bold uppercase tracking-widest text-muted-foreground">
-                    <span>{t('assessment.answered')}</span>
-                    <span className="text-foreground">{Object.keys(answers).length} / {questions.length}</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-indigo-600 transition-all duration-500"
-                      style={{ width: `${(Object.keys(answers).length / questions.length) * 100}%` }}
-                    />
-                  </div>
+              {/* Sidebar stats */}
+              <div className="mt-auto w-full pt-4 border-t border-stone-200 space-y-1.5">
+                <div className="flex justify-between text-[10px] font-medium">
+                  <span className="text-stone-400">{t('assessment.answered')}</span>
+                  <span className="text-stone-700 tabular-nums">{answeredCount}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-medium">
+                  <span className="text-stone-400">{t('assessment.notAnswered')}</span>
+                  <span className="text-stone-700 tabular-nums">{totalCount - answeredCount}</span>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
-              <div className="p-4 md:p-10 border-t border-border flex flex-col md:flex-row justify-between md:items-center gap-3 md:gap-0 bg-card shrink-0">
-              <div className="flex items-center gap-3 md:gap-6">
-                <Button variant="ghost" disabled={currentIdx === 0} onClick={() => setCurrentIdx(prev => prev - 1)} className="rounded-xl font-bold gap-2 text-muted-foreground h-10 md:h-12 px-4 md:px-6 hover:text-foreground transition-colors">
-                  <ChevronLeft className="h-5 w-5" /> {t('assessment.prevQuestion')}
-                </Button>
-                {gradingMessage && <div className="flex items-center gap-3 px-4 py-2 bg-indigo-50 rounded-full"><Loader2 className="h-4 w-4 animate-spin text-indigo-500" /><span className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest">{gradingMessage}</span></div>}
-              </div>
-              {currentIdx === questions.length - 1 ? (
-                <Button onClick={handleSubmit} disabled={isSubmitting} className="rounded-xl md:rounded-2xl w-full md:w-auto px-8 md:px-12 bg-indigo-600 text-white hover:bg-indigo-700 font-black h-12 md:h-14 shadow transition-all active:scale-95">
-                  {isSubmitting ? t('assessment.submitting') : t('assessment.submit')}
-                </Button>
-              ) : (
-                <Button onClick={() => setCurrentIdx(prev => prev + 1)} className="rounded-xl md:rounded-2xl w-full md:w-auto px-8 md:px-12 bg-slate-900 text-white hover:bg-slate-800 font-black h-12 md:h-14 shadow-lg transition-all active:scale-95">
-                  {t('assessment.nextQuestion')} <ChevronRight className="ml-2 h-5 w-5" />
-                </Button>
-              )}
+        {/* ── Footer ── */}
+        <div className="px-6 py-3.5 border-t border-stone-100 flex items-center justify-between shrink-0 bg-white">
+          <Button
+            variant="ghost"
+            disabled={isFirst}
+            onClick={() => setCurrentIdx(prev => prev - 1)}
+            className="h-9 px-4 rounded-xl text-sm font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100 gap-1.5 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {t('assessment.prevQuestion')}
+          </Button>
+
+          {gradingMessage && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-stone-50 rounded-full border border-stone-200">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-stone-400" />
+              <span className="text-[11px] font-medium text-stone-500">{gradingMessage}</span>
             </div>
-          </>
-        )}
+          )}
+
+          {isLast ? (
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="h-9 px-6 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.97]"
+            >
+              {isSubmitting ? t('assessment.submitting') : t('assessment.submit')}
+            </Button>
+          ) : (
+            <Button
+              onClick={() => setCurrentIdx(prev => prev + 1)}
+              className="h-9 px-5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.97] gap-1.5"
+            >
+              {t('assessment.nextQuestion')}
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

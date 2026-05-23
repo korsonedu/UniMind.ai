@@ -3,7 +3,7 @@
 
 四 AI Agent 迭代博弈：
   Author      — 根据知识点资料 + 人工指定难度/题型 生成候选题目
-  Reviewer    — 从难度、区分度、歧义性、知识覆盖四个维度打分（v4-pro + thinking）
+  Reviewer    — 从区分度、清晰度、知识覆盖三个维度打分 (v4-pro + thinking + agentic)
   AuthorRevise — 根据 Reviewer 反馈逐条修改题目（最多 3 轮）
   Classifier  — 审计员：检测实际难度是否匹配目标、打知识标签、确认题型
 
@@ -248,19 +248,17 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
 
 
 def _classifier_batch_report(questions: List[Dict], kps: List[KnowledgePoint], difficulty: str) -> Dict:
-    """Classifier 批次多样性报告：跨题去重 + 知识覆盖缺口 + 整体评价。"""
+    """Classifier 批次多样性报告：跨题去重 + 整体评价。"""
     if len(questions) <= 1:
-        return {"similar_pairs": [], "coverage_gaps": [], "overall_assessment": "仅 1 道题，无需批次分析。"}
+        return {"similar_pairs": [], "overall_assessment": "仅 1 道题，无需批次分析。"}
 
     system_prompt = (
         "你是学科题目质量评估专家。对一批已生成的题目进行批次级别分析。\n\n"
         "【分析维度】\n"
         "1. 相似题目检测：找出高度相似或重复的题目对。相似指考察相同概念、仅换了数字/名称/措辞。\n"
-        "2. 知识覆盖缺口：从全学科知识点列表中，找出哪些重要知识点完全没有被任何题目覆盖。\n"
-        "3. 整体评价：100 字以内总结本批次题目的优缺点。\n\n"
+        "2. 整体评价：100 字以内总结本批次题目的优缺点。\n\n"
         "调用 submit_diversity_report 提交报告。"
     )
-    kp_list = ", ".join(f"{k.code or '?'}:{k.name}" for k in kps)
     questions_summary = []
     for i, q in enumerate(questions):
         questions_summary.append(
@@ -268,10 +266,9 @@ def _classifier_batch_report(questions: List[Dict], kps: List[KnowledgePoint], d
             f"bloom={q.get('bloom_level', '?')} | detected_diff={q.get('detected_difficulty', '?')}"
         )
     prompt = (
-        f"【全学科知识点】\n{kp_list}\n\n"
         f"【目标难度】{difficulty}\n\n"
         f"【全部题目】\n" + "\n".join(questions_summary) + "\n\n"
-        f"请完成批次分析：检测相似题目对、标注覆盖缺口、给出整体评价。"
+        f"请完成批次分析：检测相似题目对、给出整体评价。"
     )
     try:
         result = AIService.structured_output(
@@ -284,10 +281,10 @@ def _classifier_batch_report(questions: List[Dict], kps: List[KnowledgePoint], d
             max_tokens=2048,
             operation="pipeline.classifier",
         )
-        return result or {"similar_pairs": [], "coverage_gaps": [], "overall_assessment": ""}
+        return result or {"similar_pairs": [], "overall_assessment": ""}
     except Exception as exc:
         logger.warning("Batch diversity report failed: %s", exc)
-        return {"similar_pairs": [], "coverage_gaps": [], "overall_assessment": ""}
+        return {"similar_pairs": [], "overall_assessment": ""}
 
 
 def _update_task(task, progress, status_text, stage_log, stage_name):
@@ -425,11 +422,53 @@ REVIEWER_SYSTEM_PROMPT = """\
 - 如果通过（score >= 0.7）：指出题目亮点和微小优化建议
 - 如果不通过（score < 0.7）：明确指出哪几个维度不达标、具体问题是什么、如何修改
 
-请直接输出 JSON 对象（不要 markdown 代码块包裹）：
-{"score": 0.85, "feedback": "具体修改建议", "dimensions": {"discrimination": 0.9, "clarity": 0.85, "coverage": 0.85}}"""
+【研究工具】
+在评审前，你可以调用以下工具获取额外信息来辅助判断：
+- lookup_knowledge_point_definition: 查询目标知识点的标准定义和范围，用于验证 coverage 维度。
+- search_similar_questions: 搜索同知识点下已有题目，检查是否与现有题目雷同或重复。
+不需要研究时可直接评审。评审完成后，调用 submit_review 提交评审结果。"""
+
+def _get_reviewer_tool_executor():
+    """Reviewer research tool executor: lookup KP definition + search similar questions."""
+    import json
+    from quizzes.models import KnowledgePoint, Question
+
+    def execute(tool_name: str, args: dict) -> str:
+        try:
+            if tool_name == "lookup_knowledge_point_definition":
+                code = (args.get('code') or '').strip()
+                kp = KnowledgePoint.objects.filter(code=code).first()
+                if kp:
+                    return json.dumps({
+                        "code": kp.code, "name": kp.name,
+                        "subject": kp.subject or '',
+                        "description": (kp.description or '')[:500],
+                        "level": kp.level,
+                    }, ensure_ascii=False)
+                return json.dumps({"error": f"KnowledgePoint code={code} not found"}, ensure_ascii=False)
+            elif tool_name == "search_similar_questions":
+                kp_code = (args.get('kp_code') or '').strip()
+                limit = min(int(args.get('limit', 5)), 10)
+                qs = Question.objects.filter(
+                    knowledge_point__code=kp_code,
+                ).values('id', 'text', 'q_type', 'correct_answer')[:limit]
+                questions = [
+                    {"id": q['id'], "text": (q['text'] or '')[:300],
+                     "q_type": q['q_type'], "answer": (q['correct_answer'] or '')[:200]}
+                    for q in qs
+                ]
+                return json.dumps({"found": len(questions), "questions": questions}, ensure_ascii=False)
+            else:
+                return json.dumps({"error": f"Unknown tool: {tool_name}"}, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({"error": str(exc)}, ensure_ascii=False)
+    return execute
+
 
 def _reviewer_evaluate(question: Dict) -> Dict:
-    """Reviewer Agent：从四个维度评估题目质量（v4-pro + thinking，无 tool_choice，回退 JSON 模式）。"""
+    """Reviewer Agent: from 3 dimensions (v4-pro + thinking + agentic)."""
+    from ai_engine.tools import get_reviewer_research_tools
+
     system_prompt = PromptManager.get_prompt("AI_QUESTION_REVIEWER", REVIEWER_SYSTEM_PROMPT)
 
     # 构建选项文本（客观题必须有选项）
@@ -452,26 +491,36 @@ def _reviewer_evaluate(question: Dict) -> Dict:
         f"参考答案：{question.get('answer') or '（未填写）'}\n"
         f"判分点：{grading_points}\n"
         f"目标知识点：{question.get('kp_name')} ({question.get('kp_code', '')})\n\n"
-        f"请逐维度审查，直接输出 JSON 评审结果。"
+        f"先判断是否需要查知识点定义或已有题目，再调用 submit_review 提交评审结果。"
     )
 
     try:
-        content = AIService.simple_chat_text(
+        research_tools = get_reviewer_research_tools()
+        tool_executor = _get_reviewer_tool_executor()
+        result = AIService.agentic_structured_output(
             system_prompt=system_prompt,
             user_prompt=prompt,
+            schema=REVIEWER_OUTPUT_SCHEMA,
+            tool_name="submit_review",
+            tool_description="Submit review result with 3-dimension scores and feedback",
+            research_tools=research_tools,
+            tool_executor=tool_executor,
             temperature=0.2,
             max_tokens=4096,
             operation="pipeline.reviewer",
+            max_tool_rounds=5,
         )
-        result = AIService.extract_json(content) or {}
+        if result is None:
+            logger.warning("Reviewer agentic_structured_output returned None")
+            return {"score": 0.0, "feedback": "[System Error] Reviewer returned empty", "dimensions": {}}
         return {
-            "score": float((result or {}).get("score", 0.5)),
-            "feedback": str((result or {}).get("feedback", "")),
-            "dimensions": (result or {}).get("dimensions", {}),
+            "score": float(result.get("score", 0.5)),
+            "feedback": str(result.get("feedback", "")),
+            "dimensions": result.get("dimensions", {}),
         }
     except Exception as exc:
         logger.warning("Reviewer failed: %s", exc)
-        return {"score": 0.0, "feedback": f"[系统错误] Reviewer 评审失败: {exc}", "dimensions": {}}
+        return {"score": 0.0, "feedback": f"[System Error] Reviewer failed: {exc}", "dimensions": {}}
 
 
 def _author_revise(question: Dict, feedback: str) -> Dict:

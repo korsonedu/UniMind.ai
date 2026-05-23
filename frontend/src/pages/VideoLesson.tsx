@@ -140,8 +140,8 @@ export const VideoLesson: React.FC = () => {
         setCourse(res.data);
 
         if (res.data.album) {
-          const allRes = await api.get('/courses/');
-          setRelatedCourses(allRes.data.filter((c: any) => c.album === res.data.album && c.id !== res.data.id));
+          const albumRes = await api.get(`/courses/albums/${res.data.album.id}/courses/`);
+          setRelatedCourses(albumRes.data.filter((c: any) => c.id !== res.data.id));
         }
       } catch (e) { console.error('fetchCourse failed', e); }
       finally { setLoading(false); }
@@ -276,7 +276,7 @@ export const VideoLesson: React.FC = () => {
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">{course.title}</h2>
               <div className="flex items-center gap-4 opacity-40 font-bold text-[10px] uppercase tracking-widest leading-none mt-1">
-                 {course.album && <span className="flex items-center gap-1.5 text-foreground"><Layers className="w-3 h-3"/> {course.album}</span>}
+                 {course.album && <span className="flex items-center gap-1.5 text-foreground"><Layers className="w-3 h-3"/> {course.album.name}</span>}
                  <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(course.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
               </div>
             </div>

@@ -111,7 +111,7 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
       </Card>
 
       <Card className="p-5 rounded-2xl border border-border/60 space-y-3">
-        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t('lobby.styleLabel')}</p>
+        <p className="text-xs font-semibold tracking-wider text-muted-foreground">{t('lobby.styleLabel')}</p>
         <div className="flex gap-2">
           <Button size="sm" variant={style === 'friendly' ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => onStyleChange('friendly')}>{t('lobby.styleFriendly')}</Button>
           <Button size="sm" variant={style === 'pressure' ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => onStyleChange('pressure')}>{t('lobby.stylePressure')}</Button>

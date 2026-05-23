@@ -25,16 +25,7 @@ import re
 
 logger = logging.getLogger(__name__)
 
-class IsMember(permissions.BasePermission):
-    """
-    允许会员或管理员访问。
-    委托给 permissions.is_member_or_admin，含会员过期检查。
-    """
-    message = "您需要先成为学员（激活会员）才能使用此功能。"
-
-    def has_permission(self, request, view):
-        from users.permissions import is_member_or_admin
-        return is_member_or_admin(request.user)
+from users.permissions import IsMember  # noqa: F401 — 向后兼容 re-export
 
 class ActivateMembershipView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -127,13 +118,6 @@ class RegisterView(generics.CreateAPIView):
         user.trial_ends_at = timezone.now() + timedelta(days=14)
         user.is_member = True
         user.save()
-
-        # 新用户初始积分
-        from users.models import EloPointsLedger
-        EloPointsLedger.objects.create(
-            user=user, amount=50, balance_after=50,
-            reason='admin_adjust', description='新用户初始积分',
-        )
 
 class UpdateProfileView(generics.UpdateAPIView):
     serializer_class = UserSerializer
@@ -402,27 +386,8 @@ class HeartbeatView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        from django.db.models import F
         user = request.user
         now = timezone.now()
-        today = now.date()
-
-        # 每日首次心跳发积分（F() 更新避免 select_for_update）
-        daily_bonus = 0
-        last_date = user.last_active.date() if user.last_active else None
-        if last_date != today:
-            from users.points import _get_multiplier
-            daily_bonus = max(1, int(5 * _get_multiplier(user.institution_id)))
-            from users.models import EloPointsLedger, User as UserModel
-            UserModel.objects.filter(id=user.id).update(
-                elo_points=F('elo_points') + daily_bonus,
-            )
-            user.refresh_from_db(fields=['elo_points'])
-            EloPointsLedger.objects.create(
-                user_id=user.id, amount=daily_bonus,
-                balance_after=user.elo_points,
-                reason='admin_adjust', description='每日登录',
-            )
 
         user.last_active = now
         update_fields = ["last_active"]
@@ -458,16 +423,12 @@ class HeartbeatView(APIView):
             update_fields.append("current_timer_end")
 
         user.save(update_fields=update_fields)
-        resp = {
+        return Response({
             "status": "ok",
             "last_active": user.last_active,
             "current_task": user.current_task,
             "current_timer_end": user.current_timer_end,
-            "daily_bonus": daily_bonus,
-        }
-        if daily_bonus > 0:
-            resp['elo_points'] = user.elo_points
-        return Response(resp)
+        })
 
 class SystemConfigView(generics.RetrieveUpdateAPIView):
     queryset = SystemConfig.objects.all()
@@ -478,21 +439,6 @@ class SystemConfigView(generics.RetrieveUpdateAPIView):
     def get_permissions(self):
         if self.request.method in permissions.SAFE_METHODS: return [permissions.AllowAny()]
         return [IsAdmin()]
-
-class ResetEloView(generics.UpdateAPIView):
-    serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    def post(self, request, *args, **kwargs):
-        user = self.request.user
-        if user.elo_reset_count >= 1:
-            return Response({'error': 'You can only reset ELO once.'}, status=400)
-        user.elo_score = 1000
-        user.has_completed_initial_assessment = False
-        user.elo_reset_count += 1
-        from users.points import reset_elo_points
-        reset_elo_points(user.id)
-        user.save()
-        return Response(UserSerializer(user).data)
 
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView

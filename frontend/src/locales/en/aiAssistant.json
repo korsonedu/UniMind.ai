@@ -9,6 +9,5 @@
   "sendFailed": "Failed to send message",
   "selectBotFirst": "Please select an AI bot first",
   "sessionReset": "Session reset",
-  "resetFailed": "Failed to reset session",
-  "featureName": "AI Assistant Chat"
+  "resetFailed": "Failed to reset session"
 }

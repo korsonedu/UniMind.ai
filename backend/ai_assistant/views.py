@@ -1,7 +1,7 @@
 import threading
 import logging
 from django.db import connections
-from users.permissions import IsAdmin, HasPointsBalance
+from users.permissions import IsAdmin, HasQuota
 from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,6 +16,7 @@ from .prompt_sync import (
 )
 from users.views import IsMember
 from ai_service import AIService
+from ai_assistant.services.tool_executor import AssistantToolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,15 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
     # Filter out pending messages from history
     history_objs = AIChatMessage.objects.filter(user=user, bot=bot).order_by('-timestamp')[:history_limit]
     history_msgs = [{"role": h.role, "content": h.content} for h in reversed(history_objs) if h.content != "[Thinking...]"]
-    
+
     student_context = ""
     if bot and bot.is_exclusive:
         student_context = get_student_academic_context(user)
 
+    tool_executor = AssistantToolExecutor(user)
+
     try:
-        res = AIService.chat_with_assistant(bot, history_msgs, user_message, student_context)
+        res = AIService.chat_with_assistant_agent(bot, history_msgs, user_message, tool_executor, student_context)
         
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
         
@@ -104,8 +107,8 @@ class BotDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.delete()
 
 class AIChatView(APIView):
-    permission_classes = [IsMember, HasPointsBalance]
-    points_cost = 30
+    permission_classes = [IsMember, HasQuota]
+    quota_resource = 'ai_call_total'
 
     def post(self, request):
         user_message = request.data.get('message')
@@ -114,13 +117,6 @@ class AIChatView(APIView):
 
         bot = Bot.objects.filter(id=bot_id).first()
         if bot: sync_bot_prompt(bot)
-
-        # 会话制：仅首条消息（无历史）扣积分，后续本条对话免费
-        has_history = AIChatMessage.objects.filter(user=request.user, bot=bot).exists()
-        if not has_history:
-            from users.points import spend_elo_points
-            if not spend_elo_points(request.user.id, 30, 'shop_redeem', description='AI助教会话门票'):
-                return Response({'error': '积分不足'}, status=402)
 
         # 1. Save User Message
         AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot)

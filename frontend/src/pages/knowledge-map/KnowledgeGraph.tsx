@@ -176,8 +176,8 @@ export const KnowledgeGraph = ({ nodes, onNodeClick }: { nodes: KPNode[], onNode
       </div>
       <div className="absolute top-8 right-8">
         <div className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-md rounded-2xl border border-border/50 shadow-sm">
-          <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest leading-none">Graph View Active</span>
+          <div className="h-2 w-2 rounded-full bg-stone-400" />
+          <span className="text-[11px] font-medium text-stone-500 leading-none">Graph View</span>
         </div>
       </div>
     </div>

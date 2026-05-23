@@ -53,6 +53,7 @@
     "planDeleted": "Plan deleted",
     "deleteFailed": "Delete failed",
     "deletePlan": "Delete plan",
+    "deleteConfirm": "Delete this plan?",
     "planCreated": "{{emoji}} created plan: {{plan}}",
     "addTarget": "ADD TARGET..."
   },

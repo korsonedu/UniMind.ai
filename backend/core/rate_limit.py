@@ -30,7 +30,10 @@ def rate_limit(key_prefix: str, max_requests: int, window_seconds: int):
                 return view_func(request, *args, **kwargs)
 
             if count > max_requests:
-                ttl = cache.ttl(cache_key) or window_seconds
+                try:
+                    ttl = cache.ttl(cache_key) or window_seconds
+                except AttributeError:
+                    ttl = window_seconds
                 return JsonResponse(
                     {
                         "error": "请求过于频繁，请稍后再试。",

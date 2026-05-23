@@ -16,7 +16,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ leaderboard }) => {
       <div className="flex items-center justify-between px-4">
         <div className="space-y-1">
           <h3 className="text-2xl font-black text-foreground tracking-tight">{t('leaderboard.title')}</h3>
-          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] leading-none">Global Meritocracy Ranking</p>
+          <p className="text-[11px] font-medium text-muted-foreground leading-none">ELO Ranking</p>
         </div>
       </div>
       <Card className="border border-border shadow-sm rounded-[2.5rem] bg-card overflow-hidden">

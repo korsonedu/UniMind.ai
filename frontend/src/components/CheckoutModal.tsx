@@ -1,28 +1,34 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Loader2, ArrowLeft, ExternalLink } from 'lucide-react';
-import { StripeCheckout } from '@/components/StripeCheckout';
+import { Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import api from '@/lib/api';
-import { toast } from 'sonner';
 
 type PlanKey = 'solo' | 'plus' | 'pro';
 type BillingCycle = 'monthly' | 'annual';
-type Gateway = 'stripe' | 'wechat' | 'alipay';
-type Step = 'plan' | 'pay' | 'result';
 
-const PLAN_META: Record<PlanKey, { label: string; priceM: number; priceA: number; color: string }> = {
-  solo: { label: 'Solo', priceM: 299, priceA: 199, color: 'bg-primary' },
-  plus: { label: 'Plus', priceM: 1299, priceA: 999, color: 'bg-unimind-green' },
-  pro:  { label: 'Pro', priceM: 3999, priceA: 2999, color: 'bg-amber-500' },
-};
-
-const PLAN_FEATURES: Record<PlanKey, string[]> = {
-  solo: ['AI 出题无限制', 'Memorix 记忆复习', 'AI 学习助手', '知识图谱', '完整学情报告', 'AI 智能大纲'],
-  plus: ['答疑系统', '多教师协作', '自习室', '模拟考试', '班级报表', '数据导出'],
-  pro: ['品牌定制', '私有化部署', 'API 接入', 'SSO 单点登录', '审计日志', '专属客户成功经理', 'SLA 99.9%'],
+const PLAN: Record<PlanKey, {
+  label: string; priceM: number; priceA: number;
+  color: string; gradient: string; ring: string;
+  features: string[];
+}> = {
+  solo: {
+    label: 'Solo', priceM: 299, priceA: 199,
+    color: 'text-primary', gradient: 'from-[#0071E3] to-[#0077ED]', ring: 'ring-primary',
+    features: ['AI 出题无限制', 'Memorix 记忆复习', 'AI 学习助手', '知识图谱', '完整学情报告', 'AI 智能大纲'],
+  },
+  plus: {
+    label: 'Plus', priceM: 1299, priceA: 999,
+    color: 'text-unimind-green', gradient: 'from-[#34C759] to-[#30D158]', ring: 'ring-unimind-green',
+    features: ['答疑系统', '多教师协作', '自习室', '模拟考试', '班级报表', '数据导出'],
+  },
+  pro: {
+    label: 'Pro', priceM: 3999, priceA: 2999,
+    color: 'text-amber-500', gradient: 'from-amber-500 to-amber-400', ring: 'ring-amber-500',
+    features: ['品牌定制', '私有化部署', 'API 接入', 'SSO 单点登录', '审计日志', '专属客户成功经理', 'SLA 99.9%'],
+  },
 };
 
 interface CheckoutModalProps {
@@ -33,255 +39,134 @@ interface CheckoutModalProps {
 }
 
 export function CheckoutModal({ open, onOpenChange, preselectedPlan, currentPlan = 'free' }: CheckoutModalProps) {
-  const [step, setStep] = useState<Step>('plan');
+  const navigate = useNavigate();
   const [plan, setPlan] = useState<PlanKey>((preselectedPlan as PlanKey) || 'solo');
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('annual');
-  const [gateway, setGateway] = useState<Gateway | null>(null);
-  const [qrUrl, setQrUrl] = useState<string>('');
-  const [payUrl, setPayUrl] = useState<string>('');
-  const [stripeClientSecret, setStripeClientSecret] = useState<string>('');
-  const [orderId, setOrderId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [polling, setPolling] = useState(false);
-  const [success, setSuccess] = useState(false);
 
-  const meta = PLAN_META[plan];
+  const meta = PLAN[plan];
   const price = billingCycle === 'annual' ? meta.priceA : meta.priceM;
 
-  const handleCreateOrder = async (gw: Gateway) => {
-    setGateway(gw);
-    setLoading(true);
-    try {
-      const { data } = await api.post('/payments/orders/create/', { plan, billing_cycle: billingCycle, gateway: gw });
-      setOrderId(data.order_id);
-      if (gw === 'stripe') {
-        setStripeClientSecret(data.clientSecret || '');
-        setLoading(false);
-        setStep('pay');
-      } else if (gw === 'wechat') {
-        setQrUrl(data.code_url);
-        setLoading(false);
-        setStep('pay');
-        startPolling(data.order_id);
-      } else if (gw === 'alipay') {
-        setPayUrl(data.pay_url);
-        setLoading(false);
-        setStep('pay');
-      }
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || '创建订单失败');
-      setLoading(false);
-    }
-  };
-
-  const startPolling = (oid: number) => {
-    setPolling(true);
-    const iv = setInterval(async () => {
-      try {
-        const { data } = await api.get(`/payments/orders/${oid}/`);
-        if (data.status === 'paid') {
-          clearInterval(iv);
-          setPolling(false);
-          setSuccess(true);
-          setStep('result');
-        }
-      } catch {}
-    }, 2000);
-    // Stop after 5 minutes
-    setTimeout(() => { clearInterval(iv); setPolling(false); }, 300000);
-  };
-
-  const handleReset = () => {
-    setStep('plan');
-    setPlan('solo');
-    setGateway(null);
-    setQrUrl('');
-    setPayUrl('');
-    setStripeClientSecret('');
-    setOrderId(null);
-    setSuccess(false);
-  };
-
-  const handleClose = () => {
-    handleReset();
+  const handlePay = () => {
     onOpenChange(false);
+    navigate(`/checkout?plan=${plan}&cycle=${billingCycle}&gateway=stub`);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[520px] rounded-3xl border-none shadow-2xl bg-card p-0 overflow-hidden">
-        {step === 'plan' && (
-          <>
-            <DialogHeader className="px-8 pt-8 pb-2 text-left">
-              <DialogTitle className="text-xl font-black tracking-tight">升级方案</DialogTitle>
-              <DialogDescription className="font-medium text-muted-foreground text-sm">
-                选择合适的方案和周期，开始支付。
-              </DialogDescription>
-            </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px] rounded-[2rem] border-none shadow-2xl bg-card p-0 overflow-hidden">
+        {/* Header */}
+        <DialogHeader className="px-7 pt-7 pb-0 text-left space-y-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="h-4 w-4 text-amber-400/60" />
+            <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-[0.25em]">升级方案</span>
+          </div>
+          <DialogTitle className="text-xl font-black tracking-tight text-foreground">
+            选择您的方案
+          </DialogTitle>
+          <DialogDescription className="text-[13px] font-medium text-muted-foreground leading-relaxed">
+            所有方案均包含 14 天免费试用，随时可取消。
+          </DialogDescription>
+        </DialogHeader>
 
-            <div className="px-8 pb-2 space-y-4">
-              {/* Plan selector */}
-              <div className="grid grid-cols-3 gap-2">
-                {(Object.keys(PLAN_META) as PlanKey[]).map((k) => (
-                  <button
-                    key={k}
-                    onClick={() => setPlan(k)}
-                    className={cn(
-                      'p-3 rounded-2xl border-2 text-left transition-all',
-                      plan === k ? 'border-primary bg-primary/5' : 'border-border hover:border-border/80'
-                    )}
-                  >
-                    <p className={cn('text-[10px] font-extrabold uppercase tracking-widest mb-0.5',
-                      plan === k ? 'text-primary' : 'text-muted-foreground')}>
-                      {PLAN_META[k].label}
-                    </p>
-                    <p className="text-lg font-extrabold text-foreground">
-                      ¥{billingCycle === 'annual' ? PLAN_META[k].priceA : PLAN_META[k].priceM}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground font-medium">/月</p>
-                  </button>
-                ))}
-              </div>
-
-              {/* Billing toggle */}
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={billingCycle === 'monthly' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setBillingCycle('monthly')}
-                  className="flex-1 h-9 rounded-xl text-xs font-bold"
+        <div className="px-7 space-y-4 pt-5 pb-2">
+          {/* Plan selector */}
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.keys(PLAN) as PlanKey[]).map((k) => {
+              const p = PLAN[k];
+              const isActive = plan === k;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setPlan(k)}
+                  className={cn(
+                    'relative p-3.5 rounded-2xl border-2 text-left',
+                    'motion-safe:transition-all motion-safe:duration-200',
+                    'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                    isActive
+                      ? `${p.ring} border-current bg-accent/30 shadow-sm`
+                      : 'border-border hover:border-muted-foreground/20',
+                  )}
                 >
-                  月付
-                </Button>
-                <Button
-                  variant={billingCycle === 'annual' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setBillingCycle('annual')}
-                  className="flex-1 h-9 rounded-xl text-xs font-bold"
-                >
-                  年付 <Badge variant="outline" className="ml-1 text-[9px] px-1 py-0">省23-33%</Badge>
-                </Button>
-              </div>
-
-              {/* Plan features */}
-              <div className="bg-unimind-bg-secondary rounded-2xl p-4 space-y-1.5">
-                <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-[0.2em] mb-2">
-                  {meta.label} 功能
-                </p>
-                {PLAN_FEATURES[plan]?.map((f, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <Check className="h-3.5 w-3.5 text-unimind-green shrink-0 mt-0.5" />
-                    <span className="text-[12px] font-medium text-foreground/70">{f}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Total + pay buttons */}
-            <div className="px-8 pb-8 space-y-3">
-              <div className="flex items-center justify-between py-2">
-                <span className="text-sm font-bold text-muted-foreground">
-                  {meta.label} · {billingCycle === 'annual' ? '年付' : '月付'}
-                </span>
-                <span className="text-2xl font-extrabold text-foreground">¥{price}<span className="text-sm font-medium text-muted-foreground">/月</span></span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <Button onClick={() => handleCreateOrder('stripe')} disabled={loading}
-                  className="h-11 rounded-xl text-xs font-bold">信用卡</Button>
-                <Button onClick={() => handleCreateOrder('wechat')} disabled={loading}
-                  className="h-11 rounded-xl text-xs font-bold bg-unimind-green hover:bg-unimind-green/90">微信</Button>
-                <Button onClick={() => handleCreateOrder('alipay')} disabled={loading}
-                  className="h-11 rounded-xl text-xs font-bold bg-blue-500 hover:bg-blue-600">支付宝</Button>
-              </div>
-              {loading && (
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" /> 创建订单中...
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {step === 'pay' && (
-          <div className="px-8 py-8 space-y-6 text-center">
-            <button onClick={() => setStep('plan')} className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-4 w-4" /> 返回
-            </button>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-extrabold text-foreground">
-                {gateway === 'stripe' ? '输入卡号' : gateway === 'wechat' ? '微信扫码支付' : '支付宝支付'}
-              </h3>
-              <p className="text-2xl font-extrabold">¥{price}</p>
-
-              {gateway === 'wechat' && qrUrl && (
-                <div className="space-y-4">
-                  <div className="w-48 h-48 mx-auto bg-white rounded-2xl border p-4">
-                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrUrl)}`}
-                      alt="微信支付二维码" className="w-full h-full" />
-                  </div>
-                  {polling && (
-                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" /> 等待支付确认...
+                  <p className={cn(
+                    'text-[10px] font-extrabold uppercase tracking-[0.15em] mb-1',
+                    isActive ? p.color : 'text-muted-foreground',
+                  )}>
+                    {p.label}
+                  </p>
+                  <p className="text-[17px] font-extrabold text-foreground tabular-nums tracking-tight leading-none">
+                    ¥{billingCycle === 'annual' ? p.priceA : p.priceM}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">/月</p>
+                  {isActive && (
+                    <div className={cn('absolute top-2 right-2 h-4 w-4 rounded-full bg-gradient-to-br', p.gradient, 'flex items-center justify-center')}>
+                      <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
                     </div>
                   )}
-                </div>
-              )}
-
-              {gateway === 'alipay' && payUrl && (
-                <div className="space-y-4">
-                  <Button onClick={() => window.open(payUrl, '_blank')} className="gap-2">
-                    前往支付宝支付 <ExternalLink className="h-4 w-4" />
-                  </Button>
-                  <p className="text-xs text-muted-foreground">支付完成后会自动返回</p>
-                </div>
-              )}
-
-              {gateway === 'stripe' && stripeClientSecret && (
-                <StripeCheckout
-                  clientSecret={stripeClientSecret}
-                  orderId={orderId!}
-                  onSuccess={() => startPolling(orderId!)}
-                  onBack={() => setStep('plan')}
-                />
-              )}
-              {gateway === 'stripe' && !stripeClientSecret && (
-                <p className="text-sm text-muted-foreground">创建支付订单中...</p>
-              )}
-            </div>
+                </button>
+              );
+            })}
           </div>
-        )}
 
-        {step === 'result' && (
-          <div className="px-8 py-12 text-center space-y-6">
-            {success ? (
-              <>
-                <div className="h-16 w-16 mx-auto rounded-full bg-unimind-green/10 flex items-center justify-center">
-                  <Check className="h-8 w-8 text-unimind-green" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-extrabold text-foreground">支付成功</h3>
-                  <p className="text-sm text-muted-foreground mt-1">您的方案已升级至 {meta.label}</p>
-                </div>
-                <Button onClick={handleClose} variant="apple" className="h-11 px-8 rounded-xl font-extrabold">
-                  开始使用
-                </Button>
-              </>
-            ) : (
-              <>
-                <h3 className="text-lg font-extrabold text-foreground">支付未确认</h3>
-                <p className="text-sm text-muted-foreground">请检查支付是否完成，或联系客服。</p>
-                <div className="flex gap-2 justify-center">
-                  <Button variant="outline" onClick={() => { if (orderId) startPolling(orderId); }} className="rounded-xl">
-                    重新检查
-                  </Button>
-                  <Button variant="outline" onClick={handleClose} className="rounded-xl">关闭</Button>
-                </div>
-              </>
-            )}
+          {/* Billing toggle */}
+          <div className="flex bg-unimind-bg-secondary rounded-2xl p-1 gap-1">
+            <button
+              onClick={() => setBillingCycle('monthly')}
+              className={cn(
+                'flex-1 h-9 rounded-xl text-[12px] font-extrabold motion-safe:transition-all motion-safe:duration-200',
+                billingCycle === 'monthly'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              月付
+            </button>
+            <button
+              onClick={() => setBillingCycle('annual')}
+              className={cn(
+                'flex-1 h-9 rounded-xl text-[12px] font-extrabold motion-safe:transition-all motion-safe:duration-200 flex items-center justify-center gap-1.5',
+                billingCycle === 'annual'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              年付
+              <Badge variant="outline" className="text-[9px] px-1 py-0 font-extrabold border-emerald-200 text-emerald-700 bg-emerald-50">
+                省 33%
+              </Badge>
+            </button>
           </div>
-        )}
+
+          {/* Features */}
+          <div className="bg-unimind-bg-secondary rounded-2xl p-4 space-y-1.5">
+            <p className="text-[10px] font-extrabold text-muted-foreground/50 uppercase tracking-[0.2em] mb-2">
+              {meta.label} 方案功能
+            </p>
+            {meta.features.map((f, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <Check className="h-3.5 w-3.5 text-unimind-green shrink-0 mt-0.5" />
+                <span className="text-[12px] font-semibold text-foreground/65">{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-7 pb-7 pt-3 space-y-3">
+          <div className="flex items-center justify-between py-1">
+            <span className="text-[13px] font-bold text-muted-foreground">
+              {meta.label} · {billingCycle === 'annual' ? '年付' : '月付'}
+            </span>
+            <span className="text-2xl font-extrabold text-foreground tabular-nums tracking-tight">
+              ¥{price}<span className="text-[13px] font-semibold text-muted-foreground">/月</span>
+            </span>
+          </div>
+
+          <Button onClick={handlePay}
+            className="w-full h-12 rounded-xl text-[13px] font-extrabold bg-gradient-to-r from-[#0071E3] to-[#0077ED] hover:from-[#0071E3]/90 hover:to-[#0077ED]/90 text-white shadow-lg shadow-[#0071E3]/15 gap-2">
+            <Sparkles className="h-4 w-4" />
+            立即支付
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

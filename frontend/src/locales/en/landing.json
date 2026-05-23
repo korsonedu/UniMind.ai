@@ -9,134 +9,134 @@
     "enterConsole": "Dashboard"
   },
   "hero": {
-    "badge": "AI Infrastructure for Tutoring & Test Prep",
-    "titleLine1": "Your teachers teach.",
-    "titleLine2": "AI handles the rest.",
-    "subtitle": "UniMind gives tutoring centers and test-prep businesses an AI-powered content engine — auto-generate exam questions, deliver personalized adaptive review, and visualize student mastery in real time. CFA, USMLE, CPA, Bar Exam, SAT — name the subject, AI produces the questions. No engineering team required.",
+    "badge": "The Operations Layer for Tutoring Businesses",
+    "titleLine1": "Your tutors teach.",
+    "titleLine2": "We run everything else.",
+    "subtitle": "Question generation, grading, review scheduling, analytics, Q&A — the entire back-office of your tutoring business, automated. Pick a subject, AI creates the content. Students jump in with a link. No engineering team, no instructional designers, no overhead.",
     "cta": "Start 14-Day Free Trial",
     "secondary": "See How It Works",
-    "footnote": "No credit card · Full access for 14 days · All subjects included"
+    "footnote": "No credit card · Full access · All subjects · Cancel anytime"
   },
   "stats": [
-    { "label": "Subjects Covered", "desc": "Finance · Law · Medicine · CPA · CFA · USMLE · SAT" },
-    { "label": "Questions Generated", "desc": "Three-agent adversarial quality control" },
-    { "label": "Active Institutions", "desc": "From solo tutors to multi-center brands" },
-    { "label": "Content Creation Speed", "desc": "From 30 minutes to 10 seconds per question" }
+    { "label": "Subjects Supported", "desc": "SAT · ACT · MCAT · LSAT · GRE · AP · USMLE · Bar Exam & more" },
+    { "label": "Questions Generated", "desc": "Multi-agent adversarial QC pipeline" },
+    { "label": "Active Tutoring Businesses", "desc": "From solo tutors to multi-location centers" },
+    { "label": "Content Creation Speed", "desc": "From 30 minutes to under 10 seconds per question" }
   ],
   "pain": {
     "label": "The Problem",
-    "title": "The Three Hidden Costs Killing Tutoring Margins",
-    "subtitle": "Not rent. Not marketing. It's the slow, manual work of content creation, one-size-fits-all review, and the complete absence of learning analytics.",
+    "title": "Your best instructors spend half their week on paperwork.",
+    "subtitle": "Not tutoring. Not mentoring. Writing questions, grading papers, building Excel trackers — work that keeps your business running but doesn't generate a dime of revenue.",
     "items": [
       {
-        "title": "Content Creation Drains Your Best People",
-        "desc": "A single quality question takes 30 minutes — topic selection, stem writing, plausible distractors, detailed explanations. A full mock exam consumes an entire week of your best instructor's time."
+        "title": "Content creation doesn't scale",
+        "desc": "Every new subject, every new exam cycle — someone has to write fresh material. A single quality question with good distractors and a detailed explanation takes 30 minutes. A full mock exam? A week of your best instructor's time."
       },
       {
-        "title": "Every Student Gets the Same Review Plan",
-        "desc": "Your top students re-drill what they already know. Your struggling students are thrown into material they're not ready for. Nobody learns at their actual frontier."
+        "title": "Every student gets the same plan",
+        "desc": "Your top performers re-drill material they already know. Your strugglers get thrown into content they're not ready for. Nobody learns at their actual frontier — because personalizing review for every student by hand is impossible."
       },
       {
-        "title": "You're Flying Blind on Student Progress",
-        "desc": "You discover knowledge gaps at the end-of-month Excel review — weeks after the student needed intervention. By then, the exam is already over."
+        "title": "You're flying blind until it's too late",
+        "desc": "You discover knowledge gaps in the end-of-month spreadsheet review — three weeks after the student needed intervention. By the time you see the data, the SAT date has passed."
       }
     ]
   },
   "features": {
-    "label": "Core Capabilities",
-    "title": "Three engines. One platform.",
-    "subtitle": "AI generates the content. Memorix schedules the review. The Knowledge Workbench maps mastery. A complete pipeline from content production to learning outcomes.",
+    "label": "What We Cover",
+    "title": "Everything but the teaching.",
+    "subtitle": "Content production, learning ops, analytics — the full back-office. Your instructors show up and teach. The system handles the rest.",
     "items": [
       {
-        "title": "AI Question Generation Engine",
-        "subtitle": "Adversarial pipeline. Production-ready output.",
-        "desc": "Three specialized AI agents — Author, Reviewer, and Classifier — collaborate adversarially on every question. The Author drafts. The Reviewer critiques for accuracy, clarity, and distractor quality. The Classifier validates subject tags and difficulty. Substandard generations are rejected and retried — up to 3 iterations — until they cross a calibrated quality threshold. Compared to a single LLM call, our adversarial pipeline lifts the usable-question rate from ~60% to 85%+. Multiple choice, calculation, case analysis, essay — all question types, across any subject. Finance, medicine, law, accounting — the engine adapts to each discipline's academic conventions.",
+        "title": "AI Question Engine",
+        "subtitle": "Adversarial pipeline · Production-ready output",
+        "desc": "Three specialized AI agents — Author, Reviewer, and Classifier — work together on every question. The Author drafts. The Reviewer challenges for accuracy, clarity, and distractor quality. The Classifier validates difficulty and topic tags. Substandard output gets rejected and regenerated — up to 3 iterations — until it crosses a calibrated quality threshold. Compared to a single LLM call, our pipeline lifts the usable-question rate from roughly 60% to 85%+. Multiple choice, calculation, case analysis, essay — any format, any subject.",
         "points": [
           "Author → Reviewer → Classifier: adversarial pipeline, up to 3 iterations",
           "Auto quality gating with configurable thresholds, 85%+ usability",
-          "All question types, all subjects — discipline-aware generation"
+          "Every question type, any subject — discipline-aware generation"
         ],
         "screenshotAlt": "AI Question Generation Center"
       },
       {
-        "title": "Memorix Adaptive Review Engine",
-        "subtitle": "Research-grade forgetting models. Review right before you forget.",
-        "desc": "Memorix is our proprietary memory-scheduling algorithm — fundamentally different from traditional spaced repetition. It models forgetting with a Weibull distribution rather than a power law, capturing the 'steep-then-gradual' decay pattern of human memory with significantly higher precision. After every answer, the algorithm updates a 20-dimensional personal parameter vector via online stochastic gradient descent with Nesterov momentum, calibrated with Brier scores for probabilistic confidence. On our Finance 431 benchmark dataset (500+ users, 120,000 review logs), Memorix reduced prediction RMSE by 13.7% versus FSRS v4.5 and improved long-term knowledge retention by 9.2%.",
+        "title": "Memorix Adaptive Review",
+        "subtitle": "Every student on their own optimal schedule",
+        "desc": "Traditional spaced repetition uses fixed-interval algorithms (SM-2, FSRS). Memorix models forgetting with a Weibull distribution, capturing the steep-then-gradual decay of real human memory. After each answer, the algorithm updates a 20-dimensional personal parameter vector via online SGD with Nesterov momentum — every response fine-tunes the schedule. On 120,000 review logs from 500+ users, Memorix reduced prediction error by 13.7% vs FSRS v4.5 and improved long-term retention by 9.2%. Your students review exactly what they need, right before they'd forget it.",
         "points": [
           "Weibull forgetting curves — more accurate than exponential or power-law models",
-          "Online SGD + Nesterov momentum — every response fine-tunes your memory portrait",
-          "Brier Score calibration — forgetting predictions with mathematical guarantees",
-          "20-dimensional personalization — individual memory profiles, not population averages"
+          "Online SGD + Nesterov momentum — every answer refines the student's memory portrait",
+          "Brier Score calibration — forgetting predictions with statistical rigor",
+          "20-dimensional personalization — individual profiles, not population averages"
         ],
         "screenshotAlt": "Academic Ladder"
       },
       {
-        "title": "Knowledge Workbench",
-        "subtitle": "Interactive knowledge graph. Mastery at a glance.",
-        "desc": "Every knowledge point appears as a color-coded node in an interactive SVG graph — green for mastered, red for weak, gray for untouched. Click any node to drill into associated questions, mistake history, and course resources. Students see exactly where they stand. Teachers pinpoint class-wide weak spots in seconds. Curriculum designers identify which topics produce the most errors.",
+        "title": "Knowledge Dashboard",
+        "subtitle": "Every student's mastery, visible in real time",
+        "desc": "Color-coded knowledge graph: green for mastered, red for weak, gray for untouched. Click any node to see associated questions, mistake history, and resources. Students know exactly where they stand. Instructors pinpoint class-wide weak spots in seconds. You stop guessing and start making data-driven decisions about curriculum and intervention.",
         "points": [
-          "Interactive SVG knowledge graph with zoom and pan",
+          "Interactive knowledge graph with zoom and pan",
           "Mastery-based color coding — weak spots surface automatically",
-          "One-click navigation to questions, mistakes, and course materials"
+          "One-click navigation to questions, mistakes, and materials"
         ],
-        "screenshotAlt": "Knowledge Workbench"
+        "screenshotAlt": "Knowledge Dashboard"
       }
     ]
   },
   "how": {
     "label": "How It Works",
-    "title": "Three steps. Ten minutes to launch.",
-    "subtitle": "No engineering team. No AI expertise. No infrastructure to manage. Register → Generate questions → Students practice. That's the whole workflow.",
+    "title": "Set up in minutes. Run on autopilot.",
+    "subtitle": "No engineering team. No instructional designers. No IT.",
     "steps": [
       {
-        "title": "Pick Your Subject",
-        "desc": "Register your institution and select from pre-built knowledge frameworks spanning finance, medicine, law, accounting, STEM, and more. Or upload your own curriculum — the engine adapts immediately."
+        "title": "Pick your subjects",
+        "desc": "Register your business and select from pre-built knowledge frameworks — SAT, ACT, MCAT, LSAT, GRE, AP, USMLE, Bar Exam, and more. Or upload your own curriculum. The engine adapts immediately."
       },
       {
-        "title": "AI Generates the Content",
-        "desc": "Open the AI Question Center, select knowledge points and question types. The three-agent adversarial pipeline generates, reviews, and quality-checks each question. Your subject-matter lead gives final approval — one click per batch."
+        "title": "AI generates your content",
+        "desc": "Open the Question Center, select topics and formats. The adversarial pipeline generates, reviews, and quality-checks every question. Your subject lead gives final approval — one click per batch."
       },
       {
-        "title": "Students Practice. You Get Analytics.",
-        "desc": "Share a link or QR code — students jump in instantly on any device. Auto-grading after every answer. The Knowledge Workbench updates each student's mastery map in real time. No app installs, no onboarding friction."
+        "title": "Students practice. You get the data.",
+        "desc": "Share a link or QR code. Students jump in on any device — no app to install. Auto-grading after every answer. The Knowledge Dashboard updates each student's mastery map in real time. You watch the business run."
       }
     ]
   },
   "subjects": {
     "label": "All Subjects",
-    "title": "Not tied to any one exam or curriculum.",
-    "subtitle": "UniMind's AI engine is an expert in 'how to write a good question' — feed it any subject's knowledge points, and it generates in that discipline's voice. The platform doesn't care whether it's finance, medicine, or civil engineering.",
+    "title": "If it's tested, we cover it.",
+    "subtitle": "The AI engine is an expert in how to write a good question — feed it any subject's material, and it generates in that discipline's voice. The platform doesn't care whether it's organic chemistry or constitutional law.",
     "categories": [
       {
-        "name": "Global Finance & Accounting",
-        "tags": ["CFA", "CPA", "FRM", "ACCA", "CMA", "CFP"]
+        "name": "College Admissions",
+        "tags": ["SAT", "ACT", "AP Biology", "AP Calculus", "AP US History", "AP Chemistry"]
+      },
+      {
+        "name": "Graduate Admissions",
+        "tags": ["GRE", "GMAT", "LSAT", "MCAT", "DAT", "PCAT"]
       },
       {
         "name": "Medical & Healthcare",
-        "tags": ["USMLE Step 1", "USMLE Step 2", "MCAT", "NCLEX", "PLAB", "AMC"]
+        "tags": ["USMLE Step 1", "USMLE Step 2", "NCLEX", "COMLEX", "NAPLEX"]
       },
       {
-        "name": "Law & Legal",
-        "tags": ["Bar Exam (US)", "SQE (UK)", "LSAT", "CLAT", "LNAT"]
+        "name": "Legal & Professional",
+        "tags": ["Bar Exam (MBE)", "Bar Exam (State)", "MPRE", "CPA", "CFA", "FRM"]
       },
       {
-        "name": "Graduate & College Admissions",
-        "tags": ["GRE", "GMAT", "SAT", "ACT", "AP Exams", "IB"]
+        "name": "K-12 & STEM",
+        "tags": ["Algebra", "Geometry", "Calculus", "Biology", "Chemistry", "Physics"]
       },
       {
-        "name": "Chinese Professional Exams",
-        "tags": ["金融 431", "法考", "教资", "计算机 408", "一建", "行测"]
-      },
-      {
-        "name": "K-12 STEM",
-        "tags": ["Mathematics", "Physics", "Chemistry", "Biology", "Computer Science"]
+        "name": "Languages & Humanities",
+        "tags": ["AP English", "AP Spanish", "AP World History", "TOEFL", "IELTS"]
       }
     ],
-    "footer": "Don't see your subject? Custom knowledge trees are built in minutes. Tell us what you teach — we'll help you set it up."
+    "footer": "Don't see your subject? Custom knowledge trees are built in minutes. We'll help you set it up."
   },
   "pricing": {
     "label": "Pricing",
-    "title": "Plans for every stage",
+    "title": "Plans for every stage of growth",
     "subtitle": "All plans include a 14-day full-feature trial. No credit card required. Start free, upgrade when you're ready.",
     "monthly": "Monthly",
     "annually": "Annual",
@@ -144,29 +144,36 @@
     "perMonth": "/mo",
     "annualTotal": "Annual total ¥",
     "popularBadge": "Most Popular",
-    "footer": "First 20 paying customers lock in early-adopter pricing for life. Pricing in CNY — international billing coming soon.",
+    "trialTitle": "One Trial, All Features — Zero Risk",
+    "trialDesc": "Every new account gets 14 days of full Plus-tier access with no restrictions. After the trial, your account switches to your chosen plan. Upgrade, downgrade, or cancel anytime.",
+    "pageTitle": "Choose Your Plan",
+    "pageSubtitle": "14-day full-feature trial · No credit card · Cancel anytime",
+    "backHome": "Back to Home",
+    "footer": "First 20 paying customers lock in early-adopter pricing for life.",
     "plans": [
-      { "label": "Free", "desc": "For individual tutors exploring AI", "cta": "Start Free" },
+      { "label": "Free", "desc": "For solo tutors getting started", "cta": "Start Free" },
       { "label": "Solo", "desc": "Independent tutor edition", "cta": "14-Day Free Trial" },
-      { "label": "Plus", "desc": "Institution edition · Full stack", "cta": "14-Day Free Trial" },
+      { "label": "Plus", "desc": "Growing business · Full stack", "cta": "14-Day Free Trial" },
       { "label": "Pro", "desc": "Enterprise · White-label", "cta": "Request Demo" }
     ],
     "rows": [
-      ["AI Gen 20/mo", "AI Gen 50/mo", "Unlimited AI Gen ✨", "Unlimited AI Gen ✨"],
+      ["AI Gen 30/mo", "AI Gen 100/mo", "Unlimited AI Gen", "Unlimited AI Gen"],
+      ["Unlimited AI Grading", "Unlimited AI Grading", "Unlimited AI Grading", "Unlimited AI Grading"],
       ["FSRS 4.5 Algorithm", "Memorix Adaptive Review", "Memorix Adaptive Review", "Memorix Adaptive Review"],
       ["Question Bank · Manual", "Question Bank · Manual", "Question Bank · Manual+Auto", "Question Bank · Manual+Auto"],
       ["Mistake Review Center", "Mistake Review Center", "Mistake Review Center", "Mistake Review Center"],
       ["Basic Stats", "Full Student Reports", "Class Comparison · Export", "Advanced Dashboard · AI Insights"],
       ["30 Students Max", "50 Students Max", "200 Students Max", "Unlimited Students"],
-      ["1 Teacher · 1 Subject", "1 Teacher · 3 Subjects", "5 Teachers · All Subjects", "Unlimited Teachers & Subjects"],
+      ["1 Instructor · 1 Subject", "1 Instructor · 3 Subjects", "5 Instructors · All Subjects", "Unlimited"],
+      ["—", "AI Assistant 500/mo", "AI Assistant 3000/mo", "Unlimited AI Assistant"],
+      ["—", "Mock Interviews 10/mo", "Mock Interviews 50/mo", "Unlimited Mock Interviews"],
+      ["—", "PDF Export 10/mo", "PDF Export 100/mo", "Unlimited PDF Export"],
       ["—", "—", "Course Videos + AI Outlines", "Course Videos + AI Outlines"],
       ["—", "—", "Interactive Knowledge Graph", "Interactive Knowledge Graph"],
       ["—", "—", "Online Q&A System", "Online Q&A System"],
-      ["—", "—", "Teacher Collaboration · RBAC", "Teacher Collaboration · RBAC"],
-      ["—", "—", "Live Study Rooms · Pomodoro", "Live Study Rooms · Pomodoro"],
-      ["—", "—", "AI Assistant · Multi-Bot", "AI Assistant · Multi-Bot"],
+      ["—", "—", "Instructor Collaboration · RBAC", "Instructor Collaboration · RBAC"],
+      ["—", "—", "Live Study Rooms", "Live Study Rooms"],
       ["—", "—", "Mock Exams", "Mock Exams"],
-      ["—", "—", "AI Mock Interviews · Radar", "AI Mock Interviews · Radar"],
       ["—", "—", "—", "Brand Customization · White-Label"],
       ["—", "—", "—", "Data Sovereignty"],
       ["—", "—", "—", "Custom Knowledge Trees"],
@@ -179,51 +186,52 @@
     "title": "Frequently Asked Questions",
     "items": [
       {
-        "q": "Is UniMind only for Chinese exams?",
-        "a": "No. The platform is fully subject-agnostic. Our AI engine generates questions in English, Chinese, or any language you prompt it with. We have pre-built knowledge frameworks for globally recognized exams — CFA, USMLE, CPA, Bar Exam, SAT, GRE — and you can upload your own curriculum in minutes. The three-agent adversarial pipeline works the same way regardless of subject or language."
+        "q": "Is UniMind only for specific subjects or exams?",
+        "a": "No. The platform is completely subject-agnostic. Our AI engine generates questions in any language for any exam — SAT, ACT, MCAT, LSAT, GRE, AP, USMLE, Bar Exam, you name it. We have pre-built knowledge frameworks for the most common standardized tests, and you can upload your own curriculum in minutes. The adversarial pipeline works the same way regardless of subject."
       },
       {
-        "q": "Can the AI generate questions in English? What about other languages?",
-        "a": "Yes. The AI engine is multilingual — it generates and reviews content in English by default for non-Chinese subjects, and you can specify any output language. Our international users (CFA, USMLE) receive English-language questions, explanations, and distractors. The platform UI currently supports Chinese and English, with more languages on the roadmap."
+        "q": "How does the free trial work?",
+        "a": "You get 14 days of full Plus-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
       },
       {
-        "q": "What makes Memorix different from Anki or spaced repetition apps?",
-        "a": "Anki and similar tools use fixed-interval algorithms (SM-2, FSRS). Memorix uses a Weibull-distribution forgetting model that better captures real human memory decay, plus online stochastic gradient descent to personalize 20 parameters per learner after every response. In head-to-head testing on 120,000 review logs, Memorix reduced prediction error by 13.7% vs FSRS v4.5. It's not just 'when to review' — it's a learning-rate-adaptive scheduler."
+        "q": "What makes Memorix different from Anki or spaced repetition?",
+        "a": "Anki and similar tools use fixed-interval algorithms (SM-2, FSRS) that treat all learners the same. Memorix uses a Weibull-distribution forgetting model and online stochastic gradient descent to personalize 20 parameters per learner — every answer refines the schedule. On 120,000 review logs, Memorix reduced prediction error by 13.7% vs FSRS v4.5. It's not just 'when to review' — it's a learning-rate-adaptive scheduler tuned to each student."
       },
       {
         "q": "How do my students access the platform?",
-        "a": "Students access everything through a web link or QR code — no app to download, no software to install. The platform is mobile-optimized and works in any modern browser. You share a link, they start practicing. Zero friction."
+        "a": "They don't download anything. Share a link or QR code, and students jump in on any device — phone, tablet, laptop. The interface is mobile-optimized and works in any modern browser. Zero onboarding friction for students."
       },
       {
-        "q": "What happens when the free trial ends?",
-        "a": "All your data — questions, student records, learning analytics — remains intact. Renew your subscription to restore full access. Without renewal, your data is read-only. You never lose anything you've built."
+        "q": "Can the AI generate questions in languages other than English?",
+        "a": "Yes. The AI engine is multilingual — specify your output language and it generates accordingly. Our international users receive content in English, Spanish, Chinese, Arabic, French, and more."
       },
       {
-        "q": "Can I pay monthly? Do you support international payment methods?",
-        "a": "Monthly and annual billing are both supported. Annual plans include a 23-33% discount. Currently, billing is in CNY via Chinese payment processors. International billing (USD, Stripe) is on our near-term roadmap. For now, international customers can pay via wire transfer or work through our partnerships team."
+        "q": "Do you support international payments?",
+        "a": "Currently, billing is in CNY via Chinese payment processors. International billing (USD via Stripe) is on our near-term roadmap. For now, international customers can pay via wire transfer or contact our partnerships team."
       },
       {
-        "q": "How is UniMind different from generic quiz platforms?",
-        "a": "Quiz platforms digitize paper tests. UniMind produces and optimizes teaching content with AI. The difference: questions are auto-generated, not manually entered. Review is algorithm-personalized per student, not one-size-fits-all. Analytics are real-time and drillable to the knowledge-point level, not end-of-month PDFs. We solve 'how to teach and how to learn' — not just 'how to test.'"
+        "q": "How is UniMind different from platforms like Quizlet, Khan Academy, or Canvas?",
+        "a": "Quizlet and Khan Academy give you pre-made content for a fixed set of subjects. Canvas is an LMS — it organizes content, it doesn't create it. UniMind produces and optimizes your teaching content with AI. The difference: questions are auto-generated, not manually entered or selected from a static library. Review is algorithm-personalized per student, not one-size-fits-all. Analytics are real-time and drillable to the topic level. We're the operations layer — you bring the teaching, we handle the rest."
       },
       {
         "q": "I run a small tutoring center. Which plan should I start with?",
-        "a": "Start with Free. 30 students and 20 AI generations per month let you validate the full workflow — generate → student practice → analytics — with a small group. When you're ready to scale, Solo (¥299/mo, ¥199/mo annual) removes the limits. Most centers upgrade within the first month once they see the time savings."
+        "a": "Start with Free. 30 students and 30 AI generations per month let you validate the full workflow with a small group. When you're ready to scale, Solo ($299/mo, $199/mo annual) removes the limits. Most centers upgrade within the first month once they see the time savings."
       },
       {
-        "q": "Can I use UniMind alongside my existing LMS or website?",
+        "q": "Can I integrate UniMind with my existing website or LMS?",
         "a": "Pro plan includes REST API access for integration. You can embed UniMind's question engine and review system into your existing platform. For custom integrations beyond the API, our solutions team can scope a tailored deployment — contact us through the demo request."
       }
     ]
   },
   "cta": {
-    "title": "Ready to bring AI into your tutoring business?",
-    "subtitle": "14-day full-feature trial. No credit card, no commitment. All subjects, all features. See how much time your instructors get back.",
+    "title": "Ready to get your instructors back to teaching?",
+    "subtitle": "14-day full-feature trial. No credit card, no commitment. See how many hours your team gets back each week.",
     "button": "Start 14-Day Free Trial",
-    "footnote": "50+ institutions already on UniMind"
+    "viewPlans": "Compare Plans",
+    "footnote": "50+ tutoring businesses already on UniMind"
   },
   "footer": {
-    "tagline": "AI Infrastructure for Tutoring & Test Prep",
+    "tagline": "The Operations Layer for Tutoring",
     "features": "Features",
     "pricing": "Pricing",
     "faq": "FAQ"

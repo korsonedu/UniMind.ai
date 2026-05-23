@@ -302,10 +302,6 @@ class QuizAttemptCreateView(generics.CreateAPIView):
         if is_initial:
             update_fields['has_completed_initial_assessment'] = True
         User.objects.filter(id=user.id).update(**update_fields)
-        if elo_change > 0:
-            from users.points import award_elo_points
-            award_elo_points(user.id, elo_change, 'exam_complete', reference_obj=attempt)
-
 
 class LeaderboardView(generics.ListAPIView):
     def get_queryset(self):

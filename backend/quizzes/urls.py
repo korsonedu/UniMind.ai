@@ -1,7 +1,6 @@
 from django.urls import path
 from .views_question import (
     QuestionListView, QuestionDetailView,
-    BulkImportQuestionsView,
     AdminQuestionListView, ExportStructuredQuestionsView, ImportCSVQuestionsView,
 )
 from .views_exam import (
@@ -21,7 +20,7 @@ from .views_knowledge import (
     KnowledgePointSubjectsView,
 )
 from .views_ai import (
-    AIPreviewGenerateView, AIConfirmSaveQuestionsView, AIPreviewParseView,
+    AIPreviewParseView,
     AdversarialPipelineView, PipelineReviewListView, PipelineReviewActionView,
 )
 from .views_admin import (
@@ -54,10 +53,7 @@ urlpatterns = [
     path('knowledge-points/import-md/', KnowledgePointImportMDView.as_view(), name='knowledge-point-import-md'),
     path('knowledge-points/export-md/', KnowledgePointExportMDView.as_view(), name='knowledge-point-export-md'),
     # 智能出题工作流
-    path('ai-smart-generate-preview/', AIPreviewGenerateView.as_view(), name='ai-smart-generate-preview'),
-    path('ai-smart-generate-confirm/', AIConfirmSaveQuestionsView.as_view(), name='ai-smart-generate-confirm'),
     path('ai-parse-raw-text/', AIPreviewParseView.as_view(), name='ai-parse-raw-text'),
-    path('ai-bulk-import/', BulkImportQuestionsView.as_view(), name='ai-bulk-import'),
     path('import-csv/', ImportCSVQuestionsView.as_view(), name='import-csv'),
     path('admin/questions/', AdminQuestionListView.as_view(), name='admin-question-list'),
     path('admin/export-structured/', ExportStructuredQuestionsView.as_view(), name='export-structured'),

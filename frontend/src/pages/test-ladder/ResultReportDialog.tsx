@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn, processMathContent } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -55,79 +54,111 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
     );
   }, [examSummary, isMobile, open]);
 
+  if (results.length === 0) return null;
+
+  const currentResult = results[currentReportIdx];
+  if (!currentResult) return null;
+
+  const scorePercent = examSummary
+    ? Math.round((examSummary.total_score / examSummary.max_score) * 100)
+    : 0;
+
+  const correctCount = results.filter((r: any) => r.is_correct).length;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         onInteractOutside={(e) => e.preventDefault()}
-        className="w-[96vw] sm:max-w-[1200px] rounded-2xl md:rounded-[3rem] border-none bg-card p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] md:h-[90vh] md:max-h-[920px] z-[100]"
+        className="w-[96vw] max-w-5xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] max-h-[860px] z-[100]"
       >
-        <DialogHeader className="px-4 md:px-8 py-4 border-b border-border shrink-0 bg-card">
-          <div className="flex flex-col md:flex-row justify-between md:items-center gap-3">
-            <div className="space-y-0.5 text-left">
-              <DialogTitle className="text-xl font-black tracking-tight text-foreground uppercase">{t('result.title')}</DialogTitle>
-              <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-indigo-600">Academic Audit</p>
-            </div>
-            {examSummary && (
-              <div className="flex items-center gap-6">
-                <div className="text-right">
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{t('result.totalScore')}</p>
-                  <p className="text-lg font-black text-foreground tabular-nums">{examSummary.total_score} / {examSummary.max_score}</p>
-                </div>
-                <div className="h-6 w-px bg-border" />
-                <div className="text-right">
-                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{t('result.eloChange')}</p>
-                  <p className={cn("text-lg font-black tabular-nums", examSummary.elo_change >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                    {examSummary.elo_change >= 0 ? `+${examSummary.elo_change}` : examSummary.elo_change}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        </DialogHeader>
+        <DialogTitle className="sr-only">{t('result.title')}</DialogTitle>
 
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-3 md:p-4 pt-2 bg-muted/30 scrollbar-thin md:border-r border-border">
-            {results.length > 0 && (
+        {/* ── Header ── */}
+        <div className="px-6 py-3.5 border-b border-stone-100 flex items-center justify-between shrink-0 bg-white">
+          <div className="flex items-center gap-5">
+            <span className="text-sm font-bold text-stone-800">{t('result.title')}</span>
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-stone-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              {correctCount}/{results.length} {t('result.matrixHint') ? '正确' : 'correct'}
+            </div>
+          </div>
+          {examSummary && (
+            <div className="flex items-center gap-5">
+              <div className="text-right">
+                <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">{t('result.totalScore')}</p>
+                <p className="text-sm font-bold text-stone-800 tabular-nums">
+                  {examSummary.total_score} <span className="text-stone-400 text-xs font-medium">/ {examSummary.max_score}</span>
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">{t('result.eloChange')}</p>
+                <p className={cn(
+                  "text-sm font-bold tabular-nums font-display italic",
+                  examSummary.elo_change >= 0 ? "text-emerald-600" : "text-red-500"
+                )}>
+                  {examSummary.elo_change >= 0 ? `+${examSummary.elo_change}` : examSummary.elo_change}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Body ── */}
+        <div className="flex-1 flex min-h-0">
+          {/* ── Main Content ── */}
+          <div className="flex-1 overflow-y-auto bg-stone-50/50">
+            <div className="px-6 md:px-10 py-6 md:py-8 max-w-2xl mx-auto">
               <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <Card className="border border-border bg-card rounded-[2rem] overflow-hidden shadow-sm">
-                  <div className="p-6 space-y-4">
+                <Card className="border border-stone-200 bg-white rounded-xl overflow-hidden shadow-sm">
+                  <div className="p-6 space-y-5">
+                    {/* Question header */}
                     <div className="flex justify-between items-start gap-4">
-                      <div className="flex gap-3 items-start flex-1 text-left">
-                        <span className="text-2xl font-black text-muted-foreground/30 tabular-nums leading-none">{(currentReportIdx + 1).toString().padStart(2, '0')}</span>
-                        <div className="font-bold text-base text-foreground leading-snug">
+                      <div className="flex gap-3 items-start flex-1 min-w-0">
+                        <span className="font-display text-2xl font-bold italic text-stone-300 leading-none select-none shrink-0">
+                          {(currentReportIdx + 1).toString().padStart(2, '0')}
+                        </span>
+                        <div className="text-sm font-medium text-stone-800 leading-relaxed">
                           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {processMathContent(results[currentReportIdx].question?.text || "")}
+                            {processMathContent(currentResult.question?.text || "")}
                           </ReactMarkdown>
                         </div>
                       </div>
-                      <Badge className={cn("rounded-lg px-2.5 py-0.5 font-bold shadow-sm shrink-0 text-[11px]", results[currentReportIdx].is_correct ? "bg-emerald-500 text-white" : "bg-rose-500 text-white")}>
-                        {results[currentReportIdx].score} / {results[currentReportIdx].max_score} PTS
+                      <Badge className={cn(
+                        "rounded-md px-2.5 py-0.5 text-[10px] font-semibold shrink-0",
+                        currentResult.is_correct
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                          : "bg-red-100 text-red-700 border-red-200"
+                      )}>
+                        {currentResult.score} / {currentResult.max_score} PTS
                       </Badge>
                     </div>
 
-                    <div className="grid gap-4 pt-4 border-t border-border">
-                      <div className="space-y-1 text-left">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground ml-1">My Response</p>
-                        <div className="p-3.5 bg-muted rounded-xl border border-border text-[13px] font-medium text-foreground leading-relaxed whitespace-pre-wrap">
-                          {results[currentReportIdx].user_answer || t('result.noAnswer')}
+                    <div className="grid gap-4 pt-4 border-t border-stone-100">
+                      {/* My Response */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">{t('result.myResponse')}</p>
+                        <div className="p-3.5 bg-stone-50 rounded-lg border border-stone-100 text-[13px] font-medium text-stone-700 leading-relaxed whitespace-pre-wrap">
+                          {currentResult.user_answer || t('result.noAnswer')}
                         </div>
                       </div>
-                      
-                      <div className="space-y-1 text-left">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-500 ml-1">AI Feedback</p>
-                        <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-400/20 text-[14px] font-bold text-foreground leading-relaxed shadow-sm text-left">
+
+                      {/* AI Feedback */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600">{t('result.aiFeedback')}</p>
+                        <div className="p-4 bg-emerald-50/50 rounded-lg border border-emerald-100 text-[13px] font-medium text-stone-700 leading-relaxed">
                           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {processMathContent(results[currentReportIdx].feedback)}
+                            {processMathContent(currentResult.feedback)}
                           </ReactMarkdown>
                         </div>
                       </div>
 
-                      <div className="space-y-1 text-left">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-500 ml-1">Academic Analysis</p>
-                        <div className="p-6 bg-slate-900 rounded-[1.5rem] text-[14px] font-medium text-slate-200 leading-relaxed shadow-sm text-left">
+                      {/* Academic Analysis */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">{t('result.academicAnalysis')}</p>
+                        <div className="p-5 bg-zinc-900 rounded-xl text-[13px] font-medium text-stone-200 leading-relaxed">
                           <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed">
                             <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                              {processMathContent(results[currentReportIdx].analysis || results[currentReportIdx].ai_answer || "")}
+                              {processMathContent(currentResult.analysis || currentResult.ai_answer || "")}
                             </ReactMarkdown>
                           </div>
                         </div>
@@ -136,49 +167,68 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
                   </div>
                 </Card>
               </div>
-            )}
+            </div>
           </div>
 
-          <div className={cn("w-full md:w-64 bg-muted/50 p-4 md:p-6 md:flex flex-col shrink-0 border-t md:border-t-0 border-border", isMobile ? "hidden" : "flex")}>
-            <h5 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-4 text-left">{t('result.assessmentMatrix')}</h5>
-            <ScrollArea className="flex-1 pr-2">
-              <div className="grid grid-cols-4 gap-2">
+          {/* ── Sidebar ── */}
+          <div className={cn(
+            "w-52 border-l border-stone-100 bg-white flex flex-col shrink-0",
+            isMobile ? "hidden" : "flex"
+          )}>
+            <div className="p-5 flex flex-col items-center flex-1">
+              {/* Score display */}
+              <div className="text-center mb-3">
+                <span className="font-display text-[2.75rem] font-bold text-stone-800 leading-none tabular-nums">
+                  {scorePercent}
+                </span>
+                <span className="text-lg text-stone-400 font-medium">%</span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full h-1 bg-stone-200 rounded-full overflow-hidden mb-5">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500 ease-out",
+                    scorePercent >= 80 ? "bg-emerald-500" : scorePercent >= 60 ? "bg-amber-500" : "bg-red-500"
+                  )}
+                  style={{ width: `${Math.max(scorePercent, 2)}%` }}
+                />
+              </div>
+
+              {/* Question grid */}
+              <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-2.5 w-full">
+                {t('result.assessmentMatrix')}
+              </p>
+              <div className="grid grid-cols-4 gap-1.5 w-full">
                 {results.map((res, i) => (
                   <button
                     key={i}
                     onClick={() => setCurrentReportIdx(i)}
                     className={cn(
-                      "h-10 w-10 rounded-xl font-bold text-xs transition-all border flex items-center justify-center relative",
+                      "aspect-square rounded-lg text-xs font-semibold transition-all duration-200 flex items-center justify-center relative",
                       i === currentReportIdx
-                        ? "bg-slate-900 text-white border-slate-900 shadow-lg scale-110 z-10"
+                        ? "bg-zinc-900 text-white shadow-sm scale-105"
                         : res.is_correct
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100"
-                          : "bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100"
+                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          : "bg-red-100 text-red-700 hover:bg-red-200"
                     )}
                   >
                     {i + 1}
-                    {i === currentReportIdx && <div className="absolute -bottom-1 w-1 h-1 bg-white rounded-full" />}
                   </button>
                 ))}
               </div>
-            </ScrollArea>
 
-            <div className="mt-6 space-y-3 pt-4 border-t border-border text-left">
-              <div className="flex justify-between items-center text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                <span>{t('result.scoreRate')}</span>
-                <span className="text-foreground">
-                  {examSummary ? Math.round((examSummary.total_score / examSummary.max_score) * 100) : 0}%
-                </span>
+              {/* Stats */}
+              <div className="mt-auto w-full pt-4 border-t border-stone-100 space-y-1.5">
+                <div className="flex justify-between text-[10px] font-medium">
+                  <span className="text-stone-400">{t('result.scoreRate')}</span>
+                  <span className="text-stone-700 tabular-nums">{scorePercent}%</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-medium">
+                  <span className="text-stone-400">正确</span>
+                  <span className="text-stone-700 tabular-nums">{correctCount}/{results.length}</span>
+                </div>
               </div>
-              <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-indigo-600 transition-all duration-500"
-                  style={{ width: `${examSummary ? (examSummary.total_score / examSummary.max_score) * 100 : 0}%` }}
-                />
-              </div>
-              <p className="text-[11px] font-medium text-muted-foreground leading-tight pt-1">
-                {t('result.matrixHint')}
-              </p>
             </div>
           </div>
         </div>

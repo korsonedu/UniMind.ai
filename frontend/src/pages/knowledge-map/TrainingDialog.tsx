@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Loader2, Sparkles, RotateCcw, ChevronRight } from 'lucide-react';
@@ -113,77 +113,83 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
     <Dialog open={!!question} onOpenChange={(open) => { if (!open && !isSubmitting) onClose(); }}>
       <DialogContent
         onInteractOutside={(e) => e.preventDefault()}
-        className="sm:max-w-[1100px] rounded-[3rem] border-none bg-card p-0 shadow-2xl overflow-hidden flex flex-col h-[min(800px,92vh)] max-h-[92vh] z-[100]"
+        className="max-w-3xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[min(800px,92vh)] max-h-[92vh] z-[100]"
       >
-        <DialogHeader className="p-10 pb-6 border-b border-border shrink-0 bg-card">
-          <div className="flex justify-between items-center">
-            <div className="space-y-1.5 text-left">
-              <DialogTitle className="text-2xl font-black tracking-tight text-foreground uppercase">{t('training.title')}</DialogTitle>
-              <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-indigo-600 animate-pulse">Smart Evaluation Active</p>
-            </div>
-            <div className="px-6 py-2 bg-slate-900 rounded-2xl text-white font-mono font-bold text-sm tabular-nums shadow-sm">
-              ELO {question.difficulty || 1200}
-            </div>
-          </div>
-        </DialogHeader>
+        <DialogTitle className="sr-only">{t('training.title')}</DialogTitle>
 
-        <div ref={contentRef} className="flex-1 overflow-y-auto p-8 bg-card scrollbar-thin">
-          <div className="max-w-4xl mx-auto space-y-8 text-left">
+        {/* ── Header ── */}
+        <div className="px-6 py-3 border-b border-stone-100 flex items-center justify-between shrink-0 bg-white">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Badge className="rounded-md px-2 py-0 h-5 text-[10px] font-semibold bg-stone-100 text-stone-600 border-none hover:bg-stone-100">
+              {question.q_type === 'objective'
+                ? t('training.questionType.objective')
+                : question.subjective_type === 'calculate'
+                  ? t('training.questionType.calculate')
+                  : question.subjective_type === 'noun'
+                    ? t('training.questionType.noun')
+                    : t('training.questionType.subjective')}
+            </Badge>
+            <span aria-hidden className="text-stone-300 select-none">·</span>
+            <span className="text-[11px] font-medium text-stone-500 whitespace-nowrap">
+              {question.difficulty_level_display || t('training.difficultyFallback')} · ELO {question.difficulty || 1200}
+            </span>
+            {question.knowledge_point_detail?.name && (
+              <>
+                <span aria-hidden className="text-stone-300 select-none">·</span>
+                <span className="text-[11px] font-medium text-stone-400 truncate">
+                  {question.knowledge_point_detail.name}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="px-3 py-1 bg-stone-100 rounded-lg">
+            <span className="font-display text-sm font-bold text-stone-600 italic tabular-nums">
+              ELO {question.difficulty || 1200}
+            </span>
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div ref={contentRef} className="flex-1 overflow-y-auto">
+          <div className="px-8 py-6 max-w-2xl mx-auto">
             {!showResult ? (
               <>
-                <div className="space-y-4 border-b border-border pb-5">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Badge variant="secondary" className="rounded-lg px-2 py-0.5 text-[11px] font-black uppercase tracking-widest bg-muted text-muted-foreground border-none">
-                      {question.q_type === 'objective'
-                        ? t('training.questionType.objective')
-                        : question.subjective_type === 'calculate'
-                          ? t('training.questionType.calculate')
-                          : question.subjective_type === 'noun'
-                            ? t('training.questionType.noun')
-                            : t('training.questionType.subjective')}
-                    </Badge>
-                    <Badge variant="outline" className="rounded-lg px-2 py-0.5 text-[11px] font-bold text-indigo-500 border-indigo-100 bg-indigo-50/30">
-                      {question.difficulty_level_display || t('training.difficultyFallback')} (ELO {question.difficulty || 1200})
-                    </Badge>
-                    {question.knowledge_point_detail?.name && (
-                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
-                        {question.knowledge_point_detail.name}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xl font-bold text-foreground leading-relaxed">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {processMathContent(question.text)}
-                    </ReactMarkdown>
-                  </div>
+                {/* Question text */}
+                <div className="text-[15px] font-medium text-stone-800 leading-relaxed mb-8">
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {processMathContent(question.text)}
+                  </ReactMarkdown>
                 </div>
 
+                {/* Answer area */}
                 {question.q_type === 'objective' ? (
-                  <div className="grid grid-cols-1 gap-3 max-w-3xl">
+                  <div className="space-y-2.5">
                     {objectiveOptions.map((opt) => (
                       <button
                         key={opt.key}
                         onClick={() => setAnswer(opt.key)}
                         className={cn(
-                          "w-full p-4 rounded-2xl border text-left font-bold transition-all flex items-center gap-5 group/opt",
+                          "w-full flex items-center gap-4 p-3.5 rounded-xl border text-left transition-all duration-200 group",
+                          "active:scale-[0.995]",
                           answer === opt.key
-                            ? "bg-slate-900 text-white border-slate-900 shadow scale-[1.01]"
-                            : "bg-card border-border hover:border-indigo-400 hover:bg-muted"
+                            ? "bg-zinc-900 border-zinc-900 text-white shadow-lg shadow-zinc-900/5"
+                            : "bg-white border-stone-200 hover:border-stone-400 hover:bg-stone-50/80"
                         )}
                       >
-                        <div
-                          className={cn(
-                            "h-7 w-7 rounded-xl border-2 flex items-center justify-center transition-all shrink-0",
-                            answer === opt.key
-                              ? "border-white/20 bg-indigo-600"
-                              : "border-border bg-muted group-hover/opt:border-indigo-200"
-                          )}
-                        >
-                          <span className={cn("text-[11px] font-black", answer === opt.key ? "text-white" : "text-muted-foreground")}>
-                            {opt.key}
-                          </span>
-                        </div>
-                        <span className="text-sm tracking-tight whitespace-pre-wrap break-words">{opt.text}</span>
+                        <span className={cn(
+                          "font-display text-lg font-bold italic w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                          answer === opt.key
+                            ? "bg-white/10 text-white"
+                            : "bg-stone-100 text-stone-500 group-hover:bg-stone-200 group-hover:text-stone-700"
+                        )}>
+                          {opt.key}
+                        </span>
+                        <span className={cn(
+                          "text-sm leading-relaxed whitespace-pre-wrap break-words",
+                          answer === opt.key ? "text-white" : "text-stone-700"
+                        )}>
+                          {opt.text}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -192,52 +198,51 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
                     placeholder={t('training.answerPlaceholder')}
-                    className="w-full bg-muted border border-border rounded-[2rem] p-8 min-h-[260px] font-bold text-base focus:ring-4 focus:ring-indigo-500/20 transition-all placeholder:text-muted-foreground resize-none shadow-inner text-foreground"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl p-5 min-h-[260px] text-sm font-medium leading-relaxed focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-stone-400 placeholder:text-stone-400 resize-none transition-all text-stone-800"
                   />
                 )}
               </>
             ) : (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div
-                  className={cn(
-                    "p-6 rounded-[2rem] border flex items-center gap-6",
-                    resultData?.is_correct
-                      ? "bg-emerald-50 border-emerald-100 text-emerald-700"
-                      : "bg-red-50 border-red-100 text-red-700"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm",
-                      resultData?.is_correct ? "bg-emerald-500 text-white" : "bg-red-500 text-white"
-                    )}
-                  >
-                    {resultData?.is_correct ? <CheckCircle2 className="w-6 h-6" /> : <RotateCcw className="w-6 h-6" />}
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Result status */}
+                <div className={cn(
+                  "p-5 rounded-xl border flex items-center gap-5",
+                  resultData?.is_correct
+                    ? "bg-emerald-50/70 border-emerald-100 text-emerald-700"
+                    : "bg-red-50/70 border-red-100 text-red-700"
+                )}>
+                  <div className={cn(
+                    "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
+                    resultData?.is_correct ? "bg-emerald-500 text-white" : "bg-red-500 text-white"
+                  )}>
+                    {resultData?.is_correct ? <CheckCircle2 className="w-5 h-5" /> : <RotateCcw className="w-5 h-5" />}
                   </div>
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-widest opacity-60">{t('training.resultLabel')}</p>
-                    <h4 className="text-xl font-black">{resultData?.is_correct ? t('training.passed') : t('training.failed')}</h4>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60">{t('training.resultLabel')}</p>
+                    <h4 className="text-lg font-bold">{resultData?.is_correct ? t('training.passed') : t('training.failed')}</h4>
                   </div>
                   <div className="ml-auto text-right">
-                    <p className="text-[11px] font-bold uppercase tracking-widest opacity-60">{t('training.scoreLabel')}</p>
-                    <p className="text-2xl font-black">{resultData?.score} / {resultData?.max_score}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60">{t('training.scoreLabel')}</p>
+                    <p className="text-xl font-bold tabular-nums">{resultData?.score} / {resultData?.max_score}</p>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h5 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t('training.standardAnswer')}</h5>
-                  <div className="p-8 bg-muted rounded-[2.5rem] border border-border text-sm font-medium leading-relaxed text-foreground">
+                {/* Standard answer */}
+                <div className="space-y-2">
+                  <h5 className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">{t('training.standardAnswer')}</h5>
+                  <div className="p-5 bg-stone-50 rounded-xl border border-stone-100 text-sm font-medium leading-relaxed text-stone-700">
                     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                       {processMathContent(standardAnswerText)}
                     </ReactMarkdown>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h5 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                    <Sparkles className="w-3.5 h-3.5" /> {t('training.rationale')}
+                {/* Rationale */}
+                <div className="space-y-2">
+                  <h5 className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3" /> {t('training.rationale')}
                   </h5>
-                  <div className="p-8 bg-slate-900 text-slate-200 rounded-[2.5rem] text-sm leading-relaxed shadow-sm">
+                  <div className="p-5 bg-zinc-900 text-stone-200 rounded-xl text-sm leading-relaxed">
                     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                       {processMathContent(rationaleText)}
                     </ReactMarkdown>
@@ -248,41 +253,49 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
           </div>
         </div>
 
-        <div className="p-8 border-t border-border flex justify-between items-center bg-card shrink-0">
+        {/* ── Footer ── */}
+        <div className="px-6 py-3.5 border-t border-stone-100 flex items-center justify-between shrink-0 bg-white">
           {!showResult ? (
             <>
               <Button
                 variant="ghost"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="rounded-xl h-12 px-6 font-bold text-muted-foreground hover:text-foreground"
+                className="h-9 px-4 rounded-xl text-sm font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100"
               >
                 {t('training.exit')}
               </Button>
               <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !answer.trim()}
-                className="rounded-2xl px-12 bg-indigo-600 text-white hover:bg-indigo-700 font-black h-14 shadow transition-all active:scale-95"
+                className="h-9 px-6 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.97] gap-1.5"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     {t('training.submitting')}
                   </>
                 ) : (
                   <>
                     {t('training.submit')}
-                    <ChevronRight className="ml-2 h-5 w-5" />
+                    <ChevronRight className="h-4 w-4" />
                   </>
                 )}
               </Button>
             </>
           ) : (
-            <div className="ml-auto flex gap-3">
-              <Button variant="outline" onClick={handleReset} className="h-12 px-8 rounded-2xl font-bold border-border">
+            <div className="ml-auto flex gap-2.5">
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                className="h-9 px-5 rounded-xl text-sm font-medium border-stone-200 text-stone-600 hover:bg-stone-50 hover:text-stone-900"
+              >
                 {t('training.retry')}
               </Button>
-              <Button onClick={onClose} className="h-12 px-10 rounded-2xl bg-primary text-primary-foreground font-bold">
+              <Button
+                onClick={onClose}
+                className="h-9 px-5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold"
+              >
                 {t('training.complete')}
               </Button>
             </div>

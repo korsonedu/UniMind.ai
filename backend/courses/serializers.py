@@ -33,6 +33,10 @@ class CourseSerializer(serializers.ModelSerializer):
     courseware = RelativeFileField(required=False)
     reference_materials = RelativeFileField(required=False)
 
+    album = AlbumSerializer(source='album_obj', read_only=True)
+    album_obj = serializers.PrimaryKeyRelatedField(
+        queryset=Album.objects.all(), required=False, allow_null=True, write_only=True
+    )
     tags = serializers.SerializerMethodField()
 
     def get_tags(self, obj):
@@ -41,7 +45,7 @@ class CourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ('id', 'title', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'institution', 'tags', 'created_at', 'updated_at', 'author')
+        fields = ('id', 'title', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'created_at', 'updated_at', 'author')
         read_only_fields = ('author',)
 
 class StartupMaterialSerializer(serializers.ModelSerializer):

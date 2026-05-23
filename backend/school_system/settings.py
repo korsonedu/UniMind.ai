@@ -268,18 +268,6 @@ CELERY_BEAT_SCHEDULE = {
         "task": "users.tasks.check_membership_expiry",
         "schedule": 86400.0,  # 24 hours
     },
-    "elo-decay-daily": {
-        "task": "users.tasks.elo_decay_daily",
-        "schedule": 86400.0,
-    },
-    "elo-decay-weekly": {
-        "task": "users.tasks.elo_decay_weekly",
-        "schedule": 604800.0,  # 7 days
-    },
-    "monthly-points-bonus": {
-        "task": "users.tasks.monthly_points_bonus",
-        "schedule": 2592000.0,  # 30 days (approx monthly)
-    },
     "notify-trial-expiring-daily": {
         "task": "users.tasks.notify_trial_expiring",
         "schedule": 86400.0,
@@ -296,30 +284,9 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
 # GIPHY
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY", "")
 
-# AI 引擎 — DeepSeek V4
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", os.getenv("LLM_API_KEY", ""))
-LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-v4-pro")
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1/chat/completions")
+# AI 引擎配置 → ai_engine/config.py（单一来源）
 
-# 按任务模型路由 → ai_engine/config.py（单一来源，不再通过 env 逐任务覆盖）
-
-# Email
-EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
-EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = _get_int("EMAIL_PORT", 587)
-EMAIL_USE_TLS = _get_bool("EMAIL_USE_TLS", default=True)
-EMAIL_USE_SSL = _get_bool("EMAIL_USE_SSL", default=False)
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "korsonedu@gmail.com")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
-EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
+# Email — Resend HTTP API (core/email_service.py)
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-
-UNIMIND_LOGO_URL = os.getenv(
-    "UNIMIND_LOGO_URL",
-    "https://unimind.ai/logo.png",
-)
-
-EMAIL_SSL_CERTFILE = os.getenv("SSL_CERT_FILE", "")
-# macOS SSL: If cert verification fails, run in terminal:
-#   /Applications/Python\ 3.14/Install\ Certificates.command
-# Or install certifi and set SSL_CERT_FILE to certifi's cacert.pem
+EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
+UNIMIND_LOGO_URL = os.getenv("UNIMIND_LOGO_URL", "https://unimind.ai/logo.png")

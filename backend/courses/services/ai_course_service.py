@@ -4,6 +4,7 @@ import random
 from typing import Any, Dict, List, Optional
 
 from ai_engine.ai_service import AIService
+from ai_engine.tools import OUTLINE_ITEMS_SCHEMA, QUESTION_LIST_SCHEMA
 from courses.asr import ASRProviderRegistry
 from courses.models import (
     Course,
@@ -144,6 +145,22 @@ class AICourseService:
         template = self.ai.get_template('courses', 'transcript_outline_prompt.txt') or ''
         prompt = self.ai.format_template(template, transcript_text=transcript_text)
 
+        result = self.ai.structured_output(
+            system_prompt="",
+            user_prompt=prompt,
+            schema=OUTLINE_ITEMS_SCHEMA,
+            tool_name="submit_outline",
+            tool_description="提交课程大纲条目",
+            temperature=0.3,
+            max_tokens=4096,
+            raise_on_error=True,
+            operation='courses.generate_outline',
+        )
+
+        if isinstance(result, list):
+            return result
+
+        # fallback to old extract_json path
         response = self.ai.call_ai(
             messages=[
                 {"role": "user", "content": prompt},
@@ -192,25 +209,42 @@ class AICourseService:
         )
 
         try:
-            response = self.ai.simple_chat(
+            result = self.ai.structured_output(
                 system_prompt=(
-                    "你是学科出题专家。只输出 JSON 数组，每个元素包含 "
-                    "q_type(objective/subjective)、subjective_type(noun/short/essay/calculate)、"
-                    "question、options(客观题 ABCD 选项)、answer、grading_points、"
-                    "difficulty_level(entry/easy/normal/hard/extreme) 字段。"
+                    "你是学科出题专家。根据视频内容出题，调用 submit_questions 提交题目列表。"
                 ),
                 user_prompt=prompt,
+                schema=QUESTION_LIST_SCHEMA,
+                tool_name="submit_questions",
+                tool_description="提交生成的题目列表",
                 temperature=0.3,
                 max_tokens=4096,
                 raise_on_error=True,
                 operation="courses.generate_questions",
             )
-            content = self.ai.extract_content(response)
-            parsed = self.ai.extract_json(content)
-            if isinstance(parsed, list):
-                questions = parsed
+            if isinstance(result, list):
+                questions = result
             else:
-                questions = []
+                # fallback to old extract_json path
+                response = self.ai.simple_chat(
+                    system_prompt=(
+                        "你是学科出题专家。只输出 JSON 数组，每个元素包含 "
+                        "q_type(objective/subjective)、subjective_type(noun/short/essay/calculate)、"
+                        "question、options(客观题 ABCD 选项)、answer、grading_points、"
+                        "difficulty_level(entry/easy/normal/hard/extreme) 字段。"
+                    ),
+                    user_prompt=prompt,
+                    temperature=0.3,
+                    max_tokens=4096,
+                    raise_on_error=True,
+                    operation="courses.generate_questions",
+                )
+                content = self.ai.extract_content(response)
+                parsed = self.ai.extract_json(content)
+                if isinstance(parsed, list):
+                    questions = parsed
+                else:
+                    questions = []
         except Exception:
             logger.exception(
                 "AI question generation failed for course %s, will rely on global fallback",

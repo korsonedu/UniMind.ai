@@ -18,9 +18,7 @@ class User(AbstractUser):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     nickname = models.CharField(max_length=100, blank=True, verbose_name="昵称")
     elo_score = models.IntegerField(default=1000)
-    elo_points = models.IntegerField(default=50, verbose_name="可消费积分")
     has_completed_initial_assessment = models.BooleanField(default=False)
-    elo_reset_count = models.IntegerField(default=0)
     avatar_style = models.CharField(max_length=50, default='avataaars')
     avatar_seed = models.CharField(max_length=100, blank=True)
     last_active = models.DateTimeField(auto_now_add=True)
@@ -40,11 +38,6 @@ class User(AbstractUser):
     verification_code_sent_at = models.DateTimeField(null=True, blank=True, verbose_name="验证码发送时间")
     institution_role = models.CharField(max_length=20, choices=INSTITUTION_ROLE_CHOICES, default='student', verbose_name="机构内角色")
     institution = models.ForeignKey('Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='students', verbose_name="所属机构")
-
-    @property
-    def is_platform_admin(self):
-        """超级管理员：is_superuser 且未绑定机构"""
-        return self.is_superuser and self.institution_id is None
 
     @property
     def avatar_url(self):
@@ -211,24 +204,6 @@ class Institution(models.Model):
         return self.name
 
 
-class InstitutionRewardConfig(models.Model):
-    """机构积分配置"""
-    institution = models.OneToOneField('Institution', on_delete=models.CASCADE, related_name='reward_config')
-    is_enabled = models.BooleanField(default=True, verbose_name="启用积分功能")
-    points_multiplier = models.FloatField(default=1.0, verbose_name="积分倍率")
-    monthly_bonus_points = models.IntegerField(default=0, verbose_name="每月赠送积分")
-    daily_login_bonus = models.IntegerField(default=5, verbose_name="每日登录积分")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = '机构积分配置'
-        verbose_name_plural = '机构积分配置'
-
-    def __str__(self):
-        return f'{self.institution.name} 积分配置'
-
-
 # ── Plan features utility ──
 DEFAULT_DURATION_DAYS = 30
 DURATION_PERMANENT = 0
@@ -243,6 +218,7 @@ PLAN_FEATURES: dict[str, list[str]] = {
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline',
+        'interview.mock', 'pdf.mock',
     ],
     'plus': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
@@ -342,32 +318,6 @@ class PlanInviteCode(models.Model):
 
     def __str__(self):
         return self.code
-
-
-# 积分流水
-class EloPointsLedger(models.Model):
-    REASON_CHOICES = (
-        ('exam_complete', '测验完成'),
-        ('question_graded', '题目判分'),
-        ('course_complete', '课程完成'),
-        ('course_reward_claim', '课程奖励领取'),
-        ('shop_redeem', '积分兑换'),
-        ('admin_adjust', '管理员调整'),
-        ('elo_reset', 'ELO重置'),
-    )
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='points_ledger')
-    amount = models.IntegerField(verbose_name="变动数量（正=获得，负=消费）")
-    balance_after = models.IntegerField(verbose_name="变动后余额")
-    reason = models.CharField(max_length=30, choices=REASON_CHOICES, verbose_name="变动原因")
-    description = models.CharField(max_length=200, blank=True, verbose_name="说明")
-    reference_type = models.CharField(max_length=50, blank=True, null=True, db_index=True, verbose_name="关联类型")
-    reference_id = models.IntegerField(blank=True, null=True, db_index=True, verbose_name="关联ID")
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        verbose_name = '积分流水'
-        verbose_name_plural = '积分流水'
 
 
 # Commercial models defined in models_commercial.py

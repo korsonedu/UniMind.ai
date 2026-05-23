@@ -82,7 +82,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
             </Card>
 
             <Card className="rounded-2xl border border-border/60 bg-card p-5 space-y-3">
-              <h2 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground flex items-center gap-2">
                 <Target className="h-3.5 w-3.5" />
                 {t('detailPage.questionsHeading')} ({questions.length})
               </h2>

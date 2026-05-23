@@ -26,10 +26,10 @@ interface CourseAIState {
   fetchTranscript: (courseId: number) => Promise<void>;
   triggerTranscription: (courseId: number) => Promise<void>;
   reset: () => void;
-  _pollTimers: Map<string, ReturnType<typeof setInterval>>;
 }
 
 const POLL_INTERVAL = 5000;
+const _pollTimers = new Map<string, ReturnType<typeof setInterval>>();
 
 export const useCourseAIStore = create<CourseAIState>((set, get) => ({
   outlineStatus: 'idle',
@@ -37,12 +37,11 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
   transcriptStatus: 'idle',
   transcriptSegments: [],
   fullText: null,
-  _pollTimers: new Map(),
 
   fetchOutline: async (courseId) => {
     const key = `outline_${courseId}`;
     // Clear any existing poll for this outline
-    const timers = get()._pollTimers;
+    const timers = _pollTimers;
     if (timers.has(key)) {
       clearInterval(timers.get(key));
       timers.delete(key);
@@ -63,20 +62,20 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
             const pollRes = await api.get(`/courses/${courseId}/outline/`);
             if (pollRes.data.status === 'completed') {
               clearInterval(timer);
-              get()._pollTimers.delete(key);
+              _pollTimers.delete(key);
               set({ outlineItems: pollRes.data.items || [], outlineStatus: 'available' });
             } else if (pollRes.data.status === 'failed') {
               clearInterval(timer);
-              get()._pollTimers.delete(key);
+              _pollTimers.delete(key);
               set({ outlineStatus: 'unavailable' });
             }
           } catch {
             clearInterval(timer);
-            get()._pollTimers.delete(key);
+            _pollTimers.delete(key);
             set({ outlineStatus: 'unavailable' });
           }
         }, POLL_INTERVAL);
-        get()._pollTimers.set(key, timer);
+        _pollTimers.set(key, timer);
       }
     } catch {
       set({ outlineStatus: 'unavailable' });
@@ -96,7 +95,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
 
   fetchTranscript: async (courseId) => {
     const key = `transcript_${courseId}`;
-    const timers = get()._pollTimers;
+    const timers = _pollTimers;
     if (timers.has(key)) {
       clearInterval(timers.get(key));
       timers.delete(key);
@@ -127,7 +126,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
             const pollRes = await api.get(`/courses/${courseId}/transcript/`);
             if (pollRes.data.status === 'completed') {
               clearInterval(timer);
-              get()._pollTimers.delete(key);
+              _pollTimers.delete(key);
               const pollSegments = (pollRes.data.segments || []).map((s: any) => ({
                 start: s.start_time ?? s.start ?? 0,
                 end: s.end_time ?? s.end ?? 0,
@@ -141,16 +140,16 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
               });
             } else if (pollRes.data.status === 'failed') {
               clearInterval(timer);
-              get()._pollTimers.delete(key);
+              _pollTimers.delete(key);
               set({ transcriptStatus: 'unavailable' });
             }
           } catch {
             clearInterval(timer);
-            get()._pollTimers.delete(key);
+            _pollTimers.delete(key);
             set({ transcriptStatus: 'unavailable' });
           }
         }, POLL_INTERVAL);
-        get()._pollTimers.set(key, timer);
+        _pollTimers.set(key, timer);
       }
     } catch {
       set({ transcriptStatus: 'unavailable' });
@@ -170,7 +169,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
 
   reset: () => {
     // Clear all poll timers
-    const timers = get()._pollTimers;
+    const timers = _pollTimers;
     timers.forEach((timer) => clearInterval(timer));
     timers.clear();
     set({

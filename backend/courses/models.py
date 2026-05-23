@@ -22,6 +22,7 @@ class Course(models.Model):
     elo_reward = models.IntegerField(default=50, verbose_name="观看完成奖励 ELO")
     courseware = models.FileField(upload_to='courseware/', blank=True, null=True, verbose_name="课件")
     reference_materials = models.FileField(upload_to='references/', blank=True, null=True, verbose_name="参考资料")
+    sort_order = models.PositiveIntegerField(default=0, verbose_name="专辑内排序")
     ai_outline_enabled = models.BooleanField(default=True, verbose_name="启用AI智能大纲")
     institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="courses", verbose_name="所属机构")
     created_at = models.DateTimeField(auto_now_add=True)

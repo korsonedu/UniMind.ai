@@ -5,11 +5,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import KnowledgePoint, ContentPipelineTask
 from quizzes.serializers import ContentPipelineTaskSerializer
-from users.permissions import HasPlanFeature, HasAIQuota
+from users.permissions import HasPlanFeature, HasQuota
 from users.quota import increment_ai_quota
 from ai_service import AIService
 from ai_engine.service import AICallError
-from quizzes.services.single_generate_pipeline import run_single_generate_pipeline
 from quizzes.services.ai_schema_guard import validate_question_list_payload
 from quizzes.ai_workflow import save_confirmed_questions
 from quizzes.services.ai_parse_service import (
@@ -20,153 +19,10 @@ from quizzes.services.task_dispatcher import dispatch_ai_parse_task
 logger = logging.getLogger(__name__)
 
 
-class AIPreviewGenerateView(APIView):
-    """
-    智能出题预览：返回生成的数据但不存库
-    """
-    permission_classes = [HasPlanFeature, HasAIQuota]
-    required_feature = 'ai.generate'
-    def post(self, request):
-        kp_ids = request.data.get('kp_ids', [])
-        count = int(request.data.get('count', 1))
-        target_types = request.data.get('types', []) # 新增题型过滤
-        target_difficulty = request.data.get('difficulty_level', 'normal')
-        target_type_ratio = request.data.get('type_ratio')
-
-        if not kp_ids:
-            return Response({'error': '未提供知识点 ID'}, status=400)
-
-        pipeline_task = ContentPipelineTask.objects.create(
-            task_type="ai_generate",
-            status="running",
-            title="AI 智能出题（快速模式）",
-            description="Author -> Reviewer -> Classifier 单一出题预览任务",
-            payload={
-                "pipeline_mode": "single_generate_v1",
-                "kp_ids": kp_ids,
-                "count_per_kp": count,
-                "target_types": target_types,
-                "target_difficulty": target_difficulty,
-            },
-            progress=5,
-            created_by=request.user,
-            assignee=request.user,
-            request_id=getattr(request, "request_id", ""),
-            started_at=timezone.now(),
-        )
-
-        try:
-            pipeline_result = run_single_generate_pipeline(
-                kp_ids=kp_ids,
-                count_per_kp=count,
-                target_types=target_types,
-                target_difficulty=target_difficulty,
-                target_type_ratio=target_type_ratio,
-                skip_review=True,
-            )
-            questions = pipeline_result.get('questions') or []
-        except AICallError as e:
-            pipeline_task.status = "failed"
-            pipeline_task.progress = 100
-            pipeline_task.error_message = e.message
-            pipeline_task.finished_at = timezone.now()
-            pipeline_task.save(update_fields=["status", "progress", "error_message", "finished_at", "updated_at"])
-            return Response({'error': e.message}, status=e.status_code)
-        except Exception as exc:
-            logger.exception("AI smart generate pipeline 未预期异常")
-            pipeline_task.status = "failed"
-            pipeline_task.progress = 100
-            pipeline_task.error_message = str(exc)[:500]
-            pipeline_task.finished_at = timezone.now()
-            pipeline_task.save(update_fields=["status", "progress", "error_message", "finished_at", "updated_at"])
-            return Response({'error': f'AI 命题服务异常：{str(exc)[:200]}'}, status=500)
-
-        if not questions:
-            pipeline_task.status = "failed"
-            pipeline_task.progress = 100
-            pipeline_task.error_message = "AI 生成失败，请重试"
-            pipeline_task.finished_at = timezone.now()
-            pipeline_task.save(update_fields=["status", "progress", "error_message", "finished_at", "updated_at"])
-            return Response({'error': 'AI 生成失败，请重试'}, status=500)
-
-        pipeline_task.status = "completed"
-        pipeline_task.progress = 100
-        pipeline_task.result = {
-            "pipeline": pipeline_result.get("pipeline", {}),
-            "generated_count": len(questions),
-            "review_report_preview": (pipeline_result.get("review_report") or [])[:20],
-        }
-        pipeline_task.finished_at = timezone.now()
-        pipeline_task.save(update_fields=["status", "progress", "result", "finished_at", "updated_at"])
-
-        increment_ai_quota(request.user.institution)
-
-        return Response({
-            'questions': questions,
-            'pipeline': pipeline_result.get('pipeline', {}),
-            'review_report': pipeline_result.get('review_report', []),
-            'pipeline_task_id': pipeline_task.id,
-        })
-
-
-class AIConfirmSaveQuestionsView(APIView):
-    """
-    确认入库：保存前端编辑后的题目
-    """
-    permission_classes = [HasPlanFeature, HasAIQuota]
-    required_feature = 'ai.generate'
-    def post(self, request):
-        questions_data = request.data.get('questions', [])
-        if not isinstance(questions_data, list) or not questions_data:
-            return Response({'error': '未提供可入库题目'}, status=400)
-
-        schema_ok, schema_errors = validate_question_list_payload(questions_data, allow_empty=False)
-        if not schema_ok:
-            return Response(
-                {
-                    'error': '题目结构校验未通过，请先修正后再入库。',
-                    'schema_errors': schema_errors[:20],
-                },
-                status=400,
-            )
-
-        created_count = 0
-        failed_items = []
-
-        for idx, q_data in enumerate(questions_data, start=1):
-            text = str((q_data or {}).get('question') or (q_data or {}).get('text') or '').strip()
-            if not text:
-                failed_items.append({'index': idx, 'error': '题干为空'})
-                continue
-
-            try:
-                created = save_confirmed_questions([q_data], institution=request.user.institution)
-                if created <= 0:
-                    failed_items.append({'index': idx, 'error': '题目格式无效，未写入'})
-                else:
-                    created_count += created
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("ai-smart-generate confirm save failed at item=%s", idx)
-                error_msg = str(exc).strip() or exc.__class__.__name__
-                failed_items.append({'index': idx, 'error': error_msg[:200]})
-
-        if failed_items:
-            msg = f"成功 {created_count} 题，失败 {len(failed_items)} 题"
-            payload = {
-                'status': 'partial_success' if created_count > 0 else 'failed',
-                'count': created_count,
-                'failed_count': len(failed_items),
-                'errors': failed_items[:10],
-                'error': msg,
-            }
-            return Response(payload, status=207 if created_count > 0 else 500)
-
-        return Response({'status': 'success', 'count': created_count})
-
-
 class GenerateFromTextView(APIView):
-    permission_classes = [HasPlanFeature, HasAIQuota]
+    permission_classes = [HasPlanFeature, HasQuota]
     required_feature = 'ai.generate'
+    quota_resource = 'ai_question'
     def post(self, request):
         text = request.data.get('text')
         kp_id = request.data.get('kp_id')
@@ -195,8 +51,9 @@ class AIPreviewParseView(APIView):
     """
     整理功能：改用高性能异步模式
     """
-    permission_classes = [HasPlanFeature, HasAIQuota]
+    permission_classes = [HasPlanFeature, HasQuota]
     required_feature = 'ai.generate'
+    quota_resource = 'ai_question'
     def post(self, request):
         raw_text = extract_raw_text(
             request.data.get('raw_text', ''),
@@ -301,8 +158,9 @@ class AIPreviewParseView(APIView):
 
 class AdversarialPipelineView(APIView):
     """对抗性 AI 出题管线（三 Agent 迭代博弈）。"""
-    permission_classes = [HasPlanFeature, HasAIQuota]
+    permission_classes = [HasPlanFeature, HasQuota]
     required_feature = 'ai.generate'
+    quota_resource = 'ai_question'
 
     def post(self, request):
         kp_ids = request.data.get('kp_ids', [])
@@ -310,6 +168,7 @@ class AdversarialPipelineView(APIView):
             return Response({'error': '请选择知识点'}, status=400)
 
         questions_per_kp = int(request.data.get('questions_per_kp', 3))
+        difficulty = str(request.data.get('difficulty', 'normal')).strip()
         title = str(request.data.get('title', '')).strip()
         types = request.data.get('types', [])
 
@@ -320,6 +179,7 @@ class AdversarialPipelineView(APIView):
                 created_by=request.user,
                 task_title=title,
                 questions_per_kp=questions_per_kp,
+                difficulty=difficulty,
                 types=types,
             )
             increment_ai_quota(request.user.institution)
@@ -331,8 +191,9 @@ class AdversarialPipelineView(APIView):
 
 class PipelineReviewListView(APIView):
     """列出待审核的管线任务。"""
-    permission_classes = [HasPlanFeature, HasAIQuota]
+    permission_classes = [HasPlanFeature, HasQuota]
     required_feature = 'ai.generate'
+    quota_resource = 'ai_question'
 
     def get(self, request):
         from users.permissions import is_platform_admin
@@ -350,9 +211,10 @@ class PipelineReviewListView(APIView):
 
 
 class PipelineReviewActionView(APIView):
-    """批准或拒绝待审核的管线任务，将题目入库。"""
-    permission_classes = [HasPlanFeature, HasAIQuota]
+    """批准或拒绝待审核的管线任务，将题目入库。支持逐题选择和手动编辑。"""
+    permission_classes = [HasPlanFeature, HasQuota]
     required_feature = 'ai.generate'
+    quota_resource = 'ai_question'
 
     def post(self, request, pk):
         action = str(request.data.get('action', '')).strip().lower()
@@ -361,17 +223,39 @@ class PipelineReviewActionView(APIView):
 
         task = get_object_or_404(ContentPipelineTask, pk=pk, status='review')
         if action == 'approve':
-            questions = (task.result or {}).get('questions', [])
+            questions = list((task.result or {}).get('questions', []))
             if not questions:
                 return Response({'error': '任务中没有待入库的题目'}, status=400)
+
+            # 支持手动编辑：前端可传 edited_questions（原始索引→新题），先应用到原题再筛选
+            edited = request.data.get('edited_questions')
+            if isinstance(edited, dict):
+                for idx_str, q_data in edited.items():
+                    try:
+                        i = int(idx_str)
+                        if 0 <= i < len(questions):
+                            questions[i] = q_data
+                    except (ValueError, TypeError):
+                        continue
+
+            # 支持逐题选择：前端可传 question_indices 指定要入库的题目序号
+            selected_indices = request.data.get('question_indices')
+            if isinstance(selected_indices, list) and selected_indices:
+                selected = [questions[i] for i in selected_indices if 0 <= i < len(questions)]
+            else:
+                selected = questions
+
+            if not selected:
+                return Response({'error': '没有选中任何题目'}, status=400)
+
             from quizzes.ai_workflow import save_confirmed_questions
-            created = save_confirmed_questions(questions, institution=request.user.institution)
+            created = save_confirmed_questions(selected, institution=request.user.institution)
             task.status = 'completed'
             task.progress = 100
             task.finished_at = timezone.now()
-            task.description = (task.description or '') + f' | 已批准入库 {created} 题'
+            task.description = (task.description or '') + f' | 已批准入库 {created}/{len(selected)} 题'
             task.save(update_fields=['status', 'progress', 'finished_at', 'description'])
-            return Response({'status': 'approved', 'questions_created': created})
+            return Response({'status': 'approved', 'questions_created': created, 'total_selected': len(selected)})
 
         # reject
         task.status = 'cancelled'

@@ -1,163 +1,27 @@
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
-from django.conf import settings
-
-from ai_engine.observability import record_schema_event
-from quizzes.models import KnowledgePoint, Question
-# prompt_resources removed — shared constraints now inlined into prompt templates
-from quizzes.services.ai_schema_guard import (
-    validate_grading_payload,
-    validate_question_list_payload,
+from ai_engine.tools import (
+    GRADING_RESULT_SCHEMA,
+    OBJECTIVE_ANALYSIS_SCHEMA,
+    QUESTION_LIST_SCHEMA,
 )
+from quizzes.models import KnowledgePoint, Question
+
+logger = logging.getLogger(__name__)
 
 
 class QuizAITaskService:
-    _JSON_REPAIR_SYSTEM_PROMPT = (
-        '你是严格的 JSON 修复器。'
-        '你的唯一任务是把输入修复为符合要求的 JSON。'
-        '禁止输出任何解释、Markdown、前后缀。'
-    )
+    """AI 判分与题目解析服务。
 
-    _SCHEMA_HINTS = {
-        'question_list': (
-            '输出必须是 JSON 数组，每个对象至少包含: '
-            'q_type, subjective_type, question, options, answer, grading_points, difficulty_level, related_knowledge_id。'
-        ),
-        'grading_result': (
-            '输出必须是单个 JSON 对象，且仅包含: '
-            'score(number), feedback(string), analysis(string), fsrs_rating(integer 1-4)。'
-            '其中 feedback=判分依据和深度解析，analysis=标准答案（满分示范作答）。'
-        ),
-    }
-
-    @classmethod
-    def _repair_json_payload(
-        cls,
-        ai,
-        raw_content: str,
-        operation: str,
-        schema_key: str,
-    ) -> Optional[Any]:
-        text = str(raw_content or '').strip()
-        if not text:
-            return None
-
-        max_retries = max(0, int(getattr(settings, 'AI_SCHEMA_REPAIR_MAX_RETRIES', 1) or 1))
-        schema_hint = cls._SCHEMA_HINTS.get(schema_key, '输出合法 JSON。')
-        truncated = text[:12000]
-
-        for attempt in range(max_retries + 1):
-            prompt = (
-                f'请将下面内容修复为合法 JSON。\n'
-                f'约束:\n{schema_hint}\n\n'
-                '原始内容如下（可能包含无关文本、坏 JSON、注释）:\n'
-                f'{truncated}'
-            )
-            res = ai.simple_chat(
-                system_prompt=cls._JSON_REPAIR_SYSTEM_PROMPT,
-                user_prompt=prompt,
-                temperature=0.0,
-                max_tokens=3200,
-                operation=f'schema_repair.{operation}',
-            )
-            content = ai.extract_content(res)
-            parsed = ai.extract_json(content)
-            if parsed is not None:
-                record_schema_event(
-                    operation=operation,
-                    stage='repair',
-                    success=True,
-                    metadata={'attempt': attempt + 1, 'schema_key': schema_key},
-                )
-                return parsed
-
-        record_schema_event(
-            operation=operation,
-            stage='repair',
-            success=False,
-            detail='repair_failed',
-            metadata={'schema_key': schema_key},
-        )
-        return None
-
-    @classmethod
-    def parse_question_list_with_repair(
-        cls,
-        ai,
-        content: str,
-        operation: str,
-        allow_empty: bool = False,
-    ) -> Optional[List[Dict[str, Any]]]:
-        parsed = ai.extract_json(content)
-        valid, errors = validate_question_list_payload(parsed, allow_empty=allow_empty)
-        if valid:
-            record_schema_event(operation=operation, stage='validate', success=True)
-            return [item for item in parsed if isinstance(item, dict)]
-
-        record_schema_event(
-            operation=operation,
-            stage='validate',
-            success=False,
-            detail=';'.join(errors[:5]),
-        )
-        repaired = cls._repair_json_payload(ai, content, operation=operation, schema_key='question_list')
-        valid_after_repair, errors_after_repair = validate_question_list_payload(repaired, allow_empty=allow_empty)
-        if valid_after_repair:
-            record_schema_event(
-                operation=operation,
-                stage='validate_after_repair',
-                success=True,
-            )
-            return [item for item in repaired if isinstance(item, dict)]
-
-        record_schema_event(
-            operation=operation,
-            stage='validate_after_repair',
-            success=False,
-            detail=';'.join(errors_after_repair[:5]),
-        )
-        return None
-
-    @classmethod
-    def parse_grading_payload_with_repair(
-        cls,
-        ai,
-        content: str,
-        operation: str,
-    ) -> Optional[Dict[str, Any]]:
-        parsed = ai.extract_json(content)
-        valid, errors = validate_grading_payload(parsed)
-        if valid and isinstance(parsed, dict):
-            record_schema_event(operation=operation, stage='validate', success=True)
-            return parsed
-
-        record_schema_event(
-            operation=operation,
-            stage='validate',
-            success=False,
-            detail=';'.join(errors[:5]),
-        )
-        repaired = cls._repair_json_payload(ai, content, operation=operation, schema_key='grading_result')
-        valid_after_repair, errors_after_repair = validate_grading_payload(repaired)
-        if valid_after_repair and isinstance(repaired, dict):
-            record_schema_event(
-                operation=operation,
-                stage='validate_after_repair',
-                success=True,
-            )
-            return repaired
-
-        record_schema_event(
-            operation=operation,
-            stage='validate_after_repair',
-            success=False,
-            detail=';'.join(errors_after_repair[:5]),
-        )
-        return None
+    Agent 化后，主路径走 structured_output(tool_choice="required")，
+    失败时记录 warning 并返回兜底结果，不再走 extract_json + repair 的旧链路。
+    """
 
     @classmethod
     def generate_ai_answer(cls, ai, question: Question) -> str:
+        """为题目生成 AI 参考答案（纯文本，不需要结构化输出）。"""
         template = ai.get_template('quizzes', 'ai_answer_prompt.txt') or ''
         prompt = ai.format_template(
             template,
@@ -192,60 +56,59 @@ class QuizAITaskService:
 
     @classmethod
     def _analyze_objective(cls, ai, question_text, options, correct_answer, user_answer, is_correct):
-        """客观题 AI 深度解析：为什么对、为什么错、易错点。失败时回退到简单文本。"""
-        try:
-            options_text = cls._format_options(options)
-            template = ai.get_template('quizzes', 'objective_analysis_prompt.txt') or ''
-            if not template:
-                return cls._fallback_objective_feedback(ai, correct_answer, is_correct)
+        """客观题 AI 深度解析：为什么对、为什么错、易错点。"""
+        options_text = cls._format_options(options)
+        template = ai.get_template('quizzes', 'objective_analysis_prompt.txt') or ''
+        if not template:
+            return cls._fallback_objective_feedback(ai, correct_answer, is_correct)
 
-            prompt = ai.format_template(
-                template,
-                question_text=question_text,
-                options_text=options_text,
-                correct_answer=str(correct_answer),
-                user_answer=str(user_answer or '未作答'),
-                is_correct='正确' if is_correct else '错误',
+        prompt = ai.format_template(
+            template,
+            question_text=question_text,
+            options_text=options_text,
+            correct_answer=str(correct_answer),
+            user_answer=str(user_answer or '未作答'),
+            is_correct='正确' if is_correct else '错误',
+        )
+
+        parsed = ai.structured_output(
+            system_prompt="",
+            user_prompt=prompt,
+            schema=OBJECTIVE_ANALYSIS_SCHEMA,
+            tool_name="submit_objective_analysis",
+            tool_description="提交客观题解析结果",
+            temperature=0.4,
+            max_tokens=2000,
+            operation='quizzes.objective_analysis',
+        )
+
+        if not isinstance(parsed, dict):
+            logger.warning("Objective analysis structured_output failed, using fallback")
+            return cls._fallback_objective_feedback(ai, correct_answer, is_correct)
+
+        why_correct = parsed.get('why_correct', '')
+        why_wrong = parsed.get('why_wrong', '')
+        pitfalls = parsed.get('pitfalls', '')
+
+        feedback_parts = []
+        if is_correct:
+            feedback_parts.append('作答与标准答案一致，本题满分。')
+        else:
+            user_choice = ai.normalize_objective_answer(user_answer)
+            correct_choice = ai.normalize_objective_answer(correct_answer)
+            feedback_parts.append(
+                f'你的作答为 {user_choice or "未作答"}，标准答案为 {correct_choice or "未设置"}，两者不一致，本题不得分。'
             )
-            response = ai.simple_chat(
-                user_prompt=prompt,
-                temperature=0.4,
-                max_tokens=2000,
-                operation='quizzes.objective_analysis',
-            )
-            content = ai.extract_content(response)
-            parsed = cls.parse_grading_payload_with_repair(
-                ai, content or '', operation='quizzes.objective_analysis',
-            )
-            if isinstance(parsed, dict):
-                why_correct = parsed.get('why_correct', '')
-                why_wrong = parsed.get('why_wrong', '')
-                pitfalls = parsed.get('pitfalls', '')
+        if why_wrong:
+            feedback_parts.append(why_wrong)
+        if pitfalls:
+            feedback_parts.append(f'易错提醒：{pitfalls}')
 
-                feedback_parts = []
-                if is_correct:
-                    feedback_parts.append('作答与标准答案一致，本题满分。')
-                else:
-                    user_choice = ai.normalize_objective_answer(user_answer)
-                    correct_choice = ai.normalize_objective_answer(correct_answer)
-                    feedback_parts.append(
-                        f'你的作答为 {user_choice or "未作答"}，标准答案为 {correct_choice or "未设置"}，两者不一致，本题不得分。'
-                    )
-                if why_wrong:
-                    feedback_parts.append(why_wrong)
-                if pitfalls:
-                    feedback_parts.append(f'易错提醒：{pitfalls}')
+        analysis_parts = [f'标准答案：{correct_answer}']
+        if why_correct:
+            analysis_parts.append(why_correct)
 
-                analysis_parts = [f'标准答案：{correct_answer}']
-                if why_correct:
-                    analysis_parts.append(why_correct)
-
-                return '\n\n'.join(feedback_parts), '\n\n'.join(analysis_parts)
-
-        except Exception:
-            pass
-
-        return cls._fallback_objective_feedback(ai, correct_answer, is_correct)
+        return '\n\n'.join(feedback_parts), '\n\n'.join(analysis_parts)
 
     @staticmethod
     def _format_options(options):
@@ -323,24 +186,22 @@ class QuizAITaskService:
             user_answer=user_answer or '（空白）',
         )
 
-        response = ai.simple_chat(
+        parsed = ai.structured_output(
+            system_prompt="",
             user_prompt=prompt,
+            schema=GRADING_RESULT_SCHEMA,
+            tool_name="submit_grading_result",
+            tool_description="提交判分结果",
             temperature=0.2,
             max_tokens=2500,
             operation='quizzes.grade_question',
         )
-        content = ai.extract_content(response)
-        parsed = cls.parse_grading_payload_with_repair(
-            ai,
-            content or '',
-            operation='quizzes.grade_question',
-        )
 
         if not isinstance(parsed, dict):
-            fallback_feedback = '判分依据和深度解析：未能完成 AI 判分，已返回兜底结果。'
+            logger.warning("Grading structured_output returned None for operation=quizzes.grade_question")
             return {
                 'score': 0.0,
-                'feedback': fallback_feedback,
+                'feedback': '判分依据和深度解析：未能完成 AI 判分，已返回兜底结果。',
                 'analysis': f'标准答案：{str(correct_answer or "")}',
                 'fsrs_rating': 1,
             }
@@ -404,21 +265,19 @@ class QuizAITaskService:
             target_kp_json=kp_payload,
         )
 
-        response = ai.simple_chat(
+        data = ai.structured_output(
+            system_prompt="",
             user_prompt=prompt,
+            schema=QUESTION_LIST_SCHEMA,
+            tool_name="submit_questions",
+            tool_description="提交生成的题目列表",
             temperature=0.35,
             max_tokens=7000,
             operation='quizzes.generate_from_text',
         )
 
-        content = ai.extract_content(response)
-        data = cls.parse_question_list_with_repair(
-            ai,
-            content or '',
-            operation='quizzes.generate_from_text',
-            allow_empty=False,
-        )
         if not isinstance(data, list):
+            logger.warning("generate_questions_from_text structured_output failed")
             return []
 
         kp_by_code = {kp.code: kp} if kp and kp.code else {}
@@ -436,20 +295,19 @@ class QuizAITaskService:
         template = ai.get_template('quizzes', 'preview_parse_prompt.txt') or ''
         prompt = ai.format_template(template, raw_text=raw_text)
 
-        response = ai.simple_chat(
+        data = ai.structured_output(
+            system_prompt="",
             user_prompt=prompt,
+            schema=QUESTION_LIST_SCHEMA,
+            tool_name="submit_questions",
+            tool_description="提交生成的题目列表",
             temperature=0.2,
             max_tokens=3200,
             operation='quizzes.preview_parse',
         )
-        content = ai.extract_content(response)
-        data = cls.parse_question_list_with_repair(
-            ai,
-            content or '',
-            operation='quizzes.preview_parse',
-            allow_empty=True,
-        )
+
         if not isinstance(data, list):
+            logger.warning("parse_questions_from_text structured_output failed")
             return []
 
         normalized = []

@@ -95,6 +95,7 @@
     "notMastered": "Master",
     "questionMatrix": "Question Matrix",
     "answered": "Answered",
+    "notAnswered": "Pending",
     "prevQuestion": "Previous",
     "nextQuestion": "Next",
     "submitting": "Submitting...",

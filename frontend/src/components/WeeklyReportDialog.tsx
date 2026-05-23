@@ -246,10 +246,7 @@ export const WeeklyReportDialog: React.FC = () => {
             <div className="relative z-10 flex h-full flex-col justify-between gap-5">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Badge className="border-none bg-indigo-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">
-                    Cognitive Assets
-                  </Badge>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300">
+                  <span className="text-[10px] font-medium text-slate-400">
                     {report.week_label}
                   </span>
                 </div>
@@ -270,11 +267,11 @@ export const WeeklyReportDialog: React.FC = () => {
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2.5">
                   <div className="rounded-xl bg-white/10 px-2.5 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Current ELO</p>
+                    <p className="text-[10px] font-semibold text-slate-400">Current ELO</p>
                     <p className="mt-0.5 text-base font-black tabular-nums">{report.current_elo}</p>
                   </div>
                   <div className="rounded-xl bg-white/10 px-2.5 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">复习次数</p>
+                    <p className="text-[10px] font-semibold text-slate-400">复习次数</p>
                     <p className="mt-0.5 text-base font-black tabular-nums">{report.week_reviews}</p>
                   </div>
                 </div>
@@ -287,19 +284,19 @@ export const WeeklyReportDialog: React.FC = () => {
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Daily Trend</p>
+                    <p className="text-[10px] font-semibold text-slate-400">Daily Trend</p>
                     <h3 className="mt-1 text-lg font-black tracking-tight text-slate-900">学习变化曲线（按天）</h3>
                     <p className="mt-1 text-xs text-slate-500">{activeMetricConfig.description}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="rounded-full border-slate-200 text-[10px] font-black text-slate-500">
+                    <Badge variant="outline" className="rounded-full border-slate-200 text-[10px] font-semibold text-slate-500">
                       {safeDailySeries.length || 0} 天数据
                     </Badge>
                     <Button
                       type="button"
                       variant="outline"
                       onClick={handleSaveImage}
-                      className="h-8 rounded-full border-slate-300 px-3 text-[11px] font-black text-slate-700 hover:bg-slate-100"
+                      className="h-8 rounded-full border-slate-300 px-3 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
                     >
                       <Download className="mr-1.5 h-3.5 w-3.5" />
                       保存为图片
@@ -315,8 +312,8 @@ export const WeeklyReportDialog: React.FC = () => {
                       onClick={() => setActiveMetric(metric.key)}
                       className={
                         activeMetric === metric.key
-                          ? 'h-8 rounded-full px-3 text-[11px] font-black text-white shadow-sm'
-                          : 'h-8 rounded-full bg-slate-100 px-3 text-[11px] font-black text-slate-500 transition-colors hover:bg-slate-200'
+                          ? 'h-8 rounded-full px-3 text-[11px] font-semibold text-white shadow-sm'
+                          : 'h-8 rounded-full bg-slate-100 px-3 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-200'
                       }
                       style={activeMetric === metric.key ? { backgroundColor: metric.color } : {}}
                     >
@@ -417,7 +414,7 @@ export const WeeklyReportDialog: React.FC = () => {
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                     <TrendingUp className="h-4 w-4" />
                   </div>
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">正确率</p>
+                  <p className="mt-2 text-[10px] font-semibold text-slate-400">正确率</p>
                   <p className="mt-1 text-xl font-black tabular-nums text-slate-900">{report.weekly_accuracy.toFixed(1)}%</p>
                 </div>
 
@@ -425,7 +422,7 @@ export const WeeklyReportDialog: React.FC = () => {
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
                     <BrainCircuit className="h-4 w-4" />
                   </div>
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">做题数</p>
+                  <p className="mt-2 text-[10px] font-semibold text-slate-400">做题数</p>
                   <p className="mt-1 text-xl font-black tabular-nums text-slate-900">{report.weekly_question_count}</p>
                 </div>
 
@@ -433,7 +430,7 @@ export const WeeklyReportDialog: React.FC = () => {
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                     <Calendar className="h-4 w-4" />
                   </div>
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">专注时长</p>
+                  <p className="mt-2 text-[10px] font-semibold text-slate-400">专注时长</p>
                   <p className="mt-1 text-xl font-black tabular-nums text-slate-900">
                     {formatMetricValue('focus_minutes', report.weekly_focus_minutes)}
                   </p>
@@ -443,7 +440,7 @@ export const WeeklyReportDialog: React.FC = () => {
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
                     <Award className="h-4 w-4" />
                   </div>
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-slate-400">听课时长</p>
+                  <p className="mt-2 text-[10px] font-semibold text-slate-400">听课时长</p>
                   <p className="mt-1 text-xl font-black tabular-nums text-slate-900">
                     {formatMetricValue('lesson_minutes', report.weekly_lesson_minutes)}
                   </p>

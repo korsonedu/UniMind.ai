@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     RegisterView, LoginView, UserDetailView, UpdateProfileView,
     OnlineUserListView, UpdateEmailView, UpdatePasswordView,
-    DailyPlanListView, DailyPlanDetailView, ResetEloView,
+    DailyPlanListView, DailyPlanDetailView,
     ActivateMembershipView, ActivationCodeListView, ActivationCodeDetailView,
     BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
@@ -28,10 +28,6 @@ from .views_institution import (
     PublicInstitutionView, InstitutionJoinBySlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
 )
-from .views_points import (
-    PointsBalanceView, PointsLedgerView,
-    InstitutionRewardConfigView, InstitutionAwardPointsView,
-)
 
 urlpatterns = [
     # Auth & profile
@@ -43,12 +39,9 @@ urlpatterns = [
     path('me/update/', UpdateProfileView.as_view(), name='user-update'),
     path('me/email/', UpdateEmailView.as_view(), name='email-update'),
     path('me/password/', UpdatePasswordView.as_view(), name='password-update'),
-    path('me/reset-elo/', ResetEloView.as_view(), name='reset-elo'),
     path('me/activate/', ActivateMembershipView.as_view(), name='activate-membership'),
     path('me/weekly-report/', WeeklyCognitiveReportView.as_view(), name='weekly-report'),
     path('me/knowledge-mastery/', MyKnowledgeMasteryView.as_view(), name='knowledge-mastery'),
-    path('me/points/', PointsBalanceView.as_view(), name='points-balance'),
-    path('me/points/ledger/', PointsLedgerView.as_view(), name='points-ledger'),
     path('heartbeat/', HeartbeatView.as_view(), name='heartbeat'),
 
     # System
@@ -99,10 +92,6 @@ urlpatterns = [
 
     # Institution — payment config (Pro)
     path('institution/me/payment-config/', InstitutionPaymentConfigView.as_view(), name='institution-payment-config'),
-
-    # Institution — rewards
-    path('institution/me/rewards/config/', InstitutionRewardConfigView.as_view(), name='institution-rewards-config'),
-    path('institution/me/rewards/award/', InstitutionAwardPointsView.as_view(), name='institution-rewards-award'),
 
     # Plan invite codes
     path('admin/plan-invite-codes/', PlanInviteCodeListView.as_view(), name='plan-invite-codes'),

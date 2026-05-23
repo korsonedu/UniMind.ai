@@ -1,6 +1,7 @@
 import logging
 import secrets
 import string
+import time
 
 import requests
 from django.conf import settings
@@ -19,8 +20,6 @@ def _resend_api_key():
 def generate_verification_code() -> str:
     return ''.join(secrets.choice(string.digits) for _ in range(VERIFICATION_CODE_LENGTH))
 
-
-import time
 
 def _send_via_resend(*, to: str, subject: str, html: str, text: str) -> bool:
     from_email = getattr(settings, "EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
@@ -147,8 +146,7 @@ def _verification_email_html(code: str) -> str:
         <!-- Footer -->
         <tr>
           <td style="border-top:1px solid #eee;padding:24px 40px;text-align:center;">
-            <p style="margin:0 0 2px;font-size:12px;color:#bbb;">UniMind.ai</p>
-            <p style="margin:0;font-size:12px;color:#bbb;">AI-Powered Exam Preparation Platform</p>
+            <p style="margin:0;font-size:12px;color:#bbb;">UniMind.ai</p>
           </td>
         </tr>
 

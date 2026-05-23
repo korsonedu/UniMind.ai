@@ -48,6 +48,7 @@ const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
 const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
 const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+const PricingPage = lazy(() => import('./pages/Pricing'));
 
 const PageLoader = () => <Loading fullScreen size="lg" />;
 
@@ -214,6 +215,7 @@ const router = createBrowserRouter([
   { path: "/intro", element: <Navigate to="/" replace /> },
   { path: "/en", element: <LanguageRedirect lang="en" /> },
   { path: "/zh", element: <LanguageRedirect lang="zh" /> },
+  { path: "/pricing", element: lazyPage(PricingPage) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/register", element: lazyPage(Register) },
   { path: "/checkout", element: <RequireAuth>{lazyPage(Checkout)}</RequireAuth> },

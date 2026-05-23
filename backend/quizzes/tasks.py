@@ -19,14 +19,14 @@ def run_ai_parse_task(raw_text: str, task_id: str):
 
 
 @shared_task(name='quizzes.run_adversarial_pipeline_task')
-def run_adversarial_pipeline_task(task_id: int, kp_ids: list, questions_per_kp: int, types: list = None):
+def run_adversarial_pipeline_task(task_id: int, kp_ids: list, questions_per_kp: int, difficulty: str = "normal", types: list = None):
     from quizzes.models import ContentPipelineTask, KnowledgePoint
     from quizzes.services.adversarial_pipeline import _execute_pipeline
 
     task = ContentPipelineTask.objects.get(id=task_id)
     kps = list(KnowledgePoint.objects.filter(id__in=kp_ids))
     try:
-        _execute_pipeline(task, kps, questions_per_kp, types=types)
+        _execute_pipeline(task, kps, questions_per_kp, difficulty=difficulty, types=types)
     except Exception as e:
         logger.exception("Adversarial pipeline task failed: task_id=%s", task_id)
         task.status = 'failed'

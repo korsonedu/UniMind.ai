@@ -1,7 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from users.permissions import IsMemberOrAdmin
+from users.permissions import IsMember
 
 from .models import KnowledgePoint, UserKnowledgeState
 
@@ -27,7 +27,7 @@ def _mastery_to_state(mastery_score: float) -> str:
 
 
 class UserHeatmapView(APIView):
-    permission_classes = [IsMemberOrAdmin]
+    permission_classes = [IsMember]
 
     def get(self, request):
         all_kps = list(

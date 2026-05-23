@@ -53,6 +53,7 @@
     "planDeleted": "计划已删除",
     "deleteFailed": "删除失败",
     "deletePlan": "删除计划",
+    "deleteConfirm": "确定删除此计划？",
     "planCreated": "{{emoji}} 制定了计划：{{plan}}",
     "addTarget": "ADD TARGET..."
   },

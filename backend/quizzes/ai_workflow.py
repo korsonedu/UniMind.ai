@@ -99,9 +99,6 @@ def grade_single_question_submission(user: User, question: Question, user_answer
         locked.elo_score += elo_change
         locked.save(update_fields=['elo_score'])
 
-    if elo_change > 0:
-        from users.points import award_elo_points
-        award_elo_points(user.id, elo_change, 'question_graded', reference_obj=question)
 
     result['elo_change'] = elo_change
     return result
@@ -184,9 +181,6 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
         locked.elo_score += elo_change
         locked.save(update_fields=['elo_score'])
 
-    if elo_change > 0:
-        from users.points import award_elo_points
-        award_elo_points(user_id, elo_change, 'exam_complete', reference_obj=exam)
 
     exam.total_score = total_score
     exam.max_score = max_total_score

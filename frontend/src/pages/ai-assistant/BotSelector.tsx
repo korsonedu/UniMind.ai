@@ -39,11 +39,6 @@ export const BotSelector: React.FC<BotSelectorProps> = React.memo(({ bots, selec
                 <h2 className="text-sm font-bold tracking-tight text-foreground">{selectedBot?.name || t('selectBot')}</h2>
                 <ChevronDown className="w-3 h-3 opacity-30" />
               </div>
-              {selectedBot && (
-                <div className="flex items-center gap-2">
-                  <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-widest">Powered by DeepSeek-V4 pro</p>
-                </div>
-              )}
             </div>
           </div>
         </DropdownMenuTrigger>

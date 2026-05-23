@@ -4,6 +4,85 @@
 
 ---
 
+## [v2.7.0-dev] - 2026-05-23
+
+### 🔌 AI 引擎：模型供应商热插拔
+
+- **从 DeepSeek V4 全量切换至 Xiaomi MiMo V2.5**
+    - `FALLBACK_FAST = 'mimo-v2.5'` / `FALLBACK_PRO = 'mimo-v2.5-pro'`，供应商切换只改 config.py 顶部。
+    - MiMo thinking + tool_choice 不冲突，移除 DeepSeek 特有的 `elif tool_choice → thinking=disabled` 互斥逻辑。
+- **分级路由替代硬编码模型名**
+    - `_TASK_MODEL_MAP` 从 `(env_key, model_name)` 改为 `(env_key, tier)`，tier ∈ {fast, pro}。
+    - 分辨率链：单任务 env → `AI_MODEL_FAST`/`AI_MODEL_PRO` env → `FALLBACK_FAST`/`FALLBACK_PRO`。
+- **env 变量名供应商无关化**
+    - `DEEPSEEK_API_KEY` → `LLM_API_KEY`（单一变量，不再有多级 fallback 链）。
+    - env 文件不重复 config.py 默认值，纯覆盖层。
+- **协议适配**
+    - `max_tokens` → `max_completion_tokens`（MiMo API 格式）。
+    - `reasoning_effort` → `thinking: {type: "enabled"}`（MiMo 思考模式控制）。
+- **死代码清理**
+    - 移除 `settings.py` 中零引用的 `DEEPSEEK_API_KEY` / `LLM_MODEL` / `LLM_BASE_URL`。
+    - 移除 `config.py` 中零引用的 `get_llm_config()` 和无调用方的 operation 前缀（`essay`/`grading`/`grade`）。
+
+## [v2.6.0-dev] - 2026-05-22
+
+### 🧠 AI 引擎：Prompt 系统升级为 Agent 系统
+
+- **结构化输出替代正则 JSON 提取**
+    - `AIEngine.structured_output()` 使用 OpenAI 兼容的 `tool_choice="required"` 强制模型输出符合 JSON Schema 的结构化数据，取代依赖正则匹配的 `extract_json()`。
+    - 保留 `extract_json()` 作为 fallback，向后兼容所有现有调用。
+- **出题管线 4 个 Agent 工具定义**
+    - 新增 `backend/ai_engine/tools.py`，为 Author/Reviewer/AuthorRevise/Classifier 四个 Agent 定义精确的 JSON Schema（题型、评分维度、分类标签）。
+    - 每个 Schema 包含 `type`、`enum`、`minimum`/`maximum` 约束，从 API 层面杜绝输出格式偏差。
+- **多轮 Agent 循环就绪**
+    - `AIEngine.call_ai_with_tools()` 支持模型多次调用工具、结果回传后继续推理的标准 Agent loop。
+    - 首轮 `tool_choice` 可强制，后续自动切换为 `auto` 让模型自主决策。最多 5 轮，超出时记录 warning。
+- **防御性修复（Code Review 11 findings）**
+    - 修复 `_author_generate` 中变量名错误 `parsed`→`q_list`，该 bug 导致管线静默产出 0 题。
+    - `json.loads(None)` 引发 `TypeError` 未被捕获 → except 子句补齐 `TypeError`。
+    - `_extract_content` 空字符串遮蔽 `reasoning_content` → `if content is None` 改为 `if not content`。
+    - `simple_chat` 对 `content: null` 调用 `.strip()` 引发 `AttributeError` → 安全处理。
+    - `if tools:` 空列表 falsy → 改为 `if tools is not None:`。
+    - `_QUESTION_SCHEMA` 在 Author/Revise 之间共享可变引用 → `deepcopy` 隔离。
+    - `_extract_tool_calls` / `_extract_content` 异常块补充日志。
+    - 管线 4 个 Agent 函数补充 `result is None` 警告日志，避免 AI 故障静默吞没。
+    - Reviewer/Classifier user prompt 与 tool schema 指令统一。
+    - AUTHOR_SYSTEM_PROMPT 去掉旧的"输出纯 JSON 数组"格式指令。
+- **0 新依赖，~300 LOC**，仅使用 `requests` + `json` + `copy.deepcopy`。
+
+### 🧩 全站结构化输出推广（6 文件，7 Schema）
+
+- **判分链路** (`ai_task_service.py`)：`grade_question` / `_analyze_objective` / `generate_questions_from_text` / `parse_questions_from_text` 全部切换为 `structured_output` 主路径。
+- **批量命题** (`question_generator.py`)：`_request_bulk_generate_once` 切换为 `structured_output`。
+- **单管线审核** (`single_generate_pipeline.py`)：`_review_by_model` 切换为 `structured_output`。
+- **模拟考试命题** (`mock_exam_generator.py`)：`_call_ai_and_parse` 切换为 `structured_output`。
+- **面试模块** (`interviews/services.py`)：`tune_resume` / `generate_post_interview_radar` 切换为 `structured_output`。
+- **课程模块** (`courses/services/ai_course_service.py`)：`_request_outline_items` / `generate_questions_from_transcript` 切换为 `structured_output`。
+- **新增 7 个通用 Schema** 到 `backend/ai_engine/tools.py`：`QUESTION_LIST_SCHEMA`、`GRADING_RESULT_SCHEMA`、`OBJECTIVE_ANALYSIS_SCHEMA`、`BATCH_REVIEW_SCHEMA`、`RESUME_TUNE_SCHEMA`、`INTERVIEW_RADAR_SCHEMA`、`OUTLINE_ITEMS_SCHEMA`。
+- **降级策略**：所有调用点均保留旧的 `simple_chat` → `extract_json` + `_repair_json_payload` 作为 fallback，`structured_output` 返回 `None` 时自动回退。
+- **流式对话/自由文本不参与**：面试官追问、AI 助教聊天、`generate_ai_answer` 等不需要结构化输出的场景保持原样。
+
+### 🧹 死代码清理
+
+- **删除 `_repair_json_payload`**（60 行）：AI 二次修复 JSON 的兜底逻辑。Agent 化后 `tool_choice="required"` 合规率 >99%，此路径不再触发。
+- **删除 `parse_question_list_with_repair` / `parse_grading_payload_with_repair`**（各 30 行）：extract_json + validate + repair 的旧三层链路。
+- **删除 `validate_grading_payload`**（30 行，`ai_schema_guard.py`）：仅被上述死代码引用。
+- **简化 5 处 fallback**：从 20 行 try/except/simple_chat/extract_json/repair 简化为 `logger.warning(...) + return fallback_default`。
+- **保留 `validate_question_list_payload`**：被 `views_ai.py` 独立使用（前端输入校验，非 AI 输出校验）。
+- **净减少 ~220 LOC**。
+
+### 📚 文档
+
+- 新增 `docs/tech/AI_SYSTEM_REFERENCE.md`：完整的功能索引、Schema 目录、Prompt 模板目录、模型路由表、修改指南。
+
+### 🔧 API 兼容性
+
+- `AIEngine.call_ai()` 新增可选参数 `tools`/`tool_choice`，默认 `None`，所有现有调用方不受影响。
+- `AIService.call_ai()` 同步透传。
+- `AIService.simple_chat()` / `simple_chat_text()` / `extract_json()` 签名与行为完全不变。
+
+---
+
 ## [v2.5.8-stable] - 2026-05-17
 
 ### ✨ 新增

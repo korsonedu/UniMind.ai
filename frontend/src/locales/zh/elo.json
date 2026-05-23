@@ -1,6 +1,5 @@
 {
   "rankingTab": "ELO 排名",
-  "pointsTab": "积分",
   "eloScore": "ELO 评分",
   "institutionRank": "机构排名",
   "rankOfTotal": "本机构排名第 {{rank}} / {{total}} 人",
@@ -8,44 +7,6 @@
   "noInstitutionDesc": "加入机构后可查看内部排名",
   "rankError": "排名加载失败，请稍后重试",
   "self": "(你)",
-  "availablePoints": "可用积分",
-  "whatCanPointsDo": "积分能做什么",
-  "howToEarnPoints": "如何获得积分",
-  "pointsEarnDesc": "刷题和看课可获得积分，积分可用于解锁 AI 功能。学得越多，能用越多。",
-  "dailyLogin": "每日签到",
-  "completeQuestions": "完成刷题",
-  "watchVideos": "观看课程",
-  "aiSession": "AI 助教会话（不限轮数）",
-  "aiSessionCost": "{{cost}} 积分",
-  "mockInterview": "模拟面试（全场，含分析）",
-  "mockInterviewCost": "50 积分",
-  "resumeOptimization": "简历优化",
-  "resumeOptimizationCost": "15 积分",
-  "earnRule1": "刷题 ELO 上涨时 1:1 获得",
-  "earnRule2": "完成视频课程 +50 积分",
-  "earnRule3": "每日登录 +5 积分",
   "eloDescription": "ELO 评分根据答题正确率、题目难度动态计算，反应你的真实学术水平。",
-  "noRankingData": "暂无排名数据",
-  "recentLedger": "最近流水",
-  "noLedger": "暂无积分记录",
-  "noLedgerDesc": "开始刷题获得第一笔积分吧",
-  "ledger": {
-    "earn": "收入",
-    "spend": "支出",
-    "reasons": {
-      "daily_login": "每日签到",
-      "exam_complete": "测验完成",
-      "question_graded": "题目判分",
-      "question_correct": "答题正确",
-      "course_complete": "课程完成",
-      "course_reward_claim": "课程奖励",
-      "video_watched": "观看课程",
-      "ai_chat": "AI 助教会话",
-      "shop_redeem": "积分兑换",
-      "admin_adjust": "管理员调整",
-      "admin_grant": "管理员发放",
-      "elo_reset": "ELO重置",
-      "monthly_task": "月度任务"
-    }
-  }
+  "noRankingData": "暂无排名数据"
 }

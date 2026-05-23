@@ -9,6 +9,5 @@
   "sendFailed": "发送失败",
   "selectBotFirst": "请选择 AI 助教",
   "sessionReset": "会话已重置",
-  "resetFailed": "重置失败",
-  "featureName": "AI 助教会话"
+  "resetFailed": "重置失败"
 }

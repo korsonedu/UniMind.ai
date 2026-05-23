@@ -7,15 +7,16 @@ from django.db import transaction
 PLAN_QUOTA_LIMITS: dict[str, dict[str, int | None]] = {
     'free': {
         'course': 5, 'question': 200, 'knowledge_point': 300,
-        'article': 5, 'ai_question': 30, 'ai_call_total': 200,
+        'article': 5, 'ai_question': 30, 'ai_call_total': 100,
     },
     'solo': {
         'course': 30, 'question': 2000, 'knowledge_point': 1000,
-        'article': 20, 'ai_question': None, 'ai_call_total': 1500,
+        'article': 20, 'ai_question': 100, 'ai_call_total': 500,
+        'interview': 10, 'pdf_export': 10,
     },
     'plus': {
         'course': 100, 'question': 10000, 'knowledge_point': 5000,
-        'article': 100, 'ai_question': None, 'ai_call_total': 5000,
+        'article': 100, 'ai_question': None, 'ai_call_total': 3000,
         'pdf_export': 100, 'interview': 50,
     },
     'pro': {

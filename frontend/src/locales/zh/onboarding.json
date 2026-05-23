@@ -27,7 +27,8 @@
     "errors": {
       "enterInviteCode": "请输入方案邀请码",
       "enterName": "请输入机构名称",
-      "createFailed": "创建失败"
+      "createFailed": "创建失败",
+      "invalidCode": "邀请码无效"
     }
   },
   "student": {

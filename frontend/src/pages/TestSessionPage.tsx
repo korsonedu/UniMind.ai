@@ -170,25 +170,28 @@ export const TestSessionPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full min-h-0 bg-background text-foreground flex flex-col overflow-hidden">
-      <header className="h-12 shrink-0 border-b border-border px-3 flex items-center justify-between bg-background/90 backdrop-blur-md">
-        <Link to="/tests"><Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-bold">
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          {t('back')}
-        </Button></Link>
+    <div className="h-full min-h-0 bg-white text-stone-800 flex flex-col overflow-hidden">
+      {/* ── Header ── */}
+      <header className="h-11 shrink-0 border-b border-stone-100 px-3 flex items-center justify-between bg-white">
+        <Link to="/tests">
+          <Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100">
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            {t('back')}
+          </Button>
+        </Link>
         <div className="flex items-center gap-2">
           {isMobile && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg border-border">
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-stone-400 hover:text-stone-600">
                   <Bell className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent side="bottom" align="end" className="w-64 rounded-2xl p-4 bg-card border-border">
+              <PopoverContent side="bottom" align="end" className="w-64 rounded-2xl p-4 bg-white border-stone-200">
                 <div className="space-y-3 text-left">
-                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t('reminderSettings')}</p>
+                  <p className="text-[11px] font-semibold text-stone-400">{t('reminderSettings')}</p>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold">{t('questionTypeReminder')}</Label>
+                    <Label className="text-xs font-medium">{t('questionTypeReminder')}</Label>
                     <Switch
                       checked={reminderSettings.questionType}
                       onCheckedChange={(enabled) => {
@@ -197,7 +200,7 @@ export const TestSessionPage: React.FC = () => {
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold">{t('testResultReminder')}</Label>
+                    <Label className="text-xs font-medium">{t('testResultReminder')}</Label>
                     <Switch
                       checked={reminderSettings.testResult}
                       onCheckedChange={(enabled) => {
@@ -209,17 +212,19 @@ export const TestSessionPage: React.FC = () => {
               </PopoverContent>
             </Popover>
           )}
-          <div className="px-3 py-1 rounded-lg bg-primary text-primary-foreground font-mono font-bold text-xs tabular-nums">
+          <div className="px-2.5 py-1 rounded-md bg-stone-100 text-stone-600 font-medium text-xs tabular-nums">
             {currentIdx + 1} / {questions.length}
           </div>
         </div>
       </header>
 
+      {/* ── Body ── */}
       <div className="flex-1 min-h-0 flex flex-col">
         <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
-          <div className="bg-card border border-border/60 rounded-2xl p-4 space-y-4">
+          <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-4">
+            {/* Metadata row */}
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-muted text-muted-foreground border-none">
+              <Badge className="rounded-md px-2 py-0 h-5 text-[10px] font-semibold bg-stone-100 text-stone-600 border-none hover:bg-stone-100">
                 {currentQ.q_type === 'objective'
                   ? t('typeObjective')
                   : currentQ.subjective_type === 'calculate'
@@ -228,67 +233,85 @@ export const TestSessionPage: React.FC = () => {
                       ? t('typeNoun')
                       : t('typeEssay')}
               </Badge>
-              <Badge variant="outline" className="rounded-lg px-2 py-0.5 text-[10px] font-bold text-indigo-500 border-indigo-100 bg-indigo-50/30">
-                {currentQ.difficulty_level_display || t('difficultyFallback')} (ELO {currentQ.difficulty || 1200})
-              </Badge>
+              <span className="text-[10px] font-medium text-stone-500">
+                {currentQ.difficulty_level_display || t('difficultyFallback')} · ELO {currentQ.difficulty || 1200}
+              </span>
             </div>
 
-            <div className="text-base font-bold text-foreground leading-relaxed">
+            {/* Question text */}
+            <div className="text-sm font-medium text-stone-800 leading-relaxed">
               <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                 {processMathContent(currentQ.text)}
               </ReactMarkdown>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Action buttons */}
+            <div className="flex items-center gap-1.5">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => toggleMastered(currentQ.id)}
                 className={cn(
-                  'rounded-xl h-8 px-3 gap-2 border transition-all',
+                  'h-7.5 px-2.5 rounded-lg text-[11px] font-medium gap-1.5 transition-colors',
                   currentQ.is_mastered
-                    ? 'text-emerald-600 bg-emerald-50 border-emerald-100'
-                    : 'text-muted-foreground border-border hover:text-emerald-500 hover:bg-emerald-50/50'
+                    ? 'text-emerald-600 bg-emerald-50'
+                    : 'text-stone-400 hover:text-emerald-600 hover:bg-emerald-50/50'
                 )}
               >
-                <CheckCircle2 className="h-4 w-4" />
-                <span className="text-[10px] font-black uppercase tracking-widest">{currentQ.is_mastered ? t('alreadyMastered') : t('markMastered')}</span>
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {currentQ.is_mastered ? t('alreadyMastered') : t('markMastered')}
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => toggleFavorite(currentQ.id)}
                 className={cn(
-                  'rounded-xl h-8 w-8 shrink-0 border border-border transition-all',
-                  currentQ.is_favorite ? 'text-amber-500 fill-amber-500 bg-amber-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  'h-7.5 w-7.5 rounded-lg transition-colors',
+                  currentQ.is_favorite ? 'text-amber-500 bg-amber-50' : 'text-stone-400 hover:text-amber-500 hover:bg-amber-50/50'
                 )}
               >
-                <Star className="h-4 w-4" />
+                <Star className={cn('h-3.5 w-3.5', currentQ.is_favorite && 'fill-current')} />
               </Button>
             </div>
 
-            <div className={cn('transition-opacity', currentQ.is_mastered && 'opacity-40')}>
+            {/* Mastered banner */}
+            {currentQ.is_mastered && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50/70 border border-emerald-100 rounded-lg text-xs font-medium text-emerald-700">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {t('alreadyMastered')}
+              </div>
+            )}
+
+            {/* Answer area */}
+            <div className={cn(currentQ.is_mastered && 'pointer-events-none')}>
               {currentQ.q_type === 'objective' ? (
-                <div className="grid grid-cols-1 gap-2.5">
-                  {currentQ.options?.map((opt: string, i: number) => (
-                    <button
-                      key={i}
-                      disabled={currentQ.is_mastered}
-                      onClick={() => setAnswers((prev) => ({ ...prev, [currentQ.id]: opt }))}
-                      className={cn(
-                        'w-full p-3 rounded-xl border text-left font-bold transition-all flex items-center gap-3',
-                        answers[currentQ.id] === opt ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-card border-border hover:border-indigo-400 hover:bg-muted',
-                        currentQ.is_mastered && 'cursor-not-allowed'
-                      )}
-                    >
-                      <div className={cn('h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all', answers[currentQ.id] === opt ? 'border-white/20 bg-indigo-600' : 'border-border bg-muted')}>
-                        <span className={cn('text-[10px] font-black', answers[currentQ.id] === opt ? 'text-white' : 'text-muted-foreground')}>
+                <div className="space-y-2">
+                  {currentQ.options?.map((opt: string, i: number) => {
+                    const selected = answers[currentQ.id] === opt;
+                    return (
+                      <button
+                        key={i}
+                        disabled={currentQ.is_mastered}
+                        onClick={() => setAnswers((prev) => ({ ...prev, [currentQ.id]: opt }))}
+                        className={cn(
+                          'w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.995]',
+                          selected
+                            ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm'
+                            : 'bg-white border-stone-200 hover:border-stone-400 active:bg-stone-50',
+                          currentQ.is_mastered && 'opacity-50'
+                        )}
+                      >
+                        <span className={cn(
+                          'font-display text-base font-bold italic w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors',
+                          selected ? 'bg-white/10 text-white' : 'bg-stone-100 text-stone-500'
+                        )}>
                           {String.fromCharCode(65 + i)}
                         </span>
-                      </div>
-                      <span className="text-xs">{opt}</span>
-                    </button>
-                  ))}
+                        <span className={cn('text-[13px] leading-snug', selected ? 'text-white' : 'text-stone-700')}>
+                          {opt}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <textarea
@@ -296,8 +319,10 @@ export const TestSessionPage: React.FC = () => {
                   disabled={currentQ.is_mastered}
                   onChange={(e) => setAnswers((prev) => ({ ...prev, [currentQ.id]: e.target.value }))}
                   className={cn(
-                    'w-full bg-muted border border-border rounded-xl p-3 min-h-[170px] font-medium text-sm focus:ring-2 focus:ring-indigo-500/20 transition-all resize-none text-foreground',
-                    currentQ.is_mastered && 'cursor-not-allowed'
+                    'w-full bg-stone-50 border border-stone-200 rounded-xl p-4 min-h-[180px] text-sm font-medium leading-relaxed',
+                    'focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-stone-400',
+                    'placeholder:text-stone-400 resize-none transition-all text-stone-800',
+                    currentQ.is_mastered && 'opacity-50'
                   )}
                   placeholder={currentQ.is_mastered ? t('masteredPlaceholder') : t('inputPlaceholder')}
                 />
@@ -306,25 +331,41 @@ export const TestSessionPage: React.FC = () => {
           </div>
         </div>
 
-        <footer className="shrink-0 border-t border-border bg-background/95 backdrop-blur-md px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] space-y-2">
-          <div className="flex justify-between items-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            <span>{t('answeredProgress')}</span>
-            <span className="text-foreground">{answeredCount} / {totalNeedAnswer}</span>
+        {/* ── Footer ── */}
+        <footer className="shrink-0 border-t border-stone-100 bg-white px-3 pt-2.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] space-y-2.5">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-medium text-stone-400">{t('answeredProgress')}</span>
+            <span className="text-[11px] font-semibold text-stone-700 tabular-nums">{answeredCount} / {totalNeedAnswer}</span>
           </div>
-          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${totalNeedAnswer ? (answeredCount / totalNeedAnswer) * 100 : 100}%` }} />
+          <div className="h-1 w-full bg-stone-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-zinc-800 rounded-full transition-all duration-300"
+              style={{ width: `${totalNeedAnswer ? (answeredCount / totalNeedAnswer) * 100 : 100}%` }}
+            />
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))} disabled={currentIdx === 0} className="h-10 rounded-xl px-3 text-xs font-bold">
+            <Button
+              variant="ghost"
+              onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
+              disabled={currentIdx === 0}
+              className="h-9 rounded-xl px-3 text-xs font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100"
+            >
               <ChevronLeft className="h-4 w-4 mr-1" />
               {t('previousQ')}
             </Button>
             {currentIdx === questions.length - 1 ? (
-              <Button onClick={handleSubmit} disabled={isSubmitting} className="h-10 flex-1 rounded-xl bg-primary text-primary-foreground font-bold text-xs">
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="h-9 flex-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold"
+              >
                 {isSubmitting ? t('submitting') : t('submitScore')}
               </Button>
             ) : (
-              <Button onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))} className="h-10 flex-1 rounded-xl bg-primary text-primary-foreground font-bold text-xs">
+              <Button
+                onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
+                className="h-9 flex-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold"
+              >
                 {t('nextQ')}
                 <ChevronRight className="h-4 w-4 ml-1" />
               </Button>

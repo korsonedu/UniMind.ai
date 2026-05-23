@@ -102,7 +102,7 @@ export const ResumeTuner: React.FC = () => {
         <div className="rounded-2xl bg-amber-50/80 border border-amber-200/60 p-4">
           <div className="flex items-center gap-2 mb-2">
             <Target className="h-3.5 w-3.5 text-amber-600" />
-            <p className="text-[11px] font-black text-amber-700 uppercase tracking-widest">{t('resumeTuner.diagnosis')}</p>
+            <p className="text-[11px] font-semibold text-amber-700">{t('resumeTuner.diagnosis')}</p>
           </div>
           <p className="text-[13px] text-amber-800 leading-relaxed">{r.diagnostics}</p>
         </div>
@@ -112,7 +112,7 @@ export const ResumeTuner: React.FC = () => {
         <div className="rounded-2xl bg-emerald-50/80 border border-emerald-200/60 p-4">
           <div className="flex items-center gap-2 mb-2">
             <PenLine className="h-3.5 w-3.5 text-emerald-600" />
-            <p className="text-[11px] font-black text-emerald-700 uppercase tracking-widest">{t('resumeTuner.polish')}</p>
+            <p className="text-[11px] font-semibold text-emerald-700">{t('resumeTuner.polish')}</p>
           </div>
           <div className="space-y-2">
             {optimizedEntries.map(([key, val]) => (
@@ -129,7 +129,7 @@ export const ResumeTuner: React.FC = () => {
         <div className="rounded-2xl bg-indigo-50/80 border border-indigo-200/60 p-4">
           <div className="flex items-center gap-2 mb-2">
             <Lightbulb className="h-3.5 w-3.5 text-indigo-600" />
-            <p className="text-[11px] font-black text-indigo-700 uppercase tracking-widest">{t('resumeTuner.predictedQuestions')}</p>
+            <p className="text-[11px] font-semibold text-indigo-700">{t('resumeTuner.predictedQuestions')}</p>
           </div>
           <ul className="space-y-1.5">
             {r.predicted_questions.map((q, i) => (
@@ -213,7 +213,7 @@ export const ResumeTuner: React.FC = () => {
         {/* Divider */}
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-border/60" />
-          <span className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-widest">{t('resumeTuner.or')}</span>
+          <span className="text-[10px] font-medium text-muted-foreground/50">{t('resumeTuner.or')}</span>
           <div className="flex-1 h-px bg-border/60" />
         </div>
 

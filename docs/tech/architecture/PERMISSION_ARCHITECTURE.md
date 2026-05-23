@@ -92,11 +92,10 @@ pro (27 = plus + 9):
 | `IsInstitutionOwner` | 仅机构 owner | 机构设置编辑、角色修改 |
 | `IsInstitutionActive` | 机构启用且未过期 | 叠加在其他机构权限上 |
 | `IsInstitutionMember` | 属于任意机构 | 机构内排行榜 |
-| `IsMemberOrAdmin` | `is_member_or_admin()`（含会员过期检查） | 知识图谱、热力图 |
+| `IsMember` | `is_member_or_admin()`（含会员过期检查） | 知识图谱、热力图、AI 对话 |
 | `IsAdminWriteMemberRead` | 读=会员/管理员，写=平台/机构管理员 | 知识点、文章 |
 | `HasPlanFeature` | `view.required_feature` 在机构功能列表中 | AI 出题、面试模拟 |
-| `HasAIQuota` | Free 版每月 20 次，Solo+ 无限 | AI 出题 |
-| `HasPointsBalance` | `user.elo_points >= view.points_cost` | AI 对话、面试 |
+| `HasQuota` | 通用配额检查，`view.quota_resource` 指定资源类型；平台/机构管理员豁免 | 课程/题目/知识点/文章/AI出题/AI调用/PDF模考/面试/对话 |
 
 ### 4.2 辅助函数
 
@@ -118,14 +117,19 @@ pro (27 = plus + 9):
 # 机构管理：叠加管理员 + 机构活跃检查
 permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
 
-# 功能+配额：方案检查 + 用量配额
-permission_classes = [HasPlanFeature, HasAIQuota]
+# 功能+配额：方案检查 + 通用配额
+permission_classes = [HasPlanFeature, HasQuota]
 required_feature = 'ai.generate'
+quota_resource = 'ai_question'
 
-# 功能+积分：方案检查 + 积分消耗
-permission_classes = [IsMember, HasPlanFeature, HasPointsBalance]
-required_feature = 'interview.mock'
-points_cost = 50
+# 总量型配额（课程/题目/知识点/文章）：仅需 HasQuota
+permission_classes = [IsAdmin, HasQuota]
+quota_resource = 'course'
+
+# 功能+会员+配额：会员检查 + 方案检查 + 配额消耗
+permission_classes = [IsMember, HasPlanFeature, HasQuota]
+required_feature = 'ai.generate'
+quota_resource = 'ai_question'
 ```
 
 ---
@@ -145,8 +149,9 @@ points_cost = 50
 | `GET/POST /users/institutions/` | IsPlatformAdmin |
 | `GET/POST /users/institution/students/` | IsInstitutionAdmin + IsInstitutionActive |
 | `GET /users/institution/me/features/` | IsAuthenticated |
-| `GET /users/institution/me/dashboard/` | IsAuthenticated（内联 RBAC） |
-| `PATCH /users/institution/me/` | IsInstitutionOwner + IsInstitutionActive |
+| `GET /users/institution/me/` | IsInstitutionAdmin + IsInstitutionActive |
+| `GET /users/institutions/overview/` | IsPlatformAdmin |
+| `PATCH /users/institution/me/update/` | IsInstitutionOwner + IsInstitutionActive |
 | `POST /users/institutions/create/` | IsAuthenticated |
 | `POST /users/institution/join-by-slug/` | IsAuthenticated |
 | `GET /users/join/:slug/` | AllowAny（公开重定向） |
@@ -159,16 +164,16 @@ points_cost = 50
 | `GET /quizzes/questions/` | IsMember（读），IsAdmin（写） |
 | `POST/PATCH/DELETE /quizzes/questions/:id/` | IsAdmin |
 | `GET/POST /quizzes/knowledge-points/` | IsAdminWriteMemberRead |
-| `POST /quizzes/knowledge-points/generate-bulk/` | HasPlanFeature('ai.generate') + HasAIQuota |
+| `POST /quizzes/knowledge-points/generate-bulk/` | HasPlanFeature('ai.generate') + HasQuota('ai_question') |
 | `POST /quizzes/knowledge-points/import-md/` | IsAdmin OR IsInstitutionAdmin |
 | `GET /quizzes/knowledge-points/subjects/` | 公开（无权限） |
 | `GET /quizzes/exams/` | IsMember |
 | `POST /quizzes/exams/` | IsAdmin |
-| `GET /quizzes/graph/heatmap/` | IsMemberOrAdmin |
+| `GET /quizzes/graph/heatmap/` | IsMember |
 | `GET /quizzes/favorites/` | IsMember |
 | `GET /quizzes/wrong-questions/` | IsMember |
-| `GET /quizzes/ai/preview/` | HasPlanFeature('ai.generate') + HasAIQuota |
-| `POST /quizzes/ai/pipeline/` | HasPlanFeature('ai.generate') + HasAIQuota |
+| `GET /quizzes/ai/preview/` | HasPlanFeature('ai.generate') + HasQuota('ai_question') |
+| `POST /quizzes/ai/pipeline/` | HasPlanFeature('ai.generate') + HasQuota('ai_question') |
 | `GET/POST /quizzes/admin/prompt-templates/` | IsPlatformAdmin |
 
 ### 5.3 课程/文章/AI/面试/自习室/通知
@@ -183,7 +188,7 @@ points_cost = 50
 | articles | 文章 读 | IsAdminWriteMemberRead（读=会员/管理员） |
 | articles | 浏览量+1 | IsMember |
 | ai_assistant | Bot 管理 | IsAdmin（写），IsMember（读） |
-| ai_assistant | AI 对话 | IsMember + HasPointsBalance(30) |
+| ai_assistant | AI 对话 | IsMember + HasQuota('ai_call_total') |
 | interviews | 全部 | IsMember + HasPlanFeature('interview.mock') |
 | faq_system | 全部 | IsMember（内联教师/管理员检查用于写操作） |
 | study_room | 全部 | IsMember |
@@ -343,16 +348,18 @@ admin   : [learning.access, member.access, admin.panel, content.manage, users.ma
 | 3 | **学生看到侧边栏锁和升级弹窗** — 机构学生在低方案机构中看到带锁图标的功能入口，点击弹出 UpgradeModal。学生不应关心方案升级 | **中** | `isInstStudent` 修正为 `Boolean(instInfo) && role==='student'`；sidebar/mobileNav 对学生过滤未解锁项；UpgradeModal 加 `!isInstStudent` 守卫 |
 | 4 | **邀请链接默认学生** — 加教师需要 owner 事后手动改角色 | **中** | `JoinInstitutionView` 支持 `?role=teacher` 参数，链路透传 cookie → register → login → join API |
 | 5 | **教师受学生数上限限制** — `InstitutionJoinBySlugView` 的学生数上限检查对教师也生效 | **低** | 学生数上限仅对 `role='student'` 生效 |
+| 6 | **激活会员按钮/弹窗冗余** — 用户通过邀请链接注册后自动 `is_member=True`，不再需要激活码激活。MainLayout 中「激活会员」菜单项和弹窗成为死代码 | **低** | 删除 `showActivateDialog`/`activationCode`/`isActivating` 状态、`handleActivate` 函数、桌面+移动端菜单项、激活码 Dialog 组件及不再使用的 import（`Loader2`, `Dialog*`, `Input`, `Label`） |
+| 7 | **lib/authz.ts isAdminUser 死代码** — 该函数仅在 PdfMockExam.tsx 一处使用，逻辑与 RequireAdmin 守卫重复 | **低** | 逻辑内联到 PdfMockExam.tsx（`user?.is_admin \|\| user?.is_institution_admin \|\| user?.role === 'admin'`），删除 `authz.ts` |
+| 8 | **InstitutionDashboardView 内联 RBAC** — 单视图混合平台管理员/机构管理员/其他三种角色逻辑，`permission_classes=[IsAuthenticated]` 太宽 | **低** | 拆分为两个视图：`PlatformAdminInstitutionOverviewView`（`/institutions/overview/`, `IsPlatformAdmin`）和收紧后的 `InstitutionDashboardView`（`/institution/me/`, `IsInstitutionAdmin + IsInstitutionActive`）。前端 `InstitutionDashboard.tsx` 根据 `isPlatformAdmin && !institution` 选择端点 |
 
 ### 10.2 已知但未修复
 
 | # | 问题 | 原因/优先级 |
 |---|------|-----------|
-| 1 | `InstitutionDashboardView` 内联 RBAC — 单个视图混合三种角色逻辑，`permission_classes=[IsAuthenticated]` 太宽 | 低优先，功能正常，拆分需前端配合 |
-| 2 | FeatureGuard 竞态 — `fetchFeatures()` 异步，FeatureGuard 可能在 features 加载前渲染导致错误的 `/` 重定向 | 低概率，RequireAuth 的 loading 状态通常覆盖此窗口 |
-| 3 | Prompt 模板（IsPlatformAdmin）vs Pipeline 管理（IsAdmin）权限不一致 | 设计决策：模板全局，pipeline 可机构级 |
-| 4 | courses 启动材料/专辑 GET 用 AllowAny | 可能是故意的——公开课程目录 |
-| 5 | `permissions.IsMemberOrAdmin` 仅在 `graph_views.py` 使用——与 `users.views.IsMember` 功能重复但位置不同 | 修复 #1 后，`IsMember` 已委托给 `is_member_or_admin()`，两者等价 |
+| 1 | FeatureGuard 竞态 — `fetchFeatures()` 异步，FeatureGuard 可能在 features 加载前渲染导致错误的 `/` 重定向 | 低概率，RequireAuth 的 loading 状态通常覆盖此窗口 |
+| 2 | Prompt 模板（IsPlatformAdmin）vs Pipeline 管理（IsAdmin）权限不一致 | 设计决策：模板全局，pipeline 可机构级 |
+| 3 | courses 启动材料/专辑 GET 用 AllowAny | 可能是故意的——公开课程目录 |
+| 4 | ~~`permissions.IsMemberOrAdmin` 仅在 `graph_views.py` 使用——与 `users.views.IsMember` 功能重复~~ | **已修复 (2026-05-23)**：统一为 `permissions.IsMember`，`users.views.IsMember` 改为 re-export |
 
 ---
 
@@ -363,9 +370,9 @@ admin   : [learning.access, member.access, admin.panel, content.manage, users.ma
 1. **权限类从 `users.permissions` 引用**，不要在 app 内定义局部权限类
 2. 机构管理数据必须用 `IsInstitutionAdmin` + `IsInstitutionActive` 组合
 3. 功能门控用 `HasPlanFeature` + `view.required_feature`
-4. 消耗性功能叠加 `HasPointsBalance` + `view.points_cost`
+4. 消耗性/配额型接口用 `HasQuota` + `view.quota_resource`
 5. queryset 必须做机构数据隔离（见第七节模式）
-6. **不要用 `users.views.IsMember`**——虽然它现在已委托给正确的实现，但建议直接 import `IsMemberOrAdmin` 让意图更清晰
+6. **`IsMember` 从 `users.permissions` 导入**，这是唯一定义位置（`users.views.IsMember` 仅为向后兼容 re-export）
 
 ### 11.2 新增前端路由时
 

@@ -27,7 +27,8 @@
     "errors": {
       "enterInviteCode": "Please enter an invite code",
       "enterName": "Please enter institution name",
-      "createFailed": "Creation failed"
+      "createFailed": "Creation failed",
+      "invalidCode": "Invalid invite code"
     }
   },
   "student": {

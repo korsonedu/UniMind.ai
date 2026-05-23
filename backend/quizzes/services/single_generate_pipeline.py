@@ -5,6 +5,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from django.conf import settings
 
 from ai_engine.service import AICallError
+from ai_engine.tools import BATCH_REVIEW_SCHEMA
 from ai_service import AIService
 from quizzes.models import KnowledgePoint
 from quizzes.services.ai_schema_guard import validate_question_list_payload
@@ -112,14 +113,28 @@ def _review_by_model(candidates: List[Dict[str, Any]]) -> Dict[int, Dict[str, An
             }
         )
 
-    raw = AIService.simple_chat_text(
+    data = AIService.structured_output(
         system_prompt=prompt_config.content,
         user_prompt=json.dumps(payload, ensure_ascii=False),
+        schema=BATCH_REVIEW_SCHEMA,
+        tool_name="submit_batch_review",
+        tool_description="提交批量题目审核结果",
         temperature=prompt_config.temperature if prompt_config.temperature is not None else 0.05,
         max_tokens=2200,
         operation="quizzes.single_pipeline.reviewer",
     )
-    data = AIService.extract_json(raw)
+
+    if not isinstance(data, list):
+        # fallback to old extract_json path
+        raw = AIService.simple_chat_text(
+            system_prompt=prompt_config.content,
+            user_prompt=json.dumps(payload, ensure_ascii=False),
+            temperature=prompt_config.temperature if prompt_config.temperature is not None else 0.05,
+            max_tokens=2200,
+            operation="quizzes.single_pipeline.reviewer",
+        )
+        data = AIService.extract_json(raw)
+
     if not isinstance(data, list):
         return {}
 

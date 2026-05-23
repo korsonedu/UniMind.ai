@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -105,7 +104,6 @@ export const PipelinePanel: React.FC = () => {
 
   // Smart generate state
   const [smartDialogOpen, setSmartDialogOpen] = useState(false);
-  const [adversarialMode, setAdversarialMode] = useState(false);
   const [smartKpIds, setSmartKpIds] = useState<number[]>([]);
   const [smartCount, setSmartCount] = useState(2);
   const [smartDifficulty, setSmartDifficulty] = useState('normal');
@@ -114,12 +112,13 @@ export const PipelinePanel: React.FC = () => {
   const [knowledgePoints, setKnowledgePoints] = useState<KnowledgePoint[]>([]);
   const [loadingKps, setLoadingKps] = useState(false);
   const [smartSubmitting, setSmartSubmitting] = useState(false);
-  const [previewQuestions, setPreviewQuestions] = useState<any[] | null>(null);
-  const [selectedPreviewIds, setSelectedPreviewIds] = useState<Set<number>>(new Set());
 
   // Review action state
   const [reviewingMap, setReviewingMap] = useState<Record<number, boolean>>({});
   const [previewTask, setPreviewTask] = useState<PipelineTask | null>(null);
+  const [reviewSelectedIds, setReviewSelectedIds] = useState<Set<number>>(new Set());
+  const [editingQuestionIdx, setEditingQuestionIdx] = useState<number | null>(null);
+  const [editedQuestions, setEditedQuestions] = useState<Record<number, any>>({});
 
   const debouncedSearch = useDebouncedValue(search.trim(), 400);
 
@@ -170,6 +169,25 @@ export const PipelinePanel: React.FC = () => {
       entry: t('pipeline.difficultyEntry'), easy: t('pipeline.difficultyEasy'),
       normal: t('pipeline.difficultyNormal'), hard: t('pipeline.difficultyHard'),
       extreme: t('pipeline.difficultyExtreme'), mixed: t('pipeline.difficultyMixed'),
+    };
+    return map[s] || s;
+  };
+
+  const diffHint = (s: string): string => {
+    const map: Record<string, string> = {
+      entry: t('pipeline.difficultyEntryHint'), easy: t('pipeline.difficultyEasyHint'),
+      normal: t('pipeline.difficultyNormalHint'), hard: t('pipeline.difficultyHardHint'),
+      extreme: t('pipeline.difficultyExtremeHint'),
+    };
+    return map[s] || '';
+  };
+
+  const bloomLabel = (s?: string): string => {
+    if (!s) return '?';
+    const map: Record<string, string> = {
+      remember: t('pipeline.bloomRemember'), understand: t('pipeline.bloomUnderstand'),
+      apply: t('pipeline.bloomApply'), analyze: t('pipeline.bloomAnalyze'),
+      evaluate: t('pipeline.bloomEvaluate'), create: t('pipeline.bloomCreate'),
     };
     return map[s] || s;
   };
@@ -267,48 +285,19 @@ export const PipelinePanel: React.FC = () => {
   }, [t]);
 
   const handleOpenGenerateDialog = () => {
-    setPreviewQuestions(null);
-    setSelectedPreviewIds(new Set());
     setSmartTaskName('');
     setSmartDialogOpen(true);
     fetchKnowledgePoints();
   };
 
-  const handleSubmitSmartGenerate = async () => {
-    if (smartKpIds.length === 0) return toast.error(t('pipeline.pleaseSelectKp'));
-    setSmartSubmitting(true);
-    toast.info(t('pipeline.aiGenerating'));
-    try {
-      const res = await api.post('/quizzes/ai-smart-generate-preview/', {
-        kp_ids: smartKpIds, count: smartCount,
-        difficulty_level: smartDifficulty, types: smartTypes,
-      }, { timeout: 180000 });
-      const data = res.data;
-      const questions = data.questions || [];
-      const passed = data.pipeline?.review_passed || 0;
-      const rejected = data.pipeline?.review_rejected || 0;
-      if (questions.length > 0) {
-        setPreviewQuestions(questions);
-        setSelectedPreviewIds(new Set(questions.map((_: any, i: number) => i)));
-        toast.success(t('pipeline.generatedResult', { total: questions.length, passed, rejected }));
-      } else {
-        toast.error(t('pipeline.aiNoValidQuestions'));
-      }
-      fetchTasks(1);
-    } catch (e) {
-      toast.error(formatApiErrorToast(e, t('pipeline.aiGenerateFailed')));
-    } finally {
-      setSmartSubmitting(false);
-    }
-  };
-
-  const handleSubmitAdversarial = async () => {
+  const handleSubmitGenerate = async () => {
     if (smartKpIds.length === 0) return toast.error(t('pipeline.pleaseSelectKp'));
     setSmartSubmitting(true);
     try {
       const res = await api.post('/quizzes/admin/adversarial-pipeline/', {
         kp_ids: smartKpIds,
         questions_per_kp: smartCount,
+        difficulty: smartDifficulty,
         title: smartTaskName.trim() || '',
         types: smartTypes,
       });
@@ -325,13 +314,21 @@ export const PipelinePanel: React.FC = () => {
 
   // ── Review Actions ──────────────────────────────────────────
 
-  const handleReviewAction = async (taskId: number, action: 'approve' | 'reject') => {
+  const handleReviewAction = async (taskId: number, action: 'approve' | 'reject', selectedIndices?: number[], editedQuestions?: Record<number, any>) => {
     setReviewingMap((prev) => ({ ...prev, [taskId]: true }));
     try {
-      const res = await api.post(`/quizzes/admin/pipeline-review/${taskId}/`, { action });
+      const body: any = { action };
+      if (action === 'approve' && selectedIndices) {
+        body.question_indices = selectedIndices;
+      }
+      if (action === 'approve' && editedQuestions) {
+        body.edited_questions = editedQuestions;
+      }
+      const res = await api.post(`/quizzes/admin/pipeline-review/${taskId}/`, body);
       toast.success(action === 'approve'
         ? t('pipeline.approvedImported', { count: (res.data as any).questions_created || 0 })
         : t('pipeline.rejectedDone'));
+      setPreviewTask(null);
       fetchTasks(1);
     } catch (e) {
       toast.error(formatApiErrorToast(e, t('pipeline.actionFailed')));
@@ -379,8 +376,6 @@ export const PipelinePanel: React.FC = () => {
             <p className="text-sm font-bold">{t('pipeline.aiSmartGenerate')}</p>
             <p className="text-[11px] text-muted-foreground mt-1">
               {t('pipeline.smartGenerateDesc')}
-              <b className="text-indigo-600">{t('pipeline.quickMode')}</b>
-              {t('pipeline.quickModeDesc')}
               <b className="text-rose-600">{t('pipeline.adversarialMode')}</b>
               {t('pipeline.adversarialModeDesc')}
             </p>
@@ -407,7 +402,7 @@ export const PipelinePanel: React.FC = () => {
                 return (
                   <div key={task.id} className="p-4 bg-white rounded-2xl border border-amber-100 space-y-2">
                     <div className="flex items-center justify-between gap-4">
-                      <div onClick={() => setPreviewTask(task)} className="min-w-0 text-left hover:text-indigo-600 transition-colors cursor-pointer">
+                      <div onClick={() => { setPreviewTask(task); const qs = (task.result as any)?.questions || []; setReviewSelectedIds(new Set(qs.map((_: any, i: number) => i))); setEditedQuestions({}); }} className="min-w-0 text-left hover:text-indigo-600 transition-colors cursor-pointer">
                         <p className="text-xs font-bold truncate">{task.title}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
                           {t('pipeline.questionSummary', {
@@ -418,7 +413,7 @@ export const PipelinePanel: React.FC = () => {
                         </p>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <Button onClick={() => setPreviewTask(task)} variant="outline" className="h-8 rounded-lg text-[10px] font-bold px-2">{t('pipeline.preview')}</Button>
+                        <Button onClick={() => { setPreviewTask(task); const qs = (task.result as any)?.questions || []; setReviewSelectedIds(new Set(qs.map((_: any, i: number) => i))); setEditedQuestions({}); }} variant="outline" className="h-8 rounded-lg text-[10px] font-bold px-2">{t('pipeline.preview')}</Button>
                         <Button
                           onClick={() => handleReviewAction(task.id, 'approve')}
                           disabled={reviewingMap[task.id]}
@@ -529,166 +524,87 @@ export const PipelinePanel: React.FC = () => {
       </Card>
 
       {/* ── Generate Dialog ── */}
-      <Dialog open={smartDialogOpen} onOpenChange={(o) => { if (!o) { setSmartDialogOpen(false); setPreviewQuestions(null); setSelectedPreviewIds(new Set()); } }}>
-        <DialogContent className={previewQuestions ? 'max-w-3xl max-h-[85vh] overflow-y-auto' : 'max-w-2xl'}>
+      <Dialog open={smartDialogOpen} onOpenChange={(o) => { if (!o) { setSmartDialogOpen(false); } }}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{adversarialMode ? t('pipeline.deepAdversarialTitle') : t('pipeline.quickGenerateTitle')}</DialogTitle>
+            <DialogTitle>{t('pipeline.deepAdversarialTitle')}</DialogTitle>
             <DialogDescription>
-              {adversarialMode
-                ? t('pipeline.deepAdversarialDesc')
-                : t('pipeline.quickGenerateDesc')}
+              {t('pipeline.deepAdversarialDesc')}
             </DialogDescription>
           </DialogHeader>
 
-          {previewQuestions ? (
-            <div className="space-y-4 py-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-emerald-600">{t('pipeline.candidateSummary', { total: previewQuestions.length, selected: selectedPreviewIds.size })}</p>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedPreviewIds(new Set(previewQuestions.map((_: any, i: number) => i)))}
-                    className="h-7 rounded-lg text-[10px] font-bold">{t('pipeline.selectAll')}</Button>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedPreviewIds(new Set())}
-                    className="h-7 rounded-lg text-[10px] font-bold">{t('pipeline.clearAll')}</Button>
-                </div>
-              </div>
-              <ScrollArea className="h-[420px] rounded-xl border bg-slate-50 p-4">
-                <div className="space-y-3">
-                  {previewQuestions.map((q: any, i: number) => {
-                    const typeLabel = getTypeLabel(q);
-                    return (
-                    <Card key={i} className={cn('p-4 rounded-2xl border-none shadow-sm space-y-2 transition-all', selectedPreviewIds.has(i) ? 'bg-white ring-2 ring-emerald-200' : 'bg-white/60 opacity-70')}>
-                      <div className="flex items-center gap-2">
-                        <Checkbox checked={selectedPreviewIds.has(i)}
-                          onCheckedChange={(c) => setSelectedPreviewIds(prev => { const next = new Set(prev); c ? next.add(i) : next.delete(i); return next; })} />
-                        <Badge className="text-[9px] font-bold rounded-lg">{i + 1}</Badge>
-                        <Badge className="bg-slate-100 text-slate-700 border-none text-[9px] font-bold rounded-lg">{typeLabel}</Badge>
-                        {q.difficulty_level && <Badge className="bg-indigo-100 text-indigo-700 border-none text-[9px] font-bold rounded-lg">{diffLabel(q.difficulty_level)}</Badge>}
-                        {q.kp_name && <span className="text-[9px] text-muted-foreground ml-auto">{q.kp_name}</span>}
-                      </div>
-                      <p className="text-xs font-bold">{q.question || q.text}</p>
-                      {q.options && typeof q.options === 'object' && Object.keys(q.options).length > 0 && (
-                        <div className="grid grid-cols-2 gap-1">
-                          {Object.entries(q.options as Record<string, string>).map(([k, v]) => (
-                            <span key={k} className="text-[10px] text-slate-500"><b>{k}.</b> {v as string}</span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex gap-3 text-[10px]">
-                        {q.answer && <span className="text-emerald-600 font-bold">{t('pipeline.answer')}: {q.answer}</span>}
-                        {q.correct_answer && <span className="text-emerald-600 font-bold">{t('pipeline.answer')}: {q.correct_answer}</span>}
-                      </div>
-                    </Card>
-                  );})}
-                </div>
-              </ScrollArea>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setPreviewQuestions(null); setSelectedPreviewIds(new Set()); setSmartKpIds([]); setSmartDialogOpen(false); }}
-                  className="rounded-xl h-11 px-6 text-xs font-bold border-red-200 text-red-600 hover:bg-red-50">
-                  <XCircle className="h-4 w-4 mr-2" />{t('pipeline.discardAll')}
-                </Button>
-                <Button onClick={async () => {
-                  const selected = previewQuestions.filter((_: any, i: number) => selectedPreviewIds.has(i));
-                  if (selected.length === 0) return toast.error(t('pipeline.pleaseSelectOne'));
-                  try {
-                    await api.post('/quizzes/ai-bulk-import/', { questions: selected, kp_id: smartKpIds[0] || null });
-                    toast.success(t('pipeline.importedSuccess', { count: selected.length }));
-                    setPreviewQuestions(null); setSelectedPreviewIds(new Set()); setSmartKpIds([]); setSmartDialogOpen(false); fetchTasks(1);
-                  } catch (e) { toast.error(formatApiErrorToast(e, t('pipeline.importFailed'))); }
-                }} disabled={selectedPreviewIds.size === 0}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white h-11 px-6 text-xs font-bold">
-                  <CheckCircle2 className="h-4 w-4 mr-2" />{t('pipeline.importSelected', { count: selectedPreviewIds.size })}
-                </Button>
-              </DialogFooter>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.taskNameLabel')}</Label>
+              <Input value={smartTaskName} onChange={(e) => setSmartTaskName(e.target.value)}
+                placeholder={t('pipeline.taskNamePlaceholder')}
+                className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs" />
             </div>
-          ) : (
-            <div className="space-y-4 py-2">
-              {/* ── 任务名 ── */}
+
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.taskNameLabel')}</Label>
-                <Input value={smartTaskName} onChange={(e) => setSmartTaskName(e.target.value)}
-                  placeholder={t('pipeline.taskNamePlaceholder')}
+                <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.countPerKp')}</Label>
+                <Input type="number" min={1} max={10} value={smartCount}
+                  onChange={(e) => setSmartCount(Math.max(1, parseInt(e.target.value) || 1))}
                   className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs" />
               </div>
-
-              {/* ── 质量模式开关 ── */}
-              <div className="flex items-center justify-between p-4 rounded-2xl border border-border bg-muted/30">
-                <div>
-                  <p className="text-sm font-bold">{adversarialMode ? t('pipeline.deepAdversarialReview') : t('pipeline.quickGenerate')}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {adversarialMode
-                      ? t('pipeline.adversarialSwitchDesc')
-                      : t('pipeline.quickSwitchDesc')}
-                  </p>
-                </div>
-                <Switch checked={adversarialMode} onCheckedChange={setAdversarialMode} />
-              </div>
-
-              <div className={adversarialMode ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-3 gap-3'}>
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.countPerKp')}</Label>
-                  <Input type="number" min={1} max={adversarialMode ? 10 : 5} value={smartCount}
-                    onChange={(e) => setSmartCount(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs" />
-                </div>
-                {!adversarialMode && (
-                  <div className="space-y-1.5">
-                    <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.targetDifficulty')}</Label>
-                    <select value={smartDifficulty} onChange={(e) => setSmartDifficulty(e.target.value)}
-                      className="w-full bg-apple-gray-50 border-none h-10 rounded-xl px-3 text-xs font-bold">
-                      <option value="entry">{t('pipeline.difficultyEntry')}</option><option value="easy">{t('pipeline.difficultyEasy')}</option>
-                      <option value="normal">{t('pipeline.difficultyNormal')}</option><option value="hard">{t('pipeline.difficultyHard')}</option>
-                      <option value="mixed">{t('pipeline.difficultyMixed')}</option>
-                    </select>
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.questionType')}</Label>
-                  <div className="flex flex-wrap gap-1">
-                    {['objective', 'subjective:noun', 'subjective:short', 'subjective:essay', 'subjective:calculate'].map((type) => (
-                      <Badge key={type} onClick={() => setSmartTypes((prev) => prev.includes(type) ? prev.filter((x) => x !== type) : [...prev, type])}
-                        className={`cursor-pointer text-[10px] font-bold rounded-lg border ${smartTypes.includes(type) ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                        {qTypeBadgeLabel(type)}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.targetDifficulty')}</Label>
+                <select value={smartDifficulty} onChange={(e) => setSmartDifficulty(e.target.value)}
+                  className="w-full bg-apple-gray-50 border-none h-10 rounded-xl px-3 text-xs font-bold">
+                  <option value="entry">{t('pipeline.difficultyEntry')}</option>
+                  <option value="easy">{t('pipeline.difficultyEasy')}</option>
+                  <option value="normal">{t('pipeline.difficultyNormal')}</option>
+                  <option value="hard">{t('pipeline.difficultyHard')}</option>
+                  <option value="extreme">{t('pipeline.difficultyExtreme')}</option>
+                </select>
+                <p className="text-[10px] text-slate-400 leading-relaxed">{diffHint(smartDifficulty)}</p>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.selectKp')}</Label>
-                {loadingKps ? (
-                  <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" /></div>
-                ) : (
-                  <ScrollArea className="h-64 rounded-xl border bg-apple-gray-50 p-2">
-                    {knowledgePoints.map((kp) => (
-                      <label key={kp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white cursor-pointer">
-                        <Checkbox checked={smartKpIds.includes(kp.id)}
-                          onCheckedChange={(c) => setSmartKpIds((prev) => c ? [...prev, kp.id] : prev.filter((id) => id !== kp.id))} />
-                        <span className="text-xs font-bold">{kp.name}</span>
-                        {kp.parent_name && <span className="text-[9px] text-muted-foreground ml-auto truncate max-w-[120px]">{kp.parent_name}</span>}
-                      </label>
-                    ))}
-                    {knowledgePoints.length === 0 && !loadingKps && (
-                      <div className="py-8 text-center text-[11px] font-bold text-muted-foreground">{t('pipeline.noLeafKp')}</div>
-                    )}
-                  </ScrollArea>
-                )}
-                <p className="text-[10px] text-muted-foreground mt-1">{t('pipeline.selectedKps', { count: smartKpIds.length })}</p>
+                <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.questionType')}</Label>
+                <div className="flex flex-wrap gap-1">
+                  {['objective', 'subjective:noun', 'subjective:short', 'subjective:essay', 'subjective:calculate'].map((type) => (
+                    <Badge key={type} onClick={() => setSmartTypes((prev) => prev.includes(type) ? prev.filter((x) => x !== type) : [...prev, type])}
+                      className={`cursor-pointer text-[10px] font-bold rounded-lg border ${smartTypes.includes(type) ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                      {qTypeBadgeLabel(type)}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setSmartDialogOpen(false)} className="rounded-xl h-11 px-6 text-xs font-bold">{t('commonActions.cancel')}</Button>
-                <Button
-                  onClick={adversarialMode ? handleSubmitAdversarial : handleSubmitSmartGenerate}
-                  disabled={smartKpIds.length === 0 || smartSubmitting}
-                  className={adversarialMode
-                    ? 'rounded-xl bg-rose-600 hover:bg-rose-700 text-white h-11 px-6 text-xs font-bold'
-                    : 'rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 px-6 text-xs font-bold'}
-                >
-                  {smartSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : adversarialMode ? <Swords className="h-4 w-4 mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
-                  {smartSubmitting ? t('pipeline.submitting') : adversarialMode ? t('pipeline.submitToQueue') : t('pipeline.generateAndPreview')}
-                </Button>
-              </DialogFooter>
             </div>
-          )}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.selectKp')}</Label>
+              {loadingKps ? (
+                <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" /></div>
+              ) : (
+                <ScrollArea className="h-64 rounded-xl border bg-apple-gray-50 p-2">
+                  {knowledgePoints.map((kp) => (
+                    <label key={kp.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white cursor-pointer">
+                      <Checkbox checked={smartKpIds.includes(kp.id)}
+                        onCheckedChange={(c) => setSmartKpIds((prev) => c ? [...prev, kp.id] : prev.filter((id) => id !== kp.id))} />
+                      <span className="text-xs font-bold">{kp.name}</span>
+                      {kp.parent_name && <span className="text-[9px] text-muted-foreground ml-auto truncate max-w-[120px]">{kp.parent_name}</span>}
+                    </label>
+                  ))}
+                  {knowledgePoints.length === 0 && !loadingKps && (
+                    <div className="py-8 text-center text-[11px] font-bold text-muted-foreground">{t('pipeline.noLeafKp')}</div>
+                  )}
+                </ScrollArea>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-1">{t('pipeline.selectedKps', { count: smartKpIds.length })}</p>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSmartDialogOpen(false)} className="rounded-xl h-11 px-6 text-xs font-bold">{t('commonActions.cancel')}</Button>
+              <Button
+                onClick={handleSubmitGenerate}
+                disabled={smartKpIds.length === 0 || smartSubmitting}
+                className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white h-11 px-6 text-xs font-bold"
+              >
+                {smartSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Swords className="h-4 w-4 mr-2" />}
+                {smartSubmitting ? t('pipeline.submitting') : t('pipeline.submitToQueue')}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -747,11 +663,39 @@ export const PipelinePanel: React.FC = () => {
               );
             })()}
 
+            {/* ── 批次多样性报告 ── */}
+            {(() => {
+              const stages = (previewTask?.result as any)?.stages || [];
+              const classifyStage = stages.find((s: any) => s.stage === 'classify_done');
+              const dr = classifyStage?.diversity_report;
+              if (!dr) return null;
+              return (
+                <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-200 space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">{t('pipeline.diversityReport')}</p>
+                  {dr.overall_assessment && (
+                    <p className="text-[11px] text-slate-700 leading-relaxed">{dr.overall_assessment}</p>
+                  )}
+                  {(dr.similar_pairs || []).length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-bold text-amber-600">{t('pipeline.similarPairs')} ({(dr.similar_pairs || []).length})</p>
+                      {(dr.similar_pairs || []).map((sp: any, si: number) => (
+                        <p key={si} className="text-[10px] text-slate-500">
+                          #{sp.q1_index + 1} ↔ #{sp.q2_index + 1}: {sp.reason}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* ── 题目列表 ── */}
             {((previewTask?.result as any)?.questions || []).map((q: any, i: number) => (
               <div key={i} className="p-4 bg-white rounded-2xl border space-y-3">
                 {/* 题头 */}
                 <div className="flex items-center gap-2">
+                  <Checkbox checked={reviewSelectedIds.has(i)}
+                    onCheckedChange={(c) => setReviewSelectedIds(prev => { const next = new Set(prev); c ? next.add(i) : next.delete(i); return next; })} />
                   <Badge className="text-[9px] font-bold rounded-lg">{i + 1}</Badge>
                   <Badge className="bg-slate-100 text-slate-700 border-none text-[9px] font-bold rounded-lg">{getTypeLabel(q)}</Badge>
                   <Badge className={cn(
@@ -768,12 +712,47 @@ export const PipelinePanel: React.FC = () => {
                     </Badge>
                   )}
                   {q.quality_warning && <Badge className="bg-rose-100 text-rose-700 text-[9px] font-bold rounded-lg">{t('pipeline.lowQualityWarning')}</Badge>}
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    setEditingQuestionIdx(editingQuestionIdx === i ? null : i);
+                  }} className="ml-auto h-6 rounded-lg text-[9px] font-bold px-2">
+                    {editingQuestionIdx === i ? t('pipeline.doneEditing') : t('pipeline.edit')}
+                  </Button>
                 </div>
 
                 {/* A: Author 出题内容 */}
                 <div className="pl-2 border-l-2 border-indigo-200 space-y-1.5">
                   <p className="text-[9px] font-bold uppercase text-indigo-500">{t('pipeline.authorLabel')}</p>
-                  <p className="text-xs font-bold">{q.question}</p>
+                  {editingQuestionIdx === i ? (
+                    <div className="space-y-2">
+                      <textarea value={editedQuestions[i]?.question ?? q.question}
+                        onChange={(e) => setEditedQuestions(prev => ({...prev, [i]: {...(prev[i] || q), question: e.target.value}}))}
+                        className="w-full bg-slate-50 border rounded-lg p-2 text-xs font-bold min-h-[60px]" />
+                      {q.options && typeof q.options === 'object' && (
+                        <div className="grid grid-cols-2 gap-1">
+                          {Object.entries(editedQuestions[i]?.options ?? q.options as Record<string, string>).map(([k, v]) => (
+                            <div key={k} className="flex items-center gap-1">
+                              <span className="text-[10px] font-bold">{k}.</span>
+                              <input value={v as string}
+                                onChange={(e) => {
+                                  const newOpts = {...(editedQuestions[i]?.options ?? q.options as Record<string, string>), [k]: e.target.value};
+                                  setEditedQuestions(prev => ({...prev, [i]: {...(prev[i] || q), options: newOpts}}));
+                                }}
+                                className="flex-1 bg-slate-50 border rounded px-2 py-1 text-[10px]" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-emerald-600 font-bold shrink-0">{t('pipeline.answer')}:</span>
+                        <input value={editedQuestions[i]?.answer ?? q.answer ?? ''}
+                          onChange={(e) => setEditedQuestions(prev => ({...prev, [i]: {...(prev[i] || q), answer: e.target.value}}))}
+                          className="flex-1 bg-slate-50 border rounded px-2 py-1 text-[10px] font-bold" />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs font-bold">{editedQuestions[i]?.question ?? q.question}</p>
+                  )}
+                  {editingQuestionIdx !== i && (<>
                   {q.options && typeof q.options === 'object' && Object.keys(q.options).length > 0 && (
                     <div className="grid grid-cols-2 gap-1">
                       {Object.entries(q.options as Record<string, string>).map(([k, v]) => (
@@ -785,6 +764,7 @@ export const PipelinePanel: React.FC = () => {
                     {q.answer && <span className="text-emerald-600 font-bold">{t('pipeline.answer')}: {q.answer}</span>}
                     {q.kp_name && <span className="text-slate-400">{t('pipeline.knowledgePoint')}: {q.kp_name}</span>}
                   </div>
+                  </>)}
                 </div>
 
                 {/* R: Reviewer 审查结果 */}
@@ -807,16 +787,65 @@ export const PipelinePanel: React.FC = () => {
                   </div>
                 )}
 
-                {/* C: Classifier 分类 */}
-                {(q.knowledge_tags?.length > 0 || q.question_type) && (
+                {/* C: Classifier 审计 */}
+                {(q.knowledge_tags?.length > 0 || q.detected_difficulty || q.answer_correct !== undefined || q.bloom_level) && (
                   <div className="pl-2 border-l-2 border-emerald-200 space-y-1.5">
                     <p className="text-[9px] font-bold uppercase text-emerald-500">{t('pipeline.classifierLabel')}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {q.question_type && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">{getTypeLabel(q)}</span>}
-                      {(q.knowledge_tags || []).map((tag: string) => (
-                        <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{tag}</span>
-                      ))}
+                    {/* 答案正确性 */}
+                    {q.answer_correct !== undefined && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {q.answer_correct ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded-lg border-none">{t('pipeline.answerCorrect')}</Badge>
+                        ) : (
+                          <Badge className="bg-red-100 text-red-700 text-[9px] font-bold rounded-lg border-none">{t('pipeline.answerIncorrect')}</Badge>
+                        )}
+                        {!q.answer_correct && q.answer_accuracy_note && (
+                          <span className="text-[10px] text-red-600">{q.answer_accuracy_note}</span>
+                        )}
+                      </div>
+                    )}
+                    {q.answer_accuracy_note && q.answer_correct === false && (
+                      <p className="text-[10px] text-red-600 bg-red-50 p-2 rounded-lg leading-relaxed">{q.answer_accuracy_note}</p>
+                    )}
+                    {/* Bloom 认知层级 + 难度审计 */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {q.bloom_level && (
+                        <>
+                          <span className="text-[9px] text-slate-400">{t('pipeline.bloomLevel')}:</span>
+                          <Badge className="bg-violet-100 text-violet-700 text-[9px] font-bold rounded-lg border-none">{bloomLabel(q.bloom_level)}</Badge>
+                        </>
+                      )}
+                      {q.detected_difficulty && (
+                        <>
+                          <span className="text-[9px] text-slate-400 ml-1">{t('pipeline.detectedDifficulty')}:</span>
+                          <Badge className={cn(
+                            'text-[9px] font-bold rounded-lg border-none',
+                            q.detected_difficulty === 'entry' ? 'bg-emerald-100 text-emerald-700' :
+                            q.detected_difficulty === 'easy' ? 'bg-sky-100 text-sky-700' :
+                            q.detected_difficulty === 'normal' ? 'bg-indigo-100 text-indigo-700' :
+                            q.detected_difficulty === 'hard' ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'
+                          )}>{diffLabel(q.detected_difficulty)}</Badge>
+                          {q.difficulty_match === false ? (
+                            <Badge className="bg-red-100 text-red-700 text-[9px] font-bold rounded-lg border-none">{t('pipeline.difficultyMismatch')}</Badge>
+                          ) : (
+                            <Badge className="bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded-lg border-none">{t('pipeline.difficultyMatch')}</Badge>
+                          )}
+                        </>
+                      )}
                     </div>
+                    {q.difficulty_mismatch_reason && (
+                      <p className="text-[10px] text-red-600 bg-red-50 p-2 rounded-lg leading-relaxed">{q.difficulty_mismatch_reason}</p>
+                    )}
+                    {/* 知识标签 */}
+                    {(q.knowledge_tags || []).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="text-[9px] text-slate-400">{t('pipeline.knowledgeTags')}:</span>
+                        {(q.knowledge_tags || []).map((tag: string) => (
+                          <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{tag}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -827,8 +856,13 @@ export const PipelinePanel: React.FC = () => {
             <Button onClick={() => { handleReviewAction(previewTask!.id, 'reject'); setPreviewTask(null); }} disabled={!previewTask || reviewingMap[previewTask.id]} variant="outline" className="rounded-xl border-red-200 text-red-700 text-xs font-bold">
               <XCircle className="h-3.5 w-3.5 mr-1" />{t('pipeline.rejectAll')}
             </Button>
-            <Button onClick={() => { handleReviewAction(previewTask!.id, 'approve'); setPreviewTask(null); }} disabled={!previewTask || reviewingMap[previewTask.id]} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />{t('pipeline.approveImport')}
+            <Button onClick={() => {
+              const indices = Array.from(reviewSelectedIds);
+              const edits = Object.keys(editedQuestions).length > 0 ? editedQuestions : undefined;
+              handleReviewAction(previewTask!.id, 'approve', indices.length > 0 ? indices : undefined, edits);
+              setPreviewTask(null); setReviewSelectedIds(new Set()); setEditedQuestions({});
+            }} disabled={!previewTask || reviewingMap[previewTask.id]} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />{reviewSelectedIds.size > 0 ? t('pipeline.importSelected', { count: reviewSelectedIds.size }) : t('pipeline.approveImport')}
             </Button>
           </DialogFooter>
         </DialogContent>

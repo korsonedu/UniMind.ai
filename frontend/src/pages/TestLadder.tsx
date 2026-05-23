@@ -302,7 +302,7 @@ export const TestLadder: React.FC = () => {
               </PopoverTrigger>
               <PopoverContent side="bottom" align="end" className="w-64 rounded-2xl p-4 bg-card border-border">
                 <div className="space-y-3 text-left">
-                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t('reminder.title')}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{t('reminder.title')}</p>
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-bold">{t('reminder.questionType')}</Label>
                     <Switch
@@ -466,7 +466,7 @@ export const TestLadder: React.FC = () => {
                     </PopoverTrigger>
                     <PopoverContent side="bottom" align="start" className="w-56 rounded-2xl p-3 bg-card border-border">
                       <div className="space-y-1">
-                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-2 pb-1 border-b border-border">{t('subjectFilter')}</p>
+                        <p className="text-xs font-semibold text-muted-foreground mb-2 pb-1 border-b border-border">{t('subjectFilter')}</p>
                         {subjectList.length === 0 ? (<p className="text-xs text-muted-foreground py-2">{t('loading')}</p>) : (
                           subjectList.map((subject) => (
                             <div key={subject.id} className="flex items-center gap-2 py-1.5 px-1 rounded-lg hover:bg-muted/60 transition-colors">

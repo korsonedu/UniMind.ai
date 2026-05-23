@@ -2,6 +2,7 @@ import logging
 from core.prompt_manager import PromptManager
 from ai_service import AIService
 from ai_engine.service import AIEngine
+from ai_engine.tools import RESUME_TUNE_SCHEMA, INTERVIEW_RADAR_SCHEMA
 from quizzes.models import KnowledgePoint
 import json
 
@@ -79,24 +80,30 @@ class InterviewAIService:
     def tune_resume(cls, resume_text: str):
         """AI 简历调优：诊断、润色并预测陷阱题"""
         default_prompt = (
-            "你是一个资深的HR及面试官。请评估考生的简历，从排版、STAR法则、专业素养给出评分和润色后的内容。\n"
-            "返回严格的 JSON 格式: \n"
-            "{\n"
-            '  "score": 85,\n'
-            '  "diagnostics": "指出简历的致命问题...",\n'
-            '  "optimized_content": {"experience": "润色后的经历描述..."},\n'
-            '  "predicted_questions": ["深挖问题1", "深挖问题2"]\n'
-            "}"
+            "你是一个资深的HR及面试官。请评估考生的简历，从排版、STAR法则、专业素养给出评分和润色后的内容。"
         )
         prompt_config = PromptManager.get_prompt_config("AI_RESUME_TUNER", default_prompt)
 
+        result = AIService.structured_output(
+            system_prompt=prompt_config.content,
+            user_prompt=f"原版简历内容：\n{resume_text}",
+            schema=RESUME_TUNE_SCHEMA,
+            tool_name="submit_resume_tune",
+            tool_description="提交简历评估和润色结果",
+            operation="interviews.tune_resume",
+            temperature=prompt_config.temperature,
+        )
+
+        if result is not None:
+            return result
+
+        # fallback to old extract_json path
         response = AIService.simple_chat_text(
             system_prompt=prompt_config.content,
             user_prompt=f"原版简历内容：\n{resume_text}",
             operation="interviews.tune_resume",
             temperature=prompt_config.temperature,
         )
-
         return AIService.extract_json(response)
 
     @classmethod
@@ -147,30 +154,32 @@ class InterviewAIService:
     def generate_post_interview_radar(cls, chat_history: list):
         """面试结束后的五维雷达图和深度复盘"""
         default_prompt = (
-            "你是一个资深的高校复试分析专家。请根据这轮面试的完整对话记录，对考生进行客观、深度的五维复盘打分。\n"
-            "请严格返回如下 JSON 格式，不要包含任何其他说明文字：\n"
-            "{\n"
-            '  "radar_scores": {\n'
-            '    "theory": 80,\n'
-            '    "logic": 70,\n'
-            '    "stress": 85,\n'
-            '    "fluency": 75,\n'
-            '    "english": 60\n'
-            "  },\n"
-            '  "overall_feedback": "对考生的整体评价，指出最大的亮点和致命弱点，字数150字左右。"\n'
-            "}"
+            "你是一个资深的高校复试分析专家。请根据这轮面试的完整对话记录，对考生进行客观、深度的五维复盘打分。"
         )
         prompt_config = PromptManager.get_prompt_config("AI_INTERVIEW_ANALYZER", default_prompt)
 
         history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in chat_history])
 
+        result = AIService.structured_output(
+            system_prompt=prompt_config.content,
+            user_prompt=f"面试记录：\n{history_text}",
+            schema=INTERVIEW_RADAR_SCHEMA,
+            tool_name="submit_interview_radar",
+            tool_description="提交面试五维评估结果",
+            operation="interviews.radar_analysis",
+            temperature=prompt_config.temperature,
+        )
+
+        if result is not None:
+            return result
+
+        # fallback to old extract_json path
         response = AIService.simple_chat_text(
             system_prompt=prompt_config.content,
             user_prompt=f"面试记录：\n{history_text}",
             operation="interviews.radar_analysis",
             temperature=prompt_config.temperature,
         )
-
         return AIService.extract_json(response)
 
     @classmethod

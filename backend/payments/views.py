@@ -1,3 +1,6 @@
+"""
+Payment views — 当前使用 stub 网关，接入真实支付平台时换 import 即可。
+"""
 import logging
 
 from rest_framework import status
@@ -8,15 +11,17 @@ from rest_framework.views import APIView
 from payments.models import Order, Invoice
 from payments.serializers import CreateOrderSerializer, OrderSerializer, InvoiceSerializer
 from payments.services.base import create_order, confirm_order
-from payments.services.stripe_gateway import create_payment_intent, verify_webhook, process_webhook_event
-from payments.services.wechat_gateway import create_native_order, verify_notify as wechat_verify, process_notify as wechat_process
-from payments.services.alipay_gateway import create_page_pay, verify_notify as alipay_verify, process_notify as alipay_process
+from payments.services.stub_gateway import (
+    create_checkout_session,
+    verify_webhook,
+    process_webhook_event,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class CreateOrderView(APIView):
-    """Create a payment order and return gateway-specific payment params."""
+class CreateCheckoutSessionView(APIView):
+    """创建订单 → 返回模拟收银台 URL。"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -25,40 +30,32 @@ class CreateOrderView(APIView):
 
         plan = ser.validated_data['plan']
         billing_cycle = ser.validated_data['billing_cycle']
-        gateway = ser.validated_data['gateway']
+        gateway = ser.validated_data.get('gateway', 'stub')
 
-        user = request.user
-        inst = user.institution
-
-        order = create_order(user=user, plan=plan, billing_cycle=billing_cycle, gateway=gateway, institution=inst)
+        order = create_order(
+            user=request.user,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            gateway=gateway,
+            institution=request.user.institution,
+        )
 
         try:
-            if gateway == 'stripe':
-                payment_data = create_payment_intent(order)
-            elif gateway == 'wechat':
-                payment_data = create_native_order(order)
-            elif gateway == 'alipay':
-                payment_data = create_page_pay(order)
-            else:
-                return Response({'error': '不支持的支付方式'}, status=400)
-        except Exception as e:
-            logger.exception("Failed to create %s order %s", gateway, order.id)
+            data = create_checkout_session(order)
+        except Exception:
+            logger.exception('Stub session create failed for order %s', order.id)
             order.status = 'cancelled'
             order.save(update_fields=['status'])
-            return Response({'error': f'创建支付订单失败: {str(e)}'}, status=500)
+            return Response({'error': '创建支付会话失败'}, status=500)
 
         return Response({
             'order_id': order.id,
-            'gateway': gateway,
-            'amount_cents': order.amount_cents,
-            'plan': order.plan,
-            'billing_cycle': order.billing_cycle,
-            **payment_data,
+            'checkout_url': data['checkout_url'],
         }, status=status.HTTP_201_CREATED)
 
 
 class OrderStatusView(APIView):
-    """Query order payment status."""
+    """查询订单支付状态。"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request, order_id):
@@ -70,7 +67,7 @@ class OrderStatusView(APIView):
 
 
 class OrderHistoryView(APIView):
-    """List user's past payment orders."""
+    """用户历史订单列表。"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -79,7 +76,7 @@ class OrderHistoryView(APIView):
 
 
 class InvoiceListView(APIView):
-    """List user's invoices."""
+    """用户发票列表。"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -88,71 +85,49 @@ class InvoiceListView(APIView):
         return Response(InvoiceSerializer(invoices, many=True).data)
 
 
-# ── Webhook handlers (no auth — signature verified internally) ──
+class SimulatePaymentView(APIView):
+    """
+    [开发专用] 模拟支付成功 — 直接确认订单，跳过真实支付。
+    生产环境应移除此端点。
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, order_id):
+        try:
+            order = Order.objects.get(id=order_id, user=request.user)
+        except Order.DoesNotExist:
+            return Response({'error': '订单不存在'}, status=404)
+
+        if order.status == 'paid':
+            return Response({'status': 'already_paid', 'message': '该订单已支付'})
+
+        import uuid
+        txn_id = f'stub_{uuid.uuid4().hex[:12]}'
+        confirm_order(order, txn_id, {'source': 'simulate'}, order.amount_cents)
+        return Response({
+            'status': 'paid',
+            'order_id': order.id,
+            'gateway_txn_id': txn_id,
+        })
 
 
-class StripeWebhookView(APIView):
+# ── Webhook (no auth — 真实支付时校验签名) ──
+
+class WebhookView(APIView):
+    """支付网关 webhook 接收端。当前 stub 实现永远返回 ok。"""
     permission_classes = []
 
     def post(self, request):
-        sig = request.headers.get('stripe-signature', '')
         try:
-            event = verify_webhook(request.body, sig)
+            event = verify_webhook(request.headers, request.body)
             result = process_webhook_event(event)
             if not result:
                 return Response({'status': 'ignored'})
             order = Order.objects.get(id=result['order_id'])
             confirm_order(order, result['gateway_txn_id'], result['raw'], result.get('amount_cents'))
             return Response({'status': 'ok'})
-        except Exception as e:
-            logger.exception("Stripe webhook error")
-            return Response({'error': str(e)}, status=400)
-
-
-class WechatNotifyView(APIView):
-    permission_classes = []
-
-    def post(self, request):
-        try:
-            data = wechat_verify(request.headers, request.body)
-            result = wechat_process(data)
-            if not result:
-                return Response({'code': 'FAIL', 'message': 'ignored'})
-            order = Order.objects.get(id=result['order_id'])
-            confirm_order(order, result['gateway_txn_id'], result['raw'], result.get('amount_cents'))
-            return Response({'code': 'SUCCESS'})
         except Order.DoesNotExist:
-            return Response({'code': 'FAIL', 'message': 'order not found'})
-        except Exception as e:
-            logger.exception("WeChat notify error")
-            return Response({'code': 'FAIL', 'message': str(e)})
-
-
-class AlipayNotifyView(APIView):
-    permission_classes = []
-
-    def post(self, request):
-        try:
-            data = dict(request.data)
-            signature = data.pop('sign', '')
-            if not alipay_verify(data, signature):
-                return Response('fail')
-            result = alipay_process(data)
-            if not result:
-                return Response('success')  # ack non-terminal states
-            order = Order.objects.get(id=result['order_id'])
-            confirm_order(order, result['gateway_txn_id'], result['raw'], result.get('amount_cents'))
-            return Response('success')
-        except Order.DoesNotExist:
-            return Response('fail')
-        except Exception as e:
-            logger.exception("Alipay notify error")
-            return Response('fail')
-
-
-class AlipayReturnView(APIView):
-    """Alipay redirects user here after payment. Frontend handles the actual UX."""
-    permission_classes = []
-
-    def get(self, request):
-        return Response({'status': 'redirect', 'message': '请在前端确认支付结果'})
+            return Response({'status': 'order not found'}, status=404)
+        except Exception:
+            logger.exception('Webhook error')
+            return Response({'error': 'webhook processing failed'}, status=400)

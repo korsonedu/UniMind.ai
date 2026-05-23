@@ -21,7 +21,7 @@ class Order(models.Model):
     billing_cycle = models.CharField(max_length=10, choices=BILLING_CHOICES)
     amount_cents = models.IntegerField(verbose_name='金额（分）')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
-    gateway = models.CharField(max_length=20, choices=[('stripe', 'Stripe'), ('wechat', 'WeChat Pay'), ('alipay', 'Alipay')])
+    gateway = models.CharField(max_length=20, choices=[('stub', 'Stub (开发)'), ('stripe', 'Stripe'), ('wechat', 'WeChat Pay'), ('alipay', 'Alipay')])
     gateway_order_id = models.CharField(max_length=128, blank=True, unique=True, null=True, verbose_name='网关订单号')
     paid_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)

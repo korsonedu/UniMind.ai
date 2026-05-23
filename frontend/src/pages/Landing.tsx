@@ -1,13 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Card } from '@/components/ui/card';
+import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  ArrowRight, Check, ChevronDown, ChevronUp,
-  BrainCircuit, BarChart3,
-  Globe, Clock, TrendingUp,
-  Menu, X, Gauge, Cpu, Image
-} from 'lucide-react';
+import { ArrowRight, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
@@ -16,63 +9,69 @@ import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/versi
 import { useTranslation } from 'react-i18next';
 
 /* ────────────────────────────────────────────
-   Screenshot component
+   Scroll reveal
    ──────────────────────────────────────────── */
 
-const Screenshot: React.FC<{
-  src: string;
-  alt: string;
-  className?: string;
-}> = ({ src, alt, className }) => {
-  if (!src) {
-    return (
-      <div className={cn(
-        'flex flex-col items-center justify-center gap-3 rounded-2xl border border-border min-h-[200px]',
-        className
-      )}>
-        <Image className="h-8 w-8 text-unimind-text-quaternary" />
-        <span className="text-xs font-medium text-unimind-text-tertiary max-w-[200px] text-center leading-relaxed">
-          {alt}
-        </span>
-      </div>
+const useScrollReveal = () => {
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) entry.target.classList.add('visible');
+        });
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -60px 0px' }
     );
-  }
-
-  return <img src={src} alt={alt} className="w-full" />;
+    const timer = setTimeout(() => {
+      document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .reveal-scale').forEach((el) => observer.observe(el));
+    }, 100);
+    return () => { clearTimeout(timer); observer.disconnect(); };
+  }, []);
 };
 
 /* ────────────────────────────────────────────
-   Shared — Section Header
+   Mouse parallax hook
    ──────────────────────────────────────────── */
 
-const SectionHeader = ({
-  label,
-  title,
-  subtitle,
-  centered = true,
-}: {
-  label: string;
-  title: string;
-  subtitle?: string;
-  centered?: boolean;
-}) => (
-  <div className={cn('mb-16', centered && 'text-center')}>
-    <p className="text-[11px] font-extrabold text-primary uppercase tracking-[0.25em] mb-4">
-      {label}
-    </p>
-    <h2 className="text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground leading-[1.12]">
-      {title}
-    </h2>
-    {subtitle && (
-      <p className="mt-5 text-[15px] md:text-base text-muted-foreground max-w-2xl mx-auto font-medium leading-relaxed">
-        {subtitle}
-      </p>
-    )}
-  </div>
-);
+const useMouseParallax = (ref: React.RefObject<HTMLElement | null>, speed: number = 0.03) => {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onMove = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      el.style.transform = `translate(${x * speed * 100}px, ${y * speed * 100}px)`;
+    };
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [ref, speed]);
+};
 
 /* ────────────────────────────────────────────
-   Navigation
+   Animated counter
+   ──────────────────────────────────────────── */
+
+const useCountUp = (target: number, duration: number, shouldStart: boolean) => {
+  const [count, setCount] = useState(0);
+  const raf = useRef<number>(0);
+  useEffect(() => {
+    if (!shouldStart) return;
+    let start = 0;
+    const step = (timestamp: number) => {
+      if (!start) start = timestamp;
+      const progress = Math.min((timestamp - start) / duration, 1);
+      setCount(Math.floor((1 - Math.pow(1 - progress, 3)) * target));
+      if (progress < 1) raf.current = requestAnimationFrame(step);
+    };
+    raf.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf.current);
+  }, [target, duration, shouldStart]);
+  return count;
+};
+
+/* ────────────────────────────────────────────
+   Nav — minimal
    ──────────────────────────────────────────── */
 
 const Nav: React.FC<{ token: string | null }> = ({ token }) => {
@@ -82,106 +81,96 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
   const scrollTo = (href: string) => {
     setOpen(false);
-    document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' });
+    if (href.startsWith('/')) {
+      navigate(href);
+    } else {
+      document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const navItems = [
     { label: t('nav.features'), href: '#features' },
     { label: t('nav.subjects'), href: '#subjects' },
-    { label: t('nav.pricing'), href: '#pricing' },
-    { label: t('nav.faq'), href: '#faq' },
+    { label: t('nav.pricing'), href: '/pricing' },
   ];
 
   return (
     <nav className={cn(
-      'fixed top-0 left-0 right-0 z-[100] transition-all duration-300',
-      scrolled
-        ? 'bg-white/80 backdrop-blur-xl border-b border-border/60'
-        : 'bg-transparent'
+      'fixed top-0 left-0 right-0 z-[100] transition-all duration-500',
+      scrolled ? 'bg-[#0a0a0d]/80 backdrop-blur-xl border-b border-white/[0.06]' : 'bg-transparent'
     )}>
       <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-        <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="flex items-center gap-2"
-        >
+        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2 shrink-0">
           <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
-          <span className="font-extrabold text-base text-foreground tracking-tight">UniMind</span>
-          <span className="text-[11px] font-bold text-unimind-text-tertiary hidden sm:inline">.ai</span>
+          <span className="font-bold text-base tracking-tight text-white">UniMind</span>
         </button>
 
-        <div className="hidden md:flex items-center gap-7">
+        {/* Desktop nav links */}
+        <div className="hidden md:flex items-center gap-8">
           {navItems.map(item => (
             <button
               key={item.href}
               onClick={() => scrollTo(item.href)}
-              className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+              className="text-[13px] font-medium text-white/50 hover:text-white transition-colors"
             >
               {item.label}
             </button>
           ))}
         </div>
 
-        <div className="hidden md:flex items-center gap-3">
+        <div className="flex items-center gap-3">
           <LanguageSwitcher variant="full" />
           {token ? (
-            <Button variant="apple" size="sm" onClick={() => navigate('/courses')}>{t('nav.enterConsole')}</Button>
+            <Button
+              size="sm"
+              className="text-white border-white/20 bg-transparent hover:bg-white/10"
+              onClick={() => navigate('/courses')}
+            >
+              {t('nav.enterConsole')}
+            </Button>
           ) : (
             <>
               <button
-                className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="text-[13px] font-medium text-white/60 hover:text-white transition-colors hidden sm:block"
                 onClick={() => navigate('/login')}
               >
                 {t('nav.login')}
               </button>
-              <Button variant="apple" size="sm" onClick={() => navigate('/register')}>
+              <Button
+                size="sm"
+                className="text-white border-0 font-semibold"
+                style={{ background: '#5b5fef' }}
+                onClick={() => navigate('/register')}
+              >
                 {t('nav.freeTrial')}
               </Button>
             </>
           )}
+          <button className="md:hidden p-1 text-white/60 hover:text-white" onClick={() => setOpen(!open)}>
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
-
-        <button className="md:hidden p-2 text-foreground" onClick={() => setOpen(!open)}>
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
       </div>
 
+      {/* Mobile menu */}
       {open && (
-        <div className="md:hidden bg-white border-b border-border/60 px-6 pb-6 space-y-3">
+        <div className="md:hidden bg-[#0a0a0d]/95 backdrop-blur-xl border-b border-white/[0.06] px-6 pb-5 space-y-1">
           {navItems.map(item => (
             <button
               key={item.href}
               onClick={() => scrollTo(item.href)}
-              className="block w-full text-left py-3 text-base font-medium text-muted-foreground hover:text-foreground"
+              className="block w-full text-left py-3 text-base font-medium text-white/50 hover:text-white transition-colors"
             >
               {item.label}
             </button>
           ))}
-          <div className="flex justify-center">
-            <LanguageSwitcher variant="full" />
-          </div>
-          <div className="pt-3 border-t border-border/60 flex gap-3">
-            {token ? (
-              <Button className="w-full" variant="apple" onClick={() => { setOpen(false); navigate('/courses'); }}>
-                {t('nav.enterConsole')}
-              </Button>
-            ) : (
-              <>
-                <Button className="flex-1" variant="outline" onClick={() => { setOpen(false); navigate('/login'); }}>
-                  {t('nav.login')}
-                </Button>
-                <Button className="flex-1" variant="apple" onClick={() => { setOpen(false); navigate('/register'); }}>
-                  {t('nav.freeTrial')}
-                </Button>
-              </>
-            )}
-          </div>
         </div>
       )}
     </nav>
@@ -189,70 +178,59 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
 };
 
 /* ────────────────────────────────────────────
-   Hero
+   Hero — one line, one image, one CTA
    ──────────────────────────────────────────── */
 
 const Hero: React.FC = () => {
   const { t } = useTranslation('landing');
   const navigate = useNavigate();
+  const imgRef = useRef<HTMLDivElement>(null);
+  useMouseParallax(imgRef, 0.02);
 
   return (
-    <section className="min-h-[95vh] flex flex-col items-center justify-center pt-20 pb-12 px-6">
-      <div className="max-w-4xl mx-auto w-full text-center space-y-7">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/5 border border-primary/10">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
-          </span>
-          <span className="text-[11px] font-extrabold text-primary uppercase tracking-[0.15em]">
-            {t('hero.badge')}
-          </span>
+    <section className="min-h-screen flex flex-col items-center justify-center pt-20 pb-12 px-6 relative overflow-hidden">
+      {/* Ambient orbs */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/4 -left-32 w-[500px] h-[500px] rounded-full blur-[120px] opacity-[0.07]" style={{ background: '#5b5fef' }} />
+        <div className="absolute bottom-1/4 -right-32 w-[400px] h-[400px] rounded-full blur-[100px] opacity-[0.05]" style={{ background: '#38bdf8' }} />
+      </div>
+
+      <div className="max-w-4xl mx-auto w-full text-center relative z-10 space-y-8">
+        <div className="reveal space-y-5">
+          <h1 className="text-[38px] md:text-[56px] lg:text-[72px] font-bold leading-[1.05] tracking-tight text-white max-w-3xl mx-auto">
+            {t('hero.titleLine1')}
+            <br />
+            <span style={{ background: 'linear-gradient(135deg, #818cf8, #5b5fef, #38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              {t('hero.titleLine2')}
+            </span>
+          </h1>
+          <p className="text-sm md:text-base text-white/40 max-w-lg mx-auto leading-relaxed">
+            {t('hero.subtitle')}
+          </p>
         </div>
 
-        <h1 className="text-4xl md:text-6xl lg:text-[68px] font-extrabold tracking-tightest text-foreground leading-[1.06]">
-          {t('hero.titleLine1')}
-          <br />
-          <span className="text-primary">
-            {t('hero.titleLine2')}
-          </span>
-        </h1>
-
-        <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto font-medium leading-relaxed">
-          {t('hero.subtitle')}
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+        <div className="flex items-center justify-center gap-3 pt-2 reveal reveal-delay-2">
           <Button
-            variant="apple"
             size="lg"
-            className="h-11 px-7 text-sm font-extrabold rounded-xl"
+            className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0"
+            style={{ background: '#5b5fef' }}
             onClick={() => navigate('/register')}
           >
             {t('hero.cta')}
             <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
-          <Button
-            variant="apple-outline"
-            size="lg"
-            className="h-11 px-7 text-sm font-bold rounded-xl"
-            onClick={() => document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' })}
-          >
-            {t('hero.secondary')}
-            <ChevronDown className="ml-1 h-4 w-4" />
-          </Button>
         </div>
 
-        <p className="text-xs text-unimind-text-quaternary font-medium">
-          {t('hero.footnote')}
-        </p>
-
-        {/* Hero dashboard preview */}
-        <div className="max-w-4xl mx-auto pt-10 reveal">
-          <Screenshot
-            src="/screenshots/hero-dashboard.png"
-            alt="Hero dashboard preview"
-            className="w-full"
-          />
+        {/* Product image with depth */}
+        <div ref={imgRef} className="max-w-4xl mx-auto pt-8 reveal reveal-delay-3" style={{ perspective: '1000px' }}>
+          <div className="relative glow-hover rounded-2xl" style={{ transform: 'rotateX(2deg)' }}>
+            <img
+              src="/screenshots/hero-dashboard.png"
+              alt="UniMind"
+              className="w-full rounded-2xl border border-white/[0.08]"
+              style={{ boxShadow: '0 40px 120px rgba(91,95,239,0.12), 0 8px 24px rgba(0,0,0,0.4)' }}
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -260,23 +238,39 @@ const Hero: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   Stats Bar
+   Stats — big numbers, no words
    ──────────────────────────────────────────── */
 
 const StatsBar: React.FC = () => {
   const { t } = useTranslation('landing');
   const stats = t('stats', { returnObjects: true }) as Array<{ label: string; value: string; desc: string }>;
-  const values = ['10+', '50,000+', '50+', '50×'];
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true); }, { threshold: 0.6 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const c0 = useCountUp(10, 1200, visible);
+  const c1 = useCountUp(50000, 1800, visible);
+  const c2 = useCountUp(50, 1200, visible);
+  const c3 = useCountUp(50, 1200, visible);
+  const displays = [`${c0}+`, `${(c1 / 1000).toFixed(0)}k+`, `${c2}+`, `${c3}×`];
 
   return (
-    <section className="py-14 border-y border-border/60 bg-white">
-      <div className="max-w-5xl mx-auto px-6 reveal">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
+    <section ref={ref} className="py-16 border-y border-white/[0.06]" style={{ background: 'rgba(255,255,255,0.01)' }}>
+      <div className="max-w-5xl mx-auto px-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-16">
           {stats.map((item, i) => (
             <div key={item.label} className="text-center space-y-1">
-              <p className="text-[10px] font-extrabold text-unimind-text-quaternary uppercase tracking-[0.25em]">{item.label}</p>
-              <p className="text-3xl md:text-4xl font-extrabold text-foreground tracking-tightest">{values[i]}</p>
-              <p className="text-[11px] font-medium text-unimind-text-tertiary">{item.desc}</p>
+              <p className="text-4xl md:text-5xl font-bold tracking-tight text-white" style={{ fontFamily: '"DM Mono", monospace' }}>
+                {displays[i]}
+              </p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-white/25">{item.label}</p>
             </div>
           ))}
         </div>
@@ -286,98 +280,48 @@ const StatsBar: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   Pain Points
+   Product Showcase — images with one-line labels
    ──────────────────────────────────────────── */
 
-const PAIN_ICONS = [Clock, BrainCircuit, TrendingUp];
-
-const PainPoints: React.FC = () => {
+const Showcase: React.FC = () => {
   const { t } = useTranslation('landing');
-  const items = t('pain.items', { returnObjects: true }) as Array<{ title: string; desc: string }>;
-
-  return (
-    <section className="py-24 md:py-32 bg-white">
-      <div className="max-w-6xl mx-auto px-6 reveal">
-        <SectionHeader
-          label={t('pain.label')}
-          title={t('pain.title')}
-          subtitle={t('pain.subtitle')}
-        />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {items.map((item, i) => (
-            <Card
-              key={item.title}
-              variant="apple"
-              className={cn('p-8 space-y-4 group cursor-default reveal', `reveal-delay-${i + 1}`)}
-            >
-              <div className="h-11 w-11 rounded-2xl bg-destructive/6 flex items-center justify-center">
-                {React.createElement(PAIN_ICONS[i], { className: 'h-5 w-5 text-destructive' })}
-              </div>
-              <h3 className="font-extrabold text-lg text-foreground tracking-tight">{item.title}</h3>
-              <p className="text-[14px] text-muted-foreground leading-relaxed font-medium">{item.desc}</p>
-            </Card>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-};
-
-/* ────────────────────────────────────────────
-   Features
-   ──────────────────────────────────────────── */
-
-const FEATURE_ICONS = [Cpu, Gauge, BarChart3];
-
-const Features: React.FC = () => {
-  const { t } = useTranslation('landing');
-  const items = t('features.items', { returnObjects: true }) as Array<{
-    title: string; subtitle: string; desc: string; points: string[]; screenshotAlt: string;
-  }>;
+  const items = t('features.items', { returnObjects: true }) as Array<{ title: string; subtitle: string; desc: string; points: string[]; screenshotAlt: string }>;
   const screenshots = ['/screenshots/ai-generate.png', '/screenshots/memorix-review.png', '/screenshots/analytics-dashboard.png'];
 
-  return (
-    <section id="features" className="py-24 md:py-32 bg-unimind-bg-secondary border-y border-border/60">
-      <div className="max-w-6xl mx-auto px-6 reveal">
-        <SectionHeader
-          label={t('features.label')}
-          title={t('features.title')}
-          subtitle={t('features.subtitle')}
-        />
+  const sectionRef = useRef<HTMLDivElement>(null);
+  useMouseParallax(sectionRef, 0.015);
 
-        <div className="space-y-20 md:space-y-28">
+  return (
+    <section id="features" ref={sectionRef} className="py-24 md:py-32 px-6 relative overflow-hidden">
+      {/* Subtle bg orb */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[150px] opacity-[0.04] pointer-events-none" style={{ background: '#5b5fef' }} />
+
+      <div className="max-w-6xl mx-auto relative z-10">
+        <div className="reveal mb-20 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef] mb-4">{t('features.label')}</p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white">{t('features.title')}</h2>
+        </div>
+
+        <div className="space-y-32 md:space-y-40">
           {items.map((item, i) => (
-            <div
-              key={item.title}
-              className={cn(
-                'flex flex-col md:flex-row gap-12 md:gap-16 items-center reveal',
-                `reveal-delay-${i + 1}`,
-                i % 2 === 1 ? 'md:flex-row-reverse' : ''
-              )}
-            >
-              <div className="flex-1 w-full">
-                <Screenshot
-                  src={screenshots[i]}
-                  alt={item.screenshotAlt}
-                  className="w-full"
-                />
+            <div key={item.title} className={cn('flex flex-col md:flex-row gap-8 md:gap-16 items-center', i % 2 === 1 ? 'md:flex-row-reverse' : '')}>
+              {/* Image — the star */}
+              <div className={cn('flex-1 w-full', i % 2 === 0 ? 'reveal-right' : 'reveal-left', `reveal-delay-${i + 1}`)}>
+                <div className="glow-hover rounded-2xl overflow-hidden">
+                  <img
+                    src={screenshots[i]}
+                    alt={item.screenshotAlt}
+                    className="w-full rounded-2xl border border-white/[0.06]"
+                    style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }}
+                  />
+                </div>
               </div>
 
-              <div className="flex-1 space-y-5">
-                <div className="h-10 w-10 rounded-2xl bg-primary/8 flex items-center justify-center">
-                  {React.createElement(FEATURE_ICONS[i], { className: 'h-5 w-5 text-primary' })}
-                </div>
-                <h3 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">{item.title}</h3>
-                <p className="text-sm font-bold text-primary">{item.subtitle}</p>
-                <p className="text-[15px] text-muted-foreground leading-relaxed font-medium">{item.desc}</p>
-                <ul className="space-y-2.5">
-                  {item.points.map(p => (
-                    <li key={p} className="flex items-start gap-3 text-sm font-medium text-foreground/80">
-                      <Check className="h-4 w-4 text-unimind-green shrink-0 mt-0.5" />
-                      {p}
-                    </li>
-                  ))}
-                </ul>
+              {/* Label — minimal */}
+              <div className={cn('flex-1 space-y-4 text-center md:text-left', i % 2 === 0 ? 'reveal-left' : 'reveal-right', `reveal-delay-${i + 1}`)}>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#5b5fef]">{item.subtitle}</p>
+                <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-white">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-white/35 max-w-sm mx-auto md:mx-0">{item.desc}</p>
               </div>
             </div>
           ))}
@@ -388,38 +332,33 @@ const Features: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   How It Works
+   How It Works — visual flow
    ──────────────────────────────────────────── */
-
-const STEP_ICONS = [Globe, Cpu, BarChart3];
 
 const HowItWorks: React.FC = () => {
   const { t } = useTranslation('landing');
   const steps = t('how.steps', { returnObjects: true }) as Array<{ title: string; desc: string }>;
 
   return (
-    <section className="py-24 md:py-32 bg-white">
-      <div className="max-w-6xl mx-auto px-6 reveal">
-        <SectionHeader
-          label={t('how.label')}
-          title={t('how.title')}
-          subtitle={t('how.subtitle')}
-        />
+    <section className="py-24 md:py-32 px-6" style={{ background: 'rgba(255,255,255,0.015)' }}>
+      <div className="max-w-5xl mx-auto">
+        <div className="reveal text-center mb-20">
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white">{t('how.title')}</h2>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-1 md:gap-0">
           {steps.map((step, i) => (
-            <Card key={step.title} variant="apple" className={cn('p-8 space-y-5 relative overflow-hidden group cursor-default reveal', `reveal-delay-${i + 1}`)}>
-              <div className="absolute -top-5 -right-5 text-[100px] font-extrabold text-unimind-bg-secondary leading-none select-none group-hover:text-[#E8E8ED] transition-colors">
+            <div key={step.title} className={cn('relative p-8 text-center group reveal-scale', `reveal-delay-${i + 1}`)}>
+              {/* Connector */}
+              {i < 2 && (
+                <div className="hidden md:block absolute top-12 right-0 w-full h-px" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.08), transparent)' }} />
+              )}
+              <div className="h-12 w-12 rounded-2xl mx-auto mb-6 flex items-center justify-center text-lg font-bold text-white" style={{ background: 'rgba(91,95,239,0.2)' }}>
                 {i + 1}
               </div>
-              <div className="relative z-10 space-y-4">
-                <div className="h-11 w-11 rounded-2xl bg-primary/8 flex items-center justify-center">
-                  {React.createElement(STEP_ICONS[i], { className: 'h-5 w-5 text-primary' })}
-                </div>
-                <h3 className="font-extrabold text-lg text-foreground tracking-tight">{step.title}</h3>
-                <p className="text-[14px] text-muted-foreground leading-relaxed font-medium">{step.desc}</p>
-              </div>
-            </Card>
+              <h3 className="font-bold text-lg text-white mb-2">{step.title}</h3>
+              <p className="text-sm leading-relaxed text-white/30">{step.desc}</p>
+            </div>
           ))}
         </div>
       </div>
@@ -428,320 +367,127 @@ const HowItWorks: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   Subjects
+   Subjects — tag cloud
    ──────────────────────────────────────────── */
 
 const Subjects: React.FC = () => {
   const { t } = useTranslation('landing');
   const categories = t('subjects.categories', { returnObjects: true }) as Array<{ name: string; tags: string[] }>;
+  const allTags = categories.flatMap(cat => cat.tags);
 
   return (
-    <section id="subjects" className="py-24 md:py-32 bg-unimind-bg-secondary border-y border-border/60">
-      <div className="max-w-6xl mx-auto px-6 reveal">
-        <SectionHeader
-          label={t('subjects.label')}
-          title={t('subjects.title')}
-          subtitle={t('subjects.subtitle')}
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {categories.map((cat, i) => (
-            <Card key={cat.name} variant="apple" className={cn('p-6 space-y-4 reveal', `reveal-delay-${i + 1}`)}>
-              <h3 className="font-extrabold text-sm text-foreground tracking-tight">{cat.name}</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {cat.tags.map(tag => (
-                  <span key={tag} className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-unimind-bg-secondary text-muted-foreground">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </Card>
+    <section id="subjects" className="py-24 md:py-32 px-6">
+      <div className="max-w-4xl mx-auto text-center">
+        <div className="reveal space-y-6">
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white">{t('subjects.title')}</h2>
+          <p className="text-sm text-white/30 max-w-lg mx-auto">{t('subjects.subtitle')}</p>
+        </div>
+        <div className="mt-12 flex flex-wrap justify-center gap-2 reveal reveal-delay-1">
+          {allTags.map((tag, i) => (
+            <span
+              key={tag}
+              className="text-[12px] font-medium px-3 py-1.5 rounded-full border border-white/[0.08] text-white/50 hover:text-white hover:border-white/20 hover:bg-white/[0.04] transition-all duration-300 cursor-default"
+            >
+              {tag}
+            </span>
           ))}
         </div>
-
-        <p className="text-center mt-10 text-sm text-unimind-text-quaternary font-medium">
-          {t('subjects.footer')}
-        </p>
+        <p className="mt-6 text-xs text-white/20 reveal reveal-delay-2">{t('subjects.footer')}</p>
       </div>
     </section>
   );
 };
 
 /* ────────────────────────────────────────────
-   Pricing
-   ──────────────────────────────────────────── */
-
-const Pricing: React.FC = () => {
-  const { t } = useTranslation('landing');
-  const navigate = useNavigate();
-  const [annual, setAnnual] = useState(true);
-
-  const plans = t('pricing.plans', { returnObjects: true }) as Array<{
-    label: string; desc: string; cta: string;
-  }>;
-  const rows = t('pricing.rows', { returnObjects: true }) as string[][];
-  const prices = [
-    { monthly: '¥0', yearly: '¥0' },
-    { monthly: '¥299', yearly: '¥199' },
-    { monthly: '¥1,299', yearly: '¥999' },
-    { monthly: '¥3,999', yearly: '¥2,999' },
-  ];
-  const popularIdx = 2; // Plus
-
-  return (
-    <section id="pricing" className="py-24 md:py-32 bg-white">
-      <div className="max-w-6xl mx-auto px-6 reveal">
-        <SectionHeader
-          label={t('pricing.label')}
-          title={t('pricing.title')}
-          subtitle={t('pricing.subtitle')}
-        />
-
-        <div className="flex items-center justify-center gap-3 mb-12">
-          <span className={cn('text-sm font-bold', !annual ? 'text-foreground' : 'text-unimind-text-quaternary')}>{t('pricing.monthly')}</span>
-          <button
-            onClick={() => setAnnual(!annual)}
-            className={cn(
-              'w-11 h-6 rounded-full transition-colors relative',
-              annual ? 'bg-primary' : 'bg-unimind-text-quaternary'
-            )}
-          >
-            <div className={cn(
-              'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
-              annual ? 'left-[22px]' : 'left-0.5'
-            )} />
-          </button>
-          <span className={cn('text-sm font-bold flex items-center gap-1.5', annual ? 'text-foreground' : 'text-unimind-text-quaternary')}>
-            {t('pricing.annually')}
-            <Badge variant="apple-green" className="text-[10px]">{t('pricing.saveBadge')}</Badge>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-          {plans.map((plan, pi) => {
-            const price = annual && prices[pi].yearly !== '¥0' ? prices[pi].yearly : prices[pi].monthly;
-            const isPopular = pi === popularIdx;
-            return (
-              <Card
-                key={plan.label}
-                variant="apple"
-                className={cn(
-                  'p-6 flex flex-col space-y-5 reveal',
-                  `reveal-delay-${pi + 1}`,
-                  isPopular && 'ring-2 ring-primary ring-offset-2'
-                )}
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-extrabold text-base text-foreground">{plan.label}</h3>
-                    {isPopular && (
-                      <Badge variant="apple-blue" className="text-[10px] font-extrabold">{t('pricing.popularBadge')}</Badge>
-                    )}
-                  </div>
-                  <p className="text-[12px] text-unimind-text-tertiary font-medium">{plan.desc}</p>
-                </div>
-
-                <div>
-                  <span className="text-3xl font-extrabold text-foreground tracking-tightest">{price}</span>
-                  {prices[pi].monthly !== '¥0' && <span className="text-sm font-bold text-unimind-text-tertiary">{t('pricing.perMonth')}</span>}
-                  {annual && prices[pi].yearly !== '¥0' && (
-                    <p className="text-[11px] font-medium text-unimind-text-quaternary mt-1">
-                      {t('pricing.annualTotal')}{parseInt(prices[pi].yearly.replace('¥', '')) * 12}
-                    </p>
-                  )}
-                </div>
-
-                <Button
-                  variant={isPopular ? 'apple' : 'apple-outline'}
-                  className="w-full h-10 rounded-xl text-sm font-extrabold"
-                  onClick={() => {
-                    if (pi === 3) {
-                      document.querySelector('#cta')?.scrollIntoView({ behavior: 'smooth' });
-                    } else {
-                      navigate('/register');
-                    }
-                  }}
-                >
-                  {plan.cta}
-                </Button>
-
-                <ul className="space-y-1.5 flex-1">
-                  {rows.map((row, ri) => {
-                    const text = row[pi];
-                    const has = text !== '—';
-                    return (
-                      <li key={ri} className={cn(
-                        'flex items-start gap-2 text-[12px] font-medium',
-                        has ? 'text-foreground/70' : 'text-unimind-text-quaternary'
-                      )}>
-                        {has
-                          ? <Check className="h-3.5 w-3.5 text-unimind-green shrink-0 mt-0.5" />
-                          : <span className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                        }
-                        {has ? text : '—'}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </Card>
-            );
-          })}
-        </div>
-
-        <p className="text-center mt-8 text-xs text-unimind-text-quaternary font-medium">
-          {t('pricing.footer')}
-        </p>
-      </div>
-    </section>
-  );
-};
-
-/* ────────────────────────────────────────────
-   FAQ
-   ──────────────────────────────────────────── */
-
-const FAQ: React.FC = () => {
-  const { t } = useTranslation('landing');
-  const [openIdx, setOpenIdx] = useState<number | null>(null);
-  const items = t('faq.items', { returnObjects: true }) as Array<{ q: string; a: string }>;
-
-  return (
-    <section id="faq" className="py-24 md:py-32 bg-unimind-bg-secondary border-y border-border/60">
-      <div className="max-w-3xl mx-auto px-6 reveal">
-        <SectionHeader label={t('faq.label')} title={t('faq.title')} />
-        <div className="space-y-2">
-          {items.map((faq, i) => (
-            <Card key={i} variant="apple" className="overflow-hidden transition-all duration-200">
-              <button
-                onClick={() => setOpenIdx(openIdx === i ? null : i)}
-                className="w-full px-5 py-4 flex items-center justify-between text-left gap-4"
-              >
-                <span className="font-extrabold text-[14px] text-foreground">{faq.q}</span>
-                {openIdx === i
-                  ? <ChevronUp className="h-4 w-4 text-unimind-text-quaternary shrink-0" />
-                  : <ChevronDown className="h-4 w-4 text-unimind-text-quaternary shrink-0" />
-                }
-              </button>
-              {openIdx === i && (
-                <div className="px-5 pb-4">
-                  <p className="text-[13px] text-muted-foreground leading-relaxed font-medium">{faq.a}</p>
-                </div>
-              )}
-            </Card>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-};
-
-/* ────────────────────────────────────────────
-   Final CTA
+   Final CTA — one question, one button
    ──────────────────────────────────────────── */
 
 const FinalCTA: React.FC = () => {
   const { t } = useTranslation('landing');
   const navigate = useNavigate();
+
   return (
-    <section id="cta" className="py-24 md:py-32 bg-white">
-      <div className="max-w-3xl mx-auto px-6 text-center space-y-8 reveal">
-        <h2 className="text-3xl md:text-5xl font-extrabold tracking-tightest text-foreground leading-[1.12]">
-          {t('cta.title')}
-        </h2>
-        <p className="text-base md:text-lg text-muted-foreground font-medium leading-relaxed max-w-xl mx-auto">
-          {t('cta.subtitle')}
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+    <section className="py-24 md:py-32 px-6 relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full blur-[150px] opacity-[0.06]" style={{ background: '#5b5fef' }} />
+      </div>
+
+      <div className="max-w-2xl mx-auto text-center relative z-10 space-y-8">
+        <div className="reveal space-y-4">
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white leading-[1.15]">
+            {t('cta.title')}
+          </h2>
+          <p className="text-sm md:text-base text-white/30 max-w-md mx-auto">
+            {t('cta.subtitle')}
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 reveal reveal-delay-1">
           <Button
-            variant="apple"
             size="lg"
-            className="h-11 px-7 text-sm font-extrabold rounded-xl"
+            className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0"
+            style={{ background: '#5b5fef' }}
             onClick={() => navigate('/register')}
           >
             {t('cta.button')}
             <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
+          <button
+            className="text-sm font-medium text-white/35 hover:text-white/70 transition-colors"
+            onClick={() => navigate('/pricing')}
+          >
+            {t('cta.viewPlans')} →
+          </button>
         </div>
-        <p className="text-xs text-unimind-text-quaternary font-medium">
-          {t('cta.footnote')}
-        </p>
+
+        <p className="text-xs text-white/15 reveal reveal-delay-2">{t('cta.footnote')}</p>
       </div>
     </section>
   );
 };
 
 /* ────────────────────────────────────────────
-   Footer
+   Footer — minimal
    ──────────────────────────────────────────── */
 
 const Footer: React.FC = () => {
   const { t } = useTranslation('landing');
+  const navigate = useNavigate();
 
   return (
-    <footer className="py-12 bg-unimind-bg-secondary border-t border-border/60">
-      <div className="max-w-6xl mx-auto px-6 reveal">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <img src="/Unimind_logo.png" alt="UniMind" className="h-8 w-8 rounded-lg object-contain" />
-            <div className="leading-tight">
-              <p className="font-extrabold text-sm text-foreground tracking-tight">UniMind.ai</p>
-              <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase tracking-[0.1em]">{t('footer.tagline')}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-6">
-            <a href="#features" className="text-[12px] font-medium text-unimind-text-tertiary hover:text-foreground transition-colors">{t('footer.features')}</a>
-            <a href="#pricing" className="text-[12px] font-medium text-unimind-text-tertiary hover:text-foreground transition-colors">{t('footer.pricing')}</a>
-            <a href="#faq" className="text-[12px] font-medium text-unimind-text-tertiary hover:text-foreground transition-colors">{t('footer.faq')}</a>
-          </div>
-          <p className="text-[10px] font-medium text-unimind-text-quaternary">
-            © {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}
-          </p>
+    <footer className="py-10 border-t border-white/[0.06]">
+      <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
+          <span className="font-bold text-sm text-white/60 tracking-tight">UniMind.ai</span>
         </div>
+        <div className="flex items-center gap-6">
+          <button onClick={() => navigate('/pricing')} className="text-[12px] font-medium text-white/30 hover:text-white/60 transition-colors">{t('footer.pricing')}</button>
+        </div>
+        <p className="text-[10px] font-medium text-white/15">
+          © {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}
+        </p>
       </div>
     </footer>
   );
 };
 
 /* ────────────────────────────────────────────
-   Main Landing
+   Main
    ──────────────────────────────────────────── */
 
 export const Landing: React.FC = () => {
   const { token } = useAuthStore();
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    const timer = setTimeout(() => {
-      document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
-    };
-  }, []);
+  useScrollReveal();
 
   return (
-    <div className="w-full bg-white font-sans text-left overflow-x-hidden antialiased scroll-smooth">
+    <div className="w-full min-h-screen font-sans text-left overflow-x-hidden antialiased scroll-smooth" style={{ background: '#0a0a0d' }}>
       <Nav token={token} />
       <Hero />
       <StatsBar />
-      <PainPoints />
-      <Features />
+      <Showcase />
       <HowItWorks />
       <Subjects />
-      <Pricing />
-      <FAQ />
       <FinalCTA />
       <Footer />
     </div>

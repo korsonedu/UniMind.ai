@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, List, Tuple
 
 
 OBJECTIVE_HINTS = {'objective', '单选', '单选题', '选择题', '单项选择题'}
@@ -6,6 +6,7 @@ SUBJECTIVE_HINTS = {'subjective', '主观题', 'noun', 'short', 'essay', 'calcul
 
 
 def validate_question_list_payload(payload: Any, allow_empty: bool = False) -> Tuple[bool, List[str]]:
+    """校验用户提交的题目列表 payload（前端输入校验，非 AI 输出校验）。"""
     errors: List[str] = []
     if not isinstance(payload, list):
         return False, ['payload_not_list']
@@ -45,36 +46,5 @@ def validate_question_list_payload(payload: Any, allow_empty: bool = False) -> T
 
         if is_subjective and not answer_text:
             errors.append(f'{prefix}_subjective_missing_answer')
-
-    return len(errors) == 0, errors
-
-
-def validate_grading_payload(payload: Any) -> Tuple[bool, List[str]]:
-    if not isinstance(payload, dict):
-        return False, ['payload_not_object']
-
-    errors: List[str] = []
-    required_keys = {'score', 'feedback', 'analysis', 'fsrs_rating'}
-    missing = [key for key in required_keys if key not in payload]
-    if missing:
-        errors.append(f'missing_keys:{",".join(sorted(missing))}')
-
-    try:
-        float(payload.get('score', 0))
-    except Exception:
-        errors.append('score_not_number')
-
-    try:
-        int(payload.get('fsrs_rating', 2))
-    except Exception:
-        errors.append('fsrs_rating_not_int')
-
-    feedback = str(payload.get('feedback', '')).strip()
-    if not feedback:
-        errors.append('feedback_empty')
-
-    analysis = str(payload.get('analysis', '')).strip()
-    if not analysis:
-        errors.append('analysis_empty')
 
     return len(errors) == 0, errors

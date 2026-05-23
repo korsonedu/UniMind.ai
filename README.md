@@ -1,6 +1,6 @@
 # UniMind.ai — AI 驱动的全球考试学习系统
 
-基于 Django + React 的全栈 AI 学习平台，集成 DeepSeek V4 智能引擎、FSRS 记忆调度算法、ELO 学术天梯和沉浸式共学社区。
+基于 Django + React 的全栈 AI 学习平台，集成 MiMo V2.5 智能引擎、Memorix 记忆调度算法、ELO 学术天梯和沉浸式共学社区。
 
 ## 项目结构
 
@@ -8,7 +8,7 @@
 官网0215/
 ├── backend/                     # Django 后端 (Python 3.12+)
 │   ├── school_system/           # 项目配置 (settings, urls, celery, asgi, middleware)
-│   ├── ai_engine/               # AI 引擎 (路由、熔断、可观测性、模型配置)
+│   ├── ai_engine/               # AI 引擎 (路由、熔断、可观测性、模型配置、Agent/工具调用)
 │   ├── ai_assistant/            # AI 助教对话 (多 Bot、WebSocket 流式)
 │   ├── quizzes/                 # 核心刷题系统
 │   │   ├── services/            #   出题管线、评分、解析、PDF 生成
@@ -67,15 +67,14 @@
 
 - **多 Bot 架构**：管理员可部署具有不同性格和学术背景的 AI 助教，学生自由切换
 - **专属导师模式**：AI 深度钩稽学生个人数据——ELO 积分、错题记录、知识图谱掌握度——提供定制化辅导。学生说"检查错题"时，AI 直接调出最近错题并分析思维误区
-- **DeepSeek V4 驱动**：出题审核、作文评分启用深度思考模式（Chain-of-Thought）；判分、对话使用高速响应模式；按任务难度智能分配 v4-pro / v4-flash 算力
+- **MiMo V2.5 驱动**：出题审核启用深度思考模式（Chain-of-Thought）；按任务智能分配 pro / fast 两级算力，支持热插拔切换供应商
 - **LaTeX 原生渲染**：数学公式、经济学模型完美展示（KaTeX）
 
-### 2. FSRS 智能天梯
+### 2. Memorix 智能天梯
 
 拒绝题海战术，千人千面的自适应学习系统。
 
-- **FSRS v4.5 记忆算法**：精准计算每道题的遗忘临界点，在最该复习的时刻推给你
-- **Memorix 自进化算法**：基于 Weibull 遗忘曲线 + 贝叶斯校准 + 在线 SGD 学习，越用越准
+- **Memorix 自进化算法**：基于 Weibull 遗忘曲线 + 贝叶斯校准 + 在线 SGD 学习，精准计算每道题的遗忘临界点，在最该复习的时刻推给你
 - **ELO 学术段位**：每次答题影响竞技积分，全站实时排名
 - **AI 自动评分**：主观题（名词解释、简答、论述、计算）由 AI 精准判分
 - **错题归因引擎**：自动分类错误原因（概念混淆/计算失误/逻辑错误/记忆遗漏/表达不清），生成针对性复习建议
@@ -156,7 +155,7 @@
 | 后端框架 | Django 6.0 + Django REST Framework 3.16 |
 | 异步任务 | Celery 5.4 + Redis |
 | WebSocket | Django Channels 4.3 + Daphne 4.2 |
-| AI 引擎 | DeepSeek V4 (v4-pro / v4-flash) 原生 API，思考模式 + 按任务路由 |
+| AI 引擎 | MiMo V2.5 (mimo-v2.5 / mimo-v2.5-pro)，思考模式 + 按任务路由 + Function Calling / 结构化输出 + 供应商热插拔 |
 | 前端框架 | React 19 + TypeScript |
 | UI 组件 | shadcn/ui (Radix) + Tailwind CSS 4 |
 | 状态管理 | Zustand 5 |
@@ -198,10 +197,12 @@
 
 | 特性 | 技术实现 |
 |------|---------|
-| AI 引擎 | DeepSeek V4 原生 API，按任务智能分配 v4-pro(思考)/v4-flash(快速) |
-| 思考模式 | Reviewer/Grader 任务开启 Chain-of-Thought，effort 可调(high/max) |
+| AI 引擎 | MiMo V2.5，按任务智能分配 pro(思考)/fast，支持 Function Calling 结构化输出，供应商热插拔 |
+| 结构化输出 | `tool_choice="required"` + JSON Schema 强制模型输出合法结构，消除正则 JSON 提取的脆弱性 |
+| Agent 循环 | 多轮工具调用循环 (`call_ai_with_tools`)，模型可多次调用工具、据反馈自纠正 |
+| 思考模式 | Reviewer 任务开启思考，MiMo 默认启用，thinking + tool_choice 不冲突 |
 | 熔断保护 | 按任务类型粒度熔断，单模型故障不扩散 |
-| 记忆算法 | FSRS v4.5 + Memorix 双轨，Weibull 遗忘曲线 + 在线 SGD |
+| 记忆算法 | Memorix 自进化算法，Weibull 遗忘曲线 + 贝叶斯校准 + 在线 SGD |
 | 出题管线 | 3-Agent 对抗性博弈，支持迭代改进与人工审核 |
 | Prompt 管理 | 统一文件系统 + 数据库版本历史，支持一键回滚 |
 | 大文件上传 | 分片上传 + 断点续传，支持 100MB+ 视频文件 |
@@ -235,7 +236,7 @@ pip install -r requirements.txt
 
 # 配置环境变量
 cp .env.example .env
-# 编辑 .env，填入 DEEPSEEK_API_KEY
+# 编辑 .env，填入 LLM_API_KEY
 
 # 数据库迁移
 python manage.py migrate
@@ -351,7 +352,7 @@ SQL
 cd /opt/unimind/backend
 cp .env.example .env
 # 编辑 .env，详见下方「环境变量完整参考」章节
-# 至少需要配置: DJANGO_ENV, SECRET_KEY, ALLOWED_HOSTS, DB_*, DEEPSEEK_API_KEY, CORS_*
+# 至少需要配置: DJANGO_ENV, SECRET_KEY, ALLOWED_HOSTS, DB_*, LLM_API_KEY, CORS_*
 ```
 
 ### 5. 安装依赖和初始化
@@ -378,7 +379,7 @@ python manage.py import_knowledge_tree backend/knowledge_trees/金融431.md --gl
 python manage.py import_knowledge_tree backend/knowledge_trees/高中数学.md --global --subject=高中数学 --force
 python manage.py import_knowledge_tree backend/knowledge_trees/高中物理.md --global --subject=高中物理 --force
 
-# AI 生成新的学科知识树（自动调 DeepSeek V4）
+# AI 生成新的学科知识树（自动调用 LLM）
 python manage.py generate_knowledge_tree --subject=高中数学
 
 # 导出知识树为 MD
@@ -616,7 +617,7 @@ VITE_API_URL=https://your-domain.com npx vite build
 - [ ] API 端点正常响应
 - [ ] WebSocket 连接正常
 - [ ] 邮件发送正常
-- [ ] DEEPSEEK_API_KEY 有效
+- [ ] LLM_API_KEY 有效
 - [ ] 日志正常输出到 journald
 
 ---
@@ -633,7 +634,7 @@ SECRET_KEY=<generate-with: python -c "import secrets; print(secrets.token_urlsaf
 ALLOWED_HOSTS=your-domain.com,www.your-domain.com
 
 # AI 引擎
-DEEPSEEK_API_KEY=sk-xxx                          # 从 https://platform.deepseek.com/api_keys 获取
+LLM_API_KEY=sk-xxx                              # LLM API key
 ```
 
 ### 数据库
@@ -669,28 +670,30 @@ USE_X_FORWARDED_PROTO=true
 ### AI 模型配置 (可选)
 
 ```bash
-# 全局模型覆盖 — 不设置则使用 ai_engine/config.py 中的按任务路由默认值
-LLM_MODEL=deepseek-v4-pro
-LLM_BASE_URL=https://api.deepseek.com
+# 以下均可选，不设则用 ai_engine/config.py 内置默认值
+# LLM_API_KEY=sk-xxx           # API key
+# LLM_BASE_URL=                # 覆盖 API 地址
+# LLM_MODEL=                   # 全局模型覆盖
+# AI_MODEL_FAST=               # 轻量任务分级覆盖
+# AI_MODEL_PRO=                # 重量任务分级覆盖
 LLM_REQUEST_TIMEOUT_SECONDS=120
 LLM_REQUEST_MAX_RETRIES=1
 ```
 
-> **模型路由已收敛至 `ai_engine/config.py`**，按 operation 名称逐段匹配，决定 flash / pro / thinking。
-> 只需设置 `LLM_MODEL` 即可全局覆盖所有任务的默认模型；如无特殊需求，无需其他配置。
+> **模型路由已收敛至 `ai_engine/config.py`**，顶部 `FALLBACK_FAST` / `FALLBACK_PRO` 两个常量是唯一默认值来源。
+> 换供应商只需改这两个常量 + `DEFAULT_BASE_URL`。env var 是可选的覆盖层。
 
-**模型策略速查：**
+**模型分级速查：**
 
-| 任务 | 默认模型 | 思考 | 原因 |
-|------|---------|------|------|
-| 对话 / 面试 | v4-flash | 关 | 快速响应 |
-| 出题 Author / 生成 | v4-pro | 关 | 高质量内容创作 |
-| 出题 Author Revise | v4-pro | 开(medium) | 基于审题反馈修订 |
-| 出题 Reviewer | v4-pro | 开(high) | 深度逻辑检查 |
-| 主观题判分 | v4-pro | 关 | 结构化 JSON 输出，无需链式推理 |
-| 作文评分 | v4-pro | 开(max) | 最高强度多维推理 |
-| 解析 / 分类 | v4-flash | 关 | 轻量文本处理 |
-| Schema 修复 | v4-flash | 关 | JSON 格式修复 |
+| 任务 | 分级 | 思考 |
+|------|------|------|
+| 对话 / 面试 | fast | — |
+| 出题 Author / AuthorRevise | fast | — |
+| 出题 Reviewer | pro | 开 |
+| 出题 Classifier | fast | — |
+| 主观题判分 | pro | — |
+| 知识树生成 | pro | — |
+| 解析 / 分类 / Schema 修复 | fast | — |
 
 ### 邮件
 
@@ -753,7 +756,7 @@ GIPHY_API_KEY=                                    # 自习室 GIF 功能
 
 ### Prompt 模板管理
 
-所有 AI Prompt 模板以 `.txt` 文件形式存放在 `backend/prompts/` 目录：
+所有 AI Prompt 模板以 `.txt` 文件形式存放在 `backend/prompts/` 目录。出题管线 Agent 通过 `backend/ai_engine/tools.py` 中的 JSON Schema 定义强制结构化输出（`tool_choice="required"`），从 API 层面杜绝格式偏差。
 
 ```
 prompts/
@@ -981,7 +984,7 @@ sudo journalctl -u unimind-celery.service -f # Celery 日志
 ## 安全注意事项
 
 - **SECRET_KEY**：生产环境必须设置为至少 64 字符的随机值，可用 `python -c "import secrets; print(secrets.token_urlsafe(64))"` 生成
-- **API Key**：所有第三方 API Key（DeepSeek、Gmail、GIPHY、ASR）必须通过环境变量注入，不得提交到版本控制
+- **API Key**：所有第三方 API Key（LLM、Gmail、GIPHY、ASR）必须通过环境变量注入，不得提交到版本控制
 - **数据库密码**：使用强随机密码，不要与其他系统重复
 - **HTTPS**：生产环境必须启用 HTTPS，建议使用 Let's Encrypt
 - **支付密钥**：支付宝/微信支付私钥属于高敏感信息，建议生产环境使用密钥管理服务（如 HashiCorp Vault），`.env` 文件权限设为 `600`

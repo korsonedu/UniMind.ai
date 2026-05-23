@@ -94,7 +94,7 @@ export const ArticleCenter: React.FC = () => {
         {/* List Content */}
         <div className="flex flex-col border border-border/50 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden shadow-sm">
           {/* List Header */}
-          <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-muted/30 text-[11px] font-black uppercase tracking-widest border-b border-border/50">
+          <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-muted/30 text-[11px] font-semibold tracking-wider border-b border-border/50">
             <div className="col-span-2">{t('articleDate')}</div>
             <div className="col-span-2">{t('articleAuthor')}</div>
             <div className="col-span-6">{t('articleTitle')}</div>
@@ -156,8 +156,8 @@ export const ArticleCenter: React.FC = () => {
                 <ChevronLeft className="w-3 h-3" /> Previous
               </Button>
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">Page</span>
-                <span className="h-7 px-3 bg-card border border-border rounded-lg flex items-center justify-center text-xs font-black tabular-nums">{page}</span>
+                <span className="text-[11px] font-semibold text-muted-foreground">Page</span>
+                <span className="h-7 px-3 bg-card border border-border rounded-lg flex items-center justify-center text-xs font-semibold tabular-nums">{page}</span>
                 <span className="text-[11px] font-bold text-muted-foreground">/ {totalPages}</span>
               </div>
               <Button 

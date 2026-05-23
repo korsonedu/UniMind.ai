@@ -11,6 +11,7 @@ from django.db import transaction
 from ai_engine.service import AICallError
 from quizzes.models import KnowledgePoint, Question
 # prompt_resources removed — shared constraints now inlined into prompt templates
+from ai_engine.tools import QUESTION_LIST_SCHEMA
 from quizzes.services.question_normalizer import (
     normalize_question_type,
     normalize_difficulty_level,
@@ -57,8 +58,6 @@ class QuestionGenerator:
         target_difficulty: str,
         target_type_ratio_text: str,
     ) -> List[Dict[str, Any]]:
-        from quizzes.services.ai_task_service import QuizAITaskService
-
         template = self.ai_service.get_template('quizzes', 'bulk_generate_prompt.txt') or ''
         prompt = self.ai_service.format_template(
             template,
@@ -76,23 +75,21 @@ class QuestionGenerator:
             len(prompt),
         )
 
-        response = self.ai_service.simple_chat(
+        max_tokens = self._estimate_bulk_generate_max_tokens(count_per_kp)
+        data = self.ai_service.structured_output(
+            system_prompt="",
             user_prompt=prompt,
+            schema=QUESTION_LIST_SCHEMA,
+            tool_name="submit_questions",
+            tool_description="提交生成的题目列表",
             temperature=0.35,
-            max_tokens=self._estimate_bulk_generate_max_tokens(count_per_kp),
+            max_tokens=max_tokens,
             raise_on_error=True,
             operation='quizzes.bulk_generate',
         )
 
-        content = self.ai_service.extract_content(response)
-
-        data = QuizAITaskService.parse_question_list_with_repair(
-            self.ai_service,
-            content or '',
-            operation='quizzes.bulk_generate',
-            allow_empty=False,
-        )
         if not isinstance(data, list):
+            logger.warning("_request_bulk_generate_once structured_output failed")
             raise AICallError(
                 "AI 命题结果格式异常，请重试。",
                 status_code=502,
@@ -112,7 +109,62 @@ class QuestionGenerator:
     # 难度估计
     # ------------------------------------------------------------------
 
-    def _estimate_difficulty_level(self, question: Dict[str, Any]) -> str:
+    # 学科分组（用于难度信号匹配）
+    SUBJECT_GROUP_MATH = {'高中数学', '高中物理', '计算机408'}
+    SUBJECT_GROUP_FINANCE = {'金融431', 'CFA', 'CPA', '金融431_完整版'}
+    SUBJECT_GROUP_LAW = {'法学', '法考'}
+    SUBJECT_GROUP_EDU = {'教资', '教育学311'}
+    SUBJECT_GROUP_MED = {'USMLE'}
+
+    # 通用学术信号（跨学科）
+    GENERAL_HARD_SIGNALS = ['推导', '证明', '比较', '辨析', '评价', '边界', '反例']
+    GENERAL_EXTREME_SIGNALS = ['批判性', '模型选择', '多目标', '稳健性']
+
+    # 学科专用信号
+    DOMAIN_SIGNALS = {
+        'math': {
+            'hard': ['综合应用', '构造', '参数讨论', '分类讨论', '数形结合', '递推'],
+            'extreme': ['存在性', '唯一性', '不等式证明', '极值问题', '收敛性'],
+            'calc': ['=', 'Δ', '∂', 'σ', 'β', '∑', '∫', 'lim', '→', '∞'],
+        },
+        'finance': {
+            'hard': ['政策建议', '一般均衡', '跨市场', '传导机制', '约束条件', '情景分析', '敏感性'],
+            'extreme': ['现实偏离', '制度约束', '市场失灵', '逆向选择', '道德风险'],
+            'calc': ['NPV', 'IRR', 'CAPM', 'WACC', 'r=', 'β', 'σ'],
+        },
+        'law': {
+            'hard': ['构成要件', '法律关系', '归责原则', '竞合', '解释论', '立法论'],
+            'extreme': ['法理辨析', '比较法', '漏洞填补', '利益衡量', '合宪性'],
+            'calc': [],
+        },
+        'edu': {
+            'hard': ['教学策略', '学习迁移', '认知发展', '课程设计', '评价体系'],
+            'extreme': ['建构主义', '元认知', '最近发展区', '质性研究'],
+            'calc': [],
+        },
+        'med': {
+            'hard': ['鉴别诊断', '病理生理', '临床表现', '治疗原则', '并发症'],
+            'extreme': ['循证医学', '多学科', '预后评估', '罕见病'],
+            'calc': [],
+        },
+    }
+
+    def _get_subject_signals(self, subject: str):
+        """根据学科名称返回对应的信号词组。"""
+        s = (subject or '').strip()
+        if s in self.SUBJECT_GROUP_MATH:
+            return self.DOMAIN_SIGNALS['math']
+        if s in self.SUBJECT_GROUP_FINANCE:
+            return self.DOMAIN_SIGNALS['finance']
+        if s in self.SUBJECT_GROUP_LAW:
+            return self.DOMAIN_SIGNALS['law']
+        if s in self.SUBJECT_GROUP_EDU:
+            return self.DOMAIN_SIGNALS['edu']
+        if s in self.SUBJECT_GROUP_MED:
+            return self.DOMAIN_SIGNALS['med']
+        return self.DOMAIN_SIGNALS['math']  # 默认用数学（通用性最强）
+
+    def _estimate_difficulty_level(self, question: Dict[str, Any], subject: str = '') -> str:
         text = str(question.get('question') or '').strip()
         answer = str(question.get('answer') or '').strip()
         q_type = str(question.get('q_type') or '')
@@ -147,16 +199,15 @@ class QuestionGenerator:
         elif subjective_type == 'calculate':
             complexity_score += 2
 
-        hard_signals = [
-            '推导', '证明', '比较', '辨析', '评价', '边界', '反例', '政策建议',
-            '一般均衡', '跨市场', '传导机制', '约束条件', '情景分析', '敏感性',
-        ]
-        extreme_signals = ['批判性', '模型选择', '现实偏离', '多目标', '制度约束', '稳健性']
-        calc_signals = ['=', 'Δ', '∂', 'σ', 'β', 'r=', 'NPV', 'IRR', 'CAPM', 'WACC']
+        domain = self._get_subject_signals(subject)
+        hard_signals = self.GENERAL_HARD_SIGNALS + domain['hard']
+        extreme_signals = self.GENERAL_EXTREME_SIGNALS + domain['extreme']
+        calc_signals = domain['calc']
 
-        hard_hits = sum(1 for token in hard_signals if token in text or token in answer)
-        extreme_hits = sum(1 for token in extreme_signals if token in text or token in answer)
-        calc_hits = sum(1 for token in calc_signals if token in text or token in answer)
+        combined = text + answer
+        hard_hits = sum(1 for token in hard_signals if token in combined)
+        extreme_hits = sum(1 for token in extreme_signals if token in combined)
+        calc_hits = sum(1 for token in calc_signals if token in combined)
 
         if hard_hits >= 2:
             complexity_score += 1
@@ -185,34 +236,32 @@ class QuestionGenerator:
         self,
         questions: List[Dict[str, Any]],
         target_difficulty: str,
+        subject: str = '',
     ) -> List[Dict[str, Any]]:
-        # 允许通过环境变量直接跳过难度校验，避免前端出现"难度未通过"
         if not getattr(settings, 'AI_DIFFICULTY_CHECK_ENABLED', True):
             for q in questions:
-                q['difficulty_estimated_level'] = self._estimate_difficulty_level(q)
+                q['difficulty_estimated_level'] = self._estimate_difficulty_level(q, subject)
                 q['difficulty_check_passed'] = True
                 q['difficulty_level'] = target_difficulty
             return questions
 
         if target_difficulty == 'mixed':
             for q in questions:
-                estimated_level = self._estimate_difficulty_level(q)
+                estimated_level = self._estimate_difficulty_level(q, subject)
                 q['difficulty_estimated_level'] = estimated_level
                 q['difficulty_check_passed'] = True
                 q['difficulty_level'] = target_difficulty
             return questions
 
         target_rank = DIFFICULTY_ORDER.get(target_difficulty, DIFFICULTY_ORDER['normal'])
-        tolerance = 1  # 严控在 ±1 档内
+        tolerance = 1
         for q in questions:
-            estimated_level = self._estimate_difficulty_level(q)
+            estimated_level = self._estimate_difficulty_level(q, subject)
             estimated_rank = DIFFICULTY_ORDER.get(estimated_level, DIFFICULTY_ORDER['normal'])
             distance = abs(estimated_rank - target_rank)
-            check_passed = distance <= tolerance
             q['difficulty_estimated_level'] = estimated_level
-            q['difficulty_check_passed'] = check_passed
+            q['difficulty_check_passed'] = distance <= tolerance
             q['difficulty_level'] = target_difficulty
-        # 保留所有题目，只打标是否通过，避免题目数量被裁掉
         return questions
 
     # ------------------------------------------------------------------
@@ -393,6 +442,8 @@ class QuestionGenerator:
         if not kps:
             return []
 
+        subject = (kps[0].subject or '').strip() if kps else ''
+
         normalized_target_difficulty = normalize_target_difficulty(target_difficulty)
         normalized_target_types = normalize_target_types(target_types)
         normalized_type_ratio = normalize_target_type_ratio(target_type_ratio, target_types)
@@ -496,7 +547,7 @@ class QuestionGenerator:
             normalized = normalized_all
 
         normalized = self._apply_type_ratio_filter(normalized, normalized_type_ratio)
-        normalized = self._apply_difficulty_regression_validation(normalized, normalized_target_difficulty)
+        normalized = self._apply_difficulty_regression_validation(normalized, normalized_target_difficulty, subject)
         return normalized
 
     # ------------------------------------------------------------------

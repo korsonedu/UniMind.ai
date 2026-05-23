@@ -7,7 +7,6 @@ interface User {
   nickname: string;
   role: 'student' | 'admin';
   elo_score: number;
-  elo_points: number;
   avatar_url: string;
   avatar_style: string;
   avatar_seed: string;
@@ -19,7 +18,6 @@ interface User {
   trial_ends_at?: string;
   membership_expires_at?: string;
   has_completed_initial_assessment: boolean;
-  elo_reset_count: number;
   current_task?: string;
   current_timer_end?: string;
   today_focused_minutes?: number;

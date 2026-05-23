@@ -95,6 +95,7 @@
     "notMastered": "拿捏",
     "questionMatrix": "题号矩阵",
     "answered": "已答",
+    "notAnswered": "未答",
     "prevQuestion": "上一题",
     "nextQuestion": "下一题",
     "submitting": "评分中...",

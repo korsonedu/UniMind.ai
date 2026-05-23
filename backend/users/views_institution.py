@@ -16,7 +16,7 @@ from django.contrib.auth import get_user_model
 from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS
 
 User = get_user_model()
-from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionOwner, IsInstitutionActive, IsInstitutionMember
+from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionOwner, IsInstitutionActive, IsInstitutionMember, is_platform_admin
 from .serializers_institution import (
     InstitutionSerializer, CreateInstitutionSerializer, ChangePlanSerializer,
     InstitutionStudentSerializer, CreateStudentSerializer, InstitutionFeatureSerializer,
@@ -409,7 +409,7 @@ class InstitutionFeatureView(APIView):
 
         # Platform admins without an institution see all features.
         # Platform admins WITH an institution see that institution's plan features.
-        if user.is_platform_admin and inst is None:
+        if is_platform_admin(user) and inst is None:
             features = get_plan_features('pro')
         elif inst:
             features = get_plan_features(inst.plan)
@@ -424,7 +424,7 @@ class InstitutionFeatureView(APIView):
         usage.setdefault('limit', ai_q.get('limit', 0))
 
         return Response(InstitutionFeatureSerializer({
-            'is_platform_admin': user.is_platform_admin,
+            'is_platform_admin': is_platform_admin(user),
             'institution': inst_data,
             'features': features,
             'usage': usage,

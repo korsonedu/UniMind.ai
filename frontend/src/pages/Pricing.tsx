@@ -1,0 +1,219 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, ArrowRight, Check, Sparkles, Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/version';
+import { useTranslation } from 'react-i18next';
+
+const PricingPage: React.FC = () => {
+  const { t } = useTranslation('landing');
+  const navigate = useNavigate();
+  const [annual, setAnnual] = useState(true);
+
+  const plans = t('pricing.plans', { returnObjects: true }) as Array<{ label: string; desc: string; cta: string }>;
+  const rows = t('pricing.rows', { returnObjects: true }) as string[][];
+  const prices = [
+    { monthly: '¥0', yearly: '¥0' },
+    { monthly: '¥299', yearly: '¥199' },
+    { monthly: '¥1,299', yearly: '¥999' },
+    { monthly: '¥3,999', yearly: '¥2,999' },
+  ];
+  const popularIdx = 2;
+
+  return (
+    <div className="min-h-screen font-sans antialiased" style={{ background: '#0a0a0d', color: '#f0f0ed' }}>
+      {/* Ambient bg */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+        <div className="absolute top-1/4 -left-32 w-[500px] h-[500px] rounded-full blur-[120px] opacity-[0.06]" style={{ background: '#5b5fef' }} />
+        <div className="absolute bottom-1/4 -right-32 w-[400px] h-[400px] rounded-full blur-[100px] opacity-[0.04]" style={{ background: '#38bdf8' }} />
+      </div>
+
+      <div className="relative z-10">
+        {/* Nav */}
+        <nav className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2">
+            <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
+            <span className="font-bold text-base tracking-tight text-white">UniMind</span>
+          </button>
+          <button onClick={() => navigate('/')} className="inline-flex items-center gap-1.5 text-sm font-medium text-white/40 hover:text-white/70 transition-colors">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            {t('pricing.backHome')}
+          </button>
+        </nav>
+
+        {/* Header */}
+        <section className="py-16 md:py-24 text-center px-6">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-[1.08]">
+            {t('pricing.pageTitle')}
+          </h1>
+          <p className="mt-5 text-base md:text-lg max-w-xl mx-auto leading-relaxed text-white/35">
+            {t('pricing.pageSubtitle')}
+          </p>
+
+          {/* Trial banner */}
+          <div className="max-w-2xl mx-auto mt-10 rounded-2xl border p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 text-left" style={{ borderColor: 'rgba(91,95,239,0.2)', background: 'rgba(91,95,239,0.05)' }}>
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(91,95,239,0.15)' }}>
+              <Zap className="h-5 w-5" style={{ color: '#818cf8' }} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">{t('pricing.trialTitle')}</p>
+              <p className="text-[13px] mt-0.5 leading-relaxed text-white/35">{t('pricing.trialDesc')}</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Toggle */}
+        <section className="max-w-6xl mx-auto px-6 pb-8">
+          <div className="flex items-center justify-center gap-3">
+            <span className={cn('text-sm font-semibold', annual ? 'text-white/25' : 'text-white')}>
+              {t('pricing.monthly')}
+            </span>
+            <button
+              onClick={() => setAnnual(!annual)}
+              className="w-11 h-6 rounded-full transition-all relative"
+              style={{ background: annual ? '#5b5fef' : '#333' }}
+            >
+              <div className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all', annual ? 'left-[22px]' : 'left-0.5')} />
+            </button>
+            <span className={cn('text-sm font-semibold flex items-center gap-1.5', annual ? 'text-white' : 'text-white/25')}>
+              {t('pricing.annually')}
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>{t('pricing.saveBadge')}</span>
+            </span>
+          </div>
+        </section>
+
+        {/* Plans */}
+        <section className="max-w-6xl mx-auto px-6 pb-24">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+            {plans.map((plan, pi) => {
+              const isFree = prices[pi].monthly === '¥0';
+              const price = annual && !isFree ? prices[pi].yearly : prices[pi].monthly;
+              const isPopular = pi === popularIdx;
+              const isPro = pi === 3;
+
+              return (
+                <div
+                  key={plan.label}
+                  className={cn('p-6 rounded-2xl border flex flex-col', isPopular && 'ring-1')}
+                  style={{
+                    borderColor: isPopular ? 'rgba(91,95,239,0.4)' : 'rgba(255,255,255,0.06)',
+                    background: isPopular ? 'rgba(91,95,239,0.06)' : 'rgba(255,255,255,0.02)',
+                    ...(isPopular ? { boxShadow: '0 0 40px rgba(91,95,239,0.08)' } : {}),
+                  }}
+                >
+                  <div className="mb-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-base text-white">{plan.label}</h3>
+                      {isPopular && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: '#5b5fef' }}>
+                          {t('pricing.popularBadge')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[12px] text-white/25">{plan.desc}</p>
+                  </div>
+
+                  <div className="mb-5" style={{ minHeight: '72px' }}>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-bold tracking-tight text-white" style={{ fontFamily: '"DM Mono", monospace' }}>
+                        {price}
+                      </span>
+                      {!isFree && <span className="text-sm text-white/25">{t('pricing.perMonth')}</span>}
+                    </div>
+                    {!isFree && annual && (
+                      <p className="text-[11px] mt-1 text-white/20">
+                        {t('pricing.annualTotal')}{parseInt(prices[pi].yearly.replace('¥', '').replace(',', '')) * 12}
+                      </p>
+                    )}
+                    {isFree && (
+                      <p className="text-[11px] mt-1 font-medium text-green-400">永久免费</p>
+                    )}
+                  </div>
+
+                  <Button
+                    className="w-full h-10 rounded-xl text-sm font-bold mb-5"
+                    style={isPopular
+                      ? { background: '#5b5fef', color: '#fff' }
+                      : isPro
+                        ? { background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }
+                        : { background: 'rgba(255,255,255,0.04)', color: '#fff' }
+                    }
+                    onClick={() => {
+                      if (isPro) {
+                        document.querySelector('#pricing-faq')?.scrollIntoView({ behavior: 'smooth' });
+                      } else {
+                        navigate('/register');
+                      }
+                    }}
+                  >
+                    {isPopular && <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+                    {plan.cta}
+                  </Button>
+
+                  <ul className="space-y-2 flex-1">
+                    {rows.map((row, ri) => {
+                      const text = row[pi];
+                      const has = text !== '—';
+                      return (
+                        <li key={ri} className="flex items-start gap-2 text-[12px]" style={{ color: has ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.12)' }}>
+                          {has
+                            ? <Check className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-400" />
+                            : <span className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          }
+                          <span className={has ? '' : 'line-through'}>{has ? text : '—'}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-center mt-8 text-xs text-white/15">{t('pricing.footer')}</p>
+        </section>
+
+        {/* FAQ */}
+        <section id="pricing-faq" className="max-w-3xl mx-auto px-6 pb-24">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-center mb-10 text-white">{t('faq.label')}</h2>
+          <div className="space-y-2">
+            {(t('faq.items', { returnObjects: true }) as Array<{ q: string; a: string }>).filter((_, i) => [0, 4, 5, 7].includes(i)).map((faq, i) => (
+              <div key={i} className="rounded-xl border p-5" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
+                <p className="font-semibold text-sm text-white mb-2">{faq.q}</p>
+                <p className="text-sm leading-relaxed text-white/35">{faq.a}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Bottom CTA */}
+        <section className="max-w-3xl mx-auto px-6 pb-24 text-center space-y-6">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white leading-[1.12]">准备好开始了吗？</h2>
+          <p className="text-base max-w-xl mx-auto leading-relaxed text-white/30">14 天全功能试用。不绑卡。随时取消。</p>
+          <Button
+            size="lg"
+            className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0"
+            style={{ background: '#5b5fef' }}
+            onClick={() => navigate('/register')}
+          >
+            免费试用 14 天
+            <ArrowRight className="ml-1.5 h-4 w-4" />
+          </Button>
+        </section>
+
+        {/* Footer */}
+        <footer className="py-10 border-t border-white/[0.06]">
+          <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
+              <span className="font-bold text-sm tracking-tight text-white/60">UniMind.ai</span>
+            </div>
+            <p className="text-[11px] text-white/15">© {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}</p>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+};
+
+export default PricingPage;

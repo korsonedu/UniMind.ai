@@ -10,7 +10,6 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 import { PageWrapper } from '@/components/PageWrapper';
-import { PointsConfirmDialog } from '@/components/PointsConfirmDialog';
 import { useTranslation } from 'react-i18next';
 
 // Modularized Components
@@ -39,8 +38,6 @@ export const AIAssistant: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isComposing, setIsComposition] = useState(false);
-  const [showPointsConfirm, setShowPointsConfirm] = useState(false);
-  const [pendingMessage, setPendingMessage] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -120,10 +117,7 @@ export const AIAssistant: React.FC = () => {
         setMessages(res.data.map((m: any) => ({ ...m, content: processMathContent(m.content) })));
       }
     } catch (err: any) {
-      // 402 积分不足 由 api 拦截器处理 toast
-      if (err.response?.status !== 402) {
-        toast.error(t('sendFailed'));
-      }
+      toast.error(t('sendFailed'));
       setInput(text);
     } finally {
       setLoading(false);
@@ -135,13 +129,7 @@ export const AIAssistant: React.FC = () => {
     if (!input.trim() || loading) return;
     const text = input;
     setInput('');
-    // 会话制：仅首条消息弹确认框，后续直接发送
-    if (messages.length === 0) {
-      setPendingMessage(text);
-      setShowPointsConfirm(true);
-    } else {
-      doSend(text);
-    }
+    doSend(text);
   };
 
   const handleReset = async () => {
@@ -229,18 +217,6 @@ export const AIAssistant: React.FC = () => {
           </footer>
         </Card>
       </div>
-      <PointsConfirmDialog
-        open={showPointsConfirm}
-        onOpenChange={setShowPointsConfirm}
-        cost={30}
-        featureName={t('featureName')}
-        balance={user?.elo_points ?? 0}
-        onConfirm={() => {
-          setShowPointsConfirm(false);
-          doSend(pendingMessage);
-        }}
-        loading={loading}
-      />
     </PageWrapper>
   );
 };

@@ -6,7 +6,7 @@ from payments.models import Order, Invoice
 class CreateOrderSerializer(serializers.Serializer):
     plan = serializers.ChoiceField(choices=[('solo', 'Solo'), ('plus', 'Plus'), ('pro', 'Pro')])
     billing_cycle = serializers.ChoiceField(choices=[('monthly', 'Monthly'), ('annual', 'Annual')])
-    gateway = serializers.ChoiceField(choices=[('stripe', 'Stripe'), ('wechat', 'WeChat Pay'), ('alipay', 'Alipay')])
+    gateway = serializers.ChoiceField(choices=[('stub', 'Stub (开发)'), ('stripe', 'Stripe'), ('wechat', 'WeChat Pay'), ('alipay', 'Alipay')])
 
 
 class OrderSerializer(serializers.ModelSerializer):

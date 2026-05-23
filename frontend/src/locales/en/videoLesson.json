@@ -26,5 +26,5 @@
   "fullscreen": "Fullscreen",
   "exitFullscreen": "Exit Fullscreen",
   "watchComplete": "Watch complete! Reward {{elo}} ELO",
-  "currentPoints": "Current points: {{score}}"
+  "currentPoints": "Current ELO: {{score}}"
 }

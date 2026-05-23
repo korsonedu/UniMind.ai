@@ -659,12 +659,12 @@ const NodeDetailPanel: React.FC<{
           )}
 
           {loading ? (
-            <p className="text-[10px] font-bold uppercase text-muted-foreground animate-pulse text-center py-8">Loading...</p>
+            <p className="text-[10px] font-medium text-muted-foreground text-center py-8">Loading...</p>
           ) : (
             <>
               {/* questions */}
               <section>
-                <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                <h5 className="text-[10px] font-semibold tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                   <Target className="w-3 h-3" /> {t('detailPanel.relatedQuestions')} ({details.questions.length})
                 </h5>
                 <div className="space-y-1.5">
@@ -691,7 +691,7 @@ const NodeDetailPanel: React.FC<{
 
               {/* courses */}
               <section>
-                <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                <h5 className="text-[10px] font-semibold tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                   <Video className="w-3 h-3" /> {t('detailPanel.courseResources')} ({details.courses.length})
                 </h5>
                 <div className="space-y-1.5">
@@ -709,7 +709,7 @@ const NodeDetailPanel: React.FC<{
 
               {/* articles */}
               <section>
-                <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                <h5 className="text-[10px] font-semibold tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
                   <FileText className="w-3 h-3" /> {t('detailPanel.referenceArticles')} ({details.articles.length})
                 </h5>
                 <div className="space-y-1.5">
@@ -924,7 +924,7 @@ export const KnowledgeMap: React.FC = () => {
   if (loading) {
     return (
       <PageWrapper title={t('pageTitle')} subtitle={t('pageLoadingSubtitle')}>
-        <div className="text-center opacity-20 font-bold uppercase text-[10px] animate-pulse py-32">Mapping...</div>
+        <div className="text-center text-[10px] font-medium text-muted-foreground/30 py-32">Mapping...</div>
       </PageWrapper>
     );
   }

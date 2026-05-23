@@ -46,7 +46,7 @@ export const ArticleDetail: React.FC = () => {
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center gap-4 text-center">
       <Loader2 className="h-10 w-10 animate-spin text-muted-foreground/40" />
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Loading Academic Context...</p>
+      <p className="text-[11px] font-medium text-muted-foreground">Loading...</p>
     </div>
   );
 

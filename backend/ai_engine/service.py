@@ -82,7 +82,7 @@ class AIEngine:
 
         config = get_model_for_task(operation)
         if not config['api_key']:
-            msg = "MIMO_API_KEY 未设置，AI 调用被跳过。"
+            msg = "LLM_API_KEY 未设置，AI 调用被跳过。"
             logger.error(msg)
             duration_ms = int((time.monotonic() - started_at) * 1000)
             record_ai_operation(
@@ -109,7 +109,11 @@ class AIEngine:
                 }
                 if tools is not None:
                     body["tools"] = tools
-                if tool_choice is not None:
+                # DeepSeek models (flash uses internal reasoning, pro uses explicit thinking)
+                # reject ANY tool_choice parameter in the request body — even "auto".
+                # Detect by model name prefix so this stays correct if we switch providers.
+                _is_deepseek = 'deepseek' in config.get('model', '').lower()
+                if tool_choice is not None and not _is_deepseek:
                     body["tool_choice"] = tool_choice
                 if config.get('thinking'):
                     body["thinking"] = {"type": "enabled"}
@@ -362,8 +366,9 @@ class AIEngine:
         强制模型输出符合 JSON Schema 的结构化数据。
         替代 regex-based extract_json()，消除 JSON 解析失败风险。
 
-        DeepSeek thinking mode 不支持指定具体 function 的 tool_choice 对象，
-        但支持 "required" 字符串形式，强制模型至少调用一个工具。
+        DeepSeek thinking mode 不支持 tool_choice="required"，只支持默认的
+        "auto"（即不传 tool_choice）。当 thinking 开启时自动降级为 "auto"，
+        并通过 prompt 引导模型调用工具，同时保留 content fallback。
         """
         # DeepSeek/OpenAI function calling 要求 parameters schema 顶层 type 必须为 object，
         # 对于 array schema，自动包裹一层 object 并在提取后解包。
@@ -375,11 +380,16 @@ class AIEngine:
                 'required': ['items'],
             }
 
+        # DeepSeek thinking mode rejects explicit tool_choice — handled in call_ai.
+        # When thinking is on, tool_choice is stripped from the request body.
+        # Use "required" for non-thinking tasks to enforce structured output.
+        _tool_choice = "required"
+
         tools = [cls._tool_def(tool_name, tool_description, schema)]
         response = cls.call_ai(
             messages=messages,
             tools=tools,
-            tool_choice="required",
+            tool_choice=_tool_choice,
             temperature=temperature,
             max_tokens=max_tokens,
             operation=operation,
@@ -396,10 +406,11 @@ class AIEngine:
             except (json.JSONDecodeError, TypeError, KeyError):
                 pass
 
-        # fallback: 模型未遵守 tool_choice 时，尝试从 content 提取
-        content = cls._extract_content(response)
-        if content:
-            return cls.extract_json(content)
+        # model did not call the tool — no fallback, return None
+        logger.warning(
+            "structured_output: model did not call tool '%s' operation=%s",
+            tool_name, operation,
+        )
         return None
 
     @classmethod
@@ -458,6 +469,85 @@ class AIEngine:
             max_tool_rounds, len(cls._extract_tool_calls(response)),
         )
         return response
+
+    @classmethod
+    def agentic_structured_output(cls, messages, schema, tool_name, tool_description,
+                                  research_tools, tool_executor,
+                                  temperature=0.7, max_tokens=8192, operation='general',
+                                  max_tool_rounds=5, raise_on_error=False):
+        """
+        多轮 Agent + 结构化输出：模型可先调用研究工具获取信息，再提交结构化结果。
+
+        流程：
+        1. 将 research_tools + submit tool 一起传给模型（不传 tool_choice）
+        2. 模型自主决定是否/何时调用研究工具
+        3. 模型调用 submit tool → 提取 arguments 作为结构化结果返回
+        4. 模型未调用 submit tool → 返回 None（无 fallback）
+
+        research_tools: [{"type":"function","function":{...}}, ...]  研究用工具
+        tool_executor:  callable(tool_name, arguments_dict) -> str   研究工具执行器
+        schema/tool_name/tool_description: 最终提交工具的 JSON Schema
+        """
+        submit_tool = cls._tool_def(tool_name, tool_description, schema)
+        all_tools = list(research_tools) + [submit_tool]
+        all_messages = list(messages)
+
+        for _ in range(max_tool_rounds):
+            response = cls.call_ai(
+                messages=all_messages,
+                tools=all_tools,
+                tool_choice="auto",
+                temperature=temperature,
+                max_tokens=max_tokens,
+                operation=operation,
+                raise_on_error=raise_on_error,
+            )
+            if not response:
+                return None
+
+            tool_calls = cls._extract_tool_calls(response)
+            if not tool_calls:
+                # model stopped calling tools without submitting — no fallback
+                logger.warning(
+                    "agentic_structured_output: model did not call submit tool '%s' operation=%s",
+                    tool_name, operation,
+                )
+                return None
+
+            all_messages.append(response['choices'][0]['message'])
+
+            final_result = None
+            for tc in tool_calls:
+                func = tc.get('function', {})
+                name = func.get('name', '')
+                try:
+                    args = json.loads(func.get('arguments', '{}'))
+                except (json.JSONDecodeError, TypeError):
+                    args = {}
+
+                if name == tool_name:
+                    final_result = args
+                    # 给模型一个确认，让它知道提交成功
+                    all_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get('id', ''),
+                        "content": "ok",
+                    })
+                else:
+                    result = tool_executor(name, args)
+                    all_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get('id', ''),
+                        "content": str(result),
+                    })
+
+            if final_result is not None:
+                return final_result
+
+        logger.warning(
+            "agentic_structured_output: exhausted max_tool_rounds=%s", max_tool_rounds,
+        )
+        return None
 
     @classmethod
     def call_ai_stream(cls, messages, temperature=0.7, max_tokens=8192, operation='general', max_retries=None):

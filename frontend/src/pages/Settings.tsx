@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
-import { 
-  User as UserIcon, RefreshCcw, Save, Camera, Mail, Lock, Trash2, RotateCcw, ShieldAlert
+import {
+  User as UserIcon, RefreshCcw, Save, Camera, Mail, Lock, Trash2, CreditCard, ArrowRight
 } from 'lucide-react';
 import api from '@/lib/api';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
   Sheet,
@@ -28,17 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 
 const AVATAR_STYLE_IDS = ['avataaars', 'bottts', 'pixel-art', 'adventurer', 'big-smile', 'micah', 'lorelei', 'notionists'];
 
@@ -78,16 +68,6 @@ export const Settings: React.FC = () => {
       toast.success(t('profile.saved'));
     } catch (err) { toast.error(t('common:failed')); }
     finally { setLoading(false); }
-  };
-
-  const handleResetElo = async () => {
-    try {
-      const res = await api.post('/users/me/reset-elo/');
-      updateUser(res.data);
-      toast.success(t('elo.saved'), { description: t('elo.savedDesc') });
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || t('common:failed'));
-    }
   };
 
   const handleUpdateEmail = async () => {
@@ -154,17 +134,25 @@ export const Settings: React.FC = () => {
              </div>
           </Card>
 
-          <Card className="border-none shadow-sm rounded-3xl bg-white p-8 space-y-4 border border-black/[0.03] text-left">
-             <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('elo.title')}</h4>
-             <p className="text-[10px] text-muted-foreground font-medium leading-relaxed">{t('elo.description')}</p>
-             <AlertDialog>
-                <AlertDialogTrigger asChild><Button variant="outline" disabled={(user?.elo_reset_count ?? 0) >= 1} className="w-full rounded-2xl h-11 border-black/5 font-bold text-xs"><RotateCcw className="h-3.5 w-3.5 mr-2" /> {t('elo.resetBtn', { remaining: 1 - (user?.elo_reset_count || 0) })}</Button></AlertDialogTrigger>
-                <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl">
-                  <AlertDialogHeader><div className="h-12 w-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-2"><ShieldAlert className="h-6 w-6"/></div><AlertDialogTitle>{t('elo.confirmTitle')}</AlertDialogTitle><AlertDialogDescription>{t('elo.confirmDesc')}</AlertDialogDescription></AlertDialogHeader>
-                  <AlertDialogFooter><AlertDialogCancel className="rounded-xl font-bold">{t('common:cancel')}</AlertDialogCancel><AlertDialogAction onClick={handleResetElo} className="rounded-xl bg-black text-white font-bold">{t('elo.confirmReset')}</AlertDialogAction></AlertDialogFooter>
-                </AlertDialogContent>
-             </AlertDialog>
-          </Card>
+          <Link to="/billing" className="block">
+            <Card className="border-none shadow-sm rounded-3xl bg-white p-8 border border-black/[0.03] text-left cursor-pointer hover:shadow-md motion-safe:transition-shadow">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">方案与账单</h4>
+                    <p className="text-[11px] text-muted-foreground font-medium">
+                      {user?.is_member ? `当前方案：${user?.membership_tier || 'Free'}` : '升级解锁完整功能'}
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground/40" />
+              </div>
+            </Card>
+          </Link>
+
         </div>
 
         <div className="lg:col-span-8 space-y-8">

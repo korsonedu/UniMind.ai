@@ -1,17 +1,13 @@
 import json
 import logging
-import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional
 
 from django.conf import settings
 
-from ai_engine.config import get_llm_config
-from ai_engine.service import AICallError, AIEngine
-from quizzes.models import KnowledgePoint, Question
-# prompt_resources removed — shared constraints now inlined into prompt templates
+from ai_engine.service import AIEngine
+from quizzes.models import Question
 
-# Extraction: normalization functions now live in question_normalizer
 from quizzes.services.question_normalizer import (
     normalize_question_type,
     normalize_difficulty_level,
@@ -23,7 +19,6 @@ from quizzes.services.question_normalizer import (
     TYPE_RATIO_LABELS,
 )
 
-# Extraction: generation methods now live in QuestionGenerator
 from quizzes.services.question_generator import QuestionGenerator
 
 logger = logging.getLogger(__name__)
@@ -35,11 +30,7 @@ class _SafeDict(dict):
 
 
 class AIService:
-    """AI 门面层：统一模板、生成、判分与助教对话接口。
-
-    Normalization functions have been extracted to quizzes.services.question_normalizer.
-    Generation pipeline has been extracted to quizzes.services.question_generator.QuestionGenerator.
-    """
+    """AI 门面层：统一模板、生成、判分与助教对话接口。"""
 
     # Re-export extracted constants for backward compatibility
     QUESTION_TYPE_ALIASES = QUESTION_TYPE_ALIASES
@@ -50,10 +41,11 @@ class AIService:
 
     @classmethod
     def call_ai(cls, messages, temperature=0.4, max_tokens=4096,
-                raise_on_error=False, operation='general'):
+                raise_on_error=False, operation='general', tools=None, tool_choice=None):
         return AIEngine.call_ai(
             list(messages), temperature=temperature, max_tokens=max_tokens,
             raise_on_error=raise_on_error, operation=operation,
+            tools=tools, tool_choice=tool_choice,
         )
 
     @classmethod
@@ -72,6 +64,63 @@ class AIService:
         res = cls.simple_chat(system_prompt, user_prompt, temperature=temperature,
                               max_tokens=max_tokens, operation=operation)
         return cls.extract_content(res)
+
+    @classmethod
+    def structured_output(cls, system_prompt, user_prompt, schema,
+                          tool_name="output", tool_description="Submit the structured output",
+                          temperature=0.7, max_tokens=8192, operation='general',
+                          raise_on_error=False):
+        """
+        强制模型输出符合 JSON Schema 的结构化数据。
+        替代 simple_chat_text + extract_json 的脆弱模式。
+        """
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        return AIEngine.structured_output(
+            messages=messages, schema=schema, tool_name=tool_name,
+            tool_description=tool_description, temperature=temperature,
+            max_tokens=max_tokens, operation=operation,
+            raise_on_error=raise_on_error,
+        )
+
+    @classmethod
+    def call_ai_with_tools(cls, system_prompt, user_prompt, tools, tool_executor,
+                           tool_choice="auto", temperature=0.7, max_tokens=8192,
+                           operation='general', max_tool_rounds=5,
+                           raise_on_error=False):
+        """多轮 Agent 循环，详见 AIEngine.call_ai_with_tools。"""
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        return AIEngine.call_ai_with_tools(
+            messages=messages, tools=tools, tool_executor=tool_executor,
+            tool_choice=tool_choice, temperature=temperature,
+            max_tokens=max_tokens, operation=operation,
+            max_tool_rounds=max_tool_rounds, raise_on_error=raise_on_error,
+        )
+
+    @classmethod
+    def agentic_structured_output(cls, system_prompt, user_prompt, schema,
+                                  tool_name, tool_description,
+                                  research_tools, tool_executor,
+                                  temperature=0.7, max_tokens=8192,
+                                  operation='general', max_tool_rounds=5,
+                                  raise_on_error=False):
+        """多轮 Agent + 结构化输出，详见 AIEngine.agentic_structured_output。"""
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_prompt},
+        ]
+        return AIEngine.agentic_structured_output(
+            messages=messages, schema=schema, tool_name=tool_name,
+            tool_description=tool_description, research_tools=research_tools,
+            tool_executor=tool_executor, temperature=temperature,
+            max_tokens=max_tokens, operation=operation,
+            max_tool_rounds=max_tool_rounds, raise_on_error=raise_on_error,
+        )
 
     @classmethod
     def extract_json(cls, text: Optional[str]):
@@ -115,10 +164,6 @@ class AIService:
                 except Exception:
                     continue
         return None
-
-    @classmethod
-    def get_llm_config(cls):
-        return get_llm_config()
 
     @classmethod
     def extract_content(cls, response: Optional[Dict[str, Any]]) -> Optional[str]:
@@ -260,6 +305,16 @@ class AIService:
         return AssistantChatService.chat_with_assistant(
             cls, bot=bot, history_messages=history_messages,
             user_message=user_message, student_context=student_context,
+        )
+
+    @classmethod
+    def chat_with_assistant_agent(cls, bot, history_messages, user_message,
+                                   tool_executor, student_context=''):
+        from ai_assistant.services.chat_service import AssistantChatService
+        return AssistantChatService.chat_with_assistant_agent(
+            bot=bot, history_messages=history_messages,
+            user_message=user_message, tool_executor=tool_executor,
+            student_context=student_context,
         )
 
     # ── Legacy private methods (delegated to QuestionGenerator) ──

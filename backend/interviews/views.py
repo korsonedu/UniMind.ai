@@ -9,7 +9,7 @@ from django.http import StreamingHttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from users.permissions import HasPlanFeature, HasPointsBalance, HasQuota
+from users.permissions import HasPlanFeature, HasQuota
 from users.views import IsMember
 from users.quota import increment_quota
 from quizzes.models import KnowledgePoint
@@ -51,9 +51,8 @@ def _serialize_session(session: InterviewSession, include_turns: bool = False) -
 
 
 class InterviewSessionListCreateView(APIView):
-    permission_classes = [IsMember, HasPlanFeature, HasPointsBalance, HasQuota]
+    permission_classes = [IsMember, HasPlanFeature, HasQuota]
     required_feature = 'interview.mock'
-    points_cost = 50
     quota_resource = 'interview'
 
     def get(self, request):
@@ -84,11 +83,6 @@ class InterviewSessionListCreateView(APIView):
             inst = request.user.institution
             if inst is None or not KnowledgePoint.objects.filter(institution=inst).exists():
                 return Response({"error": "当前机构尚未设置知识结构，请联系机构管理员导入知识树后再使用专业课面试功能"}, status=400)
-
-        # 扣积分：一口价，整场面试全包
-        from users.points import spend_elo_points
-        if not spend_elo_points(request.user.id, 50, 'shop_redeem', description='模拟面试门票'):
-            return Response({'error': '积分不足'}, status=402)
 
         session = InterviewSession.objects.create(
             user=request.user,
@@ -309,9 +303,8 @@ class ResumeTuneView(APIView):
     MAX_SIZE = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTS = {'.pdf', '.docx', '.txt'}
 
-    permission_classes = [IsMember, HasPlanFeature, HasPointsBalance]
+    permission_classes = [IsMember, HasPlanFeature]
     required_feature = 'interview.mock'
-    points_cost = 15
 
     def get(self, request):
         """列出当前用户的简历调优记录"""
@@ -358,11 +351,6 @@ class ResumeTuneView(APIView):
             resume_text = parsed.strip()
         if not resume_text:
             return Response({"error": "resume_text 不能为空，或上传文件解析失败。"}, status=400)
-
-        # 扣积分
-        from users.points import spend_elo_points
-        if not spend_elo_points(request.user.id, 15, 'shop_redeem', description='简历优化'):
-            return Response({'error': '积分不足'}, status=402)
 
         try:
             payload = InterviewAIService.tune_resume(resume_text) or {}

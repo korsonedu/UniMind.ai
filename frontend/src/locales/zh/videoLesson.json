@@ -26,5 +26,5 @@
   "fullscreen": "全屏",
   "exitFullscreen": "退出全屏",
   "watchComplete": "观看完成！奖励 {{elo}} ELO",
-  "currentPoints": "当前积分: {{score}}"
+  "currentPoints": "当前 ELO: {{score}}"
 }

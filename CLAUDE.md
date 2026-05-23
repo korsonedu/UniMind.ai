@@ -1,6 +1,6 @@
 # CLAUDE.md — UniMind.ai
 
-AI 驱动的通用培训机构 SaaS 平台。Django 6.0 + React 19 + DeepSeek V4。
+AI 驱动的通用培训机构 SaaS 平台。Django 6.0 + React 19 + MiMo V2.5。
 
 ## 硬边界
 
@@ -28,12 +28,14 @@ backend/
 │   ├── management/         #   import_knowledge_tree, seed_questions/demo
 │   └── views_*.py          #   views 已拆分为 6 个文件（原始 views.py 已删除）
 ├── users/                  # 用户/会员/RBAC/ELO/机构管理
+│   └── services/           #   会员服务 (membership.py)
 ├── courses/                # 课程/专辑/AI大纲/ASR/分片上传
 ├── articles/               # 深度文章
 ├── interviews/             # AI 模拟面试
 ├── study_room/             # 在线自习室
 ├── faq_system/             # 答疑系统
 ├── notifications/          # 站内通知
+├── payments/               # 支付网关 (Stripe/支付宝/微信)
 ├── core/                   # 基础设施 (加密字段、Cookie认证、邮件、限流、Prompt管理)
 └── prompts/                # 统一 Prompt 模板目录
     ├── quizzes/  ai_assistant/  courses/  pipeline/  grading/  interviews/
@@ -63,13 +65,17 @@ frontend/
 | `/api/courses/` | 课程/视频 API |
 | `/api/ai/` | AI 生成/管线 API |
 | `/api/institutions/` | 机构管理 API |
+| `/api/payments/` | 支付 API（订单/支付配置） |
+| `/payments/result` | 支付结果页（前端） |
+| `/billing` | 方案账单页（前端） |
+| `/checkout` | 结算页（前端） |
 | `/ws/` | WebSocket（自习室/对话） |
 
 ## 环境变量速查
 
 ```bash
 # 必填
-DEEPSEEK_API_KEY=sk-xxx          # DeepSeek V4 API key
+LLM_API_KEY=sk-xxx              # LLM API key（当前: MiMo）
 DJANGO_ENV=production|development
 SECRET_KEY=<random-64-chars>
 ALLOWED_HOSTS=domain.com
@@ -81,8 +87,8 @@ DB_NAME=unimind  DB_USER=unimind  DB_PASSWORD=xxx  DB_HOST=localhost  DB_PORT=54
 # Redis
 REDIS_URL=redis://127.0.0.1:6379/0
 
-# AI 模型（全局覆盖，可选；按任务路由见 ai_engine/config.py）
-LLM_MODEL=deepseek-v4-pro
+# AI 模型（按任务路由见 ai_engine/config.py，hot-swap 只需改顶部两个常量）
+# LLM_MODEL=                    # 全局覆盖（可选）
 
 # 邮件 (Resend HTTP API)
 EMAIL_BACKEND=core.email_service.ResendEmailBackend
@@ -132,18 +138,19 @@ sudo journalctl -u unimind.service -f
 
 ## AI 模型策略
 
-| 任务 | 模型 | 思考 | 原因 |
+| 任务 | 分级 | 思考 | 原因 |
 |------|------|------|------|
-| 对话/面试 | v4-flash | 关 | 快速响应 |
-| 出题 Author / 生成 | v4-pro | 关 | 高质量内容创作 |
-| 出题 Author Revise | v4-pro | 开(medium) | 基于审题反馈修订 |
-| 出题 Reviewer | v4-pro | 开(high) | 深度逻辑检查 |
-| 主观题判分 | v4-pro | 关 | 结构化 JSON 输出，无需链式推理 |
-| 作文评分 | v4-pro | 开(max) | 最高强度推理 |
-| 解析/分类 | v4-flash | 关 | 轻量任务 |
-| Schema 修复 | v4-flash | 关 | JSON 格式修复 |
+| 对话/面试 | fast | — | 快速响应 |
+| 出题 Author / AuthorRevise | fast | — | structured_output |
+| 出题 Reviewer | pro | 开 | 深度逻辑检查，唯一显式开 thinking 的任务 |
+| 出题 Classifier | fast | — | 审计+分类，structured_output |
+| 主观题判分 | pro | — | 结构化 JSON 输出 |
+| 知识树生成 | pro | — | 高质量内容创作 |
+| 解析/分类/Schema 修复 | fast | — | 轻量任务 |
 
-> 路由来源：`ai_engine/config.py`。`LLM_MODEL` env var 可全局覆盖。
+> 路由来源：`ai_engine/config.py`。模型 ID 集中在文件顶部 `FALLBACK_FAST` / `FALLBACK_PRO` 两个常量。
+> 换供应商只改此处 + `DEFAULT_BASE_URL`。分级覆盖：`AI_MODEL_FAST` / `AI_MODEL_PRO` env var。
+> DeepSeek thinking + tool_choice 不冲突。thinking 开启时 tool calls 轮次必须回传 `reasoning_content`（`call_ai_with_tools` 已处理）。
 
 ## 深入文档
 
@@ -153,8 +160,7 @@ sudo journalctl -u unimind.service -f
 | `CHANGELOG.md` | 版本更新日志 |
 | `docs/tech/architecture/PERMISSION_ARCHITECTURE.md` | 三层权限模型、路由守卫、数据隔离、开发规范 |
 | `docs/tech/features/MEMORIX_WHITEPAPER.md` | Memorix 算法论文 |
-| `docs/tech/features/AI_MULTI_AGENT_PIPELINE.md` | 3-Agent 对抗出题管线 |
+| `docs/tech/features/AI_MULTI_AGENT_PIPELINE.md` | 4-Agent ARC 对抗出题管线（Author→Reviewer→AuthorRevise→Classifier） |
 | `docs/tech/features/PERSONALIZED_PDF_MOCK_EXAM.md` | 模拟考试（AI 组卷 + 教师发布 + 提交评分） |
 | `docs/tech/incidents/` | 历史事故记录 |
-| `backend/knowledge_tree.md` | 431 金融知识树 |
-| `backend/finance_431.md` | 431 考纲说明 |
+| `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |

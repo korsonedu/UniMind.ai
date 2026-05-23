@@ -198,20 +198,6 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         return qs
 
 
-class BulkImportQuestionsView(APIView):
-    permission_classes = [IsAdmin, HasQuota]
-    quota_resource = 'question'
-    def post(self, request):
-        questions_data = request.data.get('questions', [])
-        kp_id = request.data.get('kp_id')
-        if kp_id:
-            for q in questions_data:
-                q['kp_id'] = q.get('kp_id') or kp_id
-
-        created_count = save_confirmed_questions(questions_data, institution=request.user.institution)
-        return Response({'status': 'success', 'count': created_count})
-
-
 class AdminQuestionListView(APIView):
     """
     管理员专用分页题目列表接口，支持搜索、知识点筛选和题型筛选。

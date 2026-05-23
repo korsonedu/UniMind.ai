@@ -1,11 +1,13 @@
 "use client"
 
 import * as React from "react"
+import { useRef } from "react"
 import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useScrollBoundaryShift } from "@/lib/useScrollBoundaryShift"
 
 const Sheet = SheetPrimitive.Root
 
@@ -56,22 +58,34 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <SheetPrimitive.Content
-      ref={ref}
-      className={cn(sheetVariants({ side }), "rounded-l-[2.5rem] border-none bg-white/95 dark:bg-background/95 backdrop-blur-2xl shadow-2xl overscroll-contain max-sm:w-[calc(100vw-1rem)]", className)}
-      {...props}
-    >
-      <SheetPrimitive.Close className="absolute right-6 top-6 rounded-full p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
-        <X className="h-4 w-4" aria-hidden="true" />
-        <span className="sr-only">Close</span>
-      </SheetPrimitive.Close>
-      {children}
-    </SheetPrimitive.Content>
-  </SheetPortal>
-))
+>(({ side = "right", className, children, ...props }, ref) => {
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  // Sheet uses inset positioning, no centering transform
+  useScrollBoundaryShift(innerRef, "", 6);
+
+  const mergeRef = (node: HTMLDivElement | null) => {
+    innerRef.current = node;
+    if (typeof ref === "function") ref(node);
+    else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+  };
+
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <SheetPrimitive.Content
+        ref={mergeRef}
+        className={cn(sheetVariants({ side }), "rounded-l-[2.5rem] border-none bg-white/95 dark:bg-background/95 backdrop-blur-2xl shadow-dialog overscroll-contain max-sm:w-[calc(100vw-1rem)]", className)}
+        {...props}
+      >
+        <SheetPrimitive.Close className="absolute right-6 top-6 rounded-full p-1 opacity-70 ring-offset-background transition-all duration-200 hover:opacity-100 hover:bg-slate-100 hover:scale-110 active:scale-95 dark:hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+          <X className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">Close</span>
+        </SheetPrimitive.Close>
+        {children}
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+})
 SheetContent.displayName = SheetPrimitive.Content.displayName
 
 const SheetHeader = ({
