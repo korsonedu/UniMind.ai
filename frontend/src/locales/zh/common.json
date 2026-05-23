@@ -67,5 +67,8 @@
   "startupGuideTitle": "使用指南",
   "startupGuideDesc": "欢迎下载启动资料，这是用于金融硕士入门必备的一些教材、课件、工具等，由我们精选并对外公开展示。请选中你想要下载的文件（支持多选），然后点击右上角的\"下载选中\"按钮进行批量获取。",
   "startupNoFiles": "暂无资料",
-  "noArticlesFound": "暂无文章"
+  "noArticlesFound": "暂无文章",
+  "notFound": "页面不存在",
+  "pageNotFound": "您访问的页面不存在或已被移除。",
+  "backHome": "返回首页"
 }

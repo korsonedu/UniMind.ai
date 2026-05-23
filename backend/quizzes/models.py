@@ -61,9 +61,9 @@ class Question(models.Model):
     
     knowledge_point = models.ForeignKey(KnowledgePoint, on_delete=models.SET_NULL, null=True, blank=True, related_name='questions')
     text = models.TextField(verbose_name="题目内容")
-    q_type = models.CharField(max_length=20, choices=QUESTION_TYPES, default='objective')
+    q_type = models.CharField(max_length=20, choices=QUESTION_TYPES, default='objective', db_index=True)
     subjective_type = models.CharField(max_length=20, choices=SUBJECTIVE_TYPES, blank=True, null=True, verbose_name="主观题类型")
-    difficulty_level = models.CharField(max_length=20, choices=DIFFICULTY_LEVELS, default='normal', verbose_name="难度等级")
+    difficulty_level = models.CharField(max_length=20, choices=DIFFICULTY_LEVELS, default='normal', verbose_name="难度等级", db_index=True)
     grading_points = models.TextField(blank=True, null=True, help_text="得分点说明（主观题必填）")
     options = models.JSONField(blank=True, null=True, help_text="客观题选项")
     correct_answer = models.TextField(blank=True, null=True, help_text="客观题标准答案或主观题参考答案")
@@ -113,7 +113,7 @@ class UserQuestionStatus(models.Model):
     lapses = models.IntegerField(default=0, help_text="忘记次数")
     last_review = models.DateTimeField(null=True, blank=True, help_text="上次复习时间")
     
-    next_review_at = models.DateTimeField(auto_now_add=True)
+    next_review_at = models.DateTimeField(auto_now_add=True, db_index=True)
     last_correct = models.BooleanField(default=False)
 
     class Meta:
@@ -155,7 +155,7 @@ class ContentPipelineTask(models.Model):
         ("failed", "失败"), ("cancelled", "已取消"),
     ]
     task_type = models.CharField(max_length=30, choices=TASK_TYPES, default="other", verbose_name="任务类型")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", verbose_name="任务状态")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", verbose_name="任务状态", db_index=True)
     title = models.CharField(max_length=200, verbose_name="任务标题")
     description = models.TextField(blank=True, verbose_name="任务说明")
     progress = models.PositiveSmallIntegerField(default=0, verbose_name="进度百分比")
@@ -164,7 +164,7 @@ class ContentPipelineTask(models.Model):
     error_message = models.TextField(blank=True, verbose_name="错误信息")
     request_id = models.CharField(max_length=80, blank=True, verbose_name="请求链路 ID")
     assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="assigned_pipeline_tasks", verbose_name="处理人")
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pipeline_tasks", verbose_name="创建人")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="pipeline_tasks", verbose_name="创建人", db_index=True)
     institution = models.ForeignKey('users.Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='pipeline_tasks', verbose_name="所属机构")
     started_at = models.DateTimeField(null=True, blank=True, verbose_name="开始时间")
     finished_at = models.DateTimeField(null=True, blank=True, verbose_name="完成时间")

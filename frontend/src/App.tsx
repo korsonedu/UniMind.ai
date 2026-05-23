@@ -1,45 +1,55 @@
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { lazy, Suspense, useState, useEffect, type ReactNode } from 'react';
 import { MainLayout } from './layouts/MainLayout';
-import { CourseCenter } from './pages/CourseCenter';
-import { TestLadder } from './pages/TestLadder';
-import { StudyRoom } from './pages/StudyRoom';
-import { Settings } from './pages/Settings';
-import { Maintenance } from './pages/Maintenance';
-import { Login } from './pages/Login';
-import { Register } from './pages/Register';
-import { VideoLesson } from './pages/VideoLesson';
-import { ArticleDetail } from './pages/ArticleDetail';
-import { ArticleCenter } from './pages/ArticleCenter';
-import { AIAssistant } from './pages/AIAssistant';
-import { SystemSettings } from './pages/SystemSettings';
-import { KnowledgeMap } from './pages/KnowledgeMap';
-import { KnowledgeNodeDetail } from './pages/KnowledgeNodeDetail';
-import { QASystem } from './pages/QASystem';
-import { TestSessionPage } from './pages/TestSessionPage';
-import InstitutionDashboard from './pages/InstitutionDashboard';
-import InstitutionStudents from './pages/InstitutionStudents';
-import InstitutionAdmin from './pages/InstitutionAdmin';
-import InstitutionHome from './pages/InstitutionHome';
-import InviteCodeAdmin from './pages/InviteCodeAdmin';
-import { PromptTemplatesAdmin } from './pages/PromptTemplatesAdmin';
-import { Interviews } from './pages/Interviews';
-import { PdfMockExam } from './pages/PdfMockExam';
-import { WrongQuestionReviewPage } from './pages/WrongQuestionReviewPage';
-import { BillingPage } from './pages/Billing';
-import { PaymentResult } from './pages/PaymentResult';
-
 import { useAuthStore } from './store/useAuthStore';
 import { useSystemStore } from './store/useSystemStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
 import { FeatureGuard } from './components/FeatureGuard';
 import { FEATURES } from './store/useInstitutionStore';
 import { Loading } from '@/components/Loading';
-import { useState, useEffect, type ReactNode } from 'react';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
 import { WeeklyReportDialog } from './components/WeeklyReportDialog';
 import { Landing } from './pages/Landing';
 import i18n from '@/lib/i18n';
+
+// Lazy-loaded pages — named exports need .then() wrapper
+const lazyNamed = <T extends Record<string, React.ComponentType<any>>>(loader: () => Promise<T>, name: keyof T) =>
+  lazy(() => loader().then(m => ({ default: m[name] })));
+
+const CourseCenter = lazyNamed(() => import('./pages/CourseCenter'), 'CourseCenter');
+const TestLadder = lazyNamed(() => import('./pages/TestLadder'), 'TestLadder');
+const StudyRoom = lazyNamed(() => import('./pages/StudyRoom'), 'StudyRoom');
+const Settings = lazyNamed(() => import('./pages/Settings'), 'Settings');
+const Maintenance = lazyNamed(() => import('./pages/Maintenance'), 'Maintenance');
+const Login = lazyNamed(() => import('./pages/Login'), 'Login');
+const Register = lazyNamed(() => import('./pages/Register'), 'Register');
+const VideoLesson = lazyNamed(() => import('./pages/VideoLesson'), 'VideoLesson');
+const ArticleDetail = lazyNamed(() => import('./pages/ArticleDetail'), 'ArticleDetail');
+const ArticleCenter = lazyNamed(() => import('./pages/ArticleCenter'), 'ArticleCenter');
+const AIAssistant = lazyNamed(() => import('./pages/AIAssistant'), 'AIAssistant');
+const SystemSettings = lazyNamed(() => import('./pages/SystemSettings'), 'SystemSettings');
+const KnowledgeMap = lazyNamed(() => import('./pages/KnowledgeMap'), 'KnowledgeMap');
+const KnowledgeNodeDetail = lazyNamed(() => import('./pages/KnowledgeNodeDetail'), 'KnowledgeNodeDetail');
+const QASystem = lazyNamed(() => import('./pages/QASystem'), 'QASystem');
+const TestSessionPage = lazyNamed(() => import('./pages/TestSessionPage'), 'TestSessionPage');
+const PromptTemplatesAdmin = lazyNamed(() => import('./pages/PromptTemplatesAdmin'), 'PromptTemplatesAdmin');
+const Interviews = lazyNamed(() => import('./pages/Interviews'), 'Interviews');
+const PdfMockExam = lazyNamed(() => import('./pages/PdfMockExam'), 'PdfMockExam');
+const WrongQuestionReviewPage = lazyNamed(() => import('./pages/WrongQuestionReviewPage'), 'WrongQuestionReviewPage');
+const BillingPage = lazyNamed(() => import('./pages/Billing'), 'BillingPage');
+const PaymentResult = lazyNamed(() => import('./pages/PaymentResult'), 'PaymentResult');
+const Checkout = lazyNamed(() => import('./pages/Checkout'), 'Checkout');
+
+// Default exports — plain lazy() works
+const InstitutionDashboard = lazy(() => import('./pages/InstitutionDashboard'));
+const InstitutionStudents = lazy(() => import('./pages/InstitutionStudents'));
+const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
+const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
+const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+const PageLoader = () => <Loading fullScreen size="lg" />;
 
 // Language redirect helper
 const LanguageRedirect = ({ lang }: { lang: string }) => {
@@ -119,7 +129,7 @@ const HomeRedirect = () => {
   const { user } = useAuthStore();
   const institution = useInstitutionStore(s => s.institution);
   if (user?.role === 'admin' && !institution && !user?.institution) return <Navigate to="/institution/admin" replace />;
-  if (institution?.plan === 'pro') return <InstitutionHome />;
+  if (institution?.plan === 'pro') return <Suspense fallback={<PageLoader />}><InstitutionHome /></Suspense>;
   return <Navigate to="/courses" replace />;
 };
 
@@ -159,6 +169,10 @@ const RootRedirect = () => {
   return <Landing />;
 };
 
+const lazyPage = (Component: React.ComponentType) => (
+  <Suspense fallback={<PageLoader />}><Component /></Suspense>
+);
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -168,40 +182,43 @@ const router = createBrowserRouter([
       {
         element: <RequireAuth><MainLayout /></RequireAuth>,
         children: [
-          { path: "courses", element: <CourseCenter /> },
-          { path: "articles", element: <ArticleCenter /> },
-          { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}><QASystem /></FeatureGuard> },
-          { path: "article/:id", element: <ArticleDetail /> },
-          { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}><TestLadder /></FeatureGuard> },
-          { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}><TestSessionPage /></FeatureGuard> },
-          { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}><StudyRoom /></FeatureGuard> },
-          { path: "ai", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}><AIAssistant /></FeatureGuard> },
-          { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}><KnowledgeMap /></FeatureGuard> },
-          { path: "knowledge-map/node/:id", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}><KnowledgeNodeDetail /></FeatureGuard> },
-          { path: "settings", element: <Settings /> },
-          { path: "billing", element: <BillingPage /> },
-          { path: "payments/result", element: <PaymentResult /> },
-          { path: "system-settings", element: <RequireAdmin><SystemSettings /></RequireAdmin> },
-          { path: "management", element: <RequireAdmin><Maintenance /></RequireAdmin> },
-          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}><VideoLesson /></FeatureGuard> },
-          { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}><WrongQuestionReviewPage /></FeatureGuard> },
-          { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}><PdfMockExam /></FeatureGuard> },
-          { path: "interviews", element: <FeatureGuard feature={FEATURES.INTERVIEW_MOCK}><Interviews /></FeatureGuard> },
-          { path: "institution", element: <RequireInstitution><InstitutionDashboard /></RequireInstitution> },
-          { path: "institution/students", element: <RequireInstitution><InstitutionStudents /></RequireInstitution> },
-          { path: "institution/admin", element: <RequireAdmin><InstitutionAdmin /></RequireAdmin> },
-          { path: "invite-codes", element: <RequirePlatformAdmin><InviteCodeAdmin /></RequirePlatformAdmin> },
-          { path: "prompt-templates", element: <RequirePlatformAdmin><PromptTemplatesAdmin /></RequirePlatformAdmin> },
+          { path: "courses", element: lazyPage(CourseCenter) },
+          { path: "articles", element: lazyPage(ArticleCenter) },
+          { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QASystem)}</FeatureGuard> },
+          { path: "article/:id", element: lazyPage(ArticleDetail) },
+          { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
+          { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
+          { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
+          { path: "ai", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}>{lazyPage(AIAssistant)}</FeatureGuard> },
+          { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeMap)}</FeatureGuard> },
+          { path: "knowledge-map/node/:id", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeNodeDetail)}</FeatureGuard> },
+          { path: "settings", element: lazyPage(Settings) },
+          { path: "billing", element: lazyPage(BillingPage) },
+          { path: "system-settings", element: <RequireAdmin>{lazyPage(SystemSettings)}</RequireAdmin> },
+          { path: "management", element: <RequireAdmin>{lazyPage(Maintenance)}</RequireAdmin> },
+          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(VideoLesson)}</FeatureGuard> },
+          { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
+          { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
+          { path: "interviews", element: <FeatureGuard feature={FEATURES.INTERVIEW_MOCK}>{lazyPage(Interviews)}</FeatureGuard> },
+          { path: "institution", element: <RequireInstitution>{lazyPage(InstitutionDashboard)}</RequireInstitution> },
+          { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
+          { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },
+          { path: "invite-codes", element: <RequirePlatformAdmin>{lazyPage(InviteCodeAdmin)}</RequirePlatformAdmin> },
+          { path: "prompt-templates", element: <RequirePlatformAdmin>{lazyPage(PromptTemplatesAdmin)}</RequirePlatformAdmin> },
+          { path: "*", element: lazyPage(NotFound) },
         ],
       },
     ],
   },
-  { path: "/intro/:slug", element: <InstitutionHome /> },
+  { path: "/intro/:slug", element: lazyPage(InstitutionHome) },
   { path: "/intro", element: <Navigate to="/" replace /> },
   { path: "/en", element: <LanguageRedirect lang="en" /> },
   { path: "/zh", element: <LanguageRedirect lang="zh" /> },
-  { path: "/login", element: <Login /> },
-  { path: "/register", element: <Register /> },
+  { path: "/login", element: lazyPage(Login) },
+  { path: "/register", element: lazyPage(Register) },
+  { path: "/checkout", element: <RequireAuth>{lazyPage(Checkout)}</RequireAuth> },
+  { path: "/payments/result", element: <RequireAuth>{lazyPage(PaymentResult)}</RequireAuth> },
+  { path: "*", element: lazyPage(NotFound) },
 ]);
 
 function App() {

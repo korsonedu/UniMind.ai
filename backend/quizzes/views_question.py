@@ -330,19 +330,18 @@ class ExportStructuredQuestionsView(APIView):
             "questions": structured
         }
 
-        # 写入 MEDIA_ROOT 而非源码目录
-        export_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
+        # 写入非公开目录，不通过 MEDIA_URL 暴露
+        export_dir = os.path.join(settings.BASE_DIR, 'exports')
         os.makedirs(export_dir, exist_ok=True)
         file_path = os.path.join(export_dir, "seed_questions.json")
         try:
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            file_url = request.build_absolute_uri(settings.MEDIA_URL + 'exports/seed_questions.json')
             return Response({
                 "status": "success",
                 "total": len(structured),
                 "message": "已成功导出",
-                "file_url": file_url,
+                "file": "seed_questions.json",
             })
         except Exception as e:
             return Response({"error": f"写入文件失败: {str(e)}"}, status=500)

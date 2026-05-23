@@ -9,8 +9,11 @@ import hashlib
 def _get_fernet() -> Fernet:
     key = getattr(settings, 'ENCRYPTION_KEY', '')
     if not key:
-        raw = (settings.SECRET_KEY or 'django-insecure-fallback').encode()
-        key = base64.urlsafe_b64encode(hashlib.sha256(raw).digest()).decode()
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "ENCRYPTION_KEY is required for encrypted fields. "
+            "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        )
     return Fernet(key.encode() if isinstance(key, str) else key)
 
 

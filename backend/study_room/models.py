@@ -18,9 +18,9 @@ class ChatMessage(models.Model):
     ]
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     content = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     related_plan = models.ForeignKey(DailyPlan, on_delete=models.CASCADE, null=True, blank=True, related_name='broadcast_messages')
-    message_type = models.CharField(max_length=20, choices=MESSAGE_TYPE_CHOICES, default='chat', verbose_name="消息类型")
+    message_type = models.CharField(max_length=20, choices=MESSAGE_TYPE_CHOICES, default='chat', verbose_name="消息类型", db_index=True)
     institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="chat_messages", verbose_name="所属机构")
 
     class Meta:

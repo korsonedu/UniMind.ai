@@ -33,7 +33,7 @@ class InterviewSession(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='interview_sessions')
     session_type = models.CharField(max_length=20, choices=SESSION_TYPES, default='professional')
     interviewer_style = models.CharField(max_length=20, choices=STYLE_CHOICES, default='friendly')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ongoing')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ongoing', db_index=True)
     
     radar_scores = models.JSONField(default=dict, blank=True, help_text="五维雷达图打分")
     overall_feedback = models.TextField(blank=True, help_text="面试总体评价")

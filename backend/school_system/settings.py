@@ -259,6 +259,36 @@ CELERY_BEAT_SCHEDULE_FILENAME = os.getenv(
     "CELERY_BEAT_SCHEDULE_FILENAME",
     str(BASE_DIR / "celerybeat-schedule"),
 )
+CELERY_BEAT_SCHEDULE = {
+    "expire-stale-orders-every-30m": {
+        "task": "payments.tasks.expire_stale_orders",
+        "schedule": 1800.0,  # 30 minutes
+    },
+    "check-membership-expiry-daily": {
+        "task": "users.tasks.check_membership_expiry",
+        "schedule": 86400.0,  # 24 hours
+    },
+    "elo-decay-daily": {
+        "task": "users.tasks.elo_decay_daily",
+        "schedule": 86400.0,
+    },
+    "elo-decay-weekly": {
+        "task": "users.tasks.elo_decay_weekly",
+        "schedule": 604800.0,  # 7 days
+    },
+    "monthly-points-bonus": {
+        "task": "users.tasks.monthly_points_bonus",
+        "schedule": 2592000.0,  # 30 days (approx monthly)
+    },
+    "notify-trial-expiring-daily": {
+        "task": "users.tasks.notify_trial_expiring",
+        "schedule": 86400.0,
+    },
+    "send-expiry-reminders-daily": {
+        "task": "notifications.tasks_reminder.send_expiry_reminders",
+        "schedule": 86400.0,
+    },
+}
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "visibility_timeout": _get_int("CELERY_VISIBILITY_TIMEOUT", 3600),
 }
