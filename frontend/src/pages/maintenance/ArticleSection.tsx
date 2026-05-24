@@ -12,6 +12,7 @@ import { FileText, Edit3, Trash2, Plus, Eye } from 'lucide-react';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { TagInput } from './MaintenanceComponents';
 import { QuickCreateKPDialog } from './QuickCreateKPDialog';
+import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -23,21 +24,26 @@ export const ArticleSection: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [showNewKP, setShowNewKP] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [form, setForm] = useState({ title: '', content: '', author_display_name: '', tags: [] as string[], knowledge_point: '0' });
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = useCallback(async (p = 1) => {
     try {
       const [a, k] = await Promise.all([
-        api.get('/articles/'),
+        api.get('/articles/', { params: { page: p } }),
         api.get('/quizzes/knowledge-points/'),
       ]);
       setItems(a.data.articles || []);
+      setTotal(a.data.total ?? (a.data.articles || []).length);
+      setTotalPages(a.data.total_pages ?? 1);
       setKpList(k.data);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => { fetchItems(page); }, [fetchItems, page]);
 
   const resetForm = () => setForm({ title: '', content: '', author_display_name: '', tags: [], knowledge_point: '0' });
 
@@ -87,7 +93,7 @@ export const ArticleSection: React.FC = () => {
         <div className="flex items-center gap-3">
           <FileText className="h-5 w-5 text-[#6E6E73]" />
           <h3 className="text-lg font-semibold tracking-tight">{t('tabs.publishArticle')}</h3>
-          <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{items.length}</Badge>
+          <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{total}</Badge>
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
           <Plus className="w-4 h-4" />
@@ -102,48 +108,51 @@ export const ArticleSection: React.FC = () => {
           <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noArticlesHint')}</p>
         </Card>
       ) : (
-        <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
-          <ScrollArea className="h-[560px]">
-            <div className="divide-y divide-black/[0.04]">
-              {items.map((item: any) => (
-                <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold">{item.title}</p>
-                      <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-2">{item.content?.replace(/[#*`>\[\]!\-]/g, '').slice(0, 150)}</p>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        {item.author_display_name && (
-                          <span className="text-[11px] text-[#AEAEB2] font-medium">{item.author_display_name}</span>
-                        )}
-                        {item.knowledge_point_name && (
-                          <Badge variant="secondary" className="text-[10px] rounded-lg bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">{item.knowledge_point_name}</Badge>
-                        )}
-                        {item.tags?.map((tag: string, i: number) => (
-                          <Badge key={i} className="text-[10px] bg-black text-white hover:bg-black/80 rounded-lg">{tag}</Badge>
-                        ))}
-                        {item.view_count !== undefined && (
-                          <span className="text-[11px] text-[#AEAEB2] flex items-center gap-0.5"><Eye className="w-3 h-3" /> {item.view_count}</span>
-                        )}
+        <>
+          <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
+            <ScrollArea className="h-[560px]">
+              <div className="divide-y divide-black/[0.04]">
+                {items.map((item: any) => (
+                  <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">{item.title}</p>
+                        <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-2">{item.content?.replace(/[#*`>\[\]!\-]/g, '').slice(0, 150)}</p>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {item.author_display_name && (
+                            <span className="text-[11px] text-[#AEAEB2] font-medium">{item.author_display_name}</span>
+                          )}
+                          {item.knowledge_point_name && (
+                            <Badge variant="secondary" className="text-[10px] rounded-lg bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">{item.knowledge_point_name}</Badge>
+                          )}
+                          {item.tags?.map((tag: string, i: number) => (
+                            <Badge key={i} className="text-[10px] bg-black text-white hover:bg-black/80 rounded-lg">{tag}</Badge>
+                          ))}
+                          {item.view_count !== undefined && (
+                            <span className="text-[11px] text-[#AEAEB2] flex items-center gap-0.5"><Eye className="w-3 h-3" /> {item.view_count}</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#AEAEB2] mt-1.5">
+                          {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
+                          {item.updated_at && item.updated_at !== item.created_at ? ` · 更新 ${new Date(item.updated_at).toLocaleDateString()}` : ''}
+                        </p>
                       </div>
-                      <p className="text-[11px] text-[#AEAEB2] mt-1.5">
-                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : ''}
-                        {item.updated_at && item.updated_at !== item.created_at ? ` · 更新 ${new Date(item.updated_at).toLocaleDateString()}` : ''}
-                      </p>
-                    </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <Button onClick={() => setEditingItem({ ...item, knowledge_point: item.knowledge_point?.toString() || '0' })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button onClick={() => handleDelete(item.id, item.title)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <Button onClick={() => setEditingItem({ ...item, knowledge_point: item.knowledge_point?.toString() || '0' })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button onClick={() => handleDelete(item.id, item.title)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </Card>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
 
       {/* Create Dialog */}

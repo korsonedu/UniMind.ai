@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, Check, Sparkles, Zap } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/version';
 import { useTranslation } from 'react-i18next';
@@ -51,16 +51,7 @@ const PricingPage: React.FC = () => {
             {t('pricing.pageSubtitle')}
           </p>
 
-          {/* Trial banner */}
-          <div className="max-w-2xl mx-auto mt-10 rounded-2xl border p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4 text-left" style={{ borderColor: 'rgba(91,95,239,0.2)', background: 'rgba(91,95,239,0.05)' }}>
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(91,95,239,0.15)' }}>
-              <Zap className="h-5 w-5" style={{ color: '#818cf8' }} />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white">{t('pricing.trialTitle')}</p>
-              <p className="text-[13px] mt-0.5 leading-relaxed text-white/65">{t('pricing.trialDesc')}</p>
-            </div>
-          </div>
+          {/* Trial banner removed — moved below pricing grid */}
         </section>
 
         {/* Toggle */}
@@ -172,6 +163,12 @@ const PricingPage: React.FC = () => {
             })}
           </div>
           <p className="text-center mt-8 text-xs text-white/40">{t('pricing.footer')}</p>
+
+          {/* Trial info — plain text, no card */}
+          <div className="max-w-2xl mx-auto mt-8 text-center space-y-2">
+            <p className="text-sm font-semibold text-white/80">{t('pricing.trialTitle')}</p>
+            <p className="text-[13px] leading-relaxed text-white/50">{t('pricing.trialDesc')}</p>
+          </div>
         </section>
 
         {/* FAQ */}

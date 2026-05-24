@@ -19,12 +19,22 @@ class RelativeImageField(serializers.ImageField):
         return url if url.startswith('/') else '/' + url
 
 
-class AlbumSerializer(serializers.ModelSerializer):
+class AlbumCourseBriefSerializer(serializers.ModelSerializer):
     cover_image = RelativeImageField(required=False)
 
     class Meta:
+        model = Course
+        fields = ('id', 'title', 'cover_image')
+
+
+class AlbumSerializer(serializers.ModelSerializer):
+    cover_image = RelativeImageField(required=False)
+    course_count = serializers.IntegerField(read_only=True, required=False)
+    courses = AlbumCourseBriefSerializer(many=True, read_only=True)
+
+    class Meta:
         model = Album
-        fields = ('id', 'name', 'description', 'cover_image', 'created_at')
+        fields = ('id', 'name', 'description', 'cover_image', 'created_at', 'course_count', 'courses')
 
 
 class CourseSerializer(serializers.ModelSerializer):
@@ -58,11 +68,17 @@ class StartupMaterialSerializer(serializers.ModelSerializer):
 
 class CourseTagSerializer(serializers.ModelSerializer):
     course_count = serializers.SerializerMethodField()
+    courses = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseTag
-        fields = ('id', 'name', 'slug', 'course_count', 'created_at')
+        fields = ('id', 'name', 'slug', 'course_count', 'courses', 'created_at')
         read_only_fields = ('slug', 'created_at')
 
     def get_course_count(self, obj):
         return getattr(obj, 'course_count', obj.course_relations.count())
+
+    def get_courses(self, obj):
+        course_ids = obj.course_relations.values_list('course_id', flat=True)
+        courses = Course.objects.filter(id__in=course_ids).only('id', 'title', 'cover_image')
+        return AlbumCourseBriefSerializer(courses, many=True).data

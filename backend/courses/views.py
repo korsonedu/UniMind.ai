@@ -328,6 +328,21 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
         if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 10))
+        total = queryset.count()
+        offset = (page - 1) * page_size
+        paged = queryset[offset:offset + page_size]
+        serializer = self.get_serializer(paged, many=True)
+        return Response({
+            'items': serializer.data,
+            'total': total,
+            'page': page,
+            'total_pages': max(1, (total + page_size - 1) // page_size),
+        })
+
 class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StartupMaterial.objects.all()
     serializer_class = StartupMaterialSerializer
@@ -336,8 +351,10 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [permissions.AllowAny()]
 
 class AlbumListCreateView(generics.ListCreateAPIView):
-    queryset = Album.objects.all().order_by('-created_at')
     serializer_class = AlbumSerializer
+    def get_queryset(self):
+        from django.db.models import Count
+        return Album.objects.annotate(course_count=Count('courses')).prefetch_related('courses').order_by('-created_at')
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
@@ -396,6 +413,21 @@ class CourseListCreateView(generics.ListCreateAPIView):
             ).values('course_id').annotate(n=Count('id')).filter(n=len(tag))
             qs = qs.filter(id__in=[m['course_id'] for m in matching_qs])
         return qs
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 10))
+        total = queryset.count()
+        offset = (page - 1) * page_size
+        paged = queryset[offset:offset + page_size]
+        serializer = self.get_serializer(paged, many=True)
+        return Response({
+            'items': serializer.data,
+            'total': total,
+            'page': page,
+            'total_pages': max(1, (total + page_size - 1) // page_size),
+        })
 
     def perform_create(self, serializer):
         course = serializer.save(author=self.request.user, institution=self.request.user.institution)

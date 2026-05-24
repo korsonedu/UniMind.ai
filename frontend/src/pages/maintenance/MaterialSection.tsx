@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Rocket, Upload, Edit3, Trash2, Plus, FileText } from 'lucide-react';
+import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
 import { useUploadStore } from '@/store/useUploadStore';
 import { toast } from 'sonner';
@@ -18,18 +19,23 @@ export const MaterialSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [form, setForm] = useState({ name: '', description: '', file: null as File | null });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = useCallback(async (p = 1) => {
     try {
-      const res = await api.get('/courses/startup-materials/');
-      setItems(res.data);
+      const res = await api.get('/courses/startup-materials/', { params: { page: p, page_size: 10 } });
+      setItems(res.data.items || res.data);
+      setTotal(res.data.total ?? (Array.isArray(res.data) ? res.data.length : 0));
+      setTotalPages(res.data.total_pages ?? 1);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => { fetchItems(page); }, [fetchItems, page]);
 
   const resetForm = () => setForm({ name: '', description: '', file: null });
 
@@ -116,7 +122,7 @@ export const MaterialSection: React.FC = () => {
         <div className="flex items-center gap-3">
           <Rocket className="h-5 w-5 text-[#6E6E73]" />
           <h3 className="text-lg font-semibold tracking-tight">{t('startupMaterial.uploadMaterial')}</h3>
-          <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{items.length}</Badge>
+          <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{total}</Badge>
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
           <Plus className="w-4 h-4" />
@@ -132,40 +138,43 @@ export const MaterialSection: React.FC = () => {
           <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noMaterialsHint')}</p>
         </Card>
       ) : (
-        <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
-          <ScrollArea className="h-[560px]">
-            <div className="divide-y divide-black/[0.04]">
-              {items.map((item: any) => (
-                <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold">{item.name}</p>
-                      <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-1">{item.description || '—'}</p>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        {item.file && (
-                          <span className="text-[11px] text-[#AEAEB2] font-medium">
-                            {item.file_name || (typeof item.file === 'string' ? item.file.split('/').pop() : '')} · {formatSize(item.file_size)}
-                          </span>
-                        )}
-                        {item.created_at && (
-                          <span className="text-[11px] text-[#AEAEB2]">{new Date(item.created_at).toLocaleDateString()}</span>
-                        )}
+        <>
+          <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
+            <ScrollArea className="h-[560px]">
+              <div className="divide-y divide-black/[0.04]">
+                {items.map((item: any) => (
+                  <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">{item.name}</p>
+                        <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-1">{item.description || '—'}</p>
+                        <div className="flex items-center gap-3 mt-1.5">
+                          {item.file && (
+                            <span className="text-[11px] text-[#AEAEB2] font-medium">
+                              {item.file_name || (typeof item.file === 'string' ? item.file.split('/').pop() : '')} · {formatSize(item.file_size)}
+                            </span>
+                          )}
+                          {item.created_at && (
+                            <span className="text-[11px] text-[#AEAEB2]">{new Date(item.created_at).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button onClick={() => handleDelete(item.id)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button onClick={() => handleDelete(item.id)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </Card>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
 
       {/* Create Dialog */}

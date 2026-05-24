@@ -32,6 +32,7 @@ export interface UsageInfo {
   ai_call_total: QuotaItem;
   pdf_export: QuotaItem;
   interview: QuotaItem;
+  custom_bot: QuotaItem;
   // backward compat
   used: number;
   limit: number | null;
@@ -46,6 +47,7 @@ export const QUOTA_LABELS: Record<string, string> = {
   ai_call_total: 'AI 调用总次数',
   pdf_export: '模拟考试 PDF',
   interview: '面试场次',
+  custom_bot: '自定义机器人数',
 };
 
 export function quotaStatus(resource: QuotaItem): 'normal' | 'warning' | 'exhausted' {
@@ -176,6 +178,7 @@ export const FEATURES = {
   AI_ASSISTANT: 'ai.assistant',
   PDF_MOCK: 'pdf.mock',
   INTERVIEW_MOCK: 'interview.mock',
+  AI_BOT_CUSTOM: 'ai.bot.custom',
   BRAND_CUSTOM: 'brand.custom',
   API_ACCESS: 'api.access',
   STUDENT_PAYMENT: 'student.payment',

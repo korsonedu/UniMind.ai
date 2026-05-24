@@ -17,7 +17,6 @@ import {
   BarChart3,
   Building2,
   MessageCircleQuestion,
-  Mic,
   Wrench,
   Eye,
   EyeOff,
@@ -77,16 +76,18 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: any) => {
         variant="ghost"
         asChild
         className={cn(
-          "w-full justify-start gap-3 h-10 px-3 transition-all duration-200 rounded-lg cursor-pointer",
+          "w-full justify-start gap-3 h-10 px-3 overflow-hidden rounded-lg cursor-pointer",
           active
             ? "bg-card text-foreground shadow-sm border border-border"
             : "text-muted-foreground hover:bg-muted hover:text-foreground",
-          collapsed && "justify-center px-0"
         )}
       >
         <Link to={to} className="flex items-center gap-3 w-full h-full">
           <Icon className={cn("h-4 w-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} />
-          {!collapsed && <span className="font-bold text-[13px] tracking-tight">{label}</span>}
+          <span className={cn(
+            "font-bold text-[13px] tracking-tight whitespace-nowrap transition-all duration-200 overflow-hidden",
+            collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-[176px]"
+          )}>{label}</span>
         </Link>
       </Button>
     </div>
@@ -216,7 +217,7 @@ export const MainLayout: React.FC = () => {
         { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qa') },
         { to: '/ai', icon: Sparkles, label: t('layout:nav.aiLab') },
         { to: '/study', icon: Clock, label: t('layout:nav.studyRoom') },
-        { to: '/interviews', icon: Mic, label: t('layout:nav.interviews') },
+
         { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams') },
       ];
 
@@ -251,24 +252,48 @@ export const MainLayout: React.FC = () => {
       <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
         <aside className={cn(
           "relative border-r border-border flex-col p-2 bg-card/70 backdrop-blur-2xl transition-[width] duration-300 ease-in-out z-30 shrink-0 hidden md:flex",
-          collapsed ? "w-16 min-w-16 max-w-16" : "w-48 min-w-48 max-w-48"
+          collapsed ? "w-16" : "w-48"
         )}>
-          {/* Header Section */}
-          <div className={cn("mb-6 mt-2 flex items-center transition-all", collapsed ? "flex-col gap-2 justify-center" : "justify-between px-2")}>
-            <div className={cn("shrink-0 overflow-hidden", collapsed ? "w-10 h-10 rounded-xl" : "w-32 h-8")}>
-              <img src={UnimindLogo} alt="Unimind.ai" className="w-full h-full object-contain brand-logo-invert" />
+          {/* Header: logo icon fixed at left, expanded logo slides out from behind */}
+          <div className="mb-6 mt-2 px-2 group/header">
+            <div className="relative h-10 flex items-center">
+              {/* Collapsed icon — always visible, always at left */}
+              <div className={cn(
+                "absolute left-0 top-0 h-10 w-10 rounded-xl overflow-hidden shrink-0 transition-opacity duration-200 z-10",
+                collapsed ? "opacity-100 group-hover/header:opacity-0" : "opacity-0 pointer-events-none"
+              )}>
+                <img src="/unimind_logo_small.png" alt="Unimind.ai" className="w-full h-full object-contain brand-logo-invert" />
+              </div>
+              {/* Expand button — same position as icon, appears on hover when collapsed */}
+              <div
+                className={cn(
+                  "absolute left-0 top-0 h-10 w-10 rounded-xl flex items-center justify-center shrink-0 cursor-pointer hover:bg-muted transition-all duration-200 z-20",
+                  collapsed ? "opacity-0 group-hover/header:opacity-100" : "opacity-0 pointer-events-none"
+                )}
+                onClick={() => setCollapsed(false)}
+              >
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+              {/* Expanded logo — slides out from behind the icon */}
+              <div className={cn(
+                "absolute left-0 top-0 h-10 overflow-hidden transition-all duration-300",
+                collapsed ? "w-10 opacity-0" : "w-32 opacity-100"
+              )}>
+                <img src={UnimindLogo} alt="Unimind.ai" className="h-10 w-32 object-contain brand-logo-invert" />
+              </div>
+              {/* Collapse button — absolutely positioned at right edge */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCollapsed(true)}
+                className={cn(
+                  "absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:bg-muted rounded-full h-6 w-6 shrink-0 transition-opacity duration-200 z-10",
+                  collapsed ? "opacity-0 pointer-events-none" : "opacity-100"
+                )}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCollapsed(!collapsed)}
-              className={cn(
-                "text-muted-foreground hover:bg-muted rounded-full",
-                collapsed ? "h-8 w-8" : "h-6 w-6"
-              )}
-            >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </Button>
           </div>
 
           <nav className="flex-1 space-y-0.5">
@@ -287,20 +312,21 @@ export const MainLayout: React.FC = () => {
             {user ? (
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <div className={cn("group flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all duration-300 hover:bg-muted border border-transparent hover:border-border", collapsed && "justify-center")}>
-                    <Avatar className={cn("h-8 w-8 border border-border shadow-sm group-hover:scale-105 transition-transform")}>
+                  <div className="group flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all duration-300 hover:bg-muted border border-transparent hover:border-border">
+                    <Avatar className="h-8 w-8 border border-border shadow-sm group-hover:scale-105 transition-transform shrink-0">
                       <AvatarImage src={user?.avatar_url} />
                       <AvatarFallback className="bg-muted text-[11px] font-bold">{user?.username?.[0]}</AvatarFallback>
                     </Avatar>
-                    {!collapsed && (
-                      <div className="flex-1 min-w-0 animate-in fade-in">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-[12px] font-bold truncate">{user?.nickname || user?.username}</p>
-                          {user.is_member && <ShieldCheck className="h-3 w-3 text-amber-500" />}
-                        </div>
-                        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight">{instInfo ? `${instInfo.name} · ${instInfo.plan_label || instInfo.plan}` : isSuperAdmin ? t('layout:userStatus.superAdmin') : (user.is_member ? t('layout:userMenu.proMember') : t('layout:userMenu.freeScholar'))}</p>
+                    <div className={cn(
+                      "flex-1 min-w-0 overflow-hidden transition-all duration-200",
+                      collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-[200px]"
+                    )}>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-[12px] font-bold truncate whitespace-nowrap">{user?.nickname || user?.username}</p>
+                        {user.is_member && <ShieldCheck className="h-3 w-3 text-amber-500 shrink-0" />}
                       </div>
-                    )}
+                      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-tight whitespace-nowrap">{instInfo ? `${instInfo.name} · ${instInfo.plan_label || instInfo.plan}` : isSuperAdmin ? t('layout:userStatus.superAdmin') : (user.is_member ? t('layout:userMenu.proMember') : t('layout:userMenu.freeScholar'))}</p>
+                    </div>
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" side={collapsed ? "right" : "top"} className="w-52 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg">
@@ -351,9 +377,9 @@ export const MainLayout: React.FC = () => {
               </DropdownMenu>
             ) : (
               <Link to="/login">
-                <Button variant="outline" className={cn("w-full gap-2", collapsed ? "px-0 justify-center" : "justify-start")}>
-                  <LogOut className="h-4 w-4" />
-                  {!collapsed && <span>{t('common:login')}</span>}
+                <Button variant="outline" className="w-full gap-2 justify-start overflow-hidden">
+                  <LogOut className="h-4 w-4 shrink-0" />
+                  <span className={cn("transition-all duration-200 whitespace-nowrap overflow-hidden", collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-[100px]")}>{t('common:login')}</span>
                 </Button>
               </Link>
             )}

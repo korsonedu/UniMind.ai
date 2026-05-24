@@ -13,9 +13,9 @@
     "titleLine1": "Your tutors teach.",
     "titleLine2": "We run everything else.",
     "subtitle": "Question generation, grading, review scheduling, analytics, Q&A — the entire back-office of your tutoring business, automated. Pick a subject, AI creates the content. Students jump in with a link. No engineering team, no instructional designers, no overhead.",
-    "cta": "Start 14-Day Free Trial",
+    "cta": "Get Started Free",
     "secondary": "See How It Works",
-    "footnote": "No credit card · Full access · All subjects · Cancel anytime"
+    "footnote": "First cohort gets Plus plan free · Offer ends June 30, 2026"
   },
   "stats": [
     { "label": "Subjects Supported", "desc": "SAT · ACT · MCAT · LSAT · GRE · AP · USMLE · Bar Exam & more" },
@@ -29,23 +29,23 @@
     "subtitle": "Not tutoring. Not mentoring. Writing questions, grading papers, building Excel trackers — work that keeps your business running but doesn't generate a dime of revenue.",
     "items": [
       {
-        "title": "Content creation doesn't scale",
-        "desc": "Every new subject, every new exam cycle — someone has to write fresh material. A single quality question with good distractors and a detailed explanation takes 30 minutes. A full mock exam? A week of your best instructor's time."
+        "title": "Content creation eats your margins",
+        "desc": "A full-time curriculum developer costs $4,000-6,000/month, and 60% of their time goes to writing questions, building exams, and crafting explanations. The bigger you grow, the more you spend on work AI finishes in 10 seconds."
       },
       {
-        "title": "Every student gets the same plan",
-        "desc": "Your top performers re-drill material they already know. Your strugglers get thrown into content they're not ready for. Nobody learns at their actual frontier — because personalizing review for every student by hand is impossible."
+        "title": "Retention plateaus without personalization",
+        "desc": "Every student drills the same material. Top performers waste time on what they know. Strugglers get lost in content they're not ready for. Personalized review drives renewals — but doing it by hand is impossible at scale. Result: renewal rates stall at 60-70%."
       },
       {
-        "title": "You're flying blind until it's too late",
-        "desc": "You discover knowledge gaps in the end-of-month spreadsheet review — three weeks after the student needed intervention. By the time you see the data, the SAT date has passed."
+        "title": "Decisions based on gut feel, not data",
+        "desc": "Which topic is the whole class struggling with? Which student is about to fall behind? You find out in the month-end spreadsheet — too late to intervene. Without real-time analytics, every curriculum change is a guess, and acquisition costs keep climbing."
       }
     ]
   },
   "features": {
     "label": "What We Cover",
     "title": "Everything but the teaching.",
-    "subtitle": "Content production, learning ops, analytics — the full back-office. Your instructors show up and teach. The system handles the rest.",
+    "subtitle": "Content production, learning delivery, analytics — three integrated modules that run on autopilot, so your team focuses on growth.",
     "items": [
       {
         "title": "AI Question Engine",
@@ -109,6 +109,10 @@
       {
         "title": "Students practice. You get the data.",
         "desc": "Share a link or QR code. Students jump in on any device — no app to install. Auto-grading after every answer. The Knowledge Dashboard updates each student's mastery map in real time. You watch the business run."
+      },
+      {
+        "title": "Custom Module Building",
+        "desc": "Advanced features like mock interviews, voice interaction, and AI Q&A can be activated on demand. Custom deployment available for Pro plans and above."
       }
     ]
   },
@@ -179,7 +183,6 @@
       ["30 Students Max", "50 Students Max", "200 Students Max", "Unlimited Students"],
       ["1 Instructor · 1 Subject", "1 Instructor · 3 Subjects", "5 Instructors · All Subjects", "Unlimited"],
       ["—", "AI Assistant 500/mo", "AI Assistant 3000/mo", "Unlimited AI Assistant"],
-      ["—", "Mock Interviews 10/mo", "Mock Interviews 50/mo", "Unlimited Mock Interviews"],
       ["—", "PDF Export 10/mo", "PDF Export 100/mo", "Unlimited PDF Export"],
       ["—", "—", "Course Videos + AI Outlines", "Course Videos + AI Outlines"],
       ["—", "—", "Interactive Knowledge Graph", "Interactive Knowledge Graph"],
@@ -237,11 +240,11 @@
     ]
   },
   "cta": {
-    "title": "Ready to get your instructors back to teaching?",
-    "subtitle": "14-day full-feature trial. No credit card, no commitment. See how many hours your team gets back each week.",
-    "button": "Start 14-Day Free Trial",
+    "title": "Ready for the future of intelligent education?",
+    "subtitle": "First cohort gets the Plus plan free. AI question generation, adaptive review, real-time analytics — ready out of the box.",
+    "button": "Get Started Free",
     "viewPlans": "Compare Plans →",
-    "footnote": "50+ tutoring businesses already on UniMind"
+    "footnote": "50+ tutoring businesses on UniMind · Offer ends June 30, 2026"
   },
   "footer": {
     "tagline": "The Operations Layer for Tutoring",

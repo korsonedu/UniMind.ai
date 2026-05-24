@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { APP_VERSION, COPYRIGHT_YEAR, BRAND_DESC } from '@/constants/version';
+import { APP_VERSION, COPYRIGHT_YEAR } from '@/constants/version';
 import { useTranslation } from 'react-i18next';
 
 /* ────────────────────────────────────────────
@@ -105,12 +105,12 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
   return (
     <nav className={cn(
       'fixed top-0 left-0 right-0 z-[100] transition-all duration-500',
-      scrolled ? 'bg-[#0c1222]/80 backdrop-blur-xl border-b border-white/[0.06]' : 'bg-transparent'
+      scrolled ? 'bg-white/80 backdrop-blur-xl border-b border-[#e5e7eb]' : 'bg-transparent'
     )}>
       <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2 shrink-0">
           <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
-          <span className="font-bold text-base tracking-tight text-white">UniMind</span>
+          <span className="font-bold text-base tracking-tight text-[#1a1a2e]">UniMind</span>
         </button>
 
         {/* Desktop nav links */}
@@ -119,7 +119,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
             <button
               key={item.href}
               onClick={() => scrollTo(item.href)}
-              className="text-[13px] font-medium text-white/70 hover:text-white transition-colors"
+              className="text-[13px] font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors"
             >
               {item.label}
             </button>
@@ -131,7 +131,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
           {token ? (
             <Button
               size="sm"
-              className="text-white border-white/20 bg-transparent hover:bg-white/10"
+              className="text-[#1a1a2e] border-[#e5e7eb] bg-white hover:bg-[#f8f9fb]"
               onClick={() => navigate('/courses')}
             >
               {t('nav.enterConsole')}
@@ -139,7 +139,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
           ) : (
             <>
               <button
-                className="text-[13px] font-medium text-white/70 hover:text-white transition-colors hidden sm:block"
+                className="text-[13px] font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors hidden sm:block"
                 onClick={() => navigate('/login')}
               >
                 {t('nav.login')}
@@ -154,7 +154,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
               </Button>
             </>
           )}
-          <button className="md:hidden p-1 text-white/70 hover:text-white" onClick={() => setOpen(!open)}>
+          <button className="md:hidden p-1 text-[#5a5a7a] hover:text-[#1a1a2e]" onClick={() => setOpen(!open)}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
@@ -162,12 +162,12 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden bg-[#0c1222]/95 backdrop-blur-xl border-b border-white/[0.06] px-6 pb-5 space-y-1">
+        <div className="md:hidden bg-white/95 backdrop-blur-xl border-b border-[#e5e7eb] px-6 pb-5 space-y-1">
           {navItems.map(item => (
             <button
               key={item.href}
               onClick={() => scrollTo(item.href)}
-              className="block w-full text-left py-3 text-base font-medium text-white/70 hover:text-white transition-colors"
+              className="block w-full text-left py-3 text-base font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors"
             >
               {item.label}
             </button>
@@ -189,26 +189,27 @@ const Hero: React.FC = () => {
   useMouseParallax(imgRef, 0.02);
 
   return (
-    <section className="min-h-screen flex flex-col items-center justify-center pt-20 pb-16 px-6 relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #0c1222 0%, #1a1033 100%)' }}>
-      {/* Ambient orbs — larger, more saturated */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 -left-48 w-[700px] h-[700px] rounded-full blur-[160px] opacity-[0.14]" style={{ background: '#5b5fef' }} />
-        <div className="absolute bottom-1/4 -right-48 w-[600px] h-[600px] rounded-full blur-[140px] opacity-[0.10]" style={{ background: '#38bdf8' }} />
-      </div>
-
+    <section className="min-h-screen flex flex-col items-center justify-center pt-20 pb-16 px-6 relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%)' }}>
       <div className="max-w-5xl mx-auto w-full text-center relative z-10 space-y-8">
         <div className="reveal space-y-6">
-          {/* Brand badge */}
-          <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#38bdf8] mb-2">{BRAND_DESC}</p>
+          {/* Promo badge */}
+          <button
+            onClick={() => navigate('/promo/plus')}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#5b5fef]/20 hover:border-[#5b5fef]/40 transition-all duration-300 cursor-pointer group"
+            style={{ background: 'rgba(91,95,239,0.06)' }}
+          >
+            <span className="text-[11px] font-semibold text-[#5b5fef]">首批机构专享 · Plus 方案免费开放</span>
+            <ArrowRight className="h-3 w-3 text-[#5b5fef] group-hover:translate-x-0.5 transition-transform" />
+          </button>
 
-          <h1 className="text-[56px] md:text-[80px] lg:text-[96px] font-bold leading-[1.02] text-white max-w-4xl mx-auto" style={{ fontFamily: '"Playfair Display", serif', letterSpacing: '-0.03em' }}>
+          <h1 className="text-[36px] md:text-[52px] lg:text-[64px] font-bold leading-[1.1] text-[#1a1a2e] max-w-4xl mx-auto" style={{ fontFamily: '"Playfair Display", serif', letterSpacing: '-0.03em' }}>
             {t('hero.titleLine1')}
             <br />
-            <span style={{ background: 'linear-gradient(135deg, #818cf8, #5b5fef, #38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <span style={{ background: 'linear-gradient(135deg, #818cf8, #5b5fef)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               {t('hero.titleLine2')}
             </span>
           </h1>
-          <p className="text-base md:text-lg text-white/65 max-w-xl mx-auto leading-relaxed">
+          <p className="text-base md:text-lg text-[#5a5a7a] max-w-xl mx-auto leading-relaxed">
             {t('hero.subtitle')}
           </p>
         </div>
@@ -226,7 +227,7 @@ const Hero: React.FC = () => {
         </div>
 
         {/* Trust markers */}
-        <p className="text-[11px] text-white/50 tracking-wide reveal reveal-delay-2">
+        <p className="text-[11px] text-[#9ca3af] tracking-wide reveal reveal-delay-2">
           {t('hero.footnote')}
         </p>
 
@@ -236,8 +237,8 @@ const Hero: React.FC = () => {
             <img
               src="/screenshots/hero-dashboard.png"
               alt="UniMind"
-              className="w-full rounded-3xl border border-white/[0.08]"
-              style={{ boxShadow: '0 60px 160px rgba(91,95,239,0.15), 0 12px 32px rgba(0,0,0,0.5)' }}
+              className="w-full rounded-3xl border border-[#e5e7eb]"
+              style={{ boxShadow: '0 60px 160px rgba(91,95,239,0.08), 0 12px 32px rgba(0,0,0,0.06)' }}
             />
           </div>
         </div>
@@ -341,35 +342,38 @@ const Showcase: React.FC = () => {
   useMouseParallax(sectionRef, 0.015);
 
   return (
-    <section id="features" ref={sectionRef} className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #0c1222 0%, #1a1033 50%, #0c1222 100%)' }}>
-      {/* Subtle bg orb */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[200px] opacity-[0.05] pointer-events-none" style={{ background: '#5b5fef' }} />
-
+    <section id="features" ref={sectionRef} className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: '#f8f9fb' }}>
       <div className="max-w-6xl mx-auto relative z-10">
-        <div className="reveal mb-24 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#38bdf8] mb-4">{t('features.label')}</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white">{t('features.title')}</h2>
-          <p className="text-sm text-white/65 max-w-lg mx-auto mt-4">{t('features.subtitle')}</p>
+        <div className="reveal mb-20 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef] mb-4">{t('features.label')}</p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-[#1a1a2e]">{t('features.title')}</h2>
+          <p className="text-base md:text-lg text-[#5a5a7a] max-w-xl mx-auto mt-4">{t('features.subtitle')}</p>
         </div>
 
-        <div className="space-y-36 md:space-y-44">
+        <div className="space-y-24 md:space-y-32">
           {items.map((item, i) => (
-            <div key={item.title} className="space-y-8">
-              {/* Text — centered above screenshot */}
-              <div className={cn('text-center max-w-2xl mx-auto reveal', `reveal-delay-${i + 1}`)}>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#38bdf8] mb-3">{item.subtitle}</p>
-                <h3 className="text-2xl md:text-4xl font-bold tracking-tight text-white mb-4">{item.title}</h3>
-                <p className="text-sm leading-relaxed text-white/65">{item.desc}</p>
+            <div
+              key={item.title}
+              className={cn(
+                'flex flex-col gap-8 items-center reveal',
+                i % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse',
+              )}
+            >
+              {/* Text */}
+              <div className={cn('flex-1 min-w-0', `reveal-delay-${i + 1}`)}>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#5b5fef] mb-3">{item.subtitle}</p>
+                <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-[#1a1a2e] mb-4">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-[#5a5a7a]">{item.desc}</p>
               </div>
 
-              {/* Image — centered, large, Apple-style depth */}
-              <div className={cn('max-w-4xl mx-auto reveal-scale', `reveal-delay-${i + 1}`)}>
-                <div className="glow-hover rounded-3xl overflow-hidden">
+              {/* Image */}
+              <div className={cn('flex-1 min-w-0 reveal-scale', `reveal-delay-${i + 1}`)}>
+                <div className="glow-hover rounded-2xl overflow-hidden">
                   <img
                     src={screenshots[i]}
                     alt={item.screenshotAlt}
-                    className="w-full rounded-3xl border border-white/[0.06]"
-                    style={{ boxShadow: '0 40px 120px rgba(91,95,239,0.12), 0 8px 24px rgba(0,0,0,0.5)' }}
+                    className="w-full rounded-2xl border border-[#e5e7eb]"
+                    style={{ boxShadow: '0 20px 60px rgba(91,95,239,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
                   />
                 </div>
               </div>
@@ -511,17 +515,13 @@ const FinalCTA: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #0c1222 0%, #1a1033 100%)' }}>
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] rounded-full blur-[180px] opacity-[0.12]" style={{ background: '#5b5fef' }} />
-      </div>
-
+    <section className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: '#ffffff' }}>
       <div className="max-w-3xl mx-auto text-center relative z-10 space-y-8">
         <div className="reveal space-y-5">
-          <h2 className="text-4xl md:text-6xl font-bold leading-[1.08] text-white" style={{ letterSpacing: '-0.03em', background: 'linear-gradient(135deg, #ffffff 40%, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <h2 className="text-4xl md:text-6xl font-bold leading-[1.08] text-[#1a1a2e]" style={{ letterSpacing: '-0.03em' }}>
             {t('cta.title')}
           </h2>
-          <p className="text-base md:text-lg text-white/65 max-w-lg mx-auto">
+          <p className="text-base md:text-lg text-[#5a5a7a] max-w-lg mx-auto">
             {t('cta.subtitle')}
           </p>
         </div>
@@ -537,14 +537,14 @@ const FinalCTA: React.FC = () => {
             <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
           <button
-            className="text-sm font-medium text-white/60 hover:text-white transition-colors"
+            className="text-sm font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors"
             onClick={() => navigate('/pricing')}
           >
             {t('cta.viewPlans')}
           </button>
         </div>
 
-        <p className="text-xs text-white/40 reveal reveal-delay-2">{t('cta.footnote')}</p>
+        <p className="text-xs text-[#9ca3af] reveal reveal-delay-2">{t('cta.footnote')}</p>
       </div>
     </section>
   );
@@ -559,24 +559,24 @@ const Footer: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <footer className="py-12 border-t border-white/[0.06]" style={{ background: '#0a0e1a' }}>
+    <footer className="py-12 border-t border-[#e5e7eb]" style={{ background: '#f8f9fb' }}>
       <div className="max-w-6xl mx-auto px-6">
         <div className="flex flex-col md:flex-row items-start justify-between gap-8 mb-8">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
-              <span className="font-bold text-sm text-white/70 tracking-tight">UniMind.ai</span>
+              <span className="font-bold text-sm text-[#1a1a2e] tracking-tight">UniMind.ai</span>
             </div>
-            <p className="text-[12px] text-white/50">{t('footer.tagline')}</p>
+            <p className="text-[12px] text-[#9ca3af]">{t('footer.tagline')}</p>
           </div>
           <div className="flex items-center gap-8">
-            <button onClick={() => document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' })} className="text-[12px] font-medium text-white/55 hover:text-white transition-colors">{t('footer.features')}</button>
-            <button onClick={() => navigate('/pricing')} className="text-[12px] font-medium text-white/55 hover:text-white transition-colors">{t('footer.pricing')}</button>
-            <button onClick={() => navigate('/pricing#faq')} className="text-[12px] font-medium text-white/55 hover:text-white transition-colors">{t('footer.faq')}</button>
+            <button onClick={() => document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' })} className="text-[12px] font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors">{t('footer.features')}</button>
+            <button onClick={() => navigate('/pricing')} className="text-[12px] font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors">{t('footer.pricing')}</button>
+            <button onClick={() => navigate('/pricing#faq')} className="text-[12px] font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors">{t('footer.faq')}</button>
           </div>
         </div>
-        <div className="border-t border-white/[0.04] pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-[10px] font-medium text-white/40">
+        <div className="border-t border-[#e5e7eb] pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="text-[10px] font-medium text-[#9ca3af]">
             © {COPYRIGHT_YEAR} {t('footer.copyrightEntity')} · {APP_VERSION}
           </p>
         </div>
@@ -594,7 +594,7 @@ export const Landing: React.FC = () => {
   useScrollReveal();
 
   return (
-    <div className="w-full min-h-screen font-sans text-left overflow-x-hidden antialiased scroll-smooth" style={{ background: '#0c1222' }}>
+    <div className="w-full min-h-screen font-sans text-left overflow-x-hidden antialiased scroll-smooth" style={{ background: '#ffffff' }}>
       <Nav token={token} />
       <Hero />
       <StatsBar />

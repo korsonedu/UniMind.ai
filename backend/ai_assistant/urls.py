@@ -1,5 +1,8 @@
 from django.urls import path
-from .views import AIChatView, AIChatListView, AIChatResetView, BotListCreateView, BotDetailView
+from .views import (
+    AIChatView, AIChatListView, AIChatResetView,
+    BotListCreateView, BotDetailView, BotVisibilityView,
+)
 
 urlpatterns = [
     path('chat/', AIChatView.as_view(), name='ai-chat'),
@@ -7,4 +10,5 @@ urlpatterns = [
     path('reset/', AIChatResetView.as_view(), name='ai-chat-reset'),
     path('bots/', BotListCreateView.as_view(), name='bot-list'),
     path('bots/<int:pk>/', BotDetailView.as_view(), name='bot-detail'),
+    path('bots/visibility/', BotVisibilityView.as_view(), name='bot-visibility'),
 ]

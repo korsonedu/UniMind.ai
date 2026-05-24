@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, CheckCheck, MessageCircle, Info, Brain, Trash2 } from 'lucide-react';
+import { Bell, CheckCheck, MessageCircle, Info, Brain, Trash2, Send } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { useNotificationStore } from '@/store/useNotificationStore';
+import { useAuthStore } from '@/store/useAuthStore';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,10 +12,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import api from '@/lib/api';
+import { toast } from 'sonner';
 
 import {
   AlertDialog,
@@ -29,10 +35,14 @@ import {
 
 export const NotificationBell = () => {
   const { notifications, unreadCount, fetchNotifications, fetchUnreadCount, markAsRead, clearAll } = useNotificationStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation(['notifications', 'common']);
   const [isOpen, setIsOpen] = useState(false);
   const [showClearAlert, setShowClearAlert] = useState(false);
+  const [showBroadcast, setShowBroadcast] = useState(false);
+  const [broadcastForm, setBroadcastForm] = useState({ title: '', content: '' });
+  const isAdmin = user?.is_admin || user?.is_institution_admin;
 
   useEffect(() => {
     fetchUnreadCount();
@@ -51,6 +61,16 @@ export const NotificationBell = () => {
         if (notif.link.startsWith('/')) navigate(notif.link);
         else window.open(notif.link, '_blank');
     }
+  };
+
+  const handleBroadcast = async () => {
+    if (!broadcastForm.title || !broadcastForm.content) return toast.error('标题和内容必填');
+    try {
+      await api.post('/notifications/broadcast/', broadcastForm);
+      toast.success('广播已发送');
+      setShowBroadcast(false);
+      setBroadcastForm({ title: '', content: '' });
+    } catch { toast.error('发送失败'); }
   };
 
   const getIcon = (type: string) => {
@@ -97,7 +117,22 @@ export const NotificationBell = () => {
             </Button>
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-border" />
+        {isAdmin && (
+          <>
+            <div className="px-2 pb-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); setIsOpen(false); setShowBroadcast(true); }}
+                className="w-full h-8 rounded-lg text-[11px] font-bold gap-1.5 border-dashed border-muted-foreground/20 text-muted-foreground hover:text-foreground hover:border-foreground/30"
+              >
+                <Send className="h-3 w-3" />
+                {t('notifications:broadcast', { defaultValue: '发布广播' })}
+              </Button>
+            </div>
+            <DropdownMenuSeparator className="bg-border" />
+          </>
+        )}
         <ScrollArea className="h-80">
           {notifications.length === 0 ? (
             <EmptyState icon={Bell} title={t('notifications:empty')} className="py-6" />
@@ -151,6 +186,41 @@ export const NotificationBell = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showBroadcast} onOpenChange={setShowBroadcast}>
+        <DialogContent className="sm:max-w-[480px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold flex items-center gap-3">
+              <Send className="h-5 w-5 text-[#6E6E73]" /> {t('notifications:broadcast', { defaultValue: '发布广播' })}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 pt-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('notifications:broadcastTitle', { defaultValue: '标题' })}</Label>
+              <Input
+                value={broadcastForm.title}
+                onChange={e => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
+                className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium"
+                placeholder={t('notifications:broadcastTitlePlaceholder', { defaultValue: '广播标题' })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('notifications:broadcastContent', { defaultValue: '内容' })} <span className="text-[#AEAEB2]">（最多 50 字）</span></Label>
+              <textarea
+                value={broadcastForm.content}
+                onChange={e => setBroadcastForm({ ...broadcastForm, content: e.target.value })}
+                maxLength={50}
+                className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[100px] font-medium text-sm resize-none outline-none"
+                placeholder={t('notifications:broadcastContentPlaceholder', { defaultValue: '输入广播内容...' })}
+              />
+              <p className="text-[11px] text-[#AEAEB2] text-right">{broadcastForm.content.length}/50</p>
+            </div>
+            <Button onClick={handleBroadcast} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
+              {t('notifications:sendBroadcast', { defaultValue: '发送广播' })}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DropdownMenu>
   );
 };

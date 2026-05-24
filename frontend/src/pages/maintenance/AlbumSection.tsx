@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Layers, Upload, Edit3, Trash2, Plus, Image as ImageIcon } from 'lucide-react';
+import { Layers, Upload, Edit3, Trash2, Plus, Image as ImageIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -17,6 +17,7 @@ export const AlbumSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: '', description: '', cover: null as File | null });
 
   const fetchItems = useCallback(async () => {
@@ -101,39 +102,75 @@ export const AlbumSection: React.FC = () => {
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
           <ScrollArea className="h-[560px]">
             <div className="divide-y divide-black/[0.04]">
-              {items.map((item: any) => (
-                <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-xl bg-[#F5F5F7] flex items-center justify-center overflow-hidden shrink-0">
-                      {item.cover_image ? (
-                        <img src={item.cover_image} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <ImageIcon className="h-5 w-5 text-[#AEAEB2]" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold">{item.name}</p>
-                      <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-1">{item.description || '—'}</p>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        {item.course_count !== undefined && (
-                          <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">{item.course_count} 门课程</Badge>
+              {items.map((item: any) => {
+                const isExpanded = expandedId === item.id;
+                return (
+                  <div key={item.id}>
+                    <div
+                      className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group cursor-pointer"
+                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    >
+                      <div className="flex items-center gap-4">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-[#AEAEB2] shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-[#AEAEB2] shrink-0" />
                         )}
-                        {item.created_at && (
-                          <span className="text-[11px] text-[#AEAEB2]">{new Date(item.created_at).toLocaleDateString()}</span>
-                        )}
+                        <div className="h-12 w-12 rounded-xl bg-[#F5F5F7] flex items-center justify-center overflow-hidden shrink-0">
+                          {item.cover_image ? (
+                            <img src={item.cover_image} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <ImageIcon className="h-5 w-5 text-[#AEAEB2]" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold">{item.name}</p>
+                          <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-1">{item.description || '—'}</p>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            {item.course_count !== undefined && (
+                              <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">{item.course_count} 门课程</Badge>
+                            )}
+                            {item.created_at && (
+                              <span className="text-[11px] text-[#AEAEB2]">{new Date(item.created_at).toLocaleDateString()}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <Button onClick={(e) => { e.stopPropagation(); setEditingItem({ ...item }); }} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name); }} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button onClick={() => handleDelete(item.id, item.name)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
+                    {isExpanded && item.courses && item.courses.length > 0 && (
+                      <div className="px-4 pb-4 pl-14">
+                        <div className="rounded-xl bg-[#F5F5F7]/60 p-3 space-y-1.5">
+                          {item.courses.map((c: any) => (
+                            <div key={c.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-white/60 transition-colors">
+                              <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
+                                {c.cover_image ? (
+                                  <img src={c.cover_image} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  <ImageIcon className="h-3.5 w-3.5 text-[#AEAEB2]" />
+                                )}
+                              </div>
+                              <span className="text-xs font-medium text-[#1D1D1F] truncate">{c.title}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {isExpanded && (!item.courses || item.courses.length === 0) && (
+                      <div className="px-4 pb-4 pl-14">
+                        <p className="text-xs text-[#AEAEB2] font-medium py-2">{t('sectionList.noAlbums', { defaultValue: '暂无课程' })}</p>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </ScrollArea>
         </Card>

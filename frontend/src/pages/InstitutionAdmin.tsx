@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { DirectionSelector } from '@/components/DirectionSelector';
+import { InstitutionBotSection } from '@/pages/maintenance/InstitutionBotSection';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -605,6 +606,9 @@ function InstitutionSelfSettings() {
             保存机构设置
           </Button>
         </Card>
+
+        {/* AI 机器人管理 */}
+        <InstitutionBotSection />
 
         <DirectionEditDialog
           open={directionOpen}

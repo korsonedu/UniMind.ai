@@ -11,9 +11,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Bot, Upload, Edit3, Trash2, Plus } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/useAuthStore';
+import { InstitutionBotSection } from './InstitutionBotSection';
 
 export const BotSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
+  const { user } = useAuthStore();
+
+  // 机构管理员看到可见性开关 + 自定义 bot 管理
+  if (user?.is_institution_admin && !user?.is_admin) {
+    return <div className="max-w-5xl mx-auto space-y-6"><InstitutionBotSection /></div>;
+  }
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -114,6 +122,9 @@ export const BotSection: React.FC = () => {
                         <p className="text-sm font-medium">{item.name}</p>
                         {item.is_exclusive && (
                           <Badge variant="secondary" className="text-[10px] rounded-full bg-amber-100 text-amber-700 font-medium hover:bg-amber-100">专属</Badge>
+                        )}
+                        {item.institution_name && (
+                          <Badge variant="secondary" className="text-[10px] rounded-full bg-blue-100 text-blue-700 font-medium hover:bg-blue-100">{item.institution_name}</Badge>
                         )}
                       </div>
                       <p className="text-xs text-[#8E8E93] mt-0.5 truncate">

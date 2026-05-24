@@ -8,21 +8,25 @@ PLAN_QUOTA_LIMITS: dict[str, dict[str, int | None]] = {
     'free': {
         'course': 5, 'question': 200, 'knowledge_point': 300,
         'article': 5, 'ai_question': 30, 'ai_call_total': 100,
+        'custom_bot': 0,
     },
     'solo': {
         'course': 30, 'question': 2000, 'knowledge_point': 1000,
         'article': 20, 'ai_question': 100, 'ai_call_total': 500,
         'interview': 10, 'pdf_export': 10,
+        'custom_bot': 3,
     },
     'plus': {
         'course': 100, 'question': 10000, 'knowledge_point': 5000,
         'article': 100, 'ai_question': None, 'ai_call_total': 3000,
         'pdf_export': 100, 'interview': 50,
+        'custom_bot': 10,
     },
     'pro': {
         'course': None, 'question': None, 'knowledge_point': None,
         'article': None, 'ai_question': None, 'ai_call_total': None,
         'pdf_export': None, 'interview': None,
+        'custom_bot': None,
     },
 }
 
@@ -32,6 +36,7 @@ RESOURCE_TYPE: dict[str, str] = {
     'knowledge_point': 'total', 'article': 'total',
     'ai_question': 'monthly', 'ai_call_total': 'monthly',
     'pdf_export': 'monthly', 'interview': 'monthly',
+    'custom_bot': 'total',
 }
 
 # 月计型资源 → UsageLog 字段名
@@ -48,6 +53,7 @@ TOTAL_COUNT_SOURCES: dict[str, tuple[str, str]] = {
     'question': ('quizzes.models.Question', 'institution'),
     'knowledge_point': ('quizzes.models.KnowledgePoint', 'institution'),
     'article': ('articles.models.Article', 'institution'),
+    'custom_bot': ('ai_assistant.models.Bot', 'institution'),
 }
 
 # 资源标签（用于提示文案）
@@ -60,6 +66,7 @@ RESOURCE_LABELS: dict[str, str] = {
     'ai_call_total': 'AI 调用总次数',
     'pdf_export': '模拟考试 PDF',
     'interview': '面试场次',
+    'custom_bot': '自定义机器人数',
 }
 
 # 升级路径

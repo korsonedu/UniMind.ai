@@ -15,6 +15,7 @@ import { QuickCreateKPDialog } from './QuickCreateKPDialog';
 import { QuickCreateAlbumDialog } from './QuickCreateAlbumDialog';
 import { createCourseWithSmartUpload } from '@/lib/chunkedUpload';
 import { useUploadStore } from '@/store/useUploadStore';
+import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -29,6 +30,9 @@ export const CourseSection: React.FC = () => {
   const [albumList, setAlbumList] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [showNewKP, setShowNewKP] = useState(false);
   const [showNewAlbum, setShowNewAlbum] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,21 +43,23 @@ export const CourseSection: React.FC = () => {
     tags: [] as string[],
   });
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (p = 1) => {
     try {
       const [c, k, a] = await Promise.all([
-        api.get('/courses/'),
+        api.get('/courses/', { params: { page: p, page_size: 10 } }),
         api.get('/quizzes/knowledge-points/'),
         api.get('/courses/albums/'),
       ]);
-      setItems(c.data);
+      setItems(c.data.items || c.data);
+      setTotal(c.data.total ?? c.data.length ?? 0);
+      setTotalPages(c.data.total_pages ?? 1);
       setKpList(k.data);
       setAlbumList(a.data);
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(page); }, [fetchData, page]);
 
   const resetForm = () => setForm({
     title: '', album_obj: '0', desc: '', elo_reward: 50,
@@ -165,7 +171,7 @@ export const CourseSection: React.FC = () => {
         <div className="flex items-center gap-3">
           <BookOpen className="h-5 w-5 text-[#6E6E73]" />
           <h3 className="text-lg font-semibold tracking-tight">{t('tabs.courseUpload')}</h3>
-          <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{items.length}</Badge>
+          <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{total}</Badge>
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
           <Plus className="w-4 h-4" />
@@ -180,6 +186,7 @@ export const CourseSection: React.FC = () => {
           <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noCoursesHint')}</p>
         </Card>
       ) : (
+        <>
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
           <ScrollArea className="h-[560px]">
             <div className="divide-y divide-black/[0.04]">
@@ -229,6 +236,8 @@ export const CourseSection: React.FC = () => {
             </div>
           </ScrollArea>
         </Card>
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+        </>
       )}
 
       {/* Create Dialog */}

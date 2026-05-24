@@ -34,7 +34,7 @@ const KnowledgeNodeDetail = lazyNamed(() => import('./pages/KnowledgeNodeDetail'
 const QASystem = lazyNamed(() => import('./pages/QASystem'), 'QASystem');
 const TestSessionPage = lazyNamed(() => import('./pages/TestSessionPage'), 'TestSessionPage');
 const PromptTemplatesAdmin = lazyNamed(() => import('./pages/PromptTemplatesAdmin'), 'PromptTemplatesAdmin');
-const Interviews = lazyNamed(() => import('./pages/Interviews'), 'Interviews');
+
 const PdfMockExam = lazyNamed(() => import('./pages/PdfMockExam'), 'PdfMockExam');
 const WrongQuestionReviewPage = lazyNamed(() => import('./pages/WrongQuestionReviewPage'), 'WrongQuestionReviewPage');
 const BillingPage = lazyNamed(() => import('./pages/Billing'), 'BillingPage');
@@ -49,6 +49,7 @@ const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
 const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
+const PromoPlus = lazy(() => import('./pages/PromoPlus'));
 
 const PageLoader = () => <Loading fullScreen size="lg" />;
 
@@ -136,22 +137,9 @@ const HomeRedirect = () => {
 
 // Root entry handler to manage landing vs app logic
 const RootRedirect = () => {
-  const { token, user, setAuth } = useAuthStore();
-  const [loading, setLoading] = useState(!!token && !user);
-  const [checkingInvite, setCheckingInvite] = useState(true);
+  const { token, user } = useAuthStore();
+  const [checkingInvite, setCheckingInvite] = useState(!token);
   const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    if (token && !user) {
-      api.get('/users/me/')
-        .then(res => setAuth(res.data, token))
-        .catch(() => {
-          api.post('/users/logout/').catch(() => {});
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [token, user, setAuth]);
 
   useEffect(() => {
     if (token || user) { setCheckingInvite(false); return; }
@@ -163,9 +151,10 @@ const RootRedirect = () => {
       .finally(() => setCheckingInvite(false));
   }, [token, user]);
 
-  if (loading || checkingInvite) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+  if (checkingInvite) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
-  if (token && user) return <Outlet />;
+  // Token exists → let RequireAuth handle user fetching, render page immediately
+  if (token) return <Outlet />;
 
   return <Landing />;
 };
@@ -200,7 +189,7 @@ const router = createBrowserRouter([
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(VideoLesson)}</FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
-          { path: "interviews", element: <FeatureGuard feature={FEATURES.INTERVIEW_MOCK}>{lazyPage(Interviews)}</FeatureGuard> },
+
           { path: "institution", element: <RequireInstitution>{lazyPage(InstitutionDashboard)}</RequireInstitution> },
           { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },
@@ -216,6 +205,7 @@ const router = createBrowserRouter([
   { path: "/en", element: <LanguageRedirect lang="en" /> },
   { path: "/zh", element: <LanguageRedirect lang="zh" /> },
   { path: "/pricing", element: lazyPage(PricingPage) },
+  { path: "/promo/plus", element: lazyPage(PromoPlus) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/register", element: lazyPage(Register) },
   { path: "/checkout", element: <RequireAuth>{lazyPage(Checkout)}</RequireAuth> },
