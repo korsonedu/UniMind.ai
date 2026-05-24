@@ -238,6 +238,18 @@ html {
 .animate-float-subtle { animation: float-subtle 4s ease-in-out infinite; }
 .animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
 
+/* ── Infinite horizontal scroll for testimonials ── */
+@keyframes scroll-x {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-scroll-x {
+  animation: scroll-x 40s linear infinite;
+}
+.animate-scroll-x:hover {
+  animation-play-state: paused;
+}
+
 /* ── Parallax depth layers ── */
 .parallax-slow {
   will-change: transform;

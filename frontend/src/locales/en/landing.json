@@ -83,6 +83,16 @@
       }
     ]
   },
+  "testimonials": {
+    "label": "Customer Stories",
+    "title": "From real tutoring businesses",
+    "items": [
+      { "name": "He Wei", "role": "Beijing · CFA Prep (Solo Tutor)", "quote": "I was skeptical about AI-generated questions at first. After a month, roughly 85% of 400+ questions were classroom-ready. The rest needed minor edits. My teaching team now spends their time on lesson plans, not question banks." },
+      { "name": "Zhou Peng", "role": "Chengdu · Math Tutoring Chain (3 Locations)", "quote": "The analytics dashboard was the game-changer. 200+ students across three locations — I can finally see which topics each class is struggling with. Renewal rate went from under 70% to over 80% in one semester." },
+      { "name": "Lin Jia", "role": "Shanghai · CPA Review Center", "quote": "We're a small team. Content creation was always the bottleneck. UniMind was live the same day we signed up — zero setup. The AI assistant handles student questions at 2am and they love it." },
+      { "name": "Wu Min", "role": "Guangzhou · Bar Exam (Solo Instructor)", "quote": "60+ students, one of me. Grading essays used to eat an entire day. Now AI does a first pass and I review — cuts the time by more than half. Students say the knowledge graph finally shows them where the gaps are." }
+    ]
+  },
   "how": {
     "label": "How It Works",
     "title": "Set up in minutes. Run on autopilot.",
@@ -145,16 +155,19 @@
     "annualTotal": "Annual total ¥",
     "popularBadge": "Most Popular",
     "trialTitle": "One Trial, All Features — Zero Risk",
-    "trialDesc": "Every new account gets 14 days of full Plus-tier access with no restrictions. After the trial, your account switches to your chosen plan. Upgrade, downgrade, or cancel anytime.",
+    "trialDesc": "Every new account gets 14 days of full-feature access (Plus tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
     "pageTitle": "Choose Your Plan",
     "pageSubtitle": "14-day full-feature trial · No credit card · Cancel anytime",
     "backHome": "Back to Home",
     "footer": "First 20 paying customers lock in early-adopter pricing for life.",
+    "freeForever": "Free forever",
+    "bottomCtaTitle": "Ready to automate your tutoring business?",
+    "bottomCtaSubtitle": "14-day full-feature trial. After that, keep using Free — no card, no catch.",
     "plans": [
-      { "label": "Free", "desc": "For solo tutors getting started", "cta": "Start Free" },
-      { "label": "Solo", "desc": "Independent tutor edition", "cta": "14-Day Free Trial" },
-      { "label": "Plus", "desc": "Growing business · Full stack", "cta": "14-Day Free Trial" },
-      { "label": "Pro", "desc": "Enterprise · White-label", "cta": "Request Demo" }
+      { "label": "Free", "desc": "Solo tutor · Zero cost", "persona": "For individual tutors or trial users — replace manual question-writing with AI and validate the workflow.", "cta": "Start Free" },
+      { "label": "Solo", "desc": "Independent tutor · Light ops", "persona": "For independent tutors or small studios who need AI assistant and adaptive review to boost retention.", "cta": "14-Day Free Trial" },
+      { "label": "Plus", "desc": "Growing business · Scale", "persona": "For growing tutoring centers — multi-instructor collaboration, class analytics, and mock exams drive renewals.", "cta": "14-Day Free Trial" },
+      { "label": "Pro", "desc": "Enterprise · White-label", "persona": "For chains and corporate training — white-label deployment, data sovereignty, and API integration.", "cta": "Request Demo" }
     ],
     "rows": [
       ["AI Gen 30/mo", "AI Gen 100/mo", "Unlimited AI Gen", "Unlimited AI Gen"],
@@ -227,11 +240,12 @@
     "title": "Ready to get your instructors back to teaching?",
     "subtitle": "14-day full-feature trial. No credit card, no commitment. See how many hours your team gets back each week.",
     "button": "Start 14-Day Free Trial",
-    "viewPlans": "Compare Plans",
+    "viewPlans": "Compare Plans →",
     "footnote": "50+ tutoring businesses already on UniMind"
   },
   "footer": {
     "tagline": "The Operations Layer for Tutoring",
+    "copyrightEntity": "Beijing Rongzhi Gaoke · UniMind.ai",
     "features": "Features",
     "pricing": "Pricing",
     "faq": "FAQ"

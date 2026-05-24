@@ -11,7 +11,7 @@ const PricingPage: React.FC = () => {
   const navigate = useNavigate();
   const [annual, setAnnual] = useState(true);
 
-  const plans = t('pricing.plans', { returnObjects: true }) as Array<{ label: string; desc: string; cta: string }>;
+  const plans = t('pricing.plans', { returnObjects: true }) as Array<{ label: string; desc: string; persona?: string; cta: string }>;
   const rows = t('pricing.rows', { returnObjects: true }) as string[][];
   const prices = [
     { monthly: '¥0', yearly: '¥0' },
@@ -36,7 +36,7 @@ const PricingPage: React.FC = () => {
             <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
             <span className="font-bold text-base tracking-tight text-white">UniMind</span>
           </button>
-          <button onClick={() => navigate('/')} className="inline-flex items-center gap-1.5 text-sm font-medium text-white/40 hover:text-white/70 transition-colors">
+          <button onClick={() => navigate('/')} className="inline-flex items-center gap-1.5 text-sm font-medium text-white/60 hover:text-white transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" />
             {t('pricing.backHome')}
           </button>
@@ -47,7 +47,7 @@ const PricingPage: React.FC = () => {
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-[1.08]">
             {t('pricing.pageTitle')}
           </h1>
-          <p className="mt-5 text-base md:text-lg max-w-xl mx-auto leading-relaxed text-white/35">
+          <p className="mt-5 text-base md:text-lg max-w-xl mx-auto leading-relaxed text-white/65">
             {t('pricing.pageSubtitle')}
           </p>
 
@@ -58,7 +58,7 @@ const PricingPage: React.FC = () => {
             </div>
             <div>
               <p className="text-sm font-bold text-white">{t('pricing.trialTitle')}</p>
-              <p className="text-[13px] mt-0.5 leading-relaxed text-white/35">{t('pricing.trialDesc')}</p>
+              <p className="text-[13px] mt-0.5 leading-relaxed text-white/65">{t('pricing.trialDesc')}</p>
             </div>
           </div>
         </section>
@@ -66,7 +66,7 @@ const PricingPage: React.FC = () => {
         {/* Toggle */}
         <section className="max-w-6xl mx-auto px-6 pb-8">
           <div className="flex items-center justify-center gap-3">
-            <span className={cn('text-sm font-semibold', annual ? 'text-white/25' : 'text-white')}>
+            <span className={cn('text-sm font-semibold', annual ? 'text-white/50' : 'text-white')}>
               {t('pricing.monthly')}
             </span>
             <button
@@ -76,7 +76,7 @@ const PricingPage: React.FC = () => {
             >
               <div className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all', annual ? 'left-[22px]' : 'left-0.5')} />
             </button>
-            <span className={cn('text-sm font-semibold flex items-center gap-1.5', annual ? 'text-white' : 'text-white/25')}>
+            <span className={cn('text-sm font-semibold flex items-center gap-1.5', annual ? 'text-white' : 'text-white/50')}>
               {t('pricing.annually')}
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>{t('pricing.saveBadge')}</span>
             </span>
@@ -111,7 +111,8 @@ const PricingPage: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <p className="text-[12px] text-white/25">{plan.desc}</p>
+                    <p className="text-[12px] text-white/55">{plan.desc}</p>
+                    {plan.persona && <p className="text-[11px] mt-1.5 leading-relaxed text-white/45">{plan.persona}</p>}
                   </div>
 
                   <div className="mb-5" style={{ minHeight: '72px' }}>
@@ -119,15 +120,15 @@ const PricingPage: React.FC = () => {
                       <span className="text-3xl font-bold tracking-tight text-white" style={{ fontFamily: '"DM Mono", monospace' }}>
                         {price}
                       </span>
-                      {!isFree && <span className="text-sm text-white/25">{t('pricing.perMonth')}</span>}
+                      {!isFree && <span className="text-sm text-white/55">{t('pricing.perMonth')}</span>}
                     </div>
                     {!isFree && annual && (
-                      <p className="text-[11px] mt-1 text-white/20">
+                      <p className="text-[11px] mt-1 text-white/45">
                         {t('pricing.annualTotal')}{parseInt(prices[pi].yearly.replace('¥', '').replace(',', '')) * 12}
                       </p>
                     )}
                     {isFree && (
-                      <p className="text-[11px] mt-1 font-medium text-green-400">永久免费</p>
+                      <p className="text-[11px] mt-1 font-medium text-green-400">{t('pricing.freeForever')}</p>
                     )}
                   </div>
 
@@ -156,7 +157,7 @@ const PricingPage: React.FC = () => {
                       const text = row[pi];
                       const has = text !== '—';
                       return (
-                        <li key={ri} className="flex items-start gap-2 text-[12px]" style={{ color: has ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.12)' }}>
+                        <li key={ri} className="flex items-start gap-2 text-[12px]" style={{ color: has ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)' }}>
                           {has
                             ? <Check className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-400" />
                             : <span className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -170,7 +171,7 @@ const PricingPage: React.FC = () => {
               );
             })}
           </div>
-          <p className="text-center mt-8 text-xs text-white/15">{t('pricing.footer')}</p>
+          <p className="text-center mt-8 text-xs text-white/40">{t('pricing.footer')}</p>
         </section>
 
         {/* FAQ */}
@@ -180,7 +181,7 @@ const PricingPage: React.FC = () => {
             {(t('faq.items', { returnObjects: true }) as Array<{ q: string; a: string }>).filter((_, i) => [0, 4, 5, 7].includes(i)).map((faq, i) => (
               <div key={i} className="rounded-xl border p-5" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
                 <p className="font-semibold text-sm text-white mb-2">{faq.q}</p>
-                <p className="text-sm leading-relaxed text-white/35">{faq.a}</p>
+                <p className="text-sm leading-relaxed text-white/65">{faq.a}</p>
               </div>
             ))}
           </div>
@@ -188,15 +189,15 @@ const PricingPage: React.FC = () => {
 
         {/* Bottom CTA */}
         <section className="max-w-3xl mx-auto px-6 pb-24 text-center space-y-6">
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white leading-[1.12]">准备好开始了吗？</h2>
-          <p className="text-base max-w-xl mx-auto leading-relaxed text-white/30">14 天全功能试用。不绑卡。随时取消。</p>
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white leading-[1.12]">{t('pricing.bottomCtaTitle')}</h2>
+          <p className="text-base max-w-xl mx-auto leading-relaxed text-white/60">{t('pricing.bottomCtaSubtitle')}</p>
           <Button
             size="lg"
             className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0"
             style={{ background: '#5b5fef' }}
             onClick={() => navigate('/register')}
           >
-            免费试用 14 天
+            {t('cta.button')}
             <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
         </section>
@@ -206,9 +207,9 @@ const PricingPage: React.FC = () => {
           <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
-              <span className="font-bold text-sm tracking-tight text-white/60">UniMind.ai</span>
+              <span className="font-bold text-sm tracking-tight text-white/70">UniMind.ai</span>
             </div>
-            <p className="text-[11px] text-white/15">© {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}</p>
+            <p className="text-[11px] text-white/40">© {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}</p>
           </div>
         </footer>
       </div>
