@@ -30,7 +30,7 @@ export const CourseCenter: React.FC = () => {
   const fetchKey = 'courses' + activeTags.join(',');
 
   const { data: courses, loading, error, refetch } = useFetch<any[]>(
-    (signal) => api.get(`/courses/${tagQuery}`, { signal }).then(r => r.data),
+    (signal) => api.get(`/courses/${tagQuery}`, { signal }).then(r => r.data.items ?? r.data),
     fetchKey
   );
 

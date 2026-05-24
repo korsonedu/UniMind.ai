@@ -879,7 +879,7 @@ export const KnowledgeMap: React.FC = () => {
         api.get('/quizzes/questions/', { params: { kp: node.id } }),
       ]);
       setNodeDetails({
-        courses: cRes.data || [],
+        courses: cRes.data.items ?? cRes.data ?? [],
         articles: aRes.data.articles || aRes.data || [],
         questions: qRes.data || [],
       });
