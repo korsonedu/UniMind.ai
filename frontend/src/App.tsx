@@ -131,27 +131,31 @@ const HomeRedirect = () => {
   const { user } = useAuthStore();
   const institution = useInstitutionStore(s => s.institution);
   if (user?.role === 'admin' && !institution && !user?.institution) return <Navigate to="/institution/admin" replace />;
-  if (institution?.plan === 'pro') return <Suspense fallback={<PageLoader />}><InstitutionHome /></Suspense>;
+  if (institution?.plan === 'enterprise') return <Suspense fallback={<PageLoader />}><InstitutionHome /></Suspense>;
   return <Navigate to="/courses" replace />;
 };
 
 // Root entry handler to manage landing vs app logic
 const RootRedirect = () => {
   const { token, user } = useAuthStore();
-  const [checkingInvite, setCheckingInvite] = useState(!token);
+  const hasHydrated = useAuthStore.persist.hasHydrated();
+  const [checkingInvite, setCheckingInvite] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (token || user) { setCheckingInvite(false); return; }
-    api.get('/users/check-invite/')
+    const controller = new AbortController();
+    api.get('/users/check-invite/', { signal: controller.signal })
       .then(res => {
         if (res.data?.has_invite) navigate('/register', { replace: true });
       })
       .catch(() => {})
       .finally(() => setCheckingInvite(false));
-  }, [token, user]);
+    return () => controller.abort();
+  }, [token, user, hasHydrated]);
 
-  if (checkingInvite) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+  if (!hasHydrated || checkingInvite) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
   // Token exists → let RequireAuth handle user fetching, render page immediately
   if (token) return <Outlet />;
