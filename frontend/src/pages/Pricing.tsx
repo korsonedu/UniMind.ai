@@ -15,9 +15,9 @@ const PricingPage: React.FC = () => {
   const rows = t('pricing.rows', { returnObjects: true }) as string[][];
   const prices = [
     { monthly: '¥0', yearly: '¥0' },
-    { monthly: '¥299', yearly: '¥199' },
-    { monthly: '¥1,299', yearly: '¥999' },
-    { monthly: '¥3,999', yearly: '¥2,999' },
+    { monthly: '¥499', yearly: '¥416' },
+    { monthly: '¥1,299', yearly: '¥1,083' },
+    { monthly: '¥3,999', yearly: '¥3,333' },
   ];
   const popularIdx = 2;
 

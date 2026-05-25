@@ -146,7 +146,7 @@ class AIServiceBatchingTests(TestCase):
                     "score": 8,
                     "feedback": "要点较完整，公式应用基本正确。",
                     "analysis": "核心机制阐述到位，但边界条件说明不足。",
-                    "fsrs_rating": 3,
+                    "memorix_rating": 3,
                 }
                 return {"choices": [{"message": {"content": json.dumps(repaired, ensure_ascii=False)}}]}
 
@@ -165,5 +165,5 @@ class AIServiceBatchingTests(TestCase):
         )
 
         self.assertEqual(result["score"], 8.0)
-        self.assertEqual(result["fsrs_rating"], 3)
+        self.assertEqual(result["memorix_rating"], 3)
         self.assertIn("要点较完整", result["feedback"])

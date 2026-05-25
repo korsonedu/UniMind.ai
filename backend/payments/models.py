@@ -17,7 +17,7 @@ class Order(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
     institution = models.ForeignKey('users.Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
-    plan = models.CharField(max_length=20, choices=[('solo', 'Solo'), ('plus', 'Plus'), ('pro', 'Pro')])
+    plan = models.CharField(max_length=20, choices=[('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise')])
     billing_cycle = models.CharField(max_length=10, choices=BILLING_CHOICES)
     amount_cents = models.IntegerField(verbose_name='金额（分）')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)

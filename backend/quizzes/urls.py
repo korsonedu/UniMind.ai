@@ -22,7 +22,9 @@ from .views_knowledge import (
 from .views_ai import (
     AIPreviewParseView,
     AdversarialPipelineView, PipelineReviewListView, PipelineReviewActionView,
+    WorkbenchTaskListView, WorkbenchTaskStatusView,
 )
+from .views_templates import ExamTemplateListCreateView, ExamTemplateDetailView
 from .views_admin import (
     AdminContentPipelineTaskListCreateView, AdminContentPipelineMetricsView,
     AdminContentPipelineTaskDetailView, AdminContentPipelineTaskRetryView,
@@ -47,6 +49,9 @@ urlpatterns = [
     path('favorite/toggle/', ToggleFavoriteView.as_view(), name='favorite-toggle'),
     path('mastered/toggle/', ToggleMasteredView.as_view(), name='mastered-toggle'),
     path('wrong-questions/insights/', WrongQuestionInsightsView.as_view(), name='wrong-questions-insights'),
+    # 出题模板
+    path('templates/', ExamTemplateListCreateView.as_view(), name='exam-template-list'),
+    path('templates/<int:pk>/', ExamTemplateDetailView.as_view(), name='exam-template-detail'),
     path('knowledge-points/subjects/', KnowledgePointSubjectsView.as_view(), name='knowledge-point-subjects'),
     path('knowledge-points/', KnowledgePointListView.as_view(), name='knowledge-point-list'),
     path('knowledge-points/<int:pk>/', KnowledgePointDetailView.as_view(), name='knowledge-point-detail'),
@@ -65,6 +70,9 @@ urlpatterns = [
     path('admin/pipeline-review/', PipelineReviewListView.as_view(), name='admin-pipeline-review-list'),
     path('admin/pipeline-review/<int:pk>/', PipelineReviewActionView.as_view(), name='admin-pipeline-review-action'),
     path('admin/adversarial-pipeline/', AdversarialPipelineView.as_view(), name='admin-adversarial-pipeline'),
+    # 工作台
+    path('workbench/tasks/', WorkbenchTaskListView.as_view(), name='workbench-task-list'),
+    path('workbench/tasks/<int:pk>/status/', WorkbenchTaskStatusView.as_view(), name='workbench-task-status'),
     path('admin/prompt-templates/', AdminPromptTemplateListView.as_view(), name='admin-prompt-template-list'),
     path('admin/prompt-templates/detail/', AdminPromptTemplateDetailView.as_view(), name='admin-prompt-template-detail'),
     path('admin/prompt-templates/rollback/', AdminPromptTemplateRollbackView.as_view(), name='admin-prompt-template-rollback'),

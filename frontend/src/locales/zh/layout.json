@@ -9,6 +9,7 @@
     "mockExams": "模拟考试",
     "studyRoom": "自习室",
     "aiLab": "AI 实验室",
+    "plan": "学习计划",
     "startupMaterials": "启动资料",
     "home": "主页",
     "courseIntro": "课程介绍",
@@ -36,7 +37,7 @@
     "appearanceSettings": "外观与系统",
     "institutionSettings": "机构设置",
     "institutionDashboard": "机构看板",
-    "proMember": "Pro Member",
+    "proMember": "Enterprise Member",
     "freeScholar": "Free Scholar",
     "logout": "退出登录"
   },
@@ -45,7 +46,7 @@
     "renewNow": "立即续费"
   },
   "quotaBanner": {
-    "exhausted": "本月 AI 出题次数已用完（{{used}}/{{limit}}）。升级到 Solo 版解锁无限次，仅 ¥299/月",
+    "exhausted": "本月 AI 出题次数已用完（{{used}}/{{limit}}）。升级到 Starter 版解锁无限次，仅 ¥499/月",
     "low": "本月 AI 出题剩余 {{remaining}}/{{limit}} 次，即将用完",
     "upgradeNow": "立即升级",
     "upgradeUnlimited": "升级解锁无限次"
@@ -70,10 +71,10 @@
   },
   "activation": {
     "title": "成为 UniMind 会员",
-    "description": "解锁所有核心功能：包括视频课程、海量题库、FSRS 记忆调度算法、AI 导师及沉浸式自习室。请输入管理员发放的激活码。",
+    "description": "解锁所有核心功能：包括视频课程、海量题库、Memorix 记忆调度算法、AI 导师及沉浸式自习室。请输入管理员发放的激活码。",
     "codeLabel": "激活码 (Activation Code)",
     "codePlaceholder": "XXXX-XXXX-XXXX",
-    "activateButton": "立即激活 Pro 权限",
+    "activateButton": "立即激活 Enterprise 权限",
     "activating": "激活中...",
     "enterCodePrompt": "请输入激活码",
     "success": "会员激活成功！欢迎加入 UniMind.ai",
@@ -96,9 +97,9 @@
   "upgradeModal": {
     "title": "升级以解锁{{feature}}",
     "requires": "{{feature}}需要 {{plan}} 版本。",
-    "soloDesc": "每月仅 ¥299，解锁 AI 智能学习全部能力。",
-    "plusDesc": "每月 ¥1,299，解锁完整机构教学平台。",
-    "proDesc": "企业旗舰版，解锁品牌定制与 API 接入。",
+    "starterDesc": "每月仅 ¥499，解锁 AI 智能学习全部能力。",
+    "growthDesc": "每月 ¥1,299，解锁完整机构教学平台。",
+    "enterpriseDesc": "企业旗舰版，解锁品牌定制与 API 接入。",
     "coreFeatures": "{{plan}} 版核心功能",
     "freeTrialNote": "所有方案均含 14 天免费试用",
     "upgradeTo": "升级到 {{plan}} 方案",

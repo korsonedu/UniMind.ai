@@ -22,13 +22,11 @@ import {
   EyeOff,
   UserPlus,
   Users,
-  Copy,
-  RefreshCw,
-  GraduationCap,
+  CalendarCheck,
+  Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSystemStore } from '@/store/useSystemStore';
@@ -38,7 +36,7 @@ import { OnboardingDialog } from '@/components/OnboardingDialog';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
-import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+
 import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 import {
@@ -107,14 +105,13 @@ export const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { primaryColor, pageTitle, pageSubtitle } = useSystemStore();
+  const { primaryColor, pageTitle } = useSystemStore();
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [inviteRole, setInviteRole] = useState<'student' | 'teacher'>('student');
 
-  const { t } = useTranslation(['layout', 'common']);
+  const { t, i18n } = useTranslation(['layout', 'common']);
   const { institution: instFromStore, fetchFeatures, hasFeature, loading: featuresLoading, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
   const instInfo = instFromStore || user?.institution || null;
 
@@ -178,7 +175,7 @@ export const MainLayout: React.FC = () => {
   const isSuperAdmin = user?.role === 'admin' && !instInfo;
   const isInstStudent = Boolean(instInfo) && user?.institution_role === 'student';
   const instPlan = instInfo?.plan || 'free';
-  const planLevel = (p: string) => ({ free: 1, solo: 2, plus: 3, pro: 4 })[p] || 1;
+  const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 4 })[p] || 1;
   const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
 
   type NavItem = { to: string; icon: any; label: string };
@@ -189,6 +186,7 @@ export const MainLayout: React.FC = () => {
     '/knowledge-map': 'knowledge.graph',
     '/qa': 'faq.system',
     '/ai': 'ai.assistant',
+    '/plan': 'ai.assistant',
     '/study': 'study.room',
     '/interviews': 'interview.mock',
     '/mock-exam': 'pdf.mock',
@@ -216,6 +214,7 @@ export const MainLayout: React.FC = () => {
         { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
         { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qa') },
         { to: '/ai', icon: Sparkles, label: t('layout:nav.aiLab') },
+        { to: '/plan', icon: CalendarCheck, label: t('layout:nav.plan') },
         { to: '/study', icon: Clock, label: t('layout:nav.studyRoom') },
 
         { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams') },
@@ -224,6 +223,7 @@ export const MainLayout: React.FC = () => {
   // ── 机构管理菜单 ──
   if (!isSuperAdmin && instInfo) {
     if (user?.is_institution_admin) {
+      navItems.unshift({ to: '/workbench', icon: Sparkles, label: 'AI 出题工作台' });
       navItems.push({ to: '/institution/students', icon: Users, label: '成员管理' });
       navItems.push({ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') });
     }
@@ -258,12 +258,12 @@ export const MainLayout: React.FC = () => {
           <div className="mb-6 mt-2 px-2 group/header">
             <div className="relative h-10 flex items-center">
               {/* Collapsed icon — always visible, always at left */}
-              <div className={cn(
+              <Link to="/xiaoyu" className={cn(
                 "absolute left-0 top-0 h-10 w-10 rounded-xl overflow-hidden shrink-0 transition-opacity duration-200 z-10",
                 collapsed ? "opacity-100 group-hover/header:opacity-0" : "opacity-0 pointer-events-none"
               )}>
                 <img src="/unimind_logo_small.png" alt="Unimind.ai" className="w-full h-full object-contain brand-logo-invert" />
-              </div>
+              </Link>
               {/* Expand button — same position as icon, appears on hover when collapsed */}
               <div
                 className={cn(
@@ -274,13 +274,13 @@ export const MainLayout: React.FC = () => {
               >
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </div>
-              {/* Expanded logo — slides out from behind the icon */}
-              <div className={cn(
+              {/* Expanded logo — slides out from behind the icon, clickable to XiaoYu */}
+              <Link to="/xiaoyu" className={cn(
                 "absolute left-0 top-0 h-10 overflow-hidden transition-all duration-300",
                 collapsed ? "w-10 opacity-0" : "w-32 opacity-100"
               )}>
                 <img src={UnimindLogo} alt="Unimind.ai" className="h-10 w-32 object-contain brand-logo-invert" />
-              </div>
+              </Link>
               {/* Collapse button — absolutely positioned at right edge */}
               <Button
                 variant="ghost"
@@ -353,6 +353,19 @@ export const MainLayout: React.FC = () => {
                       <span className="font-bold text-xs">{t('layout:userMenu.institutionDashboard')}</span>
                     </DropdownMenuItem>
                   )}
+                  {/* 邀请学生：机构管理员可见 */}
+                  {!isSuperAdmin && instInfo && user?.is_institution_admin && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
+                        toast.success(t('layout:invite.copied'));
+                      }}
+                      className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      <span className="font-bold text-xs">{t('layout:invite.trigger')}</span>
+                    </DropdownMenuItem>
+                  )}
                   {user?.role === 'admin' && (
                     <DropdownMenuItem onClick={() => navigate('/system-settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Settings2 className="h-3.5 w-3.5" />
@@ -368,6 +381,18 @@ export const MainLayout: React.FC = () => {
                       <span className="font-bold text-xs">{t('layout:nav.weeklyReport')}</span>
                     </DropdownMenuItem>
                   )}
+                  {/* 升级方案：非机构学生且未达最高方案 */}
+                  {!isInstStudent && myPlanLevel < 3 && (
+                    <DropdownMenuItem onClick={() => setShowUpgradeModal(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="font-bold text-xs">{t('layout:upgradePlan')}</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator className="my-2 bg-border" />
+                  <DropdownMenuItem onClick={() => i18n.changeLanguage(i18n.language?.startsWith('zh') ? 'en' : 'zh')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                    <Globe className="h-3.5 w-3.5" />
+                    <span className="font-bold text-xs">{i18n.language?.startsWith('zh') ? 'English' : '中文'}</span>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator className="my-2 bg-border" />
                   <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
                     <LogOut className="h-3.5 w-3.5" />
@@ -393,122 +418,10 @@ export const MainLayout: React.FC = () => {
             : "overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"
         )}>
           {!isFullPage && !isMobileImmersivePage && (
-            <header className="sticky top-0 h-14 shrink-0 border-b border-border bg-background/80 backdrop-blur-xl z-20 px-10 items-center justify-between transition-all hidden md:flex">
-               <div className="flex flex-col justify-center min-w-0">
-                  {pageTitle && (
-                    <div className="flex flex-col md:flex-row md:items-baseline md:gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                      <h2 className="text-sm font-black tracking-tight text-foreground uppercase">{pageTitle}</h2>
-                      <span className="text-[12px] font-bold text-muted-foreground/60 uppercase tracking-widest truncate max-w-[400px]">
-                        {pageSubtitle}
-                      </span>
-                    </div>
-                  )}
-               </div>
-               <div className="flex items-center gap-3">
-                  {/* Clickable ELO */}
+            <header className="sticky top-0 shrink-0 z-20 hidden md:flex pointer-events-none">
+               <div className="flex items-center gap-2 ml-auto pr-6 py-3 pointer-events-auto">
                   {user && <EloPopover />}
-                  {/* Invite students — institution admin (owner / teacher) */}
-                  {!isSuperAdmin && instInfo && user?.is_institution_admin && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-[11px] font-bold">
-                          <UserPlus className="h-3.5 w-3.5 mr-1" />
-                          {t('layout:invite.trigger')}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-3 bg-card/95 backdrop-blur-xl border-border shadow-lg">
-                        <DropdownMenuLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">
-                          {t('layout:invite.title', { name: instInfo.name })}
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <div className="space-y-3 px-1 py-1">
-                          {/* Role selector */}
-                          <div className="space-y-1.5">
-                            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">邀请角色</Label>
-                            <div className="flex gap-1.5">
-                              <Button
-                                variant={inviteRole === 'student' ? 'default' : 'outline'}
-                                size="sm"
-                                className="flex-1 h-8 rounded-lg text-[11px] font-bold"
-                                onClick={() => setInviteRole('student')}
-                              >
-                                <GraduationCap className="h-3 w-3 mr-1" />
-                                学员
-                              </Button>
-                              <Button
-                                variant={inviteRole === 'teacher' ? 'default' : 'outline'}
-                                size="sm"
-                                className="flex-1 h-8 rounded-lg text-[11px] font-bold"
-                                onClick={() => setInviteRole('teacher')}
-                              >
-                                <UserPlus className="h-3 w-3 mr-1" />
-                                教师
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{t('layout:invite.linkLabel')}</Label>
-                            <div className="flex items-center gap-2">
-                              <code className="flex-1 bg-muted px-3 py-2 rounded-lg text-[11px] font-mono font-bold truncate select-all">
-                                {window.location.origin}/api/users/join/{instInfo.invite_slug}/{inviteRole === 'teacher' ? '?role=teacher' : ''}
-                              </code>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 shrink-0"
-                                onClick={() => {
-                                  const suffix = inviteRole === 'teacher' ? '?role=teacher' : '';
-                                  navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/${suffix}`);
-                                  toast.success(t('layout:invite.copied'));
-                                }}
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground leading-relaxed">
-                            {inviteRole === 'teacher' ? '通过此链接注册的用户将自动成为教师角色。' : t('layout:invite.description')}
-                          </p>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-[11px] font-bold text-muted-foreground"
-                            onClick={async () => {
-                              try {
-                                await api.post('/users/institution/me/regenerate-invite-slug/');
-                                toast.success(t('layout:invite.regenerated'));
-                                fetchFeatures();
-                              } catch {
-                                toast.error(t('layout:invite.regenerateFailed'));
-                              }
-                            }}
-                          >
-                            <RefreshCw className="h-3 w-3 mr-1" />
-                            {t('layout:invite.regenerate')}
-                          </Button>
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  {/* Upgrade plan button — hidden for institution students, plus & pro */}
-                  {!isInstStudent && myPlanLevel < 3 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-full px-3 text-[11px] font-bold bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 hover:border-amber-300 transition-all"
-                      onClick={() => setShowUpgradeModal(true)}
-                    >
-                      <Sparkles className="h-3 w-3 mr-1 text-amber-500" />
-                      {t('layout:upgradePlan')}
-                    </Button>
-                  )}
-                  <LanguageSwitcher variant="compact" />
-                  <div className="h-6 w-px bg-border mx-1" />
                   {user && <NotificationBell />}
-                  <Avatar className={cn("h-8 w-8 border border-border shadow-sm")}>
-                     <AvatarImage src={user?.avatar_url} />
-                     <AvatarFallback className="text-xs font-bold">{user?.username?.[0]}</AvatarFallback>
-                  </Avatar>
                </div>
             </header>
           )}
@@ -583,7 +496,7 @@ export const MainLayout: React.FC = () => {
           )}
           <TrialBanner />
           <div className={cn(
-            "flex-1 w-full relative",
+            "flex-1 w-full relative min-h-0",
             (isMobileImmersivePage || isMobileStudyPage)
               ? "px-0 py-0 h-full overflow-hidden"
               : isMobileVideoPage

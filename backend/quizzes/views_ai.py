@@ -234,3 +234,46 @@ class PipelineReviewActionView(APIView):
         task.description = (task.description or '') + ' | 已拒绝'
         task.save(update_fields=['status', 'finished_at', 'description'])
         return Response({'status': 'rejected'})
+
+
+class WorkbenchTaskListView(APIView):
+    """当前教师的出题任务列表（工作台用）。"""
+    permission_classes = [IsAdmin, HasPlanFeature]
+    required_feature = 'ai.generate'
+
+    def get(self, request):
+        qs = ContentPipelineTask.objects.filter(
+            created_by=request.user,
+            task_type='ai_generate',
+        ).order_by('-created_at')[:20]
+        serializer = ContentPipelineTaskSerializer(qs, many=True)
+        return Response({'results': serializer.data})
+
+
+class WorkbenchTaskStatusView(APIView):
+    """轻量轮询端点：返回任务进度，不含 result 大字段。"""
+    permission_classes = [IsAdmin]
+
+    def get(self, request, pk):
+        from users.permissions import is_platform_admin
+
+        task = get_object_or_404(ContentPipelineTask, pk=pk)
+        # 机构隔离
+        if not is_platform_admin(request.user):
+            user_inst = getattr(request.user, 'institution', None)
+            task_inst = getattr(task.created_by, 'institution', None) if task.created_by else None
+            if user_inst != task_inst:
+                return Response({'error': '任务不存在'}, status=404)
+
+        payload = task.payload or {}
+        return Response({
+            'id': task.id,
+            'status': task.status,
+            'progress': task.progress,
+            'title': task.title,
+            'current_stage': payload.get('current_stage', ''),
+            'status_text': payload.get('status_text', ''),
+            'stages': payload.get('stages', []),
+            'created_at': task.created_at,
+            'finished_at': task.finished_at,
+        })

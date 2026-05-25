@@ -15,6 +15,7 @@ interface Bot {
   name: string;
   avatar: string;
   system_prompt: string;
+  bot_type?: string;
 }
 
 interface BotSelectorProps {

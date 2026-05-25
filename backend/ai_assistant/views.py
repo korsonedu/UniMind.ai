@@ -6,8 +6,8 @@ from rest_framework import generics, permissions, serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import AIChatMessage, Bot, BotVisibility
-from .serializers import AIChatMessageSerializer, BotSerializer
+from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, StudyPlan
+from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, StudyPlanSerializer
 from .utils import get_student_academic_context
 from .prompt_sync import (
     delete_bot_prompt_file,
@@ -33,11 +33,34 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
     if bot and bot.is_exclusive:
         student_context = get_student_academic_context(user)
 
-    tool_executor = AssistantToolExecutor(user)
+    # 获取记忆上下文
+    memory_context = ""
+    try:
+        from ai_assistant.services.memory_service import get_memories_for_injection
+        memory_context = get_memories_for_injection(user)
+    except Exception:
+        pass
+
+    if bot and bot.bot_type == 'planner':
+        from ai_assistant.services.tool_executor import PlannerToolExecutor
+        tool_executor = PlannerToolExecutor(user)
+    elif bot and bot.bot_type == 'exam_generator':
+        from ai_assistant.services.exam_generator_tool_executor import ExamGeneratorToolExecutor
+        tool_executor = ExamGeneratorToolExecutor(user)
+        # 从最近一条助手消息的 metadata 中恢复已生成的题目缓存
+        last_with_questions = AIChatMessage.objects.filter(
+            user=user, bot=bot, role='assistant',
+        ).exclude(metadata={}).order_by('-timestamp').first()
+        if last_with_questions:
+            cached = last_with_questions.metadata.get('generated_questions')
+            if cached:
+                tool_executor._last_generated = cached
+    else:
+        tool_executor = AssistantToolExecutor(user)
 
     try:
         with _AI_CHAT_SEMAPHORE:
-            res = AIService.chat_with_assistant_agent(bot, history_msgs, user_message, tool_executor, student_context)
+            res = AIService.chat_with_assistant_agent(bot, history_msgs, user_message, tool_executor, student_context, memory_context)
 
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
 
@@ -53,6 +76,16 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
 
             if pending_msg:
                 pending_msg.content = ai_content
+                # 写入出题 Agent 的结构化数据
+                if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
+                    pending_msg.metadata = {
+                        'generated_questions': tool_executor._last_generated,
+                        'pipeline_task_id': getattr(tool_executor, '_last_pipeline_task_id', None),
+                    }
+                elif hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
+                    pending_msg.metadata = {
+                        'pipeline_task_id': tool_executor._last_pipeline_task_id,
+                    }
                 pending_msg.save()
 
             # 计入 AI 调用总次数
@@ -71,6 +104,12 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
             pending_msg.content = f"抱歉，连接中断: {str(e)}"
             pending_msg.save()
     finally:
+        # 异步提取记忆（不阻塞响应）
+        try:
+            from ai_assistant.services.memory_service import extract_memories_async
+            extract_memories_async(user, history_msgs + [{'role': 'user', 'content': user_message}])
+        except Exception:
+            pass
         connections.close_all()
 
 
@@ -275,3 +314,234 @@ class AIChatResetView(APIView):
             qs = qs.filter(bot_id=bot_id)
         qs.delete()
         return Response({'status': 'cleared'})
+
+
+class AIChatStreamView(APIView):
+    """SSE 流式聊天 — 前端逐 token 渲染小宇回复。"""
+    permission_classes = [IsMember, HasQuota]
+    quota_resource = 'ai_call_total'
+
+    def post(self, request):
+        import json
+        from django.http import StreamingHttpResponse
+        from ai_engine.service import AIEngine
+
+        user_message = request.data.get('message', '').strip()
+        bot_id = request.data.get('bot_id')
+        web_search = request.data.get('web_search', False)
+
+        if not user_message:
+            return Response({'error': 'Message is required'}, status=400)
+
+        bot = Bot.objects.filter(id=bot_id).first()
+        if not bot:
+            return Response({'error': 'Bot not found'}, status=404)
+
+        if not _user_can_access_bot(request.user, bot):
+            return Response({'error': '无权使用此机器人'}, status=403)
+
+        sync_bot_prompt(bot)
+
+        # Save user message
+        AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot)
+
+        def generate():
+            collected = []
+            try:
+                # Build context
+                history_objs = AIChatMessage.objects.filter(
+                    user=request.user, bot=bot
+                ).order_by('-timestamp')[:10]
+                history_msgs = [
+                    {"role": h.role, "content": h.content}
+                    for h in reversed(history_objs)
+                    if h.content != "[Thinking...]" and h.content != user_message
+                ]
+
+                student_context = ""
+                if bot.is_exclusive:
+                    student_context = get_student_academic_context(request.user)
+
+                memory_context = ""
+                try:
+                    from ai_assistant.services.memory_service import get_memories_for_injection
+                    memory_context = get_memories_for_injection(request.user)
+                except Exception:
+                    pass
+
+                # Select tool executor
+                if bot.bot_type == 'planner':
+                    from ai_assistant.services.tool_executor import PlannerToolExecutor
+                    tool_executor = PlannerToolExecutor(request.user)
+                elif bot.bot_type == 'exam_generator':
+                    from ai_assistant.services.exam_generator_tool_executor import ExamGeneratorToolExecutor
+                    tool_executor = ExamGeneratorToolExecutor(request.user)
+                else:
+                    tool_executor = AssistantToolExecutor(request.user)
+
+                # Build messages
+                from ai_assistant.services.chat_service import AssistantChatService
+                system_prompt = AssistantChatService._build_agent_system_prompt(
+                    bot, student_context, memory_context
+                )
+                messages = [{'role': 'system', 'content': system_prompt}]
+                for msg in history_msgs:
+                    if msg['role'] in ('user', 'assistant') and msg['content']:
+                        messages.append(msg)
+                messages.append({'role': 'user', 'content': user_message})
+
+                # Get tools
+                if bot.bot_type == 'planner':
+                    from ai_engine.tools import get_planner_tools
+                    tools = get_planner_tools()
+                elif bot.bot_type == 'exam_generator':
+                    from ai_engine.tools import get_exam_generator_tools
+                    tools = get_exam_generator_tools()
+                else:
+                    from ai_engine.tools import get_assistant_tools
+                    tools = get_assistant_tools()
+
+                # First, handle tool calls synchronously
+                with _AI_CHAT_SEMAPHORE:
+                    res = AIEngine.call_ai_with_tools(
+                        messages=messages,
+                        tools=tools,
+                        tool_executor=tool_executor,
+                        tool_choice="auto",
+                        temperature=0.6,
+                        max_tokens=2500,
+                        operation='assistant.chat',
+                        max_tool_rounds=5,
+                    )
+
+                if res and 'choices' in res:
+                    ai_content = res['choices'][0]['message']['content'] or ''
+                    ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ').replace('\\(', ' $ ').replace('\\)', ' $ ')
+
+                    # Stream the final response token by token
+                    for char in ai_content:
+                        collected.append(char)
+                        yield f"data: {json.dumps({'token': char})}\n\n"
+
+                    # Save to database
+                    AIChatMessage.objects.create(
+                        user=request.user,
+                        role='assistant',
+                        content=ai_content,
+                        bot=bot,
+                    )
+
+                    # Update dashboard config if tool executor set it
+                    if hasattr(tool_executor, 'user'):
+                        request.user.refresh_from_db()
+                else:
+                    error_msg = "AI 暂时无法响应，请稍后再试。"
+                    yield f"data: {json.dumps({'error': error_msg})}\n\n"
+
+                yield f"data: {json.dumps({'done': True})}\n\n"
+
+            except Exception as e:
+                logger.exception("AI Chat Stream Error [%s]: %s", type(e).__name__, e)
+                error_msg = "抱歉，连接中断，请稍后再试。"
+                yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            finally:
+                # Async memory extraction
+                try:
+                    from ai_assistant.services.memory_service import extract_memories_async
+                    extract_memories_async(
+                        request.user,
+                        history_msgs + [{'role': 'user', 'content': user_message}]
+                    )
+                except Exception:
+                    pass
+                connections.close_all()
+
+                # Increment quota
+                from users.quota import increment_quota
+                if request.user.institution:
+                    increment_quota(request.user.institution, 'ai_call_total')
+
+        response = StreamingHttpResponse(
+            generate(),
+            content_type='text/event-stream',
+        )
+        response['Cache-Control'] = 'no-cache'
+        response['X-Accel-Buffering'] = 'no'
+        return response
+
+
+class AgentMemoryListCreateView(generics.ListCreateAPIView):
+    serializer_class = AgentMemorySerializer
+    permission_classes = [IsMember]
+
+    def get_queryset(self):
+        qs = AgentMemory.objects.filter(user=self.request.user)
+        memory_type = self.request.query_params.get('type')
+        if memory_type:
+            qs = qs.filter(memory_type=memory_type)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user, source='manual')
+
+
+class AgentMemoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = AgentMemorySerializer
+    permission_classes = [IsMember]
+
+    def get_queryset(self):
+        return AgentMemory.objects.filter(user=self.request.user)
+
+
+class StudyPlanListView(generics.ListAPIView):
+    serializer_class = StudyPlanSerializer
+    permission_classes = [IsMember]
+
+    def get_queryset(self):
+        return StudyPlan.objects.filter(user=self.request.user)
+
+
+class StudyPlanDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StudyPlanSerializer
+    permission_classes = [IsMember]
+
+    def get_queryset(self):
+        return StudyPlan.objects.filter(user=self.request.user)
+
+
+class StudyPlanTaskUpdateView(APIView):
+    permission_classes = [IsMember]
+
+    def patch(self, request, plan_id, task_id):
+        from django.utils import timezone
+
+        plan = StudyPlan.objects.filter(id=plan_id, user=request.user).first()
+        if not plan:
+            return Response({'error': 'Plan not found'}, status=404)
+
+        new_status = request.data.get('status')
+        if new_status not in ('pending', 'completed', 'skipped'):
+            return Response({'error': 'Invalid status'}, status=400)
+
+        data = plan.plan_data or {}
+        tasks = data.get('tasks', [])
+        updated = False
+        for task in tasks:
+            if task.get('id') == task_id:
+                task['status'] = new_status
+                task['completed_at'] = timezone.now().isoformat() if new_status == 'completed' else None
+                updated = True
+                break
+
+        if not updated:
+            return Response({'error': 'Task not found'}, status=404)
+
+        all_done = all(t.get('status') in ('completed', 'skipped') for t in tasks)
+        if all_done:
+            plan.status = 'completed'
+            plan.completed_at = timezone.now()
+
+        plan.plan_data = data
+        plan.save()
+
+        return Response(StudyPlanSerializer(plan).data)

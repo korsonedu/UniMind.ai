@@ -3,7 +3,7 @@ import json
 import csv
 import io
 import logging
-from django.db.models import Case, IntegerField, When
+from django.db.models import Case, IntegerField, Q, When
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import generics
@@ -62,7 +62,6 @@ class QuestionListView(generics.ListCreateAPIView):
         if not is_platform_admin(user):
             inst = getattr(user, 'institution', None)
             if inst:
-                from django.db.models import Q
                 qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
             else:
                 qs = qs.filter(institution__isnull=True)
@@ -76,14 +75,15 @@ class QuestionListView(generics.ListCreateAPIView):
         if kp_id: qs = qs.filter(knowledge_point_id=kp_id)
         if q_type: qs = qs.filter(q_type=q_type)
 
-        # 按学科（SUB 级知识点）过滤
+        # 按学科（SUB 级知识点）过滤；若过滤后为空则 fallback 到全量
         sub_ids = self.request.query_params.get('sub_ids', '')
         if sub_ids:
             sub_id_list = [int(x) for x in str(sub_ids).split(',') if x.strip().isdigit()]
             if sub_id_list:
-                # 递归收集 sub 级下的所有 kp 节点
                 kp_ids = _get_descendant_kp_ids(sub_id_list)
-                qs = qs.filter(knowledge_point_id__in=kp_ids)
+                filtered = qs.filter(knowledge_point_id__in=kp_ids)
+                if filtered.exists():
+                    qs = filtered
 
         if is_platform_admin(user) and not self.request.query_params.get('limit'):
             return qs
@@ -186,7 +186,6 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdmin]
 
     def get_queryset(self):
-        from django.db.models import Q
         user = self.request.user
         qs = super().get_queryset()
         if not is_platform_admin(user):
@@ -207,7 +206,6 @@ class AdminQuestionListView(APIView):
 
     def get(self, request):
         from users.permissions import is_platform_admin
-        from django.db.models import Q
 
         qs = Question.objects.select_related('knowledge_point').order_by('-created_at')
         if not is_platform_admin(request.user):
@@ -272,7 +270,6 @@ class ExportStructuredQuestionsView(APIView):
 
     def get(self, request):
         from users.permissions import is_platform_admin
-        from django.db.models import Q
 
         kp_id = request.query_params.get('kp_id')
         qs = Question.objects.select_related('knowledge_point').all()

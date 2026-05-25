@@ -43,10 +43,10 @@ import { useIsMobile } from '@/lib/useIsMobile';
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
 import { ResultReportDialog } from './test-ladder/ResultReportDialog';
 
-type FsrsCurvePoint = { date: string; predicted: number; actual: number; count: number };
-type FsrsCurvePayload = {
+type MemorixCurvePoint = { date: string; predicted: number; actual: number; count: number };
+type MemorixCurvePayload = {
   window_days: number;
-  time_series: FsrsCurvePoint[];
+  time_series: MemorixCurvePoint[];
   fit_curve: Array<{ bucket: string; predicted: number; actual: number; count: number }>;
   metrics: {
     review_count: number;
@@ -62,7 +62,7 @@ type FsrsCurvePayload = {
     weights_preview?: number[];
   };
 };
-type FsrsOptimizationHistory = {
+type MemorixOptimizationHistory = {
   id: number;
   previous_loss: number | null;
   new_loss: number | null;
@@ -111,13 +111,13 @@ export const TestLadder: React.FC = () => {
   const [showResultDialog, setShowResultDialog] = useState(false);
   const [currentReportIdx, setCurrentReportIdx] = useState(0);
   const [examSummary, setExamSummary] = useState<any>(null);
-  const [fsrsCurve, setFsrsCurve] = useState<FsrsCurvePayload | null>(null);
-  const [fsrsHistory, setFsrsHistory] = useState<FsrsOptimizationHistory[]>([]);
+  const [memorixCurve, setMemorixCurve] = useState<MemorixCurvePayload | null>(null);
+  const [memorixHistory, setMemorixHistory] = useState<MemorixOptimizationHistory[]>([]);
 
   useEffect(() => {
     fetchGoals();
-    fetchFsrsCurve();
-    fetchFsrsHistory();
+    fetchMemorixCurve();
+    fetchMemorixHistory();
     fetchSubjects();
   }, []);
 
@@ -177,18 +177,18 @@ export const TestLadder: React.FC = () => {
     } catch (e) { console.error('fetchGoals failed', e); }
   };
 
-  const fetchFsrsCurve = async () => {
+  const fetchMemorixCurve = async () => {
     try {
       const res = await api.get('/quizzes/memorix/curve/', { params: { window_days: 90 } });
-      setFsrsCurve(res.data as FsrsCurvePayload);
-    } catch (e) { console.error('fetchFsrsCurve failed', e); }
+      setMemorixCurve(res.data as MemorixCurvePayload);
+    } catch (e) { console.error('fetchMemorixCurve failed', e); }
   };
 
-  const fetchFsrsHistory = async () => {
+  const fetchMemorixHistory = async () => {
     try {
       const res = await api.get('/quizzes/memorix/optimization-history/');
-      setFsrsHistory((res.data?.results || []) as FsrsOptimizationHistory[]);
-    } catch (e) { console.error('fetchFsrsHistory failed', e); }
+      setMemorixHistory((res.data?.results || []) as MemorixOptimizationHistory[]);
+    } catch (e) { console.error('fetchMemorixHistory failed', e); }
   };
 
   const toggleFavorite = async (qId: number) => {
@@ -264,8 +264,8 @@ export const TestLadder: React.FC = () => {
     } finally { setIsSubmitting(false); }
   };
 
-  const fsrsChart = useMemo(() => {
-    const series = fsrsCurve?.time_series || [];
+  const memorixChart = useMemo(() => {
+    const series = memorixCurve?.time_series || [];
     const graphWidth = 760;
     const graphHeight = 220;
     const top = 16;
@@ -288,7 +288,7 @@ export const TestLadder: React.FC = () => {
     const actualPath = actualPoints.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
     return { graphWidth, graphHeight, top, right, bottom, left, predictedPoints, actualPoints, predictedPath, actualPath };
-  }, [fsrsCurve]);
+  }, [memorixCurve]);
 
   return (
     <PageWrapper title={t('pages:academicLadder.title')} subtitle={t('pages:academicLadder.subtitle')}>
@@ -536,55 +536,55 @@ export const TestLadder: React.FC = () => {
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
                 <p className="label-meta">{t('memorix.curveTitle')}</p>
-                <p className="text-sm font-bold text-foreground mt-1">{t('memorix.curveSubtitle', { days: fsrsCurve?.window_days || 90 })}</p>
+                <p className="text-sm font-bold text-foreground mt-1">{t('memorix.curveSubtitle', { days: memorixCurve?.window_days || 90 })}</p>
               </div>
-              <Button variant="outline" className="h-8 rounded-lg text-xs font-bold" onClick={() => { fetchFsrsCurve(); fetchFsrsHistory(); }}>
+              <Button variant="outline" className="h-8 rounded-lg text-xs font-bold" onClick={() => { fetchMemorixCurve(); fetchMemorixHistory(); }}>
                 {t('refresh')}
               </Button>
             </div>
-            {(fsrsCurve?.time_series || []).length > 0 ? (
+            {(memorixCurve?.time_series || []).length > 0 ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.sampleCount')}</p>
-                    <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.review_count ?? 0}</p>
+                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.review_count ?? 0}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.predictionAccuracy')}</p>
-                    <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.rmse ?? '--'}</p>
+                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.rmse ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.avgError')}</p>
-                    <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.mae ?? '--'}</p>
+                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.mae ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.predictedMastery')}</p>
-                    <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.avg_predicted ?? '--'}</p>
+                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.avg_predicted ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.actualMastery')}</p>
-                    <p className="text-sm font-black text-foreground">{fsrsCurve?.metrics?.avg_actual ?? '--'}</p>
+                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.avg_actual ?? '--'}</p>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-border bg-muted/30 p-3">
-                  <svg viewBox={`0 0 ${fsrsChart.graphWidth} ${fsrsChart.graphHeight}`} className="w-full h-48">
-                    <line x1={fsrsChart.left} y1={fsrsChart.graphHeight - fsrsChart.bottom} x2={fsrsChart.graphWidth - fsrsChart.right} y2={fsrsChart.graphHeight - fsrsChart.bottom} stroke="currentColor" className="text-border" />
-                    <path d={fsrsChart.predictedPath} fill="none" stroke="#4f46e5" strokeWidth="2.5" />
-                    <path d={fsrsChart.actualPath} fill="none" stroke="#10b981" strokeWidth="2.5" />
+                  <svg viewBox={`0 0 ${memorixChart.graphWidth} ${memorixChart.graphHeight}`} className="w-full h-48">
+                    <line x1={memorixChart.left} y1={memorixChart.graphHeight - memorixChart.bottom} x2={memorixChart.graphWidth - memorixChart.right} y2={memorixChart.graphHeight - memorixChart.bottom} stroke="currentColor" className="text-border" />
+                    <path d={memorixChart.predictedPath} fill="none" stroke="#4f46e5" strokeWidth="2.5" />
+                    <path d={memorixChart.actualPath} fill="none" stroke="#10b981" strokeWidth="2.5" />
                   </svg>
                   <div className="mt-2 flex items-center gap-4 text-[11px] font-bold">
                     <span className="text-indigo-600">{t('memorix.predictedCurve')}</span>
                     <span className="text-emerald-600">{t('memorix.actualCurve')}</span>
-                    <span className="text-muted-foreground">{t('memorix.lastOptimized', { date: fsrsCurve?.profile?.last_optimized_at ? new Date(fsrsCurve.profile.last_optimized_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US') : t('memorix.notOptimized') })}</span>
+                    <span className="text-muted-foreground">{t('memorix.lastOptimized', { date: memorixCurve?.profile?.last_optimized_at ? new Date(memorixCurve.profile.last_optimized_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US') : t('memorix.notOptimized') })}</span>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-border bg-card p-3">
                   <p className="text-[10px] font-bold uppercase text-muted-foreground">{t('memorix.tuningHistory')}</p>
-                  {fsrsHistory.length === 0 ? (
+                  {memorixHistory.length === 0 ? (
                     <p className="text-xs font-bold text-muted-foreground mt-2">{t('memorix.noTuningHistory')}</p>
                   ) : (
                     <div className="space-y-1.5 mt-2">
-                      {fsrsHistory.slice(0, 3).map((item) => (
+                      {memorixHistory.slice(0, 3).map((item) => (
                         <div key={item.id} className="rounded-lg border border-border px-2.5 py-2 text-[11px]">
                           <p className="font-bold">
                             {item.accepted ? t('memorix.accepted') : t('memorix.notAccepted')} · {t('memorix.improvementRate')} {(Number(item.improvement_ratio || 0) * 100).toFixed(2)}%

@@ -421,7 +421,7 @@
   },
   "insights": {
     "totalUsers": "Total Registered Users",
-    "proMembers": "Pro Members",
+    "proMembers": "Enterprise Members",
     "conversionRate": "Conversion Rate",
     "academicBottleneck": "Academic Bottleneck Top 10",
     "sortedByErrors": "Sorted by total errors",

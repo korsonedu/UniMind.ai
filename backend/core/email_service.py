@@ -179,7 +179,7 @@ def send_email(recipient: str, subject: str, body: str) -> bool:
 
 
 def send_membership_notification(email: str, tier: str, expires_at) -> bool:
-    tier_labels = {'free': 'Free', 'solo': 'Solo', 'plus': 'Plus', 'pro': 'Pro'}
+    tier_labels = {'free': 'Free', 'starter': 'Starter', 'growth': 'Growth', 'enterprise': 'Enterprise'}
     label = tier_labels.get(tier, tier)
     subject = f"UniMind.ai — 会员激活成功 ({label})"
     if expires_at:

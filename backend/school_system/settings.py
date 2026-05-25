@@ -90,6 +90,7 @@ MIDDLEWARE = [
     "school_system.middleware.RequestIDMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "school_system.middleware.SecurityHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -135,7 +136,7 @@ AUTH_USER_MODEL = "users.User"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 8}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
@@ -276,6 +277,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "notifications.tasks_reminder.send_expiry_reminders",
         "schedule": 86400.0,
     },
+    "check-performance-drops-daily": {
+        "task": "users.tasks.check_performance_drops",
+        "schedule": 86400.0,
+    },
 }
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "visibility_timeout": _get_int("CELERY_VISIBILITY_TIMEOUT", 3600),
@@ -290,3 +295,56 @@ GIPHY_API_KEY = os.getenv("GIPHY_API_KEY", "")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
 UNIMIND_LOGO_URL = os.getenv("UNIMIND_LOGO_URL", "https://unimind.ai/logo.png")
+
+# ── Logging（等保二级：日志持久化 + 轮转） ──
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} [{levelname}] {name} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "file_api": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(LOG_DIR, "api_access.log"),
+            "maxBytes": 50 * 1024 * 1024,  # 50MB
+            "backupCount": 180,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+        },
+        "file_security": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(LOG_DIR, "security.log"),
+            "maxBytes": 50 * 1024 * 1024,
+            "backupCount": 180,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+        },
+    },
+    "loggers": {
+        "": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+        "school_system.middleware": {
+            "handlers": ["console", "file_api"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "core.security": {
+            "handlers": ["console", "file_security"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

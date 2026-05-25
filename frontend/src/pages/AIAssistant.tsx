@@ -44,10 +44,12 @@ export const AIAssistant: React.FC = () => {
     const init = async () => {
       try {
         const bRes = await api.get('/ai/bots/');
-        setBots(bRes.data);
+        // Filter out XiaoYu — it's now an independent agent at /xiaoyu
+        const filteredBots = bRes.data.filter((b: Bot) => b.name !== '小宇');
+        setBots(filteredBots);
         const savedBotId = sessionStorage.getItem('last_selected_bot_id');
         if (savedBotId) {
-          const savedBot = bRes.data.find((b: Bot) => b.id.toString() === savedBotId);
+          const savedBot = filteredBots.find((b: Bot) => b.id.toString() === savedBotId);
           if (savedBot) setSelectedBot(savedBot);
         }
       } catch (e: any) {

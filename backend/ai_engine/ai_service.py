@@ -309,12 +309,13 @@ class AIService:
 
     @classmethod
     def chat_with_assistant_agent(cls, bot, history_messages, user_message,
-                                   tool_executor, student_context=''):
+                                   tool_executor, student_context='',
+                                   memory_context=''):
         from ai_assistant.services.chat_service import AssistantChatService
         return AssistantChatService.chat_with_assistant_agent(
             bot=bot, history_messages=history_messages,
             user_message=user_message, tool_executor=tool_executor,
-            student_context=student_context,
+            student_context=student_context, memory_context=memory_context,
         )
 
     # ── Legacy private methods (delegated to QuestionGenerator) ──

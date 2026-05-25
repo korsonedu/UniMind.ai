@@ -5,7 +5,7 @@ interface InstitutionInfo {
   id: number;
   name: string;
   slug: string;
-  plan: 'free' | 'solo' | 'plus' | 'pro';
+  plan: 'free' | 'starter' | 'growth' | 'enterprise';
   plan_label: string;
   plan_expires_at: string | null;
   is_active: boolean;

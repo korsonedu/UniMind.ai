@@ -65,6 +65,29 @@ class APIExceptionMiddleware:
             return resp
 
 
+class SecurityHeadersMiddleware:
+    """添加安全响应头（等保二级）。"""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data:; "
+            "connect-src 'self' https: wss:; "
+            "frame-ancestors 'none'"
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
+
 class APIAccessLogMiddleware:
     """
     记录 API 访问日志（状态码、耗时、request_id）。

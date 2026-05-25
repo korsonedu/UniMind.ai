@@ -1,0 +1,18 @@
+{
+  "pageTitle": "学习计划",
+  "pageSubtitle": "小宇为你定制的个性化学习方案",
+  "emptyTitle": "还没有学习计划",
+  "emptyDesc": "去和小宇聊聊，让它为你制定一份个性化学习方案",
+  "chatWithXiaoyu": "和小宇聊聊",
+  "progress": "进度",
+  "tasks": "任务",
+  "completed": "已完成",
+  "skipped": "已跳过",
+  "pending": "待完成",
+  "active": "进行中",
+  "archived": "已归档",
+  "day": "第 {{day}} 天",
+  "estimatedMinutes": "预计 {{min}} 分钟",
+  "deleteConfirm": "确定要删除这个计划吗？",
+  "viewInChat": "在对话中查看"
+}

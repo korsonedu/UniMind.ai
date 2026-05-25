@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import (
     Question, QuizAttempt, KnowledgePoint, UserQuestionStatus, QuizExam, ExamQuestionResult,
     ContentPipelineTask, TeacherExam, StudentExamSubmission, KnowledgePointAnnotation,
-    PersonalizedMockExam,
+    PersonalizedMockExam, ExamTemplate,
 )
 from users.serializers import UserSerializer
 
@@ -109,3 +109,17 @@ class PersonalizedMockExamSerializer(serializers.ModelSerializer):
     class Meta:
         model = PersonalizedMockExam
         fields = ('id', 'user', 'status', 'exam_pdf', 'answer_pdf', 'question_count', 'weak_coverage', 'error_message', 'created_at')
+
+
+class ExamTemplateSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source='created_by.username', read_only=True, default=None)
+
+    class Meta:
+        model = ExamTemplate
+        fields = (
+            'id', 'name', 'description', 'subject', 'difficulty',
+            'question_types', 'type_ratio', 'question_count',
+            'knowledge_point_ids', 'is_system', 'created_by',
+            'created_by_name', 'institution', 'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'is_system', 'created_by', 'institution', 'created_at', 'updated_at')

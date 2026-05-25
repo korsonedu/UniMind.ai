@@ -4,6 +4,46 @@
 
 ---
 
+## [v2.8.0-dev] - 2026-05-25
+
+### 🧠 Agent 记忆系统
+
+- **新增 `AgentMemory` 模型** (`ai_assistant/models.py`)：4 种记忆类型（preference/academic/interaction/teacher_context），支持 AI 自动提取和用户手动创建。
+- **记忆服务** (`ai_assistant/services/memory_service.py`)：对话后后台线程自动提取关键事实，下次对话注入 system prompt（上限 800 字符）。
+- **CRUD API**：`/api/ai/memories/` — 用户可查看、创建、编辑、删除自己的记忆。
+- **Prompt 模板**：`prompts/ai_assistant/memory_extraction_prompt.txt` — 结构化 JSON 输出 schema。
+
+### 🩺 学生诊断测试
+
+- **诊断服务** (`quizzes/services/diagnostic_service.py`)：随机选取 10 个机构知识点生成诊断题，支持客观题精确匹配 + 主观题 AI 判分。
+- **Memorix 初始化**：答对 KP → stability=5.0, next_review=+3天；答错 → stability=1.0, next_review=+1天。
+- **路由守卫**：学生首次登录未完成诊断 → 强制跳转 `/diagnostic`。
+- **前端页面** (`frontend/src/pages/DiagnosticTest.tsx`)：三阶段流程（欢迎→答题→结果分析）。
+
+### 📋 出题模板预设系统
+
+- **新增 `ExamTemplate` 模型** (`quizzes/models.py`)：支持难度、题型比例、题量、预选知识点等配置。
+- **3 个系统预设**（数据迁移 `0036_seed_system_presets.py`）：期末模拟卷（hard/30题）、周测（normal/15题）、知识点专练（mixed/10题）。
+- **CRUD API**：`/api/quizzes/templates/` — 系统预设不可删改，机构可创建自定义模板。
+- **前端组件**：工作台左侧栏模板选择器（随 Feature 5 一起交付）。
+
+### 🔄 闭环反馈
+
+- **班级分析端点**：`/api/users/institution/me/analytics/class-performance/` — 按 KP 聚合全班正确率 + 周趋势。
+- **薄弱知识点建议**：`/api/users/institution/me/analytics/suggested-topics/` — Top 5 最弱 KP + 针对性建议。
+- **绩效告警**：`notifications` 新增 `performance_alert` 类型，Celery 每日检测正确率下降 >15% 自动通知。
+- **Agent 工具扩展**：`get_class_weak_points` + `get_class_performance_summary`（仅 teacher/owner 可用）。
+- **前端面板** (`ClassPerformancePanel.tsx`)：div 柱状图 + 趋势箭头 + "针对出题"按钮（跳转工作台预选 KP）。
+
+### 🎨 AI 出题工作台
+
+- **教师首页**：`/workbench` — teacher/owner 登录后自动跳转，侧边栏首位入口。
+- **ARC 管线集成**：复用现有 4-agent 对抗管线（Author→Reviewer→AuthorRevise→Classifier），前端直接调用 `/api/quizzes/admin/adversarial-pipeline/`。
+- **后端端点**：`WorkbenchTaskListView`（教师任务列表）+ `WorkbenchTaskStatusView`（轻量轮询）。
+- **三栏布局**：左侧模板+任务列表 / 中间白板（配置→进度 stepper→结果审核）/ 右侧 AI 助手占位。
+- **子组件**：`TemplateSidebar`、`LaunchConfig`（KP 搜索+难度/题型配置）、`PipelineProgress`（4 阶段 stepper）、`QuestionResults`、`QuestionReviewCard`（ARC 元数据展示）。
+- **审核入库**：逐题选择 + 批量批准/拒绝，复用 `PipelineReviewActionView`。
+
 ## [v2.7.0-dev] - 2026-05-23
 
 ### 🔌 AI 引擎：模型供应商热插拔

@@ -12,7 +12,7 @@ def activate_membership(user, plan, duration_days, source='payment'):
 
     Args:
         user: User instance
-        plan: 'solo' | 'plus' | 'pro'
+        plan: 'starter' | 'growth' | 'enterprise'
         duration_days: 0 = permanent, >0 = expires after N days
         source: 'payment' | 'invite_code' | 'admin'
     """

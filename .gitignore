@@ -170,3 +170,7 @@ yarn-error.log*
 dist/
 backend/media/
 backend/uploads/
+
+# 等保二级：日志和备份
+backend/logs/
+backups/

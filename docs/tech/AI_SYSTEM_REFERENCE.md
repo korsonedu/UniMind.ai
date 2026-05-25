@@ -44,12 +44,12 @@ ai_engine/config.py               ← 模型路由表（哪个任务用什么模
 
 **输出格式**：
 ```json
-{"score": 8.5, "feedback": "判分依据...", "analysis": "标准答案...", "fsrs_rating": 3}
+{"score": 8.5, "feedback": "判分依据...", "analysis": "标准答案...", "memorix_rating": 3}
 ```
 
 **逻辑**：
 - 客观题：本地对比答案（normalize_objective_answer），AI 只做深度解析（为什么对/错 + 易错点）
-- 主观题：AI 完整判分（score/feedback/analysis/fsrs_rating），分数钳位到 [0, max_score]
+- 主观题：AI 完整判分（score/feedback/analysis/memorix_rating），分数钳位到 [0, max_score]
 - 失败时返回 zero-score 兜底
 
 **客观题深度解析**（同文件 `_analyze_objective`）：
@@ -298,7 +298,7 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 | Schema | 行号 | 用途 | 输出类型 |
 |--------|------|------|---------|
 | `QUESTION_LIST_SCHEMA` | 230 | 批量命题输出 | array of questions |
-| `GRADING_RESULT_SCHEMA` | 236 | 主观题判分 | `{score, feedback, analysis, fsrs_rating}` |
+| `GRADING_RESULT_SCHEMA` | 236 | 主观题判分 | `{score, feedback, analysis, memorix_rating}` |
 | `OBJECTIVE_ANALYSIS_SCHEMA` | 250 | 客观题解析 | `{why_correct, why_wrong, pitfalls}` |
 | `BATCH_REVIEW_SCHEMA` | 260 | 单管线批量审核 | array of `{index, pass, issues, severity}` |
 | `RESUME_TUNE_SCHEMA` | 281 | 简历调优 | `{score, diagnostics, optimized_content, predicted_questions}` |

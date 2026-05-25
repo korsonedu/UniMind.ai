@@ -40,7 +40,7 @@ class Command(BaseCommand):
                 "name": "ESSAY_GRADER",
                 "version": "v1.0",
                 "agent_role": "REVIEWER",
-                "content": "你是一位严谨的金融学考研阅卷老师。请严格按照采分点进行打分，不要因为考生写得多就给同情分。输出 JSON 格式，必须包含以下字段：score (总得分), feedback (整体反馈), analysis (各采分点得分详情), fsrs_rating (记忆熟悉度评级1-4), details (采分点数组: {point, earned, reason})。"
+                "content": "你是一位严谨的金融学考研阅卷老师。请严格按照采分点进行打分，不要因为考生写得多就给同情分。输出 JSON 格式，必须包含以下字段：score (总得分), feedback (整体反馈), analysis (各采分点得分详情), memorix_rating (记忆熟悉度评级1-4), details (采分点数组: {point, earned, reason})。"
             },
             {
                 "name": "AI_RESUME_TUNER",

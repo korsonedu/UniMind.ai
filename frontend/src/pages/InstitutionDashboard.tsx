@@ -8,6 +8,7 @@ import {
   Building2, Users, Calendar, Loader2,
   Check, Minus, GraduationCap, TrendingUp, Sparkles,
 } from 'lucide-react';
+import ClassPerformancePanel from '@/components/ClassPerformancePanel';
 import { cn } from '@/lib/utils';
 
 interface DashboardData {
@@ -30,8 +31,8 @@ interface DashboardData {
 }
 
 const PLAN_COLORS: Record<string, string> = {
-  free: 'bg-unimind-text-quaternary', solo: 'bg-primary',
-  plus: 'bg-unimind-green', pro: 'bg-amber-500',
+  free: 'bg-unimind-text-quaternary', starter: 'bg-primary',
+  growth: 'bg-unimind-green', enterprise: 'bg-amber-500',
 };
 
 
@@ -157,6 +158,9 @@ export default function InstitutionDashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Class Performance Analytics */}
+      <ClassPerformancePanel />
 
       {/* Features */}
       <Card variant="apple" className="p-6">

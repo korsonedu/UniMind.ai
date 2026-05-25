@@ -18,7 +18,7 @@ class Command(BaseCommand):
                 'name': '宇艺示范学员',
                 'contact_name': '宇艺',
                 'contact_email': 'demo@unimind.ai',
-                'plan': 'plus',
+                'plan': 'growth',
             }
         )
         if created:

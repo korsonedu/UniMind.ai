@@ -31,7 +31,7 @@ export function OnboardingDialog() {
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [directionError, setDirectionError] = useState('');
 
-  const PLAN_DIRECTION_LIMITS: Record<string, number> = { solo: 1, plus: 3, pro: 999999 };
+  const PLAN_DIRECTION_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 999999 };
 
   // 不弹：无用户 / 已有机构（auth store 或 institution store）/ 已关闭 / 平台超管
   if (!user || user.institution || user.institution_id || institution || dismissed) return null;
@@ -199,10 +199,10 @@ export function OnboardingDialog() {
             <DialogHeader className="space-y-1 mb-4">
               <DialogTitle className="text-xl font-black">选择业务方向</DialogTitle>
               <DialogDescription className="font-medium text-muted-foreground">
-                {plan === 'solo'
-                  ? 'Solo 方案可选择 1 个学科方向'
-                  : plan === 'plus'
-                    ? 'Plus 方案最多选择 3 个学科方向'
+                {plan === 'starter'
+                  ? 'Starter 方案可选择 1 个学科方向'
+                  : plan === 'growth'
+                    ? 'Growth 方案最多选择 3 个学科方向'
                     : '选择你机构的业务方向'}
               </DialogDescription>
             </DialogHeader>

@@ -234,12 +234,12 @@ GRADING_RESULT_SCHEMA = {
         "score": {"type": "number", "description": "得分 (0 到 max_score)"},
         "feedback": {"type": "string", "description": "判分依据和深度解析"},
         "analysis": {"type": "string", "description": "标准答案（满分示范作答）"},
-        "fsrs_rating": {
+        "memorix_rating": {
             "type": "integer", "minimum": 1, "maximum": 4,
-            "description": "FSRS 记忆评级: 1=完全不会, 2=困难回忆, 3=犹豫正确, 4=熟练正确",
+            "description": "Memorix 记忆评级: 1=完全不会, 2=困难回忆, 3=犹豫正确, 4=熟练正确",
         },
     },
-    "required": ["score", "feedback", "analysis", "fsrs_rating"],
+    "required": ["score", "feedback", "analysis", "memorix_rating"],
 }
 
 OBJECTIVE_ANALYSIS_SCHEMA = {
@@ -374,6 +374,190 @@ LOOKUP_QUESTION_SCHEMA = {
     "required": ["question_id"],
 }
 
+GET_CLASS_WEAK_POINTS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "返回数量，默认 5",
+        },
+    },
+}
+
+GET_CLASS_PERFORMANCE_SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {},
+}
+
+# ── Planner Agent 工具 Schema ──────────────────────────────────
+
+GET_LEARNING_STATS_SCHEMA = {
+    "type": "object",
+    "properties": {},
+}
+
+GET_KNOWLEDGE_MASTERY_MAP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "subject": {
+            "type": "string",
+            "description": "可选，限定学科。不传则返回全部学科的掌握度地图。",
+        },
+    },
+}
+
+GET_DUE_REVIEWS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "返回数量，默认 20",
+        },
+    },
+}
+
+GET_EXAM_HISTORY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "返回考试次数，默认 10",
+        },
+    },
+}
+
+SAVE_STUDY_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string", "description": "计划标题"},
+        "summary": {"type": "string", "description": "计划摘要说明"},
+        "tasks": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "day": {"type": "integer", "minimum": 1},
+                    "subject": {"type": "string"},
+                    "estimated_minutes": {"type": "integer", "minimum": 5},
+                    "knowledge_point_ids": {
+                        "type": "array", "items": {"type": "integer"},
+                    },
+                },
+                "required": ["title", "day"],
+            },
+            "description": "任务列表",
+        },
+        "total_days": {"type": "integer", "minimum": 1, "description": "计划总天数"},
+    },
+    "required": ["title", "tasks"],
+}
+
+GET_ACTIVE_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {},
+}
+
+UPDATE_PLAN_TASK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "plan_id": {"type": "integer", "description": "计划 ID"},
+        "task_id": {"type": "string", "description": "任务 ID（如 task_1）"},
+        "status": {
+            "type": "string",
+            "enum": ["completed", "skipped", "pending"],
+            "description": "新状态",
+        },
+    },
+    "required": ["plan_id", "task_id", "status"],
+}
+
+SET_DASHBOARD_LAYOUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "section_order": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "enum": ["plan", "stats", "mastery", "reviews", "exams"],
+            },
+            "description": "Dashboard 区块排列顺序，从上到下。未列出的区块自动隐藏。",
+        },
+        "highlight": {
+            "type": "string",
+            "enum": ["plan", "stats", "mastery", "reviews", "exams"],
+            "description": "高亮（强调）的区块，该区块会以更醒目的样式展示。",
+        },
+    },
+    "required": ["section_order"],
+}
+
+SEARCH_COURSES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "搜索关键词（课程标题、知识点名称）",
+        },
+        "subject": {
+            "type": "string",
+            "description": "可选，限定学科（如'金融431''高中数学'）",
+        },
+        "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "返回数量，默认 5",
+        },
+    },
+    "required": ["query"],
+}
+
+SEARCH_ASR_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "搜索关键词（知识点名称、概念）",
+        },
+        "course_id": {
+            "type": "integer",
+            "description": "可选，限定在某个课程内搜索",
+        },
+        "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "返回数量，默认 5",
+        },
+    },
+    "required": ["query"],
+}
+
+SEARCH_ARTICLES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "搜索关键词（文章标题、内容、标签）",
+        },
+        "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "返回数量，默认 5",
+        },
+    },
+    "required": ["query"],
+}
+
 # ── Reviewer Agent 研究工具 Schema ──────────────────────────────
 
 LOOKUP_KNOWLEDGE_POINT_SCHEMA = {
@@ -416,11 +600,141 @@ def get_assistant_tools():
         _make_tool("get_user_weak_points", "获取当前用户的薄弱知识点（错题最多的前几个知识点）。用于个性化辅导和复习建议。", GET_USER_WEAK_POINTS_SCHEMA),
         _make_tool("get_user_wrong_questions", "获取当前用户最近的错题列表。用于分析错误模式、针对性讲解。", GET_USER_WRONG_QUESTIONS_SCHEMA),
         _make_tool("lookup_question", "根据题目 ID 查询题目详情（题干、答案、解析）。用于讨论具体题目时获取准确信息。", LOOKUP_QUESTION_SCHEMA),
+        _make_tool("get_class_weak_points", "获取班级最薄弱的知识点（按正确率排序）。仅教师/机构主可用，用于了解班级整体学习情况。", GET_CLASS_WEAK_POINTS_SCHEMA),
+        _make_tool("get_class_performance_summary", "获取班级整体学习数据概览（学生数、活跃率、正确率、薄弱知识点数）。仅教师/机构主可用。", GET_CLASS_PERFORMANCE_SUMMARY_SCHEMA),
+        _make_tool("search_courses", "搜索课程库，按关键词或学科查找推荐课程。用于在建议学习资源时提供具体课程链接。", SEARCH_COURSES_SCHEMA),
+        _make_tool("search_asr", "搜索课程视频的 ASR 转录文本，找到某个知识点在视频中的具体时间位置。用于告诉学生'XX概念在课程YY的ZZ分ZZ秒处讲解'。", SEARCH_ASR_SCHEMA),
+        _make_tool("search_articles", "搜索深度文章库，按关键词查找相关文章。用于推荐学习资料和扩展阅读。", SEARCH_ARTICLES_SCHEMA),
     ]
+
+def get_planner_tools():
+    """学习规划师 Agent 工具集（含助教工具 + 规划专用工具）。"""
+    assistant = get_assistant_tools()
+    planner_only = [
+        _make_tool("get_learning_stats", "获取用户学习统计概览（总做题量、正确率、学习连续天数、学科覆盖）。用于制定计划前了解学生现状。", GET_LEARNING_STATS_SCHEMA),
+        _make_tool("get_knowledge_mastery_map", "获取用户知识点掌握度地图，按学科/模块分组。用于识别薄弱环节，制定针对性计划。", GET_KNOWLEDGE_MASTERY_MAP_SCHEMA),
+        _make_tool("get_due_reviews", "获取今日待复习的题目列表（来自间隔重复调度）。用于安排今日复习任务。", GET_DUE_REVIEWS_SCHEMA),
+        _make_tool("get_exam_history", "获取用户的考试成绩历史和趋势。用于评估学习进展。", GET_EXAM_HISTORY_SCHEMA),
+        _make_tool("save_study_plan", "将生成的学习计划持久化到数据库。调用后用户可在计划页面查看。", SAVE_STUDY_PLAN_SCHEMA),
+        _make_tool("get_active_plan", "获取用户当前进行中的学习计划。用于查看已有计划或在修改前获取当前状态。", GET_ACTIVE_PLAN_SCHEMA),
+        _make_tool("update_plan_task", "更新学习计划中某个任务的状态（完成/跳过/重置）。", UPDATE_PLAN_TASK_SCHEMA),
+        _make_tool("set_dashboard_layout", "配置小宇 Dashboard 面板的布局。根据学生当前状态决定展示哪些区块、排列顺序和高亮重点。每次对话后应调用此工具更新面板。", SET_DASHBOARD_LAYOUT_SCHEMA),
+    ]
+    return assistant + planner_only
 
 def get_reviewer_research_tools():
     """Reviewer Agent 研究工具集——在评分前查知识点定义和已有题目。"""
     return [
         _make_tool("lookup_knowledge_point_definition", "查询知识点的标准定义、范围和核心内容。用于验证题目是否准确命中目标知识点。", LOOKUP_KNOWLEDGE_POINT_SCHEMA),
         _make_tool("search_similar_questions", "搜索同一知识点下的已有题目。用于检查是否与现有题目雷同或重复。", SEARCH_SIMILAR_QUESTIONS_SCHEMA),
+    ]
+
+# ── Exam Generator Agent 工具 Schema ──────────────────────────
+
+SEARCH_KP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "搜索关键词（知识点名称或编码）",
+        },
+        "subject": {
+            "type": "string",
+            "description": "可选，限定学科（如'金融431''高中数学'）",
+        },
+    },
+    "required": ["query"],
+}
+
+GENERATE_QUESTIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kp_ids": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "知识点 ID 列表",
+        },
+        "count_per_kp": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "每个知识点生成的题数，默认 3",
+        },
+        "difficulty": {
+            "type": "string",
+            "enum": ["entry", "easy", "normal", "hard", "extreme", "mixed"],
+            "description": "目标难度，默认 normal",
+        },
+        "types": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "题型筛选，如 ['objective', 'subjective:short']，不传则全题型",
+        },
+    },
+    "required": ["kp_ids"],
+}
+
+LAUNCH_ARC_PIPELINE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kp_ids": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "知识点 ID 列表",
+        },
+        "questions_per_kp": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "每个知识点的目标题数，默认 3",
+        },
+        "difficulty": {
+            "type": "string",
+            "enum": ["entry", "easy", "normal", "hard", "extreme"],
+            "description": "目标难度，默认 normal",
+        },
+        "types": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "题型筛选",
+        },
+        "title": {
+            "type": "string",
+            "description": "任务标题，如'期中模拟卷 - 微积分'",
+        },
+    },
+    "required": ["kp_ids"],
+}
+
+CHECK_PIPELINE_STATUS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "task_id": {
+            "type": "integer",
+            "description": "管线任务 ID",
+        },
+    },
+    "required": ["task_id"],
+}
+
+SAVE_QUESTIONS_TO_LIBRARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "question_indices": {
+            "type": "array",
+            "items": {"type": "integer"},
+            "description": "要保存的题目序号（从 0 开始），不传则全部保存",
+        },
+    },
+}
+
+
+def get_exam_generator_tools():
+    """出题 Agent 工具集。"""
+    return [
+        _make_tool("search_knowledge_points", "搜索可用知识点，按名称或编码查找。出题前先用此工具确认知识点存在。", SEARCH_KP_SCHEMA),
+        _make_tool("generate_questions", "快速生成题目（同步，约 10 秒）。根据知识点、难度、题型生成候选题目。", GENERATE_QUESTIONS_SCHEMA),
+        _make_tool("launch_arc_pipeline", "启动 ARC 精修管线（异步，2-5 分钟）。4-agent 对抗循环：Author→Reviewer→Revise→Classifier，质量更高。", LAUNCH_ARC_PIPELINE_SCHEMA),
+        _make_tool("check_pipeline_status", "查询 ARC 管线的执行进度。", CHECK_PIPELINE_STATUS_SCHEMA),
+        _make_tool("save_questions_to_library", "将最近一次生成的题目存入机构题库。可选择保存全部或部分题目。", SAVE_QUESTIONS_TO_LIBRARY_SCHEMA),
     ]

@@ -155,10 +155,10 @@ const MODULES = [
       ['传统金融理论', 'Ross《公司理财》、Bodie《投资学》。原理讲解 + 答题框架梳理，兼顾主客观题。'],
       ['现代金融理论', 'Hull 衍生品定价。聚焦《核心算力》，重点训练几类答题框架。'],
     ]},
-  { title: '习题训练', tag: '180+ 题 · FSRS 算法驱动',
+  { title: '习题训练', tag: '180+ 题 · Memorix 算法驱动',
     items: [
       ['核心算力 + 独家题库', '历年真题、姜波克习题、Krugman / Ross / Bodie test bank 独家翻译版。'],
-      ['UniMind 智能训练', 'FSRS 自适应调度，在 UniMind 或纸质材料完成。'],
+      ['UniMind 智能训练', 'Memorix 自适应调度，在 UniMind 或纸质材料完成。'],
     ]},
   { title: '数字化与答疑', tag: 'AI 融入 · UniMind 驱动',
     items: [

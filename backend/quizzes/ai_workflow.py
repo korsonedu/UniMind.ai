@@ -23,9 +23,9 @@ def _subjective_type_label(question: Question) -> str:
     return '客观题'
 
 
-def _apply_fsrs_status(user: User, question: Question, normalized_score: float, fsrs_rating: int, review_time=None) -> UserQuestionStatus:
+def _apply_memorix_status(user: User, question: Question, normalized_score: float, memorix_rating: int, review_time=None) -> UserQuestionStatus:
     status_obj, _ = UserQuestionStatus.objects.get_or_create(user=user, question=question)
-    status_obj = MemorixService.update_status(user_id=user.id, status=status_obj, rating=fsrs_rating)
+    status_obj = MemorixService.update_status(user_id=user.id, status=status_obj, rating=memorix_rating)
     if review_time is not None:
         status_obj.last_review = review_time
 
@@ -68,14 +68,14 @@ def grade_answer_for_user(user: User, question: Question, user_answer: Any, set_
         score_val = float(max_score if user_choice and user_choice == correct_choice else 0)
 
     normalized_score = score_val / max_score if max_score > 0 else 0
-    fsrs_rating = safe_int(grade_data.get('fsrs_rating', 2), 2)
-    fsrs_rating = min(4, max(1, fsrs_rating))
+    memorix_rating = safe_int(grade_data.get('memorix_rating', 2), 2)
+    memorix_rating = min(4, max(1, memorix_rating))
 
-    _apply_fsrs_status(
+    _apply_memorix_status(
         user=user,
         question=question,
         normalized_score=normalized_score,
-        fsrs_rating=fsrs_rating,
+        memorix_rating=memorix_rating,
         review_time=timezone.now() if set_last_review else None,
     )
 
@@ -84,7 +84,7 @@ def grade_answer_for_user(user: User, question: Question, user_answer: Any, set_
         'max_score': max_score,
         'feedback': grade_data.get('feedback', '已评阅'),
         'analysis': grade_data.get('analysis', question.ai_answer or ''),
-        'fsrs_rating': fsrs_rating,
+        'memorix_rating': memorix_rating,
         'normalized_score': normalized_score,
         'is_correct': normalized_score >= 0.6,
     }

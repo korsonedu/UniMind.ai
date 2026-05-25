@@ -17,14 +17,14 @@ ORDER_TIMEOUT_MINUTES = 30
 
 # Plan → amount in cents
 PLAN_PRICES_MONTHLY = {
-    'solo': 29900,
-    'plus': 129900,
-    'pro': 399900,
+    'starter': 49900,
+    'growth': 129900,
+    'enterprise': 399900,
 }
 PLAN_PRICES_ANNUAL = {
-    'solo': 19900,   # ~67% of monthly
-    'plus': 99900,
-    'pro': 299900,
+    'starter': 49900,
+    'growth': 129900,
+    'enterprise': 399900,
 }
 PLAN_DURATION_DAYS = {
     'monthly': 30,

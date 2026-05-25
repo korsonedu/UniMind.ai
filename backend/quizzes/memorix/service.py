@@ -6,7 +6,7 @@ Replaces quizzes.fsrs.FSRS with the full Memorix algorithm:
   - Online SGD with Nesterov momentum after every review
   - Brier score loss (strictly proper scoring rule)
   - Regret-minimizing review scheduling
-  - Per-user weight vectors persisted in FSRSProfile.weights
+  - Per-user weight vectors persisted in MemorixProfile.weights
 
 Usage (replaces FSRS.update_status):
     status = MemorixService.update_status(user_id, status, rating)
@@ -20,7 +20,7 @@ from typing import Optional
 import numpy as np
 from django.utils import timezone
 
-from quizzes.models import UserQuestionStatus, FSRSProfile
+from quizzes.models import UserQuestionStatus, MemorixProfile
 from quizzes.memorix.optimizer import MemorixOptimizer, MEMORIX_DEFAULT_WEIGHTS, W_WEIBULL_K
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=5000)
 def _load_weights(user_id: int) -> tuple:
-    profile = FSRSProfile.objects.filter(user_id=user_id).first()
+    profile = MemorixProfile.objects.filter(user_id=user_id).first()
     if profile and profile.weights and len(profile.weights) == 20:
         return tuple(round(w, 6) for w in profile.weights)
     return tuple(MEMORIX_DEFAULT_WEIGHTS)
@@ -40,9 +40,9 @@ def _get_optimizer(user_id: int) -> MemorixOptimizer:
 
 
 def _save_weights(user_id: int, opt: MemorixOptimizer):
-    """Persist EMA-smoothed weights back to FSRSProfile."""
+    """Persist EMA-smoothed weights back to MemorixProfile."""
     weights_list = [round(float(w), 6) for w in opt.ema_weights]
-    FSRSProfile.objects.update_or_create(
+    MemorixProfile.objects.update_or_create(
         user_id=user_id,
         defaults={
             'weights': weights_list,

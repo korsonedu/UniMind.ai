@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AIChatMessage, Bot, BotVisibility
+from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, StudyPlan
 from .prompt_sync import get_bot_prompt_path, get_bot_prompt_template_name
 
 
@@ -15,6 +15,7 @@ class BotSerializer(serializers.ModelSerializer):
             'name',
             'avatar',
             'system_prompt',
+            'bot_type',
             'is_exclusive',
             'is_active',
             'created_at',
@@ -43,4 +44,35 @@ class BotSerializer(serializers.ModelSerializer):
 class AIChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = AIChatMessage
-        fields = ('role', 'content', 'timestamp', 'bot')
+        fields = ('role', 'content', 'timestamp', 'bot', 'metadata')
+
+
+class StudyPlanSerializer(serializers.ModelSerializer):
+    task_progress = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudyPlan
+        fields = (
+            'id', 'title', 'summary', 'status', 'plan_data',
+            'auto_generated', 'completed_at', 'created_at', 'updated_at',
+            'task_progress',
+        )
+        read_only_fields = ('id', 'auto_generated', 'completed_at', 'created_at', 'updated_at', 'task_progress')
+
+    def get_task_progress(self, obj):
+        tasks = (obj.plan_data or {}).get('tasks', [])
+        total = len(tasks)
+        completed = sum(1 for t in tasks if t.get('status') == 'completed')
+        skipped = sum(1 for t in tasks if t.get('status') == 'skipped')
+        return {'total': total, 'completed': completed, 'skipped': skipped}
+
+
+class AgentMemorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentMemory
+        fields = (
+            'id', 'memory_type', 'key', 'value', 'source',
+            'confidence', 'last_used_at', 'use_count', 'is_active',
+            'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'source', 'last_used_at', 'use_count', 'created_at', 'updated_at')

@@ -61,3 +61,39 @@ class PromptQualityLog(models.Model):
 
     def __str__(self):
         return f"PromptQualityLog #{self.id} ({self.task_type} v{self.prompt_version})"
+
+
+class SecurityAuditLog(models.Model):
+    """安全审计日志 — 等保二级要求：登录/权限/异常操作记录，保留≥6个月。"""
+
+    EVENT_CHOICES = (
+        ('login_success', '登录成功'),
+        ('login_failure', '登录失败'),
+        ('login_locked', '账号锁定'),
+        ('password_change', '密码变更'),
+        ('permission_change', '权限变更'),
+        ('admin_action', '管理操作'),
+    )
+
+    event_type = models.CharField(max_length=30, choices=EVENT_CHOICES, verbose_name="事件类型")
+    user = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='security_audit_logs', verbose_name="用户",
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="IP 地址")
+    user_agent = models.CharField(max_length=255, blank=True, verbose_name="User-Agent")
+    detail = models.TextField(blank=True, verbose_name="详情")
+    request_id = models.CharField(max_length=64, blank=True, verbose_name="Request ID")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="发生时间")
+
+    class Meta:
+        verbose_name = '安全审计日志'
+        verbose_name_plural = '安全审计日志'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['event_type', '-created_at']),
+            models.Index(fields=['user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_event_type_display()} — {self.user or 'anonymous'} @ {self.created_at}"

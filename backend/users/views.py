@@ -689,3 +689,64 @@ class MyKnowledgeMasteryView(APIView):
             avg_r = sum(scores) / len(scores)
             data[str(kp_id)] = _r_to_level(avg_r)
         return Response(data)
+
+
+class DiagnosticGenerateView(APIView):
+    """生成诊断测试题目。"""
+    permission_classes = [IsMember]
+
+    def post(self, request):
+        user = request.user
+        if user.has_completed_initial_assessment:
+            return Response({'error': '诊断已完成', 'status': 'already_completed'}, status=400)
+
+        inst = user.institution
+        if not inst:
+            return Response({'error': '请先加入机构'}, status=400)
+
+        from quizzes.services.diagnostic_service import (
+            generate_diagnostic_questions, DIAGNOSTIC_TIME_LIMIT_SECONDS,
+        )
+        questions = generate_diagnostic_questions(inst)
+
+        if not questions:
+            return Response({'error': '暂无可用知识点，请联系管理员'}, status=400)
+
+        return Response({
+            'questions': questions,
+            'time_limit_seconds': DIAGNOSTIC_TIME_LIMIT_SECONDS,
+        })
+
+
+class DiagnosticSubmitView(APIView):
+    """提交诊断答案，获取结果和学习计划。"""
+    permission_classes = [IsMember]
+
+    def post(self, request):
+        user = request.user
+        if user.has_completed_initial_assessment:
+            return Response({'error': '诊断已完成'}, status=400)
+
+        answers = request.data.get('answers', [])
+        if not answers:
+            return Response({'error': '请提交答案'}, status=400)
+
+        from quizzes.services.diagnostic_service import (
+            grade_diagnostic_answers, initialize_memorix_from_diagnostic, build_study_plan,
+        )
+
+        results, kp_scores = grade_diagnostic_answers(user, answers)
+        initialize_memorix_from_diagnostic(user, kp_scores)
+        study_plan = build_study_plan(kp_scores)
+
+        # 标记诊断完成
+        user.has_completed_initial_assessment = True
+        user.save(update_fields=['has_completed_initial_assessment'])
+
+        total_correct = sum(1 for r in results if r['is_correct'])
+        return Response({
+            'total_score': total_correct,
+            'total_questions': len(results),
+            'results': results,
+            'study_plan': study_plan,
+        })

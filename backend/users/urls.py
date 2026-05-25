@@ -6,6 +6,7 @@ from .views import (
     ActivateMembershipView, ActivationCodeListView, ActivationCodeDetailView,
     BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
+    DiagnosticGenerateView, DiagnosticSubmitView,
 )
 from .views_admin import (
     SuperuserUserListView, UserTagListView, PermissionGroupListView,
@@ -27,6 +28,7 @@ from .views_institution import (
     UpdateDirectionsView,
     PublicInstitutionView, InstitutionJoinBySlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
+    InstitutionClassPerformanceView, InstitutionSuggestedTopicsView,
 )
 
 urlpatterns = [
@@ -42,6 +44,8 @@ urlpatterns = [
     path('me/activate/', ActivateMembershipView.as_view(), name='activate-membership'),
     path('me/weekly-report/', WeeklyCognitiveReportView.as_view(), name='weekly-report'),
     path('me/knowledge-mastery/', MyKnowledgeMasteryView.as_view(), name='knowledge-mastery'),
+    path('me/diagnostic/generate/', DiagnosticGenerateView.as_view(), name='diagnostic-generate'),
+    path('me/diagnostic/submit/', DiagnosticSubmitView.as_view(), name='diagnostic-submit'),
     path('heartbeat/', HeartbeatView.as_view(), name='heartbeat'),
 
     # System
@@ -89,6 +93,10 @@ urlpatterns = [
     # Institution — members (owner + teacher management)
     path('institution/me/members/', InstitutionMemberListView.as_view(), name='institution-member-list'),
     path('institution/me/members/<int:pk>/role/', InstitutionMemberRoleView.as_view(), name='institution-member-role'),
+
+    # Institution — analytics
+    path('institution/me/analytics/class-performance/', InstitutionClassPerformanceView.as_view(), name='institution-class-performance'),
+    path('institution/me/analytics/suggested-topics/', InstitutionSuggestedTopicsView.as_view(), name='institution-suggested-topics'),
 
     # Institution — payment config (Pro)
     path('institution/me/payment-config/', InstitutionPaymentConfigView.as_view(), name='institution-payment-config'),

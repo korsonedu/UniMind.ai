@@ -455,7 +455,7 @@ def enrich_daily_plans():
     students = User.objects.filter(email__endswith='@demo.unimind')
     plans = [
         '完成货币银行学选择题 30 道', '复习国际金融汇率理论笔记',
-        '整理本周错题集', 'FSRS 记忆复习：货币政策 + 通胀',
+        '整理本周错题集', 'Memorix 记忆复习：货币政策 + 通胀',
         '阅读公司理财第5章', '做一套金融431模拟卷',
         '背英语单词 50 个', '看教学视频：汇率决定理论',
         '完成 CAPM 练习题', 'Review IS-LM model notes',

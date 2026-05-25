@@ -10,16 +10,16 @@ import { Check, Crown, CreditCard, Loader2, ArrowRight, Sparkles } from 'lucide-
 import { cn } from '@/lib/utils';
 
 const PLAN: Record<string, { label: string; priceM: number; color: string; gradient: string }> = {
-  free: { label: 'Free', priceM: 0, color: 'bg-unimind-text-quaternary', gradient: 'from-neutral-400 to-neutral-500' },
-  solo: { label: 'Solo', priceM: 299, color: 'bg-primary', gradient: 'from-[#0071E3] to-[#0077ED]' },
-  plus: { label: 'Plus', priceM: 1299, color: 'bg-unimind-green', gradient: 'from-[#34C759] to-[#30D158]' },
-  pro:  { label: 'Pro', priceM: 3999, color: 'bg-amber-500', gradient: 'from-amber-500 to-amber-400' },
+  free:       { label: 'Free', priceM: 0, color: 'bg-unimind-text-quaternary', gradient: 'from-neutral-400 to-neutral-500' },
+  starter:    { label: 'Starter', priceM: 499, color: 'bg-primary', gradient: 'from-[#0071E3] to-[#0077ED]' },
+  growth:     { label: 'Growth', priceM: 1299, color: 'bg-unimind-green', gradient: 'from-[#34C759] to-[#30D158]' },
+  enterprise: { label: 'Enterprise', priceM: 3999, color: 'bg-amber-500', gradient: 'from-amber-500 to-amber-400' },
 };
 
 const PLAN_FEATURES: Record<string, string[]> = {
-  solo: ['AI 出题无限制', 'Memorix 记忆复习', 'AI 学习助手', '交互式知识图谱', '完整学情报告', 'AI 智能大纲'],
-  plus: ['答疑系统', '多教师协作', '实时自习室', '模拟考试', '班级对比报表', '数据导出'],
-  pro:  ['品牌定制 · 白标部署', '私有化部署', 'API 接入', 'SSO 单点登录', '审计日志', '学生端收费', 'SLA 99.9%'],
+  starter: ['AI 出题无限制', 'Memorix 记忆复习', 'AI 学习助手', '交互式知识图谱', '完整学情报告', 'AI 智能大纲'],
+  growth: ['答疑系统', '多教师协作', '实时自习室', '模拟考试', '班级对比报表', '数据导出'],
+  enterprise: ['品牌定制 · 白标部署', '私有化部署', 'API 接入', 'SSO 单点登录', '审计日志', '学生端收费', 'SLA 99.9%'],
 };
 
 const fmtDate = (d: Date) =>
@@ -95,9 +95,9 @@ export function BillingPage() {
                   </p>
                 </div>
               </div>
-              {currentTier !== 'pro' && (
+              {currentTier !== 'enterprise' && (
                 <Button variant="apple" className="h-9 px-4 rounded-xl text-[12px] font-extrabold gap-1.5"
-                  onClick={() => navigate('/checkout?plan=solo&cycle=annual&gateway=stub')}>
+                  onClick={() => navigate('/checkout?plan=starter&cycle=annual&gateway=stub')}>
                   <Sparkles className="h-3.5 w-3.5" /> 升级方案
                 </Button>
               )}
@@ -118,7 +118,7 @@ export function BillingPage() {
           </Card>
 
           {/* Upgrade options */}
-          {currentTier !== 'pro' && (
+          {currentTier !== 'enterprise' && (
             <div>
               <p className="text-[11px] font-extrabold text-muted-foreground/40 uppercase tracking-[0.25em] mb-3 ml-1">可升级方案</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

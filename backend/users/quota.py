@@ -10,19 +10,19 @@ PLAN_QUOTA_LIMITS: dict[str, dict[str, int | None]] = {
         'article': 5, 'ai_question': 30, 'ai_call_total': 100,
         'custom_bot': 0,
     },
-    'solo': {
+    'starter': {
         'course': 30, 'question': 2000, 'knowledge_point': 1000,
         'article': 20, 'ai_question': 100, 'ai_call_total': 500,
         'interview': 10, 'pdf_export': 10,
         'custom_bot': 3,
     },
-    'plus': {
+    'growth': {
         'course': 100, 'question': 10000, 'knowledge_point': 5000,
         'article': 100, 'ai_question': None, 'ai_call_total': 3000,
         'pdf_export': 100, 'interview': 50,
         'custom_bot': 10,
     },
-    'pro': {
+    'enterprise': {
         'course': None, 'question': None, 'knowledge_point': None,
         'article': None, 'ai_question': None, 'ai_call_total': None,
         'pdf_export': None, 'interview': None,
@@ -70,8 +70,8 @@ RESOURCE_LABELS: dict[str, str] = {
 }
 
 # 升级路径
-PLAN_ORDER = ['free', 'solo', 'plus', 'pro']
-PLAN_LABELS = {'free': 'Free', 'solo': 'Solo', 'plus': 'Plus', 'pro': 'Pro'}
+PLAN_ORDER = ['free', 'starter', 'growth', 'enterprise']
+PLAN_LABELS = {'free': 'Free', 'starter': 'Starter', 'growth': 'Growth', 'enterprise': 'Enterprise'}
 
 
 # ── helpers ──

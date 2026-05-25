@@ -411,7 +411,7 @@ class InstitutionFeatureView(APIView):
         # Platform admins without an institution see all features.
         # Platform admins WITH an institution see that institution's plan features.
         if is_platform_admin(user) and inst is None:
-            features = get_plan_features('pro')
+            features = get_plan_features('enterprise')
         elif inst:
             features = get_plan_features(inst.plan)
         else:
@@ -508,7 +508,7 @@ class InstitutionDashboardView(APIView):
                 'top_weak_points': top_weak,
             },
             'features': get_plan_features(inst.plan),
-            'plan_matrix': {p: get_plan_features(p) for p in ['free', 'solo', 'plus', 'pro']},
+            'plan_matrix': {p: get_plan_features(p) for p in ['free', 'starter', 'growth', 'enterprise']},
         })
 
 
@@ -533,7 +533,7 @@ class PlatformAdminInstitutionOverviewView(APIView):
                 }
                 for i in qs
             ],
-            'plan_matrix': {p: get_plan_features(p) for p in ['free', 'solo', 'plus', 'pro']},
+            'plan_matrix': {p: get_plan_features(p) for p in ['free', 'starter', 'growth', 'enterprise']},
         })
 
 
@@ -924,6 +924,176 @@ class PlanInviteCodeDeactivateView(APIView):
         return Response({'status': 'deactivated'})
 
 
+# ── Institution Analytics (teacher/owner) ──
+
+class InstitutionClassPerformanceView(APIView):
+    """GET /api/users/institution/me/analytics/class-performance/
+    各知识点的班级正确率、趋势、参与学生数。仅 teacher/owner 可用。
+    """
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request):
+        from django.db.models import Sum, Count, Q
+        from quizzes.models import UserQuestionStatus, Question
+
+        inst = request.user.institution
+        student_ids = list(
+            inst.students.filter(institution_role='student').values_list('id', flat=True)
+        )
+        if not student_ids:
+            return Response({'results': []})
+
+        now = timezone.now()
+        week_ago = now - timedelta(days=7)
+        two_weeks_ago = now - timedelta(days=14)
+
+        # Aggregate by knowledge_point: reps + lapses = total_attempts, reps = correct
+        qs = (
+            UserQuestionStatus.objects
+            .filter(user_id__in=student_ids, question__knowledge_point__isnull=False)
+            .values(
+                'question__knowledge_point__id',
+                'question__knowledge_point__name',
+                'question__knowledge_point__code',
+            )
+            .annotate(
+                total_reps=Sum('reps'),
+                total_lapses=Sum('lapses'),
+                student_count=Count('user_id', distinct=True),
+            )
+        )
+
+        # Build per-KP weekly trend: this week vs last week correct rate
+        weekly_qs = (
+            UserQuestionStatus.objects
+            .filter(
+                user_id__in=student_ids,
+                question__knowledge_point__isnull=False,
+                last_review__gte=two_weeks_ago,
+            )
+            .values(
+                'question__knowledge_point__id',
+                'last_review__date',
+            )
+            .annotate(
+                day_reps=Sum('reps'),
+                day_lapses=Sum('lapses'),
+            )
+        )
+
+        # Compute per-KP this-week and last-week rates
+        kp_weekly: dict[int, dict[str, tuple[int, int]]] = {}
+        for row in weekly_qs:
+            kp_id = row['question__knowledge_point__id']
+            date = row['last_review__date']
+            bucket = 'this_week' if date >= week_ago.date() else 'last_week'
+            r, l = row['day_reps'] or 0, row['day_lapses'] or 0
+            kp_weekly.setdefault(kp_id, {}).setdefault(bucket, [0, 0])
+            kp_weekly[kp_id][bucket][0] += r
+            kp_weekly[kp_id][bucket][1] += l
+
+        results = []
+        for row in qs:
+            kp_id = row['question__knowledge_point__id']
+            total = (row['total_reps'] or 0) + (row['total_lapses'] or 0)
+            correct_rate = round((row['total_reps'] or 0) / total * 100, 1) if total > 0 else 0
+
+            # Trend
+            trend = 'stable'
+            wk = kp_weekly.get(kp_id, {})
+            tw = wk.get('this_week', [0, 0])
+            lw = wk.get('last_week', [0, 0])
+            tw_total = tw[0] + tw[1]
+            lw_total = lw[0] + lw[1]
+            if tw_total > 0 and lw_total > 0:
+                tw_rate = tw[0] / tw_total
+                lw_rate = lw[0] / lw_total
+                diff = tw_rate - lw_rate
+                if diff > 0.05:
+                    trend = 'up'
+                elif diff < -0.05:
+                    trend = 'down'
+
+            results.append({
+                'kp_id': kp_id,
+                'kp_name': row['question__knowledge_point__name'] or '',
+                'kp_code': row['question__knowledge_point__code'] or '',
+                'correct_rate': correct_rate,
+                'total_attempts': total,
+                'student_count': row['student_count'] or 0,
+                'trend': trend,
+            })
+
+        results.sort(key=lambda x: x['correct_rate'])
+        return Response({'results': results})
+
+
+class InstitutionSuggestedTopicsView(APIView):
+    """GET /api/users/institution/me/analytics/suggested-topics/
+    基于班级数据，返回 top 5 最弱知识点及建议。仅 teacher/owner 可用。
+    """
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request):
+        # Reuse the class-performance logic (compact version)
+        from django.db.models import Sum, Count
+        from quizzes.models import UserQuestionStatus
+
+        inst = request.user.institution
+        student_ids = list(
+            inst.students.filter(institution_role='student').values_list('id', flat=True)
+        )
+        if not student_ids:
+            return Response({'suggested_topics': []})
+
+        qs = (
+            UserQuestionStatus.objects
+            .filter(user_id__in=student_ids, question__knowledge_point__isnull=False)
+            .values(
+                'question__knowledge_point__id',
+                'question__knowledge_point__name',
+                'question__knowledge_point__code',
+            )
+            .annotate(
+                total_reps=Sum('reps'),
+                total_lapses=Sum('lapses'),
+                student_count=Count('user_id', distinct=True),
+            )
+        )
+
+        scored = []
+        for row in qs:
+            total = (row['total_reps'] or 0) + (row['total_lapses'] or 0)
+            if total == 0:
+                continue
+            correct_rate = (row['total_reps'] or 0) / total
+            scored.append({
+                'kp_id': row['question__knowledge_point__id'],
+                'kp_name': row['question__knowledge_point__name'] or '',
+                'kp_code': row['question__knowledge_point__code'] or '',
+                'correct_rate': round(correct_rate * 100, 1),
+                'total_attempts': total,
+                'student_count': row['student_count'] or 0,
+            })
+
+        scored.sort(key=lambda x: x['correct_rate'])
+        top5 = scored[:5]
+
+        for item in top5:
+            rate = item['correct_rate']
+            if rate < 40:
+                item['priority'] = 'high'
+                item['suggested_action'] = '建议立即加强练习，当前正确率过低'
+            elif rate < 60:
+                item['priority'] = 'medium'
+                item['suggested_action'] = '建议安排专项训练，巩固薄弱环节'
+            else:
+                item['priority'] = 'low'
+                item['suggested_action'] = '建议适当复习，保持记忆强度'
+
+        return Response({'suggested_topics': top5})
+
+
 class ValidateInviteCodeView(APIView):
     """Validate a PlanInviteCode without consuming it — returns plan info for UI gating."""
     permission_classes = [IsAuthenticated]
@@ -970,8 +1140,8 @@ class InstitutionPaymentConfigView(APIView):
 
     def put(self, request):
         inst = request.user.institution
-        if inst.plan != 'pro':
-            return Response({'error': '仅 Pro 方案支持自有收款配置'}, status=403)
+        if inst.plan != 'enterprise':
+            return Response({'error': '仅 Enterprise 方案支持自有收款配置'}, status=403)
 
         from users.models_commercial import InstitutionPaymentConfig
         cfg, _ = InstitutionPaymentConfig.objects.get_or_create(institution=inst)

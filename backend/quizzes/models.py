@@ -106,7 +106,7 @@ class UserQuestionStatus(models.Model):
     is_mastered = models.BooleanField(default=False, verbose_name="是否已掌握(排除)")
     wrong_count = models.IntegerField(default=0, verbose_name="错误次数")
     
-    # FSRS Fields
+    # Memorix Fields
     stability = models.FloatField(default=0.0, help_text="记忆稳定性 (S)，单位：天")
     difficulty = models.FloatField(default=0.0, help_text="记忆难度 (D)，范围 1-10")
     reps = models.IntegerField(default=0, help_text="总复习次数")
@@ -214,9 +214,9 @@ class KnowledgePointAnnotation(models.Model):
         unique_together = ("user", "knowledge_point")
 
 
-# ── 0018 FSRSProfile / ReviewLog / UserKnowledgeState ──
-class FSRSProfile(models.Model):
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="fsrs_profile")
+# ── 0018 MemorixProfile / ReviewLog / UserKnowledgeState ──
+class MemorixProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memorix_profile")
     weights = models.JSONField(default=list)
     last_optimized_at = models.DateTimeField(null=True, blank=True)
     total_reviews_used = models.IntegerField(default=0)
@@ -243,9 +243,9 @@ class UserKnowledgeState(models.Model):
         unique_together = ("user", "knowledge_point")
 
 
-# ── 0020 FSRSOptimizationLog / PersonalizedMockExam ──
-class FSRSOptimizationLog(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="fsrs_optimization_logs")
+# ── 0020 MemorixOptimizationLog / PersonalizedMockExam ──
+class MemorixOptimizationLog(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memorix_optimization_logs")
     previous_loss = models.FloatField(null=True, blank=True)
     new_loss = models.FloatField(null=True, blank=True)
     improvement_ratio = models.FloatField(default=0.0, help_text="(old - new) / old")
@@ -293,3 +293,35 @@ class StudentExamSubmission(models.Model):
     feedback = models.TextField(blank=True)
     graded_pdf = models.FileField(upload_to="graded_answers/", blank=True, help_text="教师批改后带笔迹的PDF")
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ExamTemplate(models.Model):
+    """出题模板：保存常用出题配置，支持系统预设和机构自定义。"""
+    DIFFICULTY_LEVELS = (
+        ('entry', '入门'),
+        ('easy', '简单'),
+        ('normal', '适当'),
+        ('hard', '困难'),
+        ('extreme', '极限'),
+        ('mixed', '混合'),
+    )
+    name = models.CharField(max_length=100, verbose_name="模板名称")
+    description = models.TextField(blank=True, verbose_name="模板说明")
+    subject = models.CharField(max_length=100, blank=True, verbose_name="适用学科")
+    difficulty = models.CharField(max_length=20, choices=DIFFICULTY_LEVELS, default='normal')
+    question_types = models.JSONField(default=list, help_text='["objective","subjective"]')
+    type_ratio = models.JSONField(default=dict, help_text='{"objective": 0.7, "short": 0.2, "essay": 0.1}')
+    question_count = models.IntegerField(default=10)
+    knowledge_point_ids = models.JSONField(default=list, blank=True, help_text="预选知识点ID列表")
+    is_system = models.BooleanField(default=False, verbose_name="系统预设")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    institution = models.ForeignKey('users.Institution', on_delete=models.CASCADE, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_system', '-updated_at']
+
+    def __str__(self):
+        prefix = '[系统]' if self.is_system else ''
+        return f"{prefix}{self.name}"

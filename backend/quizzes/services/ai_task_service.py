@@ -171,7 +171,7 @@ class QuizAITaskService:
                 'score': max_score if is_correct else 0.0,
                 'feedback': ai_feedback,
                 'analysis': ai_analysis,
-                'fsrs_rating': 4 if is_correct else 1,
+                'memorix_rating': 4 if is_correct else 1,
             }
 
         template = ai.get_template('quizzes', 'grading_prompt.txt') or ''
@@ -203,7 +203,7 @@ class QuizAITaskService:
                 'score': 0.0,
                 'feedback': '判分依据和深度解析：未能完成 AI 判分，已返回兜底结果。',
                 'analysis': f'标准答案：{str(correct_answer or "")}',
-                'fsrs_rating': 1,
+                'memorix_rating': 1,
             }
 
         try:
@@ -213,16 +213,16 @@ class QuizAITaskService:
         score = max(0.0, min(max_score, score))
 
         try:
-            fsrs_rating = int(parsed.get('fsrs_rating', 2))
+            memorix_rating = int(parsed.get('memorix_rating', 2))
         except Exception:
-            fsrs_rating = 2
-        fsrs_rating = min(4, max(1, fsrs_rating))
+            memorix_rating = 2
+        memorix_rating = min(4, max(1, memorix_rating))
 
         return {
             'score': score,
             'feedback': str(parsed.get('feedback', '已评阅')).strip(),
             'analysis': str(parsed.get('analysis', '')).strip() or str(correct_answer or ''),
-            'fsrs_rating': fsrs_rating,
+            'memorix_rating': memorix_rating,
         }
 
     @classmethod

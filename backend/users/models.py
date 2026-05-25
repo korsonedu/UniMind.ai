@@ -8,7 +8,7 @@ class User(AbstractUser):
         ('admin', '管理员'),
     )
     MEMBERSHIP_TIER_CHOICES = (
-        ('free', 'Free'), ('solo', 'Solo'), ('plus', 'Plus'), ('pro', 'Pro'),
+        ('free', 'Free'), ('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise'),
     )
     INSTITUTION_ROLE_CHOICES = (
         ('owner', '机构所有者'),
@@ -38,6 +38,9 @@ class User(AbstractUser):
     verification_code_sent_at = models.DateTimeField(null=True, blank=True, verbose_name="验证码发送时间")
     institution_role = models.CharField(max_length=20, choices=INSTITUTION_ROLE_CHOICES, default='student', verbose_name="机构内角色")
     institution = models.ForeignKey('Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='students', verbose_name="所属机构")
+    failed_login_count = models.IntegerField(default=0, verbose_name="连续登录失败次数")
+    locked_until = models.DateTimeField(null=True, blank=True, verbose_name="锁定截止时间")
+    dashboard_config = models.JSONField(default=dict, blank=True, verbose_name="小宇 Dashboard 配置")
 
     @property
     def avatar_url(self):
@@ -142,7 +145,7 @@ class UserProfile(models.Model):
 # ── 0018 Institution ──
 class Institution(models.Model):
     PLAN_CHOICES = [
-        ('free', 'Free'), ('solo', 'Solo'), ('plus', 'Plus'), ('pro', 'Pro'),
+        ('free', 'Free'), ('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise'),
     ]
     name = models.CharField(max_length=200, verbose_name="机构名称")
     slug = models.SlugField(max_length=100, unique=True, verbose_name="机构标识")
@@ -163,7 +166,7 @@ class Institution(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
-    _PLAN_STUDENT_LIMITS = {'free': 30, 'solo': 50, 'plus': 200, 'pro': 999999}
+    _PLAN_STUDENT_LIMITS = {'free': 30, 'starter': 50, 'growth': 200, 'enterprise': 999999}
 
     @property
     def max_students(self):
@@ -214,20 +217,20 @@ PLAN_FEATURES: dict[str, list[str]] = {
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'course.video',
     ],
-    'solo': [
+    'starter': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline',
         'interview.mock', 'pdf.mock', 'ai.bot.custom',
     ],
-    'plus': [
+    'growth': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline', 'faq.system',
         'pdf.mock', 'study.room', 'multi.teacher', 'class.compare', 'data.export',
         'interview.mock', 'ai.bot.custom',
     ],
-    'pro': [
+    'enterprise': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline', 'faq.system',
@@ -261,7 +264,7 @@ def compute_expiry(duration_days: int):
 # ── 0022-0023 PlanInviteCode ──
 class PlanInviteCode(models.Model):
     PLAN_CHOICES = [
-        ('free', 'Free'), ('solo', 'Solo'), ('plus', 'Plus'), ('pro', 'Pro'),
+        ('free', 'Free'), ('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise'),
     ]
     code = models.CharField(max_length=16, unique=True, verbose_name="邀请码")
     plan = models.CharField(max_length=20, choices=PLAN_CHOICES, verbose_name="对应方案")

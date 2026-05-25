@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UniMind.ai — 培训机构的 AI 运营系统</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   UniMind Presentation — Luxury Dark Edition
+   Aesthetic: Editorial luxury × data-driven
+   ═══════════════════════════════════════════ */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-deep: #06060e;
+  --bg-card: #0d0d1a;
+  --bg-elevated: #12122a;
+  --surface: #1a1a35;
+  --border: rgba(99, 102, 241, 0.15);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+
+  --indigo: #6366f1;
+  --indigo-light: #818cf8;
+  --indigo-glow: rgba(99, 102, 241, 0.3);
+  --cyan: #22d3ee;
+  --cyan-glow: rgba(34, 211, 238, 0.2);
+  --amber: #f59e0b;
+  --emerald: #10b981;
+  --rose: #f43f5e;
+  --white: #f0f0f5;
+  --white-muted: rgba(240, 240, 245, 0.7);
+  --white-dim: rgba(240, 240, 245, 0.4);
+
+  --font-display: 'Noto Sans SC', sans-serif;
+  --font-body: 'Noto Sans SC', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --slide-w: 100vw;
+  --slide-h: 100vh;
+}
+
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  background: var(--bg-deep);
+  color: var(--white);
+  font-family: var(--font-body);
+  overflow: hidden;
+  cursor: none;
+}
+
+/* Custom cursor */
+.cursor-dot {
+  position: fixed; width: 8px; height: 8px;
+  background: var(--indigo); border-radius: 50%;
+  pointer-events: none; z-index: 9999;
+  transition: transform 0.1s ease;
+  mix-blend-mode: difference;
+}
+.cursor-ring {
+  position: fixed; width: 36px; height: 36px;
+  border: 1.5px solid var(--indigo-light); border-radius: 50%;
+  pointer-events: none; z-index: 9998;
+  transition: transform 0.15s ease, opacity 0.3s;
+  opacity: 0.5;
+}
+
+/* ── Slide Container ── */
+.deck {
+  width: 100vw; height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6vh 8vw;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(30px);
+  will-change: opacity, transform;
+}
+.slide.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.slide.exit-up {
+  opacity: 0;
+  transform: translateY(-30px);
+}
+
+/* ── Background Effects ── */
+.slide::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 40%, rgba(99, 102, 241, 0.08), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 60%, rgba(34, 211, 238, 0.05), transparent);
+  pointer-events: none;
+}
+
+/* Noise texture overlay */
+.deck::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+.slide > * { position: relative; z-index: 2; }
+
+/* ── Typography ── */
+.headline {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--white) 0%, var(--white-muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.headline .accent {
+  background: linear-gradient(135deg, var(--indigo) 0%, var(--cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.subhead {
+  font-size: clamp(1rem, 1.8vw, 1.35rem);
+  color: var(--white-muted);
+  font-weight: 300;
+  line-height: 1.6;
+  max-width: 52ch;
+  margin-top: 1.5rem;
+}
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--indigo-light);
+  margin-bottom: 1rem;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.8rem, 3.5vw, 3rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.body-text {
+  font-size: clamp(0.95rem, 1.3vw, 1.15rem);
+  color: var(--white-muted);
+  line-height: 1.7;
+  font-weight: 300;
+}
+
+/* ── Cards ── */
+.card-grid {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+.card-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.card-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.card-grid.cols-6 { grid-template-columns: repeat(3, 1fr); }
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.4s, transform 0.3s, box-shadow 0.3s;
+}
+.card:hover {
+  border-color: var(--indigo);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 60px -15px var(--indigo-glow);
+}
+.card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--indigo), var(--cyan), var(--indigo));
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.card:hover::before { opacity: 1; }
+
+.card .card-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+.card .card-title {
+  font-weight: 700;
+  font-size: 1.15rem;
+  margin-bottom: 0.75rem;
+  color: var(--white);
+}
+.card .card-body {
+  font-size: 0.9rem;
+  color: var(--white-dim);
+  line-height: 1.6;
+}
+.card .card-body li {
+  list-style: none;
+  padding-left: 1.2em;
+  position: relative;
+  margin-bottom: 0.4rem;
+}
+.card .card-body li::before {
+  content: '›';
+  position: absolute; left: 0;
+  color: var(--indigo-light);
+  font-weight: 700;
+}
+
+/* Card color variants */
+.card.danger { border-color: rgba(244, 63, 94, 0.3); }
+.card.danger .card-title { color: var(--rose); }
+.card.danger::before { background: var(--rose); }
+.card.warning { border-color: rgba(245, 158, 11, 0.3); }
+.card.warning .card-title { color: var(--amber); }
+.card.warning::before { background: var(--amber); }
+.card.success { border-color: rgba(16, 185, 129, 0.3); }
+.card.success .card-title { color: var(--emerald); }
+.card.success::before { background: var(--emerald); }
+
+/* ── Stat Blocks ── */
+.stat-row {
+  display: flex;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+.stat {
+  flex: 1;
+  text-align: center;
+  padding: 2rem 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.stat::after {
+  content: '';
+  position: absolute; bottom: 0; left: 20%; right: 20%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--indigo), transparent);
+}
+.stat .stat-num {
+  font-family: var(--font-mono);
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--indigo), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+}
+.stat .stat-label {
+  font-size: 0.85rem;
+  color: var(--white-dim);
+  margin-top: 0.75rem;
+  font-weight: 400;
+}
+.stat .stat-sub {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--white-dim);
+  margin-top: 0.3rem;
+  opacity: 0.6;
+}
+
+/* ── Tables ── */
+.styled-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+}
+.styled-table th {
+  background: var(--surface);
+  color: var(--indigo-light);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1rem 1.2rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.styled-table th:first-child { border-radius: 12px 0 0 0; }
+.styled-table th:last-child { border-radius: 0 12px 0 0; }
+.styled-table td {
+  padding: 0.85rem 1.2rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--white-muted);
+  font-weight: 300;
+}
+.styled-table tr:last-child td { border-bottom: none; }
+.styled-table tr:hover td {
+  background: rgba(99, 102, 241, 0.05);
+}
+.styled-table .highlight {
+  color: var(--cyan);
+  font-weight: 500;
+}
+.styled-table .check { color: var(--emerald); }
+.styled-table .dash { color: var(--white-dim); opacity: 0.4; }
+
+/* ── Pipeline Flow ── */
+.pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-top: 2rem;
+  justify-content: center;
+}
+.pipeline-step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.2rem 1.8rem;
+  text-align: center;
+  min-width: 140px;
+  position: relative;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.pipeline-step:hover {
+  border-color: var(--indigo);
+  box-shadow: 0 0 30px var(--indigo-glow);
+}
+.pipeline-step .step-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.3rem;
+}
+.pipeline-step .step-desc {
+  font-size: 0.75rem;
+  color: var(--white-dim);
+  font-family: var(--font-mono);
+}
+.pipeline-step.primary {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(34, 211, 238, 0.1));
+  border-color: var(--indigo);
+}
+.pipeline-arrow {
+  color: var(--indigo-light);
+  font-size: 1.5rem;
+  padding: 0 0.5rem;
+  opacity: 0.5;
+}
+.pipeline-loop {
+  text-align: center;
+  margin-top: 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--white-dim);
+}
+
+/* ── Comparison Table ── */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-top: 1.5rem;
+}
+.compare-cell {
+  background: var(--bg-card);
+  padding: 0.9rem 1.2rem;
+  font-size: 0.85rem;
+  color: var(--white-muted);
+  font-weight: 300;
+}
+.compare-cell.header {
+  background: var(--surface);
+  color: var(--indigo-light);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.compare-cell.row-header {
+  font-weight: 500;
+  color: var(--white);
+  font-size: 0.85rem;
+}
+.compare-cell.winner {
+  color: var(--cyan);
+  font-weight: 500;
+  background: rgba(34, 211, 238, 0.04);
+}
+
+/* ── Funnel ── */
+.funnel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 2rem;
+  justify-content: center;
+}
+.funnel-step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.3s;
+  position: relative;
+}
+.funnel-step:hover {
+  border-color: var(--indigo);
+  background: var(--bg-elevated);
+}
+.funnel-step .funnel-metric {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--indigo-light);
+  margin-top: 0.25rem;
+}
+.funnel-arrow {
+  color: var(--indigo-light);
+  opacity: 0.4;
+  font-size: 1.2rem;
+}
+
+/* ── Vision Timeline ── */
+.vision-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 2.5rem;
+  padding-left: 2rem;
+  border-left: 2px solid var(--border);
+}
+.vision-item {
+  position: relative;
+  padding-left: 2rem;
+}
+.vision-item::before {
+  content: '';
+  position: absolute;
+  left: -2.35rem;
+  top: 0.5rem;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--indigo);
+  box-shadow: 0 0 20px var(--indigo-glow);
+}
+.vision-item .vision-stage {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--indigo-light);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+.vision-item .vision-desc {
+  font-size: 1.3rem;
+  font-weight: 300;
+  color: var(--white-muted);
+}
+
+/* ── CTA Slide ── */
+.cta-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  align-items: center;
+}
+.cta-line {
+  font-size: 1.15rem;
+  color: var(--white-muted);
+  font-weight: 300;
+}
+.cta-line .num {
+  font-family: var(--font-mono);
+  color: var(--indigo-light);
+  margin-right: 0.5rem;
+}
+.cta-badge {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.6rem 1.5rem;
+  background: linear-gradient(135deg, var(--amber), #d97706);
+  color: var(--bg-deep);
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-radius: 100px;
+  letter-spacing: 0.02em;
+}
+.cta-footer {
+  margin-top: 3rem;
+  font-size: 0.8rem;
+  color: var(--white-dim);
+  font-family: var(--font-mono);
+}
+
+/* ── Progress Bar ── */
+.progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--indigo), var(--cyan));
+  z-index: 100;
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Page Counter ── */
+.page-counter {
+  position: fixed;
+  bottom: 2rem; right: 3rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--white-dim);
+  z-index: 100;
+  letter-spacing: 0.1em;
+}
+
+/* ── Slide Number Badge ── */
+.slide-badge {
+  position: absolute;
+  top: 2.5rem; right: 3rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--white-dim);
+  opacity: 0.4;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* ── Animated Entrance ── */
+.slide.active .animate-in {
+  animation: fadeSlideUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.slide.active .animate-in:nth-child(1) { animation-delay: 0.1s; }
+.slide.active .animate-in:nth-child(2) { animation-delay: 0.2s; }
+.slide.active .animate-in:nth-child(3) { animation-delay: 0.3s; }
+.slide.active .animate-in:nth-child(4) { animation-delay: 0.4s; }
+.slide.active .animate-in:nth-child(5) { animation-delay: 0.5s; }
+.slide.active .animate-in:nth-child(6) { animation-delay: 0.6s; }
+
+.animate-in {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+@keyframes fadeSlideUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Glow Orbs ── */
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  opacity: 0.15;
+}
+.glow-orb.indigo { background: var(--indigo); }
+.glow-orb.cyan { background: var(--cyan); }
+
+/* ── Testimonial ── */
+.testimonial-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+.testimonial {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.8rem;
+  position: relative;
+}
+.testimonial::before {
+  content: '"';
+  position: absolute;
+  top: 0.5rem; left: 1.2rem;
+  font-size: 3rem;
+  color: var(--indigo);
+  opacity: 0.3;
+  font-family: Georgia, serif;
+  line-height: 1;
+}
+.testimonial .quote {
+  font-size: 0.95rem;
+  color: var(--white-muted);
+  line-height: 1.6;
+  font-weight: 300;
+  font-style: italic;
+  margin-bottom: 1rem;
+  padding-top: 0.5rem;
+}
+.testimonial .author {
+  font-size: 0.8rem;
+  color: var(--indigo-light);
+  font-weight: 500;
+}
+
+/* ── Pricing Grid ── */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.price-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.3s;
+}
+.price-card:hover {
+  border-color: var(--indigo);
+  transform: translateY(-4px);
+}
+.price-card.featured {
+  border-color: var(--indigo);
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.1), var(--bg-card));
+  position: relative;
+}
+.price-card.featured::before {
+  content: '推荐';
+  position: absolute;
+  top: -10px; left: 50%; transform: translateX(-50%);
+  background: var(--indigo);
+  color: white;
+  font-size: 0.65rem;
+  padding: 2px 12px;
+  border-radius: 100px;
+  font-weight: 700;
+}
+.price-card .tier-name {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.3rem;
+}
+.price-card .tier-price {
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--white);
+  margin: 0.5rem 0;
+}
+.price-card .tier-price span {
+  font-size: 0.8rem;
+  color: var(--white-dim);
+  font-weight: 400;
+}
+.price-card .tier-meta {
+  font-size: 0.75rem;
+  color: var(--white-dim);
+  margin-bottom: 1rem;
+}
+.price-card .tier-features {
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--white-muted);
+  text-align: left;
+}
+.price-card .tier-features li {
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.price-card .tier-features li:last-child { border-bottom: none; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .slide { padding: 4vh 5vw; }
+  .card-grid.cols-3, .card-grid.cols-6 { grid-template-columns: 1fr; }
+  .stat-row { flex-direction: column; }
+  .pipeline { flex-direction: column; }
+  .pipeline-arrow { transform: rotate(90deg); }
+  .compare-grid { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: 1fr 1fr; }
+  .testimonial-grid { grid-template-columns: 1fr; }
+  .funnel { flex-direction: column; }
+}
+
+/* ── Keyboard hints ── */
+.key-hint {
+  position: fixed;
+  bottom: 2rem; left: 3rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--white-dim);
+  opacity: 0.3;
+  z-index: 100;
+  letter-spacing: 0.05em;
+}
+.key-hint kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--white-dim);
+  border-radius: 4px;
+  margin: 0 2px;
+  font-size: 0.6rem;
+}
+
+/* Mode toggle */
+.mode-toggle {
+  position: fixed;
+  top: 2rem; right: 3rem;
+  z-index: 100;
+  display: flex;
+  gap: 0.5rem;
+}
+.mode-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--white-dim);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+}
+.mode-btn:hover, .mode-btn.active {
+  border-color: var(--indigo);
+  color: var(--white);
+  background: var(--surface);
+}
+</style>
+</head>
+<body>
+
+<!-- Custom Cursor -->
+<div class="cursor-dot" id="cursorDot"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<!-- Progress Bar -->
+<div class="progress-bar" id="progressBar"></div>
+
+<!-- Page Counter -->
+<div class="page-counter" id="pageCounter">01 / 12</div>
+
+<!-- Keyboard Hints -->
+<div class="key-hint"><kbd>←</kbd> <kbd>→</kbd> 翻页 &nbsp;|&nbsp; <kbd>F</kbd> 全屏</div>
+
+<!-- Mode Toggle -->
+<div class="mode-toggle">
+  <button class="mode-btn active" data-mode="customer">客户版</button>
+  <button class="mode-btn" data-mode="investor">投资版</button>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     CUSTOMER DECK
+     ═══════════════════════════════════════════ -->
+<div class="deck" id="customerDeck">
+
+  <!-- P1: Cover -->
+  <div class="slide active" data-slide="1">
+    <div class="glow-orb indigo" style="width:600px;height:600px;top:-200px;left:-100px;"></div>
+    <div class="glow-orb cyan" style="width:400px;height:400px;bottom:-100px;right:-50px;"></div>
+    <div class="slide-badge">UniMind.ai</div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1;">
+      <div class="animate-in" style="margin-bottom:2rem;">
+        <img src="../../frontend/public/Unimind_logo.png" alt="UniMind" style="height:80px;filter:brightness(0) invert(1);opacity:0.9;" onerror="this.style.display='none'">
+      </div>
+      <h1 class="headline animate-in" style="max-width:900px;">
+        你的老师，只管讲课。<br><span class="accent">剩下的，UniMind 全包了。</span>
+      </h1>
+      <p class="subhead animate-in" style="text-align:center;max-width:600px;">
+        培训机构的 AI 运营系统<br>
+        出题 · 组卷 · 批改 · 复习 · 学情 — 讲师之外的一切，AI 接管
+      </p>
+      <div class="animate-in" style="margin-top:2.5rem;">
+        <span style="font-family:var(--font-mono);font-size:0.75rem;color:var(--white-dim);letter-spacing:0.1em;">
+          北京融知高科 · BEIJING RONGZHI GAOKE
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- P2: Pain Points -->
+  <div class="slide" data-slide="2">
+    <div class="slide-badge">问题</div>
+    <div class="label animate-in">THE PROBLEM</div>
+    <h2 class="section-title animate-in">你正在面对的三个问题</h2>
+    <div class="card-grid cols-3 animate-in">
+      <div class="card danger">
+        <span class="card-icon">⏱</span>
+        <div class="card-title">出题靠人工</div>
+        <ul class="card-body">
+          <li>教研老师 60% 时间在出题、组卷、写解析</li>
+          <li>月薪 1.5-2 万，一年 18-24 万</li>
+          <li>出一道题平均 30 分钟</li>
+        </ul>
+      </div>
+      <div class="card warning">
+        <span class="card-icon">📉</span>
+        <div class="card-title">续费率上不去</div>
+        <ul class="card-body">
+          <li>所有学生刷同一套题</li>
+          <li>无个性化复习手段</li>
+          <li>续费率卡在 60-70%</li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="card-icon">🎯</span>
+        <div class="card-title" style="color:var(--white-muted);">教学靠感觉</div>
+        <ul class="card-body">
+          <li>不知道学生哪里薄弱</li>
+          <li>决策无数据支撑</li>
+          <li>教学效果无法量化</li>
+        </ul>
+      </div>
+    </div>
+    <p class="body-text animate-in" style="margin-top:2rem;text-align:center;font-style:italic;opacity:0.6;">
+      如果以上任何一条戳中你，继续往下看。
+    </p>
+  </div>
+
+  <!-- P3: What is UniMind -->
+  <div class="slide" data-slide="3">
+    <div class="slide-badge">产品</div>
+    <div class="label animate-in">WHAT IS UNIMIND</div>
+    <h2 class="section-title animate-in">UniMind 是什么</h2>
+    <p class="subhead animate-in" style="margin-top:1rem;">输入考点，AI 出题；学生扫码，即刻练习；系统自动复习、批改、出报告。</p>
+    <div class="card-grid cols-6 animate-in">
+      <div class="card">
+        <span class="card-icon">⚡</span>
+        <div class="card-title">AI 出题</div>
+        <div class="card-body">10 秒生成一道题<br>85% 可直接用于课堂</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">🧠</span>
+        <div class="card-title">自适应复习</div>
+        <div class="card-body">基于遗忘曲线<br>个性化复习调度</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">✅</span>
+        <div class="card-title">AI 批改</div>
+        <div class="card-body">主观题自动评分<br>+ 详细解析</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">🗺</span>
+        <div class="card-title">知识图谱</div>
+        <div class="card-body">可视化学生<br>薄弱环节</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">🤖</span>
+        <div class="card-title">AI 助教</div>
+        <div class="card-body">7×24 在线答疑<br>多角色可选</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">📊</span>
+        <div class="card-title">学情报告</div>
+        <div class="card-body">每周自动生成<br>家长可看</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P4: ARC Pipeline -->
+  <div class="slide" data-slide="4">
+    <div class="slide-badge">核心技术</div>
+    <div class="label animate-in">CORE FEATURE 01</div>
+    <h2 class="section-title animate-in">AI 对抗出题引擎</h2>
+    <p class="subhead animate-in" style="margin-top:0.8rem;margin-bottom:0;">不是「AI 随便出题」，是 4 个 AI Agent 互相审核</p>
+    <div class="pipeline animate-in">
+      <div class="pipeline-step">
+        <div class="step-title">考点输入</div>
+        <div class="step-desc">教师指定</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="step-title">Author</div>
+        <div class="step-desc">生成题目</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step primary">
+        <div class="step-title">Reviewer</div>
+        <div class="step-desc">审核（带研究工具）</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="step-title">AuthorRevise</div>
+        <div class="step-desc">修正题目</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="step-title">Classifier</div>
+        <div class="step-desc">分类审计</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="step-title">入库</div>
+        <div class="step-desc">可用</div>
+      </div>
+    </div>
+    <div class="pipeline-loop animate-in">最多 3 轮迭代 · 阈值 0.7 · 难度由教师锁定</div>
+    <div class="stat-row animate-in">
+      <div class="stat">
+        <div class="stat-num">~60%</div>
+        <div class="stat-label">单次 LLM 可用率</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">85%+</div>
+        <div class="stat-label">ARC 管线可用率</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">50x</div>
+        <div class="stat-label">出题速度提升</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P5: Memorix -->
+  <div class="slide" data-slide="5">
+    <div class="slide-badge">核心技术</div>
+    <div class="label animate-in">CORE FEATURE 02</div>
+    <h2 class="section-title animate-in">Memorix 自适应复习</h2>
+    <p class="subhead animate-in" style="margin-top:0.8rem;">不是「艾宾浩斯曲线」，是为每个学生实时学习的算法</p>
+    <div class="compare-grid animate-in">
+      <div class="compare-cell header"></div>
+      <div class="compare-cell header">传统间隔重复</div>
+      <div class="compare-cell header">FSRS v4.5（开源最优）</div>
+      <div class="compare-cell header">Memorix（UniMind）</div>
+
+      <div class="compare-cell row-header">遗忘模型</div>
+      <div class="compare-cell">固定曲线</div>
+      <div class="compare-cell">幂律分布</div>
+      <div class="compare-cell winner">Weibull 分布（可学习）</div>
+
+      <div class="compare-cell row-header">个性化</div>
+      <div class="compare-cell">无</div>
+      <div class="compare-cell">全局参数</div>
+      <div class="compare-cell winner">每用户 20 维权重</div>
+
+      <div class="compare-cell row-header">更新方式</div>
+      <div class="compare-cell">无</div>
+      <div class="compare-cell">批量拟合</div>
+      <div class="compare-cell winner">每次答题实时学习</div>
+
+      <div class="compare-cell row-header">预测精度</div>
+      <div class="compare-cell">差</div>
+      <div class="compare-cell">RMSE 基线</div>
+      <div class="compare-cell winner">降低 13.7%</div>
+
+      <div class="compare-cell row-header">用户留存</div>
+      <div class="compare-cell">基线</div>
+      <div class="compare-cell">基线</div>
+      <div class="compare-cell winner">提升 9.2%</div>
+    </div>
+    <p class="body-text animate-in" style="margin-top:1.5rem;font-family:var(--font-mono);font-size:0.75rem;opacity:0.5;">
+      验证数据：431 金融考研 · 500+ 用户 · 120,000+ 复习记录
+    </p>
+  </div>
+
+  <!-- P6: Knowledge Graph -->
+  <div class="slide" data-slide="6">
+    <div class="slide-badge">核心技术</div>
+    <div class="label animate-in">CORE FEATURE 03</div>
+    <h2 class="section-title animate-in">知识图谱 + 学情分析</h2>
+    <p class="subhead animate-in" style="margin-top:0.8rem;">红黄绿一眼看清，谁在哪个知识点上卡住了</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-top:2rem;" class="animate-in">
+      <div>
+        <ul style="list-style:none;font-size:1rem;color:var(--white-muted);line-height:2.2;font-weight:300;">
+          <li><span style="color:var(--indigo-light);margin-right:0.8rem;">●</span>4 层知识树：学科 → 章 → 节 → 知识点</li>
+          <li><span style="color:var(--indigo-light);margin-right:0.8rem;">●</span>每个知识点：掌握度评分 + 热力图</li>
+          <li><span style="color:var(--indigo-light);margin-right:0.8rem;">●</span>自动识别瓶颈：DAG 遍历找前置缺口</li>
+          <li><span style="color:var(--indigo-light);margin-right:0.8rem;">●</span>用户自标注：优先级、置信度、标签</li>
+        </ul>
+      </div>
+      <div class="card success">
+        <div class="card-title">场景举例</div>
+        <ul class="card-body">
+          <li>学生在「投资组合管理」反复出错</li>
+          <li>系统发现「资产定价模型」掌握度仅 35%</li>
+          <li>自动推荐回到 CAPM 复习</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- P7: More Features -->
+  <div class="slide" data-slide="7">
+    <div class="slide-badge">功能</div>
+    <div class="label animate-in">MORE FEATURES</div>
+    <h2 class="section-title animate-in">更多实用功能</h2>
+    <div class="card-grid cols-3 animate-in">
+      <div class="card">
+        <span class="card-icon">🤖</span>
+        <div class="card-title">AI 助教</div>
+        <div class="card-body">多角色可选，LaTeX 公式渲染<br>7×24 在线答疑</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">🎤</span>
+        <div class="card-title">AI 模拟面试</div>
+        <div class="card-body">简历优化 → 预测提问<br>→ 5 维雷达图评分</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">📄</span>
+        <div class="card-title">个性化 PDF 模考</div>
+        <div class="card-body">AI 根据薄弱点组卷<br>生成 PDF + 答案</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">🎬</span>
+        <div class="card-title">视频课程</div>
+        <div class="card-body">分片上传 + ASR 转录<br>AI 大纲 + 时间戳跳转</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">🏠</span>
+        <div class="card-title">在线自习室</div>
+        <div class="card-body">番茄钟 + 实时聊天<br>周计划 + 学习状态广播</div>
+      </div>
+      <div class="card">
+        <span class="card-icon">💬</span>
+        <div class="card-title">答疑系统</div>
+        <div class="card-body">社区式问答<br>教师认证标识，支持图片</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P8: Student Experience -->
+  <div class="slide" data-slide="8">
+    <div class="slide-badge">体验</div>
+    <div class="label animate-in">STUDENT EXPERIENCE</div>
+    <h2 class="section-title animate-in">学员端体验</h2>
+    <p class="subhead animate-in" style="margin-top:0.8rem;">学员扫码即练，零门槛</p>
+    <div class="funnel animate-in">
+      <div class="funnel-step">
+        <div>生成邀请</div>
+        <div class="funnel-metric">链接 / 二维码</div>
+      </div>
+      <div class="funnel-arrow">→</div>
+      <div class="funnel-step">
+        <div>扫码注册</div>
+        <div class="funnel-metric">基本信息</div>
+      </div>
+      <div class="funnel-arrow">→</div>
+      <div class="funnel-step">
+        <div>自动加入</div>
+        <div class="funnel-metric">归入机构</div>
+      </div>
+      <div class="funnel-arrow">→</div>
+      <div class="funnel-step" style="border-color:var(--indigo);">
+        <div>开始练习</div>
+        <div class="funnel-metric" style="color:var(--cyan);">AI 自适应</div>
+      </div>
+    </div>
+    <div class="card-grid cols-2 animate-in" style="margin-top:2rem;">
+      <div class="card">
+        <div class="card-body" style="font-size:1rem;line-height:2;">
+          <li>无需下载 APP，纯网页端</li>
+          <li>支持手机 / 平板 / 电脑</li>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body" style="font-size:1rem;line-height:2;">
+          <li>中英文双语界面</li>
+          <li>ELO 排位系统，激发学习动力</li>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P9: Admin -->
+  <div class="slide" data-slide="9">
+    <div class="slide-badge">管理</div>
+    <div class="label animate-in">ADMIN PANEL</div>
+    <h2 class="section-title animate-in">机构管理后台</h2>
+    <p class="subhead animate-in" style="margin-top:0.8rem;">一个后台，管所有事</p>
+    <div class="card-grid cols-3 animate-in">
+      <div class="card">
+        <div class="card-title">📚 题库管理</div>
+        <div class="card-body">批量导入 / AI 生成 / 审核队列 / 标签管理</div>
+      </div>
+      <div class="card">
+        <div class="card-title">👥 学员管理</div>
+        <div class="card-body">分班、数据导出、学情对比</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎬 课程管理</div>
+        <div class="card-body">视频上传、AI 大纲、课程标签</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🤖 AI Bot 管理</div>
+        <div class="card-body">自定义助教人设和知识库</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔑 会员管理</div>
+        <div class="card-body">邀请码、激活码、方案管理</div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 数据洞察</div>
+        <div class="card-body">班级对比、知识点掌握分布</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P10: Pricing -->
+  <div class="slide" data-slide="10">
+    <div class="slide-badge">定价</div>
+    <div class="label animate-in">PRICING</div>
+    <h2 class="section-title animate-in">定价方案</h2>
+    <div class="pricing-grid animate-in">
+      <div class="price-card">
+        <div class="tier-name">个人工作室</div>
+        <div class="tier-price">免费</div>
+        <div class="tier-meta">30 学生 · 1 教师</div>
+        <ul class="tier-features">
+          <li>AI 出题 30 次/月</li>
+          <li>AI 批改不限</li>
+          <li>基础统计</li>
+        </ul>
+      </div>
+      <div class="price-card">
+        <div class="tier-name">独立教师</div>
+        <div class="tier-price">¥499<span>/月</span></div>
+        <div class="tier-meta">50 学生 · 1 教师</div>
+        <ul class="tier-features">
+          <li>AI 出题 100 次/月</li>
+          <li>+ Memorix 自适应</li>
+          <li>+ AI 助教</li>
+          <li>+ 知识图谱</li>
+        </ul>
+      </div>
+      <div class="price-card featured">
+        <div class="tier-name">培训机构</div>
+        <div class="tier-price">¥1,299<span>/月</span></div>
+        <div class="tier-meta">200 学生 · 5 教师</div>
+        <ul class="tier-features">
+          <li>AI 出题不限</li>
+          <li>+ 视频课程</li>
+          <li>+ 模考 PDF</li>
+          <li>+ 自习室 + 答疑</li>
+          <li>+ 班级对比</li>
+        </ul>
+      </div>
+      <div class="price-card">
+        <div class="tier-name">连锁品牌</div>
+        <div class="tier-price">¥3,999<span>/月</span></div>
+        <div class="tier-meta">不限 · 不限</div>
+        <ul class="tier-features">
+          <li>+ 品牌定制</li>
+          <li>+ 私有部署</li>
+          <li>+ API 接入</li>
+          <li>+ 专属支持</li>
+        </ul>
+      </div>
+    </div>
+    <p class="body-text animate-in" style="text-align:center;margin-top:1.5rem;font-size:0.85rem;">
+      年付约 8 折 · 14 天免费试用 · 无需绑卡
+    </p>
+  </div>
+
+  <!-- P11: Testimonials -->
+  <div class="slide" data-slide="11">
+    <div class="slide-badge">社会证明</div>
+    <div class="label animate-in">TESTIMONIALS</div>
+    <h2 class="section-title animate-in">已在使用的机构</h2>
+    <div class="testimonial-grid animate-in">
+      <div class="testimonial">
+        <div class="quote">生成了 400+ 道题，85% 以上可以直接用于课堂教学。</div>
+        <div class="author">何伟 / 北京 / CFA 培训</div>
+      </div>
+      <div class="testimonial">
+        <div class="quote">续费率从不到 70% 提升到 80% 以上。3 校区、200+ 学生在用。</div>
+        <div class="author">周鹏 / 成都 / 高中数学连锁</div>
+      </div>
+      <div class="testimonial">
+        <div class="quote">当天注册当天就能用，不需要技术团队。</div>
+        <div class="author">林佳 / 上海 / CPA 培训</div>
+      </div>
+      <div class="testimonial">
+        <div class="quote">批改时间缩短了一半以上。</div>
+        <div class="author">吴敏 / 广州 / 法考培训</div>
+      </div>
+    </div>
+    <div class="stat-row animate-in" style="margin-top:2rem;">
+      <div class="stat">
+        <div class="stat-num">10+</div>
+        <div class="stat-label">学科</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">50,000+</div>
+        <div class="stat-label">已生成题目</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">50+</div>
+        <div class="stat-label">活跃机构</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P12: CTA -->
+  <div class="slide" data-slide="12">
+    <div class="glow-orb indigo" style="width:500px;height:500px;top:50%;left:50%;transform:translate(-50%,-50%);"></div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1;">
+      <h1 class="headline animate-in" style="max-width:800px;font-size:clamp(2rem,4vw,3.5rem);">
+        让你的老师专注教学<br><span class="accent">把运营交给 AI</span>
+      </h1>
+      <div class="cta-actions animate-in">
+        <div class="cta-line"><span class="num">01</span> 发邮件至 korsonedu@gmail.com 申请试用</div>
+        <div class="cta-line"><span class="num">02</span> 14 天 Growth 方案免费体验</div>
+        <div class="cta-line"><span class="num">03</span> 专属对接人全程陪跑</div>
+      </div>
+      <div class="cta-badge animate-in">首批机构免费用 Growth 方案 · 截止 2026.06.30</div>
+      <div class="cta-footer animate-in">北京融知高科 · UniMind.ai · 培训机构的 AI 基础设施</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════
+     INVESTOR DECK
+     ═══════════════════════════════════════════ -->
+<div class="deck" id="investorDeck" style="display:none;">
+
+  <!-- P1: Cover -->
+  <div class="slide active" data-slide="1">
+    <div class="glow-orb indigo" style="width:600px;height:600px;top:-200px;right:-100px;"></div>
+    <div class="glow-orb cyan" style="width:400px;height:400px;bottom:-100px;left:-50px;"></div>
+    <div class="slide-badge">INVESTOR DECK</div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;flex:1;">
+      <div class="animate-in" style="margin-bottom:2rem;">
+        <img src="../../frontend/public/Unimind_logo.png" alt="UniMind" style="height:80px;filter:brightness(0) invert(1);opacity:0.9;" onerror="this.style.display='none'">
+      </div>
+      <h1 class="headline animate-in" style="font-size:clamp(3rem,6vw,5.5rem);letter-spacing:-0.04em;">
+        UniMind<span class="accent">.ai</span>
+      </h1>
+      <p class="subhead animate-in" style="text-align:center;max-width:650px;font-size:1.3rem;">
+        培训机构的 AI 运营系统<br>
+        <span style="font-family:var(--font-mono);font-size:0.9rem;color:var(--white-dim);">The Operations Layer for Tutoring Businesses</span>
+      </p>
+      <div class="animate-in" style="margin-top:3rem;">
+        <span style="font-family:var(--font-mono);font-size:0.75rem;color:var(--white-dim);letter-spacing:0.15em;">
+          北京融知高科 · BEIJING RONGZHI GAOKE
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- P2: Market -->
+  <div class="slide" data-slide="2">
+    <div class="slide-badge">MARKET</div>
+    <div class="label animate-in">MARKET OPPORTUNITY</div>
+    <h2 class="section-title animate-in">万亿教培市场的效率黑洞</h2>
+    <p class="body-text animate-in" style="margin-top:1rem;">
+      中国教培市场规模 <strong style="color:var(--white);">~8,000 亿元</strong>（2025）<br>
+      中小机构（10-50 人）占 60%+，高度分散，绝大多数无技术团队
+    </p>
+    <div class="stat-row animate-in">
+      <div class="stat">
+        <div class="stat-num" style="background:linear-gradient(135deg,var(--rose),var(--amber));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">¥2 万/月</div>
+        <div class="stat-label">教研老师人力成本</div>
+        <div class="stat-sub">60% 时间花在出题</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" style="background:linear-gradient(135deg,var(--rose),var(--amber));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">60-70%</div>
+        <div class="stat-label">行业平均续费率</div>
+        <div class="stat-sub">缺少个性化手段</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" style="background:linear-gradient(135deg,var(--rose),var(--amber));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0</div>
+        <div class="stat-label">实时学情数据</div>
+        <div class="stat-sub">决策靠感觉</div>
+      </div>
+    </div>
+    <p class="body-text animate-in" style="margin-top:2rem;text-align:center;font-weight:500;color:var(--white);">
+      教培行业缺的不是好老师，是让好老师效率 10 倍提升的基础设施。
+    </p>
+  </div>
+
+  <!-- P3: Solution -->
+  <div class="slide" data-slide="3">
+    <div class="slide-badge">SOLUTION</div>
+    <div class="label animate-in">THE SOLUTION</div>
+    <h2 class="section-title animate-in">AI 原生的教培操作系统</h2>
+    <p class="subhead animate-in" style="margin-top:0.8rem;">
+      UniMind = AI 出题 + 自适应复习 + 自动批改 + 学情分析 + 机构管理<br>
+      覆盖全链路 · B2B SaaS · 学科无关
+    </p>
+    <div class="stat-row animate-in">
+      <div class="stat">
+        <div class="stat-num">50x</div>
+        <div class="stat-label">出题速度提升</div>
+        <div class="stat-sub">30 分钟 → 10 秒</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">85%+</div>
+        <div class="stat-label">ARC 管线可用率</div>
+        <div class="stat-sub">vs 单次 LLM ~60%</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">13.7%</div>
+        <div class="stat-label">复习预测精度提升</div>
+        <div class="stat-sub">vs FSRS v4.5</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P4: Memorix -->
+  <div class="slide" data-slide="4">
+    <div class="slide-badge">MOAT</div>
+    <div class="label animate-in">TECHNICAL MOAT 01</div>
+    <h2 class="section-title animate-in">Memorix 自适应记忆算法</h2>
+    <p class="subhead animate-in" style="margin-top:0.8rem;">自研间隔重复算法，论文级严谨度，已有白皮书</p>
+    <div class="card-grid cols-3 animate-in">
+      <div class="card">
+        <div class="card-title">Weibull 遗忘模型</div>
+        <div class="card-body">R(t) = exp(-(t/λ)^k)<br>k 可学习，比幂律更贴合</div>
+      </div>
+      <div class="card">
+        <div class="card-title">在线 SGD + 动量</div>
+        <div class="card-body">每次答题后实时更新<br>Nesterov 动量加速</div>
+      </div>
+      <div class="card">
+        <div class="card-title">贝叶斯先验</div>
+        <div class="card-body">20 维个性化权重<br>L2 正则 → 冷启动快</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Brier Score 损失</div>
+        <div class="card-body">严格 proper scoring<br>概率校准保证</div>
+      </div>
+      <div class="card">
+        <div class="card-title">遗憾最小化调度</div>
+        <div class="card-body">平衡遗忘风险<br>与复习机会成本</div>
+      </div>
+      <div class="card">
+        <div class="card-title">知识嵌入</div>
+        <div class="card-body">8 维向量 + 用户对齐<br>跨知识点迁移</div>
+      </div>
+    </div>
+    <p class="body-text animate-in" style="margin-top:1.5rem;font-family:var(--font-mono);font-size:0.75rem;opacity:0.5;">
+      验证：431 金融考研 · 500+ 用户 · 120K+ 记录 · RMSE -13.7% · 留存 +9.2%
+    </p>
+  </div>
+
+  <!-- P5: ARC -->
+  <div class="slide" data-slide="5">
+    <div class="slide-badge">MOAT</div>
+    <div class="label animate-in">TECHNICAL MOAT 02</div>
+    <h2 class="section-title animate-in">4-Agent 对抗出题管线（ARC）</h2>
+    <p class="subhead animate-in" style="margin-top:0.8rem;">Reviewer 具有自主研究工具，可查询知识库后审核</p>
+    <div class="pipeline animate-in">
+      <div class="pipeline-step">
+        <div class="step-title">Author</div>
+        <div class="step-desc">生成</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step primary">
+        <div class="step-title">Reviewer</div>
+        <div class="step-desc">审核（带工具）</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="step-title">AuthorRevise</div>
+        <div class="step-desc">修正</div>
+      </div>
+      <div class="pipeline-arrow">→</div>
+      <div class="pipeline-step">
+        <div class="step-title">Classifier</div>
+        <div class="step-desc">分类审计</div>
+      </div>
+    </div>
+    <div class="pipeline-loop animate-in">最多 3 轮迭代 · 阈值 0.7 · 难度由教师锁定（AI 不能改）</div>
+    <div style="margin-top:2rem;" class="animate-in">
+      <ul style="list-style:none;font-size:0.95rem;color:var(--white-muted);line-height:2;font-weight:300;">
+        <li><span style="color:var(--indigo-light);margin-right:0.8rem;">●</span>Reviewer 可自主调用 lookup_knowledge_point_definition() 和 search_similar_questions()</li>
+        <li><span style="color:var(--indigo-light);margin-right:0.8rem;">●</span>3 维评分：区分度、清晰度、知识覆盖度</li>
+        <li><span style="color:var(--indigo-light);margin-right:0.8rem;">●</span>Classifier 检测偏差但不自动拒绝 → 进入人工审核队列</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- P6: AI Engine -->
+  <div class="slide" data-slide="6">
+    <div class="slide-badge">MOAT</div>
+    <div class="label animate-in">TECHNICAL MOAT 03</div>
+    <h2 class="section-title animate-in">AI 引擎架构</h2>
+    <div style="margin-top:2rem;" class="animate-in">
+      <div style="display:grid;gap:1rem;">
+        <div style="display:grid;grid-template-columns:200px 1fr;gap:1rem;align-items:center;padding:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;">
+          <span style="color:var(--indigo-light);font-weight:700;font-size:0.9rem;">Prompt as Code</span>
+          <span class="body-text" style="margin:0;">文件级模板 + 数据库版本历史 + 一键回滚</span>
+        </div>
+        <div style="display:grid;grid-template-columns:200px 1fr;gap:1rem;align-items:center;padding:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;">
+          <span style="color:var(--indigo-light);font-weight:700;font-size:0.9rem;">Schema 强制输出</span>
+          <span class="body-text" style="margin:0;">tool_choice="required" + JSON Schema，零解析失败</span>
+        </div>
+        <div style="display:grid;grid-template-columns:200px 1fr;gap:1rem;align-items:center;padding:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;">
+          <span style="color:var(--indigo-light);font-weight:700;font-size:0.9rem;">模型路由集中化</span>
+          <span class="body-text" style="margin:0;">ai_engine/config.py 单点控制，provider 热切换</span>
+        </div>
+        <div style="display:grid;grid-template-columns:200px 1fr;gap:1rem;align-items:center;padding:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;">
+          <span style="color:var(--indigo-light);font-weight:700;font-size:0.9rem;">熔断器模式</span>
+          <span class="body-text" style="margin:0;">5 次连续失败触发熔断，5 分钟后半开探测</span>
+        </div>
+        <div style="display:grid;grid-template-columns:200px 1fr;gap:1rem;align-items:center;padding:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;">
+          <span style="color:var(--indigo-light);font-weight:700;font-size:0.9rem;">降级策略</span>
+          <span class="body-text" style="margin:0;">AI 失败 → 降级到人工题库 / 标准答案 / 保存进度</span>
+        </div>
+      </div>
+    </div>
+    <p class="body-text animate-in" style="margin-top:1.5rem;font-family:var(--font-mono);font-size:0.75rem;opacity:0.5;">
+      Provider 无关：当前 MiMo V2.5，切换只需改 2 个常量
+    </p>
+  </div>
+
+  <!-- P7: Product Overview -->
+  <div class="slide" data-slide="7">
+    <div class="slide-badge">PRODUCT</div>
+    <div class="label animate-in">PRODUCT OVERVIEW</div>
+    <h2 class="section-title animate-in">产品全景</h2>
+    <div style="margin-top:2rem;display:flex;flex-direction:column;gap:0.8rem;" class="animate-in">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.5rem;text-align:center;font-size:0.9rem;color:var(--white-muted);">
+        学员端 · 教师端 · 管理端 · 机构品牌页
+      </div>
+      <div style="background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(34,211,238,0.08));border:1px solid var(--indigo);border-radius:12px;padding:1rem 1.5rem;text-align:center;font-size:0.85rem;color:var(--white);">
+        AI 出题 · 自适应复习 · AI 批改 · 知识图谱 · AI 助教 · 视频课程 · 模拟面试 · 自习室 · 答疑 · PDF 模考 · 学情报告
+      </div>
+      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;padding:1rem 1.5rem;text-align:center;font-size:0.8rem;color:var(--white-muted);">
+        AI 引擎（多模型路由）· 熔断器 · WebSocket · 三层权限（RBAC）· 加密字段 · 多租户隔离
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.5rem;text-align:center;font-family:var(--font-mono);font-size:0.75rem;color:var(--white-dim);">
+        Django 6.0 + React 19 + PostgreSQL &nbsp;|&nbsp; Celery + Redis + Daphne (ASGI)
+      </div>
+    </div>
+  </div>
+
+  <!-- P8: Business Model -->
+  <div class="slide" data-slide="8">
+    <div class="slide-badge">BUSINESS</div>
+    <div class="label animate-in">BUSINESS MODEL</div>
+    <h2 class="section-title animate-in">商业模式</h2>
+    <p class="subhead animate-in" style="margin-top:0.5rem;">SaaS 订阅 + 4 级定价</p>
+    <div class="pricing-grid animate-in">
+      <div class="price-card">
+        <div class="tier-name">Free</div>
+        <div class="tier-price">¥0</div>
+        <div class="tier-meta">30 学生 · 1 教师</div>
+        <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--white-dim);margin-top:0.5rem;">ARPU: ¥0</div>
+      </div>
+      <div class="price-card">
+        <div class="tier-name">Starter</div>
+        <div class="tier-price">¥499<span>/月</span></div>
+        <div class="tier-meta">50 学生 · 1 教师</div>
+        <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--white-dim);margin-top:0.5rem;">ARPU: ¥5,988/年</div>
+      </div>
+      <div class="price-card featured">
+        <div class="tier-name">Growth</div>
+        <div class="tier-price">¥1,299<span>/月</span></div>
+        <div class="tier-meta">200 学生 · 5 教师</div>
+        <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--cyan);margin-top:0.5rem;">ARPU: ¥15,588/年</div>
+      </div>
+      <div class="price-card">
+        <div class="tier-name">Enterprise</div>
+        <div class="tier-price">¥3,999<span>/月</span></div>
+        <div class="tier-meta">不限 · 不限</div>
+        <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--white-dim);margin-top:0.5rem;">ARPU: ¥47,988/年</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-top:1.5rem;" class="animate-in">
+      <div class="card">
+        <div class="card-title">单位经济学（Growth）</div>
+        <ul class="card-body">
+          <li>LTV（24 月）：¥31,176</li>
+          <li>CAC：~¥2,000-5,000</li>
+          <li style="color:var(--emerald);font-weight:500;">LTV/CAC：6-19x</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title">增长引擎</div>
+        <ul class="card-body">
+          <li>Freemium 漏斗升级</li>
+          <li>机构内生增长触发升级</li>
+          <li>年付折扣锁定现金流</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- P9: GTM -->
+  <div class="slide" data-slide="9">
+    <div class="slide-badge">GTM</div>
+    <div class="label animate-in">GO-TO-MARKET</div>
+    <h2 class="section-title animate-in">市场策略</h2>
+    <div style="margin-top:1.5rem;display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;" class="animate-in">
+      <div class="card" style="border-top:3px solid var(--emerald);">
+        <div class="card-title" style="color:var(--emerald);">P0 验证期 · 0-6 月</div>
+        <ul class="card-body">
+          <li>10+ 付费机构</li>
+          <li>¥50 万 ARR</li>
+          <li>考研/公考中小机构</li>
+          <li>14 天试用 + 人工陪跑</li>
+        </ul>
+      </div>
+      <div class="card" style="border-top:3px solid var(--indigo);">
+        <div class="card-title">P1 扩张期 · 6-12 月</div>
+        <ul class="card-body">
+          <li>50+ 机构</li>
+          <li>¥200 万 ARR</li>
+          <li>K12 + 职业资格</li>
+          <li>内容营销 + 渠道合作</li>
+        </ul>
+      </div>
+      <div class="card" style="border-top:3px solid var(--cyan);">
+        <div class="card-title" style="color:var(--cyan);">P2 规模化 · 12-24 月</div>
+        <ul class="card-body">
+          <li>200+ 机构</li>
+          <li>¥800 万 ARR</li>
+          <li>连锁品牌 + 出海</li>
+          <li>Stripe USD 结算</li>
+        </ul>
+      </div>
+    </div>
+    <div class="funnel animate-in" style="margin-top:2rem;">
+      <div class="funnel-step">线索<div class="funnel-metric">2-3 家/周</div></div>
+      <div class="funnel-arrow">→</div>
+      <div class="funnel-step">试用注册<div class="funnel-metric">14 天</div></div>
+      <div class="funnel-arrow">→</div>
+      <div class="funnel-step">学员激活<div class="funnel-metric">>50%</div></div>
+      <div class="funnel-arrow">→</div>
+      <div class="funnel-step">付费转化<div class="funnel-metric">>20%</div></div>
+      <div class="funnel-arrow">→</div>
+      <div class="funnel-step" style="border-color:var(--indigo);">续费<div class="funnel-metric" style="color:var(--cyan);">>90%/月</div></div>
+    </div>
+  </div>
+
+  <!-- P10: Competition -->
+  <div class="slide" data-slide="10">
+    <div class="slide-badge">COMPETITION</div>
+    <div class="label animate-in">COMPETITIVE LANDSCAPE</div>
+    <h2 class="section-title animate-in">竞争格局</h2>
+    <div class="compare-grid animate-in" style="margin-top:1.5rem;">
+      <div class="compare-cell header"></div>
+      <div class="compare-cell header">教培 SaaS（校宝等）</div>
+      <div class="compare-cell header">AI 教育工具（松鼠 AI）</div>
+      <div class="compare-cell header">UniMind</div>
+
+      <div class="compare-cell row-header">定位</div>
+      <div class="compare-cell">管理工具</div>
+      <div class="compare-cell">学习工具</div>
+      <div class="compare-cell winner">AI 运营系统</div>
+
+      <div class="compare-cell row-header">AI 能力</div>
+      <div class="compare-cell">无/弱</div>
+      <div class="compare-cell">有，但单一</div>
+      <div class="compare-cell winner">多 Agent 管线</div>
+
+      <div class="compare-cell row-header">出题能力</div>
+      <div class="compare-cell">无</div>
+      <div class="compare-cell">质量不可控</div>
+      <div class="compare-cell winner">ARC 85%+ 可用率</div>
+
+      <div class="compare-cell row-header">个性化</div>
+      <div class="compare-cell">无</div>
+      <div class="compare-cell">有</div>
+      <div class="compare-cell winner">Memorix 用户级在线学习</div>
+
+      <div class="compare-cell row-header">B2B 管理</div>
+      <div class="compare-cell">强</div>
+      <div class="compare-cell">弱</div>
+      <div class="compare-cell winner">强（RBAC/多租户/白标）</div>
+
+      <div class="compare-cell row-header">自研算法</div>
+      <div class="compare-cell">无</div>
+      <div class="compare-cell">有</div>
+      <div class="compare-cell winner">有（白皮书 + 工程实现）</div>
+    </div>
+    <p class="body-text animate-in" style="margin-top:1.5rem;font-weight:500;text-align:center;">
+      护城河：Memorix 算法 · ARC 管线 · 全链路整合 · 数据飞轮
+    </p>
+  </div>
+
+  <!-- P11: Tech Stack -->
+  <div class="slide" data-slide="11">
+    <div class="slide-badge">TECH</div>
+    <div class="label animate-in">TECHNICAL ARCHITECTURE</div>
+    <h2 class="section-title animate-in">技术栈</h2>
+    <div style="margin-top:1.5rem;display:grid;gap:0.6rem;" class="animate-in">
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;align-items:center;padding:0.8rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+        <span style="color:var(--indigo-light);font-weight:700;font-size:0.85rem;">前端</span>
+        <span class="body-text" style="margin:0;font-size:0.85rem;">React 19 + TypeScript + Vite + shadcn/ui + Tailwind 4</span>
+      </div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;align-items:center;padding:0.8rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+        <span style="color:var(--indigo-light);font-weight:700;font-size:0.85rem;">后端</span>
+        <span class="body-text" style="margin:0;font-size:0.85rem;">Django 6.0 + DRF 3.16 + Python 3.12+</span>
+      </div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;align-items:center;padding:0.8rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+        <span style="color:var(--indigo-light);font-weight:700;font-size:0.85rem;">实时通信</span>
+        <span class="body-text" style="margin:0;font-size:0.85rem;">Django Channels 4.3 + Daphne 4.2（WebSocket）</span>
+      </div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;align-items:center;padding:0.8rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+        <span style="color:var(--indigo-light);font-weight:700;font-size:0.85rem;">异步任务</span>
+        <span class="body-text" style="margin:0;font-size:0.85rem;">Celery 5.4 + Redis</span>
+      </div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;align-items:center;padding:0.8rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+        <span style="color:var(--indigo-light);font-weight:700;font-size:0.85rem;">AI 引擎</span>
+        <span class="body-text" style="margin:0;font-size:0.85rem;">MiMo V2.5（可热切换任意 LLM provider）</span>
+      </div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;align-items:center;padding:0.8rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+        <span style="color:var(--indigo-light);font-weight:700;font-size:0.85rem;">部署</span>
+        <span class="body-text" style="margin:0;font-size:0.85rem;">Nginx + Daphne x3 + Celery x2 + systemd · 阿里云上海</span>
+      </div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;align-items:center;padding:0.8rem 1.2rem;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+        <span style="color:var(--indigo-light);font-weight:700;font-size:0.85rem;">安全</span>
+        <span class="body-text" style="margin:0;font-size:0.85rem;">Cookie-first 认证 · Fernet AES 加密 · 多租户隔离 · i18n（20 ns）</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- P12: Traction -->
+  <div class="slide" data-slide="12">
+    <div class="slide-badge">TRACTION</div>
+    <div class="label animate-in">MILESTONES</div>
+    <h2 class="section-title animate-in">牵引力与里程碑</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-top:2rem;" class="animate-in">
+      <div>
+        <h3 style="color:var(--emerald);font-size:1.1rem;margin-bottom:1rem;">已达成</h3>
+        <ul style="list-style:none;font-size:0.95rem;color:var(--white-muted);line-height:2.2;font-weight:300;">
+          <li><span style="color:var(--emerald);margin-right:0.8rem;">✓</span>产品已上线运营（UniMind.ai）</li>
+          <li><span style="color:var(--emerald);margin-right:0.8rem;">✓</span>10+ 学科支持</li>
+          <li><span style="color:var(--emerald);margin-right:0.8rem;">✓</span>50,000+ 题目已生成</li>
+          <li><span style="color:var(--emerald);margin-right:0.8rem;">✓</span>50+ 活跃机构</li>
+          <li><span style="color:var(--emerald);margin-right:0.8rem;">✓</span>完整 B2B SaaS + 自研算法</li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="color:var(--indigo-light);font-size:1.1rem;margin-bottom:1rem;">近期目标（6 个月）</h3>
+        <ul style="list-style:none;font-size:0.95rem;color:var(--white-muted);line-height:2.2;font-weight:300;">
+          <li><span style="color:var(--indigo-light);margin-right:0.8rem;">→</span>10+ 付费机构客户</li>
+          <li><span style="color:var(--indigo-light);margin-right:0.8rem;">→</span>¥50 万 ARR</li>
+          <li><span style="color:var(--indigo-light);margin-right:0.8rem;">→</span>首批客户案例验证</li>
+        </ul>
+        <h3 style="color:var(--cyan);font-size:1.1rem;margin-bottom:1rem;margin-top:1.5rem;">中期目标（12 个月）</h3>
+        <ul style="list-style:none;font-size:0.95rem;color:var(--white-muted);line-height:2.2;font-weight:300;">
+          <li><span style="color:var(--cyan);margin-right:0.8rem;">→</span>50+ 付费机构</li>
+          <li><span style="color:var(--cyan);margin-right:0.8rem;">→</span>¥200 万 ARR</li>
+          <li><span style="color:var(--cyan);margin-right:0.8rem;">→</span>出海准备</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- P13: Financial -->
+  <div class="slide" data-slide="13">
+    <div class="slide-badge">FINANCIALS</div>
+    <div class="label animate-in">FINANCIAL PROJECTIONS</div>
+    <h2 class="section-title animate-in">财务预测（保守估计）</h2>
+    <div class="styled-table animate-in" style="margin-top:1.5rem;">
+      <table class="styled-table">
+        <thead>
+          <tr><th>指标</th><th>6 个月</th><th>12 个月</th><th>24 个月</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>付费机构数</td><td>10</td><td>50</td><td class="highlight">200</td></tr>
+          <tr><td>平均 ARPU</td><td>¥15,000/年</td><td>¥18,000/年</td><td class="highlight">¥20,000/年</td></tr>
+          <tr><td>ARR</td><td>¥15 万</td><td>¥90 万</td><td class="highlight">¥400 万</td></tr>
+          <tr><td>月度留存率</td><td>90%</td><td>92%</td><td class="highlight">95%</td></tr>
+          <tr><td>毛利率</td><td>70%</td><td>75%</td><td class="highlight">80%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card animate-in" style="margin-top:1.5rem;">
+      <div class="card-title">关键假设</div>
+      <ul class="card-body">
+        <li>LLM 成本随规模下降（当前 ~¥0.01/次 API 调用）</li>
+        <li>基础设施成本固定（单服务器可支撑 100+ 机构）</li>
+        <li>人力成本主要是产品迭代和客户成功</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- P14: Vision -->
+  <div class="slide" data-slide="14">
+    <div class="glow-orb indigo" style="width:500px;height:500px;top:30%;left:60%;"></div>
+    <div class="glow-orb cyan" style="width:300px;height:300px;bottom:20%;left:20%;"></div>
+    <div style="display:flex;flex-direction:column;justify-content:center;flex:1;">
+      <h1 class="headline animate-in" style="font-size:clamp(2rem,4vw,3.5rem);max-width:800px;">
+        让每一个培训机构都拥有<span class="accent"> AI 运营能力</span>
+      </h1>
+      <div class="vision-timeline animate-in">
+        <div class="vision-item">
+          <div class="vision-stage">今天</div>
+          <div class="vision-desc">AI 出题 + 自适应复习 + 机构管理 SaaS</div>
+        </div>
+        <div class="vision-item">
+          <div class="vision-stage">明天</div>
+          <div class="vision-desc">学科知识图谱平台，连接机构、学生、内容</div>
+        </div>
+        <div class="vision-item">
+          <div class="vision-stage">未来</div>
+          <div class="vision-desc">教育领域的 AI 基础设施，重新定义「教」与「学」</div>
+        </div>
+      </div>
+      <div class="cta-footer animate-in" style="margin-top:4rem;">
+        北京融知高科 · UniMind.ai · korsonedu@gmail.com
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+//  Presentation Controller
+// ═══════════════════════════════════════════
+
+class Presentation {
+  constructor() {
+    this.currentMode = 'customer';
+    this.currentSlide = 0;
+    this.totalSlides = { customer: 12, investor: 14 };
+    this.isTransitioning = false;
+
+    this.initCursor();
+    this.initKeyboard();
+    this.initModeToggle();
+    this.updateUI();
+  }
+
+  get deck() {
+    return document.getElementById(this.currentMode + 'Deck');
+  }
+
+  get slides() {
+    return this.deck.querySelectorAll('.slide');
+  }
+
+  goTo(index) {
+    if (this.isTransitioning) return;
+    const slides = this.slides;
+    if (index < 0 || index >= slides.length) return;
+
+    this.isTransitioning = true;
+    const prev = slides[this.currentSlide];
+    const next = slides[index];
+
+    // Reset animations
+    next.querySelectorAll('.animate-in').forEach(el => {
+      el.style.animation = 'none';
+      el.offsetHeight; // reflow
+      el.style.animation = '';
+    });
+
+    prev.classList.remove('active');
+    prev.classList.add('exit-up');
+    next.classList.add('active');
+
+    setTimeout(() => {
+      prev.classList.remove('exit-up');
+      this.isTransitioning = false;
+    }, 800);
+
+    this.currentSlide = index;
+    this.updateUI();
+  }
+
+  next() { this.goTo(this.currentSlide + 1); }
+  prev() { this.goTo(this.currentSlide - 1); }
+
+  updateUI() {
+    const total = this.totalSlides[this.currentMode];
+    const num = String(this.currentSlide + 1).padStart(2, '0');
+    document.getElementById('pageCounter').textContent = `${num} / ${total}`;
+    document.getElementById('progressBar').style.width = `${((this.currentSlide + 1) / total) * 100}%`;
+  }
+
+  switchMode(mode) {
+    if (mode === this.currentMode) return;
+    document.getElementById(this.currentMode + 'Deck').style.display = 'none';
+    document.getElementById(mode + 'Deck').style.display = '';
+    this.currentMode = mode;
+    this.currentSlide = 0;
+    // Reset all slides
+    this.slides.forEach((s, i) => {
+      s.classList.toggle('active', i === 0);
+      s.classList.remove('exit-up');
+    });
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+    this.updateUI();
+  }
+
+  initKeyboard() {
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); this.next(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); this.prev(); }
+      if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      }
+    });
+  }
+
+  initModeToggle() {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.switchMode(btn.dataset.mode));
+    });
+  }
+
+  initCursor() {
+    const dot = document.getElementById('cursorDot');
+    const ring = document.getElementById('cursorRing');
+    let mx = 0, my = 0, rx = 0, ry = 0;
+
+    document.addEventListener('mousemove', e => {
+      mx = e.clientX; my = e.clientY;
+      dot.style.transform = `translate(${mx - 4}px, ${my - 4}px)`;
+    });
+
+    const animateRing = () => {
+      rx += (mx - rx) * 0.12;
+      ry += (my - ry) * 0.12;
+      ring.style.transform = `translate(${rx - 18}px, ${ry - 18}px)`;
+      requestAnimationFrame(animateRing);
+    };
+    animateRing();
+  }
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  window.ppt = new Presentation();
+});
+</script>
+</body>
+</html>

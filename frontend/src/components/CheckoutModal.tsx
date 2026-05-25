@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type PlanKey = 'solo' | 'plus' | 'pro';
+type PlanKey = 'starter' | 'growth' | 'enterprise';
 type BillingCycle = 'monthly' | 'annual';
 
 const PLAN: Record<PlanKey, {
@@ -14,18 +14,18 @@ const PLAN: Record<PlanKey, {
   color: string; gradient: string; ring: string;
   features: string[];
 }> = {
-  solo: {
-    label: 'Solo', priceM: 299, priceA: 199,
+  starter: {
+    label: 'Starter', priceM: 499, priceA: 416,
     color: 'text-primary', gradient: 'from-[#0071E3] to-[#0077ED]', ring: 'ring-primary',
     features: ['AI 出题无限制', 'Memorix 记忆复习', 'AI 学习助手', '知识图谱', '完整学情报告', 'AI 智能大纲'],
   },
-  plus: {
-    label: 'Plus', priceM: 1299, priceA: 999,
+  growth: {
+    label: 'Growth', priceM: 1299, priceA: 1083,
     color: 'text-unimind-green', gradient: 'from-[#34C759] to-[#30D158]', ring: 'ring-unimind-green',
     features: ['答疑系统', '多教师协作', '自习室', '模拟考试', '班级报表', '数据导出'],
   },
-  pro: {
-    label: 'Pro', priceM: 3999, priceA: 2999,
+  enterprise: {
+    label: 'Enterprise', priceM: 3999, priceA: 3333,
     color: 'text-amber-500', gradient: 'from-amber-500 to-amber-400', ring: 'ring-amber-500',
     features: ['品牌定制', '私有化部署', 'API 接入', 'SSO 单点登录', '审计日志', '专属客户成功经理', 'SLA 99.9%'],
   },
@@ -40,7 +40,7 @@ interface CheckoutModalProps {
 
 export function CheckoutModal({ open, onOpenChange, preselectedPlan, currentPlan = 'free' }: CheckoutModalProps) {
   const navigate = useNavigate();
-  const [plan, setPlan] = useState<PlanKey>((preselectedPlan as PlanKey) || 'solo');
+  const [plan, setPlan] = useState<PlanKey>((preselectedPlan as PlanKey) || 'starter');
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('annual');
 
   const meta = PLAN[plan];

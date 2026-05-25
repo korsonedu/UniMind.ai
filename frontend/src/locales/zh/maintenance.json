@@ -421,7 +421,7 @@
   },
   "insights": {
     "totalUsers": "注册总用户",
-    "proMembers": "正式学员 (Pro)",
+    "proMembers": "正式学员 (Enterprise)",
     "conversionRate": "付费转化率",
     "academicBottleneck": "学术瓶颈 Top 10",
     "sortedByErrors": "按错题总数降序",

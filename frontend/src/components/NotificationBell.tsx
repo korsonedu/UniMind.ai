@@ -76,7 +76,7 @@ export const NotificationBell = () => {
   const getIcon = (type: string) => {
     switch (type) {
       case 'qa_reply': return <MessageCircle className="h-3 w-3 text-indigo-500" />;
-      case 'fsrs_reminder': return <Brain className="h-3 w-3 text-emerald-500" />;
+      case 'memorix_reminder': return <Brain className="h-3 w-3 text-emerald-500" />;
       default: return <Info className="h-3 w-3 text-blue-500" />;
     }
   };

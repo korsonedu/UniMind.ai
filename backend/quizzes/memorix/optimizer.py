@@ -427,7 +427,7 @@ class MemorixOptimizer:
 
 # ── Benchmark comparison ──────────────────────────────────────────
 
-def compare_with_fsrs_v45(
+def compare_with_baseline_v45(
     review_data: List[List[Dict]],
     memorix_weights: Optional[np.ndarray] = None,
 ) -> Dict:
@@ -435,21 +435,21 @@ def compare_with_fsrs_v45(
     Compare Memorix against FSRS v4.5 on the same dataset.
     Returns comparative metrics.
     """
-    from quizzes.fsrs_optimizer import FSRSOptimizer
+    from quizzes.baseline_optimizer import BaselineOptimizer
 
-    fsrs = FSRSOptimizer(review_data)
-    fsrs_rmse = fsrs.loss_function(fsrs.weights)
+    baseline = BaselineOptimizer(review_data)
+    baseline_rmse = baseline.loss_function(baseline.weights)
 
     memorix = MemorixOptimizer(weights=memorix_weights)
     memorix_rmse = memorix.loss_function(review_data)
 
-    improvement = (fsrs_rmse - memorix_rmse) / fsrs_rmse * 100 if fsrs_rmse > 0 else 0
+    improvement = (baseline_rmse - memorix_rmse) / baseline_rmse * 100 if baseline_rmse > 0 else 0
 
     return {
-        'fsrs_v45_rmse': round(fsrs_rmse, 6),
+        'baseline_v45_rmse': round(baseline_rmse, 6),
         'memorix_rmse': round(memorix_rmse, 6),
         'improvement_pct': round(improvement, 2),
-        'memorix_better': memorix_rmse < fsrs_rmse,
+        'memorix_better': memorix_rmse < baseline_rmse,
     }
 
 
@@ -526,6 +526,6 @@ if __name__ == "__main__":
 
     # Compare with FSRS v4.5
     print(f"\n--- FSRS v4.5 Comparison ---")
-    comparison = compare_with_fsrs_v45(dummy_data, opt.ema_weights)
+    comparison = compare_with_baseline_v45(dummy_data, opt.ema_weights)
     for k, v in comparison.items():
         print(f"  {k}: {v}")

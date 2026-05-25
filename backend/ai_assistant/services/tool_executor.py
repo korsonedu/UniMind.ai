@@ -5,7 +5,9 @@ AI 助教 Agent 工具执行器。
 """
 
 import json
+from datetime import timedelta
 from typing import Any, Dict, List
+from django.db import models
 
 
 class AssistantToolExecutor:
@@ -28,6 +30,7 @@ class AssistantToolExecutor:
     # ── Tool handlers ──────────────────────────────────────────
 
     def _handle_search_knowledge_tree(self, args: Dict) -> Dict:
+        from django.db.models import Q
         from quizzes.models import KnowledgePoint
 
         query = (args.get('query') or '').strip()
@@ -40,7 +43,7 @@ class AssistantToolExecutor:
         if subject:
             qs = qs.filter(subject=subject)
         if self.institution:
-            qs = qs.filter(institution__in=[self.institution, None])
+            qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
 
         kps = qs.values('code', 'name', 'subject', 'description')[:10]
         return {
@@ -104,6 +107,107 @@ class AssistantToolExecutor:
             ],
         }
 
+    def _handle_get_class_weak_points(self, args: Dict) -> Dict:
+        """获取班级最薄弱的知识点（仅 teacher/owner 可用）。"""
+        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+            return {"error": "仅教师/机构主可使用班级分析功能"}
+
+        from django.db.models import Sum, Count
+        from quizzes.models import UserQuestionStatus
+
+        limit = min(int(args.get('limit', 5)), 10)
+        student_ids = list(
+            self.institution.students.filter(institution_role='student').values_list('id', flat=True)
+        )
+        if not student_ids:
+            return {"weak_points": [], "message": "该机构暂无学生"}
+
+        qs = (
+            UserQuestionStatus.objects
+            .filter(user_id__in=student_ids, question__knowledge_point__isnull=False)
+            .values(
+                'question__knowledge_point__id',
+                'question__knowledge_point__name',
+                'question__knowledge_point__code',
+            )
+            .annotate(
+                total_reps=Sum('reps'),
+                total_lapses=Sum('lapses'),
+                student_count=Count('user_id', distinct=True),
+            )
+        )
+
+        scored = []
+        for row in qs:
+            total = (row['total_reps'] or 0) + (row['total_lapses'] or 0)
+            if total == 0:
+                continue
+            correct_rate = (row['total_reps'] or 0) / total
+            scored.append({
+                'kp_name': row['question__knowledge_point__name'] or '',
+                'kp_code': row['question__knowledge_point__code'] or '',
+                'correct_rate': round(correct_rate * 100, 1),
+                'total_attempts': total,
+                'student_count': row['student_count'] or 0,
+            })
+
+        scored.sort(key=lambda x: x['correct_rate'])
+        return {"weak_points": scored[:limit]}
+
+    def _handle_get_class_performance_summary(self, args: Dict) -> Dict:
+        """获取班级整体学习数据概览（仅 teacher/owner 可用）。"""
+        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+            return {"error": "仅教师/机构主可使用班级分析功能"}
+
+        from django.db.models import Sum, Count
+        from quizzes.models import UserQuestionStatus, ReviewLog
+
+        student_ids = list(
+            self.institution.students.filter(institution_role='student').values_list('id', flat=True)
+        )
+        if not student_ids:
+            return {"summary": {}, "message": "该机构暂无学生"}
+
+        from django.utils import timezone
+        week_ago = timezone.now() - timedelta(days=7)
+
+        total_students = len(student_ids)
+        total_statuses = UserQuestionStatus.objects.filter(user_id__in=student_ids)
+        total_questions = total_statuses.count()
+        agg = total_statuses.aggregate(t_reps=Sum('reps'), t_lapses=Sum('lapses'))
+        total_reps = agg['t_reps'] or 0
+        total_lapses = agg['t_lapses'] or 0
+        total_attempts = total_reps + total_lapses
+        overall_rate = round(total_reps / total_attempts * 100, 1) if total_attempts > 0 else 0
+
+        weekly_active = ReviewLog.objects.filter(
+            user_id__in=student_ids, review_time__gte=week_ago,
+        ).values('user_id').distinct().count()
+
+        # KP count with weak performance (correct_rate < 60%)
+        kp_agg = (
+            total_statuses
+            .filter(question__knowledge_point__isnull=False)
+            .values('question__knowledge_point__id')
+            .annotate(t_reps=Sum('reps'), t_lapses=Sum('lapses'))
+        )
+        weak_kp_count = 0
+        for row in kp_agg:
+            t = (row['t_reps'] or 0) + (row['t_lapses'] or 0)
+            if t > 0 and (row['t_reps'] or 0) / t < 0.6:
+                weak_kp_count += 1
+
+        return {
+            "summary": {
+                "total_students": total_students,
+                "weekly_active_students": weekly_active,
+                "total_questions_tracked": total_questions,
+                "total_attempts": total_attempts,
+                "overall_correct_rate": overall_rate,
+                "weak_kp_count": weak_kp_count,
+            }
+        }
+
     def _handle_lookup_question(self, args: Dict) -> Dict:
         from quizzes.models import Question
 
@@ -124,4 +228,385 @@ class AssistantToolExecutor:
             "kp_name": q.knowledge_point.name if q.knowledge_point else '',
             "kp_code": q.knowledge_point.code if q.knowledge_point else '',
             "difficulty_level": q.difficulty_level,
+        }
+
+
+class PlannerToolExecutor(AssistantToolExecutor):
+    """扩展助教工具执行器，增加规划相关工具。继承全部 4 个助教工具。"""
+
+    def _handle_get_learning_stats(self, args: Dict) -> Dict:
+        from django.utils import timezone
+        from quizzes.models import UserQuestionStatus, ReviewLog
+        from datetime import timedelta
+
+        now = timezone.now()
+        uqs = UserQuestionStatus.objects.filter(user=self.user)
+        total_questions = uqs.count()
+        total_correct = uqs.filter(last_correct=True).count()
+        total_wrong = uqs.filter(wrong_count__gt=0).count()
+
+        # Study streak: consecutive days with review activity in last 30 days
+        review_days = (
+            ReviewLog.objects.filter(user=self.user, review_time__gte=now - timedelta(days=30))
+            .values_list('review_time__date', flat=True)
+            .distinct()
+        )
+        streak = 0
+        check_date = now.date()
+        for d in sorted(set(review_days), reverse=True):
+            if d == check_date:
+                streak += 1
+                check_date -= timedelta(days=1)
+            elif d < check_date:
+                break
+
+        # Subject coverage
+        subjects_with_progress = (
+            uqs.values('question__knowledge_point__subject')
+            .distinct()
+            .count()
+        )
+
+        return {
+            "total_questions_attempted": total_questions,
+            "correct_count": total_correct,
+            "accuracy": round(total_correct / total_questions * 100, 1) if total_questions else 0,
+            "wrong_count": total_wrong,
+            "study_streak_days": streak,
+            "subjects_with_progress": subjects_with_progress,
+            "is_new_user": total_questions == 0,
+            "suggested_action": "diagnostic_test" if total_questions == 0 else None,
+            "diagnostic_url": "/tests" if total_questions == 0 else None,
+        }
+
+    def _handle_get_knowledge_mastery_map(self, args: Dict) -> Dict:
+        from quizzes.models import UserKnowledgeState
+
+        qs = UserKnowledgeState.objects.filter(user=self.user).select_related('knowledge_point')
+        subject_filter = (args.get('subject') or '').strip()
+        if subject_filter:
+            qs = qs.filter(knowledge_point__subject=subject_filter)
+
+        result = {}
+        for uks in qs:
+            kp = uks.knowledge_point
+            subj = kp.subject or '未分类'
+            if subj not in result:
+                result[subj] = []
+            result[subj].append({
+                "kp_id": kp.id,
+                "kp_code": kp.code or '',
+                "kp_name": kp.name,
+                "mastery_score": round(uks.mastery_score, 2),
+            })
+
+        for subj in result:
+            result[subj].sort(key=lambda x: x['mastery_score'])
+
+        return {"mastery_map": result}
+
+    def _handle_get_due_reviews(self, args: Dict) -> Dict:
+        from django.utils import timezone
+        from quizzes.models import UserQuestionStatus
+
+        limit = min(int(args.get('limit', 20)), 50)
+        now = timezone.now()
+        due_qs = (
+            UserQuestionStatus.objects
+            .filter(user=self.user, next_review_at__lte=now)
+            .select_related('question__knowledge_point')
+            .order_by('next_review_at')
+        )
+        due_count = due_qs.count()
+        due_list = due_qs[:limit]
+
+        return {
+            "due_count": due_count,
+            "reviews": [
+                {
+                    "question_id": d.question_id,
+                    "question_text": (d.question.text or '')[:200],
+                    "kp_name": d.question.knowledge_point.name if d.question.knowledge_point else '',
+                    "wrong_count": d.wrong_count,
+                    "stability": round(d.stability, 2),
+                    "next_review_at": d.next_review_at.isoformat() if d.next_review_at else None,
+                }
+                for d in due_list
+            ],
+        }
+
+    def _handle_get_exam_history(self, args: Dict) -> Dict:
+        from quizzes.models import QuizExam
+
+        limit = min(int(args.get('limit', 10)), 20)
+        exams = QuizExam.objects.filter(user=self.user).order_by('-created_at')[:limit]
+        return {
+            "exams": [
+                {
+                    "id": e.id,
+                    "total_score": e.total_score,
+                    "max_score": e.max_score,
+                    "percentage": round(e.total_score / e.max_score * 100, 1) if e.max_score else 0,
+                    "elo_change": e.elo_change,
+                    "created_at": e.created_at.isoformat(),
+                }
+                for e in exams
+            ],
+        }
+
+    def _handle_save_study_plan(self, args: Dict) -> Dict:
+        from ai_assistant.models import StudyPlan
+
+        title = args.get('title', '学习计划')
+        summary = args.get('summary', '')
+        tasks = args.get('tasks', [])
+        total_days = args.get('total_days', max((t.get('day', 1) for t in tasks), default=1))
+
+        for i, task in enumerate(tasks):
+            if 'id' not in task:
+                task['id'] = f"task_{i + 1}"
+            task.setdefault('status', 'pending')
+            task.setdefault('completed_at', None)
+
+        # Archive any existing active plan
+        StudyPlan.objects.filter(user=self.user, status='active').update(status='archived')
+
+        plan = StudyPlan.objects.create(
+            user=self.user,
+            title=title,
+            summary=summary,
+            plan_data={
+                "tasks": tasks,
+                "total_days": total_days,
+                "subjects_covered": list({t.get('subject', '') for t in tasks if t.get('subject')}),
+                "diagnostic_suggested": args.get('diagnostic_suggested', False),
+            },
+            auto_generated=True,
+        )
+        return {"plan_id": plan.id, "title": plan.title, "task_count": len(tasks), "status": "active"}
+
+    def _handle_get_active_plan(self, args: Dict) -> Dict:
+        from ai_assistant.models import StudyPlan
+
+        plan = StudyPlan.objects.filter(user=self.user, status='active').first()
+        if not plan:
+            return {"has_active_plan": False, "message": "当前没有进行中的学习计划。"}
+        data = plan.plan_data or {}
+        tasks = data.get('tasks', [])
+        completed = sum(1 for t in tasks if t.get('status') == 'completed')
+        return {
+            "has_active_plan": True,
+            "plan_id": plan.id,
+            "title": plan.title,
+            "summary": plan.summary,
+            "total_tasks": len(tasks),
+            "completed_tasks": completed,
+            "progress_pct": round(completed / len(tasks) * 100, 1) if tasks else 0,
+            "tasks": tasks,
+            "created_at": plan.created_at.isoformat(),
+        }
+
+    def _handle_update_plan_task(self, args: Dict) -> Dict:
+        from ai_assistant.models import StudyPlan
+        from django.utils import timezone
+
+        plan_id = int(args.get('plan_id', 0))
+        task_id = args.get('task_id', '')
+        new_status = args.get('status', 'pending')
+
+        try:
+            plan = StudyPlan.objects.get(id=plan_id, user=self.user)
+        except StudyPlan.DoesNotExist:
+            return {"error": f"Plan #{plan_id} not found"}
+
+        data = plan.plan_data or {}
+        tasks = data.get('tasks', [])
+        updated = False
+        for task in tasks:
+            if task.get('id') == task_id:
+                task['status'] = new_status
+                task['completed_at'] = timezone.now().isoformat() if new_status == 'completed' else None
+                updated = True
+                break
+
+        if not updated:
+            return {"error": f"Task '{task_id}' not found in plan #{plan_id}"}
+
+        all_done = all(t.get('status') in ('completed', 'skipped') for t in tasks)
+        if all_done:
+            plan.status = 'completed'
+            plan.completed_at = timezone.now()
+
+        plan.plan_data = data
+        plan.save()
+
+        completed = sum(1 for t in tasks if t.get('status') == 'completed')
+        return {
+            "plan_id": plan.id,
+            "task_id": task_id,
+            "new_status": new_status,
+            "total_tasks": len(tasks),
+            "completed_tasks": completed,
+            "plan_status": plan.status,
+        }
+
+    def _handle_set_dashboard_layout(self, args: Dict) -> Dict:
+        """配置 Dashboard 面板布局。"""
+        valid_sections = {'plan', 'stats', 'mastery', 'reviews', 'exams'}
+        section_order = args.get('section_order', [])
+        highlight = args.get('highlight', '')
+
+        # Validate
+        section_order = [s for s in section_order if s in valid_sections]
+        if not section_order:
+            section_order = ['plan', 'stats', 'mastery', 'reviews', 'exams']
+        if highlight and highlight not in valid_sections:
+            highlight = ''
+
+        config = {
+            'section_order': section_order,
+            'highlight': highlight or section_order[0] if section_order else 'stats',
+        }
+
+        self.user.dashboard_config = config
+        self.user.save(update_fields=['dashboard_config'])
+
+        return {"dashboard_config": config}
+
+    def _handle_search_courses(self, args: Dict) -> Dict:
+        """搜索课程库，推荐学习资源。"""
+        from courses.models import Course
+
+        query = (args.get('query') or '').strip()
+        subject = (args.get('subject') or '').strip()
+        limit = min(int(args.get('limit', 5)), 10)
+
+        if not query:
+            return {"courses": [], "message": "请提供搜索关键词"}
+
+        qs = Course.objects.filter(
+            models.Q(title__icontains=query) |
+            models.Q(description__icontains=query) |
+            models.Q(knowledge_point__name__icontains=query)
+        ).select_related('knowledge_point', 'album_obj')
+
+        # Institution isolation
+        institution = getattr(self.user, 'institution', None)
+        if institution:
+            qs = qs.filter(
+                models.Q(institution=institution) |
+                models.Q(institution__isnull=True)
+            )
+
+        if subject:
+            qs = qs.filter(knowledge_point__subject=subject)
+
+        courses = qs[:limit]
+
+        return {
+            "courses": [
+                {
+                    "id": c.id,
+                    "title": c.title,
+                    "description": (c.description or '')[:200],
+                    "kp_name": c.knowledge_point.name if c.knowledge_point else '',
+                    "album": c.album_obj.name if c.album_obj else '',
+                    "url": f"/course/{c.id}",
+                }
+                for c in courses
+            ],
+            "total_found": qs.count(),
+        }
+
+    def _handle_search_asr(self, args: Dict) -> Dict:
+        """搜索 ASR 转录文本，找到知识点在视频中的时间位置。"""
+        from courses.models import TranscriptSegment, VideoTranscript, Course
+
+        query = (args.get('query') or '').strip()
+        course_id = args.get('course_id')
+        limit = min(int(args.get('limit', 5)), 10)
+
+        if not query:
+            return {"segments": [], "message": "请提供搜索关键词"}
+
+        # Search in transcript segments
+        qs = TranscriptSegment.objects.filter(
+            text__icontains=query
+        ).select_related('transcript__course')
+
+        # Institution isolation
+        institution = getattr(self.user, 'institution', None)
+        if institution:
+            qs = qs.filter(
+                models.Q(transcript__course__institution=institution) |
+                models.Q(transcript__course__institution__isnull=True)
+            )
+
+        # Filter by course if specified
+        if course_id:
+            qs = qs.filter(transcript__course_id=course_id)
+
+        segments = qs[:limit]
+
+        def format_time(seconds):
+            mins = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f"{mins}:{secs:02d}"
+
+        return {
+            "segments": [
+                {
+                    "course_id": s.transcript.course_id,
+                    "course_title": s.transcript.course.title,
+                    "start_time": format_time(s.start_time),
+                    "end_time": format_time(s.end_time),
+                    "start_seconds": s.start_time,
+                    "text": s.text[:200],
+                    "url": f"/course/{s.transcript.course_id}",
+                }
+                for s in segments
+            ],
+            "total_found": qs.count(),
+        }
+
+    def _handle_search_articles(self, args: Dict) -> Dict:
+        """搜索文章库，推荐扩展阅读。"""
+        from articles.models import Article
+
+        query = (args.get('query') or '').strip()
+        limit = min(int(args.get('limit', 5)), 10)
+
+        if not query:
+            return {"articles": [], "message": "请提供搜索关键词"}
+
+        qs = Article.objects.filter(
+            models.Q(title__icontains=query) |
+            models.Q(content__icontains=query) |
+            models.Q(tags__contains=[query])
+        ).select_related('knowledge_point', 'author')
+
+        # Institution isolation
+        institution = getattr(self.user, 'institution', None)
+        if institution:
+            qs = qs.filter(
+                models.Q(institution=institution) |
+                models.Q(institution__isnull=True)
+            )
+
+        articles = qs[:limit]
+
+        return {
+            "articles": [
+                {
+                    "id": a.id,
+                    "title": a.title,
+                    "kp_name": a.knowledge_point.name if a.knowledge_point else '',
+                    "tags": a.tags or [],
+                    "views": a.views,
+                    "author": a.author_display_name or (a.author.nickname or a.author.username if a.author else ''),
+                    "url": f"/article/{a.id}",
+                }
+                for a in articles
+            ],
+            "total_found": qs.count(),
         }

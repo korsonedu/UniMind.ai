@@ -10,13 +10,13 @@
 我们将系统内的用户身份划分为以下几个梯队：
 
 1. **System Admin (系统管理员)**：
-   - 拥有最高权限，可访问 Django Admin，配置 Prompt 模板，调整 FSRS 全局参数。
+   - 拥有最高权限，可访问 Django Admin，配置 Prompt 模板，调整 Memorix 全局参数。
 2. **Content Reviewer (教研审核员)**：
    - 核心职责：拦截 AI。在 AI 多智能体管线生成的题目入库（进入公开池）之前，如果遇到高难度或争议题目，需经 Reviewer 人工点一次“发布”。
 3. **Content Creator (内容贡献者)**：
    - 拥有上传文档、批量导入真题、发起“AI OCR 一键录题”任务的权限。
 4. **Student / Standard User (普通学生)**：
-   - 只能消费内容（做题、看课、查看自己的图谱与 FSRS 状态）。
+   - 只能消费内容（做题、看课、查看自己的图谱与 Memorix 状态）。
 
 ## 3. 用户标签与画像体系 (User Tagging & Profiling)
 
@@ -28,7 +28,7 @@
 - **动态标签 (系统自动打标)**：如 `微观薄弱`、`计算题杀手`、`夜猫子学习者`。
 
 ### 3.2 标签与业务的联动逻辑
-- **FSRS 联动**：不同的静态标签（如跨考生 vs 本专业）在首次注册时，分配不同的 FSRS 初始化默认权重（跨考生初始遗忘率更高）。
+- **Memorix 联动**：不同的静态标签（如跨考生 vs 本专业）在首次注册时，分配不同的 Memorix 初始化默认权重（跨考生初始遗忘率更高）。
 - **组队与排行榜**：为相同标签的用户建立竞争小组（如“跨考生 431 冲刺营”）。
 
 ## 4. 架构落地设计 (Implementation Architecture)
@@ -42,7 +42,7 @@ class UserProfile(models.Model):
     student_type = models.CharField(choices=[('cross_major', '跨考'), ('same_major', '本专业')])
     target_university = models.CharField(max_length=100, blank=True)
     tags = models.ManyToManyField(UserTag, blank=True)
-    # 结合点 1：记录 FSRS 独立配置
+    # 结合点 1：记录 Memorix 独立配置
     # 结合点 2：记录图谱历史掌握度
 ```
 
@@ -65,7 +65,7 @@ class IsContentReviewer(permissions.BasePermission):
 **尚未落地：**
 - Content Reviewer / Content Creator 等预设角色组（需手动在超管面板创建）
 - 前端 Admin 界面的直观权限分配 UI（当前通过下拉选框 + 标签/权限组按钮实现）
-- FSRS 与标签联动（跨考生初始遗忘率差异化）
+- Memorix 与标签联动（跨考生初始遗忘率差异化）
 
 ## 6. 后续 AI 编码指南 (For AI Assistant)
 - **解耦操作**：不要直接修改 Django 的原生 `User` 模型（如果项目已经在运行），使用 `UserProfile` (OneToOne) 是更安全、兼容性更好的基建方式。

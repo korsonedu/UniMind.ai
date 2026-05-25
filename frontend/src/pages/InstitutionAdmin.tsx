@@ -39,7 +39,7 @@ interface Institution {
 }
 
 const PLAN_COLORS: Record<string, string> = {
-  free: 'bg-muted-foreground', solo: 'bg-primary', plus: 'bg-unimind-green', pro: 'bg-amber-500',
+  free: 'bg-muted-foreground', starter: 'bg-primary', growth: 'bg-unimind-green', enterprise: 'bg-amber-500',
 };
 
 export default function InstitutionAdmin() {
@@ -147,7 +147,7 @@ export default function InstitutionAdmin() {
           />
         </div>
         <div className="flex gap-1.5">
-          {['', 'free', 'solo', 'plus', 'pro'].map(p => (
+          {['', 'free', 'starter', 'growth', 'enterprise'].map(p => (
             <button
               key={p}
               onClick={() => setPlanFilter(p)}
@@ -312,9 +312,9 @@ function CreateInstitutionDialog({
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium"
             >
               <option value="free">Free</option>
-              <option value="solo">Solo</option>
-              <option value="plus">Plus</option>
-              <option value="pro">Pro</option>
+              <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
+              <option value="enterprise">Enterprise</option>
             </select>
             <Input type="date"
               value={form.plan_expires_at} onChange={e => setForm({ ...form, plan_expires_at: e.target.value })} />
@@ -396,9 +396,9 @@ function EditInstitutionDialog({
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium"
             >
               <option value="free">Free</option>
-              <option value="solo">Solo</option>
-              <option value="plus">Plus</option>
-              <option value="pro">Pro</option>
+              <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
+              <option value="enterprise">Enterprise</option>
             </select>
             <Input type="date"
               value={form.plan_expires_at} onChange={e => setForm({ ...form, plan_expires_at: e.target.value })} />
@@ -643,7 +643,7 @@ function InstitutionSelfSettings() {
 
 /* ── Direction Edit Dialog ── */
 
-const PLAN_DIRECTION_LIMITS: Record<string, number> = { solo: 1, plus: 3, pro: 999999, free: 0 };
+const PLAN_DIRECTION_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 999999, free: 0 };
 
 function DirectionEditDialog({
   open, onClose, plan, subjects, selected, onSelectedChange, onSave, saving, error,
@@ -680,10 +680,10 @@ function DirectionEditDialog({
           <DialogHeader className="space-y-1 mb-4">
             <DialogTitle className="text-lg font-black">编辑业务方向</DialogTitle>
             <DialogDescription className="font-medium text-muted-foreground text-sm">
-              {plan === 'solo'
-                ? 'Solo 方案可选择 1 个学科方向'
-                : plan === 'plus'
-                  ? 'Plus 方案最多选择 3 个学科方向'
+              {plan === 'starter'
+                ? 'Starter 方案可选择 1 个学科方向'
+                : plan === 'growth'
+                  ? 'Growth 方案最多选择 3 个学科方向'
                   : '选择你机构的业务方向'}
               <span className="block text-red-500 mt-1">修改方向将删除现有知识点并重新导入，请谨慎操作。</span>
             </DialogDescription>

@@ -2,7 +2,7 @@ import numpy as np
 from scipy.optimize import minimize
 import math
 
-class FSRSOptimizer:
+class BaselineOptimizer:
     def __init__(self, review_data, current_weights=None):
         self.data = review_data
         # Default FSRS v4.5 weights
@@ -20,7 +20,7 @@ class FSRSOptimizer:
         for i, log in enumerate(card_history):
             grade = log['grade']
             elapsed_days = log['elapsed_days']
-            
+
             if i == 0:
                 predictions.append(0.0)
                 stability = weights[grade - 1]
@@ -30,12 +30,12 @@ class FSRSOptimizer:
                 # Retrievability prediction before current review
                 r = math.pow(1 + 19/81 * elapsed_days / stability, -0.5)
                 predictions.append(r)
-                
+
                 # Update difficulty
                 difficulty -= weights[6] * (grade - 3)
                 difficulty = weights[7] * weights[4] + (1 - weights[7]) * difficulty
                 difficulty = max(1, min(10, difficulty))
-                
+
                 # Update stability based on actual grade
                 if grade == 1:
                     stability = weights[11] * math.pow(difficulty, -weights[12]) * (math.pow(stability + 1, weights[13]) - 1) * math.exp(weights[14] * (1 - r))
@@ -68,9 +68,9 @@ class FSRSOptimizer:
     def optimize(self):
         bounds = [(0.01, 10.0)] * len(self.weights)
         res = minimize(
-            self.loss_function, 
-            x0=self.weights, 
-            method='L-BFGS-B', 
+            self.loss_function,
+            x0=self.weights,
+            method='L-BFGS-B',
             bounds=bounds
         )
         if res.success:
@@ -92,10 +92,10 @@ if __name__ == "__main__":
             {"grade": 4, "elapsed_days": 2}
         ]
     ]
-    optimizer = FSRSOptimizer(dummy_data)
-    print("FSRS Optimizer Initialized.")
+    optimizer = BaselineOptimizer(dummy_data)
+    print("Baseline Optimizer Initialized.")
     print("Initial RMSE Loss:", optimizer.loss_function(optimizer.weights))
-    
+
     new_w, new_loss = optimizer.optimize()
     if new_w:
         print("Optimization successful!")

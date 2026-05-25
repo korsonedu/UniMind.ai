@@ -37,7 +37,7 @@ UniMindCode/                  ← git 仓库根目录
 │   ├── faq_system/             # 答疑系统
 │   ├── notifications/          # 站内通知
 │   ├── payments/               # 支付网关 (Stripe/支付宝/微信)
-│   ├── core/                   # 基础设施 (加密字段、Cookie认证、邮件、限流、Prompt管理)
+│   ├── core/                   # 基础设施 (加密字段、Cookie认证、邮件、限流、文件校验、安全审计)
 │   └── prompts/                # 统一 Prompt 模板目录
 │       ├── quizzes/  ai_assistant/  courses/  pipeline/  grading/  interviews/
 ├── frontend/
@@ -59,15 +59,28 @@ UniMindCode/                  ← git 仓库根目录
 
 | 路径 | 说明 |
 |------|------|
-| `/` | Landing（未登录）/ HomeRedirect（已登录：pro→机构主页, 其他→课程中心） |
+| `/` | Landing（未登录）/ HomeRedirect（已登录：学生未诊断→/diagnostic, 老师/机构主→/workbench, 其他→/courses） |
 | `/login` `/register` | 邮箱验证码登录注册 |
+| `/diagnostic` | 学生诊断测试（首次登录强制） |
+| `/workbench` | AI 出题工作台（老师/机构主） |
 | `/intro/:slug` | 机构公开首页（无需登录，公开访问） |
 | `/management` | 管理后台（需管理员） |
 | `/join/:invite_slug` | 邀请链接 → 种 cookie → 302 到 /register |
 | `/api/users/` | 用户/会员/ELO API |
+| `/api/users/me/diagnostic/generate/` | POST 生成诊断题目 |
+| `/api/users/me/diagnostic/submit/` | POST 提交诊断答案 |
+| `/api/users/institution/me/analytics/class-performance/` | GET 班级 KP 正确率分析 |
+| `/api/users/institution/me/analytics/suggested-topics/` | GET Top 5 薄弱知识点建议 |
 | `/api/quizzes/` | 题库/考试 API |
+| `/api/quizzes/templates/` | GET/POST 出题模板（系统预设+机构自定义） |
+| `/api/quizzes/templates/<id>/` | PATCH/DELETE 模板详情 |
+| `/api/quizzes/ai/streaming-generate/` | POST 启动流式出题（返回 task_id） |
+| `/api/quizzes/ai/streaming-generate/status/` | GET 轮询出题进度 |
 | `/api/courses/` | 课程/视频 API |
 | `/api/ai/` | AI 生成/管线 API |
+| `/api/ai/memories/` | GET/POST Agent 记忆 CRUD |
+| `/api/ai/memories/<id>/` | PATCH/DELETE Agent 记忆 |
+| `/api/ai/workbench-chat/` | POST 工作台 Agent 对话 |
 | `/api/institutions/` | 机构管理 API |
 | `/api/payments/` | 支付 API（订单/支付配置） |
 | `/payments/result` | 支付结果页（前端） |
@@ -120,6 +133,7 @@ make backend-check     # python manage.py check + makemigrations --check --dry-r
 make frontend-check    # npx tsc -b && vite build
 make qa-smoke          # API 冒烟测试
 make full-check        # 全部检查
+make backup            # pg_dump 压缩备份数据库（自动清理 30 天前）
 
 # 知识树导入（全局，示例）
 python manage.py import_knowledge_tree backend/knowledge_trees/金融431.md --global --subject=金融431 --force
@@ -172,5 +186,8 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/MEMORIX_WHITEPAPER.md` | Memorix 算法论文 |
 | `docs/tech/features/AI_MULTI_AGENT_PIPELINE.md` | 4-Agent ARC 对抗出题管线（Author→Reviewer→AuthorRevise→Classifier） |
 | `docs/tech/features/PERSONALIZED_PDF_MOCK_EXAM.md` | 模拟考试（AI 组卷 + 教师发布 + 提交评分） |
+| `docs/tech/features/AGENT_MEMORY.md` | Agent 记忆系统（提取/检索/注入机制） |
+| `docs/tech/features/DIAGNOSTIC_TEST.md` | 学生诊断测试（生成/评分/Memorix 初始化） |
+| `docs/tech/features/EXAM_WORKBENCH.md` | AI 出题工作台（三栏布局/流式生成/Agent 集成） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |

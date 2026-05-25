@@ -33,6 +33,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pip-audit
+
+      - name: Dependency vulnerability scan
+        run: pip-audit --strict
 
       - name: Django system check
         working-directory: backend
@@ -65,6 +69,10 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Dependency vulnerability scan
+        working-directory: frontend
+        run: npm audit --audit-level=high
 
       - name: Frontend build check
         working-directory: frontend

@@ -1,4 +1,4 @@
-.PHONY: backend-bootstrap backend-check qa-smoke frontend-bootstrap frontend-check full-check
+.PHONY: backend-bootstrap backend-check qa-smoke frontend-bootstrap frontend-check full-check backup
 
 backend-bootstrap:
 	bash scripts/bootstrap_backend.sh
@@ -17,3 +17,6 @@ frontend-check:
 
 full-check:
 	bash scripts/check_all.sh
+
+backup:
+	bash scripts/backup_db.sh

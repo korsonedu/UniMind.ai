@@ -38,7 +38,7 @@ def get_or_create_admin():
         defaults={
             'username': 'demo_admin', 'nickname': '张老师', 'role': 'student',
             'is_staff': False, 'is_superuser': False, 'is_member': True,
-            'membership_tier': 'pro', 'email_verified': True, 'elo_score': 1850,
+            'membership_tier': 'enterprise', 'email_verified': True, 'elo_score': 1850,
             'bio': 'UniMind 演示机构管理员 | 5年考研辅导经验',
         }
     )
@@ -57,7 +57,7 @@ def get_or_create_students(count=5):
             email=f'student{i+1}@demo.unimind',
             defaults={
                 'username': f'demo_student_{i+1}', 'nickname': names[i],
-                'role': 'student', 'is_member': True, 'membership_tier': 'solo',
+                'role': 'student', 'is_member': True, 'membership_tier': 'starter',
                 'email_verified': True, 'elo_score': random.randint(900, 1600),
                 'bio': f'备考中 | {directions[i % 3]}方向',
             }
@@ -176,13 +176,13 @@ def seed_questions(kps_by_subject):
     return created
 
 
-# ── exams + FSRS (all in last 7 days) ──
+# ── exams + Memorix (all in last 7 days) ──
 
-def seed_exams_and_fsrs(admin, students, all_questions):
+def seed_exams_and_memorix(admin, students, all_questions):
     from quizzes.models import (
         QuizExam, ExamQuestionResult, QuizAttempt,
-        UserQuestionStatus, UserKnowledgeState, FSRSProfile,
-        ReviewLog, FSRSOptimizationLog, KnowledgePoint,
+        UserQuestionStatus, UserKnowledgeState, MemorixProfile,
+        ReviewLog, MemorixOptimizationLog, KnowledgePoint,
     )
 
     all_qs = [q for qs in all_questions.values() for q in qs]
@@ -191,27 +191,27 @@ def seed_exams_and_fsrs(admin, students, all_questions):
 
     all_users = [admin] + list(students)
     for user in all_users:
-        # FSRS profile
-        FSRSProfile.objects.get_or_create(user=user, defaults={
+        # Memorix profile
+        MemorixProfile.objects.get_or_create(user=user, defaults={
             'weights': [0.5, 0.5, 1.0, 2.0, 0.1, 1.5, 0.2, 0.8,
                        0.01, 0.6, 1.2, 0.05, 0.3, 1.0, 0.15, 1.8, 0.0],
             'last_optimized_at': days_ago(2), 'total_reviews_used': random.randint(150, 400),
             'current_loss': round(random.uniform(0.15, 0.30), 4),
         })
 
-        # FSRS optimization — one entry per day for days 7,5,3,1 ago
+        # Memorix optimization — one entry per day for days 7,5,3,1 ago
         for d in [7, 5, 3, 1]:
             prev = round(random.uniform(0.28, 0.45), 4)
             new = round(prev * random.uniform(0.72, 0.88), 4)
-            note = f'FSRS参数第{random.randint(1,5)}次在线调优'
+            note = f'Memorix参数第{random.randint(1,5)}次在线调优'
             # Don't include created_at in filter — auto_now_add would break get_or_create
-            opt_log, created = FSRSOptimizationLog.objects.get_or_create(
+            opt_log, created = MemorixOptimizationLog.objects.get_or_create(
                 user=user, note=note,
                 defaults={'previous_loss': prev, 'new_loss': new,
                           'improvement_ratio': round((prev - new) / prev * 100, 1),
                           'reviews_used': random.randint(40, 180), 'accepted': True})
             if created:
-                fix_auto_now(FSRSOptimizationLog, opt_log.pk, created_at=days_ago(d, 10))
+                fix_auto_now(MemorixOptimizationLog, opt_log.pk, created_at=days_ago(d, 10))
 
         # ── 7 daily exams (days 7..1 ago) ──
         scores_trend = []
@@ -241,7 +241,7 @@ def seed_exams_and_fsrs(admin, students, all_questions):
                                                   elo_change=exam.elo_change)
             fix_auto_now(QuizAttempt, attempt.pk, created_at=exam_ts)
 
-        # ── UserQuestionStatus (FSRS per-question) ──
+        # ── UserQuestionStatus (Memorix per-question) ──
         for q in all_qs:
             wc = random.randint(0, 3)
             reps = random.randint(1, 7)
@@ -406,10 +406,10 @@ def seed_study_room(admin, students):
 def seed_notifications(admin, students):
     from notifications.models import Notification
     templates = [
-        ('学习提醒', '你今天还有 15 道题待复习，Memorix 建议在遗忘临界点前完成。', 'fsrs_reminder'),
+        ('学习提醒', '你今天还有 15 道题待复习，Memorix 建议在遗忘临界点前完成。', 'memorix_reminder'),
         ('答疑回复', '你在"货币政策传导机制"问题下收到了老师的回复。', 'qa_reply'),
-        ('系统通知', 'FSRS 算法已完成在线参数调优，你的个性化复习计划已更新。', 'system'),
-        ('学习提醒', '知识工作台中"汇率决定理论"掌握度下降，建议今天复习 10 道相关题目。', 'fsrs_reminder'),
+        ('系统通知', 'Memorix 算法已完成在线参数调优，你的个性化复习计划已更新。', 'system'),
+        ('学习提醒', '知识工作台中"汇率决定理论"掌握度下降，建议今天复习 10 道相关题目。', 'memorix_reminder'),
         ('答疑回复', '老师回答了"合并报表抵销分录"的问题。', 'qa_reply'),
     ]
     for student in students[:3]:
@@ -463,7 +463,7 @@ def seed_institution(admin, students):
             'name': '宇艺示范学院',
             'contact_name': admin.nickname or '张老师',
             'contact_email': admin.email,
-            'plan': 'plus',
+            'plan': 'growth',
             'created_by': admin,
         }
     )
@@ -500,8 +500,8 @@ class Command(BaseCommand):
         questions = seed_questions(kps_by_subject)
         self.stdout.write(f'  Questions: {sum(len(v) for v in questions.values())}')
 
-        seed_exams_and_fsrs(admin, students, questions)
-        self.stdout.write('  Exams (7 daily) + FSRS + ReviewLogs (3/day): done')
+        seed_exams_and_memorix(admin, students, questions)
+        self.stdout.write('  Exams (7 daily) + Memorix + ReviewLogs (3/day): done')
 
         seed_pipeline_tasks(admin, kps_by_subject)
         self.stdout.write('  AI pipeline tasks (14 across 7 days): done')

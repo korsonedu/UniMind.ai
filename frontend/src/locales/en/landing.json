@@ -15,7 +15,7 @@
     "subtitle": "Question generation, grading, review scheduling, analytics, Q&A — the entire back-office of your tutoring business, automated. Pick a subject, AI creates the content. Students jump in with a link. No engineering team, no instructional designers, no overhead.",
     "cta": "Get Started Free",
     "secondary": "See How It Works",
-    "footnote": "First cohort gets Plus plan free · Offer ends June 30, 2026"
+    "footnote": "First cohort gets Growth plan free · Offer ends June 30, 2026"
   },
   "stats": [
     { "label": "Subjects Supported", "desc": "SAT · ACT · MCAT · LSAT · GRE · AP · USMLE · Bar Exam & more" },
@@ -159,7 +159,7 @@
     "annualTotal": "Annual total ¥",
     "popularBadge": "Most Popular",
     "trialTitle": "One Trial, All Features — Zero Risk",
-    "trialDesc": "Every new account gets 14 days of full-feature access (Plus tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
+    "trialDesc": "Every new account gets 14 days of full-feature access (Growth tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
     "pageTitle": "Choose Your Plan",
     "pageSubtitle": "14-day full-feature trial · No credit card · Cancel anytime",
     "backHome": "Back to Home",
@@ -169,14 +169,14 @@
     "bottomCtaSubtitle": "14-day full-feature trial. After that, keep using Free — no card, no catch.",
     "plans": [
       { "label": "Free", "desc": "Solo tutor · Zero cost", "persona": "For individual tutors or trial users — replace manual question-writing with AI and validate the workflow.", "cta": "Start Free" },
-      { "label": "Solo", "desc": "Independent tutor · Light ops", "persona": "For independent tutors or small studios who need AI assistant and adaptive review to boost retention.", "cta": "14-Day Free Trial" },
-      { "label": "Plus", "desc": "Growing business · Scale", "persona": "For growing tutoring centers — multi-instructor collaboration, class analytics, and mock exams drive renewals.", "cta": "14-Day Free Trial" },
-      { "label": "Pro", "desc": "Enterprise · White-label", "persona": "For chains and corporate training — white-label deployment, data sovereignty, and API integration.", "cta": "Request Demo" }
+      { "label": "Starter", "desc": "Independent tutor · Light ops", "persona": "For independent tutors or small studios who need AI assistant and adaptive review to boost retention.", "cta": "14-Day Free Trial" },
+      { "label": "Growth", "desc": "Growing business · Scale", "persona": "For growing tutoring centers — multi-instructor collaboration, class analytics, and mock exams drive renewals.", "cta": "14-Day Free Trial" },
+      { "label": "Enterprise", "desc": "Enterprise · White-label", "persona": "For chains and corporate training — white-label deployment, data sovereignty, and API integration.", "cta": "Request Demo" }
     ],
     "rows": [
       ["AI Gen 30/mo", "AI Gen 100/mo", "Unlimited AI Gen", "Unlimited AI Gen"],
       ["Unlimited AI Grading", "Unlimited AI Grading", "Unlimited AI Grading", "Unlimited AI Grading"],
-      ["FSRS 4.5 Algorithm", "Memorix Adaptive Review", "Memorix Adaptive Review", "Memorix Adaptive Review"],
+      ["Memorix Adaptive Algorithm", "Memorix Adaptive Review", "Memorix Adaptive Review", "Memorix Adaptive Review"],
       ["Question Bank · Manual", "Question Bank · Manual", "Question Bank · Manual+Auto", "Question Bank · Manual+Auto"],
       ["Mistake Review Center", "Mistake Review Center", "Mistake Review Center", "Mistake Review Center"],
       ["Basic Stats", "Full Student Reports", "Class Comparison · Export", "Advanced Dashboard · AI Insights"],
@@ -207,7 +207,7 @@
       },
       {
         "q": "How does the free trial work?",
-        "a": "You get 14 days of full Plus-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
+        "a": "You get 14 days of full Growth-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
       },
       {
         "q": "What makes Memorix different from Anki or spaced repetition?",
@@ -231,17 +231,17 @@
       },
       {
         "q": "I run a small tutoring center. Which plan should I start with?",
-        "a": "Start with Free. 30 students and 30 AI generations per month let you validate the full workflow with a small group. When you're ready to scale, Solo ($299/mo, $199/mo annual) removes the limits. Most centers upgrade within the first month once they see the time savings."
+        "a": "Start with Free. 30 students and 30 AI generations per month let you validate the full workflow with a small group. When you're ready to scale, Starter (¥499/mo, ¥416/mo annual) removes the limits. Most centers upgrade within the first month once they see the time savings."
       },
       {
         "q": "Can I integrate UniMind with my existing website or LMS?",
-        "a": "Pro plan includes REST API access for integration. You can embed UniMind's question engine and review system into your existing platform. For custom integrations beyond the API, our solutions team can scope a tailored deployment — contact us through the demo request."
+        "a": "Enterprise plan includes REST API access for integration. You can embed UniMind's question engine and review system into your existing platform. For custom integrations beyond the API, our solutions team can scope a tailored deployment — contact us through the demo request."
       }
     ]
   },
   "cta": {
     "title": "Ready for the future of intelligent education?",
-    "subtitle": "First cohort gets the Plus plan free. AI question generation, adaptive review, real-time analytics — ready out of the box.",
+    "subtitle": "First cohort gets the Growth plan free. AI question generation, adaptive review, real-time analytics — ready out of the box.",
     "button": "Get Started Free",
     "viewPlans": "Compare Plans →",
     "footnote": "50+ tutoring businesses on UniMind · Offer ends June 30, 2026"

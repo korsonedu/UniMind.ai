@@ -40,8 +40,13 @@ const WrongQuestionReviewPage = lazyNamed(() => import('./pages/WrongQuestionRev
 const BillingPage = lazyNamed(() => import('./pages/Billing'), 'BillingPage');
 const PaymentResult = lazyNamed(() => import('./pages/PaymentResult'), 'PaymentResult');
 const Checkout = lazyNamed(() => import('./pages/Checkout'), 'Checkout');
+const DiagnosticTest = lazyNamed(() => import('./pages/DiagnosticTest'), 'DiagnosticTest');
+const StudyPlan = lazyNamed(() => import('./pages/StudyPlan'), 'StudyPlan');
+const StudentHome = lazyNamed(() => import('./pages/StudentHome'), 'StudentHome');
+const XiaoYu = lazyNamed(() => import('./pages/XiaoYu'), 'XiaoYu');
 
 // Default exports — plain lazy() works
+const Workbench = lazy(() => import('./pages/Workbench'));
 const InstitutionDashboard = lazy(() => import('./pages/InstitutionDashboard'));
 const InstitutionStudents = lazy(() => import('./pages/InstitutionStudents'));
 const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
@@ -126,13 +131,26 @@ const RequireInstitution = ({ children }: { children: ReactNode }) => {
   return children;
 };
 
-// 超管默认跳转到机构管理；Pro 机构有主页 → 主页，否则 → 课程中心
+// 超管默认跳转到机构管理；Pro 机构 → 机构主页；未完成诊断的学生 → 诊断；否则 → 学生主页
 const HomeRedirect = () => {
   const { user } = useAuthStore();
   const institution = useInstitutionStore(s => s.institution);
   if (user?.role === 'admin' && !institution && !user?.institution) return <Navigate to="/institution/admin" replace />;
-  if (institution?.plan === 'enterprise') return <Suspense fallback={<PageLoader />}><InstitutionHome /></Suspense>;
-  return <Navigate to="/courses" replace />;
+  if (institution?.plan === 'enterprise') {
+    if (user?.institution_role === 'owner' || user?.institution_role === 'teacher' || user?.is_institution_admin) {
+      return <Navigate to="/workbench" replace />;
+    }
+    return <Navigate to="/institution" replace />;
+  }
+  // 教师/机构主 → 工作台
+  if (user?.institution_role === 'owner' || user?.institution_role === 'teacher' || user?.is_institution_admin) {
+    return <Navigate to="/workbench" replace />;
+  }
+  // 学生未完成诊断 → 诊断页（全屏，无 sidebar）
+  if (user?.institution_role === 'student' && !user?.has_completed_initial_assessment) {
+    return <Navigate to="/diagnostic" replace />;
+  }
+  return <Navigate to="/xiaoyu" replace />;
 };
 
 // Root entry handler to manage landing vs app logic
@@ -184,6 +202,9 @@ const router = createBrowserRouter([
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
           { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
           { path: "ai", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}>{lazyPage(AIAssistant)}</FeatureGuard> },
+          { path: "home", element: lazyPage(StudentHome) },
+          { path: "xiaoyu", element: lazyPage(XiaoYu) },
+          { path: "plan", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}>{lazyPage(StudyPlan)}</FeatureGuard> },
           { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeMap)}</FeatureGuard> },
           { path: "knowledge-map/node/:id", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeNodeDetail)}</FeatureGuard> },
           { path: "settings", element: lazyPage(Settings) },
@@ -194,6 +215,7 @@ const router = createBrowserRouter([
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
 
+          { path: "workbench", element: <RequireInstitution>{lazyPage(Workbench)}</RequireInstitution> },
           { path: "institution", element: <RequireInstitution>{lazyPage(InstitutionDashboard)}</RequireInstitution> },
           { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },
@@ -212,6 +234,7 @@ const router = createBrowserRouter([
   { path: "/promo/plus", element: lazyPage(PromoPlus) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/register", element: lazyPage(Register) },
+  { path: "/diagnostic", element: <RequireAuth>{lazyPage(DiagnosticTest)}</RequireAuth> },
   { path: "/checkout", element: <RequireAuth>{lazyPage(Checkout)}</RequireAuth> },
   { path: "/payments/result", element: <RequireAuth>{lazyPage(PaymentResult)}</RequireAuth> },
   { path: "*", element: lazyPage(NotFound) },

@@ -2,7 +2,7 @@
 
 ## 1. 背景与动机
 目前系统的知识图谱主要用于静态展示考研 431 的大纲结构（如“宏观经济学 -> 货币需求理论 -> 鲍莫尔-托宾模型”）。
-为了实现真正的“因材施教”，我们需要将图谱从**“静态知识字典”**升级为**“动态学习雷达”**。本设计将用户的 FSRS 数据、错题数据映射到图谱节点上，实现可视化的掌握度热力图和智能学习路径推荐。
+为了实现真正的“因材施教”，我们需要将图谱从**“静态知识字典”**升级为**“动态学习雷达”**。本设计将用户的 Memorix 数据、错题数据映射到图谱节点上，实现可视化的掌握度热力图和智能学习路径推荐。
 
 ## 2. 核心设计：动态状态映射 (Dynamic State Mapping)
 
@@ -10,7 +10,7 @@
 
 ### 2.1 掌握度计算模型
 掌握度 $M$ 综合考量以下指标：
-1. **FSRS 召回率 (Retrievability, $R$)**：反映该节点下记忆类知识的遗忘程度。
+1. **Memorix 召回率 (Retrievability, $R$)**：反映该节点下记忆类知识的遗忘程度。
 2. **答题胜率 (Win Rate, $W$)**：该节点下关联题目（尤其是计算题/综合题）的历史正确率。
 3. **ELO 积分 (Elo Rating, $E$)**：反映用户在该难度层级下的竞技水平。
 
@@ -21,7 +21,7 @@ $$ Mastery = \alpha \times \bar{R} + \beta \times W + \gamma \times \text{Normal
 ### 2.2 图谱热力图渲染 (Heatmap Visualization)
 在前端（如使用 ECharts, G6 或 D3.js）渲染图谱时，根据 Mastery 赋予节点不同的视觉反馈：
 - $M \ge 0.85$：**精通 (绿色)** —— 节点发光或标记为“已攻克”。
-- $0.6 \le M < 0.85$：**复习 (黄色)** —— 需要定期的 FSRS 复习。
+- $0.6 \le M < 0.85$：**复习 (黄色)** —— 需要定期的 Memorix 复习。
 - $M < 0.6$：**薄弱 (红色)** —— 核心丢分点。
 
 ## 3. AI 驱动的自适应路径规划 (Adaptive Pathing)
@@ -43,7 +43,7 @@ $$ Mastery = \alpha \times \bar{R} + \beta \times W + \gamma \times \text{Normal
 
 ## 5. 落地步骤 (Implementation Steps)
 
-1. **数据库层**：在 `UserKnowledgeState` 表中新增 `mastery_score` 字段，通过 Celery 定时从 FSRS 聚合计算。
+1. **数据库层**：在 `UserKnowledgeState` 表中新增 `mastery_score` 字段，通过 Celery 定时从 Memorix 聚合计算。
 2. **API 层**：提供 `/api/graph/user_heatmap/` 接口，返回包含颜色/权重状态的图谱 JSON。
 3. **前端层**：改造图谱组件，支持颜色渲染、点击节点查看个人笔记。
 4. **AI 层**：实现基于 DAG 的前置节点回溯算法。

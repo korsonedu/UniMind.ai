@@ -9,7 +9,7 @@ export function Checkout() {
   const [error, setError] = useState('');
   const started = useRef(false);
 
-  const plan = searchParams.get('plan') || 'solo';
+  const plan = searchParams.get('plan') || 'starter';
   const cycle = searchParams.get('cycle') || 'annual';
   const gateway = searchParams.get('gateway') || 'stub';
 

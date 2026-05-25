@@ -25,9 +25,9 @@ interface InviteCode {
 
 const PLAN_COLORS: Record<string, string> = {
   free: 'bg-unimind-text-quaternary',
-  solo: 'bg-primary',
-  plus: 'bg-unimind-green',
-  pro: 'bg-amber-500',
+  starter: 'bg-primary',
+  growth: 'bg-unimind-green',
+  enterprise: 'bg-amber-500',
 };
 
 const DEFAULT_DURATION_DAYS = 30;
@@ -39,7 +39,7 @@ function formatDuration(days: number) {
 export default function InviteCodeAdmin() {
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState('plus');
+  const [plan, setPlan] = useState('growth');
   const [count, setCount] = useState(1);
   const [maxUses, setMaxUses] = useState(1);
   const [durationDays, setDurationDays] = useState(DEFAULT_DURATION_DAYS);
@@ -101,9 +101,9 @@ export default function InviteCodeAdmin() {
             <select value={plan} onChange={e => setPlan(e.target.value)}
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-bold">
               <option value="free">Free 免费</option>
-              <option value="solo">Solo 个人</option>
-              <option value="plus">Plus 机构</option>
-              <option value="pro">Pro 企业</option>
+              <option value="starter">Starter 入门</option>
+              <option value="growth">Growth 成长</option>
+              <option value="enterprise">Enterprise 企业</option>
             </select>
           </div>
           <div className="space-y-1">

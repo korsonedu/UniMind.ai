@@ -179,17 +179,15 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
 };
 
 /* ────────────────────────────────────────────
-   Hero — one line, one image, one CTA
+   Hero — one line, one CTA
    ──────────────────────────────────────────── */
 
 const Hero: React.FC = () => {
   const { t } = useTranslation('landing');
   const navigate = useNavigate();
-  const imgRef = useRef<HTMLDivElement>(null);
-  useMouseParallax(imgRef, 0.02);
 
   return (
-    <section className="min-h-screen flex flex-col items-center justify-center pt-20 pb-16 px-6 relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%)' }}>
+    <section className="flex flex-col items-center justify-center pt-32 pb-24 md:pt-40 md:pb-32 px-6 relative overflow-hidden" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%)' }}>
       <div className="max-w-5xl mx-auto w-full text-center relative z-10 space-y-8">
         <div className="reveal space-y-6">
           {/* Promo badge */}
@@ -230,18 +228,6 @@ const Hero: React.FC = () => {
         <p className="text-[11px] text-[#9ca3af] tracking-wide reveal reveal-delay-2">
           {t('hero.footnote')}
         </p>
-
-        {/* Product image — Apple style large with depth */}
-        <div ref={imgRef} className="max-w-5xl mx-auto pt-10 reveal reveal-delay-3" style={{ perspective: '1200px' }}>
-          <div className="relative glow-hover rounded-3xl" style={{ transform: 'rotateX(2deg)' }}>
-            <img
-              src="/screenshots/hero-dashboard.png"
-              alt="UniMind"
-              className="w-full rounded-3xl border border-[#e5e7eb]"
-              style={{ boxShadow: '0 60px 160px rgba(91,95,239,0.08), 0 12px 32px rgba(0,0,0,0.06)' }}
-            />
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -330,13 +316,53 @@ const PainPoints: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   Product Showcase — images with one-line labels
+   Demo media — video with screenshot fallback
+   ──────────────────────────────────────────── */
+
+const DemoMedia: React.FC<{
+  videoSrc: string;
+  imgSrc: string;
+  alt: string;
+}> = ({ videoSrc, imgSrc, alt }) => {
+  const [useVideo, setUseVideo] = useState(true);
+
+  return (
+    <div className="glow-hover rounded-2xl overflow-hidden">
+      {useVideo ? (
+        <video
+          src={videoSrc}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="w-full rounded-2xl border border-[#e5e7eb]"
+          style={{ boxShadow: '0 20px 60px rgba(91,95,239,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
+          onError={() => setUseVideo(false)}
+        />
+      ) : (
+        <img
+          src={imgSrc}
+          alt={alt}
+          className="w-full rounded-2xl border border-[#e5e7eb]"
+          style={{ boxShadow: '0 20px 60px rgba(91,95,239,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
+        />
+      )}
+    </div>
+  );
+};
+
+/* ────────────────────────────────────────────
+   Product Showcase — left/right with demo videos
    ──────────────────────────────────────────── */
 
 const Showcase: React.FC = () => {
   const { t } = useTranslation('landing');
   const items = t('features.items', { returnObjects: true }) as Array<{ title: string; subtitle: string; desc: string; points: string[]; screenshotAlt: string }>;
-  const screenshots = ['/screenshots/ai-generate.png', '/screenshots/memorix-review.png', '/screenshots/analytics-dashboard.png'];
+  const media = [
+    { video: '/demos/demo-question-gen.mp4', img: '/screenshots/ai-generate.png' },
+    { video: '/demos/demo-memorix.mp4', img: '/screenshots/memorix-review.png' },
+    { video: '/demos/demo-knowledge.mp4', img: '/screenshots/analytics-dashboard.png' },
+  ];
 
   const sectionRef = useRef<HTMLDivElement>(null);
   useMouseParallax(sectionRef, 0.015);
@@ -366,16 +392,13 @@ const Showcase: React.FC = () => {
                 <p className="text-sm leading-relaxed text-[#5a5a7a]">{item.desc}</p>
               </div>
 
-              {/* Image */}
+              {/* Video / Screenshot */}
               <div className={cn('flex-1 min-w-0 reveal-scale', `reveal-delay-${i + 1}`)}>
-                <div className="glow-hover rounded-2xl overflow-hidden">
-                  <img
-                    src={screenshots[i]}
-                    alt={item.screenshotAlt}
-                    className="w-full rounded-2xl border border-[#e5e7eb]"
-                    style={{ boxShadow: '0 20px 60px rgba(91,95,239,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
-                  />
-                </div>
+                <DemoMedia
+                  videoSrc={media[i].video}
+                  imgSrc={media[i].img}
+                  alt={item.screenshotAlt}
+                />
               </div>
             </div>
           ))}
