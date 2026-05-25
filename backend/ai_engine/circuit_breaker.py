@@ -1,4 +1,3 @@
-import time
 import logging
 from django.conf import settings
 from django.core.cache import cache

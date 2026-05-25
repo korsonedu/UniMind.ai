@@ -72,6 +72,14 @@ class OrderHistoryView(APIView):
 
     def get(self, request):
         qs = Order.objects.filter(user=request.user).order_by('-created_at')
+        try:
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+        except (ValueError, TypeError):
+            page, page_size = 1, 20
+        start = (page - 1) * page_size
+        end = start + page_size
+        qs = qs[start:end]
         return Response(OrderSerializer(qs, many=True).data)
 
 
@@ -93,6 +101,10 @@ class SimulatePaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, order_id):
+        from django.conf import settings
+        if not getattr(settings, 'DEBUG', False) and getattr(settings, 'DJANGO_ENV', 'production') != 'development':
+            return Response({'detail': 'Not available in production'}, status=404)
+
         try:
             order = Order.objects.get(id=order_id, user=request.user)
         except Order.DoesNotExist:
@@ -118,6 +130,13 @@ class WebhookView(APIView):
     permission_classes = []
 
     def post(self, request):
+        from django.conf import settings
+        webhook_secret = getattr(settings, 'PAYMENT_WEBHOOK_SECRET', '')
+        if webhook_secret:
+            provided = request.headers.get('X-Webhook-Secret', '')
+            if provided != webhook_secret:
+                return Response({'detail': 'Invalid webhook secret'}, status=403)
+
         try:
             event = verify_webhook(request.headers, request.body)
             result = process_webhook_event(event)

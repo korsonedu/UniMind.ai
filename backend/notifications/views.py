@@ -43,7 +43,7 @@ class AdminBroadcastView(APIView):
         else:
             inst = request.user.institution
             if inst:
-                users = User.objects.filter(Q(institution=inst) | Q(institution__isnull=True))
+                users = User.objects.filter(institution=inst, is_active=True)
             else:
                 users = User.objects.filter(institution__isnull=True)
 

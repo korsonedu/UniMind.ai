@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def _create_deepseek_session() -> requests.Session:
     """创建强制 TLS 1.2 的 session。"""
     ctx = ssl.create_default_context()
-    ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     adapter = HTTPAdapter(pool_connections=10, pool_maxsize=20)
     session = requests.Session()
     session.mount('https://', adapter)

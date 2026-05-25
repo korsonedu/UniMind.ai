@@ -40,11 +40,6 @@ class BotSerializer(serializers.ModelSerializer):
         return None
 
 
-class BotVisibilitySerializer(serializers.Serializer):
-    bot_id = serializers.IntegerField()
-    is_visible = serializers.BooleanField()
-
-
 class AIChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = AIChatMessage

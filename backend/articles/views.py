@@ -2,7 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from .models import Article
 from .serializers import ArticleSerializer
-from django.db.models import Count
+from django.db.models import Count, F
 from users.views import IsMember
 from users.permissions import is_platform_admin, IsAdminWriteMemberRead, HasQuota
 
@@ -39,7 +39,10 @@ class ArticleListCreateView(generics.ListCreateAPIView):
         queryset = self.get_queryset()
         
         # 分页逻辑 (每页 20 条)
-        page = int(request.query_params.get('page', 1))
+        try:
+            page = int(request.query_params.get('page', 1))
+        except (ValueError, TypeError):
+            page = 1
         page_size = 20
         total = queryset.count()
         
@@ -90,13 +93,12 @@ class ArticleDetailView(generics.RetrieveUpdateDestroyAPIView):
         return qs
 
 class ArticleIncrementViewView(generics.GenericAPIView):
-    queryset = Article.objects.all()
 
     def get_queryset(self):
         from users.permissions import is_platform_admin
         from django.db.models import Q
         user = self.request.user
-        qs = super().get_queryset()
+        qs = Article.objects.all()
         if not is_platform_admin(user):
             inst = getattr(user, 'institution', None)
             if inst:
@@ -108,6 +110,6 @@ class ArticleIncrementViewView(generics.GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         instance = self.get_object()
-        instance.views += 1
-        instance.save(update_fields=['views'])
+        Article.objects.filter(pk=instance.pk).update(views=F('views') + 1)
+        instance.refresh_from_db()
         return Response({'views': instance.views}, status=status.HTTP_200_OK)

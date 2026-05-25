@@ -1,7 +1,7 @@
 import datetime
 import logging
 from django.utils import timezone
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,7 +18,6 @@ class AdminContentPipelineTaskListCreateView(APIView):
 
     def get(self, request):
         from users.permissions import is_platform_admin
-        from django.db.models import Q
         qs = ContentPipelineTask.objects.select_related("created_by", "assignee").all()
         if not is_platform_admin(request.user):
             inst = getattr(request.user, 'institution', None)
@@ -78,7 +77,6 @@ class AdminContentPipelineTaskDetailView(APIView):
 
     def get_object(self, pk):
         from users.permissions import is_platform_admin
-        from django.db.models import Q
         user = self.request.user
         if is_platform_admin(user):
             return get_object_or_404(ContentPipelineTask.objects.select_related("created_by", "assignee"), pk=pk)
@@ -123,7 +121,6 @@ class AdminContentPipelineMetricsView(APIView):
 
     def get(self, request):
         from users.permissions import is_platform_admin
-        from django.db.models import Q
         try:
             days = int(request.query_params.get("days", 14))
         except (TypeError, ValueError):
@@ -243,7 +240,6 @@ class AdminContentPipelineTaskRetryView(APIView):
 
     def post(self, request, pk):
         from users.permissions import is_platform_admin
-        from django.db.models import Q
         if is_platform_admin(request.user):
             source = get_object_or_404(ContentPipelineTask, pk=pk)
         else:
@@ -379,8 +375,13 @@ class AdminPromptTemplateRollbackView(APIView):
         if not template_name or version_id is None:
             return Response({"error": "缺少回滚参数"}, status=400)
 
+        try:
+            version_id = int(version_id)
+        except (ValueError, TypeError):
+            return Response({"detail": "无效的版本号"}, status=400)
+
         target = PromptTemplateVersion.objects.filter(
-            namespace=namespace, template_name=template_name, id=int(version_id)
+            namespace=namespace, template_name=template_name, id=version_id
         ).first()
         if not target:
             return Response({"error": "目标版本不存在"}, status=404)

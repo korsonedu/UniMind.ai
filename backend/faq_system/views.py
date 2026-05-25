@@ -102,8 +102,6 @@ class AnswerCreateView(generics.CreateAPIView):
     permission_classes = [IsMember]
 
     def create(self, request, *args, **kwargs):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
         question_id = request.data.get('question')
         try:
             if is_platform_admin(request.user):
@@ -224,10 +222,13 @@ class AnswerActionView(APIView):
     permission_classes = [IsMember]
 
     def patch(self, request, pk):
-        try:
-            answer = Answer.objects.get(pk=pk)
-        except Answer.DoesNotExist:
-            return Response({'error': 'Not found'}, status=404)
+        from django.shortcuts import get_object_or_404
+        answer = get_object_or_404(Answer, pk=pk)
+        user = request.user
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst and answer.question.institution != inst:
+                return Response({'detail': '无权操作'}, status=403)
 
         # Like Logic (Any User)
         if 'toggle_like' in request.data:

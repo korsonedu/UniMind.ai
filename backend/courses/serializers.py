@@ -56,7 +56,7 @@ class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ('id', 'title', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'created_at', 'updated_at', 'author')
-        read_only_fields = ('author',)
+        read_only_fields = ('author', 'institution')
 
 class StartupMaterialSerializer(serializers.ModelSerializer):
     file = RelativeFileField(required=False)

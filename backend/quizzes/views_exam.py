@@ -1,18 +1,15 @@
 import logging
-from django.conf import settings
-from django.db.models import F, Q
+from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from quizzes.models import Question, QuizAttempt, QuizExam, TeacherExam, StudentExamSubmission
-from quizzes.serializers import QuizAttemptSerializer, QuizExamSerializer, TeacherExamSerializer
-from users.models import User
-from users.serializers import UserSerializer
+from quizzes.models import QuizExam, TeacherExam, StudentExamSubmission
+from quizzes.serializers import QuizExamSerializer, TeacherExamSerializer
 from users.permissions import IsAdmin, HasQuota
 from users.views import IsMember
-from quizzes.ai_workflow import grade_single_question_submission, mark_questions_reviewed
+from quizzes.ai_workflow import mark_questions_reviewed
 from users.quota import increment_quota
 from quizzes.services.task_dispatcher import dispatch_exam_grading
 
@@ -22,7 +19,6 @@ logger = logging.getLogger(__name__)
 def _inst_q(user):
     """返回机构数据隔离 Q 对象，用于 get_object_or_404 等查询"""
     from users.permissions import is_platform_admin
-    from django.db.models import Q
     if is_platform_admin(user):
         return Q()
     inst = getattr(user, 'institution', None)
@@ -51,7 +47,6 @@ class TeacherExamListView(APIView):
 
     def get(self, request):
         from users.permissions import is_platform_admin
-        from django.db.models import Q
         qs = TeacherExam.objects.all().order_by('-created_at')
         if not is_platform_admin(request.user):
             inst = getattr(request.user, 'institution', None)
@@ -99,6 +94,8 @@ class TeacherExamCreateView(APIView):
 
         if not title or not exam_file:
             return Response({'error': '请填写试卷标题并上传 PDF 文件'}, status=400)
+        from core.file_validation import validate_upload_file
+        validate_upload_file(exam_file, allowed_extensions={'.pdf'})
 
         exam = TeacherExam.objects.create(
             title=title,
@@ -128,9 +125,17 @@ class StudentExamSubmissionView(APIView):
 
     def post(self, request, pk):
         exam = get_object_or_404(TeacherExam, id=pk)
+        user = request.user
+        from users.permissions import is_platform_admin
+        if not is_platform_admin(user):
+            inst = getattr(user, 'institution', None)
+            if inst and exam.institution != inst:
+                return Response({'detail': '无权操作'}, status=403)
         answer_file = request.FILES.get('file')
         if not answer_file:
             return Response({'error': '未上传解答文件'}, status=400)
+        from core.file_validation import validate_upload_file
+        validate_upload_file(answer_file, allowed_extensions={'.pdf', '.jpg', '.jpeg', '.png'})
 
         submission, created = StudentExamSubmission.objects.update_or_create(
             exam=exam, user=request.user,
@@ -178,6 +183,9 @@ class TeacherGradeSubmissionView(APIView):
         score = request.data.get('score')
         feedback = request.data.get('feedback', '')
         graded_file = request.FILES.get('graded_pdf')
+        if graded_file:
+            from core.file_validation import validate_upload_file
+            validate_upload_file(graded_file, allowed_extensions={'.pdf'})
         if score is not None:
             try:
                 submission.score = float(score)
@@ -194,37 +202,6 @@ class TeacherGradeSubmissionView(APIView):
             'feedback': submission.feedback,
             'graded_pdf_url': _build_media_abs_url(request, submission.graded_pdf.name) if submission.graded_pdf else '',
         })
-
-
-class GradeSubjectiveView(APIView):
-    permission_classes = [IsMember]
-
-    def post(self, request):
-        question_id = request.data.get('question_id')
-        user_answer = request.data.get('answer')
-
-        if not user_answer:
-            return Response({'error': '请提供答题内容'}, status=400)
-
-        try:
-            question = Question.objects.get(id=question_id)
-        except Question.DoesNotExist:
-            return Response({'error': '题目不存在'}, status=404)
-
-        max_score = question.get_max_score()
-
-        try:
-            result = grade_single_question_submission(request.user, question, user_answer)
-            return Response({
-                'score': result['score'],
-                'max_score': max_score,
-                'feedback': result['feedback'],
-                'analysis': result['analysis'],
-                'ai_answer': question.ai_answer,
-                'elo_change': result['elo_change']
-            })
-        except Exception as e:
-            return Response({'error': f'评分逻辑错误: {str(e)}'}, status=500)
 
 
 class SubmitExamView(APIView):
@@ -256,21 +233,6 @@ class SubmitExamView(APIView):
         })
 
 
-class LatestExamReportView(APIView):
-    """
-    获取最近一次考试报告。
-    """
-    permission_classes = [IsMember]
-
-    def get(self, request):
-        latest_exam = QuizExam.objects.filter(user=request.user).first()
-        if not latest_exam:
-            return Response({'error': '报告不存在'}, status=404)
-
-        serializer = QuizExamSerializer(latest_exam)
-        return Response(serializer.data)
-
-
 class ExamDetailView(generics.RetrieveAPIView):
     """
     获取某次考试的详细报告
@@ -283,39 +245,3 @@ class ExamDetailView(generics.RetrieveAPIView):
         return QuizExam.objects.filter(user=self.request.user)
 
 
-class QuizAttemptCreateView(generics.CreateAPIView):
-    serializer_class = QuizAttemptSerializer
-    permission_classes = [IsMember]
-
-    def perform_create(self, serializer):
-        from django.db.models import F
-        user = self.request.user
-        is_initial = not user.has_completed_initial_assessment
-        avg_difficulty = 1000
-        expected_score = 1 / (1 + 10**((avg_difficulty - user.elo_score) / 400))
-        score = serializer.validated_data.get('score', 0)
-        elo_change = int(getattr(settings, 'ELO_K_FACTOR', 32) * (score - expected_score))
-        if is_initial and score > getattr(settings, 'ELO_INITIAL_BONUS_THRESHOLD', 0.8):
-            elo_change += getattr(settings, 'ELO_INITIAL_BONUS', 200)
-        attempt = serializer.save(user=user, is_initial_placement=is_initial, elo_change=elo_change)
-        update_fields = {'elo_score': F('elo_score') + elo_change}
-        if is_initial:
-            update_fields['has_completed_initial_assessment'] = True
-        User.objects.filter(id=user.id).update(**update_fields)
-
-class LeaderboardView(generics.ListAPIView):
-    def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
-        size = getattr(settings, 'LEADERBOARD_SIZE', 50)
-        qs = User.objects.filter(is_active=True)
-        user = self.request.user
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
-        return qs.order_by('-elo_score')[:size]
-    serializer_class = UserSerializer
-    permission_classes = [IsMember]

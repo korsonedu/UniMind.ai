@@ -5,25 +5,26 @@ from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from django.utils.decorators import method_decorator
+from django.contrib.auth import authenticate
 from .serializers import (
     UserSerializer,
     RegisterSerializer,
-    SystemConfigSerializer,
     DailyPlanSerializer,
     ActivationCodeSerializer,
 )
-from .models import User, SystemConfig, DailyPlan, ActivationCode
+from .models import User, DailyPlan, ActivationCode
 from .permissions import IsPlatformAdmin, IsAdmin, is_platform_admin
 from django.utils import timezone
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
-from core.rate_limit import rate_limit
+from core.rate_limit import rate_limit, _get_client_ip
 import datetime
 import logging
 import re
 
 
 logger = logging.getLogger(__name__)
+security_logger = logging.getLogger('core.security')
 
 from users.permissions import IsMember  # noqa: F401 — 向后兼容 re-export
 
@@ -89,9 +90,12 @@ class RegisterView(generics.CreateAPIView):
         if not email or not code or not password:
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'error': '邮箱、验证码、密码为必填项'})
-        if len(password) < 6:
+        if len(password) < 8:
             from rest_framework.exceptions import ValidationError
-            raise ValidationError({'error': '密码至少需要 6 位'})
+            raise ValidationError({'error': '密码至少需要 8 位'})
+        if not re.search(r'[A-Z]', password) or not re.search(r'[0-9]', password):
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': '密码需包含大写字母和数字'})
 
         if User.objects.filter(email=email, email_verified=True).exists():
             from rest_framework.exceptions import ValidationError
@@ -125,9 +129,7 @@ class UpdateProfileView(generics.UpdateAPIView):
         return self.request.user
     
     def perform_update(self, serializer):
-        user = serializer.save()
-        # 移除了对 avatar_url 的手动赋值，因为它现在是动态属性
-        user.save()
+        serializer.save()
 
 from django.db.models import Q
 from django.db.models.functions import TruncDate
@@ -366,8 +368,6 @@ class OnlineUserListView(generics.ListAPIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
         now = timezone.now()
         active_window_seconds = max(getattr(settings, "ONLINE_USER_ACTIVE_WINDOW_SECONDS", 300), 10)
         threshold = now - datetime.timedelta(seconds=active_window_seconds)
@@ -430,25 +430,12 @@ class HeartbeatView(APIView):
             "current_timer_end": user.current_timer_end,
         })
 
-class SystemConfigView(generics.RetrieveUpdateAPIView):
-    queryset = SystemConfig.objects.all()
-    serializer_class = SystemConfigSerializer
-    def get_object(self):
-        config, created = SystemConfig.objects.get_or_create(id=1)
-        return config
-    def get_permissions(self):
-        if self.request.method in permissions.SAFE_METHODS: return [permissions.AllowAny()]
-        return [IsAdmin()]
-
-from django.contrib.auth import authenticate
-from rest_framework.views import APIView
-
 class LoginView(APIView):
     permission_classes = (AllowAny,)
 
     @method_decorator(rate_limit(key_prefix="login", max_requests=10, window_seconds=300))
     def post(self, request, *args, **kwargs):
-        from django.contrib.auth import authenticate
+        from core.models import SecurityAuditLog
 
         login_id = request.data.get('email') or request.data.get('username') or ''
         password = request.data.get('password')
@@ -457,21 +444,56 @@ class LoginView(APIView):
         if not login_id or not password:
             return Response({'error': '请提供邮箱和密码'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = None
+        # 查找用户（锁定检查需要拿到 user 对象）
+        target_user = None
         if '@' in str(login_id):
-            try:
-                u = User.objects.get(email__iexact=login_id)
-                user = authenticate(username=u.username, password=password)
-            except User.DoesNotExist:
-                pass
+            target_user = User.objects.filter(email__iexact=login_id).first()
+        else:
+            target_user = User.objects.filter(username=login_id).first()
+
+        # 账号锁定检查
+        if target_user and target_user.locked_until and target_user.locked_until > timezone.now():
+            remaining = int((target_user.locked_until - timezone.now()).total_seconds() / 60) + 1
+            SecurityAuditLog.objects.create(
+                event_type='login_locked',
+                user=target_user,
+                ip_address=_get_client_ip(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],
+                detail=f'账号锁定中，剩余 {remaining} 分钟',
+            )
+            security_logger.warning("login_locked user=%s ip=%s remaining=%dmin", target_user.username, _get_client_ip(request), remaining)
+            return Response(
+                {'error': f'账号已锁定，请 {remaining} 分钟后重试', 'code': 'account_locked'},
+                status=status.HTTP_423_LOCKED,
+            )
+
+        # 执行认证
+        user = None
+        if target_user:
+            user = authenticate(username=target_user.username, password=password)
         else:
             user = authenticate(username=login_id, password=password)
 
+        client_ip = _get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
+
         if user:
+            # 登录成功：重置失败计数
+            if user.failed_login_count > 0 or user.locked_until:
+                user.failed_login_count = 0
+                user.locked_until = None
+                user.save(update_fields=['failed_login_count', 'locked_until'])
             Token.objects.filter(user=user).delete()
             token = Token.objects.create(user=user)
             user.last_login = timezone.now()
             user.save(update_fields=['last_login'])
+            SecurityAuditLog.objects.create(
+                event_type='login_success',
+                user=user,
+                ip_address=client_ip,
+                user_agent=user_agent,
+            )
+            security_logger.info("login_success user=%s ip=%s", user.username, client_ip)
             response = Response({
                 'token': token.key,
                 'user': UserSerializer(user).data
@@ -486,6 +508,29 @@ class LoginView(APIView):
             )
             return response
         else:
+            # 登录失败：累加计数，≥5次锁定15分钟
+            if target_user:
+                target_user.failed_login_count += 1
+                if target_user.failed_login_count >= 5:
+                    target_user.locked_until = timezone.now() + datetime.timedelta(minutes=15)
+                    SecurityAuditLog.objects.create(
+                        event_type='login_locked',
+                        user=target_user,
+                        ip_address=client_ip,
+                        user_agent=user_agent,
+                        detail=f'连续失败 {target_user.failed_login_count} 次，锁定 15 分钟',
+                    )
+                    security_logger.warning("account_locked user=%s ip=%s failures=%d", target_user.username, client_ip, target_user.failed_login_count)
+                else:
+                    SecurityAuditLog.objects.create(
+                        event_type='login_failure',
+                        user=target_user,
+                        ip_address=client_ip,
+                        user_agent=user_agent,
+                        detail=f'第 {target_user.failed_login_count} 次失败',
+                    )
+                    security_logger.info("login_failure user=%s ip=%s attempt=%d", target_user.username, client_ip, target_user.failed_login_count)
+                target_user.save(update_fields=['failed_login_count', 'locked_until'])
             logger.debug("Authentication failed id=%s", login_id)
             return Response({'error': '邮箱或密码错误'}, status=status.HTTP_401_UNAUTHORIZED)
 

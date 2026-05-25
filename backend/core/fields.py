@@ -1,20 +1,20 @@
-import os
+import logging
 from django.conf import settings
 from django.db import models
-from cryptography.fernet import Fernet, MultiFernet
-import base64
-import hashlib
+from cryptography.fernet import Fernet
+
+logger = logging.getLogger(__name__)
+
+
+_fernet_instance = None
 
 
 def _get_fernet() -> Fernet:
-    key = getattr(settings, 'ENCRYPTION_KEY', '')
-    if not key:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            "ENCRYPTION_KEY is required for encrypted fields. "
-            "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
-        )
-    return Fernet(key.encode() if isinstance(key, str) else key)
+    global _fernet_instance
+    if _fernet_instance is None:
+        key = getattr(settings, 'ENCRYPTION_KEY', None) or settings.SECRET_KEY
+        _fernet_instance = Fernet(key.encode() if isinstance(key, str) else key)
+    return _fernet_instance
 
 
 class EncryptedCharField(models.CharField):
@@ -35,8 +35,7 @@ class EncryptedCharField(models.CharField):
         try:
             return _get_fernet().decrypt(value.encode()).decode()
         except Exception:
-            import logging
-            logging.getLogger(__name__).error("EncryptedCharField decrypt failed, returning empty string")
+            logger.warning("EncryptedCharField decryption failed", exc_info=True)
             return ''
 
     def to_python(self, value):
@@ -57,6 +56,7 @@ class EncryptedTextField(models.TextField):
         try:
             return _get_fernet().decrypt(value.encode()).decode()
         except Exception:
+            logger.warning("EncryptedTextField decryption failed", exc_info=True)
             return ''
 
     def to_python(self, value):

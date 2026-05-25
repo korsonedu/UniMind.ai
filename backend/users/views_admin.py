@@ -19,7 +19,9 @@ class SuperuserUserListView(APIView):
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def get(self, request):
-        qs = User.objects.all().order_by('-date_joined')
+        qs = User.objects.select_related('access_profile').prefetch_related(
+            'access_profile__tags', 'access_profile__permission_groups'
+        ).order_by('-date_joined')
         search = request.query_params.get('search', '')
         if search:
             qs = qs.filter(username__icontains=search) | qs.filter(email__icontains=search) | qs.filter(nickname__icontains=search)
@@ -56,6 +58,9 @@ class SuperuserUserListView(APIView):
         user = get_object_or_404(User, pk=pk)
 
         if 'role' in request.data:
+            valid_roles = [c[0] for c in User.ROLE_CHOICES]
+            if request.data['role'] not in valid_roles:
+                return Response({'detail': '无效的角色'}, status=400)
             user.role = request.data['role']
         if 'is_member' in request.data:
             user.is_member = bool(request.data['is_member'])

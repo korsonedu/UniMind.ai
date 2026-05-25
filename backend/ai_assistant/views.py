@@ -21,6 +21,8 @@ from ai_assistant.services.tool_executor import AssistantToolExecutor
 
 logger = logging.getLogger(__name__)
 
+_AI_CHAT_SEMAPHORE = threading.Semaphore(5)  # max 5 concurrent AI chats
+
 
 def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
     # Filter out pending messages from history
@@ -34,7 +36,8 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
     tool_executor = AssistantToolExecutor(user)
 
     try:
-        res = AIService.chat_with_assistant_agent(bot, history_msgs, user_message, tool_executor, student_context)
+        with _AI_CHAT_SEMAPHORE:
+            res = AIService.chat_with_assistant_agent(bot, history_msgs, user_message, tool_executor, student_context)
 
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
 
@@ -125,8 +128,6 @@ class BotListCreateView(generics.ListCreateAPIView):
         else:
             qs = Bot.objects.filter(institution__isnull=True, is_active=True)
 
-        for bot in qs:
-            sync_bot_prompt(bot)
         return qs
 
     def perform_create(self, serializer):

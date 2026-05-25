@@ -7,13 +7,12 @@ from django.conf import settings
 from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import (
-    UserQuestionStatus, PersonalizedMockExam, ReviewLog, FSRSProfile,
+    UserQuestionStatus, PersonalizedMockExam, ReviewLog, MemorixProfile,
 )
-from quizzes.serializers import UserQuestionStatusSerializer, QuizExamSerializer
+from quizzes.serializers import QuizExamSerializer
 from users.views import IsMember
 from users.permissions import HasQuota
 from users.quota import increment_quota
@@ -61,13 +60,6 @@ class ToggleMasteredView(APIView):
         return Response({'is_mastered': status_obj.is_mastered})
 
 
-class WrongQuestionListView(generics.ListAPIView):
-    serializer_class = UserQuestionStatusSerializer
-    permission_classes = [IsMember]
-    def get_queryset(self):
-        return UserQuestionStatus.objects.filter(user=self.request.user, wrong_count__gt=0).order_by('-wrong_count')
-
-
 class WrongQuestionInsightsView(APIView):
     permission_classes = [IsMember]
 
@@ -79,13 +71,6 @@ class WrongQuestionInsightsView(APIView):
         top_k = max(1, min(top_k, 8))
         payload = build_wrong_question_insights(user=request.user, top_k=top_k)
         return Response(payload)
-
-
-class FavoriteQuestionListView(generics.ListAPIView):
-    serializer_class = UserQuestionStatusSerializer
-    permission_classes = [IsMember]
-    def get_queryset(self):
-        return UserQuestionStatus.objects.filter(user=self.request.user, is_favorite=True)
 
 
 class QuizStatsView(APIView):
@@ -140,7 +125,7 @@ class MemorixCurveView(APIView):
             .values("review_time", "grade", "predicted_retrievability")
         )
 
-        profile = FSRSProfile.objects.filter(user=request.user).first()
+        profile = MemorixProfile.objects.filter(user=request.user).first()
         if not logs:
             return Response(
                 {
@@ -244,8 +229,8 @@ class MemorixOptimizationHistoryView(APIView):
     permission_classes = [IsMember]
 
     def get(self, request):
-        from quizzes.models import FSRSOptimizationLog
-        rows = FSRSOptimizationLog.objects.filter(user=request.user).order_by("-created_at")[:30]
+        from quizzes.models import MemorixOptimizationLog
+        rows = MemorixOptimizationLog.objects.filter(user=request.user).order_by("-created_at")[:30]
         return Response(
             {
                 "results": [

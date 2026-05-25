@@ -117,41 +117,45 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
     reviewed = []
     iteration_stats = {i: 0 for i in range(1, MAX_ITERATIONS + 1)}
 
-    for draft in drafts:
-        for iteration in range(1, MAX_ITERATIONS + 1):
-            review_result = _reviewer_evaluate(draft)
-            draft["review_score"] = review_result["score"]
-            draft["review_feedback"] = review_result["feedback"]
-            draft["review_dimensions"] = review_result.get("dimensions", {})
-            draft["iteration"] = iteration
+    for i, draft in enumerate(drafts):
+        try:
+            for iteration in range(1, MAX_ITERATIONS + 1):
+                review_result = _reviewer_evaluate(draft)
+                draft["review_score"] = review_result["score"]
+                draft["review_feedback"] = review_result["feedback"]
+                draft["review_dimensions"] = review_result.get("dimensions", {})
+                draft["iteration"] = iteration
 
-            logger.info(
-                "Reviewer kp=%s iteration=%s score=%.2f feedback=%s",
-                draft.get("kp_code", "?"), iteration,
-                review_result["score"],
-                str(review_result.get("feedback", ""))[:200],
-            )
-
-            if review_result["score"] >= QUALITY_THRESHOLD:
-                reviewed.append(draft)
-                iteration_stats[iteration] = iteration_stats.get(iteration, 0) + 1
-                break
-            elif iteration < MAX_ITERATIONS:
-                prev_question = draft.get("question", "")[:120]
-                prev_answer = draft.get("answer", "")[:120]
-                draft = _author_revise(draft, review_result["feedback"])
                 logger.info(
-                    "AuthorRevise kp=%s iteration=%s | before: q=%s answer=%s | after: q=%s answer=%s | feedback=%s",
+                    "Reviewer kp=%s iteration=%s score=%.2f feedback=%s",
                     draft.get("kp_code", "?"), iteration,
-                    prev_question, prev_answer,
-                    draft.get("question", "")[:120], draft.get("answer", "")[:120],
+                    review_result["score"],
                     str(review_result.get("feedback", ""))[:200],
                 )
-            else:
-                # 超过最大轮次，仍保留（标记为低质量）
-                draft["quality_warning"] = True
-                reviewed.append(draft)
-                iteration_stats[iteration] = iteration_stats.get(iteration, 0) + 1
+
+                if review_result["score"] >= QUALITY_THRESHOLD:
+                    reviewed.append(draft)
+                    iteration_stats[iteration] = iteration_stats.get(iteration, 0) + 1
+                    break
+                elif iteration < MAX_ITERATIONS:
+                    prev_question = draft.get("question", "")[:120]
+                    prev_answer = draft.get("answer", "")[:120]
+                    draft = _author_revise(draft, review_result["feedback"])
+                    logger.info(
+                        "AuthorRevise kp=%s iteration=%s | before: q=%s answer=%s | after: q=%s answer=%s | feedback=%s",
+                        draft.get("kp_code", "?"), iteration,
+                        prev_question, prev_answer,
+                        draft.get("question", "")[:120], draft.get("answer", "")[:120],
+                        str(review_result.get("feedback", ""))[:200],
+                    )
+                else:
+                    # 超过最大轮次，仍保留（标记为低质量）
+                    draft["quality_warning"] = True
+                    reviewed.append(draft)
+                    iteration_stats[iteration] = iteration_stats.get(iteration, 0) + 1
+        except Exception as e:
+            logger.error(f"Pipeline draft {i} failed: {e}")
+            continue
 
     stage_log.append({
         "stage": "review_done",

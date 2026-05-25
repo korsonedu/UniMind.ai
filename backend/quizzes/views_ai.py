@@ -5,46 +5,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import KnowledgePoint, ContentPipelineTask
 from quizzes.serializers import ContentPipelineTaskSerializer
-from users.permissions import HasPlanFeature, HasQuota
+from users.permissions import HasPlanFeature, HasQuota, IsAdmin
 from users.quota import increment_ai_quota
-from ai_service import AIService
-from ai_engine.service import AICallError
-from quizzes.services.ai_schema_guard import validate_question_list_payload
-from quizzes.ai_workflow import save_confirmed_questions
 from quizzes.services.ai_parse_service import (
     build_parse_task_id, extract_raw_text, get_parse_task, init_parse_task,
 )
 from quizzes.services.task_dispatcher import dispatch_ai_parse_task
 
 logger = logging.getLogger(__name__)
-
-
-class GenerateFromTextView(APIView):
-    permission_classes = [HasPlanFeature, HasQuota]
-    required_feature = 'ai.generate'
-    quota_resource = 'ai_question'
-    def post(self, request):
-        text = request.data.get('text')
-        kp_id = request.data.get('kp_id')
-        num_obj = request.data.get('num_objective', 3)
-        num_short = request.data.get('num_short', 1)
-        num_essay = request.data.get('num_essay', 1)
-        num_calc = request.data.get('num_calc', 0)
-
-        generated = AIService.generate_questions_from_text(
-            text=text or '',
-            num_obj=num_obj,
-            num_short=num_short,
-            num_essay=num_essay,
-            num_calc=num_calc,
-            kp_id=kp_id,
-        )
-        if not generated:
-            return Response({'error': 'AI 生成失败'}, status=500)
-
-        created_count = save_confirmed_questions(generated, institution=request.user.institution)
-        increment_ai_quota(request.user.institution)
-        return Response({'status': 'success', 'count': created_count})
 
 
 class AIPreviewParseView(APIView):
@@ -63,6 +31,9 @@ class AIPreviewParseView(APIView):
         if not raw_text.strip(): return Response({'error': '内容为空'}, status=400)
 
         upload_file = request.FILES.get('file')
+        if upload_file:
+            from core.file_validation import validate_upload_file
+            validate_upload_file(upload_file, allowed_extensions={'.pdf', '.doc', '.docx', '.txt', '.md'})
         payload = {
             "raw_text_chars": len(raw_text),
             "has_file": bool(upload_file),
@@ -158,7 +129,7 @@ class AIPreviewParseView(APIView):
 
 class AdversarialPipelineView(APIView):
     """对抗性 AI 出题管线（三 Agent 迭代博弈）。"""
-    permission_classes = [HasPlanFeature, HasQuota]
+    permission_classes = [IsAdmin, HasPlanFeature, HasQuota]
     required_feature = 'ai.generate'
     quota_resource = 'ai_question'
 
@@ -212,7 +183,7 @@ class PipelineReviewListView(APIView):
 
 class PipelineReviewActionView(APIView):
     """批准或拒绝待审核的管线任务，将题目入库。支持逐题选择和手动编辑。"""
-    permission_classes = [HasPlanFeature, HasQuota]
+    permission_classes = [IsAdmin, HasPlanFeature, HasQuota]
     required_feature = 'ai.generate'
     quota_resource = 'ai_question'
 

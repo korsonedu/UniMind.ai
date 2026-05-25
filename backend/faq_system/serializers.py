@@ -30,7 +30,7 @@ class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = ('id', 'user', 'content', 'attachment', 'is_solved', 'is_starred', 'likes', 'followers', 'created_at', 'updated_at', 'institution', 'user_detail', 'answers', 'first_answer', 'reply_count', 'likes_count', 'is_liked', 'is_followed')
-        read_only_fields = ('user', 'created_at', 'updated_at', 'is_solved', 'is_starred')
+        read_only_fields = ('user', 'created_at', 'updated_at', 'is_solved', 'is_starred', 'likes', 'followers')
 
     def get_answers(self, obj):
         # Pass context to answer serializer to get is_liked status correctly

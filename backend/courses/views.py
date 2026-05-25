@@ -125,6 +125,8 @@ class ChunkedUploadInitView(APIView):
     permission_classes = [IsAdmin]
 
     def post(self, request):
+        from core.file_validation import validate_upload_file, DANGEROUS_EXTENSIONS, ALLOWED_UPLOAD_TYPES
+
         file_name = str(request.data.get("file_name", "")).strip()
         total_size = _safe_int(request.data.get("total_size"), 0)
         chunk_size = _safe_int(request.data.get("chunk_size"), 0)
@@ -135,6 +137,13 @@ class ChunkedUploadInitView(APIView):
             return Response({"error": "缺少文件名"}, status=400)
         if total_size <= 0 or chunk_size <= 0 or total_chunks <= 0:
             return Response({"error": "分片参数非法"}, status=400)
+
+        # 文件类型校验
+        ext = os.path.splitext(file_name)[1].lower()
+        if ext in DANGEROUS_EXTENSIONS:
+            return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
+        if ext not in ALLOWED_UPLOAD_TYPES:
+            return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
         if chunk_size > MAX_CHUNK_SIZE_BYTES:
             return Response({"error": f"单片过大，单片上限 {MAX_CHUNK_SIZE_BYTES // (1024 * 1024)}MB"}, status=400)
 
@@ -474,36 +483,6 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']:
             return [IsAdmin()]
         return [IsMember()]
-
-class AwardEloView(APIView):
-    """完成课程后领取 ELO 奖励，每门课仅一次。"""
-    permission_classes = [IsMember]
-
-    def post(self, request, pk):
-        try:
-            course = Course.objects.get(pk=pk)
-        except Course.DoesNotExist:
-            return Response({'error': '课程不存在'}, status=404)
-
-        progress = VideoProgress.objects.filter(
-            user=request.user, course=course, is_finished=True,
-        ).first()
-        if not progress:
-            return Response({'error': '请先完成课程学习'}, status=400)
-        if progress.elo_claimed_at:
-            return Response({'error': '已领取过该课程奖励'}, status=409)
-
-        from django.utils import timezone
-        from django.db.models import F
-        User.objects.filter(id=request.user.id).update(elo_score=F('elo_score') + course.elo_reward)
-        VideoProgress.objects.filter(pk=progress.pk).update(elo_claimed_at=timezone.now())
-
-        request.user.refresh_from_db()
-        return Response({
-            'status': 'success',
-            'elo_added': course.elo_reward,
-            'new_score': request.user.elo_score,
-        })
 
 
 class CourseOutlineView(APIView):

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, SystemConfig, DailyPlan, ActivationCode
+from .models import User, DailyPlan, ActivationCode
 
 class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.ReadOnlyField()
@@ -49,11 +49,6 @@ class DailyPlanSerializer(serializers.ModelSerializer):
         model = DailyPlan
         fields = ('id', 'user', 'content', 'is_completed', 'completed_at', 'created_at')
         read_only_fields = ('user',)
-
-class SystemConfigSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SystemConfig
-        fields = ("school_name", "school_short_name", "school_description", "school_logo")
 
 class RegisterSerializer(serializers.ModelSerializer):
     username = serializers.CharField(required=False)

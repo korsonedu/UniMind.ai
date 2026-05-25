@@ -22,7 +22,7 @@ from .serializers_institution import (
     InstitutionStudentSerializer, CreateStudentSerializer, InstitutionFeatureSerializer,
 )
 
-DIRECTION_LIMITS = {'solo': 1, 'plus': 3, 'pro': 999999}
+DIRECTION_LIMITS = {'starter': 1, 'growth': 3, 'enterprise': 999999}
 
 
 def _clone_knowledge_tree(subject_name, institution):
@@ -158,21 +158,6 @@ class InstitutionChangePlanView(APIView):
         return Response(InstitutionSerializer(inst).data)
 
 
-class InstitutionStatsView(APIView):
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
-
-    def get(self, request, pk):
-        inst = get_object_or_404(Institution, pk=pk)
-        return Response({
-            'id': inst.id, 'name': inst.name, 'plan': inst.plan,
-            'student_count': inst.student_count,
-            'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher')).count(),
-            'is_active': inst.is_active,
-            'plan_expires_at': inst.plan_expires_at,
-            'created_at': inst.created_at,
-        })
-
-
 # ── Institution Admin: Student Management ──
 
 class InstitutionStudentListView(APIView):
@@ -181,8 +166,21 @@ class InstitutionStudentListView(APIView):
     def get(self, request):
         inst = request.user.institution
         qs = inst.students.filter(institution_role='student').order_by('-date_joined')
-        serializer = InstitutionStudentSerializer(qs, many=True)
-        return Response(serializer.data)
+        try:
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+        except (ValueError, TypeError):
+            page, page_size = 1, 20
+        total = qs.count()
+        start = (page - 1) * page_size
+        end = start + page_size
+        serializer = InstitutionStudentSerializer(qs[start:end], many=True)
+        return Response({
+            'results': serializer.data,
+            'total': total,
+            'page': page,
+            'total_pages': (total + page_size - 1) // page_size,
+        })
 
     def post(self, request):
         inst = request.user.institution
@@ -192,35 +190,38 @@ class InstitutionStudentListView(APIView):
         if isinstance(students_data, list):
             if not students_data:
                 return Response({'error': '学员列表为空'}, status=status.HTTP_400_BAD_REQUEST)
-            remaining = inst.max_students - inst.student_count
-            if len(students_data) > remaining:
-                return Response(
-                    {'error': f'当前剩余{remaining}个名额，无法导入{len(students_data)}人。请升级版本。'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
 
-            created = []
-            failed = []
-            for i, item in enumerate(students_data):
-                try:
-                    serializer = CreateStudentSerializer(data=item)
-                    serializer.is_valid(raise_exception=True)
-                    user = User.objects.create_user(
-                        username=serializer.validated_data['username'],
-                        email=serializer.validated_data.get('email', ''),
-                        password=serializer.validated_data['password'],
-                        nickname=serializer.validated_data.get('nickname', ''),
-                        institution=inst,
-                        institution_role='student',
-                        is_member=True,
-                        email_verified=True,
+            with transaction.atomic():
+                inst = Institution.objects.select_for_update().get(pk=inst.pk)
+                remaining = inst.max_students - inst.student_count
+                if len(students_data) > remaining:
+                    return Response(
+                        {'error': f'当前剩余{remaining}个名额，无法导入{len(students_data)}人。请升级版本。'},
+                        status=status.HTTP_400_BAD_REQUEST,
                     )
-                    created.append(InstitutionStudentSerializer(user).data)
-                except (ValueError, TypeError) as e:
-                    failed.append({'index': i, 'username': item.get('username', ''), 'error': str(e)})
-                except Exception:
-                    logger.exception("批量创建学员失败: index=%s username=%s", i, item.get('username', ''))
-                    failed.append({'index': i, 'username': item.get('username', ''), 'error': '系统错误，请重试'})
+
+                created = []
+                failed = []
+                for i, item in enumerate(students_data):
+                    try:
+                        serializer = CreateStudentSerializer(data=item)
+                        serializer.is_valid(raise_exception=True)
+                        user = User.objects.create_user(
+                            username=serializer.validated_data['username'],
+                            email=serializer.validated_data.get('email', ''),
+                            password=serializer.validated_data['password'],
+                            nickname=serializer.validated_data.get('nickname', ''),
+                            institution=inst,
+                            institution_role='student',
+                            is_member=True,
+                            email_verified=True,
+                        )
+                        created.append(InstitutionStudentSerializer(user).data)
+                    except (ValueError, TypeError) as e:
+                        failed.append({'index': i, 'username': item.get('username', ''), 'error': str(e)})
+                    except Exception:
+                        logger.exception("批量创建学员失败: index=%s username=%s", i, item.get('username', ''))
+                        failed.append({'index': i, 'username': item.get('username', ''), 'error': '系统错误，请重试'})
 
             return Response({
                 'created': created,
@@ -560,39 +561,6 @@ class InstitutionPreviewView(APIView):
         })
 
 
-# ── Public Join Link ──
-
-from django.shortcuts import redirect
-from django.conf import settings
-from rest_framework.permissions import AllowAny
-
-
-class JoinInstitutionView(APIView):
-    """邀请链接：/join/{invite_slug}?role=teacher → 种 cookie → 重定向到 /register"""
-    permission_classes = [AllowAny]
-
-    def get(self, request, invite_slug):
-        institution = get_object_or_404(Institution, invite_slug=invite_slug, is_active=True)
-        role = request.GET.get('role', 'student')
-        if role not in ('student', 'teacher'):
-            role = 'student'
-        frontend_url = getattr(settings, 'FRONTEND_URL', '')
-        response = redirect(f'{frontend_url}/register')
-        response.set_cookie(
-            'institution_invite', invite_slug,
-            max_age=7 * 24 * 3600,
-            httponly=False,
-            samesite='Lax',
-        )
-        response.set_cookie(
-            'institution_invite_role', role,
-            max_age=7 * 24 * 3600,
-            httponly=False,
-            samesite='Lax',
-        )
-        return response
-
-
 class CheckInviteView(APIView):
     """前端检测：是否有有效的机构邀请 cookie"""
     permission_classes = [AllowAny]
@@ -649,6 +617,8 @@ class InstitutionSelfUpdateView(APIView):
                 setattr(inst, field, request.data[field])
                 updated.append(field)
         if 'logo' in request.FILES:
+            from core.file_validation import validate_upload_file
+            validate_upload_file(request.FILES['logo'], allowed_extensions={'.jpg', '.jpeg', '.png', '.webp'})
             inst.logo = request.FILES['logo']
             updated.append('logo')
         if updated:
@@ -785,9 +755,7 @@ class InstitutionJoinBySlugView(APIView):
         if not inst.is_plan_active:
             return Response({'error': '该机构服务已到期'}, status=403)
 
-        role = str(request.data.get('role', 'student')).strip()
-        if role not in ('student', 'teacher'):
-            role = 'student'
+        role = 'student'
 
         if role == 'student' and inst.student_count >= inst.max_students:
             return Response({'error': '该机构学员数已达上限'}, status=403)
