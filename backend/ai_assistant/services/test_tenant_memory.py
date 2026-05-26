@@ -114,4 +114,4 @@ class TestTenantMemoryManager:
 
         manager = TenantMemoryManager(institution_id=1)
         manager.delete_all(user_id=100)
-        mock_mem.delete_all.assert_called_once()
+        mock_mem.delete_all.assert_called_once_with(user_id="100")
