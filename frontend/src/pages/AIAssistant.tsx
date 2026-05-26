@@ -12,6 +12,10 @@ import { toast } from 'sonner';
 import { PageWrapper } from '@/components/PageWrapper';
 import { useTranslation } from 'react-i18next';
 
+// Agent integration
+import { useAgentChat } from '@/hooks/useAgentChat';
+import { AgentStepCard } from '@/components/AgentStepCard';
+
 // Modularized Components
 import { BotSelector } from './ai-assistant/BotSelector';
 import { ChatMessage } from './ai-assistant/ChatMessage';
@@ -39,6 +43,9 @@ export const AIAssistant: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isComposing, setIsComposition] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const agentChat = useAgentChat(selectedBot?.id || 0);
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   useEffect(() => {
     const init = async () => {
@@ -73,7 +80,7 @@ export const AIAssistant: React.FC = () => {
         } else {
           setMessages([{ role: 'assistant', content: t('welcomeMessage', { botName: selectedBot.name }) }]);
         }
-      }).catch(e => { toast.error(t('loadHistoryFailed')); });
+      }).catch(() => { toast.error(t('loadHistoryFailed')); });
     }
   }, [selectedBot]);
 
@@ -86,31 +93,51 @@ export const AIAssistant: React.FC = () => {
 
   useEffect(() => {
     if (!selectedBot) return;
-    const lastMsg = messages[messages.length - 1];
+    const lastMsg = messagesRef.current[messagesRef.current.length - 1];
     const needsPolling = lastMsg && (lastMsg.role === 'user' || lastMsg.content === '[Thinking...]');
-    if (needsPolling) {
-      const timer = setInterval(() => {
-        api.get('/ai/history/', { params: { bot_id: selectedBot.id } }).then(res => {
-          if (res.data.length > 0) {
-            const processedHistory = res.data.map((m: any) => ({
-              ...m,
-              content: processMathContent(m.content)
-            }));
-            const newLastMsg = processedHistory[processedHistory.length - 1];
-            if (newLastMsg.content !== '[Thinking...]') {
-               setMessages(processedHistory);
-               setLoading(false);
-            } else if (messages.length !== processedHistory.length) {
-               setMessages(processedHistory);
-            }
+    if (!needsPolling) return;
+
+    const timer = setInterval(() => {
+      api.get('/ai/history/', { params: { bot_id: selectedBot.id } }).then(res => {
+        if (res.data.length > 0) {
+          const processedHistory = res.data.map((m: any) => ({
+            ...m,
+            content: processMathContent(m.content)
+          }));
+          const newLastMsg = processedHistory[processedHistory.length - 1];
+          const currentMessages = messagesRef.current;
+          if (newLastMsg.content !== '[Thinking...]') {
+             setMessages(processedHistory);
+             setLoading(false);
+          } else if (currentMessages.length !== processedHistory.length) {
+             setMessages(processedHistory);
           }
-        });
-      }, 2000);
-      return () => clearInterval(timer);
+        }
+      });
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [selectedBot]);
+
+  useEffect(() => {
+    if (agentChat.isDone && agentChat.streamingText) {
+      setMessages(prev => [...prev, {
+        role: 'assistant' as const,
+        content: processMathContent(agentChat.streamingText),
+      }]);
+      const timer = setTimeout(() => agentChat.reset(), 500);
+      return () => clearTimeout(timer);
     }
-  }, [messages, selectedBot]);
+  }, [agentChat.isDone, agentChat.streamingText]);
 
   const doSend = async (text: string) => {
+    // Agent bots (exam_generator, planner) use WebSocket mode
+    if (selectedBot && ((selectedBot as any).bot_type === 'exam_generator' || (selectedBot as any).bot_type === 'planner')) {
+      setMessages(prev => [...prev, { role: 'user', content: text }]);
+      agentChat.sendMessage(text);
+      return;
+    }
+
+    // Other bots: existing polling mode
     setLoading(true);
     try {
       await api.post('/ai/chat/', { message: text, bot_id: selectedBot!.id });
@@ -177,24 +204,44 @@ export const AIAssistant: React.FC = () => {
               </div>
             ) : (
               <div className="p-8 space-y-8 max-w-4xl mx-auto w-full">
+                {/* Agent mode: show step cards + streaming text */}
+                {agentChat.steps.length > 0 && (
+                  <div className="space-y-3">
+                    {agentChat.steps.map(step => (
+                      <AgentStepCard key={step.call_id} step={step} />
+                    ))}
+                  </div>
+                )}
+                {agentChat.streamingText && (
+                  <ChatMessage
+                    msg={{ role: 'assistant', content: agentChat.streamingText }}
+                    isUser={false}
+                    avatar={selectedBot.avatar}
+                    botName={selectedBot.name}
+                    userName=""
+                  />
+                )}
+
+                {/* History messages (after agent done, final message appears here) */}
                 {messages.filter(msg => msg.content !== '[Thinking...]').map((msg, i) => (
-                  <ChatMessage 
-                    key={i} 
-                    msg={msg} 
-                    isUser={msg.role === 'user'} 
-                    avatar={selectedBot.avatar} 
-                    botName={selectedBot.name} 
-                    userName={user?.nickname || user?.username || 'User'} 
+                  <ChatMessage
+                    key={i}
+                    msg={msg}
+                    isUser={msg.role === 'user'}
+                    avatar={selectedBot.avatar}
+                    botName={selectedBot.name}
+                    userName={user?.nickname || user?.username || 'User'}
                   />
                 ))}
-                {messages.length > 0 && messages[messages.length - 1].content === '[Thinking...]' && (
-                  <ChatMessage 
-                    msg={{ role: 'assistant', content: '' }} 
-                    isUser={false} 
-                    avatar={selectedBot.avatar} 
-                    botName={selectedBot.name} 
-                    userName="" 
-                    isThinking 
+                {/* Thinking indicator (non-agent mode only) */}
+                {agentChat.steps.length === 0 && messages.length > 0 && messages[messages.length - 1].content === '[Thinking...]' && (
+                  <ChatMessage
+                    msg={{ role: 'assistant', content: '' }}
+                    isUser={false}
+                    avatar={selectedBot.avatar}
+                    botName={selectedBot.name}
+                    userName=""
+                    isThinking
                   />
                 )}
               </div>
@@ -212,9 +259,9 @@ export const AIAssistant: React.FC = () => {
                 placeholder={selectedBot ? "Ask a question..." : "Select an assistant first"}
                 autoComplete="off"
                 className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-9 px-4 font-medium"
-                disabled={loading || !selectedBot}
+                disabled={(loading || agentChat.isConnected) || !selectedBot}
               />
-              <Button onClick={handleSend} disabled={loading || !input.trim() || !selectedBot} size="icon" className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow active:scale-95 transition-[transform,colors] shrink-0" aria-label="Send message"><Send className="h-3.5 w-3.5" /></Button>
+              <Button onClick={handleSend} disabled={(loading || agentChat.isConnected) || !input.trim() || !selectedBot} size="icon" className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow active:scale-95 transition-[transform,colors] shrink-0" aria-label="Send message"><Send className="h-3.5 w-3.5" /></Button>
             </div>
           </footer>
         </Card>
