@@ -140,3 +140,72 @@ def _parse_extraction_result(content):
     except (json.JSONDecodeError, IndexError):
         pass
     return []
+
+
+def extract_memories_with_mem0(user, conversation_history):
+    """Use mem0 to extract and store memories from conversation."""
+    if not user.institution_id:
+        return
+
+    lines = []
+    for msg in conversation_history[-10:]:
+        role = '用户' if msg.get('role') == 'user' else 'AI'
+        content = str(msg.get('content', ''))[:500]
+        if content and content != '[Thinking...]':
+            lines.append(f"{role}: {content}")
+
+    if not lines:
+        return
+
+    conversation_text = "\n".join(lines)
+
+    def _worker():
+        from django.db import connections
+        try:
+            from ai_assistant.services.tenant_memory import TenantMemoryManager
+            manager = TenantMemoryManager(institution_id=user.institution_id)
+            manager.add(
+                user_id=user.id,
+                message=conversation_text,
+                metadata={"source": "auto_extract"},
+            )
+        except Exception:
+            logger.exception("mem0 extraction failed for user %d", user.id)
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
+
+
+def get_mem0_memories_for_injection(user, query: str = '', limit: int = 5) -> str:
+    """Retrieve semantically relevant memories from mem0 for prompt injection."""
+    if not user.institution_id:
+        return ''
+
+    try:
+        from ai_assistant.services.tenant_memory import TenantMemoryManager
+        manager = TenantMemoryManager(institution_id=user.institution_id)
+
+        if query:
+            memories = manager.search(user_id=user.id, query=query, limit=limit)
+        else:
+            memories = manager.get_all(user_id=user.id)[:limit]
+
+        if not memories:
+            return ''
+
+        lines = []
+        for m in memories:
+            text = m.get('memory', '')
+            if text:
+                lines.append(f"- {text}")
+
+        if not lines:
+            return ''
+
+        return "## 用户记忆（语义检索）\n以下是与当前问题相关的用户记忆：\n" + "\n".join(lines)
+
+    except Exception:
+        logger.exception("mem0 retrieval failed for user %d", user.id)
+        return ''

@@ -4,6 +4,7 @@ from .views import (
     AgentMemoryListCreateView, AgentMemoryDetailView,
     BotListCreateView, BotDetailView, BotVisibilityView,
     StudyPlanListView, StudyPlanDetailView, StudyPlanTaskUpdateView,
+    SemanticMemoryListView, SemanticMemoryDeleteView,
 )
 from .views_dashboard import XiaoYuDashboardView
 
@@ -15,6 +16,9 @@ urlpatterns = [
     path('reset/', AIChatResetView.as_view(), name='ai-chat-reset'),
     path('memories/', AgentMemoryListCreateView.as_view(), name='agent-memory-list'),
     path('memories/<int:pk>/', AgentMemoryDetailView.as_view(), name='agent-memory-detail'),
+    path('memories/semantics/', SemanticMemoryListView.as_view(), name='semantic-memory-list'),
+    path('memories/semantics/<str:memory_id>/', SemanticMemoryDeleteView.as_view(), name='semantic-memory-detail'),
+    path('memories/semantics/clear/', SemanticMemoryDeleteView.as_view(), name='semantic-memory-clear'),
     path('bots/', BotListCreateView.as_view(), name='bot-list'),
     path('bots/<int:pk>/', BotDetailView.as_view(), name='bot-detail'),
     path('bots/visibility/', BotVisibilityView.as_view(), name='bot-visibility'),

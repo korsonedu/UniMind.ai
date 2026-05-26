@@ -33,11 +33,17 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
     if bot and bot.is_exclusive:
         student_context = get_student_academic_context(user)
 
-    # 获取记忆上下文
+    # 获取记忆上下文 (dual-layer: structured + mem0 semantic)
     memory_context = ""
     try:
-        from ai_assistant.services.memory_service import get_memories_for_injection
-        memory_context = get_memories_for_injection(user)
+        from ai_assistant.services.memory_service import (
+            get_memories_for_injection,
+            get_mem0_memories_for_injection,
+        )
+        structured = get_memories_for_injection(user)
+        semantic = get_mem0_memories_for_injection(user, query=user_message)
+        parts = [p for p in [structured, semantic] if p]
+        memory_context = "\n\n".join(parts)
     except Exception:
         pass
 
@@ -106,8 +112,13 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
     finally:
         # 异步提取记忆（不阻塞响应）
         try:
-            from ai_assistant.services.memory_service import extract_memories_async
-            extract_memories_async(user, history_msgs + [{'role': 'user', 'content': user_message}])
+            from ai_assistant.services.memory_service import (
+                extract_memories_async,
+                extract_memories_with_mem0,
+            )
+            full_history = history_msgs + [{'role': 'user', 'content': user_message}]
+            extract_memories_async(user, full_history)
+            extract_memories_with_mem0(user, full_history)
         except Exception:
             pass
         connections.close_all()
@@ -364,8 +375,14 @@ class AIChatStreamView(APIView):
 
                 memory_context = ""
                 try:
-                    from ai_assistant.services.memory_service import get_memories_for_injection
-                    memory_context = get_memories_for_injection(request.user)
+                    from ai_assistant.services.memory_service import (
+                        get_memories_for_injection,
+                        get_mem0_memories_for_injection,
+                    )
+                    structured = get_memories_for_injection(request.user)
+                    semantic = get_mem0_memories_for_injection(request.user, query=user_message)
+                    parts = [p for p in [structured, semantic] if p]
+                    memory_context = "\n\n".join(parts)
                 except Exception:
                     pass
 
@@ -447,11 +464,13 @@ class AIChatStreamView(APIView):
             finally:
                 # Async memory extraction
                 try:
-                    from ai_assistant.services.memory_service import extract_memories_async
-                    extract_memories_async(
-                        request.user,
-                        history_msgs + [{'role': 'user', 'content': user_message}]
+                    from ai_assistant.services.memory_service import (
+                        extract_memories_async,
+                        extract_memories_with_mem0,
                     )
+                    full_history = history_msgs + [{'role': 'user', 'content': user_message}]
+                    extract_memories_async(request.user, full_history)
+                    extract_memories_with_mem0(request.user, full_history)
                 except Exception:
                     pass
                 connections.close_all()
@@ -545,3 +564,44 @@ class StudyPlanTaskUpdateView(APIView):
         plan.save()
 
         return Response(StudyPlanSerializer(plan).data)
+
+
+class SemanticMemoryListView(APIView):
+    """List semantic memories for the current user from mem0."""
+    permission_classes = [IsMember]
+
+    def get(self, request):
+        user = request.user
+        if not user.institution_id:
+            return Response({"memories": []})
+
+        try:
+            from ai_assistant.services.tenant_memory import TenantMemoryManager
+            manager = TenantMemoryManager(institution_id=user.institution_id)
+            memories = manager.get_all(user_id=user.id)
+            return Response({"memories": memories})
+        except Exception as e:
+            logger.exception("Failed to list semantic memories")
+            return Response({"error": str(e)}, status=500)
+
+
+class SemanticMemoryDeleteView(APIView):
+    """Delete a single semantic memory or clear all."""
+    permission_classes = [IsMember]
+
+    def delete(self, request, memory_id=None):
+        user = request.user
+        if not user.institution_id:
+            return Response({"error": "No institution"}, status=400)
+
+        try:
+            from ai_assistant.services.tenant_memory import TenantMemoryManager
+            manager = TenantMemoryManager(institution_id=user.institution_id)
+            if memory_id:
+                manager.delete(memory_id=memory_id)
+            else:
+                manager.delete_all(user_id=user.id)
+            return Response({"status": "ok"})
+        except Exception as e:
+            logger.exception("Failed to delete semantic memory")
+            return Response({"error": str(e)}, status=500)
