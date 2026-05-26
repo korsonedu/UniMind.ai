@@ -1,6 +1,7 @@
 import logging
 import os
 from django.conf import settings
+from ai_engine.config import EMBEDDING_MODEL, EMBEDDING_BASE_URL
 
 try:
     from mem0 import Memory
@@ -31,8 +32,8 @@ def _get_mem0_config(institution_id: int) -> dict:
             "provider": "openai",
             "config": {
                 "api_key": api_key,
-                "base_url": base_url,
-                "model": "deepseek-embedding",
+                "base_url": EMBEDDING_BASE_URL,
+                "model": EMBEDDING_MODEL,
             },
         },
         "version": "v1.1",

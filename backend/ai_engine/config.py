@@ -33,6 +33,10 @@ _TASK_MODEL_MAP = {
     'repair':   ('AI_MODEL_SCHEMA_REPAIR',       'fast'),
 }
 
+# ── Embedding model config (for mem0 semantic memory) ──
+EMBEDDING_MODEL = os.getenv('AI_EMBEDDING_MODEL', 'deepseek-embedding')
+EMBEDDING_BASE_URL = os.getenv('AI_EMBEDDING_BASE_URL', DEFAULT_BASE_URL.replace('/chat/completions', ''))
+
 # Thinking effort per task prefix.
 # DeepSeek supports thinking + tool_choice simultaneously.
 # When thinking is enabled with tool calls, reasoning_content MUST be
