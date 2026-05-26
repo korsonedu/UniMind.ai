@@ -45,3 +45,6 @@ zope.interface==8.2
 stripe>=13.0.0
 wechatpayv3>=0.3.0
 alipay>=0.7.4
+# Semantic memory (mem0 + pgvector)
+mem0ai>=0.1.0
+pgvector>=0.3.0
