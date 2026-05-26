@@ -578,11 +578,12 @@ class SemanticMemoryListView(APIView):
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
             manager = TenantMemoryManager(institution_id=user.institution_id)
-            memories = manager.get_all(user_id=user.id)
+            limit = int(request.query_params.get('limit', 100))
+            memories = manager.get_all(user_id=user.id)[:limit]
             return Response({"memories": memories})
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to list semantic memories")
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "获取记忆失败"}, status=500)
 
 
 class SemanticMemoryDeleteView(APIView):
@@ -592,16 +593,21 @@ class SemanticMemoryDeleteView(APIView):
     def delete(self, request, memory_id=None):
         user = request.user
         if not user.institution_id:
-            return Response({"error": "No institution"}, status=400)
+            return Response({"error": "无机构信息"}, status=400)
 
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
             manager = TenantMemoryManager(institution_id=user.institution_id)
             if memory_id:
+                # Verify ownership: only delete if memory belongs to this user
+                user_memories = manager.get_all(user_id=user.id)
+                user_memory_ids = {m.get('id') for m in user_memories if m.get('id')}
+                if memory_id not in user_memory_ids:
+                    return Response({"error": "记忆不存在"}, status=404)
                 manager.delete(memory_id=memory_id)
             else:
                 manager.delete_all(user_id=user.id)
             return Response({"status": "ok"})
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to delete semantic memory")
-            return Response({"error": str(e)}, status=500)
+            return Response({"error": "删除记忆失败"}, status=500)
