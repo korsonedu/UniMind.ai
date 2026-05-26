@@ -1,10 +1,13 @@
 import json
 import logging
+import os
 import threading
 from datetime import timedelta
 from django.utils import timezone
 from django.db.models import F
 from ..models import AgentMemory
+
+USE_MEM0 = os.getenv('USE_MEM0', 'false').lower() == 'true'
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +147,8 @@ def _parse_extraction_result(content):
 
 def extract_memories_with_mem0(user, conversation_history):
     """Use mem0 to extract and store memories from conversation."""
+    if not USE_MEM0:
+        return
     if not user.institution_id:
         return
 
@@ -180,6 +185,8 @@ def extract_memories_with_mem0(user, conversation_history):
 
 def get_mem0_memories_for_injection(user, query: str = '', limit: int = 5) -> str:
     """Retrieve semantically relevant memories from mem0 for prompt injection."""
+    if not USE_MEM0:
+        return ''
     if not user.institution_id:
         return ''
 
