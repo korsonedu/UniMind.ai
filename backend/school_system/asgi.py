@@ -14,8 +14,9 @@ django_asgi_app = get_asgi_application()
 
 from interviews.routing import websocket_urlpatterns as interviews_ws
 from notifications.routing import websocket_urlpatterns as notifications_ws
+from ai_assistant.routing import websocket_urlpatterns as ai_assistant_ws
 
-websocket_urlpatterns = interviews_ws + notifications_ws
+websocket_urlpatterns = interviews_ws + notifications_ws + ai_assistant_ws
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
