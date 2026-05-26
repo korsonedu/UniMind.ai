@@ -62,6 +62,15 @@ class AssistantToolExecutor:
         except Exception as exc:
             return json.dumps({"error": str(exc)}, ensure_ascii=False)
 
+    def _get_user_subjects(self):
+        """Return list of subjects the user has questions for."""
+        from quizzes.models import UserQuestionStatus
+        return list(
+            UserQuestionStatus.objects.filter(user=self.user)
+            .values_list('question__knowledge_point__subject', flat=True)
+            .distinct()
+        )
+
     # ── Tool handlers ──────────────────────────────────────────
 
     def _handle_search_knowledge_tree(self, args: Dict) -> Dict:
@@ -77,6 +86,11 @@ class AssistantToolExecutor:
         )
         if subject:
             qs = qs.filter(subject=subject)
+        else:
+            # Auto-filter to user's subjects when none specified
+            user_subjects = self._get_user_subjects()
+            if user_subjects:
+                qs = qs.filter(subject__in=user_subjects)
         if self.institution:
             qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
 

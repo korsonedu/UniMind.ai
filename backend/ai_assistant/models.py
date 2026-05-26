@@ -29,6 +29,11 @@ class Bot(models.Model):
         null=True, blank=True, related_name='bots',
         verbose_name="所属机构",
     )
+    institution_personality = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="机构人格配置",
+        help_text="机构自定义人格配置：教学风格、知识范围、语气等",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

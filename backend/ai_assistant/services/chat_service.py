@@ -12,7 +12,7 @@ class AssistantChatService:
         return prompt
 
     @classmethod
-    def _build_agent_system_prompt(cls, bot, student_context: str = '', memory_context: str = '') -> str:
+    def _build_agent_system_prompt(cls, bot, student_context: str = '', memory_context: str = '', institution=None) -> str:
         """为 Agent 模式构建包含工具使用指引的 system prompt。"""
         base = cls.build_system_prompt(bot, student_context)
         memory_section = f"\n\n{memory_context}" if memory_context else ''
@@ -35,7 +35,23 @@ class AssistantChatService:
                 "2. 简单问候、闲聊、通用学习建议不需要调工具。\n"
                 "3. 工具返回的数据是 JSON，请将关键信息用中文自然表达。"
             )
-        return base + memory_section + tool_guide
+        # Inject institution personality if configured
+        personality_section = ''
+        if bot and hasattr(bot, 'institution_personality') and bot.institution_personality:
+            p = bot.institution_personality
+            parts = []
+            if p.get('teaching_style'):
+                parts.append(f"教学风格：{p['teaching_style']}")
+            if p.get('tone'):
+                parts.append(f"语气：{p['tone']}")
+            if p.get('knowledge_domain'):
+                parts.append(f"知识领域：{p['knowledge_domain']}")
+            if p.get('custom_instructions'):
+                parts.append(p['custom_instructions'])
+            if parts:
+                personality_section = "\n\n## 机构教学配置\n" + "\n".join(f"- {x}" for x in parts)
+
+        return base + memory_section + tool_guide + personality_section
 
     @classmethod
     def _build_exam_generator_tool_guide(cls) -> str:
@@ -128,8 +144,10 @@ class AssistantChatService:
     ):
         """Agent 化对话：模型可自主调用工具获取信息后再回答。"""
         from ai_engine.service import AIEngine
+        from ai_engine.tool_permissions import filter_tools
 
-        system_prompt = cls._build_agent_system_prompt(bot, student_context, memory_context)
+        institution = getattr(tool_executor, 'institution', None)
+        system_prompt = cls._build_agent_system_prompt(bot, student_context, memory_context, institution)
 
         messages = [{'role': 'system', 'content': system_prompt}]
 
@@ -147,6 +165,10 @@ class AssistantChatService:
             tools = get_exam_generator_tools()
         else:
             tools = get_assistant_tools()
+
+        # Apply tool permission sandbox
+        bot_type = bot.bot_type if bot else 'assistant'
+        tools = filter_tools(bot_type, institution, tools)
 
         if on_step:
             return AIEngine.call_ai_with_streaming_tools(
