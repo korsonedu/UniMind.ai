@@ -471,6 +471,185 @@ class AIEngine:
         return response
 
     @classmethod
+    def call_ai_with_streaming_tools(cls, messages, tools, tool_executor,
+                                      on_step=None, tool_choice="auto",
+                                      temperature=0.7, max_tokens=8192,
+                                      operation='general', max_tool_rounds=5,
+                                      raise_on_error=False):
+        """
+        多轮 Agent 循环 + 流式输出 + 步骤回调。
+
+        与 call_ai_with_tools 相同逻辑，但：
+        1. LLM 调用使用 stream=True，逐 token 推送 text_delta
+        2. 每步 tool call/result 通过 on_step 回调推送
+
+        on_step: callable(event_dict) — 接收 step/text_delta/done/error 事件
+        返回: {"content": str} 最终文本
+        """
+        from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
+        from django.conf import settings as _settings
+
+        all_messages = list(messages)
+        accumulated_text = ""
+
+        for round_i in range(max_tool_rounds):
+            config = get_model_for_task(operation)
+            if not config['api_key']:
+                if on_step:
+                    on_step({"type": "error", "message": "LLM_API_KEY 未设置"})
+                return {"content": ""}
+
+            try:
+                AICircuitBreaker.check(operation)
+            except CircuitBreakerError:
+                if on_step:
+                    on_step({"type": "error", "message": "AI 服务熔断中，请稍后重试"})
+                return {"content": ""}
+
+            body = {
+                "model": config['model'],
+                "messages": all_messages,
+                "temperature": temperature,
+                "max_completion_tokens": max_tokens,
+                "stream": True,
+            }
+            if tools is not None:
+                body["tools"] = tools
+            _is_deepseek = 'deepseek' in config.get('model', '').lower()
+            if tool_choice is not None and not _is_deepseek:
+                body["tool_choice"] = tool_choice
+            if config.get('thinking'):
+                body["thinking"] = {"type": "enabled"}
+
+            timeout_seconds = max(30, int(getattr(_settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120) or 120))
+
+            try:
+                r = _session.post(
+                    config['base_url'],
+                    headers={
+                        "Authorization": f"Bearer {config['api_key'].strip()}",
+                        "Content-Type": "application/json",
+                    },
+                    json=body,
+                    timeout=timeout_seconds,
+                    stream=True,
+                )
+                r.raise_for_status()
+            except Exception as e:
+                AICircuitBreaker.record_failure(operation)
+                if on_step:
+                    on_step({"type": "error", "message": f"AI 调用失败: {e}"})
+                return {"content": accumulated_text or "AI 服务暂时不可用，请稍后重试。"}
+
+            # Consume SSE stream
+            tool_calls_map = {}
+            finish_reason = None
+
+            for line in r.iter_lines(decode_unicode=True):
+                if not line or not line.startswith('data: '):
+                    continue
+                data_str = line[6:]
+                if data_str.strip() == '[DONE]':
+                    break
+                try:
+                    data = json.loads(data_str)
+                except json.JSONDecodeError:
+                    continue
+
+                choice = data.get('choices', [{}])[0]
+                delta = choice.get('delta', {})
+                finish_reason = choice.get('finish_reason') or finish_reason
+
+                content = delta.get('content', '')
+                if content:
+                    accumulated_text += content
+                    if on_step:
+                        on_step({"type": "text_delta", "delta": content})
+
+                for tc_chunk in delta.get('tool_calls', []):
+                    idx = tc_chunk.get('index', 0)
+                    if idx not in tool_calls_map:
+                        tool_calls_map[idx] = {
+                            "id": tc_chunk.get('id', ''),
+                            "function": {"name": '', "arguments": ''},
+                        }
+                    tc = tool_calls_map[idx]
+                    if tc_chunk.get('id'):
+                        tc['id'] = tc_chunk['id']
+                    func_chunk = tc_chunk.get('function', {})
+                    if func_chunk.get('name'):
+                        tc['function']['name'] = func_chunk['name']
+                    if func_chunk.get('arguments'):
+                        tc['function']['arguments'] += func_chunk['arguments']
+
+            AICircuitBreaker.record_success(operation)
+
+            tool_calls = [tool_calls_map[k] for k in sorted(tool_calls_map.keys())] if tool_calls_map else []
+
+            if not tool_calls:
+                return {"content": accumulated_text}
+
+            assistant_msg = {"role": "assistant", "content": None, "tool_calls": tool_calls}
+            all_messages.append(assistant_msg)
+
+            for tc in tool_calls:
+                func = tc.get('function', {})
+                name = func.get('name', '')
+                call_id = tc.get('id', '')
+                try:
+                    args = json.loads(func.get('arguments', '{}'))
+                except (json.JSONDecodeError, TypeError):
+                    args = {}
+
+                try:
+                    from ai_assistant.services.tool_executor import generate_step_label
+                    label = generate_step_label(name, args)
+                except ImportError:
+                    label = f"执行 {name}"
+
+                if on_step:
+                    on_step({
+                        "type": "step",
+                        "call_id": call_id,
+                        "step": round_i + 1,
+                        "status": "calling",
+                        "name": name,
+                        "label": label,
+                        "args_summary": json.dumps(args, ensure_ascii=False)[:200],
+                    })
+
+                try:
+                    result = tool_executor(name, args)
+                except Exception as e:
+                    result = json.dumps({"error": str(e)}, ensure_ascii=False)
+
+                if on_step:
+                    on_step({
+                        "type": "step",
+                        "call_id": call_id,
+                        "step": round_i + 1,
+                        "status": "done",
+                        "name": name,
+                        "label": label,
+                        "result_summary": str(result)[:300],
+                    })
+
+                all_messages.append({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": str(result),
+                })
+
+            accumulated_text = ""
+            tool_choice = "auto"
+
+        logger.warning(
+            "call_ai_with_streaming_tools: exhausted max_tool_rounds=%s",
+            max_tool_rounds,
+        )
+        return {"content": accumulated_text}
+
+    @classmethod
     def agentic_structured_output(cls, messages, schema, tool_name, tool_description,
                                   research_tools, tool_executor,
                                   temperature=0.7, max_tokens=8192, operation='general',
