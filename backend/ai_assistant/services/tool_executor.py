@@ -10,6 +10,41 @@ from typing import Any, Dict, List
 from django.db import models
 
 
+def generate_step_label(tool_name: str, args: dict) -> str:
+    """根据 tool name 和 args 动态生成中文步骤描述。"""
+    labels = {
+        'search_knowledge_tree': lambda a: f"检索「{a.get('query', '')}」相关知识点",
+        'get_user_weak_points': lambda a: "分析你的薄弱知识点",
+        'get_user_wrong_questions': lambda a: f"查看{a.get('topic', '')}错题" if a.get('topic') else "查看你的错题记录",
+        'get_class_weak_points': lambda a: "分析班级薄弱知识点",
+        'get_class_performance_summary': lambda a: "获取班级表现概览",
+        'lookup_question': lambda a: f"查找题目（ID: {a.get('question_id', '')}）",
+        'get_learning_stats': lambda a: "获取学习统计数据",
+        'get_knowledge_mastery_map': lambda a: f"生成{a.get('subject', '')}知识掌握图谱" if a.get('subject') else "生成知识掌握图谱",
+        'get_due_reviews': lambda a: f"查询未来{a.get('days', 7)}天的复习任务",
+        'get_exam_history': lambda a: "查询考试历史",
+        'save_study_plan': lambda a: "保存学习计划",
+        'get_active_plan': lambda a: "获取当前学习计划",
+        'update_plan_task': lambda a: f"更新计划任务「{a.get('task_id', '')}」",
+        'set_dashboard_layout': lambda a: "更新仪表盘布局",
+        'search_courses': lambda a: f"搜索课程「{a.get('query', '')}」",
+        'search_asr': lambda a: f"搜索视频字幕「{a.get('query', '')}」",
+        'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
+        'search_knowledge_points': lambda a: f"搜索知识点「{a.get('query', '')}」",
+        'generate_questions': lambda a: f"基于{len(a.get('knowledge_point_ids', []))}个知识点生成{a.get('count', 5)}道题",
+        'launch_arc_pipeline': lambda a: "启动题目审查（ARC 管线）",
+        'check_pipeline_status': lambda a: "检查管线执行进度",
+        'save_questions_to_library': lambda a: f"保存{len(a.get('question_ids', []))}道题到题库",
+    }
+    generator = labels.get(tool_name)
+    if generator:
+        try:
+            return generator(args)
+        except Exception:
+            pass
+    return f"执行 {tool_name}"
+
+
 class AssistantToolExecutor:
     """将 tool_name 映射到实际数据库查询。捕获 user 和 institution 上下文。"""
 
@@ -63,10 +98,15 @@ class AssistantToolExecutor:
         from django.db.models import Sum
         from quizzes.models import UserQuestionStatus
 
+        qs = UserQuestionStatus.objects.filter(user=self.user, wrong_count__gt=0)
+        if self.institution:
+            qs = qs.filter(
+                models.Q(question__institution=self.institution) |
+                models.Q(question__institution__isnull=True)
+            )
+
         aggregated = (
-            UserQuestionStatus.objects
-            .filter(user=self.user, wrong_count__gt=0)
-            .values('question__knowledge_point__name', 'question__knowledge_point__code')
+            qs.values('question__knowledge_point__name', 'question__knowledge_point__code')
             .annotate(total_wrong=Sum('wrong_count'))
             .order_by('-total_wrong')[:5]
         )
@@ -86,12 +126,13 @@ class AssistantToolExecutor:
         from quizzes.models import UserQuestionStatus
 
         limit = min(int(args.get('limit', 5)), 10)
-        wrong_qs = (
-            UserQuestionStatus.objects
-            .filter(user=self.user, wrong_count__gt=0)
-            .select_related('question__knowledge_point')
-            .order_by('-wrong_count')[:limit]
-        )
+        qs = UserQuestionStatus.objects.filter(user=self.user, wrong_count__gt=0)
+        if self.institution:
+            qs = qs.filter(
+                models.Q(question__institution=self.institution) |
+                models.Q(question__institution__isnull=True)
+            )
+        wrong_qs = qs.select_related('question__knowledge_point').order_by('-wrong_count')[:limit]
 
         return {
             "questions": [
@@ -283,6 +324,11 @@ class PlannerToolExecutor(AssistantToolExecutor):
         from quizzes.models import UserKnowledgeState
 
         qs = UserKnowledgeState.objects.filter(user=self.user).select_related('knowledge_point')
+        if self.institution:
+            qs = qs.filter(
+                models.Q(knowledge_point__institution=self.institution) |
+                models.Q(knowledge_point__institution__isnull=True)
+            )
         subject_filter = (args.get('subject') or '').strip()
         if subject_filter:
             qs = qs.filter(knowledge_point__subject=subject_filter)
@@ -311,12 +357,13 @@ class PlannerToolExecutor(AssistantToolExecutor):
 
         limit = min(int(args.get('limit', 20)), 50)
         now = timezone.now()
-        due_qs = (
-            UserQuestionStatus.objects
-            .filter(user=self.user, next_review_at__lte=now)
-            .select_related('question__knowledge_point')
-            .order_by('next_review_at')
-        )
+        due_qs = UserQuestionStatus.objects.filter(user=self.user, next_review_at__lte=now)
+        if self.institution:
+            due_qs = due_qs.filter(
+                models.Q(question__institution=self.institution) |
+                models.Q(question__institution__isnull=True)
+            )
+        due_qs = due_qs.select_related('question__knowledge_point').order_by('next_review_at')
         due_count = due_qs.count()
         due_list = due_qs[:limit]
 
