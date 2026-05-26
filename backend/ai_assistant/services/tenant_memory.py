@@ -9,13 +9,12 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-LLM_API_KEY = os.getenv('LLM_API_KEY', '')
-LLM_BASE_URL = os.getenv('LLM_BASE_URL', 'https://api.deepseek.com/v1')
-
 
 def _get_mem0_config(institution_id: int) -> dict:
     """Build mem0 config with pgvector backend for the given institution."""
     db = settings.DATABASES['default']
+    api_key = os.getenv('LLM_API_KEY', '')
+    base_url = os.getenv('LLM_BASE_URL', 'https://api.deepseek.com/v1')
     return {
         "vector_store": {
             "provider": "pgvector",
@@ -31,8 +30,8 @@ def _get_mem0_config(institution_id: int) -> dict:
         "embedder": {
             "provider": "openai",
             "config": {
-                "api_key": LLM_API_KEY,
-                "base_url": LLM_BASE_URL,
+                "api_key": api_key,
+                "base_url": base_url,
                 "model": "deepseek-embedding",
             },
         },
@@ -85,8 +84,12 @@ class TenantMemoryManager:
             logger.exception("mem0 get_all failed for user %d", user_id)
             return []
 
-    def delete(self, user_id: int, memory_id: str):
-        """Delete a single memory by ID."""
+    def delete(self, memory_id: str):
+        """Delete a single memory by ID.
+
+        Note: mem0 deletes by memory_id directly. Caller must verify
+        the memory belongs to the authenticated user before calling.
+        """
         try:
             self.memory.delete(memory_id)
         except Exception:
