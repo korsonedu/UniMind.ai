@@ -124,6 +124,7 @@ class AssistantChatService:
         tool_executor,
         student_context: str = '',
         memory_context: str = '',
+        on_step=None,
     ):
         """Agent 化对话：模型可自主调用工具获取信息后再回答。"""
         from ai_engine.service import AIEngine
@@ -146,13 +147,27 @@ class AssistantChatService:
             tools = get_exam_generator_tools()
         else:
             tools = get_assistant_tools()
-        return AIEngine.call_ai_with_tools(
-            messages=messages,
-            tools=tools,
-            tool_executor=tool_executor,
-            tool_choice="auto",
-            temperature=0.6,
-            max_tokens=2500,
-            operation='assistant.chat',
-            max_tool_rounds=5,
-        )
+
+        if on_step:
+            return AIEngine.call_ai_with_streaming_tools(
+                messages=messages,
+                tools=tools,
+                tool_executor=tool_executor,
+                on_step=on_step,
+                tool_choice="auto",
+                temperature=0.6,
+                max_tokens=2500,
+                operation='assistant.chat',
+                max_tool_rounds=5,
+            )
+        else:
+            return AIEngine.call_ai_with_tools(
+                messages=messages,
+                tools=tools,
+                tool_executor=tool_executor,
+                tool_choice="auto",
+                temperature=0.6,
+                max_tokens=2500,
+                operation='assistant.chat',
+                max_tool_rounds=5,
+            )
