@@ -4,6 +4,19 @@
 
 ---
 
+## [v2.8.0-dev] - 2026-05-26
+
+### 🤖 多步可见 Agent（WebSocket 实时步骤 + 流式输出）
+
+- **`call_ai_with_streaming_tools`** (`ai_engine/service.py`)：流式 Agent 循环，支持 `on_step` 回调实时推送每步 tool call/result。
+- **WebSocket Consumer** (`ai_assistant/consumers.py`)：`AgentChatConsumer`，agent loop 在线程池中执行，每步通过 WS 推送。
+- **Step Label 生成** (`tool_executor.py` → `generate_step_label`)：22 个 tool 的中文动态描述（如"检索「导数」相关知识点"）。
+- **前端组件**：`useAgentChat` hook + `AgentStepCard` 折叠卡片组件，集成到 `AIAssistant.tsx`。
+- **适用范围**：exam_generator（出题助手）和 planner（小宇）升级，assistant 保持原有 polling 模式。
+- **技术文档**：`docs/tech/features/MULTI_STEP_AGENT.md`
+
+---
+
 ## [v2.8.0-dev] - 2026-05-25
 
 ### 🧠 Agent 记忆系统

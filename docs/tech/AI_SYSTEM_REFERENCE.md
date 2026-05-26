@@ -261,7 +261,7 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 |------|---|
 | **入口** | `ai_assistant/views.py` → `AIChatView.post` → 后台线程 `process_ai_chat` |
 | **服务** | `ai_assistant/services/chat_service.py` → `AssistantChatService.chat_with_assistant_agent` |
-| **AI 方法** | **`call_ai_with_tools`**（多轮 Agent 循环，非流式） |
+| **AI 方法** | **`call_ai_with_tools`**（多轮 Agent 循环，非流式）/ **`call_ai_with_streaming_tools`**（流式 + on_step 回调，出题助手/小宇使用） |
 | **Prompt** | `prompts/ai_assistant/base_assistant_prompt.txt` + `prompts/ai_assistant/bots/*.txt` |
 | **Model** | deepseek-v4-flash |
 | **工具** | 4 个：`search_knowledge_tree` / `get_user_weak_points` / `get_user_wrong_questions` / `lookup_question` |
@@ -269,11 +269,35 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 
 **Agent 行为**：助教在回复前可自主调用工具查询知识库和用户数据，而非仅凭模型参数记忆回答。工具查询结果注入上下文后，模型基于准确数据进行回复。
 
+**WebSocket 多步可见模式**（2026-05-26）：exam_generator 和 planner bot 使用 `call_ai_with_streaming_tools`，每步 tool call 通过 WebSocket 实时推送给前端（折叠卡片形式），文本回复逐 token 流式输出。端点：`ws/ai/chat/<bot_id>/`，详见 `docs/tech/features/MULTI_STEP_AGENT.md`。
+
 **工具说明**：
 - `search_knowledge_tree(query, subject?)`：按名称查找知识点（模糊匹配）
 - `get_user_weak_points()`：获取当前用户错题最多的知识点排行
 - `get_user_wrong_questions(limit?)`：获取最近错题列表（题干+答案）
 - `lookup_question(question_id)`：查询具体题目详情
+
+#### 5d. 出题助手对话（教师端 Agent）
+
+| 维度 | 值 |
+|------|---|
+| **入口** | `ai_assistant/views.py` → `AIChatView.post` → `process_ai_chat` |
+| **服务** | `chat_service.py` → `AssistantChatService.chat_with_assistant_agent` |
+| **AI 方法** | **`call_ai_with_tools`**（多轮 Agent 循环） |
+| **工具执行器** | `ai_assistant/services/exam_generator_tool_executor.py` → `ExamGeneratorToolExecutor` |
+| **Bot** | `bot_type='exam_generator'`，seed: `python manage.py seed_exam_agent` |
+| **工具** | 5 个出题专用 + 继承助教基础工具 |
+
+**工具列表**：
+- `search_knowledge_points(query, subject?)`：搜索可用知识点（level='kp'，按 institution 过滤）
+- `generate_questions(kp_ids, count_per_kp?, difficulty?, types?)`：快速管线出题（同步 ~10s），调用 `run_single_generate_pipeline`
+- `launch_arc_pipeline(kp_ids, questions_per_kp?, difficulty?, types?, title?)`：启动 ARC 精修管线（异步 Celery）
+- `check_pipeline_status(task_id)`：查询 ARC 管线进度
+- `save_questions_to_library(question_indices?)`：将最近生成的题目存入 Question 表
+
+**Fallback**：`generate_questions` 失败时自动降级为 `AIService.simple_chat_text` + `extract_json` 直接生成。
+
+**Metadata**：工具产出的结构化数据（`generated_questions`、`pipeline_task_id`）写入 `AIChatMessage.metadata`，前端通过 `GET /ai/history/` 获取。
 
 ---
 
@@ -315,6 +339,11 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 | `LOOKUP_QUESTION_SCHEMA` | 371 | 按 ID 查询题目详情 | AI 助教 |
 | `LOOKUP_KNOWLEDGE_POINT_SCHEMA` | 384 | 按 code 查询知识点定义 | Reviewer |
 | `SEARCH_SIMILAR_QUESTIONS_SCHEMA` | 395 | 搜索同知识点已有题目 | Reviewer |
+| `SEARCH_KP_SCHEMA` | — | 搜索可用知识点 | 出题助手 |
+| `GENERATE_QUESTIONS_SCHEMA` | — | 快速管线出题参数 | 出题助手 |
+| `LAUNCH_ARC_PIPELINE_SCHEMA` | — | 启动 ARC 管线参数 | 出题助手 |
+| `CHECK_PIPELINE_STATUS_SCHEMA` | — | 查询管线进度参数 | 出题助手 |
+| `SAVE_QUESTIONS_TO_LIBRARY_SCHEMA` | — | 存入题库参数 | 出题助手 |
 
 ---
 
