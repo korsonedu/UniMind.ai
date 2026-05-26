@@ -1,6 +1,19 @@
 # CLAUDE.md — UniMind.ai
 
-AI 驱动的通用培训机构 SaaS 平台。Django 6.0 + React 19 + DeepSeek V4。
+新一代智能教育基础设施（Agent-Native 学习操作系统）。Django 6.0 + React 19 + DeepSeek V4。
+
+## Agent 架构
+
+三个自治 AI Agent 共享统一运行时：
+
+| Agent | bot_type | 工具数 | 职责 |
+|-------|----------|--------|------|
+| 小宇 | `planner` | 15+ | 学习规划，教练式对话，主动分析数据给建议 |
+| 出题助手 | `exam_generator` | 5 专用 | 教研出题，背靠 4-Agent ARC 对抗管线 |
+| AI 助教 | `assistant` | 6+ | 学生辅导，跨会话记忆，深度数据钩稽 |
+
+运行时：`Bot → ToolExecutor → AIChatView → call_ai_with_tools`（最多 5 轮自主工具调用）。
+新增 Agent 只需：Bot 记录 + ToolExecutor 子类 + 系统提示词。见 `ai_assistant/services/`。
 
 ## 硬边界
 
@@ -22,7 +35,7 @@ UniMindCode/                  ← git 仓库根目录
 ├── backend/
 │   ├── school_system/          # Django 配置 (settings, urls, celery, asgi, middleware)
 │   ├── ai_engine/              # AI 引擎 (路由、熔断、可观测性、模型配置)
-│   ├── ai_assistant/           # AI 助教 (WebSocket 流式对话)
+│   ├── ai_assistant/           # Agent 运行时（Bot/ToolExecutor/记忆系统，3 个自治 Agent）
 │   ├── quizzes/                # 核心刷题
 │   │   ├── services/           #   出题管线、评分、解析、PDF
 │   │   ├── memorix/            #   Memorix 自进化记忆调度算法
@@ -62,7 +75,7 @@ UniMindCode/                  ← git 仓库根目录
 | `/` | Landing（未登录）/ HomeRedirect（已登录：学生未诊断→/diagnostic, 老师/机构主→/workbench, 其他→/courses） |
 | `/login` `/register` | 邮箱验证码登录注册 |
 | `/diagnostic` | 学生诊断测试（首次登录强制） |
-| `/workbench` | AI 出题工作台（老师/机构主） |
+| `/workbench` | AI 出题工作台 — 对话式 Agent（老师/机构主） |
 | `/intro/:slug` | 机构公开首页（无需登录，公开访问） |
 | `/management` | 管理后台（需管理员） |
 | `/join/:invite_slug` | 邀请链接 → 种 cookie → 302 到 /register |
@@ -86,6 +99,7 @@ UniMindCode/                  ← git 仓库根目录
 | `/payments/result` | 支付结果页（前端） |
 | `/billing` | 方案账单页（前端） |
 | `/checkout` | 结算页（前端） |
+| `/ws/ai/chat/<bot_id>/` | WS Agent 对话（出题助手/小宇，多步可见） |
 | `/ws/` | WebSocket（自习室/对话） |
 
 ## 环境变量速查
@@ -144,6 +158,10 @@ python manage.py generate_knowledge_tree --subject=高中数学
 # 批量导入所有预设
 for f in backend/knowledge_trees/*.md; do subject=$(basename "$f" .md); python manage.py import_knowledge_tree "$f" --global --subject="$subject" --force; done
 
+# Bot 种子
+python manage.py seed_exam_agent                # 创建/更新出题助手 Bot
+python manage.py seed_xiaoyu                    # 创建/更新小宇学习规划 Bot
+
 # 机构管理
 python manage.py assign_default_institution     # 将无机构用户批量归入宇艺示范学员
 
@@ -188,6 +206,7 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/PERSONALIZED_PDF_MOCK_EXAM.md` | 模拟考试（AI 组卷 + 教师发布 + 提交评分） |
 | `docs/tech/features/AGENT_MEMORY.md` | Agent 记忆系统（提取/检索/注入机制） |
 | `docs/tech/features/DIAGNOSTIC_TEST.md` | 学生诊断测试（生成/评分/Memorix 初始化） |
-| `docs/tech/features/EXAM_WORKBENCH.md` | AI 出题工作台（三栏布局/流式生成/Agent 集成） |
+| `docs/tech/features/EXAM_WORKBENCH.md` | AI 出题工作台（对话式 Agent/快速出题/ARC 精修） |
+| `docs/tech/features/MULTI_STEP_AGENT.md` | 多步可见 Agent（WebSocket 实时步骤 + 流式输出） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |
