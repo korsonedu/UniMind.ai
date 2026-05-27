@@ -35,6 +35,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
 
     # 获取记忆上下文 (dual-layer: structured + mem0 semantic)
     memory_context = ""
+    adaptive_directives = ""
     try:
         from ai_assistant.services.memory_service import (
             get_memories_for_injection,
@@ -44,6 +45,14 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
         semantic = get_mem0_memories_for_injection(user, query=user_message)
         parts = [p for p in [structured, semantic] if p]
         memory_context = "\n\n".join(parts)
+
+        # Phase 3: prompt self-adaptation based on semantic memories
+        from ai_assistant.services.prompt_adapter import get_adaptive_directives
+        from ai_assistant.services.tenant_memory import TenantMemoryManager
+        if user.institution_id:
+            mgr = TenantMemoryManager(institution_id=user.institution_id)
+            raw_memories = mgr.get_all(user_id=user.id)[:20]
+            adaptive_directives = get_adaptive_directives(raw_memories)
     except Exception:
         pass
 
@@ -66,7 +75,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
 
     try:
         with _AI_CHAT_SEMAPHORE:
-            res = AIService.chat_with_assistant_agent(bot, history_msgs, user_message, tool_executor, student_context, memory_context)
+            res = AIService.chat_with_assistant_agent(bot, history_msgs, user_message, tool_executor, student_context, memory_context, adaptive_directives=adaptive_directives)
 
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
 
@@ -374,6 +383,7 @@ class AIChatStreamView(APIView):
                     student_context = get_student_academic_context(request.user)
 
                 memory_context = ""
+                adaptive_directives = ""
                 try:
                     from ai_assistant.services.memory_service import (
                         get_memories_for_injection,
@@ -383,6 +393,13 @@ class AIChatStreamView(APIView):
                     semantic = get_mem0_memories_for_injection(request.user, query=user_message)
                     parts = [p for p in [structured, semantic] if p]
                     memory_context = "\n\n".join(parts)
+
+                    from ai_assistant.services.prompt_adapter import get_adaptive_directives
+                    from ai_assistant.services.tenant_memory import TenantMemoryManager
+                    if request.user.institution_id:
+                        mgr = TenantMemoryManager(institution_id=request.user.institution_id)
+                        raw_memories = mgr.get_all(user_id=request.user.id)[:20]
+                        adaptive_directives = get_adaptive_directives(raw_memories)
                 except Exception:
                     pass
 
@@ -399,7 +416,7 @@ class AIChatStreamView(APIView):
                 # Build messages
                 from ai_assistant.services.chat_service import AssistantChatService
                 system_prompt = AssistantChatService._build_agent_system_prompt(
-                    bot, student_context, memory_context
+                    bot, student_context, memory_context, adaptive_directives=adaptive_directives
                 )
                 messages = [{'role': 'system', 'content': system_prompt}]
                 for msg in history_msgs:
@@ -418,44 +435,72 @@ class AIChatStreamView(APIView):
                     from ai_engine.tools import get_assistant_tools
                     tools = get_assistant_tools()
 
-                # First, handle tool calls synchronously
-                with _AI_CHAT_SEMAPHORE:
-                    res = AIEngine.call_ai_with_tools(
-                        messages=messages,
-                        tools=tools,
-                        tool_executor=tool_executor,
-                        tool_choice="auto",
-                        temperature=0.6,
-                        max_tokens=2500,
-                        operation='assistant.chat',
-                        max_tool_rounds=5,
-                    )
+                # Use streaming tools for step events + real-time text streaming
+                # Run agent in a thread; yield events from queue in real-time
+                import queue
+                step_queue = queue.Queue()
+                _SENTINEL = object()
+                _result_container = [None]
 
-                if res and 'choices' in res:
-                    ai_content = res['choices'][0]['message']['content'] or ''
-                    ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ').replace('\\(', ' $ ').replace('\\)', ' $ ')
+                def on_step(event):
+                    step_queue.put(event)
 
-                    # Stream the final response token by token
-                    for char in ai_content:
-                        collected.append(char)
-                        yield f"data: {json.dumps({'token': char})}\n\n"
+                def _run_agent():
+                    try:
+                        with _AI_CHAT_SEMAPHORE:
+                            _result_container[0] = AIEngine.call_ai_with_streaming_tools(
+                                messages=messages,
+                                tools=tools,
+                                tool_executor=tool_executor,
+                                on_step=on_step,
+                                tool_choice="auto",
+                                temperature=0.6,
+                                max_tokens=2500,
+                                operation='assistant.chat',
+                                max_tool_rounds=5,
+                            )
+                    except Exception as e:
+                        _result_container[0] = {"content": f"AI 服务暂时不可用: {e}"}
+                    finally:
+                        step_queue.put(_SENTINEL)
 
-                    # Save to database
+                agent_thread = threading.Thread(target=_run_agent, daemon=True)
+                agent_thread.start()
+
+                # Yield events in real-time as they arrive
+                while True:
+                    event = step_queue.get()
+                    if event is _SENTINEL:
+                        break
+                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+                agent_thread.join(timeout=5)
+                result = _result_container[0]
+
+                ai_content = ""
+                is_error = False
+                if isinstance(result, dict) and 'content' in result:
+                    ai_content = result['content']
+                elif result and 'choices' in result:
+                    ai_content = result['choices'][0]['message']['content'] or ''
+
+                # Detect error responses (don't save to DB)
+                error_patterns = ("AI 服务暂时不可用", "AI 暂时无法响应", "LLM_API_KEY")
+                is_error = any(p in ai_content for p in error_patterns) if ai_content else True
+
+                ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ').replace('\\(', ' $ ').replace('\\)', ' $ ')
+
+                if ai_content and not is_error:
                     AIChatMessage.objects.create(
                         user=request.user,
                         role='assistant',
                         content=ai_content,
                         bot=bot,
                     )
-
-                    # Update dashboard config if tool executor set it
                     if hasattr(tool_executor, 'user'):
                         request.user.refresh_from_db()
-                else:
-                    error_msg = "AI 暂时无法响应，请稍后再试。"
-                    yield f"data: {json.dumps({'error': error_msg})}\n\n"
 
-                yield f"data: {json.dumps({'done': True})}\n\n"
+                yield f"data: {json.dumps({'done': True, 'full_content': ai_content, 'is_error': is_error}, ensure_ascii=False)}\n\n"
 
             except Exception as e:
                 logger.exception("AI Chat Stream Error [%s]: %s", type(e).__name__, e)

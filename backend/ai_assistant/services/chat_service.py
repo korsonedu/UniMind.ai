@@ -12,7 +12,7 @@ class AssistantChatService:
         return prompt
 
     @classmethod
-    def _build_agent_system_prompt(cls, bot, student_context: str = '', memory_context: str = '', institution=None) -> str:
+    def _build_agent_system_prompt(cls, bot, student_context: str = '', memory_context: str = '', institution=None, adaptive_directives: str = '') -> str:
         """为 Agent 模式构建包含工具使用指引的 system prompt。"""
         base = cls.build_system_prompt(bot, student_context)
         memory_section = f"\n\n{memory_context}" if memory_context else ''
@@ -51,7 +51,8 @@ class AssistantChatService:
             if parts:
                 personality_section = "\n\n## 机构教学配置\n" + "\n".join(f"- {x}" for x in parts)
 
-        return base + memory_section + tool_guide + personality_section
+        adaptive_section = f"\n\n{adaptive_directives}" if adaptive_directives else ''
+        return base + memory_section + tool_guide + personality_section + adaptive_section
 
     @classmethod
     def _build_exam_generator_tool_guide(cls) -> str:
@@ -141,13 +142,14 @@ class AssistantChatService:
         student_context: str = '',
         memory_context: str = '',
         on_step=None,
+        adaptive_directives='',
     ):
         """Agent 化对话：模型可自主调用工具获取信息后再回答。"""
         from ai_engine.service import AIEngine
         from ai_engine.tool_permissions import filter_tools
 
         institution = getattr(tool_executor, 'institution', None)
-        system_prompt = cls._build_agent_system_prompt(bot, student_context, memory_context, institution)
+        system_prompt = cls._build_agent_system_prompt(bot, student_context, memory_context, institution, adaptive_directives)
 
         messages = [{'role': 'system', 'content': system_prompt}]
 
