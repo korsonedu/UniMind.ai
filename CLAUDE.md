@@ -34,8 +34,8 @@
 UniMindCode/                  ← git 仓库根目录
 ├── backend/
 │   ├── school_system/          # Django 配置 (settings, urls, celery, asgi, middleware)
-│   ├── ai_engine/              # AI 引擎 (路由、熔断、可观测性、模型配置)
-│   ├── ai_assistant/           # Agent 运行时（Bot/ToolExecutor/记忆系统，3 个自治 Agent）
+│   ├── ai_engine/              # AI 引擎 (路由、熔断、可观测性、模型配置、工具权限沙箱)
+│   ├── ai_assistant/           # Agent 运行时（Bot/ToolExecutor/记忆系统/mem0 语义记忆，3 个自治 Agent）
 │   ├── quizzes/                # 核心刷题
 │   │   ├── services/           #   出题管线、评分、解析、PDF
 │   │   ├── memorix/            #   Memorix 自进化记忆调度算法
@@ -91,8 +91,11 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/quizzes/ai/streaming-generate/status/` | GET 轮询出题进度 |
 | `/api/courses/` | 课程/视频 API |
 | `/api/ai/` | AI 生成/管线 API |
-| `/api/ai/memories/` | GET/POST Agent 记忆 CRUD |
-| `/api/ai/memories/<id>/` | PATCH/DELETE Agent 记忆 |
+| `/api/ai/memories/` | GET/POST Agent 记忆 CRUD（结构化） |
+| `/api/ai/memories/<id>/` | PATCH/DELETE Agent 记忆（结构化） |
+| `/api/ai/memories/semantics/` | GET 语义记忆列表（mem0，需 USE_MEM0=true） |
+| `/api/ai/memories/semantics/clear/` | DELETE 清空全部语义记忆 |
+| `/api/ai/memories/semantics/<memory_id>/` | DELETE 删除单条语义记忆 |
 | `/api/ai/workbench-chat/` | POST 工作台 Agent 对话 |
 | `/api/institutions/` | 机构管理 API |
 | `/api/payments/` | 支付 API（订单/支付配置） |
@@ -127,6 +130,11 @@ RESEND_API_KEY=re_xxx
 
 # 熔断器
 AI_CB_FAILURE_THRESHOLD=5  AI_CB_RECOVERY_TIMEOUT=300  AI_CB_WINDOW_TIMEOUT=60
+
+# Agent 记忆（mem0 语义记忆，默认关闭）
+USE_MEM0=false                    # 启用 mem0 语义记忆（需 pgvector 扩展）
+AI_EMBEDDING_MODEL=deepseek-embedding  # Embedding 模型
+AI_EMBEDDING_BASE_URL=https://api.deepseek.com/v1  # Embedding API 地址
 
 # 其他
 AI_BULK_GENERATE_MAX_PER_REQUEST=3  AI_BULK_GENERATE_CONCURRENCY=4
@@ -208,5 +216,6 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/DIAGNOSTIC_TEST.md` | 学生诊断测试（生成/评分/Memorix 初始化） |
 | `docs/tech/features/EXAM_WORKBENCH.md` | AI 出题工作台（对话式 Agent/快速出题/ARC 精修） |
 | `docs/tech/features/MULTI_STEP_AGENT.md` | 多步可见 Agent（WebSocket 实时步骤 + 流式输出） |
+| `docs/tech/features/MULTI_TENANT_AGENT_MEMORY.md` | 多租户 Agent 记忆（mem0+pgvector、工具权限沙箱、机构人格） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |

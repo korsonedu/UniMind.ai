@@ -4,6 +4,23 @@
 
 ---
 
+## [v2.8.0-dev] - 2026-05-27
+
+### 🧠 Multi-Tenant Agent Memory (mem0 + pgvector)
+
+- **语义记忆**：集成 mem0 SDK + pgvector，Agent 从对话中自动提取语义记忆，下次对话语义检索注入 prompt。
+- **租户隔离**：每个机构独立 pgvector collection（`inst_{id}`），用户级 `user_id` 过滤。
+- **双层记忆**：结构化（AgentMemory KV）+ 语义（mem0）互补，结构化层存精确数据，语义层存模糊认知。
+- **工具权限沙箱**：`PLAN_TOOL_ACCESS` 按 plan（free/starter/growth/enterprise）过滤 Agent 可用工具集。
+- **机构人格**：Bot 模型新增 `institution_personality` JSONField，机构可配置教学风格、语气、知识领域。
+- **Feature Flag**：`USE_MEM0=true` 启用，默认关闭，渐进式上线。
+- **Embedding 配置**：`AI_EMBEDDING_MODEL` / `AI_EMBEDDING_BASE_URL` 环境变量可配置 embedding 模型。
+- **语义记忆 API**：`/api/ai/memories/semantics/` — GET 列表、DELETE 单条、DELETE 清空。
+- **测试**：6 单元测试 + 9 工具权限测试 + 3 集成测试（需 PG）。
+- **技术文档**：`docs/tech/features/MULTI_TENANT_AGENT_MEMORY.md`
+
+---
+
 ## [v2.8.0-dev] - 2026-05-26
 
 ### 🤖 多步可见 Agent（WebSocket 实时步骤 + 流式输出）
