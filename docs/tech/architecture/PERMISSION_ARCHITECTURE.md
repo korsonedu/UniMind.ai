@@ -1,7 +1,7 @@
 # UniMind.ai 权限架构
 
-> 最后更新：2026-05-21  
-> 审计范围：全系统（后端 11 个 Django app + 前端 21 个页面 + 路由/侧边栏）
+> 最后更新：2026-05-27
+> 审计范围：全系统（后端 11 个 Django app + 前端 21 个页面 + 路由/侧边栏 + Agent 工具权限沙箱）
 
 ---
 
@@ -189,6 +189,8 @@ quota_resource = 'ai_question'
 | articles | 浏览量+1 | IsMember |
 | ai_assistant | Bot 管理 | IsAdmin（写），IsMember（读） |
 | ai_assistant | AI 对话 | IsMember + HasQuota('ai_call_total') |
+| ai_assistant | 结构化记忆 CRUD | IsMember（仅操作自己的记忆） |
+| ai_assistant | 语义记忆 GET/DELETE | IsMember（含所有权验证） |
 | interviews | 全部 | IsMember + HasPlanFeature('interview.mock') |
 | faq_system | 全部 | IsMember（内联教师/管理员检查用于写操作） |
 | study_room | 全部 | IsMember |
@@ -285,6 +287,25 @@ if (loading) return <Spinner />
 if (hasFeature(feature)) return children
 return <Navigate to="/" replace />
 ```
+
+---
+
+## 7.5 Agent 工具权限沙箱
+
+Agent 的可用工具集按机构方案（plan）过滤，低方案用户无法调用高级工具。
+
+**文件**：`ai_engine/tool_permissions.py`
+
+**调用链**：`chat_service.py` → `filter_tools(bot_type, institution, tools)` → 过滤后的工具列表
+
+| Plan | assistant | planner | exam_generator |
+|------|-----------|---------|----------------|
+| free | search_knowledge_tree, get_user_weak_points | get_learning_stats, get_knowledge_mastery_map, get_due_reviews, search_knowledge_tree | 不可用 |
+| starter | + get_user_wrong_questions, search_courses | get_learning_stats, get_knowledge_mastery_map, get_due_reviews | search_knowledge_points, generate_questions |
+| growth | 全部 | 全部 | 全部 |
+| enterprise | 全部 | 全部 | 全部 |
+
+**数据隔离补充**：Agent 记忆（mem0 语义记忆）在 pgvector 层面按机构隔离（`inst_{id}` collection），用户层通过 mem0 的 `user_id` 参数过滤。
 
 ---
 

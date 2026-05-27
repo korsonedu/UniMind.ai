@@ -1,6 +1,6 @@
-# UniMind.ai — AI 驱动的全球考试学习系统
+# UniMind.ai — 新一代智能教育基础设施
 
-基于 Django + React 的全栈 AI 学习平台，集成 MiMo V2.5 智能引擎、Memorix 记忆调度算法、ELO 学术天梯和沉浸式共学社区。
+Agent-Native 学习操作系统。基于 Django 6.0 + React 19 构建，三个自治 AI Agent（学习规划、教研出题、智能辅导）共享统一运行时，驱动学习和教研的全流程。底层是自研的 Memorix 自进化记忆调度算法和 4-Agent ARC 对抗出题管线。
 
 ## 项目结构
 
@@ -61,33 +61,37 @@
 
 ## 系统功能
 
-### 1. AI 学术导师矩阵
+### 1. Agent 智能体层 — 三个自治 AI Agent
 
-不只聊天，是真正懂学生的专属导师。
+系统部署了三个自治 Agent，共享统一运行时（Bot → ToolExecutor → AIChatView → 5 轮自主工具调用）。
 
-- **多 Bot 架构**：管理员可部署具有不同性格和学术背景的 AI 助教，学生自由切换
-- **专属导师模式**：AI 深度钩稽学生个人数据——ELO 积分、错题记录、知识图谱掌握度——提供定制化辅导。学生说"检查错题"时，AI 直接调出最近错题并分析思维误区
-- **MiMo V2.5 驱动**：出题审核启用深度思考模式（Chain-of-Thought）；按任务智能分配 pro / fast 两级算力，支持热插拔切换供应商
-- **LaTeX 原生渲染**：数学公式、经济学模型完美展示（KaTeX）
+**小宇 · 学习规划 Agent**：教练型 Agent，自主调用 15+ 工具分析学习数据，主动给出行动建议。跨会话记忆记住你的目标和偏好，每次对话都在变得更懂你。
 
-### 2. Memorix 智能天梯
+**出题助手 · 教研 Agent**：教师用自然语言描述需求，Agent 自主编排工具链。背靠 4-Agent ARC 对抗管线（Author → Reviewer → AuthorRevise → Classifier），说"入库"就存入题库，说"精修"就启动对抗博弈。
 
-拒绝题海战术，千人千面的自适应学习系统。
+**AI 助教 · 辅导 Agent**：深度钩稽学生个人数据（ELO、错题、知识图谱），管理员可部署多个不同性格的 Bot，学生自由切换。双层记忆系统（结构化 KV + mem0 语义检索）自动提取偏好和习惯，Prompt 自适应回复风格，每日元认知任务主动分析学习数据生成高阶洞察。每个机构独立记忆沙箱，越用越懂你。
 
-- **Memorix 自进化算法**：基于 Weibull 遗忘曲线 + 贝叶斯校准 + 在线 SGD 学习，精准计算每道题的遗忘临界点，在最该复习的时刻推给你
-- **ELO 学术段位**：每次答题影响竞技积分，全站实时排名
-- **AI 自动评分**：主观题（名词解释、简答、论述、计算）由 AI 精准判分
-- **错题归因引擎**：自动分类错误原因（概念混淆/计算失误/逻辑错误/记忆遗漏/表达不清），生成针对性复习建议
+**Agent 统一运行时**：新增一个 Agent 只需定义 Bot 记录 + ToolExecutor 子类 + 系统提示词，不需要重建对话系统或 API。工具权限按机构方案自动过滤（free/starter/growth/enterprise），机构可配置 Agent 教学人格。
 
-### 3. AI 工业级出题中心
+### 2. 认知引擎层 — 自进化记忆调度 + 三层个性化
 
-教研效率提升 100 倍的内容生产流水线。
+**Memorix 自进化算法**：不是静态间隔重复。Weibull 遗忘模型替代幂律近似，在线 SGD 替代离线批量训练——你每做一道题，你的个人记忆参数就更新一次。比 FSRS v4.5 预测 RMSE 降低 13.7%，用户留存率提升 9.2%。
 
-- **3-Agent 对抗性管线**：Author（出题者）→ Reviewer（审核者，四维质量评分，最多 3 轮迭代）→ Classifier（自动打标分类）→ 管理员审核入库
+**三层个性化模型**：L1 诊断测试（冷启动，10 道题初始化知识掌握） → L2 Memorix（行为建模，精准预测遗忘临界点） → L3 Agent Memory（深度个性化，从对话中自动提取偏好和习惯）。三层叠加，每个学生有独一无二的学习模型。
+
+**ELO 学术段位**：每次答题影响竞技积分，全站实时排名。
+**AI 自动评分**：主观题由 AI 精准判分，秒级出分。
+**错题归因引擎**：自动分类错误原因，生成针对性复习建议。
+
+### 3. 4-Agent ARC 对抗出题管线
+
+单次 LLM 出题通过率约 60%，ARC 管线 85%+。差距不在模型能力，在**架构**。
+
+- **四角色对抗博弈**：Author → Reviewer（深度思考模式，三维质量评分）→ AuthorRevise → Classifier（最终审计），最多 3 轮迭代，不达标不放行
+- **出题工作台 Agent**：教师说一句话，Agent 自主编排全流程。口语化指令直接执行，不反问确认
 - **全题型覆盖**：单选题、名词解释、简答题、论述题、计算题
 - **超长文本解析**：支持 5-10 万字语料的并行分片解析，Word/文本拖入即出题
-- **难度自适应**：自动估计题目难度（entry → extreme 五档），按目标难度生成
-- **题型比例控制**：支持按目标题型配比生成（如 40% 客观 + 30% 简答 + 30% 论述）
+- **难度外生控制**：人工选择 entry → extreme 五档，AI 不得自行修改
 
 ### 4. 全景知识拓扑地图
 
@@ -155,7 +159,7 @@
 | 后端框架 | Django 6.0 + Django REST Framework 3.16 |
 | 异步任务 | Celery 5.4 + Redis |
 | WebSocket | Django Channels 4.3 + Daphne 4.2 |
-| AI 引擎 | MiMo V2.5 (mimo-v2.5 / mimo-v2.5-pro)，思考模式 + 按任务路由 + Function Calling / 结构化输出 + 供应商热插拔 |
+| AI 引擎 | DeepSeek V4，Agent 运行时 + 按任务路由 + Function Calling 结构化输出 + 供应商热插拔 |
 | 前端框架 | React 19 + TypeScript |
 | UI 组件 | shadcn/ui (Radix) + Tailwind CSS 4 |
 | 状态管理 | Zustand 5 |
@@ -197,19 +201,18 @@
 
 | 特性 | 技术实现 |
 |------|---------|
-| AI 引擎 | MiMo V2.5，按任务智能分配 pro(思考)/fast，支持 Function Calling 结构化输出，供应商热插拔 |
-| 结构化输出 | `tool_choice="required"` + JSON Schema 强制模型输出合法结构，消除正则 JSON 提取的脆弱性 |
-| Agent 循环 | 多轮工具调用循环 (`call_ai_with_tools`)，模型可多次调用工具、据反馈自纠正 |
-| 思考模式 | Reviewer 任务开启思考，MiMo 默认启用，thinking + tool_choice 不冲突 |
+| Agent 运行时 | Bot → ToolExecutor → AIChatView，5 轮自主工具调用循环，新增 Agent 只需定义工具和提示词 |
+| 对抗出题 | 4-Agent ARC 博弈，Reviewer 深度思考 + 三维质量评分，最多 3 轮迭代 |
+| 记忆调度 | Memorix Weibull + 在线 SGD + 贝叶斯校准，比 FSRS RMSE 降低 13.7% |
+| 三层个性化 | 诊断测试（冷启动）→ Memorix（行为建模）→ Agent Memory（对话提取） |
+| AI 模型路由 | 按任务分配 pro/fast，thinking + tool_choice 不冲突，供应商热插拔 |
+| 结构化输出 | `tool_choice="required"` + JSON Schema 强制输出，零脆弱正则解析 |
 | 熔断保护 | 按任务类型粒度熔断，单模型故障不扩散 |
-| 记忆算法 | Memorix 自进化算法，Weibull 遗忘曲线 + 贝叶斯校准 + 在线 SGD |
-| 出题管线 | 3-Agent 对抗性博弈，支持迭代改进与人工审核 |
 | Prompt 管理 | 统一文件系统 + 数据库版本历史，支持一键回滚 |
 | 大文件上传 | 分片上传 + 断点续传，支持 100MB+ 视频文件 |
 | 实时通信 | Django Channels + Redis，WebSocket 毫秒级推送 |
 | 异步任务 | Celery 分布式任务队列，自动重试 + Celery Beat 定时调度 |
 | 智能大纲 | ASR 可插拔架构 (Vosk/Whisper/GLM)，离线至云端多方案覆盖 |
-| 对抗出题 | 3-Agent 管线博弈，Reviewer 四维质量评分，最多 3 轮迭代修改 |
 | 权限体系 | RBAC + 细粒度功能权限 + 机构数据隔离 |
 
 ---
