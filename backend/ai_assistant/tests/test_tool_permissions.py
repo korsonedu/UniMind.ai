@@ -12,10 +12,13 @@ class TestToolPermissions:
         result = filter_tools("assistant", inst, tools)
         assert {t["function"]["name"] for t in result} == {"search_knowledge_tree", "get_user_weak_points"}
 
-    def test_free_plan_planner_empty(self):
+    def test_free_plan_planner_basic_only(self):
         inst = MagicMock(plan="free")
-        result = filter_tools("planner", inst, self._make_tools(["get_learning_stats"]))
-        assert result == []
+        tools = self._make_tools(["get_learning_stats", "save_study_plan", "get_due_reviews"])
+        result = filter_tools("planner", inst, tools)
+        names = {t["function"]["name"] for t in result}
+        assert "get_learning_stats" in names
+        assert "save_study_plan" not in names
 
     def test_free_plan_exam_generator_empty(self):
         inst = MagicMock(plan="free")
