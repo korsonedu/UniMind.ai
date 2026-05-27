@@ -20,6 +20,8 @@ ai_engine/tools.py                ← JSON Schema 定义（约束模型输出格
 ai_engine/config.py               ← 模型路由表（哪个任务用什么模型、是否思考）
 ai_engine/tool_permissions.py     ← 工具权限沙箱（按 plan 过滤可用工具）
 ai_assistant/services/tenant_memory.py ← mem0 语义记忆（pgvector 后端，租户隔离）
+ai_assistant/services/prompt_adapter.py ← Prompt 自适应（规则引擎检测用户模式）
+ai_assistant/tasks.py             ← 元认知 Celery 任务（每日分析学习数据生成高阶记忆）
 ```
 
 **三个原则**：
@@ -271,7 +273,24 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 
 **Agent 行为**：助教在回复前可自主调用工具查询知识库和用户数据，而非仅凭模型参数记忆回答。工具查询结果注入上下文后，模型基于准确数据进行回复。
 
-**WebSocket 多步可见模式**（2026-05-26）：exam_generator 和 planner bot 使用 `call_ai_with_streaming_tools`，每步 tool call 通过 WebSocket 实时推送给前端（折叠卡片形式），文本回复逐 token 流式输出。端点：`ws/ai/chat/<bot_id>/`，详见 `docs/tech/features/MULTI_STEP_AGENT.md`。
+**多步可见 Agent**（2026-05-26，2026-05-27 流式修复）：exam_generator 和 planner bot 使用 `call_ai_with_streaming_tools`，每步 tool call 实时推送给前端（折叠卡片形式），文本回复逐 token 流式输出。exam_generator 通过 WebSocket（`ws/ai/chat/<bot_id>/`），小宇通过 SSE（`POST /api/ai/chat/stream/`），详见 `docs/tech/features/MULTI_STEP_AGENT.md`。
+
+**Planner 专用工具**（小宇）：
+
+| 工具 | 用途 |
+|------|------|
+| `get_learning_stats` | 获取学习统计概览 |
+| `get_knowledge_mastery_map` | 知识点掌握度地图 |
+| `get_due_reviews` | 今日待复习题目 |
+| `get_exam_history` | 考试成绩历史 |
+| `save_study_plan` | 保存学习计划 |
+| `get_active_plan` | 获取当前学习计划 |
+| `update_plan_task` | 更新计划任务状态 |
+| `set_dashboard_layout` | 配置 Dashboard 布局 |
+| `create_indicator_card` | 创建自定义指标卡片（持久化到 Dashboard） |
+| `search_courses` | 搜索课程 |
+| `search_asr` | 搜索视频字幕 |
+| `search_articles` | 搜索文章 |
 
 **工具说明**：
 - `search_knowledge_tree(query, subject?)`：按名称查找知识点（模糊匹配）
@@ -346,6 +365,8 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 | `LAUNCH_ARC_PIPELINE_SCHEMA` | — | 启动 ARC 管线参数 | 出题助手 |
 | `CHECK_PIPELINE_STATUS_SCHEMA` | — | 查询管线进度参数 | 出题助手 |
 | `SAVE_QUESTIONS_TO_LIBRARY_SCHEMA` | — | 存入题库参数 | 出题助手 |
+| `SET_DASHBOARD_LAYOUT_SCHEMA` | 482 | 配置 Dashboard 区块布局 | 小宇 |
+| `CREATE_INDICATOR_CARD_SCHEMA` | 502 | 创建自定义指标卡片 | 小宇 |
 
 ---
 

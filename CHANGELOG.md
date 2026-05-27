@@ -19,6 +19,21 @@
 - **测试**：6 单元测试 + 9 工具权限测试 + 3 集成测试（需 PG）。
 - **技术文档**：`docs/tech/features/MULTI_TENANT_AGENT_MEMORY.md`
 
+### 🎯 Prompt 自适应（Phase 3）
+
+- **规则引擎**：`prompt_adapter.py` — 8 种用户模式检测（学习风格 4 种 + 回复长度 2 种 + 交互风格 2 种）。
+- **自适应指令**：检测到模式后生成中文指令注入 system prompt 末尾，Agent 自动调整回复风格。
+- **双路径集成**：polling 和 streaming 两条聊天路径均在记忆检索后调用 `get_adaptive_directives()`。
+- **零 LLM 开销**：纯规则匹配（关键词检测），不额外调用模型。
+- **测试**：14 单元测试。
+
+### 🔄 主动反思与元认知（Phase 4）
+
+- **Celery 定时任务**：`reflect_user_learning` 每日运行，分析近 7 天活跃用户的学习数据。
+- **分析维度**：做题错误率（>60% 告警 / <20% 鼓励进阶）、使用频率（高频/低频）、学习时段（深夜/上午）。
+- **语义记忆写入**：洞察通过 mem0 存储，metadata 标记 `source=meta_cognition`，下次对话自动注入。
+- **测试**：4 单元测试。
+
 ---
 
 ## [v2.8.0-dev] - 2026-05-26
