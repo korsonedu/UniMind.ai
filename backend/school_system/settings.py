@@ -281,6 +281,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "users.tasks.check_performance_drops",
         "schedule": 86400.0,
     },
+    "reflect-user-learning-daily": {
+        "task": "ai_assistant.tasks.reflect_user_learning",
+        "schedule": 86400.0,
+    },
 }
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "visibility_timeout": _get_int("CELERY_VISIBILITY_TIMEOUT", 3600),
