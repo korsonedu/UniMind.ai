@@ -71,6 +71,13 @@ def load_personality_template(bot) -> str:
 
 
 # 向后兼容：保留旧接口
+def get_bot_prompt_template_name(bot) -> str:
+    """返回 bot prompt 文件的相对模板路径（供 serializer 使用）。"""
+    from ai_assistant.bot_registry import get_bot_profile
+    profile = get_bot_profile(bot.bot_type)
+    return f'bots/{profile.prompt_dir}/system_prompt.txt'
+
+
 def get_bot_prompt_path(bot) -> Path:
     return get_bot_prompt_dir(bot) / 'system_prompt.txt'
 
