@@ -16,17 +16,31 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.bot_id = self.scope['url_route']['kwargs']['bot_id']
         self.user = self.scope.get('user')
+        logger.info("WS connect: bot_id=%s, session_user=%s", self.bot_id, self.user)
 
+        # Try session auth first, then fallback to token query param
         if not self.user or not self.user.is_authenticated:
-            await self.close(code=4001)
-            return
+            from urllib.parse import parse_qs
+            qs = self.scope.get('query_string', b'').decode()
+            params = parse_qs(qs)
+            token = params.get('token', [None])[0]
+            logger.info("WS auth fallback: token=%s", bool(token))
+            if token:
+                self.user = await self._authenticate_token(token)
+                logger.info("WS token auth result: %s", self.user)
+            if not self.user or not self.user.is_authenticated:
+                logger.warning("WS rejected: unauthenticated")
+                await self.close(code=4001)
+                return
 
         bot = await self._get_bot(self.bot_id)
         if not bot:
+            logger.warning("WS rejected: bot %s not found or no access", self.bot_id)
             await self.close(code=4004)
             return
 
         self.bot = bot
+        logger.info("WS accepted: user=%s, bot=%s (%s)", self.user, bot.name, bot.bot_type)
         await self.accept()
 
     async def disconnect(self, code):
@@ -43,6 +57,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             return
 
         message = data.get('message', '').strip()
+        logger.info("WS received: bot=%s, user=%s, msg=%s", self.bot_id, self.user, message[:50])
         if not message:
             await self.send(text_data=json.dumps(
                 {"type": "error", "message": "Empty message"},
@@ -52,7 +67,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
 
         loop = asyncio.get_event_loop()
         try:
-            await loop.run_in_executor(None, self._run_agent, message)
+            await loop.run_in_executor(None, self._run_agent, message, loop)
         except Exception as e:
             logger.exception("Agent WS error: %s", e)
             await self.send(text_data=json.dumps(
@@ -60,15 +75,18 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 ensure_ascii=False,
             ))
 
-    def _run_agent(self, message: str):
+    def _run_agent(self, message: str, loop=None):
         """同步方法，在线程池中执行完整的 agent loop。"""
         import asyncio as _asyncio
         from .models import AIChatMessage
         from .utils import get_student_academic_context
 
-        loop = _asyncio.new_event_loop()
+        # Use the consumer's event loop (passed from receive) so run_coroutine_threadsafe works
+        if loop is None:
+            loop = _asyncio.get_event_loop()
 
         def send_sync(event_dict):
+            logger.info("WS send_sync: type=%s", event_dict.get('type'))
             future = _asyncio.run_coroutine_threadsafe(
                 self.send(text_data=json.dumps(event_dict, ensure_ascii=False)),
                 loop,
@@ -102,33 +120,21 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             except Exception:
                 pass
 
-            if self.bot.bot_type == 'planner':
-                from .services.tool_executor import PlannerToolExecutor
-                tool_executor = PlannerToolExecutor(self.user)
-            elif self.bot.bot_type == 'exam_generator':
-                from .services.exam_generator_tool_executor import ExamGeneratorToolExecutor
-                tool_executor = ExamGeneratorToolExecutor(self.user)
-                last_with_questions = AIChatMessage.objects.filter(
-                    user=self.user, bot=self.bot, role='assistant',
-                ).exclude(metadata={}).order_by('-timestamp').first()
-                if last_with_questions:
-                    cached = last_with_questions.metadata.get('generated_questions')
-                    if cached:
-                        tool_executor._last_generated = cached
-            else:
-                from .services.tool_executor import AssistantToolExecutor
-                tool_executor = AssistantToolExecutor(self.user)
+            from .services.chat_dispatch import dispatch_bot_chat
 
-            from ai_service import AIService
-            result = AIService.chat_with_assistant_agent(
+            dispatch_result = dispatch_bot_chat(
                 bot=self.bot,
-                history_messages=history_msgs,
-                user_message=message,
-                tool_executor=tool_executor,
+                user=self.user,
+                message=message,
+                history=history_msgs,
+                institution=getattr(self, 'institution', None),
+                stream=True,
+                on_step=on_step,
                 student_context=student_context,
                 memory_context=memory_context,
-                on_step=on_step,
             )
+            result = dispatch_result['result']
+            tool_executor = dispatch_result['tool_executor']
 
             if isinstance(result, dict) and 'content' in result:
                 ai_content = result['content']
@@ -171,6 +177,15 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 return bot
             return None
         except Bot.DoesNotExist:
+            return None
+
+    @database_sync_to_async
+    def _authenticate_token(self, token: str):
+        from rest_framework.authtoken.models import Token
+        try:
+            auth_token = Token.objects.get(key=token)
+            return auth_token.user
+        except Token.DoesNotExist:
             return None
 
     def _save_message(self, user, bot, role, content, metadata=None):
