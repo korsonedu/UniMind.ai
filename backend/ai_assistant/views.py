@@ -1,5 +1,7 @@
+import asyncio
 import threading
 import logging
+from asgiref.sync import sync_to_async
 from django.db import models, connections
 from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin
 from rest_framework import generics, permissions, serializers
@@ -33,49 +35,25 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
     if bot and bot.is_exclusive:
         student_context = get_student_academic_context(user)
 
-    # 获取记忆上下文 (dual-layer: structured + mem0 semantic)
-    memory_context = ""
-    adaptive_directives = ""
-    try:
-        from ai_assistant.services.memory_service import (
-            get_memories_for_injection,
-            get_mem0_memories_for_injection,
-        )
-        structured = get_memories_for_injection(user)
-        semantic = get_mem0_memories_for_injection(user, query=user_message)
-        parts = [p for p in [structured, semantic] if p]
-        memory_context = "\n\n".join(parts)
+    # 获取记忆上下文 (dual-layer: structured + mem0 semantic + adaptive directives)
+    from ai_assistant.services.memory_service import build_memory_context
+    memory_context, adaptive_directives = build_memory_context(user, user_message)
 
-        # Phase 3: prompt self-adaptation based on semantic memories
-        from ai_assistant.services.prompt_adapter import get_adaptive_directives
-        from ai_assistant.services.tenant_memory import TenantMemoryManager
-        if user.institution_id:
-            mgr = TenantMemoryManager(institution_id=user.institution_id)
-            raw_memories = mgr.get_all(user_id=user.id)[:20]
-            adaptive_directives = get_adaptive_directives(raw_memories)
-    except Exception:
-        pass
-
-    if bot and bot.bot_type == 'planner':
-        from ai_assistant.services.tool_executor import PlannerToolExecutor
-        tool_executor = PlannerToolExecutor(user)
-    elif bot and bot.bot_type == 'exam_generator':
-        from ai_assistant.services.exam_generator_tool_executor import ExamGeneratorToolExecutor
-        tool_executor = ExamGeneratorToolExecutor(user)
-        # 从最近一条助手消息的 metadata 中恢复已生成的题目缓存
-        last_with_questions = AIChatMessage.objects.filter(
-            user=user, bot=bot, role='assistant',
-        ).exclude(metadata={}).order_by('-timestamp').first()
-        if last_with_questions:
-            cached = last_with_questions.metadata.get('generated_questions')
-            if cached:
-                tool_executor._last_generated = cached
-    else:
-        tool_executor = AssistantToolExecutor(user)
+    from ai_assistant.services.chat_dispatch import dispatch_bot_chat
 
     try:
         with _AI_CHAT_SEMAPHORE:
-            res = AIService.chat_with_assistant_agent(bot, history_msgs, user_message, tool_executor, student_context, memory_context, adaptive_directives=adaptive_directives)
+            dispatch_result = dispatch_bot_chat(
+                bot=bot,
+                user=user,
+                message=user_message,
+                history=history_msgs,
+                student_context=student_context,
+                memory_context=memory_context,
+                adaptive_directives=adaptive_directives,
+            )
+            res = dispatch_result['result']
+            tool_executor = dispatch_result['tool_executor']
 
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
 
@@ -116,7 +94,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
         logger.exception("AI Chat Thread Error: %s", e)
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
         if pending_msg:
-            pending_msg.content = f"抱歉，连接中断: {str(e)}"
+            pending_msg.content = "抱歉，连接中断，请稍后再试。"
             pending_msg.save()
     finally:
         # 异步提取记忆（不阻塞响应）
@@ -365,85 +343,52 @@ class AIChatStreamView(APIView):
         # Save user message
         AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot)
 
-        def generate():
+        def _sync_setup():
+            """All sync DB/ORM work — called once via sync_to_async."""
+            history_objs = AIChatMessage.objects.filter(
+                user=request.user, bot=bot
+            ).order_by('-timestamp')[:10]
+            history_msgs = [
+                {"role": h.role, "content": h.content}
+                for h in reversed(history_objs)
+                if h.content != "[Thinking...]" and h.content != user_message
+            ]
+
+            student_context = ""
+            if bot.is_exclusive:
+                student_context = get_student_academic_context(request.user)
+
+            from ai_assistant.services.memory_service import build_memory_context
+            memory_context, adaptive_directives = build_memory_context(request.user, user_message)
+
+            from ai_assistant.services.chat_dispatch import dispatch_bot_chat_sync
+
+            messages, tools, tool_executor, profile = dispatch_bot_chat_sync(
+                bot=bot,
+                user=request.user,
+                message=user_message,
+                history=history_msgs,
+                student_context=student_context,
+                memory_context=memory_context,
+                adaptive_directives=adaptive_directives,
+            )
+
+            return history_msgs, messages, tools, tool_executor
+
+        async def generate():
+            history_msgs = []
             collected = []
             try:
-                # Build context
-                history_objs = AIChatMessage.objects.filter(
-                    user=request.user, bot=bot
-                ).order_by('-timestamp')[:10]
-                history_msgs = [
-                    {"role": h.role, "content": h.content}
-                    for h in reversed(history_objs)
-                    if h.content != "[Thinking...]" and h.content != user_message
-                ]
+                history_msgs, messages, tools, tool_executor = await sync_to_async(_sync_setup)()
 
-                student_context = ""
-                if bot.is_exclusive:
-                    student_context = get_student_academic_context(request.user)
-
-                memory_context = ""
-                adaptive_directives = ""
-                try:
-                    from ai_assistant.services.memory_service import (
-                        get_memories_for_injection,
-                        get_mem0_memories_for_injection,
-                    )
-                    structured = get_memories_for_injection(request.user)
-                    semantic = get_mem0_memories_for_injection(request.user, query=user_message)
-                    parts = [p for p in [structured, semantic] if p]
-                    memory_context = "\n\n".join(parts)
-
-                    from ai_assistant.services.prompt_adapter import get_adaptive_directives
-                    from ai_assistant.services.tenant_memory import TenantMemoryManager
-                    if request.user.institution_id:
-                        mgr = TenantMemoryManager(institution_id=request.user.institution_id)
-                        raw_memories = mgr.get_all(user_id=request.user.id)[:20]
-                        adaptive_directives = get_adaptive_directives(raw_memories)
-                except Exception:
-                    pass
-
-                # Select tool executor
-                if bot.bot_type == 'planner':
-                    from ai_assistant.services.tool_executor import PlannerToolExecutor
-                    tool_executor = PlannerToolExecutor(request.user)
-                elif bot.bot_type == 'exam_generator':
-                    from ai_assistant.services.exam_generator_tool_executor import ExamGeneratorToolExecutor
-                    tool_executor = ExamGeneratorToolExecutor(request.user)
-                else:
-                    tool_executor = AssistantToolExecutor(request.user)
-
-                # Build messages
-                from ai_assistant.services.chat_service import AssistantChatService
-                system_prompt = AssistantChatService._build_agent_system_prompt(
-                    bot, student_context, memory_context, adaptive_directives=adaptive_directives
-                )
-                messages = [{'role': 'system', 'content': system_prompt}]
-                for msg in history_msgs:
-                    if msg['role'] in ('user', 'assistant') and msg['content']:
-                        messages.append(msg)
-                messages.append({'role': 'user', 'content': user_message})
-
-                # Get tools
-                if bot.bot_type == 'planner':
-                    from ai_engine.tools import get_planner_tools
-                    tools = get_planner_tools()
-                elif bot.bot_type == 'exam_generator':
-                    from ai_engine.tools import get_exam_generator_tools
-                    tools = get_exam_generator_tools()
-                else:
-                    from ai_engine.tools import get_assistant_tools
-                    tools = get_assistant_tools()
-
-                # Use streaming tools for step events + real-time text streaming
-                # Run agent in a thread; yield events from queue in real-time
-                import queue
-                step_queue = queue.Queue()
+                step_queue: asyncio.Queue = asyncio.Queue()
                 _SENTINEL = object()
                 _result_container = [None]
 
                 def on_step(event):
-                    step_queue.put(event)
+                    step_queue.put_nowait(event)
+
+                forced_tool_choice = "required" if bot.bot_type in ('planner', 'exam_generator') else "auto"
 
                 def _run_agent():
                     try:
@@ -453,23 +398,23 @@ class AIChatStreamView(APIView):
                                 tools=tools,
                                 tool_executor=tool_executor,
                                 on_step=on_step,
-                                tool_choice="auto",
+                                tool_choice=forced_tool_choice,
                                 temperature=0.6,
                                 max_tokens=2500,
                                 operation='assistant.chat',
                                 max_tool_rounds=5,
                             )
                     except Exception as e:
-                        _result_container[0] = {"content": f"AI 服务暂时不可用: {e}"}
+                        logger.exception("Agent thread error: %s", e)
+                        _result_container[0] = {"content": "AI 服务暂时不可用，请稍后再试。"}
                     finally:
-                        step_queue.put(_SENTINEL)
+                        step_queue.put_nowait(_SENTINEL)
 
                 agent_thread = threading.Thread(target=_run_agent, daemon=True)
                 agent_thread.start()
 
-                # Yield events in real-time as they arrive
                 while True:
-                    event = step_queue.get()
+                    event = await step_queue.get()
                     if event is _SENTINEL:
                         break
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
@@ -484,21 +429,20 @@ class AIChatStreamView(APIView):
                 elif result and 'choices' in result:
                     ai_content = result['choices'][0]['message']['content'] or ''
 
-                # Detect error responses (don't save to DB)
                 error_patterns = ("AI 服务暂时不可用", "AI 暂时无法响应", "LLM_API_KEY")
                 is_error = any(p in ai_content for p in error_patterns) if ai_content else True
 
                 ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ').replace('\\(', ' $ ').replace('\\)', ' $ ')
 
                 if ai_content and not is_error:
-                    AIChatMessage.objects.create(
+                    await sync_to_async(AIChatMessage.objects.create)(
                         user=request.user,
                         role='assistant',
                         content=ai_content,
                         bot=bot,
                     )
                     if hasattr(tool_executor, 'user'):
-                        request.user.refresh_from_db()
+                        await sync_to_async(request.user.refresh_from_db)()
 
                 yield f"data: {json.dumps({'done': True, 'full_content': ai_content, 'is_error': is_error}, ensure_ascii=False)}\n\n"
 
@@ -507,23 +451,21 @@ class AIChatStreamView(APIView):
                 error_msg = "抱歉，连接中断，请稍后再试。"
                 yield f"data: {json.dumps({'error': error_msg})}\n\n"
             finally:
-                # Async memory extraction
                 try:
                     from ai_assistant.services.memory_service import (
                         extract_memories_async,
                         extract_memories_with_mem0,
                     )
                     full_history = history_msgs + [{'role': 'user', 'content': user_message}]
-                    extract_memories_async(request.user, full_history)
-                    extract_memories_with_mem0(request.user, full_history)
+                    await sync_to_async(extract_memories_async)(request.user, full_history)
+                    await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     pass
-                connections.close_all()
+                await sync_to_async(connections.close_all)()
 
-                # Increment quota
                 from users.quota import increment_quota
                 if request.user.institution:
-                    increment_quota(request.user.institution, 'ai_call_total')
+                    await sync_to_async(increment_quota)(request.user.institution, 'ai_call_total')
 
         response = StreamingHttpResponse(
             generate(),
@@ -623,7 +565,7 @@ class SemanticMemoryListView(APIView):
         try:
             from ai_assistant.services.tenant_memory import TenantMemoryManager
             manager = TenantMemoryManager(institution_id=user.institution_id)
-            limit = int(request.query_params.get('limit', 100))
+            limit = min(int(request.query_params.get('limit', 100)), 200)
             memories = manager.get_all(user_id=user.id)[:limit]
             return Response({"memories": memories})
         except Exception:
