@@ -1,45 +1,47 @@
 {
+  "wizard": {
+    "next": "下一步",
+    "finish": "完成",
+    "skip": "跳过",
+    "back": "返回",
+    "creating": "创建中…"
+  },
+  "step1": {
+    "title": "欢迎使用 UniMind！",
+    "subtitle": "请输入您的邀请码开始创建机构",
+    "placeholder": "请输入邀请码",
+    "error_empty": "请输入邀请码",
+    "error_invalid": "邀请码无效"
+  },
+  "step2": {
+    "title": "给你的机构起个名字吧",
+    "subtitle": "这将展示在学员端和邀请链接中",
+    "placeholder": "例如：宇艺教育",
+    "error_empty": "请输入机构名称"
+  },
+  "step3": {
+    "title": "你的机构目前有多少学生？",
+    "subtitle": "帮助我们为你推荐合适的方案",
+    "options": {
+      "1-50": "1-50 人",
+      "50-200": "50-200 人",
+      "200-500": "200-500 人",
+      "500+": "500+ 人"
+    }
+  },
+  "step4": {
+    "title": "你主要教哪些科目？",
+    "subtitle_plan": "{{plan}} 方案最多选择 {{count}} 个学科方向",
+    "subtitle_default": "选择你机构的学科方向"
+  },
+  "step5": {
+    "title": "简单介绍一下你的机构",
+    "subtitle": "让学员快速了解你（可选）",
+    "placeholder": "例如：专注金融考研辅导 10 年，累计培训 5000+ 学员"
+  },
   "done": {
     "title": "设置完成！",
-    "teacherDesc": "你的机构已创建成功，现在可以邀请学员、生成题目了。",
-    "studentDesc": "你已成功加入机构，现在可以开始学习了。",
+    "subtitle": "你的机构已创建成功，现在可以邀请学员、生成题目了。",
     "enter": "进入 UniMind"
-  },
-  "role": {
-    "title": "设置你的身份",
-    "subtitle": "选择你的角色，开始你的 UniMind 之旅",
-    "teacherLabel": "我是老师/机构",
-    "teacherDesc": "创建你的专属机构，管理学员和课程",
-    "studentLabel": "我是学生",
-    "studentDesc": "加入已有的机构，开始刷题学习"
-  },
-  "teacher": {
-    "title": "创建你的机构",
-    "subtitle": "填写机构基本信息，开始管理你的教学团队",
-    "inviteCodeLabel": "方案邀请码 *（由 UniMind 提供）",
-    "inviteCodePlaceholder": "请输入邀请码",
-    "nameLabel": "机构名称 *",
-    "namePlaceholder": "请输入机构名称",
-    "descPlaceholder": "一句话简介（如：专注金融考研辅导）",
-    "phoneLabel": "联系电话",
-    "phonePlaceholder": "请输入联系电话",
-    "create": "创建机构",
-    "errors": {
-      "enterInviteCode": "请输入方案邀请码",
-      "enterName": "请输入机构名称",
-      "createFailed": "创建失败",
-      "invalidCode": "邀请码无效"
-    }
-  },
-  "student": {
-    "title": "加入机构",
-    "subtitle": "输入机构邀请码，立即加入并开始学习",
-    "instruction": "请向你的老师或机构管理员索要邀请码。",
-    "inviteCodePlaceholder": "请输入机构邀请码",
-    "join": "加入机构",
-    "errors": {
-      "enterInviteCode": "请输入机构邀请码",
-      "joinFailed": "加入失败，请检查邀请码是否正确"
-    }
   }
 }

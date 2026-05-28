@@ -1,45 +1,47 @@
 {
+  "wizard": {
+    "next": "Next",
+    "finish": "Finish",
+    "skip": "Skip",
+    "back": "Back",
+    "creating": "Creating…"
+  },
+  "step1": {
+    "title": "Welcome to UniMind!",
+    "subtitle": "Enter your invite code to create your institution",
+    "placeholder": "Enter invite code",
+    "error_empty": "Please enter an invite code",
+    "error_invalid": "Invalid invite code"
+  },
+  "step2": {
+    "title": "Name your institution",
+    "subtitle": "This will be shown to students and in invite links",
+    "placeholder": "e.g., Bright Future Education",
+    "error_empty": "Please enter an institution name"
+  },
+  "step3": {
+    "title": "How many students do you have?",
+    "subtitle": "Helps us recommend the right plan for you",
+    "options": {
+      "1-50": "1-50",
+      "50-200": "50-200",
+      "200-500": "200-500",
+      "500+": "500+"
+    }
+  },
+  "step4": {
+    "title": "What subjects do you teach?",
+    "subtitle_plan": "{{plan}} plan — up to {{count}} subject directions",
+    "subtitle_default": "Select your subject directions"
+  },
+  "step5": {
+    "title": "Tell us about your institution",
+    "subtitle": "Help students understand what you offer (optional)",
+    "placeholder": "e.g., 10 years of CFA exam prep, 5000+ students trained"
+  },
   "done": {
     "title": "All Set!",
-    "teacherDesc": "Your institution has been created. You can now invite students and generate questions.",
-    "studentDesc": "You've successfully joined the institution. Start learning now.",
+    "subtitle": "Your institution has been created. You can now invite students and generate questions.",
     "enter": "Enter UniMind"
-  },
-  "role": {
-    "title": "Set Up Your Identity",
-    "subtitle": "Choose your role to get started with UniMind",
-    "teacherLabel": "I'm a Teacher / Institution",
-    "teacherDesc": "Create your institution and manage students and courses",
-    "studentLabel": "I'm a Student",
-    "studentDesc": "Join an existing institution and start practicing"
-  },
-  "teacher": {
-    "title": "Create Your Institution",
-    "subtitle": "Fill in your institution details to start managing your teaching team",
-    "inviteCodeLabel": "Invite Code * (provided by UniMind)",
-    "inviteCodePlaceholder": "Enter invite code",
-    "nameLabel": "Institution Name *",
-    "namePlaceholder": "Enter institution name",
-    "descPlaceholder": "Short description (e.g., CFA exam prep)",
-    "phoneLabel": "Contact Phone",
-    "phonePlaceholder": "Enter phone number",
-    "create": "Create Institution",
-    "errors": {
-      "enterInviteCode": "Please enter an invite code",
-      "enterName": "Please enter institution name",
-      "createFailed": "Creation failed",
-      "invalidCode": "Invalid invite code"
-    }
-  },
-  "student": {
-    "title": "Join an Institution",
-    "subtitle": "Enter your institution's invite code to join and start learning",
-    "instruction": "Ask your teacher or institution admin for an invite code.",
-    "inviteCodePlaceholder": "Enter institution invite code",
-    "join": "Join Institution",
-    "errors": {
-      "enterInviteCode": "Please enter invite code",
-      "joinFailed": "Failed to join. Please check your invite code."
-    }
   }
 }
