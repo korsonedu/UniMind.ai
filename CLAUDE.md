@@ -12,8 +12,8 @@
 | 出题助手 | `exam_generator` | 5 专用 | 教研出题，背靠 4-Agent ARC 对抗管线 |
 | AI 助教 | `assistant` | 6+ | 学生辅导，跨会话记忆，深度数据钩稽 |
 
-运行时：`Bot → ToolExecutor → AIChatView → call_ai_with_tools`（最多 5 轮自主工具调用）。
-新增 Agent 只需：Bot 记录 + ToolExecutor 子类 + 系统提示词。见 `ai_assistant/services/`。
+运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
+新增 Agent 只需：① 写 prompt 文件到 `prompts/ai_assistant/bots/{name}/` ② 在 `bot_registry.py` 的 `BOT_REGISTRY` 加一行 ③ （可选）写 ToolExecutor 子类。
 
 ## 硬边界
 
@@ -35,7 +35,9 @@ UniMindCode/                  ← git 仓库根目录
 ├── backend/
 │   ├── school_system/          # Django 配置 (settings, urls, celery, asgi, middleware)
 │   ├── ai_engine/              # AI 引擎 (路由、熔断、可观测性、模型配置、工具权限沙箱)
-│   ├── ai_assistant/           # Agent 运行时（Bot/ToolExecutor/记忆系统/mem0 语义记忆，3 个自治 Agent）
+│   ├── ai_assistant/           # Agent 运行时（Bot/BotRegistry/ToolExecutor/记忆系统/mem0 语义记忆，3 个自治 Agent）
+│   │   ├── bot_registry.py     #   Bot 注册表：bot_type → (Executor, tools, prompt_dir)
+│   │   └── services/chat_dispatch.py  # 统一调度：3 个入口共用
 │   ├── quizzes/                # 核心刷题
 │   │   ├── services/           #   出题管线、评分、解析、PDF
 │   │   ├── memorix/            #   Memorix 自进化记忆调度算法
@@ -53,6 +55,7 @@ UniMindCode/                  ← git 仓库根目录
 │   ├── core/                   # 基础设施 (加密字段、Cookie认证、邮件、限流、文件校验、安全审计)
 │   └── prompts/                # 统一 Prompt 模板目录
 │       ├── quizzes/  ai_assistant/  courses/  pipeline/  grading/  interviews/
+│       └── ai_assistant/bots/  # Bot prompt 模板（每个 bot 一个目录：system_prompt.txt + tool_guide.txt + personality.txt）
 ├── frontend/
 │   ├── src/pages/              # 30+ 页面组件
 │   ├── src/components/         # 通用组件 + shadcn/ui
@@ -215,7 +218,8 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/AGENT_MEMORY.md` | Agent 记忆系统（提取/检索/注入机制） |
 | `docs/tech/features/DIAGNOSTIC_TEST.md` | 学生诊断测试（生成/评分/Memorix 初始化） |
 | `docs/tech/features/EXAM_WORKBENCH.md` | AI 出题工作台（对话式 Agent/快速出题/ARC 精修） |
-| `docs/tech/features/MULTI_STEP_AGENT.md` | 多步可见 Agent（WebSocket 实时步骤 + 流式输出） |
+| `docs/tech/features/MULTI_STEP_AGENT.md` | 多步可见 Agent（逐步气泡展示 + 自定义指标卡片） |
+| `docs/tech/features/WOW_MOMENT_TECH_FLOWS.md` | 6 个核心功能技术流程图（数据流/消息协议/架构图） |
 | `docs/tech/features/MULTI_TENANT_AGENT_MEMORY.md` | 多租户 Agent 记忆（mem0+pgvector、工具权限沙箱、机构人格） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |
