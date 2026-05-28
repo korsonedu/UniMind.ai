@@ -2,113 +2,131 @@
 
 ## 概述
 
-AI 出题工作台是老师/机构主的核心工作界面，集成 ARC 4-Agent 对抗出题管线（Author→Reviewer→AuthorRevise→Classifier）。采用三栏布局：左侧模板选择、中间题目白板（配置→进度→结果三态切换）、右侧 Agent 对话（v2）。
+AI 出题工作台是老师/机构主的核心工作界面，采用**对话式 Agent 架构**——教师通过自然语言描述出题需求，Agent 自主调用工具搜索知识点、生成题目、精修入库。结构与小宇（XiaoYu）学习规划 Agent 对齐：未对话时大片留白，对话后左右分栏。
 
 ## 页面布局
 
+### 空状态（无对话）
+
 ```
-┌──────────────┬────────────────────────────────┬──────────────────┐
-│ 左侧栏 w-64  │ 中间白板 flex-1                │ 右侧 w-72        │
-│              │                                │                  │
-│ 模板列表     │ 空闲: 出题配置表单              │ v2: AI 助手对话  │
-│ 最近任务     │ 运行: ARC 进度 stepper          │ 当前: 占位符     │
-│              │ 完成: 题目审核卡片列表           │                  │
-└──────────────┴────────────────────────────────┴──────────────────┘
+┌─────────────────────────────────────────────────┐
+│                 大片留白居中                       │
+│          [Gradient Icon]                         │
+│          出题助手                                  │
+│          你的 AI 出题工作台                        │
+│                                                  │
+│    ┌─────────────────────────────────────┐       │
+│    │ 描述你的出题需求...          [发送]  │       │
+│    └─────────────────────────────────────┘       │
+│                                                  │
+│  [针对薄弱点出题] [出一套模拟卷] [自定义出题]       │
+└─────────────────────────────────────────────────┘
 ```
+
+### 对话状态（有对话后）
+
+```
+┌──────────────────────────┬──────────────────────┐
+│ 左侧 flex-1              │ 右侧 360px           │
+│                          │                      │
+│ 生成的题目卡片列表        │ [Header] 出题助手     │
+│ (QuestionPanel)          │                      │
+│                          │ [Messages]           │
+│ ┌──────────────────────┐ │  用户: 出10道微积分    │
+│ │ Q1: 求极限...        │ │  助手: 好的，已生成    │
+│ │ [✓] 客观题 normal    │ │  [题目预览卡片]       │
+│ ├──────────────────────┤ │                      │
+│ │ Q2: 证明...          │ │  ...                 │
+│ │ [✓] 主观题 hard      │ │                      │
+│ └──────────────────────┘ │                      │
+│                          │ [Input]              │
+│ [全选] [存入题库]        │                      │
+│ [ARC 精修选中题]         │                      │
+└──────────────────────────┴──────────────────────┘
+```
+
+## Agent 架构
+
+工作台复用 **Bot + BotRegistry + chat_dispatch + tool_executor** 基础设施：
+
+| 组件 | 位置 | 职责 |
+|------|------|------|
+| Bot | `ai_assistant/models.py` (`bot_type='exam_generator'`) | 出题助手 Bot |
+| BotRegistry | `ai_assistant/bot_registry.py` | 注册表：bot_type → (Executor, tools, prompt_dir) |
+| chat_dispatch | `ai_assistant/services/chat_dispatch.py` | 统一调度：3 个入口共用 |
+| Prompt 模板 | `prompts/ai_assistant/bots/exam_generator/` | system_prompt.txt + tool_guide.txt + personality.txt |
+| ToolExecutor | `ai_assistant/services/exam_generator_tool_executor.py` | 5 个出题专用工具的执行器 |
+| Seed 命令 | `ai_assistant/management/commands/seed_exam_agent.py` | 创建/更新出题助手 Bot（prompt 从文件读取） |
+
+### 工具列表
+
+| 工具 | 用途 | 模式 |
+|------|------|------|
+| `search_knowledge_points` | 搜索可用知识点（按名称+学科） | 同步 |
+| `generate_questions` | 快速管线出题（~10 秒） | 同步 |
+| `launch_arc_pipeline` | 启动 ARC 精修管线（2-5 分钟） | 异步 Celery |
+| `check_pipeline_status` | 查询 ARC 管线进度 | 同步 |
+| `save_questions_to_library` | 将题目存入机构题库 | 同步 |
+
+继承自 `AssistantToolExecutor` 的基础工具（`search_knowledge_tree`、`get_user_weak_points` 等）也可用。
+
+### 对话式指令
+
+Agent 识别口语化指令，直接调用对应工具，不反问确认：
+
+| 用户说 | Agent 做 |
+|--------|----------|
+| "入库" / "保存" / "存入题库" | `save_questions_to_library` |
+| "ARC精修" / "精修一下" | `launch_arc_pipeline` |
+| "看看进度" / "跑完没" | `check_pipeline_status` |
+| "再来一组" / "换XX出题" | 重新 `search_knowledge_points` + `generate_questions` |
+| "难度改成hard" / "加到10题" | 用新参数重新 `generate_questions` |
+
+## 消息 Metadata
+
+`AIChatMessage.metadata` (JSONField) 承载工具产出的结构化数据：
+
+```json
+{
+  "generated_questions": [
+    {"question": "...", "q_type": "objective", "difficulty_level": "normal", "kp_name": "极限", "answer_preview": "..."},
+    ...
+  ],
+  "pipeline_task_id": 42
+}
+```
+
+前端通过 `GET /ai/history/` 获取消息列表，从 `metadata` 中提取题目渲染到左侧面板，提取 `pipeline_task_id` 显示进度。
+
+### 跨轮次缓存
+
+`process_ai_chat` 在每次调用时从最近一条助手消息的 `metadata` 中恢复 `tool_executor._last_generated`，使"入库"等指令在后续对话轮次中仍能找到之前生成的题目。
 
 ## 核心流程
 
-### 启动 ARC 管线
+### 快速出题
 
 ```
-POST /api/quizzes/admin/adversarial-pipeline/
+教师: "出10道微积分极限的客观题"
+  ↓ Agent 调用 search_knowledge_points → 获取知识点 ID
+  ↓ Agent 调用 generate_questions → 同步生成题目
+  ↓ metadata.generated_questions 写入消息
+  ↓ 前端轮询 GET /ai/history/ → 渲染题目卡片到左侧面板
+教师: "入库"
+  ↓ Agent 调用 save_questions_to_library → 题目存入 Question 表
 ```
 
-请求参数：
-```json
-{
-  "kp_ids": [1, 2, 3],
-  "questions_per_kp": 3,
-  "difficulty": "normal",
-  "types": ["objective", "subjective:short"],
-  "title": "期中模拟卷 - 微积分"
-}
-```
-
-返回：`{"task_id": 42, "status": "running"}`
-
-### 轮询进度
+### ARC 精修
 
 ```
-GET /api/quizzes/workbench/tasks/{task_id}/status/
+教师: "精修一下"
+  ↓ Agent 调用 launch_arc_pipeline → 返回 task_id
+  ↓ metadata.pipeline_task_id 写入消息
+  ↓ 前端显示 PipelineProgress 组件，轮询 /quizzes/workbench/tasks/{id}/status/
+  ↓ ARC 4-Agent 管线（Author→Reviewer→Revise→Classifier）异步执行
+教师: "看看进度"
+  ↓ Agent 调用 check_pipeline_status → 返回进度信息
 ```
-
-轻量端点，不含 result 大字段。返回：
-```json
-{
-  "id": 42,
-  "status": "running",
-  "progress": 70,
-  "title": "期中模拟卷 - 微积分",
-  "current_stage": "review_done",
-  "status_text": "Reviewer 完成，8 道题通过 (1-2 轮分布)",
-  "stages": [
-    {"stage": "author_generated", "count": 10},
-    {"stage": "review_completed", "count": 8}
-  ]
-}
-```
-
-### 进度阶段映射
-
-| current_stage | progress | 前端显示 |
-|---------------|----------|---------|
-| `author_start` | 5% | Author 正在生成候选题目... |
-| `author_done` | 30% | Author 生成了 N 道候选题目 |
-| `review_start` | 40% | Reviewer 正在逐题评审... |
-| `review_done` | 70% | Reviewer 完成评审 |
-| `classify_start` | 75% | Classifier 正在审计... |
-| `classify_batch` | 85% | Classifier 正在生成多样性报告... |
-| `classify_done` | 95% | 审计完成 |
-| `completed` | 100% | 展示结果 |
-
-### 审核入库
-
-管线完成后自动创建 `status='review'` 的审核任务（`payload.source_task_id` = 生成任务 ID）。
-
-```
-GET /api/quizzes/admin/pipeline-review/     → 查找审核任务
-POST /api/quizzes/admin/pipeline-review/{id}/  → 批准/拒绝
-```
-
-批准请求：
-```json
-{
-  "action": "approve",
-  "question_indices": [0, 2, 3]
-}
-```
-
-`save_confirmed_questions()` 自动绑定 `institution=request.user.institution`，题目入库。
-
-## 教师任务列表
-
-```
-GET /api/quizzes/workbench/tasks/
-```
-
-返回当前教师的最近 20 个出题任务（`created_by=request.user, task_type='ai_generate'`）。
-
-## 前端组件
-
-| 组件 | 文件 | 说明 |
-|------|------|------|
-| Workbench | `pages/Workbench.tsx` | 主页面，三栏布局 + 三态切换 |
-| TemplateSidebar | `pages/workbench/TemplateSidebar.tsx` | 模板卡片列表 + 最近任务 |
-| LaunchConfig | `pages/workbench/LaunchConfig.tsx` | KP 搜索 + 难度/题型/数量 + 启动按钮 |
-| PipelineProgress | `pages/workbench/PipelineProgress.tsx` | 4 阶段 stepper + 实时进度条 |
-| QuestionResults | `pages/workbench/QuestionResults.tsx` | 题目网格 + 批量操作栏 |
-| QuestionReviewCard | `pages/workbench/QuestionReviewCard.tsx` | 单题展示（ARC 元数据 + 详情展开） |
 
 ## 路由
 
@@ -117,16 +135,22 @@ GET /api/quizzes/workbench/tasks/
 - HomeRedirect：teacher/owner → `/workbench`（所有方案级别）
 - 侧边栏：institution admin 首位入口
 
-## 集成：ClassPerformancePanel → 工作台
+## 前端组件
 
-班级分析面板的"针对出题"按钮跳转 `/workbench?kp={id}`，工作台自动预选该知识点。
+| 组件 | 文件 | 说明 |
+|------|------|------|
+| Workbench | `pages/Workbench.tsx` | 主页面，空状态 / 对话状态两态切换 |
+| QuestionPanel | `pages/workbench/QuestionPanel.tsx` | 左侧题目卡片列表 + 全选/入库/ARC精修操作栏 |
+| PipelineProgress | `pages/workbench/PipelineProgress.tsx` | ARC 管线 4 阶段 stepper + 实时进度条 |
+| QuestionReviewCard | `pages/workbench/QuestionReviewCard.tsx` | 单题展示（复用于 QuestionPanel） |
 
 ## 相关模型
 
-- `ExamTemplate` — 出题模板（见模板预设系统）
-- `ContentPipelineTask` — 异步任务跟踪
-- `AgentMemory` — 教师记忆（注入 Agent 上下文）
-- `Question` — 生成的题目
+- `Bot` (`bot_type='exam_generator'`) — 出题助手 Bot 定义
+- `AIChatMessage` (`metadata`) — 消息级结构化数据
+- `Question` — 生成的题目（入库后）
+- `ContentPipelineTask` — ARC 异步任务跟踪
+- `KnowledgePoint` — 知识点（搜索目标）
 
 ## ARC 管线详情
 

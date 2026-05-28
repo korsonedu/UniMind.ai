@@ -263,13 +263,13 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 
 | 维度 | 值 |
 |------|---|
-| **入口** | `ai_assistant/views.py` → `AIChatView.post` → 后台线程 `process_ai_chat` |
-| **服务** | `ai_assistant/services/chat_service.py` → `AssistantChatService.chat_with_assistant_agent` |
+| **入口** | `ai_assistant/views.py` → `AIChatView.post` → `dispatch_bot_chat` |
+| **服务** | `ai_assistant/services/chat_dispatch.py` → `dispatch_bot_chat` → `chat_service.py` |
 | **AI 方法** | **`call_ai_with_tools`**（多轮 Agent 循环，非流式）/ **`call_ai_with_streaming_tools`**（流式 + on_step 回调，出题助手/小宇使用） |
-| **Prompt** | `prompts/ai_assistant/base_assistant_prompt.txt` + `prompts/ai_assistant/bots/*.txt` |
+| **Prompt** | `prompts/ai_assistant/bots/assistant/system_prompt.txt` + `tool_guide.txt`（文件模板，见 PROMPT_MANAGEMENT_SYSTEM.md） |
 | **Model** | deepseek-v4-flash |
 | **工具** | 4 个：`search_knowledge_tree` / `get_user_weak_points` / `get_user_wrong_questions` / `lookup_question` |
-| **工具执行器** | `ai_assistant/services/tool_executor.py` → `AssistantToolExecutor` |
+| **工具执行器** | `ai_assistant/bot_registry.py` → `BotRegistry` → `AssistantToolExecutor` |
 
 **Agent 行为**：助教在回复前可自主调用工具查询知识库和用户数据，而非仅凭模型参数记忆回答。工具查询结果注入上下文后，模型基于准确数据进行回复。
 
@@ -302,10 +302,10 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 
 | 维度 | 值 |
 |------|---|
-| **入口** | `ai_assistant/views.py` → `AIChatView.post` → `process_ai_chat` |
-| **服务** | `chat_service.py` → `AssistantChatService.chat_with_assistant_agent` |
+| **入口** | `ai_assistant/views.py` → `AIChatView.post` → `dispatch_bot_chat` |
+| **服务** | `chat_dispatch.py` → `dispatch_bot_chat` → `chat_service.py` |
 | **AI 方法** | **`call_ai_with_tools`**（多轮 Agent 循环） |
-| **工具执行器** | `ai_assistant/services/exam_generator_tool_executor.py` → `ExamGeneratorToolExecutor` |
+| **工具执行器** | `bot_registry.py` → `ExamGeneratorToolExecutor` |
 | **Bot** | `bot_type='exam_generator'`，seed: `python manage.py seed_exam_agent` |
 | **工具** | 5 个出题专用 + 继承助教基础工具 |
 
@@ -529,7 +529,7 @@ def get_model_for_task(operation: str):
 6. **处理 None**：`agentic_structured_output` 不会兜底——模型未调用提交工具时返回 None，调用方需自行处理
 
 **与单轮 `structured_output` 的区别**：
-- `structured_output`：tool_choice="required"，模型必须第一轮就调用提交工具
+- `structured_output`：tool_choice="required"，模型必须第一轮就调用提交工具（注：DeepSeek 模型会跳过 tool_choice，靠 prompt 驱动）
 - `agentic_structured_output`：不传 tool_choice，模型自主决定何时研究、何时提交。thinking 开启时自动生效（tool_choice 从请求体中整条移除）
 
 ### 新增一个多 Agent 管线
