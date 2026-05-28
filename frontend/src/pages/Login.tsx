@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 
 import api from '@/lib/api';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 
 export const Login: React.FC = () => {
   const { t } = useTranslation('auth');
@@ -16,8 +17,18 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { setAuth, updateUser } = useAuthStore();
+  const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // 清除残留 auth 状态，防止 cookie 残留影响登录
+  useEffect(() => {
+    const { token } = useAuthStore.getState();
+    if (token) {
+      api.post('/users/logout/').catch(() => {});
+      useAuthStore.getState().logout();
+    }
+  }, []);
 
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -60,6 +71,9 @@ export const Login: React.FC = () => {
         }
       }
 
+      // Fetch institution features/plan so permissions are correct immediately
+      await fetchFeatures();
+
       navigate('/');
     } catch (err: any) {
       const errorData = err.response?.data;
@@ -71,14 +85,14 @@ export const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-unimind-bg-secondary flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-white/80 backdrop-blur-xl p-4">
-        <CardHeader className="space-y-1 text-center">
+      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-white/80 backdrop-blur-xl">
+        <CardHeader className="p-6 space-y-1 text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">{t('login.title')}</CardTitle>
           <CardDescription>{t('login.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
-            {error && <p className="text-red-500 text-xs text-center">{error}</p>}
+            {error && <p className="text-sm text-center bg-red-50 text-red-600 rounded-xl py-2.5 px-3">{error}</p>}
             <div className="space-y-2">
               <Input
                 placeholder={t('login.usernamePlaceholder')}

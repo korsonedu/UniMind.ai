@@ -6,10 +6,11 @@ from .views import (
     StudyPlanListView, StudyPlanDetailView, StudyPlanTaskUpdateView,
     SemanticMemoryListView, SemanticMemoryDeleteView,
 )
-from .views_dashboard import XiaoYuDashboardView
+from .views_dashboard import XiaoYuDashboardView, ExamWorkbenchDashboardView
 
 urlpatterns = [
     path('dashboard/', XiaoYuDashboardView.as_view(), name='xiaoyu-dashboard'),
+    path('workbench/dashboard/', ExamWorkbenchDashboardView.as_view(), name='exam-workbench-dashboard'),
     path('chat/', AIChatView.as_view(), name='ai-chat'),
     path('chat/stream/', AIChatStreamView.as_view(), name='ai-chat-stream'),
     path('history/', AIChatListView.as_view(), name='ai-chat-history'),

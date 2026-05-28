@@ -52,7 +52,7 @@ export default function InviteCodeAdmin() {
     try {
       const { data } = await api.get('/users/admin/plan-invite-codes/');
       setCodes(data);
-    } catch { /* */ }
+    } catch { toast.error('加载邀请码失败'); }
     setLoading(false);
   };
 

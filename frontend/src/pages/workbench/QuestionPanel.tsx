@@ -37,6 +37,8 @@ interface Props {
   questions: QuestionData[];
   pipelineTaskId: number | null;
   bot: Bot | null;
+  onPipelineStart?: (taskId: number) => void;
+  onQuestionsSaved?: (indices: number[]) => void;
 }
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -60,7 +62,7 @@ const QTYPE_LABEL: Record<string, string> = {
   subjective: '主观题',
 };
 
-export default function QuestionPanel({ questions, pipelineTaskId, bot }: Props) {
+export default function QuestionPanel({ questions, pipelineTaskId, bot, onPipelineStart, onQuestionsSaved }: Props) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
@@ -85,7 +87,7 @@ export default function QuestionPanel({ questions, pipelineTaskId, bot }: Props)
           }
         }
       } catch {
-        // keep polling
+        console.warn('Task status poll failed, will retry');
       }
     };
 
@@ -117,34 +119,35 @@ export default function QuestionPanel({ questions, pipelineTaskId, bot }: Props)
   }, [selected.size, questions.length]);
 
   const handleSave = useCallback(async () => {
-    if (!bot) return;
     const indices = selected.size > 0 ? Array.from(selected) : undefined;
+    const toSave = indices ? indices.map(i => questions[i]) : questions;
     setSaving(true);
     try {
-      const msg = indices
-        ? `请将第 ${indices.map(i => i + 1).join(', ')} 题存入题库`
-        : '请将所有题目存入题库';
-      await api.post('/ai/chat/', { message: msg, bot_id: bot.id });
-      toast.success('入库指令已发送');
+      const res = await api.post('/quizzes/workbench/save-questions/', { questions: toSave });
+      toast.success(`已入库 ${res.data.saved} 题`);
+      if (indices) onQuestionsSaved?.(indices);
+      else onQuestionsSaved?.(questions.map((_, i) => i));
+      setSelected(new Set());
     } catch {
-      toast.error('操作失败');
+      toast.error('入库失败');
     }
     setSaving(false);
-  }, [bot, selected]);
+  }, [selected, questions, onQuestionsSaved]);
 
   const handleArcRefine = useCallback(async () => {
-    if (!bot || selected.size === 0) return;
+    if (selected.size === 0) return;
     const indices = Array.from(selected);
+    const toRefine = indices.map(i => questions[i]);
     setSaving(true);
     try {
-      const msg = `请对第 ${indices.map(i => i + 1).join(', ')} 题启动 ARC 精修管线`;
-      await api.post('/ai/chat/', { message: msg, bot_id: bot.id });
-      toast.success('ARC 精修指令已发送');
+      const res = await api.post('/quizzes/workbench/launch-arc/', { questions: toRefine });
+      toast.success('ARC 精修已启动');
+      if (res.data.task_id) onPipelineStart?.(res.data.task_id);
     } catch {
-      toast.error('操作失败');
+      toast.error('启动失败');
     }
     setSaving(false);
-  }, [bot, selected]);
+  }, [selected, questions, onPipelineStart]);
 
   // 空状态
   if (questions.length === 0 && !pipelineTaskId) {

@@ -323,6 +323,7 @@ def _export_node_md(node, lines, depth):
 
 # ── Subjects API (for institution onboarding) ──
 
+
 SUBJECT_CATEGORIES = {
     '高中学科': ['高中数学', '高中物理'],
     '考研专业课': ['金融431', '法学', '计算机408', '教育学311'],

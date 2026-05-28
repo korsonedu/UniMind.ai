@@ -13,9 +13,10 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import {
   BrainCircuit, Upload, Download, Plus, Pencil, Trash2, Loader2,
-  ChevronRight, ChevronDown, FileText, FileUp, RefreshCw, Check,
+  ChevronRight, ChevronDown, FileUp, RefreshCw, Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useConfirm } from '@/components/useConfirm';
 
 interface KPNode {
   id: number;
@@ -205,6 +206,7 @@ function KPEditDialog({
 /* ── Main Panel ── */
 export function KnowledgeSystemPanel() {
   const { t } = useTranslation('maintenance');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [tree, setTree] = useState<KPNode[]>([]);
   const [allNodes, setAllNodes] = useState<KPNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -272,7 +274,7 @@ export function KnowledgeSystemPanel() {
   useEffect(() => { fetchTree(); }, []);
 
   const handleDelete = async (node: KPNode) => {
-    if (!confirm(t('knowledgeSystem.deleteConfirm', { name: node.name }))) return;
+    if (!(await confirm(t('knowledgeSystem.deleteConfirm', { name: node.name })))) return;
     try {
       await api.delete(`/quizzes/knowledge-points/${node.id}/`);
       toast.success(t('knowledgeSystem.deleted'));
@@ -468,6 +470,7 @@ export function KnowledgeSystemPanel() {
         onSaved={fetchTree}
         parentOptions={allNodes}
       />
+      {ConfirmDialog}
     </div>
   );
 }

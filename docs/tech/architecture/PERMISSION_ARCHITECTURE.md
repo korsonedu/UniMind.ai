@@ -154,6 +154,7 @@ quota_resource = 'ai_question'
 | `PATCH /users/institution/me/update/` | IsInstitutionOwner + IsInstitutionActive |
 | `POST /users/institutions/create/` | IsAuthenticated |
 | `POST /users/institution/join-by-slug/` | IsAuthenticated |
+| `POST /users/institution/join-by-invite-slug/` | IsAuthenticated |
 | `GET /users/join/:slug/` | AllowAny（公开重定向） |
 | `GET /api/users/institution/:slug/public/` | AllowAny |
 
@@ -279,6 +280,12 @@ def get_queryset(self):
 - 机构用户：看到本机构数据 + 全局数据
 - 无机构用户：只看到全局数据
 
+### 7.1.1 服务层同样需要隔离
+
+视图层的 queryset 过滤只覆盖 API 入口。**服务层代码**（QuestionGenerator、AdversarialPipeline、DiagnosticService、MemorixScheduler 等）如果直接查询 Question / KnowledgePoint，也必须加同样的 `Q(institution=inst) | Q(institution__isnull=True)` 过滤，否则会出现：视图层正确隔离但服务层全局抽题的不一致。
+
+**规则**：任何在服务层查询 Question 或 KnowledgePoint 的地方，如果调用方能拿到 `institution`，查询时必须加机构过滤。
+
 ### 7.2 前端 FeatureGuard
 
 ```typescript
@@ -337,24 +344,28 @@ admin   : [learning.access, member.access, admin.panel, content.manage, users.ma
 ## 九、用户流向与角色来源
 
 ```
-注册（无机构、无角色）
+直接注册（/register）→ OnboardingDialog 角色选择
   │
-  ├─ 平台超管：Django createsuperuser → is_superuser → role=admin, is_member=True
+  ├─ 选"学生" → 提示"联系老师获取邀请链接"，账号保留但无法进入系统
   │
-  ├─ 教师创建机构：OnboardingDialog → InstitutionCreateView → institution_role=owner
+  ├─ 选"教师/机构主" → 输入方案邀请码 → InstitutionCreateView → institution_role=owner
   │
-  ├─ 教师加入机构：邀请链接(?role=teacher) → InstitutionJoinBySlugView → institution_role=teacher
+  └─ 平台超管：Django createsuperuser → is_superuser → role=admin, is_member=True
+
+邀请链接（/join/:invite_slug）
   │
-  ├─ 学生加入：邀请链接（默认） → InstitutionJoinBySlugView → institution_role=student
+  ├─ 未登录 → 跳 /register?institution=<invite_slug> → 注册 → 登录 → 自动绑定机构
   │
-  └─ 游离用户：未加入机构，institution_role 默认='student' 但无 institution
+  └─ 已登录（裸号）→ InstitutionJoinByInviteSlugView → 直接绑定机构，institution_role=student
 ```
 
 **规则：**
-- 学生进入机构的唯一路径是邀请链接
-- 教师可以通过邀请链接（?role=teacher）加入，或创建新机构成为 owner
+- 学生进入机构的唯一路径是邀请链接（`/join/:invite_slug`）
+- 邀请链接支持绑定已有账号——已登录裸号用户点击链接直接加入，无需重新注册
+- 教师通过 OnboardingDialog 创建机构成为 owner，需要方案邀请码
 - 机构内所有人自动 `is_member = True`，`membership_tier = inst.plan`
 - 平台管理员（无机构）看到所有功能（等同于 pro）
+- `institution_invite` cookie 机制是死代码（从未写入），实际依赖 URL query 参数
 
 ---
 
@@ -367,7 +378,7 @@ admin   : [learning.access, member.access, admin.panel, content.manage, users.ma
 | 1 | **重复 IsMember 类缺少过期检查** — `users/views.py:28` 的 `IsMember` 只检查 `is_member` 布尔值，不检查 `membership_expires_at`。46+ 视图（quizzes/views_exam, views_memorix, views_question, courses, ai_assistant, faq_system, study_room, interviews, articles）使用此重复类，绕过会员过期控制 | **关键** | `IsMember.has_permission` 改为委托给 `is_member_or_admin()`，一次性修复所有 46+ 视图 |
 | 2 | **articles 重复权限类** — `articles/views.py:9` 的 `IsAdminUserOrReadOnly` 写检查用 `is_staff`（仅超级管理员），导致机构管理员无法写文章。与 `permissions.py` 的 `IsAdminWriteMemberRead` 功能重复 | **中** | 删除局部类，统一使用 `IsAdminWriteMemberRead`。同时修复了机构管理员文章写入权限 |
 | 3 | **学生看到侧边栏锁和升级弹窗** — 机构学生在低方案机构中看到带锁图标的功能入口，点击弹出 UpgradeModal。学生不应关心方案升级 | **中** | `isInstStudent` 修正为 `Boolean(instInfo) && role==='student'`；sidebar/mobileNav 对学生过滤未解锁项；UpgradeModal 加 `!isInstStudent` 守卫 |
-| 4 | **邀请链接默认学生** — 加教师需要 owner 事后手动改角色 | **中** | `JoinInstitutionView` 支持 `?role=teacher` 参数，链路透传 cookie → register → login → join API |
+| 4 | ~~**邀请链接默认学生**~~ | **已重构 (2026-05-29)** | OnboardingDialog 增加角色分流（学生/教师），学生被引导走邀请链接；`/join/:invite_slug` 支持已登录裸号直接绑定机构（`InstitutionJoinByInviteSlugView`） |
 | 5 | **教师受学生数上限限制** — `InstitutionJoinBySlugView` 的学生数上限检查对教师也生效 | **低** | 学生数上限仅对 `role='student'` 生效 |
 | 6 | **激活会员按钮/弹窗冗余** — 用户通过邀请链接注册后自动 `is_member=True`，不再需要激活码激活。MainLayout 中「激活会员」菜单项和弹窗成为死代码 | **低** | 删除 `showActivateDialog`/`activationCode`/`isActivating` 状态、`handleActivate` 函数、桌面+移动端菜单项、激活码 Dialog 组件及不再使用的 import（`Loader2`, `Dialog*`, `Input`, `Label`） |
 | 7 | **lib/authz.ts isAdminUser 死代码** — 该函数仅在 PdfMockExam.tsx 一处使用，逻辑与 RequireAdmin 守卫重复 | **低** | 逻辑内联到 PdfMockExam.tsx（`user?.is_admin \|\| user?.is_institution_admin \|\| user?.role === 'admin'`），删除 `authz.ts` |

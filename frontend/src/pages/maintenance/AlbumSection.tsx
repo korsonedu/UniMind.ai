@@ -10,9 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Layers, Upload, Edit3, Trash2, Plus, Image as ImageIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 export const AlbumSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -66,7 +68,7 @@ export const AlbumSection: React.FC = () => {
   };
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`删除专辑「${name}」？此操作不可撤销。`)) return;
+    if (!(await confirm(`删除专辑「${name}」？此操作不可撤销。`))) return;
     try {
       await api.delete(`/courses/albums/${id}/`);
       toast.success('已删除');
@@ -235,6 +237,7 @@ export const AlbumSection: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };

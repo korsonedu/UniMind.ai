@@ -50,6 +50,28 @@ class AICallError(Exception):
 class AIEngine:
     """底层的 AI 引擎服务类，负责通用的 AI 模型调用逻辑"""
 
+    @staticmethod
+    def _build_body(config, messages, temperature, max_tokens, tools, tool_choice, stream=False):
+        """构建 LLM 请求体。处理 DeepSeek thinking mode 对 tool_choice 的限制。"""
+        body = {
+            "model": config['model'],
+            "messages": messages,
+            "temperature": temperature,
+            "max_completion_tokens": max_tokens,
+        }
+        if stream:
+            body["stream"] = True
+        if tools is not None:
+            body["tools"] = tools
+        if config.get('thinking'):
+            body["thinking"] = {"type": "enabled"}
+        # DeepSeek 模型内置 reasoning，不支持 tool_choice="required"，降级为 auto
+        if 'deepseek' in config.get('model', '').lower() and tool_choice == "required":
+            tool_choice = "auto"
+        if tool_choice is not None:
+            body["tool_choice"] = tool_choice
+        return body
+
     @classmethod
     def call_ai(
         cls,
@@ -101,22 +123,7 @@ class AIEngine:
 
         for attempt in range(max_retries + 1):
             try:
-                body = {
-                    "model": config['model'],
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_completion_tokens": max_tokens,
-                }
-                if tools is not None:
-                    body["tools"] = tools
-                # DeepSeek models (flash uses internal reasoning, pro uses explicit thinking)
-                # reject ANY tool_choice parameter in the request body — even "auto".
-                # Detect by model name prefix so this stays correct if we switch providers.
-                _is_deepseek = 'deepseek' in config.get('model', '').lower()
-                if tool_choice is not None and not _is_deepseek:
-                    body["tool_choice"] = tool_choice
-                if config.get('thinking'):
-                    body["thinking"] = {"type": "enabled"}
+                body = cls._build_body(config, messages, temperature, max_tokens, tools, tool_choice)
 
                 logger.info(
                     "ai.call_ai request: model=%s operation=%s tool_choice=%s thinking=%s",
@@ -442,8 +449,17 @@ class AIEngine:
             if not tool_calls:
                 return response
 
-            # 将 assistant 消息（含 tool_calls）追加到历史
-            all_messages.append(response['choices'][0]['message'])
+            # 将 assistant 消息（含 tool_calls + reasoning_content）追加到历史
+            # DeepSeek thinking mode 要求后续轮次完整回传 reasoning_content
+            raw_msg = response['choices'][0]['message']
+            assistant_msg = {
+                "role": "assistant",
+                "content": raw_msg.get('content'),
+                "tool_calls": tool_calls,
+            }
+            if raw_msg.get('reasoning_content'):
+                assistant_msg["reasoning_content"] = raw_msg['reasoning_content']
+            all_messages.append(assistant_msg)
 
             # 执行工具并追加结果
             for tc in tool_calls:
@@ -456,6 +472,7 @@ class AIEngine:
                 result = tool_executor(name, args)
                 all_messages.append({
                     "role": "tool",
+                    "type": "tool",
                     "tool_call_id": tc.get('id', ''),
                     "content": str(result),
                 })
@@ -491,6 +508,7 @@ class AIEngine:
 
         all_messages = list(messages)
         accumulated_text = ""
+        total_text = ""  # Track total text across all rounds for done event
 
         for round_i in range(max_tool_rounds):
             config = get_model_for_task(operation)
@@ -506,22 +524,34 @@ class AIEngine:
                     on_step({"type": "error", "message": "AI 服务熔断中，请稍后重试"})
                 return {"content": ""}
 
-            body = {
-                "model": config['model'],
-                "messages": all_messages,
-                "temperature": temperature,
-                "max_completion_tokens": max_tokens,
-                "stream": True,
-            }
-            if tools is not None:
-                body["tools"] = tools
-            _is_deepseek = 'deepseek' in config.get('model', '').lower()
-            if tool_choice is not None and not _is_deepseek:
-                body["tool_choice"] = tool_choice
-            if config.get('thinking'):
-                body["thinking"] = {"type": "enabled"}
+            body = cls._build_body(config, all_messages, temperature, max_tokens, tools, tool_choice, stream=True)
 
             timeout_seconds = max(30, int(getattr(_settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120) or 120))
+
+            # Log request body (without full messages/tools for readability)
+            _body_log = {k: v for k, v in body.items() if k not in ('messages', 'tools')}
+            _body_log['tools_count'] = len(body.get('tools', []))
+            logger.info(
+                "ai.call_ai_stream request: model=%s operation=%s round=%s msgs=%s body=%s",
+                config['model'], operation, round_i, len(all_messages), json.dumps(_body_log, ensure_ascii=False),
+            )
+            if round_i > 0:
+                for i, m in enumerate(all_messages):
+                    role = m.get('role', '?')
+                    tc = len(m.get('tool_calls', [])) if m.get('tool_calls') else 0
+                    tcid = m.get('tool_call_id', '')
+                    content_len = len(str(m.get('content', '')))
+                    logger.info("  msg[%s] role=%s content_len=%s tool_calls=%s tool_call_id=%s", i, role, content_len, tc, tcid)
+
+            # Debug: dump message format on follow-up rounds
+            if round_i > 0:
+                for mi, m in enumerate(all_messages):
+                    if m.get('role') == 'assistant' and m.get('tool_calls'):
+                        logger.info("  follow-up assistant msg[%s] keys=%s has_reasoning=%s tc_count=%s",
+                                    mi, list(m.keys()), 'reasoning_content' in m, len(m.get('tool_calls', [])))
+                        # Log first tool_call structure
+                        tc0 = m['tool_calls'][0] if m['tool_calls'] else {}
+                        logger.info("  tc[0] keys=%s", list(tc0.keys()))
 
             try:
                 r = _session.post(
@@ -536,6 +566,22 @@ class AIEngine:
                 )
                 r.raise_for_status()
             except Exception as e:
+                # Log full request body for 4xx errors
+                error_body = ""
+                try:
+                    if hasattr(e, 'response') and e.response is not None:
+                        error_body = e.response.text[:800]
+                except Exception:
+                    pass
+                # Also dump the messages that caused the error
+                if round_i > 0:
+                    for mi, m in enumerate(all_messages):
+                        role = m.get('role', '?')
+                        keys = list(m.keys())
+                        tc = len(m.get('tool_calls', [])) if m.get('tool_calls') else 0
+                        logger.error("  FAIL msg[%s] role=%s keys=%s tc=%s content_preview=%s",
+                                     mi, role, keys, tc, str(m.get('content', ''))[:100])
+                logger.error("call_ai_with_streaming_tools HTTP error: operation=%s round=%s err=%s body=%s", operation, round_i, e, error_body)
                 AICircuitBreaker.record_failure(operation)
                 if on_step:
                     on_step({"type": "error", "message": f"AI 调用失败: {e}"})
@@ -544,6 +590,8 @@ class AIEngine:
             # Consume SSE stream
             tool_calls_map = {}
             finish_reason = None
+            reasoning_content = ""
+            text_emitted_this_round = 0  # Track how much text was already streamed this round
 
             for line in r.iter_lines(decode_unicode=True):
                 if not line or not line.startswith('data: '):
@@ -560,9 +608,15 @@ class AIEngine:
                 delta = choice.get('delta', {})
                 finish_reason = choice.get('finish_reason') or finish_reason
 
+                # Capture reasoning_content for thinking mode (DeepSeek requires it in follow-up)
+                rc = delta.get('reasoning_content') or ''
+                if rc:
+                    reasoning_content += rc
+
                 content = delta.get('content', '')
                 if content:
                     accumulated_text += content
+                    text_emitted_this_round += len(content)
                     if on_step:
                         on_step({"type": "text_delta", "delta": content})
 
@@ -571,6 +625,7 @@ class AIEngine:
                     if idx not in tool_calls_map:
                         tool_calls_map[idx] = {
                             "id": tc_chunk.get('id', ''),
+                            "type": "function",
                             "function": {"name": '', "arguments": ''},
                         }
                     tc = tool_calls_map[idx]
@@ -586,10 +641,28 @@ class AIEngine:
 
             tool_calls = [tool_calls_map[k] for k in sorted(tool_calls_map.keys())] if tool_calls_map else []
 
-            if not tool_calls:
-                return {"content": accumulated_text}
+            logger.info("call_ai_with_streaming_tools round=%s done: text_len=%s tool_calls=%s finish_reason=%s",
+                        round_i, len(accumulated_text), len(tool_calls), finish_reason)
 
-            assistant_msg = {"role": "assistant", "content": None, "tool_calls": tool_calls}
+            if not tool_calls:
+                total_text += accumulated_text
+                return {"content": total_text}
+
+            # Emit any remaining text that wasn't streamed during this round
+            # (text_delta events are already sent during the stream loop above)
+            remaining = accumulated_text[text_emitted_this_round:]
+            if remaining and on_step:
+                on_step({"type": "text_delta", "delta": remaining})
+            total_text += accumulated_text
+
+            # Build assistant message matching DeepSeek API format
+            assistant_msg = {
+                "role": "assistant",
+                "content": accumulated_text or None,
+                "tool_calls": tool_calls,
+            }
+            if reasoning_content:
+                assistant_msg["reasoning_content"] = reasoning_content
             all_messages.append(assistant_msg)
 
             for tc in tool_calls:
@@ -602,10 +675,11 @@ class AIEngine:
                     args = {}
 
                 try:
-                    from ai_assistant.services.tool_executor import generate_step_label
+                    from ai_assistant.services.tool_executor import generate_step_label, summarize_tool_result
                     label = generate_step_label(name, args)
                 except ImportError:
                     label = f"执行 {name}"
+                    summarize_tool_result = None
 
                 if on_step:
                     on_step({
@@ -631,23 +705,26 @@ class AIEngine:
                         "status": "done",
                         "name": name,
                         "label": label,
-                        "result_summary": str(result)[:300],
+                        "result_summary": summarize_tool_result(name, result) if summarize_tool_result else str(result)[:200],
                     })
 
                 all_messages.append({
                     "role": "tool",
-                    "tool_call_id": call_id,
                     "content": str(result),
+                    "tool_call_id": call_id,
                 })
 
             accumulated_text = ""
-            tool_choice = "auto"
+            if round_i < max_tool_rounds - 2:
+                tool_choice = "required"
+            else:
+                tool_choice = "auto"
 
         logger.warning(
             "call_ai_with_streaming_tools: exhausted max_tool_rounds=%s",
             max_tool_rounds,
         )
-        return {"content": accumulated_text}
+        return {"content": accumulated_text or total_text}
 
     @classmethod
     def agentic_structured_output(cls, messages, schema, tool_name, tool_description,
@@ -709,6 +786,7 @@ class AIEngine:
                     # 给模型一个确认，让它知道提交成功
                     all_messages.append({
                         "role": "tool",
+                        "type": "tool",
                         "tool_call_id": tc.get('id', ''),
                         "content": "ok",
                     })
@@ -716,6 +794,7 @@ class AIEngine:
                     result = tool_executor(name, args)
                     all_messages.append({
                         "role": "tool",
+                        "type": "tool",
                         "tool_call_id": tc.get('id', ''),
                         "content": str(result),
                     })

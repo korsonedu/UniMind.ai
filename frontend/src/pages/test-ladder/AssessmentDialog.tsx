@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
@@ -40,16 +41,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
   gradingMessage
 }) => {
   const { t } = useTranslation('testLadder');
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(max-width: 767px)');
-    const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
+  const isMobile = useIsMobile();
 
   if (questions.length === 0) return null;
 

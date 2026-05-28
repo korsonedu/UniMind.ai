@@ -27,18 +27,20 @@ AIChatView
     │
     ├── Tool Permission Sandbox (filter_tools by plan)
     │
-    ├── Prompt Assembly
+    ├── Prompt Assembly (build_memory_context → chat_service)
     │   ├── base system prompt
     │   ├── institution personality (机构人格)
     │   ├── structured memory (AgentMemory KV)
-    │   └── semantic memory (mem0 pgvector)
+    │   ├── semantic memory (mem0 pgvector)
+    │   └── adaptive directives (prompt_adapter 模式检测)
     │
     └── Agent Loop (call_ai_with_tools)
             │
             ▼
         后台提取记忆
             ├── extract_memories_async (结构化)
-            └── extract_memories_with_mem0 (语义)
+            ├── extract_memories_with_mem0 (语义)
+            └── reflect_user_learning (每日元认知)
 ```
 
 ## 文件结构
@@ -50,16 +52,20 @@ backend/
 │   └── tool_permissions.py    # PLAN_TOOL_ACCESS, filter_tools()
 ├── ai_assistant/
 │   ├── models.py              # Bot.institution_personality
+│   ├── tasks.py               # reflect_user_learning (元认知 Celery 任务)
 │   ├── migrations/
 │   │   └── 0008_add_institution_personality.py
 │   ├── services/
 │   │   ├── tenant_memory.py   # TenantMemoryManager (mem0 wrapper)
-│   │   ├── memory_service.py  # extract_memories_with_mem0, get_mem0_memories_for_injection
+│   │   ├── memory_service.py  # build_memory_context, extract/检索/注入
+│   │   ├── prompt_adapter.py  # 8 种模式检测 + 自适应指令生成
 │   │   ├── chat_service.py    # 人格注入 + 工具过滤
 │   │   └── tool_executor.py   # self.institution
 │   └── tests/
 │       ├── test_tenant_memory.py      # 6 unit tests
 │       ├── test_tool_permissions.py   # 9 unit tests
+│       ├── test_prompt_adapter.py     # 14 unit tests
+│       ├── test_meta_cognition.py     # 4 unit tests
 │       └── test_mem0_integration.py   # 3 integration tests (需 PG)
 ```
 
@@ -96,7 +102,7 @@ pip install mem0ai pgvector
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/ai/memories/semantics/` | 获取语义记忆列表 |
-| GET | `/api/ai/memories/semantics/?limit=10` | 限制返回数量 |
+| GET | `/api/ai/memories/semantics/?limit=10` | 限制返回数量（上限 200） |
 | DELETE | `/api/ai/memories/semantics/<memory_id>/` | 删除单条记忆 |
 | DELETE | `/api/ai/memories/semantics/clear/` | 清空全部记忆 |
 
@@ -104,7 +110,7 @@ pip install mem0ai pgvector
 
 | Plan | assistant 工具 | planner 工具 | exam_generator 工具 |
 |------|---------------|-------------|-------------------|
-| free | 2 个基础 | 不可用 | 不可用 |
+| free | 2 个基础 | 4 个基础 | 不可用 |
 | starter | 4 个 | 3 个 | 2 个 |
 | growth | 全部 | 全部 | 全部 |
 | enterprise | 全部 | 全部 | 全部 |
@@ -129,7 +135,7 @@ Agent 根据用户历史行为模式自动调整回复风格。
 | 组件 | 文件 | 说明 |
 |------|------|------|
 | Pattern Detector | `ai_assistant/services/prompt_adapter.py` | 规则引擎，关键词匹配 8 种模式 |
-| Integration | `ai_assistant/views.py` | 两条聊天路径（polling + streaming）均注入自适应指令 |
+| Integration | `ai_assistant/views.py` via `memory_service.build_memory_context()` | polling + streaming 两条路径共用统一入口 |
 | Chat Service | `ai_assistant/services/chat_service.py` | `_build_agent_system_prompt` 接受 `adaptive_directives` 参数 |
 
 **支持的模式**：

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Play, Pause, MessageSquare, MoreHorizontal,
-  XCircle, Zap, CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -67,7 +67,7 @@ export const StudyRoom: React.FC = () => {
 
   // ── UI state ──
   const [showStopAlert, setShowStopAlert] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile();
   const [showMobileTimerSetup, setShowMobileTimerSetup] = useState(false);
   const [showMobileTimerFullscreen, setShowMobileTimerFullscreen] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -99,9 +99,9 @@ export const StudyRoom: React.FC = () => {
   }, [setPageHeader, t]);
 
   // ── API calls ──
-  const fetchOnline = async () => { try { const res = await api.get('/users/online/'); setOnlineUsers(res.data); } catch (e) {} };
-  const fetchMessages = async () => { try { const res = await api.get('/study/messages/'); setMessages(res.data); } catch (e) {} };
-  const fetchPlans = async () => { try { const res = await api.get('/users/plans/'); setPlans(res.data); } catch (e) {} };
+  const fetchOnline = async () => { try { const res = await api.get('/users/online/'); setOnlineUsers(res.data); } catch (e) { console.warn('fetchOnline failed', e); } };
+  const fetchMessages = async () => { try { const res = await api.get('/study/messages/'); setMessages(res.data); } catch (e) { console.warn('fetchMessages failed', e); } };
+  const fetchPlans = async () => { try { const res = await api.get('/users/plans/'); setPlans(res.data); } catch (e) { console.warn('fetchPlans failed', e); } };
 
   // ── Heartbeat ──
   const getHeartbeatPayload = useCallback(() => {
@@ -115,7 +115,7 @@ export const StudyRoom: React.FC = () => {
   }, [t]);
 
   const sendHeartbeat = async (override?: { current_task?: string | null; current_timer_end?: string | null }) => {
-    try { await api.post('/users/heartbeat/', { ...getHeartbeatPayload(), ...(override || {}) }); } catch (e) {}
+    try { await api.post('/users/heartbeat/', { ...getHeartbeatPayload(), ...(override || {}) }); } catch (e) { console.warn('heartbeat failed', e); }
   };
 
   // ── Initial load + polling ──
@@ -130,15 +130,6 @@ export const StudyRoom: React.FC = () => {
   }, []);
 
   useEffect(() => { sendHeartbeat(); }, [isActive]);
-
-  // ── Mobile detection ──
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
-    const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
 
   // ── Textarea resize ──
   useEffect(() => {
@@ -193,7 +184,7 @@ export const StudyRoom: React.FC = () => {
       try {
         await api.post('/study/messages/', { content: t('taskStarted', { emoji: '💪', taskName, duration }) });
         fetchMessages();
-      } catch (e) {}
+      } catch (e) { toast.error(t('sendFailed')); }
     }
   };
 
@@ -207,7 +198,7 @@ export const StudyRoom: React.FC = () => {
       try {
         await api.post('/study/messages/', { content: t('taskAborted', { emoji: '❌', taskName, focusedMins }) });
         fetchMessages();
-      } catch (e) {}
+      } catch (e) { toast.error(t('sendFailed')); }
     }
   };
 
@@ -221,7 +212,7 @@ export const StudyRoom: React.FC = () => {
         try {
           await api.post('/study/messages/', { content: t('taskAborted', { emoji: '❌', taskName, focusedMins }) });
           fetchMessages();
-        } catch (e) {}
+        } catch (e) { toast.error(t('sendFailed')); }
       }
     } else {
       if (activePlanId) {
@@ -232,14 +223,14 @@ export const StudyRoom: React.FC = () => {
             await api.post('/study/messages/', { content: t('planCompleted', { emoji: '✅', plan: taskName }), related_plan_id: activePlanId });
             fetchMessages();
           }
-        } catch (e) {}
+        } catch (e) { toast.error(t('sendFailed')); }
         setActivePlanId(null);
       } else {
         if (allowBroadcast) {
           try {
             await api.post('/study/messages/', { content: t('taskCompleted', { emoji: '✅', taskName, duration }) });
             fetchMessages();
-          } catch (e) {}
+          } catch (e) { toast.error(t('sendFailed')); }
         }
       }
       toast.success(t('focusAchieved'));
@@ -247,15 +238,24 @@ export const StudyRoom: React.FC = () => {
   };
 
   // ── Countdown interval ──
-  useEffect(() => {
-    if (!isActive || timeLeft <= 0) return;
-    const id = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    return () => clearInterval(id);
-  }, [isActive, timeLeft]);
+  const completedRef = useRef(false);
 
   useEffect(() => {
-    if (timeLeft === 0 && isActive) handleCompleteTask(false);
-  }, [timeLeft, isActive]);
+    if (!isActive) return;
+    completedRef.current = false;
+    const id = setInterval(() => setTimeLeft(prev => {
+      if (prev <= 1) { clearInterval(id); return 0; }
+      return prev - 1;
+    }), 1000);
+    return () => clearInterval(id);
+  }, [isActive]);
+
+  useEffect(() => {
+    if (timeLeft === 0 && isActive && !completedRef.current) {
+      completedRef.current = true;
+      handleCompleteTask(false);
+    }
+  }, [timeLeft, isActive, handleCompleteTask]);
 
   // ── Chat actions ──
   const sendMessage = async () => {

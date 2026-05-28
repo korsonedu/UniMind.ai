@@ -12,9 +12,11 @@ import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
 import { useUploadStore } from '@/store/useUploadStore';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 export const MaterialSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -98,7 +100,7 @@ export const MaterialSection: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定删除该资料？此操作不可撤销。')) return;
+    if (!(await confirm('确定删除该资料？此操作不可撤销。'))) return;
     try {
       await api.delete(`/courses/startup-materials/${id}/`);
       toast.success('已删除');
@@ -236,6 +238,7 @@ export const MaterialSection: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };

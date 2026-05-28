@@ -17,6 +17,7 @@ import { formatApiErrorToast } from '@/lib/apiError';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 type TaskStatus = 'draft' | 'pending' | 'running' | 'review' | 'completed' | 'failed' | 'cancelled';
 type TaskType = 'ai_parse' | 'ai_generate' | 'bulk_import' | 'course_publish' | 'article_publish' | 'other';
@@ -91,6 +92,7 @@ const toPercentText = (value: number) => `${Number(value || 0).toFixed(1)}%`;
 
 export const PipelinePanel: React.FC = () => {
   const { t } = useTranslation('maintenance');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [tasks, setTasks] = useState<PipelineTask[]>([]);
   const [metrics, setMetrics] = useState<PipelineMetrics | null>(null);
   const [reviewTasks, setReviewTasks] = useState<PipelineTask[]>([]);
@@ -242,7 +244,7 @@ export const PipelinePanel: React.FC = () => {
   };
 
   const handleDeleteTask = async (taskId: number) => {
-    if (!confirm(t('pipeline.deleteConfirm'))) return;
+    if (!(await confirm(t('pipeline.deleteConfirm')))) return;
     setUpdatingMap((prev) => ({ ...prev, [taskId]: true }));
     try {
       await api.delete(`/quizzes/admin/pipeline-tasks/${taskId}/`);
@@ -398,7 +400,6 @@ export const PipelinePanel: React.FC = () => {
               {reviewTasks.map((task) => {
                 const questions = (task.result as any)?.questions || [];
                 const summary = (task.result as any)?.summary || {};
-                const stages = (task.result as any)?.stages || [];
                 return (
                   <div key={task.id} className="p-4 bg-white rounded-2xl border border-amber-100 space-y-2">
                     <div className="flex items-center justify-between gap-4">
@@ -867,6 +868,7 @@ export const PipelinePanel: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };

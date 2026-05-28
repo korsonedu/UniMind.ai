@@ -7,10 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { CalendarCheck, MessageCircle, Trash2, Clock, ArrowLeft } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 interface PlanTask {
   id: string;
@@ -52,6 +52,7 @@ export function StudyPlan() {
   const [plans, setPlans] = useState<StudyPlan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<StudyPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const { confirm, Dialog } = useConfirm();
 
   useEffect(() => {
     fetchPlans();
@@ -65,6 +66,7 @@ export function StudyPlan() {
       const active = list.find((p: StudyPlan) => p.status === 'active');
       if (active) fetchPlanDetail(active.id);
     } catch {
+      toast.error('加载计划失败');
     } finally {
       setLoading(false);
     }
@@ -75,6 +77,7 @@ export function StudyPlan() {
       const res = await api.get(`/ai/plans/${id}/`);
       setSelectedPlan(res.data);
     } catch {
+      toast.error('加载计划详情失败');
     }
   };
 
@@ -91,7 +94,7 @@ export function StudyPlan() {
   };
 
   const deletePlan = async (id: number) => {
-    if (!confirm(t('deleteConfirm'))) return;
+    if (!(await confirm(t('deleteConfirm')))) return;
     try {
       await api.delete(`/ai/plans/${id}/`);
       setPlans(prev => prev.filter(p => p.id !== id));
@@ -275,6 +278,7 @@ export function StudyPlan() {
           </div>
         )}
       </div>
+      {Dialog}
     </PageWrapper>
   );
 }

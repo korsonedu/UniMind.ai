@@ -10,9 +10,12 @@
 """
 
 import json
+import logging
 from typing import Any, Dict, List
 
 from ai_assistant.services.tool_executor import AssistantToolExecutor
+
+logger = logging.getLogger(__name__)
 
 
 class ExamGeneratorToolExecutor(AssistantToolExecutor):
@@ -76,9 +79,11 @@ class ExamGeneratorToolExecutor(AssistantToolExecutor):
                 count_per_kp=count_per_kp,
                 target_types=types,
                 target_difficulty=difficulty,
+                institution=self.institution,
             )
             questions = result.get('questions', [])
-        except Exception:
+        except Exception as e:
+            logger.warning("管线生成失败，降级到 fallback: %s", e)
             # fallback：直接用 AI 生成
             questions = self._fallback_generate(kp_ids, count_per_kp, difficulty, types)
 
@@ -138,10 +143,12 @@ class ExamGeneratorToolExecutor(AssistantToolExecutor):
         )
 
         if not raw:
+            logger.warning("fallback_generate: AI 返回空结果")
             return []
 
         data = AIService.extract_json(raw)
         if not isinstance(data, list):
+            logger.warning("fallback_generate: JSON 解析失败，raw=%s", raw[:200])
             return []
 
         # 填充 kp_id
@@ -180,6 +187,7 @@ class ExamGeneratorToolExecutor(AssistantToolExecutor):
                 questions_per_kp=questions_per_kp,
                 difficulty=difficulty,
                 types=types,
+                institution=self.institution,
             )
         except Exception as e:
             return {"error": str(e)}

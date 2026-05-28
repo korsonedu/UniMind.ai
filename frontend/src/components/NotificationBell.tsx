@@ -1,12 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Bell, CheckCheck, MessageCircle, Info, Brain, Trash2, Send } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell, MessageCircle, Info, Brain, Send } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,

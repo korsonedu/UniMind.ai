@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 
 from ai_engine.service import AICallError
 from quizzes.models import KnowledgePoint, Question
@@ -400,10 +401,13 @@ class QuestionGenerator:
         count_per_kp: int,
         target_types: Optional[List[str]],
         target_difficulty: Any,
+        institution=None,
     ) -> List[Dict[str, Any]]:
         fallback_results = []
         for kp in kps:
             qs = Question.objects.filter(knowledge_point=kp)
+            if institution:
+                qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
             if target_difficulty and target_difficulty != 'mixed':
                 qs = qs.filter(difficulty_level=target_difficulty)
 
@@ -437,6 +441,7 @@ class QuestionGenerator:
         target_types: Optional[List[str]] = None,
         target_difficulty: Any = 'normal',
         target_type_ratio: Optional[Dict[str, Any]] = None,
+        institution=None,
     ):
         kps = list(KnowledgePoint.objects.filter(id__in=list(kp_ids), level='kp').order_by('id'))
         if not kps:
@@ -519,9 +524,15 @@ class QuestionGenerator:
                         raise
 
             if first_error:
+                logger.error(
+                    "AI 命题原始异常: type=%s err=%s",
+                    type(first_error).__name__,
+                    first_error,
+                )
                 # 触发业务降级：从本地题库抽取现有题目
                 fallback_questions = self._fallback_fetch_local_questions(
-                    kps, total_per_kp, normalized_target_types, normalized_target_difficulty
+                    kps, total_per_kp, normalized_target_types, normalized_target_difficulty,
+                    institution=institution,
                 )
                 if fallback_questions:
                     logger.info("AI 命题服务异常，已成功降级为本地题库抽题。")
@@ -568,6 +579,7 @@ class QuestionGenerator:
             count_per_kp=count_per_kp,
             target_types=target_types,
             target_difficulty=target_difficulty,
+            institution=institution,
         )
         if not generated:
             return 0

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -49,35 +49,16 @@ export function DiagnosticTest() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [timeLeft, setTimeLeft] = useState(300);
   const [result, setResult] = useState<DiagnosticResult | null>(null);
+  const submittedRef = useRef(false);
 
   useEffect(() => {
-    if (phase !== 'testing' || timeLeft <= 0) return;
-    const timer = setInterval(() => setTimeLeft(t => t - 1), 1000);
+    if (phase !== 'testing') return;
+    const timer = setInterval(() => setTimeLeft(t => {
+      if (t <= 1) { clearInterval(timer); return 0; }
+      return t - 1;
+    }), 1000);
     return () => clearInterval(timer);
-  }, [phase, timeLeft]);
-
-  useEffect(() => {
-    if (timeLeft <= 0 && phase === 'testing') handleSubmit();
-  }, [timeLeft, phase]);
-
-  const startDiagnostic = async () => {
-    setLoading(true);
-    try {
-      const res = await api.post('/users/me/diagnostic/generate/');
-      setQuestions(res.data.questions);
-      setTimeLeft(res.data.time_limit_seconds || 300);
-      setPhase('testing');
-    } catch (err: any) {
-      if (err.response?.data?.status === 'already_completed') {
-        toast.info('诊断已完成，你可以直接开始练习');
-        navigate('/tests');
-      } else {
-        toast.error(err.response?.data?.error || '生成诊断题失败');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [phase]);
 
   const handleSubmit = useCallback(async () => {
     setLoading(true);
@@ -98,6 +79,33 @@ export function DiagnosticTest() {
       setLoading(false);
     }
   }, [questions, answers]);
+
+  useEffect(() => {
+    if (timeLeft <= 0 && phase === 'testing' && !submittedRef.current) {
+      submittedRef.current = true;
+      handleSubmit();
+    }
+  }, [timeLeft, phase, handleSubmit]);
+
+  const startDiagnostic = async () => {
+    submittedRef.current = false;
+    setLoading(true);
+    try {
+      const res = await api.post('/users/me/diagnostic/generate/');
+      setQuestions(res.data.questions);
+      setTimeLeft(res.data.time_limit_seconds || 300);
+      setPhase('testing');
+    } catch (err: any) {
+      if (err.response?.data?.status === 'already_completed') {
+        toast.info('诊断已完成，你可以直接开始练习');
+        navigate('/tests');
+      } else {
+        toast.error(err.response?.data?.error || '生成诊断题失败');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);

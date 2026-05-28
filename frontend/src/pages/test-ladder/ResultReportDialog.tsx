@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Card } from '@/components/ui/card';
@@ -28,17 +29,8 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
   setCurrentReportIdx
 }) => {
   const { t } = useTranslation('testLadder');
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile();
   const resultReminderKeyRef = useRef<string>('');
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(max-width: 767px)');
-    const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
 
   useEffect(() => {
     if (!open || !isMobile || !examSummary || !isLearningReminderEnabled('testResult')) return;

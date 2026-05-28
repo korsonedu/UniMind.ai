@@ -38,7 +38,7 @@ interface CheckoutModalProps {
   currentPlan?: string;
 }
 
-export function CheckoutModal({ open, onOpenChange, preselectedPlan, currentPlan = 'free' }: CheckoutModalProps) {
+export function CheckoutModal({ open, onOpenChange, preselectedPlan }: CheckoutModalProps) {
   const navigate = useNavigate();
   const [plan, setPlan] = useState<PlanKey>((preselectedPlan as PlanKey) || 'starter');
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('annual');

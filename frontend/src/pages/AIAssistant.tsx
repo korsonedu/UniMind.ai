@@ -30,7 +30,11 @@ interface Bot {
   name: string;
   avatar: string;
   system_prompt: string;
+  bot_type?: string;
 }
+
+const AGENT_BOT_TYPES = ['exam_generator', 'planner'];
+const isAgentBot = (bot: Bot) => !!bot.bot_type && AGENT_BOT_TYPES.includes(bot.bot_type);
 
 export const AIAssistant: React.FC = () => {
   const { user } = useAuthStore();
@@ -70,6 +74,7 @@ export const AIAssistant: React.FC = () => {
 
   useEffect(() => {
     if (selectedBot) {
+      agentChat.reset();
       sessionStorage.setItem('last_selected_bot_id', selectedBot.id.toString());
       api.get('/ai/history/', { params: { bot_id: selectedBot.id } }).then(res => {
         if (res.data.length > 0) {
@@ -92,7 +97,7 @@ export const AIAssistant: React.FC = () => {
   }, [messages, loading]);
 
   useEffect(() => {
-    if (!selectedBot) return;
+    if (!selectedBot || isAgentBot(selectedBot)) return;
     const lastMsg = messagesRef.current[messagesRef.current.length - 1];
     const needsPolling = lastMsg && (lastMsg.role === 'user' || lastMsg.content === '[Thinking...]');
     if (!needsPolling) return;
@@ -129,9 +134,15 @@ export const AIAssistant: React.FC = () => {
     }
   }, [agentChat.isDone, agentChat.streamingText]);
 
+  useEffect(() => {
+    if (agentChat.error) {
+      toast.error(agentChat.error);
+    }
+  }, [agentChat.error]);
+
   const doSend = async (text: string) => {
     // Agent bots (exam_generator, planner) use WebSocket mode
-    if (selectedBot && ((selectedBot as any).bot_type === 'exam_generator' || (selectedBot as any).bot_type === 'planner')) {
+    if (selectedBot && isAgentBot(selectedBot)) {
       setMessages(prev => [...prev, { role: 'user', content: text }]);
       agentChat.sendMessage(text);
       return;

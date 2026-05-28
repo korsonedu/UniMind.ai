@@ -177,6 +177,7 @@ def run_single_generate_pipeline(
     target_difficulty: Any = "normal",
     target_type_ratio: Optional[Dict[str, Any]] = None,
     skip_review: bool = False,
+    institution=None,
 ) -> Dict[str, Any]:
     normalized_kp_ids = _normalize_kp_ids(kp_ids)
     if not normalized_kp_ids:
@@ -197,6 +198,7 @@ def run_single_generate_pipeline(
             target_types=target_types,
             target_difficulty=target_difficulty,
             target_type_ratio=target_type_ratio,
+            institution=institution,
         )
         for item in generated or []:
             row = dict(item)

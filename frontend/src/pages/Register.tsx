@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from 'react-i18next';
 
 import api from '@/lib/api';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export const Register: React.FC = () => {
   const { t } = useTranslation('auth');
@@ -18,7 +19,22 @@ export const Register: React.FC = () => {
   const [sendingCode, setSendingCode] = useState(false);
   const [error, setError] = useState('');
   const [codeSent, setCodeSent] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
+
+  // 清除残留 auth 状态，防止 cookie 残留导致验证码发到旧邮箱
+  useEffect(() => {
+    const { token } = useAuthStore.getState();
+    if (token) {
+      api.post('/users/logout/').catch(() => {});
+      useAuthStore.getState().logout();
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
   const [searchParams] = useSearchParams();
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -36,12 +52,23 @@ export const Register: React.FC = () => {
   const institutionRole = getInstitutionRole();
 
   const handleSendCode = async () => {
-    if (!email.trim()) { setError(t('register.errors.enterEmail')); return; }
+    if (!email.trim() || countdown > 0) return;
     setSendingCode(true);
     setError('');
     try {
       await api.post('/users/send-verification-code/', { email });
       setCodeSent(true);
+      setCountdown(60);
+      timerRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current!);
+            timerRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (err: any) {
       setError(err.response?.data?.error || t('register.errors.sendCodeFailed'));
     } finally {
@@ -66,14 +93,14 @@ export const Register: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-unimind-bg-secondary flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-white/80 backdrop-blur-xl p-4">
-        <CardHeader className="space-y-1 text-center">
+      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-white/80 backdrop-blur-xl">
+        <CardHeader className="p-6 space-y-1 text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">{t('register.title')}</CardTitle>
           <CardDescription>{t('register.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">
-            {error && <p className="text-red-500 text-xs text-center">{error}</p>}
+            {error && <p className="text-sm text-center bg-red-50 text-red-600 rounded-xl py-2.5 px-3">{error}</p>}
 
             <div className="flex gap-2">
               <Input
@@ -89,10 +116,10 @@ export const Register: React.FC = () => {
               <Button
                 type="button"
                 onClick={handleSendCode}
-                disabled={sendingCode || !email.trim()}
+                disabled={sendingCode || !email.trim() || countdown > 0}
                 className="h-12 rounded-xl bg-black text-white font-medium shrink-0"
               >
-                {sendingCode ? t('register.sending') : codeSent ? t('register.codeSent') : t('register.getCode')}
+                {sendingCode ? t('register.sending') : countdown > 0 ? `${countdown}s` : t('register.getCode')}
               </Button>
             </div>
 

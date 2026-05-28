@@ -23,10 +23,10 @@ def run_adversarial_pipeline_task(task_id: int, kp_ids: list, questions_per_kp: 
     from quizzes.models import ContentPipelineTask, KnowledgePoint
     from quizzes.services.adversarial_pipeline import _execute_pipeline
 
-    task = ContentPipelineTask.objects.get(id=task_id)
+    task = ContentPipelineTask.objects.select_related('institution').get(id=task_id)
     kps = list(KnowledgePoint.objects.filter(id__in=kp_ids))
     try:
-        _execute_pipeline(task, kps, questions_per_kp, difficulty=difficulty, types=types)
+        _execute_pipeline(task, kps, questions_per_kp, difficulty=difficulty, types=types, institution=task.institution)
     except Exception as e:
         logger.exception("Adversarial pipeline task failed: task_id=%s", task_id)
         task.status = 'failed'

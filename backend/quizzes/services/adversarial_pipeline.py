@@ -58,6 +58,7 @@ def run_adversarial_pipeline(
     questions_per_kp: int = QUESTIONS_PER_KP,
     difficulty: str = "normal",
     types: Optional[List[str]] = None,
+    institution=None,
 ) -> int:
     """启动对抗性出题管线，返回 pipeline_task_id。
 
@@ -86,6 +87,7 @@ def run_adversarial_pipeline(
         },
         progress=0,
         created_by=created_by,
+        institution=institution,
         started_at=timezone.now(),
     )
 
@@ -101,7 +103,7 @@ def run_adversarial_pipeline(
     return task.id
 
 
-def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_per_kp: int, difficulty: str = "normal", types: Optional[List[str]] = None):
+def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_per_kp: int, difficulty: str = "normal", types: Optional[List[str]] = None, institution=None):
     """执行对抗性出题管线。"""
     all_questions = []
     stage_log = []
@@ -120,7 +122,7 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
     for i, draft in enumerate(drafts):
         try:
             for iteration in range(1, MAX_ITERATIONS + 1):
-                review_result = _reviewer_evaluate(draft)
+                review_result = _reviewer_evaluate(draft, institution=institution)
                 draft["review_score"] = review_result["score"]
                 draft["review_feedback"] = review_result["feedback"]
                 draft["review_dimensions"] = review_result.get("dimensions", {})
@@ -167,7 +169,7 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
     _update_task(task, 70, f"Reviewer 完成，{len(reviewed)} 道题通过 ({iteration_stats} 轮分布)", stage_log, "review_done")
 
     # ── Stage 3: Classifier 三层审计 ──
-    subject_kps = _get_subject_knowledge_points(kps)
+    subject_kps = _get_subject_knowledge_points(kps, institution=institution)
     _update_task(task, 75, f"Classifier 正在逐题审计（知识标签候选: {len(subject_kps)} 个）...", stage_log, "classify_start")
     difficulty_mismatches = 0
     answer_errors = 0
@@ -327,12 +329,16 @@ AUTHOR_SYSTEM_PROMPT = """\
 调用 submit_questions 提交题目列表，每道题为一个 JSON 对象包含 question/q_type/subjective_type/options/answer/grading_points/difficulty_level 字段。"""
 
 
-def _get_subject_knowledge_points(kps: List[KnowledgePoint]) -> List[KnowledgePoint]:
+def _get_subject_knowledge_points(kps: List[KnowledgePoint], institution=None) -> List[KnowledgePoint]:
     """获取与已选 KP 同科目的所有知识点，作为 Classifier 知识标签候选。"""
     subjects = set(k.subject for k in kps if k.subject)
     if not subjects:
         return kps
-    return list(KnowledgePoint.objects.filter(subject__in=subjects).order_by('subject', 'code'))
+    qs = KnowledgePoint.objects.filter(subject__in=subjects)
+    if institution:
+        from django.db.models import Q
+        qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
+    return list(qs.order_by('subject', 'code'))
 
 
 def _difficulty_label(d: str) -> str:
@@ -432,7 +438,7 @@ REVIEWER_SYSTEM_PROMPT = """\
 - search_similar_questions: 搜索同知识点下已有题目，检查是否与现有题目雷同或重复。
 不需要研究时可直接评审。评审完成后，调用 submit_review 提交评审结果。"""
 
-def _get_reviewer_tool_executor():
+def _get_reviewer_tool_executor(institution=None):
     """Reviewer research tool executor: lookup KP definition + search similar questions."""
     import json
     from quizzes.models import KnowledgePoint, Question
@@ -441,7 +447,11 @@ def _get_reviewer_tool_executor():
         try:
             if tool_name == "lookup_knowledge_point_definition":
                 code = (args.get('code') or '').strip()
-                kp = KnowledgePoint.objects.filter(code=code).first()
+                qs = KnowledgePoint.objects.filter(code=code)
+                if institution:
+                    from django.db.models import Q
+                    qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
+                kp = qs.first()
                 if kp:
                     return json.dumps({
                         "code": kp.code, "name": kp.name,
@@ -455,11 +465,14 @@ def _get_reviewer_tool_executor():
                 limit = min(int(args.get('limit', 5)), 10)
                 qs = Question.objects.filter(
                     knowledge_point__code=kp_code,
-                ).values('id', 'text', 'q_type', 'correct_answer')[:limit]
+                )
+                if institution:
+                    from django.db.models import Q
+                    qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
                 questions = [
                     {"id": q['id'], "text": (q['text'] or '')[:300],
                      "q_type": q['q_type'], "answer": (q['correct_answer'] or '')[:200]}
-                    for q in qs
+                    for q in qs.values('id', 'text', 'q_type', 'correct_answer')[:limit]
                 ]
                 return json.dumps({"found": len(questions), "questions": questions}, ensure_ascii=False)
             else:
@@ -469,7 +482,7 @@ def _get_reviewer_tool_executor():
     return execute
 
 
-def _reviewer_evaluate(question: Dict) -> Dict:
+def _reviewer_evaluate(question: Dict, institution=None) -> Dict:
     """Reviewer Agent: from 3 dimensions (v4-pro + thinking + agentic)."""
     from ai_engine.tools import get_reviewer_research_tools
 
@@ -500,7 +513,7 @@ def _reviewer_evaluate(question: Dict) -> Dict:
 
     try:
         research_tools = get_reviewer_research_tools()
-        tool_executor = _get_reviewer_tool_executor()
+        tool_executor = _get_reviewer_tool_executor(institution=institution)
         result = AIService.agentic_structured_output(
             system_prompt=system_prompt,
             user_prompt=prompt,

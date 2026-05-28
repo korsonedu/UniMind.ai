@@ -183,6 +183,33 @@ def extract_memories_with_mem0(user, conversation_history):
     thread.start()
 
 
+def build_memory_context(user, user_message: str = '', bot_type: str = 'planner'):
+    """Build dual-layer memory context + adaptive directives for prompt injection.
+
+    Returns (memory_context: str, adaptive_directives: str).
+    Used by both polling (process_ai_chat) and streaming (AIChatStreamView) paths.
+    """
+    memory_context = ""
+    adaptive_directives = ""
+
+    try:
+        structured = get_memories_for_injection(user)
+        semantic = get_mem0_memories_for_injection(user, query=user_message)
+        parts = [p for p in [structured, semantic] if p]
+        memory_context = "\n\n".join(parts)
+
+        if USE_MEM0 and user.institution_id:
+            from ai_assistant.services.prompt_adapter import get_adaptive_directives
+            from ai_assistant.services.tenant_memory import TenantMemoryManager
+            mgr = TenantMemoryManager(institution_id=user.institution_id)
+            raw_memories = mgr.get_all(user_id=user.id)[:20]
+            adaptive_directives = get_adaptive_directives(raw_memories, bot_type=bot_type)
+    except Exception:
+        logger.exception("Failed to build memory context for user %s", user.id)
+
+    return memory_context, adaptive_directives
+
+
 def get_mem0_memories_for_injection(user, query: str = '', limit: int = 5) -> str:
     """Retrieve semantically relevant memories from mem0 for prompt injection."""
     if not USE_MEM0:

@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useState, useEffect, type ReactNode } from 'react';
 import { MainLayout } from './layouts/MainLayout';
 import { useAuthStore } from './store/useAuthStore';
@@ -9,14 +9,15 @@ import { FEATURES } from './store/useInstitutionStore';
 import { Loading } from '@/components/Loading';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
-import { WeeklyReportDialog } from './components/WeeklyReportDialog';
-import { Landing } from './pages/Landing';
 import i18n from '@/lib/i18n';
+
+const WeeklyReportDialog = lazy(() => import('./components/WeeklyReportDialog').then(m => ({ default: m.WeeklyReportDialog })));
 
 // Lazy-loaded pages — named exports need .then() wrapper
 const lazyNamed = <T extends Record<string, React.ComponentType<any>>>(loader: () => Promise<T>, name: keyof T) =>
   lazy(() => loader().then(m => ({ default: m[name] })));
 
+const Landing = lazyNamed(() => import('./pages/Landing'), 'Landing');
 const CourseCenter = lazyNamed(() => import('./pages/CourseCenter'), 'CourseCenter');
 const TestLadder = lazyNamed(() => import('./pages/TestLadder'), 'TestLadder');
 const StudyRoom = lazyNamed(() => import('./pages/StudyRoom'), 'StudyRoom');
@@ -52,6 +53,7 @@ const InstitutionStudents = lazy(() => import('./pages/InstitutionStudents'));
 const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
 const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
 const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
+const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
 const NotFound = lazy(() => import('./pages/NotFound'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
 const PromoPlus = lazy(() => import('./pages/PromoPlus'));
@@ -146,8 +148,8 @@ const HomeRedirect = () => {
   if (user?.institution_role === 'owner' || user?.institution_role === 'teacher' || user?.is_institution_admin) {
     return <Navigate to="/workbench" replace />;
   }
-  // 学生未完成诊断 → 诊断页（全屏，无 sidebar）
-  if (user?.institution_role === 'student' && !user?.has_completed_initial_assessment) {
+  // 通过邀请链接加入机构的学生，未完成诊断 → 诊断页（全屏，无 sidebar）
+  if (user?.institution_role === 'student' && user?.institution && !user?.has_completed_initial_assessment) {
     return <Navigate to="/diagnostic" replace />;
   }
   return <Navigate to="/xiaoyu" replace />;
@@ -178,7 +180,7 @@ const RootRedirect = () => {
   // Token exists → let RequireAuth handle user fetching, render page immediately
   if (token) return <Outlet />;
 
-  return <Landing />;
+  return <Suspense fallback={<PageLoader />}><Landing /></Suspense>;
 };
 
 const lazyPage = (Component: React.ComponentType) => (
@@ -226,6 +228,7 @@ const router = createBrowserRouter([
       },
     ],
   },
+  { path: "/join/:invite_slug", element: lazyPage(JoinPage) },
   { path: "/intro/:slug", element: lazyPage(InstitutionHome) },
   { path: "/intro", element: <Navigate to="/" replace /> },
   { path: "/en", element: <LanguageRedirect lang="en" /> },
@@ -244,7 +247,9 @@ function App() {
   return (
     <>
       <Toaster position="top-center" richColors />
-      <WeeklyReportDialog />
+      <Suspense fallback={null}>
+        <WeeklyReportDialog />
+      </Suspense>
       <RouterProvider router={router} />
     </>
   );

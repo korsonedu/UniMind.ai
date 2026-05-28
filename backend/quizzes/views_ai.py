@@ -152,6 +152,7 @@ class AdversarialPipelineView(APIView):
                 questions_per_kp=questions_per_kp,
                 difficulty=difficulty,
                 types=types,
+                institution=getattr(request.user, 'institution', None),
             )
             increment_ai_quota(request.user.institution)
             return Response({'task_id': task_id, 'status': 'running'}, status=201)
@@ -277,3 +278,80 @@ class WorkbenchTaskStatusView(APIView):
             'created_at': task.created_at,
             'finished_at': task.finished_at,
         })
+
+
+class WorkbenchSaveQuestionsView(APIView):
+    """直接将前端题目数据存入题库。"""
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        from quizzes.models import Question
+
+        questions = request.data.get('questions', [])
+        if not questions:
+            return Response({'error': '没有可保存的题目'}, status=400)
+
+        saved_count = 0
+        errors = []
+        for q in questions:
+            try:
+                kp = None
+                kp_id = q.get('kp_id')
+                if kp_id:
+                    kp = KnowledgePoint.objects.filter(id=kp_id).first()
+
+                question = Question(
+                    text=q.get('question', ''),
+                    q_type=q.get('q_type', 'objective'),
+                    subjective_type=q.get('subjective_type'),
+                    difficulty_level=q.get('difficulty_level', 'normal'),
+                    options=q.get('options'),
+                    correct_answer=q.get('answer', ''),
+                    grading_points='\n'.join(q.get('grading_points', []) or []) if q.get('grading_points') else None,
+                    knowledge_point=kp,
+                    institution=getattr(request.user, 'institution', None),
+                )
+                question.save()
+                saved_count += 1
+            except Exception as e:
+                errors.append(str(e))
+
+        return Response({
+            'saved': saved_count,
+            'total': len(questions),
+            'errors': errors[:3] if errors else [],
+        })
+
+
+class WorkbenchLaunchArcView(APIView):
+    """直接启动 ARC 精修管线。"""
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        from quizzes.services.adversarial_pipeline import run_adversarial_pipeline
+
+        questions = request.data.get('questions', [])
+        kp_ids = request.data.get('kp_ids', [])
+        difficulty = request.data.get('difficulty', 'normal')
+        questions_per_kp = int(request.data.get('questions_per_kp', 3))
+
+        # 从前端题目中提取 kp_id（如果未显式提供）
+        if not kp_ids:
+            kp_ids = list({q['kp_id'] for q in questions if q.get('kp_id')})
+
+        if not kp_ids:
+            return Response({'error': '请提供知识点 ID 或包含 kp_id 的题目'}, status=400)
+
+        try:
+            task_id = run_adversarial_pipeline(
+                kp_ids=kp_ids,
+                created_by=request.user,
+                task_title='ARC 精修管线',
+                questions_per_kp=questions_per_kp,
+                difficulty=difficulty,
+                institution=getattr(request.user, 'institution', None),
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+        return Response({'task_id': task_id})

@@ -19,6 +19,7 @@ class BotProfile:
     prompt_dir: str                    # prompts 文件目录名
     is_exclusive: bool = False         # 是否注入学生学术数据
     force_tool_choice: bool = False    # 是否强制 tool_choice="required"
+    use_intent_router: bool = False    # 是否启用意图预筛选路由
 
 
 def _get_executor_class(bot_type: str):
@@ -56,15 +57,17 @@ BOT_REGISTRY: dict[str, BotProfile] = {
         prompt_dir='xiaoyu',
         is_exclusive=True,
         force_tool_choice=True,
+        use_intent_router=True,
     ),
     'exam_generator': BotProfile(
-        name='出题助手',
+        name='命题官',
         bot_type='exam_generator',
         executor_class=None,
         tools_factory=None,
         prompt_dir='exam_generator',
         is_exclusive=False,
         force_tool_choice=True,
+        use_intent_router=True,
     ),
     'assistant': BotProfile(
         name='AI 助教',

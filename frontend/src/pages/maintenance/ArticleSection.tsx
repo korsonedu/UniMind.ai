@@ -15,9 +15,11 @@ import { QuickCreateKPDialog } from './QuickCreateKPDialog';
 import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 export const ArticleSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [kpList, setKpList] = useState<any[]>([]);
@@ -72,7 +74,7 @@ export const ArticleSection: React.FC = () => {
   };
 
   const handleDelete = async (id: number, title: string) => {
-    if (!confirm(`删除文章「${title}」？此操作不可撤销。`)) return;
+    if (!(await confirm(`删除文章「${title}」？此操作不可撤销。`))) return;
     try {
       await api.delete(`/articles/${id}/`);
       toast.success('已删除');
@@ -274,6 +276,7 @@ export const ArticleSection: React.FC = () => {
         onCreated={onKPCreated}
         onRefresh={fetchItems}
       />
+      {ConfirmDialog}
     </div>
   );
 };

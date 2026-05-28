@@ -2,12 +2,19 @@ from rest_framework import generics, permissions, status, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Q
+from django.utils.decorators import method_decorator
 from .models import Question, Answer
 from .serializers import QuestionSerializer, AnswerSerializer
 from notifications.models import Notification
 from users.views import IsMember
 from users.permissions import is_platform_admin, is_institution_admin
+from core.file_validation import validate_upload_file
+from core.rate_limit import user_rate_limit
+from users.quota import validate_storage_quota, add_storage_usage
 
+_upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
+
+@_upload_rl
 class QuestionListCreateView(generics.ListCreateAPIView):
     serializer_class = QuestionSerializer
     permission_classes = [IsMember]
@@ -39,7 +46,12 @@ class QuestionListCreateView(generics.ListCreateAPIView):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user, institution=self.request.user.institution)
+        validate_upload_file(self.request.FILES.get("attachment"))
+        total_size = sum(f.size for f in self.request.FILES.values() if f)
+        inst = self.request.user.institution
+        validate_storage_quota(inst, total_size)
+        serializer.save(user=self.request.user, institution=inst)
+        add_storage_usage(inst, total_size)
 
 class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Question.objects.all()

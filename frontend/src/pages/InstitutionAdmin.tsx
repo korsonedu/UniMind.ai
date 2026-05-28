@@ -9,15 +9,16 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
 import {
   Building2, Plus, Search, Loader2, Pencil, Power, PowerOff,
-  Users, Calendar, ArrowLeft, Layers, Eye, Copy, Check,
+  Users, Calendar, ArrowLeft, Layers, Eye,
   Upload, ShieldCheck,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { DirectionSelector } from '@/components/DirectionSelector';
-import { InstitutionBotSection } from '@/pages/maintenance/InstitutionBotSection';
+
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useConfirm } from '@/components/useConfirm';
 
 interface Institution {
   id: number;
@@ -52,6 +53,7 @@ export default function InstitutionAdmin() {
   const [planFilter, setPlanFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Institution | null>(null);
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   const fetchInstitutions = async () => {
     try {
@@ -75,7 +77,7 @@ export default function InstitutionAdmin() {
     fetchInstitutions();
   };
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`确认删除机构「${name}」？该操作不可撤销。`)) return;
+    if (!(await confirm(`确认删除机构「${name}」？该操作不可撤销。`))) return;
     await api.delete(`/users/institutions/${id}/`);
     fetchInstitutions();
   };
@@ -252,6 +254,7 @@ export default function InstitutionAdmin() {
           onUpdated={() => { setEditTarget(null); fetchInstitutions(); }}
         />
       )}
+      {ConfirmDialog}
     </div>
   </div>
   );
@@ -568,7 +571,7 @@ function InstitutionSelfSettings() {
                     setDirectionSelected(currentDirections);
                     setDirectionError('');
                     setDirectionOpen(true);
-                  } catch { /* ignore */ }
+                  } catch { console.error('Failed to load direction subjects'); }
                 }}
               >
                 <Pencil className="h-3 w-3 mr-1" />编辑方向
@@ -606,9 +609,6 @@ function InstitutionSelfSettings() {
             保存机构设置
           </Button>
         </Card>
-
-        {/* AI 机器人管理 */}
-        <InstitutionBotSection />
 
         <DirectionEditDialog
           open={directionOpen}

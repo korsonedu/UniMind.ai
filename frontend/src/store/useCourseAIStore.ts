@@ -70,6 +70,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
               set({ outlineStatus: 'unavailable' });
             }
           } catch {
+            console.error('Outline poll failed');
             clearInterval(timer);
             _pollTimers.delete(key);
             set({ outlineStatus: 'unavailable' });
@@ -78,6 +79,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
         _pollTimers.set(key, timer);
       }
     } catch {
+      console.error('Fetch outline failed');
       set({ outlineStatus: 'unavailable' });
     }
   },
@@ -89,6 +91,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       // 等后端启动后开始轮询
       setTimeout(() => get().fetchOutline(courseId), 2000);
     } catch {
+      console.error('Trigger outline generation failed');
       set({ outlineStatus: 'unavailable' });
     }
   },
@@ -144,6 +147,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
               set({ transcriptStatus: 'unavailable' });
             }
           } catch {
+            console.error('Transcript poll failed');
             clearInterval(timer);
             _pollTimers.delete(key);
             set({ transcriptStatus: 'unavailable' });
@@ -152,6 +156,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
         _pollTimers.set(key, timer);
       }
     } catch {
+      console.error('Fetch transcript failed');
       set({ transcriptStatus: 'unavailable' });
     }
   },
@@ -163,6 +168,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       // 等后端启动后开始轮询
       setTimeout(() => get().fetchTranscript(courseId), 2000);
     } catch {
+      console.error('Trigger transcription failed');
       set({ transcriptStatus: 'unavailable' });
     }
   },

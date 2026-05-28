@@ -105,6 +105,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
         loading: false,
       });
     } catch {
+      console.error('Fetch institution features failed');
       if (isInitial) {
         set({ loading: false, features: [] });
       }
@@ -123,7 +124,9 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
         usage: data.usage || null,
         loading: false,
       });
-    } catch { /* silently fail */ }
+    } catch {
+      console.error('Enter preview failed');
+    }
   },
 
   exitPreview: async () => {
@@ -138,6 +141,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
         loading: false,
       });
     } catch {
+      console.error('Exit preview failed');
       set({ loading: false, features: [] });
     }
   },

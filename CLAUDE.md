@@ -6,13 +6,14 @@
 
 三个自治 AI Agent 共享统一运行时：
 
-| Agent | bot_type | 工具数 | 职责 |
-|-------|----------|--------|------|
-| 小宇 | `planner` | 15+ | 学习规划，教练式对话，主动分析数据给建议 |
-| 出题助手 | `exam_generator` | 5 专用 | 教研出题，背靠 4-Agent ARC 对抗管线 |
-| AI 助教 | `assistant` | 6+ | 学生辅导，跨会话记忆，深度数据钩稽 |
+| Agent | bot_type | 工具数 | 意图路由 | 职责 |
+|-------|----------|--------|---------|------|
+| 小宇 | `planner` | 15+ | ✅ 7类意图 | 学习规划，教练式对话，主动分析数据给建议 |
+| 命题官 | `exam_generator` | 5 专用 | ✅ 5类意图 | 教研出题，背靠 4-Agent ARC 对抗管线 |
+| AI 助教 | `assistant` | 6+ | — | 学生辅导，跨会话记忆，深度数据钩稽 |
 
 运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
+意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。
 新增 Agent 只需：① 写 prompt 文件到 `prompts/ai_assistant/bots/{name}/` ② 在 `bot_registry.py` 的 `BOT_REGISTRY` 加一行 ③ （可选）写 ToolExecutor 子类。
 
 ## 硬边界
@@ -78,15 +79,16 @@ UniMindCode/                  ← git 仓库根目录
 | `/` | Landing（未登录）/ HomeRedirect（已登录：学生未诊断→/diagnostic, 老师/机构主→/workbench, 其他→/courses） |
 | `/login` `/register` | 邮箱验证码登录注册 |
 | `/diagnostic` | 学生诊断测试（首次登录强制） |
-| `/workbench` | AI 出题工作台 — 对话式 Agent（老师/机构主） |
+| `/workbench` | 命题官 — 对话式 Agent 出题（老师/机构主） |
 | `/intro/:slug` | 机构公开首页（无需登录，公开访问） |
 | `/management` | 管理后台（需管理员） |
-| `/join/:invite_slug` | 邀请链接 → 种 cookie → 302 到 /register |
+| `/join/:invite_slug` | 邀请链接落地页（未登录→注册/登录，已登录裸号→自动绑定机构） |
 | `/api/users/` | 用户/会员/ELO API |
 | `/api/users/me/diagnostic/generate/` | POST 生成诊断题目 |
 | `/api/users/me/diagnostic/submit/` | POST 提交诊断答案 |
 | `/api/users/institution/me/analytics/class-performance/` | GET 班级 KP 正确率分析 |
 | `/api/users/institution/me/analytics/suggested-topics/` | GET Top 5 薄弱知识点建议 |
+| `/api/users/institution/join-by-invite-slug/` | POST 已登录用户通过邀请链接加入机构 |
 | `/api/quizzes/` | 题库/考试 API |
 | `/api/quizzes/templates/` | GET/POST 出题模板（系统预设+机构自定义） |
 | `/api/quizzes/templates/<id>/` | PATCH/DELETE 模板详情 |
@@ -99,13 +101,16 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/ai/memories/semantics/` | GET 语义记忆列表（mem0，需 USE_MEM0=true） |
 | `/api/ai/memories/semantics/clear/` | DELETE 清空全部语义记忆 |
 | `/api/ai/memories/semantics/<memory_id>/` | DELETE 删除单条语义记忆 |
+| `/api/ai/chat/` | POST Agent 对话（非流式 polling） |
+| `/api/ai/chat/stream/` | POST Agent 对话（SSE 流式，小宇/命题官共用） |
 | `/api/ai/workbench-chat/` | POST 工作台 Agent 对话 |
+| `/api/ai/workbench/dashboard/` | GET 命题官 Dashboard 聚合接口（仅机构管理员） |
 | `/api/institutions/` | 机构管理 API |
 | `/api/payments/` | 支付 API（订单/支付配置） |
 | `/payments/result` | 支付结果页（前端） |
 | `/billing` | 方案账单页（前端） |
 | `/checkout` | 结算页（前端） |
-| `/ws/ai/chat/<bot_id>/` | WS Agent 对话（出题助手/小宇，多步可见） |
+| `/ws/ai/chat/<bot_id>/` | WS Agent 对话（命题官/小宇，多步可见） |
 | `/ws/` | WebSocket（自习室/对话） |
 
 ## 环境变量速查
@@ -123,6 +128,7 @@ DB_NAME=unimind  DB_USER=unimind  DB_PASSWORD=xxx  DB_HOST=localhost  DB_PORT=54
 
 # Redis
 REDIS_URL=redis://127.0.0.1:6379/0
+CACHE_REDIS_URL=redis://127.0.0.1:6379/1    # Django 缓存用独立 db
 
 # AI 模型（按任务路由见 ai_engine/config.py，hot-swap 只需改顶部两个常量）
 # LLM_MODEL=                    # 全局覆盖（可选）
@@ -170,7 +176,7 @@ python manage.py generate_knowledge_tree --subject=高中数学
 for f in backend/knowledge_trees/*.md; do subject=$(basename "$f" .md); python manage.py import_knowledge_tree "$f" --global --subject="$subject" --force; done
 
 # Bot 种子
-python manage.py seed_exam_agent                # 创建/更新出题助手 Bot
+python manage.py seed_exam_agent                # 创建/更新命题官 Bot
 python manage.py seed_xiaoyu                    # 创建/更新小宇学习规划 Bot
 
 # 机构管理
@@ -221,5 +227,6 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/MULTI_STEP_AGENT.md` | 多步可见 Agent（逐步气泡展示 + 自定义指标卡片） |
 | `docs/tech/features/WOW_MOMENT_TECH_FLOWS.md` | 6 个核心功能技术流程图（数据流/消息协议/架构图） |
 | `docs/tech/features/MULTI_TENANT_AGENT_MEMORY.md` | 多租户 Agent 记忆（mem0+pgvector、工具权限沙箱、机构人格） |
+| `docs/tech/features/INTELLIGENT_TOOL_ROUTING.md` | 智能工具路由（SkillRouter 论文落地、impl_summary、意图预筛选） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |

@@ -26,7 +26,7 @@ from .views_institution import (
     InstitutionPaymentConfigView,
     ValidateInviteCodeView,
     UpdateDirectionsView,
-    PublicInstitutionView, InstitutionJoinBySlugView,
+    PublicInstitutionView, InstitutionJoinBySlugView, InstitutionJoinByInviteSlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
     InstitutionClassPerformanceView, InstitutionSuggestedTopicsView,
 )
@@ -80,6 +80,7 @@ urlpatterns = [
     path('institution/me/features/', InstitutionFeatureView.as_view(), name='institution-features'),
     path('institution/me/regenerate-invite-slug/', RegenerateInviteSlugView.as_view(), name='regenerate-invite-slug'),
     path('institution/join-by-slug/', InstitutionJoinBySlugView.as_view(), name='institution-join-by-slug'),
+    path('institution/join-by-invite-slug/', InstitutionJoinByInviteSlugView.as_view(), name='institution-join-by-invite-slug'),
     path('public/institution/<str:slug>/', PublicInstitutionView.as_view(), name='public-institution'),
     path('check-invite/', CheckInviteView.as_view(), name='check-invite'),
 

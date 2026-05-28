@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { PageWrapper } from '@/components/PageWrapper';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
+import { toast } from 'sonner';
 import { Check, Crown, CreditCard, Loader2, ArrowRight, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -49,7 +50,7 @@ export function BillingPage() {
   const fetchOrders = async () => {
     setLoadingOrders(true);
     try { const { data } = await api.get('/payments/orders/'); setOrders(data); }
-    catch {}
+    catch { toast.error('加载订单失败'); }
     finally { setLoadingOrders(false); }
   };
 

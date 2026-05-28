@@ -35,7 +35,7 @@ export function PaymentResult() {
             if (!cancelled) { setStatus('paid'); sessionStorage.removeItem('last_order_id'); }
             return;
           }
-        } catch {}
+        } catch { console.error('Payment verification failed'); }
         attempts++;
         await new Promise(r => setTimeout(r, 2000));
       }

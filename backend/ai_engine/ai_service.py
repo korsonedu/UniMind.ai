@@ -247,12 +247,13 @@ class AIService:
 
     @classmethod
     def preview_generate_questions(cls, kp_ids, count_per_kp=1, target_types=None,
-                                   target_difficulty='normal', target_type_ratio=None):
+                                   target_difficulty='normal', target_type_ratio=None,
+                                   institution=None):
         gen = QuestionGenerator(cls)
         return gen.preview_generate_questions(
             kp_ids=kp_ids, count_per_kp=count_per_kp,
             target_types=target_types, target_difficulty=target_difficulty,
-            target_type_ratio=target_type_ratio,
+            target_type_ratio=target_type_ratio, institution=institution,
         )
 
     @classmethod

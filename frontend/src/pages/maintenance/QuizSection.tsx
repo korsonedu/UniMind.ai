@@ -9,9 +9,11 @@ import { Target, Plus } from 'lucide-react';
 import { QuestionBankPanel } from './QuestionBankPanel';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 export const QuizSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [kpList, setKpList] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -57,7 +59,7 @@ export const QuizSection: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定删除此题目？')) return;
+    if (!(await confirm('确定删除此题目？'))) return;
     try {
       await api.delete(`/quizzes/questions/${id}/`);
       toast.success('已删除');
@@ -224,6 +226,7 @@ export const QuizSection: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };

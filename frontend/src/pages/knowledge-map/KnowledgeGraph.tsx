@@ -20,7 +20,7 @@ export const KnowledgeGraph = ({ nodes, onNodeClick }: { nodes: KPNode[], onNode
     }));
   }, [nodes]);
 
-  const animate = (time: number) => {
+  const animate = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');

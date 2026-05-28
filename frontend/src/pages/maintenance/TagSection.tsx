@@ -10,9 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tag, Plus, Trash2, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 export const TagSection: React.FC = () => {
-  const { t } = useTranslation('maintenance');
+  useTranslation('maintenance');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [tags, setTags] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -43,7 +45,7 @@ export const TagSection: React.FC = () => {
   };
 
   const handleDelete = async (tag: any) => {
-    if (!confirm(`删除标签「${tag.name}」？此操作仅解除关联，不影响课程。`)) return;
+    if (!(await confirm(`删除标签「${tag.name}」？此操作仅解除关联，不影响课程。`))) return;
     try {
       await api.delete(`/courses/tags/${tag.id}/`);
       toast.success('已移除');
@@ -163,6 +165,7 @@ export const TagSection: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };

@@ -755,7 +755,9 @@ class InstitutionJoinBySlugView(APIView):
         if not inst.is_plan_active:
             return Response({'error': '该机构服务已到期'}, status=403)
 
-        role = 'student'
+        role = request.data.get('role', 'student')
+        if role not in ('student', 'teacher'):
+            role = 'student'
 
         if role == 'student' and inst.student_count >= inst.max_students:
             return Response({'error': '该机构学员数已达上限'}, status=403)
@@ -768,6 +770,44 @@ class InstitutionJoinBySlugView(APIView):
 
         user.institution = inst
         user.institution_role = role
+        user.is_member = True
+        user.membership_tier = inst.plan
+        user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
+
+        return Response({
+            'status': 'ok',
+            'institution': {'id': inst.id, 'name': inst.name},
+        })
+
+
+class InstitutionJoinByInviteSlugView(APIView):
+    """已登录用户通过邀请链接（invite_slug）直接加入机构"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        invite_slug = (request.data.get('invite_slug') or '').strip()
+        if not invite_slug:
+            return Response({'error': '缺少邀请标识'}, status=400)
+
+        try:
+            inst = Institution.objects.get(invite_slug=invite_slug, is_active=True)
+        except Institution.DoesNotExist:
+            return Response({'error': '邀请链接无效或机构已停用'}, status=404)
+
+        if not inst.is_plan_active:
+            return Response({'error': '该机构服务已到期'}, status=403)
+
+        if inst.student_count >= inst.max_students:
+            return Response({'error': '该机构学员数已达上限'}, status=403)
+
+        user = request.user
+        if user.institution == inst:
+            return Response({'status': 'ok', 'institution': {'id': inst.id, 'name': inst.name}})
+        if user.institution is not None:
+            return Response({'error': '你已加入其他机构，请先退出'}, status=409)
+
+        user.institution = inst
+        user.institution_role = 'student'
         user.is_member = True
         user.membership_tier = inst.plan
         user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])

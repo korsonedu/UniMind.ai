@@ -7,6 +7,7 @@ from django.db import connections
 from ai_engine.service import AICallError
 from ai_service import AIService
 from .models import AIChatMessage, Bot
+from .services.tenant_memory import TenantMemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -230,10 +231,8 @@ def _analyze_user(user, cutoff, now):
     return insights
 
 
-def _store_insights(user, insights):
+def _store_insights(user, insights, source="meta_cognition"):
     """Store insights as semantic memories via mem0."""
-    from ai_assistant.services.tenant_memory import TenantMemoryManager
-
     if not user.institution_id:
         return
 
@@ -245,7 +244,204 @@ def _store_insights(user, insights):
             user_id=user.id,
             message=message,
             metadata={
-                "source": "meta_cognition",
+                "source": source,
                 "insight_type": insight["type"],
             },
         )
+
+
+@shared_task(
+    bind=True,
+    soft_time_limit=600,
+    time_limit=660,
+    acks_late=True,
+)
+def reflect_teacher_patterns(self):
+    """Daily meta-cognition for teachers: analyze question generation patterns.
+
+    For each active teacher (institution admin) with mem0 enabled, analyzes:
+    - Question type preferences (objective vs subjective)
+    - Difficulty preferences
+    - Subject focus areas
+    - Quality trends (ARC pipeline pass rate)
+    - Generation frequency and active hours
+    """
+    if not USE_MEM0:
+        logger.info("reflect_teacher_patterns: USE_MEM0=false, skipping")
+        return
+
+    from django.utils import timezone
+    from datetime import timedelta
+    from django.contrib.auth import get_user_model
+    from django.db.models import Count
+    from django.db.models.functions import ExtractHour
+    from quizzes.models import Question, ContentPipelineTask
+
+    User = get_user_model()
+    now = timezone.now()
+    cutoff = now - timedelta(days=30)
+
+    # Get institution admins who used exam_generator recently
+    exam_bot = Bot.objects.filter(bot_type='exam_generator').first()
+    if not exam_bot:
+        logger.info("reflect_teacher_patterns: no exam_generator bot found")
+        return
+
+    active_teacher_ids = (
+        AIChatMessage.objects.filter(
+            timestamp__gte=cutoff,
+            bot=exam_bot,
+            role='user',
+        )
+        .values_list('user_id', flat=True)
+        .distinct()
+    )
+    teachers = User.objects.filter(
+        id__in=active_teacher_ids,
+        is_institution_admin=True,
+        institution__isnull=False,
+    ).select_related('institution')
+
+    processed = 0
+    errors = 0
+
+    for teacher in teachers:
+        try:
+            insights = _analyze_teacher(teacher, exam_bot, cutoff, now)
+            if insights:
+                _store_insights(teacher, insights, source="exam_meta_cognition")
+                processed += 1
+        except Exception:
+            logger.exception("reflect_teacher_patterns failed for user %d", teacher.id)
+            errors += 1
+        finally:
+            connections.close_all()
+
+    logger.info("reflect_teacher_patterns done: processed=%d, errors=%d", processed, errors)
+
+
+def _analyze_teacher(teacher, exam_bot, cutoff, now):
+    """Analyze a single teacher's question generation patterns."""
+    from quizzes.models import Question, ContentPipelineTask
+
+    insights = []
+    inst = teacher.institution
+
+    # 1. Question type preferences
+    recent_questions = Question.objects.filter(
+        institution=inst,
+        created_at__gte=cutoff,
+    )
+    total_qs = recent_questions.count()
+    if total_qs > 0:
+        obj_count = recent_questions.filter(q_type='objective').count()
+        subj_count = total_qs - obj_count
+        if obj_count > subj_count * 2:
+            insights.append({
+                "type": "question_preference",
+                "text": f"该教师近30天出题以客观题为主（{obj_count}/{total_qs}），偏好选择题/判断题。",
+            })
+        elif subj_count > obj_count * 2:
+            insights.append({
+                "type": "question_preference",
+                "text": f"该教师近30天出题以主观题为主（{subj_count}/{total_qs}），偏好简答/论述/名词解释。",
+            })
+
+        # 2. Difficulty distribution
+        from django.db.models import Q
+        hard_count = recent_questions.filter(
+            Q(difficulty_level='hard') | Q(difficulty_level='extreme')
+        ).count()
+        easy_count = recent_questions.filter(
+            Q(difficulty_level='entry') | Q(difficulty_level='easy')
+        ).count()
+        if hard_count > total_qs * 0.5:
+            insights.append({
+                "type": "difficulty_preference",
+                "text": f"该教师偏好高难度题目（hard/extreme占{hard_count}/{total_qs}），注重拔高训练。",
+            })
+        elif easy_count > total_qs * 0.5:
+            insights.append({
+                "type": "difficulty_preference",
+                "text": f"该教师偏好基础题目（entry/easy占{easy_count}/{total_qs}），注重夯实基础。",
+            })
+
+        # 3. Subject focus
+        subjects = (
+            recent_questions
+            .values_list('knowledge_point__subject', flat=True)
+            .distinct()
+        )
+        subjects = [s for s in subjects if s]
+        if len(subjects) == 1:
+            insights.append({
+                "type": "subject_focus",
+                "text": f"该教师专注{subjects[0]}学科出题。",
+            })
+        elif len(subjects) > 3:
+            insights.append({
+                "type": "subject_focus",
+                "text": f"该教师跨{len(subjects)}个学科出题，覆盖面广。",
+            })
+
+    # 4. Quality trends from ARC pipeline
+    pipeline_tasks = ContentPipelineTask.objects.filter(
+        created_by=teacher,
+        created_at__gte=cutoff,
+    )
+    total_pipelines = pipeline_tasks.count()
+    if total_pipelines > 0:
+        completed = pipeline_tasks.filter(status='completed').count()
+        failed = pipeline_tasks.filter(status='failed').count()
+        if completed > 0:
+            pass_rate = completed / total_pipelines
+            if pass_rate < 0.5:
+                insights.append({
+                    "type": "quality_trend",
+                    "text": f"ARC管线通过率较低（{completed}/{total_pipelines}），建议优化出题模板或调整难度。",
+                })
+            elif pass_rate > 0.8:
+                insights.append({
+                    "type": "quality_trend",
+                    "text": f"ARC管线通过率良好（{completed}/{total_pipelines}），出题质量稳定。",
+                })
+
+    # 5. Generation frequency
+    chat_count = AIChatMessage.objects.filter(
+        user=teacher, bot=exam_bot, role='user', timestamp__gte=cutoff
+    ).count()
+    if chat_count >= 30:
+        insights.append({
+            "type": "usage_frequency",
+            "text": f"该教师近30天高频使用命题官（{chat_count}次），是核心用户。",
+        })
+    elif chat_count <= 3:
+        insights.append({
+            "type": "usage_frequency",
+            "text": "该教师近30天很少使用命题官，可能需要引导或遇到了问题。",
+        })
+
+    # 6. Active hours
+    hourly = (
+        AIChatMessage.objects.filter(
+            user=teacher, bot=exam_bot, role='user', timestamp__gte=cutoff
+        )
+        .annotate(hour=ExtractHour('timestamp'))
+        .values('hour')
+        .annotate(cnt=Count('id'))
+        .order_by('-cnt')
+    )
+    if hourly:
+        peak_hour = hourly[0]['hour']
+        if 22 <= peak_hour or peak_hour < 6:
+            insights.append({
+                "type": "time_pattern",
+                "text": "该教师主要在深夜备课出题，工作强度较大。",
+            })
+        elif 6 <= peak_hour < 9:
+            insights.append({
+                "type": "time_pattern",
+                "text": "该教师习惯在早晨备课出题，时间管理良好。",
+            })
+
+    return insights

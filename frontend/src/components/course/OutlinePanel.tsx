@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Loader2, Clock, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
 import { cn, formatDuration } from '@/lib/utils';

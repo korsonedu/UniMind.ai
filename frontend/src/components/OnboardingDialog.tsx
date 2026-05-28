@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, GraduationCap, School } from 'lucide-react';
 import { DirectionSelector } from '@/components/DirectionSelector';
 
-const TOTAL_STEPS = 5;
+// Teacher flow: steps 2-6 (role selected at step 1)
+const TEACHER_STEPS = 5;
 
 const SCALE_OPTIONS = ['1-50', '50-200', '200-500', '500+'] as const;
 
@@ -25,6 +26,9 @@ export function OnboardingDialog() {
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
 
+  // Role selection
+  const [role, setRole] = useState<'student' | 'teacher' | null>(null);
+
   // Form state
   const [inviteCode, setInviteCode] = useState('');
   const [instName, setInstName] = useState('');
@@ -36,12 +40,6 @@ export function OnboardingDialog() {
   const [plan, setPlan] = useState('');
   const [subjects, setSubjects] = useState<any[]>([]);
 
-  const PLAN_DIRECTION_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 999999 };
-
-  // Don't show if: no user / has institution / dismissed / platform admin
-  if (!user || user.institution || user.institution_id || institution || dismissed) return null;
-  if (user.is_admin) return null;
-
   const goToStep = useCallback((nextStep: number) => {
     setAnimState('exiting');
     setTimeout(() => {
@@ -52,7 +50,22 @@ export function OnboardingDialog() {
     }, 300);
   }, []);
 
-  // Step 1: Validate invite code
+  const PLAN_DIRECTION_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 999999 };
+
+  // Don't show if: no user / has institution / dismissed / platform admin
+  if (!user || user.institution || user.institution_id || institution || dismissed) return null;
+  if (user.is_admin) return null;
+
+  // Step 1: Role selection
+  const handleRoleSelect = (selected: 'student' | 'teacher') => {
+    setRole(selected);
+    if (selected === 'teacher') {
+      goToStep(2);
+    }
+    // student: stay on step 1, show guidance message
+  };
+
+  // Step 2: Validate invite code
   const handleValidateCode = async () => {
     if (!inviteCode.trim()) return setError(t('step1.error_empty'));
     setLoading(true); setError('');
@@ -63,31 +76,31 @@ export function OnboardingDialog() {
       setPlan(data.plan);
       const subRes = await api.get('/quizzes/knowledge-points/subjects/');
       setSubjects(subRes.data.categories || []);
-      goToStep(2);
+      goToStep(3);
     } catch (err: any) {
       setError(err.response?.data?.error || t('step1.error_invalid'));
     }
     setLoading(false);
   };
 
-  // Step 2: Validate name
+  // Step 3: Validate name
   const handleNameNext = () => {
     if (!instName.trim()) return setError(t('step2.error_empty'));
-    goToStep(3);
-  };
-
-  // Step 3: Select scale → auto-advance
-  const handleScaleSelect = (scale: string) => {
-    setStudentScale(scale);
     goToStep(4);
   };
 
-  // Step 4: Subjects → next
-  const handleSubjectsNext = () => {
+  // Step 4: Select scale → auto-advance
+  const handleScaleSelect = (scale: string) => {
+    setStudentScale(scale);
     goToStep(5);
   };
 
-  // Step 5: Create institution
+  // Step 5: Subjects → next
+  const handleSubjectsNext = () => {
+    goToStep(6);
+  };
+
+  // Step 6: Create institution
   const handleCreate = async () => {
     setLoading(true); setError('');
     try {
@@ -114,6 +127,10 @@ export function OnboardingDialog() {
       ? 'opacity-0 translate-y-5'
       : 'opacity-100 translate-y-0';
 
+  // Step 1 is role selection; teacher steps are 2-6
+  const showTeacherProgress = role === 'teacher' && currentStep >= 2;
+  const teacherCurrentStep = currentStep - 1; // map step 2-6 to 1-5 for dots
+
   return (
     <Dialog open={!dismissed} onOpenChange={(open) => { if (!open) setDismissed(true); }}>
       <DialogContent className="sm:max-w-lg rounded-2xl border-none shadow-2xl bg-card p-8 min-h-[400px]"
@@ -136,7 +153,55 @@ export function OnboardingDialog() {
           <div className="space-y-6">
             {/* Card content with animation */}
             <div className={`transition-all duration-300 ease-in-out ${animClass}`}>
-              {currentStep === 1 && (
+              {/* Step 1: Role selection */}
+              {currentStep === 1 && role === null && (
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <h2 className="text-xl font-black">你的身份是？</h2>
+                    <p className="text-sm font-medium text-muted-foreground">选择后我们将为你提供对应的引导</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleRoleSelect('student')}
+                      className="group p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-all text-center space-y-2"
+                    >
+                      <GraduationCap className="h-8 w-8 mx-auto text-muted-foreground group-hover:text-primary transition-colors" />
+                      <div className="font-bold text-sm">我是学生</div>
+                      <div className="text-xs text-muted-foreground">通过邀请链接加入机构</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRoleSelect('teacher')}
+                      className="group p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-all text-center space-y-2"
+                    >
+                      <School className="h-8 w-8 mx-auto text-muted-foreground group-hover:text-primary transition-colors" />
+                      <div className="font-bold text-sm">我是教师 / 机构主</div>
+                      <div className="text-xs text-muted-foreground">创建或管理教学机构</div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 1 (student): Guidance message */}
+              {currentStep === 1 && role === 'student' && (
+                <div className="space-y-4 text-center py-4">
+                  <GraduationCap className="h-12 w-12 mx-auto text-primary" />
+                  <div className="space-y-2">
+                    <h2 className="text-xl font-black">请联系你的老师</h2>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      请向你的老师或机构负责人索取邀请链接，<br />
+                      点击链接后即可自动加入机构。
+                    </p>
+                  </div>
+                  <Button variant="outline" className="w-full h-11 rounded-xl" onClick={() => setRole(null)}>
+                    返回重新选择
+                  </Button>
+                </div>
+              )}
+
+              {/* Step 2: Validate invite code (teacher path) */}
+              {currentStep === 2 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <h2 className="text-xl font-black">{t('step1.title')}</h2>
@@ -154,7 +219,8 @@ export function OnboardingDialog() {
                 </div>
               )}
 
-              {currentStep === 2 && (
+              {/* Step 3: Institution name */}
+              {currentStep === 3 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <h2 className="text-xl font-black">{t('step2.title')}</h2>
@@ -172,7 +238,8 @@ export function OnboardingDialog() {
                 </div>
               )}
 
-              {currentStep === 3 && (
+              {/* Step 4: Student scale */}
+              {currentStep === 4 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <h2 className="text-xl font-black">{t('step3.title')}</h2>
@@ -193,7 +260,8 @@ export function OnboardingDialog() {
                 </div>
               )}
 
-              {currentStep === 4 && (
+              {/* Step 5: Subject selection */}
+              {currentStep === 5 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <h2 className="text-xl font-black">{t('step4.title')}</h2>
@@ -214,7 +282,8 @@ export function OnboardingDialog() {
                 </div>
               )}
 
-              {currentStep === 5 && (
+              {/* Step 6: Description */}
+              {currentStep === 6 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <h2 className="text-xl font-black">{t('step5.title')}</h2>
@@ -234,56 +303,60 @@ export function OnboardingDialog() {
             {/* Error */}
             {error && <p className="text-xs text-red-500" role="alert">{error}</p>}
 
-            {/* Progress dots */}
-            <div className="flex items-center justify-center gap-2">
-              {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-                <div
-                  key={i}
-                  className={`h-2 w-2 rounded-full transition-all duration-300 ${
-                    i + 1 === currentStep
-                      ? 'bg-primary w-4'
-                      : i + 1 < currentStep
-                        ? 'bg-primary/60'
-                        : 'bg-muted-foreground/20'
-                  }`}
-                />
-              ))}
-            </div>
+            {/* Progress dots (teacher path only) */}
+            {showTeacherProgress && (
+              <div className="flex items-center justify-center gap-2">
+                {Array.from({ length: TEACHER_STEPS }, (_, i) => (
+                  <div
+                    key={i}
+                    className={`h-2 w-2 rounded-full transition-all duration-300 ${
+                      i + 1 === teacherCurrentStep
+                        ? 'bg-primary w-4'
+                        : i + 1 < teacherCurrentStep
+                          ? 'bg-primary/60'
+                          : 'bg-muted-foreground/20'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
 
-            {/* Navigation buttons */}
-            <div className="flex gap-2">
-              {currentStep > 1 && currentStep < 5 && (
-                <Button variant="outline" className="flex-1 h-11 rounded-xl"
-                  onClick={() => goToStep(currentStep - 1)}>
-                  {t('wizard.back')}
-                </Button>
-              )}
-              {currentStep === 1 && (
-                <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleValidateCode} disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('wizard.next')}
-                </Button>
-              )}
-              {currentStep === 2 && (
-                <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleNameNext}>
-                  {t('wizard.next')}
-                </Button>
-              )}
-              {currentStep === 4 && (
-                <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleSubjectsNext}>
-                  {t('wizard.next')}
-                </Button>
-              )}
-              {currentStep === 5 && (
-                <>
-                  <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={handleCreate} disabled={loading}>
-                    {t('wizard.skip')}
+            {/* Navigation buttons (teacher path only, step 1 has its own buttons in the cards) */}
+            {role === 'teacher' && currentStep >= 2 && (
+              <div className="flex gap-2">
+                {currentStep > 2 && currentStep < 6 && (
+                  <Button variant="outline" className="flex-1 h-11 rounded-xl"
+                    onClick={() => goToStep(currentStep - 1)}>
+                    {t('wizard.back')}
                   </Button>
-                  <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleCreate} disabled={loading}>
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('wizard.finish')}
+                )}
+                {currentStep === 2 && (
+                  <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleValidateCode} disabled={loading}>
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('wizard.next')}
                   </Button>
-                </>
-              )}
-            </div>
+                )}
+                {currentStep === 3 && (
+                  <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleNameNext}>
+                    {t('wizard.next')}
+                  </Button>
+                )}
+                {currentStep === 5 && (
+                  <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleSubjectsNext}>
+                    {t('wizard.next')}
+                  </Button>
+                )}
+                {currentStep === 6 && (
+                  <>
+                    <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={handleCreate} disabled={loading}>
+                      {t('wizard.skip')}
+                    </Button>
+                    <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleCreate} disabled={loading}>
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('wizard.finish')}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </DialogContent>

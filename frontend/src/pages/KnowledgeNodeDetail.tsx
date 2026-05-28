@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, Maximize2, Target } from 'lucide-react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
@@ -22,7 +22,6 @@ interface KnowledgePointDetail {
 }
 
 export const KnowledgeNodeDetail: React.FC = () => {
-  const navigate = useNavigate();
   const { id } = useParams();
   const { t } = useTranslation('knowledgeMap');
   const [loading, setLoading] = useState(true);

@@ -42,7 +42,18 @@ export function useAgentChat(botId: number) {
     reset();
     setIsConnected(true);
 
-    const ws = new WebSocket(`${WS_BASE}/ws/ai/chat/${botId}/`);
+    // Pass auth token via query string (WebSocket can't send custom headers)
+    let token: string | null = null;
+    try {
+      const stored = localStorage.getItem('auth-storage');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        token = parsed?.state?.token || null;
+      }
+    } catch { /* ignore */ }
+
+    const authQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+    const ws = new WebSocket(`${WS_BASE}/ws/ai/chat/${botId}/${authQuery}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -79,8 +90,12 @@ export function useAgentChat(botId: number) {
       setIsConnected(false);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       setIsConnected(false);
+      // If closed abnormally (not by done event), ensure UI unblocks
+      if (e.code !== 1000 && !wsRef.current) {
+        setIsDone(true);
+      }
     };
   }, [botId, upsertStep]);
 

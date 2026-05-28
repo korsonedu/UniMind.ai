@@ -3,8 +3,15 @@
 PLAN_TOOL_ACCESS = {
     "free": {
         "assistant": ["search_knowledge_tree", "get_user_weak_points"],
-        "planner": [],
-        "exam_generator": [],
+        "planner": [
+            "get_learning_stats", "get_knowledge_mastery_map",
+            "get_due_reviews", "search_knowledge_tree",
+        ],
+        "exam_generator": [
+            "search_knowledge_points", "generate_questions",
+            "save_questions_to_library", "launch_arc_pipeline",
+            "check_pipeline_status",
+        ],
     },
     "starter": {
         "assistant": [
@@ -17,6 +24,8 @@ PLAN_TOOL_ACCESS = {
         ],
         "exam_generator": [
             "search_knowledge_points", "generate_questions",
+            "save_questions_to_library", "launch_arc_pipeline",
+            "check_pipeline_status",
         ],
     },
     "growth": {"assistant": "all", "planner": "all", "exam_generator": "all"},

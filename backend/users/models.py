@@ -174,6 +174,7 @@ class Institution(models.Model):
     )
     description = models.TextField(blank=True, verbose_name="机构简介")
     notes = models.TextField(blank=True, verbose_name="管理员备注")
+    storage_used_bytes = models.BigIntegerField(default=0, verbose_name="已用存储(字节)")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_institutions', verbose_name="创建人")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
@@ -231,9 +232,9 @@ PLAN_FEATURES: dict[str, list[str]] = {
     ],
     'starter': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
-        'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
-        'ai.assistant', 'course.video', 'video.outline',
-        'interview.mock', 'pdf.mock', 'ai.bot.custom',
+        'ai.generate', 'memorix.review', 'full.report',
+        'ai.assistant', 'course.video',
+        'ai.bot.custom',
     ],
     'growth': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',

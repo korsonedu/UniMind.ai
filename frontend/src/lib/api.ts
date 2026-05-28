@@ -26,6 +26,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('auth-storage');
+      window.dispatchEvent(new Event('auth:logout'));
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }

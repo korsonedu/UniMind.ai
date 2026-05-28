@@ -1,27 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { useTranslation } from 'react-i18next';
 import { 
-  MessageCircleQuestion, 
-  Search, 
-  Filter, 
-  Plus, 
-  Paperclip, 
-  Send, 
-  MoreHorizontal, 
-  Star, 
-  Trash2, 
-  CheckCircle2, 
-  Circle, 
-  ChevronDown, 
-  ChevronUp, 
-  CornerDownRight, 
-  ShieldCheck,
-  User,
+  MessageCircleQuestion,
+  Search,
+  Paperclip,
+  Send,
+  MoreHorizontal,
+  Star,
+  Trash2,
+  CheckCircle2,
+  Circle,
+  ChevronUp,
+  CornerDownRight,
   Loader2,
-  FileText,
   MessageCircle,
   X,
-  Image as ImageIcon,
   Edit,
   ThumbsUp,
   Eye
@@ -42,6 +36,7 @@ import { PageWrapper } from '@/components/PageWrapper';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 import { cn, processMathContent } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -60,6 +55,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
   // Like State
   const [likesCount, setLikesCount] = useState(answer.likes_count || 0);
   const [isLiked, setIsLiked] = useState(answer.is_liked || false);
+  const { confirm, Dialog } = useConfirm();
 
   useEffect(() => {
     if (!isEditing) setEditContent(answer.content);
@@ -78,7 +74,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
   };
 
   const handleDelete = async () => {
-    if (!confirm(t('deleteConfirm'))) return;
+    if (!(await confirm(t('deleteConfirm')))) return;
     try {
       await api.delete(`/qa/answers/${answer.id}/`);
       toast.success(t('replyDeleted'));
@@ -184,6 +180,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
           </div>
         )}
       </div>
+      {Dialog}
     </div>
   );
 };
@@ -196,6 +193,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
   const { user } = useAuthStore();
   const { t } = useTranslation('qaSystem');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { confirm, Dialog } = useConfirm();
 
   // Editing state
   const [isEditing, setIsEditing] = useState(false);
@@ -248,7 +246,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
   const handleAction = async (action: string) => {
     try {
       if (action === 'delete') {
-        if (!confirm(t('deleteQuestionConfirm'))) return;
+        if (!(await confirm(t('deleteQuestionConfirm')))) return;
         await api.delete(`/qa/questions/${question.id}/`);
         toast.success(t('questionDeleted'));
       } else {
@@ -484,6 +482,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
           </div>
         </div>
       )}
+      {Dialog}
     </Card>
   );
 };
@@ -493,8 +492,8 @@ export const QASystem: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [isMobile, setIsMobile] = useState(false);
-  
+  const isMobile = useIsMobile();
+
   // New Question State
   const [qContent, setQContent] = useState('');
   const [qFile, setQFile] = useState<File | null>(null);
@@ -515,14 +514,6 @@ export const QASystem: React.FC = () => {
   };
 
   useEffect(() => { fetchQuestions(); }, [filter, search]);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(max-width: 767px)');
-    const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
 
   const handlePost = async () => {
     if (!qContent.trim()) return toast.error(t('enterContent'));

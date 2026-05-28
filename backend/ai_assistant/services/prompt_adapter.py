@@ -62,13 +62,52 @@ _INTERACTION_STYLE_RULES = [
     },
 ]
 
+_TEACHING_STYLE_RULES = [
+    {
+        "keywords": ["选择题", "判断题", "客观题", "abcd", "单选", "多选"],
+        "label": "objective_focused",
+        "directive": "该教师偏好客观题。出题时优先生成选择题和判断题，确保选项干扰性强、答案唯一。",
+    },
+    {
+        "keywords": ["论述", "简答", "名词解释", "主观题", "案例分析", "材料题"],
+        "label": "subjective_focused",
+        "directive": "该教师偏好主观题。出题时优先生成简答、论述、名词解释，确保评分要点清晰、答案体量充足。",
+    },
+    {
+        "keywords": ["简单", "基础", "入门", "容易", "初级"],
+        "label": "difficulty_easy",
+        "directive": "该教师偏好基础难度。出题时控制在 entry/easy 级别，侧重基础概念和直接应用。",
+    },
+    {
+        "keywords": ["难题", "挑战", "拔高", "进阶", "困难", "综合"],
+        "label": "difficulty_hard",
+        "directive": "该教师偏好高难度题目。出题时控制在 hard/extreme 级别，侧重综合应用和深度分析。",
+    },
+    {
+        "keywords": ["金融", "431", "公司理财", "投资学", "货币银行"],
+        "label": "subject_finance",
+        "directive": "该教师专注金融学科。出题时使用金融专业术语，结合实际金融市场案例。",
+    },
+    {
+        "keywords": ["数学", "高数", "线代", "概率", "微积分"],
+        "label": "subject_math",
+        "directive": "该教师专注数学学科。出题时注重公式推导和计算过程，LaTeX 格式化数学表达式。",
+    },
+    {
+        "keywords": ["法学", "法考", "民法", "刑法", "宪法"],
+        "label": "subject_law",
+        "directive": "该教师专注法学科。出题时注重法律条文引用和案例分析，使用法言法语。",
+    },
+]
 
-def detect_patterns(memories: List[Dict]) -> List[str]:
+
+def detect_patterns(memories: List[Dict], bot_type: str = "planner") -> List[str]:
     """Analyze memory texts and return matched pattern labels.
 
     Args:
         memories: list of dicts with 'memory' key (mem0 format)
                   or list of dicts with 'key'+'value' keys (AgentMemory format)
+        bot_type: 'planner' for student-facing, 'exam_generator' for teacher-facing
 
     Returns:
         List of matched pattern labels (deduplicated)
@@ -90,11 +129,14 @@ def detect_patterns(memories: List[Dict]) -> List[str]:
         return []
 
     matched = []
-    all_rules = (
-        _LEARNING_STYLE_RULES
-        + _RESPONSE_LENGTH_RULES
-        + _INTERACTION_STYLE_RULES
-    )
+    if bot_type == 'exam_generator':
+        all_rules = _TEACHING_STYLE_RULES + _RESPONSE_LENGTH_RULES
+    else:
+        all_rules = (
+            _LEARNING_STYLE_RULES
+            + _RESPONSE_LENGTH_RULES
+            + _INTERACTION_STYLE_RULES
+        )
 
     for rule in all_rules:
         for kw in rule["keywords"]:
@@ -105,22 +147,25 @@ def detect_patterns(memories: List[Dict]) -> List[str]:
     return list(set(matched))
 
 
-def get_adaptive_directives(memories: List[Dict]) -> str:
+def get_adaptive_directives(memories: List[Dict], bot_type: str = "planner") -> str:
     """Generate adaptive prompt directives from semantic memories.
 
     Returns a formatted string to inject into system prompt, or empty string
     if no patterns detected.
     """
-    labels = detect_patterns(memories)
+    labels = detect_patterns(memories, bot_type=bot_type)
     if not labels:
         return ""
 
     label_to_directive = {}
-    all_rules = (
-        _LEARNING_STYLE_RULES
-        + _RESPONSE_LENGTH_RULES
-        + _INTERACTION_STYLE_RULES
-    )
+    if bot_type == 'exam_generator':
+        all_rules = _TEACHING_STYLE_RULES + _RESPONSE_LENGTH_RULES
+    else:
+        all_rules = (
+            _LEARNING_STYLE_RULES
+            + _RESPONSE_LENGTH_RULES
+            + _INTERACTION_STYLE_RULES
+        )
     for rule in all_rules:
         label_to_directive[rule["label"]] = rule["directive"]
 

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.files import File
+from django.utils.decorators import method_decorator
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics, permissions
@@ -20,6 +21,12 @@ from .models import Course, Album, StartupMaterial, VideoProgress
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.views import IsMember
 from quizzes.utils import safe_int as _safe_int
+from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES
+from core.rate_limit import user_rate_limit
+from users.quota import validate_storage_quota, add_storage_usage
+
+# 上传限流：20 次/小时/用户
+_upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
 
 
 CHUNK_DIR = Path(settings.MEDIA_ROOT) / "chunk_uploads"
@@ -121,6 +128,7 @@ def _add_chunk_to_meta(upload_id: str, chunk_index: int) -> dict:
         return meta
 
 
+@_upload_rl
 class ChunkedUploadInitView(APIView):
     permission_classes = [IsAdmin]
 
@@ -208,6 +216,7 @@ class ChunkedUploadChunkView(APIView):
         )
 
 
+@_upload_rl
 class ChunkedUploadCompleteView(APIView):
     permission_classes = [IsAdmin, HasQuota]
     quota_resource = 'course'
@@ -235,6 +244,17 @@ class ChunkedUploadCompleteView(APIView):
         knowledge_point_id = request.data.get("knowledge_point")
         cover_image = request.FILES.get("cover_image")
         courseware = request.FILES.get("courseware")
+        validate_upload_file(cover_image, max_size_bytes=IMAGE_MAX_BYTES)
+        validate_upload_file(courseware, max_size_bytes=DOC_MAX_BYTES)
+
+        # 存储配额预检
+        inst = request.user.institution
+        total_upload_size = _safe_int(meta.get("total_size"), 0)
+        if cover_image:
+            total_upload_size += cover_image.size
+        if courseware:
+            total_upload_size += courseware.size
+        validate_storage_quota(inst, total_upload_size)
 
         upload_path = _upload_dir(upload_id)
         merged_path = upload_path / "merged_video.bin"
@@ -266,6 +286,7 @@ class ChunkedUploadCompleteView(APIView):
             with merged_path.open("rb") as merged_file:
                 course.video_file.save(original_name, File(merged_file), save=False)
             course.save()
+            add_storage_usage(inst, total_upload_size)
         except Exception as exc:
             return Response({"error": f"合并失败：{exc}"}, status=500)
         finally:
@@ -330,12 +351,21 @@ class VideoProgressUpdateView(APIView):
         except Course.DoesNotExist:
             return Response({'error': 'Course not found'}, status=404)
 
+@_upload_rl
 class StartupMaterialListCreateView(generics.ListCreateAPIView):
     queryset = StartupMaterial.objects.all().order_by('-created_at')
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
+
+    def perform_create(self, serializer):
+        validate_upload_file(self.request.FILES.get("file"))
+        total_size = sum(f.size for f in self.request.FILES.values() if f)
+        inst = self.request.user.institution
+        validate_storage_quota(inst, total_size)
+        serializer.save()
+        add_storage_usage(inst, total_size)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -359,6 +389,7 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
         return [permissions.AllowAny()]
 
+@_upload_rl
 class AlbumListCreateView(generics.ListCreateAPIView):
     serializer_class = AlbumSerializer
     def get_queryset(self):
@@ -367,6 +398,14 @@ class AlbumListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
+
+    def perform_create(self, serializer):
+        validate_upload_file(self.request.FILES.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
+        total_size = sum(f.size for f in self.request.FILES.values() if f)
+        inst = self.request.user.institution
+        validate_storage_quota(inst, total_size)
+        serializer.save()
+        add_storage_usage(inst, total_size)
 
 class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Album.objects.all()
@@ -388,6 +427,7 @@ class AlbumCoursesView(APIView):
         courses = album.courses.all().order_by('sort_order', '-created_at')
         return Response(CourseSerializer(courses, many=True).data)
 
+@_upload_rl
 class CourseListCreateView(generics.ListCreateAPIView):
     serializer_class = CourseSerializer
     quota_resource = 'course'
@@ -439,7 +479,16 @@ class CourseListCreateView(generics.ListCreateAPIView):
         })
 
     def perform_create(self, serializer):
-        course = serializer.save(author=self.request.user, institution=self.request.user.institution)
+        files = self.request.FILES
+        validate_upload_file(files.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
+        validate_upload_file(files.get("video_file"), max_size_bytes=VIDEO_MAX_BYTES)
+        validate_upload_file(files.get("courseware"), max_size_bytes=DOC_MAX_BYTES)
+        validate_upload_file(files.get("reference_materials"), max_size_bytes=DOC_MAX_BYTES)
+        total_size = sum(f.size for f in files.values() if f)
+        inst = self.request.user.institution
+        validate_storage_quota(inst, total_size)
+        course = serializer.save(author=self.request.user, institution=inst)
+        add_storage_usage(inst, total_size)
 
         # 未上传封面 → 后台线程提取第一帧
         if not course.cover_image and course.video_file:

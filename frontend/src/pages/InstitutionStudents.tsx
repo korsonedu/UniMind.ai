@@ -17,6 +17,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useConfirm } from '@/components/useConfirm';
 
 /* ── Page router: pick view based on role ── */
 
@@ -24,6 +25,7 @@ export default function InstitutionStudents() {
   const { t } = useTranslation('maintenance');
   const { isPlatformAdmin, institution } = useInstitutionStore();
   const [showGlobal, setShowGlobal] = useState(false);
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   // 平台管理员 + 有机构 → 默认显示机构花名册，可切换到全局
   if (isPlatformAdmin && institution) {
@@ -105,7 +107,7 @@ function PlatformUserManagement() {
       setUsers(uRes.data.results || uRes.data || []);
       setTags((tRes.data || []).filter((t: any) => t.is_active));
       setGroups((gRes.data || []).filter((g: any) => g.is_active));
-    } catch { /* */ }
+    } catch { toast.error('加载成员列表失败'); }
     setLoading(false);
   };
 
@@ -343,6 +345,7 @@ type RosterMember = {
 function InstitutionRosterManagement({ institution }: { institution: any }) {
   const { t } = useTranslation('maintenance');
   const { user } = useAuthStore();
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const isOwner = user?.is_institution_owner;
   const [members, setMembers] = useState<RosterMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -353,7 +356,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
   const [roleUpdating, setRoleUpdating] = useState<number | null>(null);
 
   const fetch = async () => {
-    try { const { data } = await api.get('/users/institution/me/members/'); setMembers(data); } catch { /* */ }
+    try { const { data } = await api.get('/users/institution/me/members/'); setMembers(data); } catch { toast.error('加载成员列表失败'); }
     setLoading(false);
   };
   useEffect(() => { fetch(); }, []);
@@ -545,7 +548,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
                   {(isOwner || user?.is_institution_admin) && s.id !== user?.id && s.institution_role !== 'teacher' && (
                     <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Remove ${s.nickname || s.username}`}
                       onClick={async () => {
-                        if (!confirm(t('institution.confirmRemove', { name: s.nickname || s.username }))) return;
+                        if (!(await confirm(t('institution.confirmRemove', { name: s.nickname || s.username })))) return;
                         await api.delete(`/users/institution/me/students/${s.id}/`);
                         fetch();
                       }}>
@@ -556,7 +559,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
                   {isOwner && s.id !== user?.id && s.institution_role === 'teacher' && (
                     <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Remove teacher ${s.nickname || s.username}`}
                       onClick={async () => {
-                        if (!confirm(t('institution.confirmRemoveTeacher', { name: s.nickname || s.username }))) return;
+                        if (!(await confirm(t('institution.confirmRemoveTeacher', { name: s.nickname || s.username })))) return;
                         await api.delete(`/users/institution/me/students/${s.id}/`);
                         fetch();
                       }}>
@@ -576,6 +579,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
       </Dialog>
       </>
       )}
+      {ConfirmDialog}
     </div>
   );
 }

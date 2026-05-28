@@ -1,6 +1,7 @@
 from django.utils import timezone
 from django.db.models import F
 from django.db import transaction
+from rest_framework.exceptions import ValidationError
 
 # ── 配额矩阵 ──
 
@@ -236,6 +237,72 @@ def get_quota_message(institution, resource_type: str) -> str:
         return f'{label}已达上限（{limit}）。升级到 {next_label} 解锁无限制。'
     else:
         return f'{label}已达上限，请联系管理员升级方案。'
+
+
+# ── 存储配额 ──
+
+STORAGE_QUOTA_BYTES: dict[str, int | None] = {
+    'free': 500 * 1024 * 1024,         # 500 MB
+    'starter': 5 * 1024 * 1024 * 1024,  # 5 GB
+    'growth': 50 * 1024 * 1024 * 1024,  # 50 GB
+    'enterprise': None,                  # unlimited
+}
+
+
+def check_storage_quota(institution, file_size: int) -> bool:
+    """检查机构是否有足够存储空间上传指定大小的文件。"""
+    if institution is None:
+        return False
+    limit = STORAGE_QUOTA_BYTES.get(institution.plan)
+    if limit is None:
+        return True
+    return institution.storage_used_bytes + file_size <= limit
+
+
+def add_storage_usage(institution, file_size: int):
+    """原子递增机构存储用量。"""
+    if institution is None or file_size <= 0:
+        return
+    from users.models import Institution
+    with transaction.atomic():
+        Institution.objects.filter(pk=institution.pk).update(
+            storage_used_bytes=F('storage_used_bytes') + file_size
+        )
+
+
+def remove_storage_usage(institution, file_size: int):
+    """原子递减机构存储用量（不降到负数）。"""
+    if institution is None or file_size <= 0:
+        return
+    from users.models import Institution
+    with transaction.atomic():
+        inst = Institution.objects.select_for_update().filter(pk=institution.pk).first()
+        if inst:
+            inst.storage_used_bytes = max(0, inst.storage_used_bytes - file_size)
+            inst.save(update_fields=['storage_used_bytes'])
+
+
+def validate_storage_quota(institution, file_size: int):
+    """检查存储配额，不足时抛 ValidationError。供 views 直接调用。"""
+    if not check_storage_quota(institution, file_size):
+        limit = STORAGE_QUOTA_BYTES.get(institution.plan, 0)
+        limit_mb = limit // (1024 * 1024)
+        used_mb = institution.storage_used_bytes // (1024 * 1024)
+        raise ValidationError(
+            {"error": f"机构存储空间不足（已用 {used_mb}MB / 上限 {limit_mb}MB），请联系管理员升级方案。"}
+        )
+
+
+def get_storage_usage(institution) -> dict:
+    """返回机构存储用量信息。"""
+    if institution is None:
+        return {'used_bytes': 0, 'limit_bytes': 0, 'used_pct': 0}
+    limit = STORAGE_QUOTA_BYTES.get(institution.plan)
+    used = institution.storage_used_bytes
+    if limit is None:
+        return {'used_bytes': used, 'limit_bytes': None, 'used_pct': 0}
+    pct = min(round(used / limit * 100), 100) if limit > 0 else 0
+    return {'used_bytes': used, 'limit_bytes': limit, 'used_pct': pct}
 
 
 # ── 向后兼容 wrapper ──

@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
 import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
 
 interface OnlineUsersPanelProps {
   onlineUsers: any[];

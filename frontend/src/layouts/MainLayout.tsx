@@ -24,6 +24,7 @@ import {
   Users,
   CalendarCheck,
   Globe,
+  Bot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -38,7 +39,7 @@ import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
 
 import { useTranslation } from 'react-i18next';
-import api from '@/lib/api';
+import { useIsMobile } from '@/lib/useIsMobile';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -108,7 +109,7 @@ export const MainLayout: React.FC = () => {
   const { primaryColor, pageTitle } = useSystemStore();
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   const { t, i18n } = useTranslation(['layout', 'common']);
@@ -155,15 +156,6 @@ export const MainLayout: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(max-width: 767px)');
-    const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
-
-  useEffect(() => {
     if (!isMobile) return;
     if (!isMobileAllowedPath(location.pathname)) {
       navigate('/qa', { replace: true });
@@ -174,6 +166,7 @@ export const MainLayout: React.FC = () => {
   // ── 身份与方案层级 ──
   const isSuperAdmin = user?.role === 'admin' && !instInfo;
   const isInstStudent = Boolean(instInfo) && user?.institution_role === 'student';
+  const homePath = isInstStudent ? '/xiaoyu' : '/workbench';
   const instPlan = instInfo?.plan || 'free';
   const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 4 })[p] || 1;
   const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
@@ -208,6 +201,7 @@ export const MainLayout: React.FC = () => {
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
       ]
     : [
+        { to: '/xiaoyu', icon: Bot, label: t('layout:nav.xiaoyu') },
         { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
         { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeMap') },
@@ -223,7 +217,7 @@ export const MainLayout: React.FC = () => {
   // ── 机构管理菜单 ──
   if (!isSuperAdmin && instInfo) {
     if (user?.is_institution_admin) {
-      navItems.unshift({ to: '/workbench', icon: Sparkles, label: 'AI 出题工作台' });
+      navItems.unshift({ to: '/workbench', icon: Sparkles, label: t('layout:nav.workbench') });
       navItems.push({ to: '/institution/students', icon: Users, label: '成员管理' });
       navItems.push({ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') });
     }
@@ -258,7 +252,7 @@ export const MainLayout: React.FC = () => {
           <div className="mb-6 mt-2 px-2 group/header">
             <div className="relative h-10 flex items-center">
               {/* Collapsed icon — always visible, always at left */}
-              <Link to="/xiaoyu" className={cn(
+              <Link to={homePath} className={cn(
                 "absolute left-0 top-0 h-10 w-10 rounded-xl overflow-hidden shrink-0 transition-opacity duration-200 z-10",
                 collapsed ? "opacity-100 group-hover/header:opacity-0" : "opacity-0 pointer-events-none"
               )}>
@@ -275,7 +269,7 @@ export const MainLayout: React.FC = () => {
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </div>
               {/* Expanded logo — slides out from behind the icon, clickable to XiaoYu */}
-              <Link to="/xiaoyu" className={cn(
+              <Link to={homePath} className={cn(
                 "absolute left-0 top-0 h-10 overflow-hidden transition-all duration-300",
                 collapsed ? "w-10 opacity-0" : "w-32 opacity-100"
               )}>

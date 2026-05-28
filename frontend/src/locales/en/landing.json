@@ -18,10 +18,22 @@
     "footnote": "First cohort gets Growth plan free · Offer ends June 30, 2026"
   },
   "stats": [
-    { "label": "Subjects Supported", "desc": "SAT · ACT · MCAT · LSAT · GRE · AP · USMLE · Bar Exam & more" },
-    { "label": "Questions Generated", "desc": "Multi-agent adversarial QC pipeline" },
-    { "label": "Active Tutoring Businesses", "desc": "From solo tutors to multi-location centers" },
-    { "label": "Content Creation Speed", "desc": "From 30 minutes to under 10 seconds per question" }
+    {
+      "label": "Subjects Supported",
+      "desc": "SAT · ACT · MCAT · LSAT · GRE · AP · USMLE · Bar Exam & more"
+    },
+    {
+      "label": "Questions Generated",
+      "desc": "Multi-agent adversarial QC pipeline"
+    },
+    {
+      "label": "Active Tutoring Businesses",
+      "desc": "From solo tutors to multi-location centers"
+    },
+    {
+      "label": "Content Creation Speed",
+      "desc": "From 30 minutes to under 10 seconds per question"
+    }
   ],
   "pain": {
     "label": "The Problem",
@@ -87,10 +99,26 @@
     "label": "Customer Stories",
     "title": "From real tutoring businesses",
     "items": [
-      { "name": "He Wei", "role": "Beijing · CFA Prep (Solo Tutor)", "quote": "I was skeptical about AI-generated questions at first. After a month, roughly 85% of 400+ questions were classroom-ready. The rest needed minor edits. My teaching team now spends their time on lesson plans, not question banks." },
-      { "name": "Zhou Peng", "role": "Chengdu · Math Tutoring Chain (3 Locations)", "quote": "The analytics dashboard was the game-changer. 200+ students across three locations — I can finally see which topics each class is struggling with. Renewal rate went from under 70% to over 80% in one semester." },
-      { "name": "Lin Jia", "role": "Shanghai · CPA Review Center", "quote": "We're a small team. Content creation was always the bottleneck. UniMind was live the same day we signed up — zero setup. The AI assistant handles student questions at 2am and they love it." },
-      { "name": "Wu Min", "role": "Guangzhou · Bar Exam (Solo Instructor)", "quote": "60+ students, one of me. Grading essays used to eat an entire day. Now AI does a first pass and I review — cuts the time by more than half. Students say the knowledge graph finally shows them where the gaps are." }
+      {
+        "name": "He Wei",
+        "role": "Beijing · CFA Prep (Solo Tutor)",
+        "quote": "I was skeptical about AI-generated questions at first. After a month, roughly 85% of 400+ questions were classroom-ready. The rest needed minor edits. My teaching team now spends their time on lesson plans, not question banks."
+      },
+      {
+        "name": "Zhou Peng",
+        "role": "Chengdu · Math Tutoring Chain (3 Locations)",
+        "quote": "The analytics dashboard was the game-changer. 200+ students across three locations — I can finally see which topics each class is struggling with. Renewal rate went from under 70% to over 80% in one semester."
+      },
+      {
+        "name": "Lin Jia",
+        "role": "Shanghai · CPA Review Center",
+        "quote": "We're a small team. Content creation was always the bottleneck. UniMind was live the same day we signed up — zero setup. The AI assistant handles student questions at 2am and they love it."
+      },
+      {
+        "name": "Wu Min",
+        "role": "Guangzhou · Bar Exam (Solo Instructor)",
+        "quote": "60+ students, one of me. Grading essays used to eat an entire day. Now AI does a first pass and I review — cuts the time by more than half. Students say the knowledge graph finally shows them where the gaps are."
+      }
     ]
   },
   "how": {
@@ -123,27 +151,67 @@
     "categories": [
       {
         "name": "College Admissions",
-        "tags": ["SAT", "ACT", "AP Biology", "AP Calculus", "AP US History", "AP Chemistry"]
+        "tags": [
+          "SAT",
+          "ACT",
+          "AP Biology",
+          "AP Calculus",
+          "AP US History",
+          "AP Chemistry"
+        ]
       },
       {
         "name": "Graduate Admissions",
-        "tags": ["GRE", "GMAT", "LSAT", "MCAT", "DAT", "PCAT"]
+        "tags": [
+          "GRE",
+          "GMAT",
+          "LSAT",
+          "MCAT",
+          "DAT",
+          "PCAT"
+        ]
       },
       {
         "name": "Medical & Healthcare",
-        "tags": ["USMLE Step 1", "USMLE Step 2", "NCLEX", "COMLEX", "NAPLEX"]
+        "tags": [
+          "USMLE Step 1",
+          "USMLE Step 2",
+          "NCLEX",
+          "COMLEX",
+          "NAPLEX"
+        ]
       },
       {
         "name": "Legal & Professional",
-        "tags": ["Bar Exam (MBE)", "Bar Exam (State)", "MPRE", "CPA", "CFA", "FRM"]
+        "tags": [
+          "Bar Exam (MBE)",
+          "Bar Exam (State)",
+          "MPRE",
+          "CPA",
+          "CFA",
+          "FRM"
+        ]
       },
       {
         "name": "K-12 & STEM",
-        "tags": ["Algebra", "Geometry", "Calculus", "Biology", "Chemistry", "Physics"]
+        "tags": [
+          "Algebra",
+          "Geometry",
+          "Calculus",
+          "Biology",
+          "Chemistry",
+          "Physics"
+        ]
       },
       {
         "name": "Languages & Humanities",
-        "tags": ["AP English", "AP Spanish", "AP World History", "TOEFL", "IELTS"]
+        "tags": [
+          "AP English",
+          "AP Spanish",
+          "AP World History",
+          "TOEFL",
+          "IELTS"
+        ]
       }
     ],
     "footer": "Don't see your subject? Custom knowledge trees are built in minutes. We'll help you set it up."
@@ -168,33 +236,182 @@
     "bottomCtaTitle": "Ready to automate your tutoring business?",
     "bottomCtaSubtitle": "14-day full-feature trial. After that, keep using Free — no card, no catch.",
     "plans": [
-      { "label": "Free", "desc": "Solo tutor · Zero cost", "persona": "For individual tutors or trial users — replace manual question-writing with AI and validate the workflow.", "cta": "Start Free" },
-      { "label": "Starter", "desc": "Independent tutor · Light ops", "persona": "For independent tutors or small studios who need AI assistant and adaptive review to boost retention.", "cta": "14-Day Free Trial" },
-      { "label": "Growth", "desc": "Growing business · Scale", "persona": "For growing tutoring centers — multi-instructor collaboration, class analytics, and mock exams drive renewals.", "cta": "14-Day Free Trial" },
-      { "label": "Enterprise", "desc": "Enterprise · White-label", "persona": "For chains and corporate training — white-label deployment, data sovereignty, and API integration.", "cta": "Request Demo" }
+      {
+        "label": "Free",
+        "desc": "Trial · Validate AI teaching",
+        "persona": "Zero-cost trial with AI question generation, question bank, and basic analytics — see if it fits your institution.",
+        "cta": "Start Free"
+      },
+      {
+        "label": "Starter",
+        "desc": "Growing institution · 1-2 teachers",
+        "persona": "For early-stage training centers: AI gen + Memorix review + full reports — automate repetitive lesson prep.",
+        "cta": "14-Day Free Trial"
+      },
+      {
+        "label": "Growth",
+        "desc": "Scaling institution · Multi-teacher ops",
+        "persona": "For growing centers: multi-teacher collaboration, knowledge graph, mock exams, Q&A — systematic teaching management.",
+        "cta": "14-Day Free Trial"
+      },
+      {
+        "label": "Enterprise",
+        "desc": "Enterprise chain · Data sovereignty",
+        "persona": "For chains and corporate training: white-label, private deploy, API integration, SSO single sign-on.",
+        "cta": "Request Demo"
+      }
     ],
     "rows": [
-      ["AI Gen 30/mo", "AI Gen 100/mo", "Unlimited AI Gen", "Unlimited AI Gen"],
-      ["Unlimited AI Grading", "Unlimited AI Grading", "Unlimited AI Grading", "Unlimited AI Grading"],
-      ["Memorix Adaptive Algorithm", "Memorix Adaptive Review", "Memorix Adaptive Review", "Memorix Adaptive Review"],
-      ["Question Bank · Manual", "Question Bank · Manual", "Question Bank · Manual+Auto", "Question Bank · Manual+Auto"],
-      ["Mistake Review Center", "Mistake Review Center", "Mistake Review Center", "Mistake Review Center"],
-      ["Basic Stats", "Full Student Reports", "Class Comparison · Export", "Advanced Dashboard · AI Insights"],
-      ["30 Students Max", "50 Students Max", "200 Students Max", "Unlimited Students"],
-      ["1 Instructor · 1 Subject", "1 Instructor · 3 Subjects", "5 Instructors · All Subjects", "Unlimited"],
-      ["—", "AI Assistant 500/mo", "AI Assistant 3000/mo", "Unlimited AI Assistant"],
-      ["—", "PDF Export 10/mo", "PDF Export 100/mo", "Unlimited PDF Export"],
-      ["—", "—", "Course Videos + AI Outlines", "Course Videos + AI Outlines"],
-      ["—", "—", "Interactive Knowledge Graph", "Interactive Knowledge Graph"],
-      ["—", "—", "Online Q&A System", "Online Q&A System"],
-      ["—", "—", "Instructor Collaboration · RBAC", "Instructor Collaboration · RBAC"],
-      ["—", "—", "Live Study Rooms", "Live Study Rooms"],
-      ["—", "—", "Mock Exams", "Mock Exams"],
-      ["—", "—", "—", "Brand Customization · White-Label"],
-      ["—", "—", "—", "Data Sovereignty"],
-      ["—", "—", "—", "Custom Knowledge Trees"],
-      ["—", "—", "—", "REST API Access"],
-      ["—", "—", "—", "Dedicated Account Manager"]
+      [
+        "AI Gen 30/mo",
+        "AI Gen 100/mo",
+        "Unlimited AI Gen",
+        "Unlimited AI Gen"
+      ],
+      [
+        "Unlimited AI Grading",
+        "Unlimited AI Grading",
+        "Unlimited AI Grading",
+        "Unlimited AI Grading"
+      ],
+      [
+        "Memorix Adaptive Algorithm",
+        "Memorix Adaptive Review",
+        "Memorix Adaptive Review",
+        "Memorix Adaptive Review"
+      ],
+      [
+        "Question Bank · Manual",
+        "Question Bank · Manual",
+        "Question Bank · Manual+Auto",
+        "Question Bank · Manual+Auto"
+      ],
+      [
+        "Mistake Review Center",
+        "Mistake Review Center",
+        "Mistake Review Center",
+        "Mistake Review Center"
+      ],
+      [
+        "Basic Stats",
+        "Full Student Reports",
+        "Class Comparison · Export",
+        "Advanced Dashboard · AI Insights"
+      ],
+      [
+        "30 Students Max",
+        "50 Students Max",
+        "200 Students Max",
+        "Unlimited Students"
+      ],
+      [
+        "1 Instructor · 1 Subject",
+        "1 Instructor · 3 Subjects",
+        "5 Instructors · All Subjects",
+        "Unlimited"
+      ],
+      [
+        "—",
+        "AI Assistant 500/mo",
+        "AI Assistant 3000/mo",
+        "Unlimited AI Assistant"
+      ],
+      [
+        "—",
+        "PDF Export 10/mo",
+        "PDF Export 100/mo",
+        "Unlimited PDF Export"
+      ],
+      [
+        "—",
+        "—",
+        "Course Videos + AI Outlines",
+        "Course Videos + AI Outlines"
+      ],
+      [
+        "—",
+        "—",
+        "Interactive Knowledge Graph",
+        "Interactive Knowledge Graph"
+      ],
+      [
+        "—",
+        "—",
+        "Online Q&A System",
+        "Online Q&A System"
+      ],
+      [
+        "—",
+        "—",
+        "Instructor Collaboration · RBAC",
+        "Instructor Collaboration · RBAC"
+      ],
+      [
+        "—",
+        "—",
+        "Live Study Rooms",
+        "Live Study Rooms"
+      ],
+      [
+        "—",
+        "—",
+        "Mock Exams",
+        "Mock Exams"
+      ],
+      [
+        "—",
+        "—",
+        "10/mo",
+        "50/mo"
+      ],
+      [
+        "—",
+        "3 bots",
+        "10 bots",
+        "Unlimited"
+      ],
+      [
+        "500 MB",
+        "5 GB",
+        "50 GB",
+        "Unlimited"
+      ],
+      [
+        "200 Qs",
+        "2,000 Qs",
+        "10,000 Qs",
+        "Unlimited"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "Brand Customization · White-Label"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "Data Sovereignty"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "Custom Knowledge Trees"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "REST API Access"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "Dedicated Account Manager"
+      ]
     ]
   },
   "faq": {

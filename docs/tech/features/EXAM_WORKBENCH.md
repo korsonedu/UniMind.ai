@@ -1,8 +1,10 @@
-# AI 出题工作台
+# 命题官（ExamMaster）
 
 ## 概述
 
-AI 出题工作台是老师/机构主的核心工作界面，采用**对话式 Agent 架构**——教师通过自然语言描述出题需求，Agent 自主调用工具搜索知识点、生成题目、精修入库。结构与小宇（XiaoYu）学习规划 Agent 对齐：未对话时大片留白，对话后左右分栏。
+命题官是老师/机构主的核心工作界面，采用**对话式 Agent 架构**——教师通过自然语言描述出题需求，Agent 自主调用工具搜索知识点、生成题目、精修入库。结构与小宇（XiaoYu）学习规划 Agent 对齐：未对话时大片留白，对话后左右分栏。
+
+2026-05-29 从小宇同步大规模更新：意图路由器（5类意图预筛选工具子集）、Prompt 自适应（检测教师出题偏好）、Meta-cognition（每日分析出题模式）、Dashboard API（聚合面板数据）。
 
 ## 页面布局
 
@@ -12,7 +14,7 @@ AI 出题工作台是老师/机构主的核心工作界面，采用**对话式 A
 ┌─────────────────────────────────────────────────┐
 │                 大片留白居中                       │
 │          [Gradient Icon]                         │
-│          出题助手                                  │
+│          命题官                                    │
 │          你的 AI 出题工作台                        │
 │                                                  │
 │    ┌─────────────────────────────────────┐       │
@@ -29,7 +31,7 @@ AI 出题工作台是老师/机构主的核心工作界面，采用**对话式 A
 ┌──────────────────────────┬──────────────────────┐
 │ 左侧 flex-1              │ 右侧 360px           │
 │                          │                      │
-│ 生成的题目卡片列表        │ [Header] 出题助手     │
+│ 生成的题目卡片列表        │ [Header] 命题官       │
 │ (QuestionPanel)          │                      │
 │                          │ [Messages]           │
 │ ┌──────────────────────┐ │  用户: 出10道微积分    │
@@ -51,12 +53,16 @@ AI 出题工作台是老师/机构主的核心工作界面，采用**对话式 A
 
 | 组件 | 位置 | 职责 |
 |------|------|------|
-| Bot | `ai_assistant/models.py` (`bot_type='exam_generator'`) | 出题助手 Bot |
-| BotRegistry | `ai_assistant/bot_registry.py` | 注册表：bot_type → (Executor, tools, prompt_dir) |
+| Bot | `ai_assistant/models.py` (`bot_type='exam_generator'`) | 命题官 Bot |
+| BotRegistry | `ai_assistant/bot_registry.py` | 注册表：bot_type → (Executor, tools, prompt_dir, use_intent_router) |
 | chat_dispatch | `ai_assistant/services/chat_dispatch.py` | 统一调度：3 个入口共用 |
 | Prompt 模板 | `prompts/ai_assistant/bots/exam_generator/` | system_prompt.txt + tool_guide.txt + personality.txt |
 | ToolExecutor | `ai_assistant/services/exam_generator_tool_executor.py` | 5 个出题专用工具的执行器 |
-| Seed 命令 | `ai_assistant/management/commands/seed_exam_agent.py` | 创建/更新出题助手 Bot（prompt 从文件读取） |
+| 意图路由器 | `ai_engine/tool_router.py` (`EXAM_GENERATOR_INTENT_MAP`) | 5 类意图预筛选：generate/refine/save/status/general |
+| Prompt 自适应 | `ai_assistant/services/prompt_adapter.py` (`_TEACHING_STYLE_RULES`) | 7 条教师偏好规则（题型/难度/学科） |
+| Meta-cognition | `ai_assistant/tasks.py` (`reflect_teacher_patterns`) | 每日分析出题模式，存入 mem0 语义记忆 |
+| Dashboard | `ai_assistant/views_dashboard.py` (`ExamWorkbenchDashboardView`) | GET /api/ai/workbench/dashboard/ |
+| Seed 命令 | `ai_assistant/management/commands/seed_exam_agent.py` | 创建/更新命题官 Bot（prompt 从文件读取） |
 
 ### 工具列表
 
@@ -108,10 +114,11 @@ Agent 识别口语化指令，直接调用对应工具，不反问确认：
 
 ```
 教师: "出10道微积分极限的客观题"
+  ↓ 前端 SSE POST /api/ai/chat/stream/ → 流式接收 step 事件
   ↓ Agent 调用 search_knowledge_points → 获取知识点 ID
   ↓ Agent 调用 generate_questions → 同步生成题目
   ↓ metadata.generated_questions 写入消息
-  ↓ 前端轮询 GET /ai/history/ → 渲染题目卡片到左侧面板
+  ↓ 前端 done 事件 → 刷新历史 → 渲染题目卡片到左侧面板
 教师: "入库"
   ↓ Agent 调用 save_questions_to_library → 题目存入 Question 表
 ```
@@ -134,6 +141,56 @@ Agent 识别口语化指令，直接调用对应工具，不反问确认：
 - 权限：`RequireInstitution`（teacher/owner/admin）
 - HomeRedirect：teacher/owner → `/workbench`（所有方案级别）
 - 侧边栏：institution admin 首位入口
+- Dashboard API：`GET /api/ai/workbench/dashboard/`（仅 institution_admin）
+
+## 意图路由器
+
+`EXAM_GENERATOR_INTENT_MAP`（`ai_engine/tool_router.py`）根据教师消息关键词预筛选工具子集：
+
+| 意图 | 触发关键词 | 筛选工具 |
+|------|-----------|---------|
+| `generate` | 出题/生成/命题/出一组 | search_knowledge_points, generate_questions |
+| `refine` | 精修/ARC/润色/改进 | launch_arc_pipeline, check_pipeline_status |
+| `save` | 入库/存下来/保存/收录 | save_questions_to_library |
+| `status` | 进度/跑完没/状态/结果 | check_pipeline_status |
+| `general` | 无匹配 | 返回全量工具 |
+
+两轮匹配：先用户消息，无匹配则回退最近 3 轮对话上下文。
+
+## Prompt 自适应
+
+`_TEACHING_STYLE_RULES`（`ai_assistant/services/prompt_adapter.py`）检测教师出题偏好，自动注入 system prompt：
+
+- 客观题偏好 / 主观题偏好
+- 基础难度偏好 / 高难度偏好
+- 学科专注（金融/数学/法学）
+
+基于 mem0 语义记忆关键词匹配，无额外 LLM 调用。
+
+## Meta-cognition
+
+`reflect_teacher_patterns`（`ai_assistant/tasks.py`）每日 Celery task，分析 6 个维度：
+
+1. 题型偏好（客观题 vs 主观题比例）
+2. 难度偏好（hard/extreme vs entry/easy 比例）
+3. 学科专注（单一学科 vs 多学科覆盖）
+4. ARC 管线通过率（质量趋势）
+5. 使用频率（高频用户 vs 低活跃）
+6. 活跃时段（深夜/早晨/工作时间）
+
+洞察存入 mem0 语义记忆，`source: "exam_meta_cognition"`，供 Prompt 自适应和 Dashboard 消费。
+
+## Dashboard API
+
+`GET /api/ai/workbench/dashboard/`（`ExamWorkbenchDashboardView`）返回 5 个数据板块：
+
+| 板块 | 内容 |
+|------|------|
+| `recent_questions` | 最近生成的题目（含题型/难度/知识点） |
+| `pipeline_status` | 进行中的 ARC 管线任务 |
+| `library_stats` | 题库统计（按题型/难度/学科分布） |
+| `teacher_insights` | Meta-cognition 生成的教师偏好洞察 |
+| `dashboard_config` | 教师自定义布局配置 |
 
 ## 前端组件
 
@@ -146,7 +203,7 @@ Agent 识别口语化指令，直接调用对应工具，不反问确认：
 
 ## 相关模型
 
-- `Bot` (`bot_type='exam_generator'`) — 出题助手 Bot 定义
+- `Bot` (`bot_type='exam_generator'`) — 命题官 Bot 定义
 - `AIChatMessage` (`metadata`) — 消息级结构化数据
 - `Question` — 生成的题目（入库后）
 - `ContentPipelineTask` — ARC 异步任务跟踪

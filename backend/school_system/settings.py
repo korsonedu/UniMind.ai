@@ -129,6 +129,17 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD", ""),
         "HOST": os.getenv("DB_HOST", "localhost"),
         "PORT": os.getenv("DB_PORT", ""),
+        "CONN_MAX_AGE": 600,
+        "CONN_HEALTH_CHECKS": True,
+    }
+}
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": os.getenv("CACHE_REDIS_URL", "redis://127.0.0.1:6379/1"),
+        "KEY_PREFIX": "unimind",
+        "TIMEOUT": 300,
     }
 }
 
@@ -283,6 +294,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "reflect-user-learning-daily": {
         "task": "ai_assistant.tasks.reflect_user_learning",
+        "schedule": 86400.0,
+    },
+    "reflect-teacher-patterns-daily": {
+        "task": "ai_assistant.tasks.reflect_teacher_patterns",
         "schedule": 86400.0,
     },
 }

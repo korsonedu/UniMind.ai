@@ -74,7 +74,7 @@ type MemorixOptimizationHistory = {
 
 export const TestLadder: React.FC = () => {
   const { t, i18n } = useTranslation(['testLadder', 'pages']);
-  const { primaryColor } = useSystemStore();
+
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
@@ -104,7 +104,7 @@ export const TestLadder: React.FC = () => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<any>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [gradingMessage, setGradingMessage] = useState("");
+  const [gradingMessage] = useState("");
 
   // Report UI State
   const [results, setResults] = useState<any[]>([]);

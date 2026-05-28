@@ -37,7 +37,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
 
     # 获取记忆上下文 (dual-layer: structured + mem0 semantic + adaptive directives)
     from ai_assistant.services.memory_service import build_memory_context
-    memory_context, adaptive_directives = build_memory_context(user, user_message)
+    memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type if bot else 'assistant')
 
     from ai_assistant.services.chat_dispatch import dispatch_bot_chat
 
@@ -120,6 +120,9 @@ def _user_can_access_bot(user, bot):
     if bot.institution is None:
         if not bot.is_active:
             return False
+        # planner/exam_generator 始终可见，不允许租户隐藏
+        if bot.bot_type in ('planner', 'exam_generator'):
+            return True
         if user.institution:
             vis = BotVisibility.objects.filter(
                 institution=user.institution, bot=bot
@@ -153,9 +156,10 @@ class BotListCreateView(generics.ListCreateAPIView):
                 models.Q(institution=user.institution)
             )
         elif user.institution:
+            # planner/exam_generator 始终可见，不参与隐藏过滤
             hidden_ids = BotVisibility.objects.filter(
-                institution=user.institution, is_visible=False
-            ).values_list('bot_id', flat=True)
+                institution=user.institution, is_visible=False,
+            ).exclude(bot__bot_type__in=('planner', 'exam_generator')).values_list('bot_id', flat=True)
             qs = Bot.objects.filter(
                 models.Q(institution__isnull=True, is_active=True) |
                 models.Q(institution=user.institution, is_active=True)
@@ -222,7 +226,10 @@ class BotVisibilityView(APIView):
 
     def get(self, request):
         inst = request.user.institution
-        global_bots = Bot.objects.filter(institution__isnull=True)
+        # 排除始终可见的 planner/exam_generator
+        global_bots = Bot.objects.filter(
+            institution__isnull=True,
+        ).exclude(bot_type__in=('planner', 'exam_generator'))
         vis_map = {
             v.bot_id: v.is_visible
             for v in BotVisibility.objects.filter(institution=inst)
@@ -248,6 +255,9 @@ class BotVisibilityView(APIView):
         bot = Bot.objects.filter(id=bot_id, institution__isnull=True).first()
         if not bot:
             return Response({'error': '全局机器人不存在'}, status=404)
+
+        if bot.bot_type in ('planner', 'exam_generator'):
+            return Response({'error': '该机器人始终可见，不允许调整'}, status=403)
 
         vis, _ = BotVisibility.objects.update_or_create(
             institution=inst, bot=bot,
@@ -359,7 +369,7 @@ class AIChatStreamView(APIView):
                 student_context = get_student_academic_context(request.user)
 
             from ai_assistant.services.memory_service import build_memory_context
-            memory_context, adaptive_directives = build_memory_context(request.user, user_message)
+            memory_context, adaptive_directives = build_memory_context(request.user, user_message, bot_type=bot.bot_type)
 
             from ai_assistant.services.chat_dispatch import dispatch_bot_chat_sync
 
@@ -435,12 +445,23 @@ class AIChatStreamView(APIView):
                 ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ').replace('\\(', ' $ ').replace('\\)', ' $ ')
 
                 if ai_content and not is_error:
-                    await sync_to_async(AIChatMessage.objects.create)(
-                        user=request.user,
-                        role='assistant',
-                        content=ai_content,
-                        bot=bot,
-                    )
+                    msg_kwargs = {
+                        'user': request.user,
+                        'role': 'assistant',
+                        'content': ai_content,
+                        'bot': bot,
+                    }
+                    # 写入出题 Agent 的结构化数据
+                    if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
+                        msg_kwargs['metadata'] = {
+                            'generated_questions': tool_executor._last_generated,
+                            'pipeline_task_id': getattr(tool_executor, '_last_pipeline_task_id', None),
+                        }
+                    elif hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
+                        msg_kwargs['metadata'] = {
+                            'pipeline_task_id': tool_executor._last_pipeline_task_id,
+                        }
+                    await sync_to_async(AIChatMessage.objects.create)(**msg_kwargs)
                     if hasattr(tool_executor, 'user'):
                         await sync_to_async(request.user.refresh_from_db)()
 

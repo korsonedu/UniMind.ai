@@ -38,7 +38,6 @@ EMBEDDING_MODEL = os.getenv('AI_EMBEDDING_MODEL', 'deepseek-embedding')
 EMBEDDING_BASE_URL = os.getenv('AI_EMBEDDING_BASE_URL', DEFAULT_BASE_URL.replace('/chat/completions', ''))
 
 # Thinking effort per task prefix.
-# DeepSeek supports thinking + tool_choice simultaneously.
 # When thinking is enabled with tool calls, reasoning_content MUST be
 # passed back in subsequent requests (see service.py call_ai_with_tools).
 _TASK_THINKING = {

@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { FileText, ChevronRight, ChevronLeft } from 'lucide-react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Button } from '@/components/ui/button';
 import { Loading } from '@/components/Loading';
-import { EmptyState } from '@/components/EmptyState';
 import { InlineError } from '@/components/InlineError';
 import { useFetch } from '@/lib/useFetch';
 import { cn } from '@/lib/utils';
@@ -17,8 +16,6 @@ export const ArticleCenter: React.FC = () => {
   const [page, setPage] = useState(1);
 
   const { t, i18n } = useTranslation('common');
-
-  const navigate = useNavigate();
 
   const cacheKey = `articles-${selectedTag || 'all'}-${page}`;
   const { data, loading, error, refetch } = useFetch<{

@@ -5,8 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
-import { CalendarCheck, MessageCircle, BookOpen, FileText, Trophy, BrainCircuit, Sparkles, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
+import { CalendarCheck, MessageCircle, BookOpen, FileText, Trophy, BrainCircuit, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
 import api from '@/lib/api';
+import { toast } from 'sonner';
 
 interface PlanTask {
   id: string;
@@ -62,7 +63,7 @@ export function StudentHome() {
     try {
       const res = await api.patch(`/ai/plans/${activePlan.id}/tasks/${taskId}/`, { status: 'completed' });
       setActivePlan(res.data);
-    } catch {}
+    } catch { toast.error('更新失败'); }
   };
 
   if (loading) {

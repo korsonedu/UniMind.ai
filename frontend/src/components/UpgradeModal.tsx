@@ -35,7 +35,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
 
 const FEATURE_REQUIRED_PLAN: Record<string, string> = {
   'memorix.review': 'starter', 'ai.assistant': 'starter',
-  'full.report': 'starter', 'knowledge.graph': 'starter', 'video.outline': 'starter',
+  'full.report': 'starter', 'knowledge.graph': 'growth', 'video.outline': 'growth',
   'faq.system': 'growth', 'multi.teacher': 'growth', 'class.compare': 'growth',
   'data.export': 'growth', 'study.room': 'growth', 'pdf.mock': 'growth', 'interview.mock': 'growth',
   'brand.custom': 'enterprise', 'api.access': 'enterprise', 'student.payment': 'enterprise',

@@ -75,8 +75,9 @@ cd frontend && npx tsc -b 2>&1 | grep -E "(AgentStepCard|useAgentChat|AIAssistan
 
 ## 验证清单
 
-- [ ] `python3 manage.py check` 通过
-- [ ] WS 路由可达（返回 403 而非 500）
+- [x] `python3 manage.py check` 通过
+- [x] WS 路由可达（返回 403 而非 500）
+- [x] 前端 TS 编译无 AgentStepCard/useAgentChat/AIAssistant 相关错误
 - [ ] exam_generator 发消息后出现步骤卡片
 - [ ] planner 发消息后出现步骤卡片
 - [ ] assistant bot 保持原有 polling 模式

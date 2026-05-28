@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the existing OnboardingDialog with a card-based wizard for first-time institution owners — 5 steps with fade transitions.
+**Goal:** Replace the existing OnboardingDialog with a card-based wizard — role selection (student/teacher) as step 1, then 5 steps for institution creation (teacher path only).
 
-**Architecture:** Keep the dialog form factor in MainLayout, rewrite internals as a multi-card wizard. Backend adds `student_scale` field to Institution model and passes it through the existing create API.
+**Architecture:** Keep the dialog form factor in MainLayout, rewrite internals as a multi-card wizard. Step 1 is role selection: students see guidance to get invite link, teachers proceed to institution creation. Backend adds `student_scale` field to Institution model, `join-by-invite-slug` endpoint for existing account binding, and passes it through the existing create API.
 
 **Tech Stack:** React 19, shadcn/ui Dialog, CSS transitions, Django REST Framework
 

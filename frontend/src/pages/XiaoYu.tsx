@@ -1,26 +1,31 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Send, Sparkles, Loader2, RotateCcw, Lightbulb, BarChart3, Target, FileText, CheckCircle2, CalendarCheck, BookOpen, History } from 'lucide-react';
+import { Send, Loader2, RotateCcw, Lightbulb, BarChart3, Target, CheckCircle2, CalendarCheck, BookOpen, History, ArrowRight } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import remarkGfm from 'remark-gfm';
-import rehypeKatex from 'rehype-katex';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import { DashboardPanel, type DashboardData } from './xiaoyu/DashboardPanel';
+import ChatBubble from '@/components/ChatBubble';
+import { ToolStepMessage } from '@/components/AgentStepCard';
+import type { AgentStep } from '@/hooks/useAgentChat';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp?: string;
+  toolStep?: AgentStep;
+  inlineCard?: { title: string; subtitle?: string; items: Array<{ label: string; value: string; trend?: string; progress?: number; emphasis?: boolean; action_link?: string }>; cta?: { label: string; link: string } };
+  visible?: boolean;
+  _id?: string;
 }
 
 interface ConversationSession {
@@ -38,68 +43,71 @@ interface Bot {
 }
 
 const SKILLS = [
-  { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议', color: 'text-red-500' },
-  { icon: CalendarCheck, label: '制定学习计划', prompt: '根据我的现状制定一份学习计划', color: 'text-blue-500' },
-  { icon: CheckCircle2, label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容', color: 'text-amber-500' },
-  { icon: BarChart3, label: '学习数据总览', prompt: '帮我分析学习数据，看看整体情况', color: 'text-emerald-500' },
-  { icon: BookOpen, label: '推荐课程', prompt: '根据我的薄弱点推荐适合的课程', color: 'text-purple-500' },
+  { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
+  { icon: CalendarCheck, label: '制定学习计划', prompt: '根据我的现状制定一份学习计划' },
+  { icon: CheckCircle2, label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容' },
+  { icon: BarChart3, label: '学习数据总览', prompt: '帮我分析学习数据，看看整体情况' },
+  { icon: BookOpen, label: '推荐课程', prompt: '根据我的薄弱点推荐适合的课程' },
 ];
 
-// ── Chat bubble ──
-const ChatBubble: React.FC<{
-  msg: Message;
-  isUser: boolean;
-  userName: string;
-  isThinking?: boolean;
+const InlineCardMessage: React.FC<{
+  card: NonNullable<Message['inlineCard']>;
   index: number;
-}> = ({ msg, isUser, userName, isThinking = false, index }) => (
-  <div
-    className={cn("flex gap-2 w-full", isUser ? "flex-row-reverse" : "flex-row")}
-    style={{ animationDelay: `${Math.min(index * 40, 200)}ms` }}
-  >
-    {!isUser && (
-      <div className="h-6 w-6 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0 mt-0.5">
-        <Sparkles className="h-3 w-3 text-white" />
-      </div>
-    )}
-    <div className={cn("flex flex-col max-w-[85%]", isUser ? "items-end" : "items-start")}>
-      <div className={cn(
-        "px-3 py-1.5 text-[13px] leading-relaxed w-fit animate-in fade-in slide-in-from-bottom-1 duration-300",
-        isUser
-          ? "bg-foreground text-background rounded-2xl rounded-tr-md font-medium"
-          : "bg-muted text-foreground rounded-2xl rounded-tl-md"
-      )}>
-        {isThinking ? (
-          <div className="flex items-center gap-1 py-0.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-foreground/30 animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-foreground/30 animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-foreground/30 animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
-        ) : (
-          <div className={cn(
-            "prose prose-sm max-w-none text-left",
-            "prose-p:my-1 prose-p:leading-relaxed prose-p:text-foreground",
-            "prose-strong:text-foreground prose-li:text-foreground",
-            "prose-headings:font-bold prose-headings:tracking-tight",
-            "prose-table:text-xs prose-table:border-collapse",
-            "prose-th:px-2 prose-th:py-1 prose-th:text-left prose-th:font-bold prose-th:bg-muted prose-th:border prose-th:border-border",
-            "prose-td:px-2 prose-td:py-1 prose-td:border prose-td:border-border",
-            "prose-thead:border-b-2 prose-thead:border-border",
-            "prose-code:text-[12px] prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded",
-            "prose-pre:bg-muted prose-pre:border prose-pre:border-border",
-          )}>
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {msg.content}
-            </ReactMarkdown>
-          </div>
+}> = ({ card, index }) => {
+  const navigate = useNavigate();
+  return (
+    <div className="ml-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="rounded-lg border border-border/50 bg-card/80 p-2.5 space-y-1.5 max-w-[280px]">
+        <div className="flex items-center gap-1">
+          <BarChart3 className="h-3 w-3 text-primary/50" />
+          <span className="text-[10px] font-semibold text-foreground/80">{card.title}</span>
+          {card.subtitle && (
+            <span className="text-[9px] text-muted-foreground/40 ml-auto">{card.subtitle}</span>
+          )}
+        </div>
+        <div className="space-y-0.5">
+          {card.items?.map((item, ii) => {
+            const clickable = !!item.action_link;
+            const content = (
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-muted-foreground/60 truncate">{item.label}</span>
+                <span className={cn(
+                  "font-semibold tabular-nums shrink-0 ml-1",
+                  item.trend === 'up' && "text-emerald-500",
+                  item.trend === 'down' && "text-red-400",
+                )}>
+                  {item.value}
+                  {item.trend === 'up' && ' ↑'}
+                  {item.trend === 'down' && ' ↓'}
+                </span>
+              </div>
+            );
+            return clickable ? (
+              <button key={ii} className="w-full text-left hover:bg-muted/40 rounded px-0.5 -mx-0.5 cursor-pointer transition-colors" onClick={() => navigate(item.action_link!)}>
+                {content}
+              </button>
+            ) : (
+              <div key={ii}>{content}</div>
+            );
+          })}
+        </div>
+        {card.cta && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full h-5 text-[10px] text-primary/70 gap-0.5"
+            onClick={() => navigate(card.cta!.link)}
+          >
+            {card.cta.label} <ArrowRight className="h-2.5 w-2.5" />
+          </Button>
         )}
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const XiaoYu: React.FC = () => {
-  const navigate = useNavigate();
+
   const { user } = useAuthStore();
   const setPageHeader = useSystemStore(state => state.setPageHeader);
   const [bot, setBot] = useState<Bot | null>(null);
@@ -115,14 +123,44 @@ export const XiaoYu: React.FC = () => {
   const [sessionOpen, setSessionOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [chatWidth, setChatWidth] = useState(() => Math.round(window.innerWidth / 3));
+  const [dragging, setDragging] = useState(false);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(0);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    setDragging(true);
+    dragStartX.current = e.clientX;
+    dragStartWidth.current = chatWidth;
+    document.body.style.cursor = 'col-resize';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = dragStartX.current - e.clientX;
+      const newWidth = Math.min(Math.max(dragStartWidth.current + delta, 280), Math.round(window.innerWidth * 0.5));
+      setChatWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      isDragging.current = false;
+      setDragging(false);
+      document.body.style.cursor = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [chatWidth]);
 
   const hasConversation = activeSessionId !== null || messages.some(m => m.role === 'user');
 
-  // Group messages into sessions by time gaps (>30 min = new session)
   const groupIntoSessions = useCallback((allMessages: Message[]): ConversationSession[] => {
     if (allMessages.length === 0) return [];
     const GAP_MS = 30 * 60 * 1000;
-    const sessions: ConversationSession[][] = [[]];
+    const sessions: Message[][] = [[]];
     for (const msg of allMessages) {
       const current = sessions[sessions.length - 1];
       if (current.length > 0 && msg.timestamp) {
@@ -167,7 +205,7 @@ export const XiaoYu: React.FC = () => {
     try {
       const res = await api.get('/ai/dashboard/');
       setDashboard(res.data);
-    } catch {}
+    } catch { toast.error('加载会话失败'); }
   }, []);
 
   useEffect(() => {
@@ -185,7 +223,6 @@ export const XiaoYu: React.FC = () => {
             }));
             const grouped = groupIntoSessions(allMsgs);
             setSessions(grouped);
-            // Auto-show most recent session if within 24h
             const lastMsg = hRes.data[hRes.data.length - 1];
             const isRecent = Date.now() - new Date(lastMsg.timestamp).getTime() < 86400000;
             if (isRecent && grouped.length > 0) {
@@ -228,25 +265,22 @@ export const XiaoYu: React.FC = () => {
         }));
         setSessions(groupIntoSessions(allMsgs));
       }
-    } catch {}
+    } catch { toast.error('初始化失败'); }
   }, [bot, groupIntoSessions]);
 
   const doSend = useCallback(async (text: string) => {
     if (!bot) return;
     setLoading(true);
 
-    // Start a new session if needed
     if (activeSessionId === null) {
-      setActiveSessionId(0); // temporary ID until refresh
+      setActiveSessionId(0);
     }
 
-    // Add user message immediately
-    const userMsg: Message = { role: 'user', content: text, timestamp: new Date().toISOString() };
-    setMessages(prev => [...prev, userMsg]);
+    let msgId = 0;
+    const nextId = () => `msg_${++msgId}_${Date.now()}`;
 
-    // Add thinking indicator
-    const thinkingMsg: Message = { role: 'assistant', content: '[Thinking...]' };
-    setMessages(prev => [...prev, thinkingMsg]);
+    const userMsg: Message = { _id: nextId(), role: 'user', content: text, timestamp: new Date().toISOString() };
+    setMessages(prev => [...prev, userMsg]);
 
     try {
       const res = await fetch('/api/ai/chat/stream/', {
@@ -262,11 +296,17 @@ export const XiaoYu: React.FC = () => {
       if (!reader) throw new Error('Stream not available');
 
       const decoder = new TextDecoder();
-      let collected = '';
       let leftover = '';
+      const shownCount = { current: 0 };
+      const STEP_DELAY_MS = 600;
 
-      // Remove thinking indicator
-      setMessages(prev => prev.filter(m => m.content !== '[Thinking...]' || m.role !== 'assistant'));
+      function scheduleShow(id: string, pos: number) {
+        const delay = Math.max(0, pos - shownCount.current) * STEP_DELAY_MS;
+        setTimeout(() => {
+          shownCount.current = Math.max(shownCount.current, pos + 1);
+          setMessages(prev => prev.map(m => m._id === id ? { ...m, visible: true } : m));
+        }, delay);
+      }
 
       while (true) {
         const { done, value } = await reader.read();
@@ -280,33 +320,74 @@ export const XiaoYu: React.FC = () => {
           if (!line.startsWith('data: ')) continue;
           try {
             const payload = JSON.parse(line.slice(6));
-            if (payload.done) {
-              // Finalize: update existing message with processed content
-              if (collected) {
+            if (payload.type === 'step') {
+              const step = payload as AgentStep;
+              if (step.status === 'calling') {
+                const id = nextId();
                 setMessages(prev => {
-                  const msgs = [...prev];
-                  const lastIdx = msgs.length - 1;
-                  if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
-                    msgs[lastIdx] = { ...msgs[lastIdx], content: processMathContent(collected) };
+                  scheduleShow(id, prev.length);
+                  return [...prev, {
+                    _id: id,
+                    role: 'assistant' as const,
+                    content: '',
+                    toolStep: step,
+                    visible: false,
+                    timestamp: new Date().toISOString(),
+                  }];
+                });
+              } else if (step.status === 'done') {
+                setMessages(prev => {
+                  const updated = prev.map(m =>
+                    m.toolStep?.call_id === step.call_id ? { ...m, toolStep: step } : m
+                  );
+                  // Insert inline card after the tool step
+                  if ((step.name === 'create_dashboard_card' || step.name === 'create_indicator_card') && step.result_summary) {
+                    try {
+                      const cardData = JSON.parse(step.result_summary);
+                      if (cardData.title && (cardData.items || cardData.indicators)) {
+                        const idx = updated.findIndex(m => m.toolStep?.call_id === step.call_id);
+                        const cardId = nextId();
+                        const cardMsg: Message = {
+                          _id: cardId,
+                          role: 'assistant',
+                          content: '',
+                          inlineCard: cardData,
+                          visible: false,
+                          timestamp: new Date().toISOString(),
+                        };
+                        scheduleShow(cardId, idx >= 0 ? idx + 1 : updated.length);
+                        updated.splice(idx >= 0 ? idx + 1 : updated.length, 0, cardMsg);
+                        fetchDashboard();
+                      }
+                    } catch { /* not valid JSON card */ }
                   }
-                  return msgs;
+                  return updated;
                 });
               }
+            } else if (payload.type === 'text_delta') {
+              // Ignore streaming text
+            } else if (payload.type === 'error') {
+              toast.error(payload.message || 'AI 调用失败');
+            } else if (payload.done) {
+              const finalContent = payload.full_content || '';
+              if (payload.is_error) {
+                toast.error(finalContent || 'AI 调用失败');
+              } else if (finalContent) {
+                const id = nextId();
+                setMessages(prev => {
+                  scheduleShow(id, prev.length);
+                  return [...prev, {
+                    _id: id,
+                    role: 'assistant' as const,
+                    content: processMathContent(finalContent),
+                    visible: false,
+                    timestamp: new Date().toISOString(),
+                  }];
+                });
+              }
+              setLoading(false);
               fetchDashboard();
               handleRefreshSessions();
-            } else if (payload.token) {
-              collected += payload.token;
-              // Update streaming message in real-time
-              setMessages(prev => {
-                const msgs = [...prev];
-                const lastIdx = msgs.length - 1;
-                if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
-                  msgs[lastIdx] = { ...msgs[lastIdx], content: collected };
-                } else {
-                  msgs.push({ role: 'assistant', content: collected });
-                }
-                return msgs;
-              });
             } else if (payload.error) {
               toast.error(payload.error);
             }
@@ -317,7 +398,6 @@ export const XiaoYu: React.FC = () => {
       const msg = err?.message || '发送失败，请重试';
       toast.error(msg.includes('HTTP') ? '服务暂时不可用，请稍后再试' : '发送失败，请重试');
       setInput(text);
-      setMessages(prev => prev.filter(m => m.content !== '[Thinking...]' || m.role !== 'assistant'));
     } finally {
       setLoading(false);
     }
@@ -346,29 +426,26 @@ export const XiaoYu: React.FC = () => {
   if (!initialized) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/40" />
       </div>
     );
   }
 
-  // ── Empty state ──
+  // ── Landing state ──
   if (!hasConversation) {
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full flex flex-col items-center justify-center px-4 pb-20 animate-in fade-in duration-500">
-          <div className="w-full max-w-md space-y-5">
-            <div className="text-center space-y-1.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20">
-                <Sparkles className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold tracking-tight">你好，我是小宇</h1>
-                <p className="text-muted-foreground text-xs">帮你搞定一切的专属 AI 学习规划师</p>
-              </div>
+        <div className="h-full flex flex-col items-center justify-center px-4 animate-in fade-in duration-500">
+          <div className="w-full max-w-sm space-y-4">
+            {/* Greeting */}
+            <div className="text-center space-y-1">
+              <h1 className="text-base font-semibold tracking-tight text-foreground/90">你好，我是小宇</h1>
+              <p className="text-[11px] text-muted-foreground/50">你的 AI 学习规划师</p>
             </div>
 
+            {/* Input */}
             <div className="relative">
-              <div className="flex items-center gap-2 bg-card rounded-xl p-1.5 border border-border shadow-sm focus-within:shadow-md focus-within:border-primary/20 transition-all duration-200">
+              <div className="flex items-center gap-1.5 bg-card rounded-xl p-1 border border-border/60 transition-all duration-200 focus-within:border-border">
                 <Input
                   ref={inputRef}
                   value={input}
@@ -378,45 +455,45 @@ export const XiaoYu: React.FC = () => {
                   onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); handleSend(); } }}
                   placeholder={placeholder}
                   autoComplete="off"
-                  className="bg-transparent border-none shadow-none focus-visible:ring-0 text-sm h-9 px-3 font-medium placeholder:text-muted-foreground/60"
+                  className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-8 px-2.5 placeholder:text-muted-foreground/40"
                   disabled={loading}
                 />
                 <Button
                   onClick={handleSend}
                   disabled={loading || !input.trim()}
                   size="icon"
-                  className="rounded-lg h-9 w-9 bg-foreground text-background shadow-sm active:scale-95 transition-all shrink-0 hover:opacity-90"
+                  className="rounded-lg h-8 w-8 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90"
                 >
                   {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 </Button>
               </div>
 
               {/* Bottom-left icon buttons */}
-              <div className="flex items-center gap-0.5 mt-1.5 ml-0.5">
+              <div className="flex items-center gap-0 mt-1 ml-0.5">
                 {sessions.length > 0 && (
                   <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button className="p-1 rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/60">
-                            <History className="h-3.5 w-3.5" />
+                          <button className="p-1 rounded text-muted-foreground/40 hover:text-foreground/60 transition-colors">
+                            <History className="h-3 w-3" />
                           </button>
                         </PopoverTrigger>
                       </TooltipTrigger>
-                      <TooltipContent side="bottom" className="text-[11px] font-medium">
+                      <TooltipContent side="bottom" className="text-[10px]">
                         历史对话 ({sessions.length})
                       </TooltipContent>
                     </Tooltip>
-                    <PopoverContent align="start" side="top" className="w-64 p-1.5 rounded-xl border-border shadow-lg max-h-60 overflow-y-auto">
+                    <PopoverContent align="start" side="top" className="w-56 p-1 rounded-lg border-border/60 shadow-lg max-h-52 overflow-y-auto">
                       <div className="space-y-0.5">
                         {[...sessions].reverse().map(session => (
                           <button
                             key={session.id}
                             onClick={() => handleLoadSession(session)}
-                            className="w-full flex flex-col gap-0.5 px-2.5 py-2 rounded-lg hover:bg-muted transition-colors text-left"
+                            className="w-full flex flex-col gap-0.5 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
                           >
-                            <span className="text-xs font-medium truncate">{session.label}</span>
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-[11px] font-medium truncate">{session.label}</span>
+                            <span className="text-[9px] text-muted-foreground/50">
                               {session.messages.length} 条消息
                               {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                             </span>
@@ -431,42 +508,51 @@ export const XiaoYu: React.FC = () => {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <PopoverTrigger asChild>
-                        <button
-                          className={cn(
-                            "p-1 rounded-md transition-colors",
-                            skillOpen
-                              ? "bg-amber-50 text-amber-600"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-                          )}
-                        >
-                          <Lightbulb className="h-3.5 w-3.5" />
+                        <button className={cn(
+                          "p-1 rounded transition-colors",
+                          skillOpen ? "text-primary/60" : "text-muted-foreground/40 hover:text-foreground/60"
+                        )}>
+                          <Lightbulb className="h-3 w-3" />
                         </button>
                       </PopoverTrigger>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[11px] font-medium">
+                    <TooltipContent side="bottom" className="text-[10px]">
                       技能
                     </TooltipContent>
                   </Tooltip>
                   <PopoverContent
                     align="start"
                     side="top"
-                    className="w-52 p-1.5 rounded-xl border-border shadow-lg"
+                    className="w-48 p-1 rounded-lg border-border/60 shadow-lg"
                   >
                     <div className="space-y-0.5">
                       {SKILLS.map(skill => (
                         <button
                           key={skill.label}
                           onClick={() => handleSkillSelect(skill.prompt)}
-                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-muted transition-colors text-left"
+                          className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
                         >
-                          <skill.icon className={cn("h-3.5 w-3.5 shrink-0", skill.color)} />
-                          <span className="text-xs font-medium">{skill.label}</span>
+                          <skill.icon className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+                          <span className="text-[11px] font-medium">{skill.label}</span>
                         </button>
                       ))}
                     </div>
                   </PopoverContent>
                 </Popover>
               </div>
+            </div>
+
+            {/* Skill pills */}
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {SKILLS.map(skill => (
+                <button
+                  key={skill.label}
+                  onClick={() => handleSkillSelect(skill.prompt)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border/50 text-[10px] text-muted-foreground/60 hover:text-foreground/80 hover:border-border transition-colors"
+                >
+                  {skill.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -478,37 +564,47 @@ export const XiaoYu: React.FC = () => {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="h-full flex animate-in fade-in duration-300">
+        {/* Dashboard */}
         <div className="flex-1 min-w-0 h-full">
           <DashboardPanel data={dashboard} onRefresh={fetchDashboard} />
         </div>
 
-        <div className="w-[360px] shrink-0 flex flex-col h-full hidden md:flex">
-          <div className="h-11 shrink-0 px-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="h-5 w-5 rounded-md bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
-                <Sparkles className="h-2.5 w-2.5 text-white" />
-              </div>
-              <span className="text-xs font-bold">小宇</span>
+        {/* Chat panel */}
+        <div
+          className={cn("shrink-0 flex flex-col h-full border-l border-border/40 hidden md:flex relative", dragging && "select-none")}
+          style={{ width: chatWidth }}
+        >
+          {/* Drag handle */}
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize group z-10"
+            onMouseDown={handleDragStart}
+          >
+            <div className="w-px h-full bg-border/0 group-hover:bg-primary/30 transition-colors mx-auto" />
+          </div>
+          {/* Header */}
+          <div className="h-10 shrink-0 px-3 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[12px] font-semibold text-foreground/80">小宇</span>
               {sessions.length > 1 && (
                 <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                   <PopoverTrigger asChild>
-                    <button className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
-                      ({sessions.length} 个对话)
+                    <button className="text-[9px] text-muted-foreground/40 hover:text-foreground/60 transition-colors">
+                      {sessions.length} 个对话
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" side="bottom" className="w-64 p-1.5 rounded-xl border-border shadow-lg max-h-60 overflow-y-auto">
+                  <PopoverContent align="start" side="bottom" className="w-56 p-1 rounded-lg border-border/60 shadow-lg max-h-52 overflow-y-auto">
                     <div className="space-y-0.5">
                       {[...sessions].reverse().map(session => (
                         <button
                           key={session.id}
                           onClick={() => { handleLoadSession(session); setSessionOpen(false); }}
                           className={cn(
-                            "w-full flex flex-col gap-0.5 px-2.5 py-2 rounded-lg transition-colors text-left",
-                            session.id === activeSessionId ? "bg-muted" : "hover:bg-muted"
+                            "w-full flex flex-col gap-0.5 px-2 py-1.5 rounded-md transition-colors text-left",
+                            session.id === activeSessionId ? "bg-muted/50" : "hover:bg-muted/50"
                           )}
                         >
-                          <span className="text-xs font-medium truncate">{session.label}</span>
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-[11px] font-medium truncate">{session.label}</span>
+                          <span className="text-[9px] text-muted-foreground/50">
                             {session.messages.length} 条消息
                             {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                           </span>
@@ -523,72 +619,84 @@ export const XiaoYu: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={handleReset}
-              className="rounded-md text-muted-foreground hover:text-foreground gap-1 px-2 h-6"
+              className="rounded text-muted-foreground/40 hover:text-foreground/60 gap-0.5 px-1.5 h-5"
             >
               <RotateCcw className="h-2.5 w-2.5" />
-              <span className="text-[10px] font-semibold">新对话</span>
+              <span className="text-[9px] font-medium">新对话</span>
             </Button>
           </div>
 
+          {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
-            <div className="p-3 space-y-3">
-              {messages.filter(m => m.content !== '[Thinking...]').map((msg, i) => (
-                <ChatBubble
-                  key={i}
-                  msg={msg}
-                  isUser={msg.role === 'user'}
-                  userName={user?.nickname || user?.username || 'User'}
-                  index={i}
-                />
+            <div className="p-2.5 space-y-2">
+              {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => (
+                msg.inlineCard ? (
+                  <InlineCardMessage
+                    key={msg._id || i}
+                    card={msg.inlineCard}
+                    index={i}
+                  />
+                ) : msg.toolStep ? (
+                  <ToolStepMessage
+                    key={msg._id || i}
+                    step={msg.toolStep}
+                    index={i}
+                  />
+                ) : (
+                  <ChatBubble
+                    key={msg._id || i}
+                    msg={msg}
+                    isUser={msg.role === 'user'}
+                    index={i}
+                    compact
+                  />
+                )
               ))}
-              {messages.length > 0 && messages[messages.length - 1].content === '[Thinking...]' && (
+              {loading && (
                 <ChatBubble
                   msg={{ role: 'assistant', content: '' }}
                   isUser={false}
-                  userName=""
                   isThinking
                   index={messages.length}
+                  compact
                 />
               )}
             </div>
           </div>
 
+          {/* Input */}
           <div className="shrink-0 p-2">
-            <div className="flex items-center gap-0.5 mb-1 ml-0.5">
+            <div className="flex items-center gap-0 mb-0.5 ml-0.5">
               <Popover open={skillOpen} onOpenChange={setSkillOpen}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <PopoverTrigger asChild>
-                      <button
-                        className={cn(
-                          "p-1 rounded-md transition-colors",
-                          skillOpen
-                            ? "bg-amber-50 text-amber-600"
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        <Lightbulb className="h-3 w-3" />
+                      <button className={cn(
+                        "p-0.5 rounded transition-colors",
+                        skillOpen ? "text-primary/60" : "text-muted-foreground/40 hover:text-foreground/60"
+                      )}>
+                        <Lightbulb className="h-2.5 w-2.5" />
                       </button>
                     </PopoverTrigger>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="text-[11px] font-medium">
+                  <TooltipContent side="top" className="text-[10px]">
                     技能
                   </TooltipContent>
                 </Tooltip>
                 <PopoverContent
                   align="start"
                   side="top"
-                  className="w-52 p-1.5 rounded-xl border-border shadow-lg"
+                  className="w-48 p-1 rounded-lg border-border/60 shadow-lg"
                 >
                   <div className="space-y-0.5">
                     {SKILLS.map(skill => (
                       <button
                         key={skill.label}
                         onClick={() => handleSkillSelect(skill.prompt)}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-muted transition-colors text-left"
+                        className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left"
                       >
-                        <skill.icon className={cn("h-3.5 w-3.5 shrink-0", skill.color)} />
-                        <span className="text-xs font-medium">{skill.label}</span>
+                        <skill.icon className="h-3 w-3 shrink-0 text-muted-foreground/40" />
+                        <span className="text-[11px] font-medium">{skill.label}</span>
                       </button>
                     ))}
                   </div>
@@ -596,7 +704,7 @@ export const XiaoYu: React.FC = () => {
               </Popover>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-muted rounded-xl p-1 pr-1.5">
+            <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-0.5">
               <Input
                 value={input}
                 onChange={e => setInput(e.target.value)}
@@ -605,16 +713,16 @@ export const XiaoYu: React.FC = () => {
                 onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); handleSend(); } }}
                 placeholder="和小宇对话..."
                 autoComplete="off"
-                className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-8 px-3 font-medium placeholder:text-muted-foreground/50"
+                className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[12px] h-7 px-2.5 placeholder:text-muted-foreground/35"
                 disabled={loading}
               />
               <Button
                 onClick={handleSend}
                 disabled={loading || !input.trim()}
                 size="icon"
-                className="rounded-lg h-8 w-8 bg-foreground text-background shadow-sm active:scale-95 transition-all shrink-0"
+                className="rounded-md h-7 w-7 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0"
               >
-                <Send className="h-3.5 w-3.5" />
+                <Send className="h-3 w-3" />
               </Button>
             </div>
           </div>

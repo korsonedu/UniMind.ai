@@ -536,10 +536,11 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request):
-        Token.objects.filter(user=request.user).delete()
+        if request.user.is_authenticated:
+            Token.objects.filter(user=request.user).delete()
         response = Response({'status': 'ok'})
         response.delete_cookie('auth_token', samesite='Lax')
         return response
@@ -619,24 +620,19 @@ class SendVerificationCodeView(APIView):
 
         code = generate_verification_code()
 
-        if request.user.is_authenticated:
-            # 已登录用户只重发验证码到当前邮箱，不允许通过此接口改邮箱
-            user = request.user
-            email = user.email
-        else:
-            user = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
-            if not user:
-                username_base = email.split('@')[0]
-                username = username_base
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{username_base}{counter}"
-                    counter += 1
-                user = User.objects.create_user(
-                    username=username,
-                    email=email,
-                )
-                user.set_unusable_password()
+        user = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
+        if not user:
+            username_base = email.split('@')[0]
+            username = username_base
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{username_base}{counter}"
+                counter += 1
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+            )
+            user.set_unusable_password()
 
         from django.contrib.auth.hashers import make_password
         user.verification_code = make_password(code)

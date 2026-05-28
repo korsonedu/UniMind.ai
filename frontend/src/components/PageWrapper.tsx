@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 
 export const PageWrapper = ({ children, title, subtitle, action }: any) => {

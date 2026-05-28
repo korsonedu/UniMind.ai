@@ -139,9 +139,14 @@ def initialize_memorix_from_diagnostic(user, kp_scores):
     for kp_id, scores in kp_scores.items():
         accuracy = scores['correct'] / max(scores['total'], 1)
 
-        # 获取该知识点下的题目
+        # 获取该知识点下的题目（优先机构题，回退全局题）
         from quizzes.models import Question
-        questions = Question.objects.filter(knowledge_point_id=kp_id)[:5]
+        from django.db.models import Q
+        qs = Question.objects.filter(knowledge_point_id=kp_id)
+        inst = getattr(user, 'institution', None)
+        if inst:
+            qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+        questions = qs[:5]
 
         for q in questions:
             status, created = UserQuestionStatus.objects.get_or_create(

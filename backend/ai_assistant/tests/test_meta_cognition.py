@@ -55,15 +55,15 @@ class TestAnalyzeUser(SimpleTestCase):
 class TestStoreInsights(SimpleTestCase):
     """Test _store_insights writes to mem0."""
 
-    @patch('ai_assistant.tasks._store_insights')
-    def test_no_institution_skips(self, mock_store):
-        """Users without institution should be skipped."""
-        from ai_assistant.tasks import _store_insights as real_store
+    def test_no_institution_skips(self):
+        """Users without institution should be skipped without error."""
+        from ai_assistant.tasks import _store_insights
         user = MagicMock()
         user.institution_id = None
-        real_store(user, [{"type": "test", "text": "test"}])
+        # Should return early without raising
+        _store_insights(user, [{"type": "test", "text": "test"}])
 
-    @patch('ai_assistant.services.tenant_memory.TenantMemoryManager')
+    @patch('ai_assistant.tasks.TenantMemoryManager')
     def test_stores_each_insight(self, MockManager):
         from ai_assistant.tasks import _store_insights
         user = MagicMock()

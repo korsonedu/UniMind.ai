@@ -31,8 +31,9 @@ export function processMathContent(content: string) {
   let processed = content.replace(/\\\\([a-zA-Z])/g, '\\$1');
 
   // 2. Comprehensive unescape and autocorrect within math blocks ($...$ or $$...$$)
-  processed = processed.replace(/(\$\$?)([\s\S]*?)(\$\$?)/g, (match, p1, p2, p3) => {
-    let math = p2
+  // Use negative lookbehind/lookahead to skip currency $ (e.g. $100, $50 and $100)
+  processed = processed.replace(/(?<![a-zA-Z0-9])(\$\$?)([\s\S]*?)(\$\$?)(?![a-zA-Z0-9])/g, (_match, open, inner, close) => {
+    let math = inner
       .replace(/&gt;/g, '>')
       .replace(/&lt;/g, '<')
       .replace(/&amp;/g, '&')
@@ -41,12 +42,12 @@ export function processMathContent(content: string) {
       .replace(/\\\{/g, '{')
       .replace(/\\\}/g, '}')
       .replace(/\\\^/g, '^');
-      
+
     // Autocorrect: convert /command to \command (e.g., /frac to \frac)
     // Refined: only for lowercase commands of length >= 2 to avoid capturing division like V/D
     math = math.replace(/\/([a-z]{2,})/g, '\\$1');
-    
-    return p1 + math + p3;
+
+    return open + math + close;
   });
 
   // 3. Delimiter Standardization

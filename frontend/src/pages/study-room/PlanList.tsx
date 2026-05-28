@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { formatApiErrorToast } from '@/lib/apiError';
+import { useConfirm } from '@/components/useConfirm';
 
 interface PlanListProps {
   plans: Array<{ id: number; content: string; is_completed: boolean }>;
@@ -24,6 +25,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
   const { plans, allowBroadcast, onRefresh, onStartPlan, onPlanCompleted, onPlanDeleted } = props;
   const [newPlan, setNewPlan] = useState('');
   const { t } = useTranslation('studyRoom');
+  const { confirm, Dialog } = useConfirm();
 
   return (
     <Card className="border-none shadow-sm rounded-2xl md:rounded-3xl bg-card overflow-hidden p-4 md:p-6 md:flex-1 min-h-0 flex flex-col border border-border">
@@ -56,7 +58,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             <button
               onClick={async (e) => {
                 e.stopPropagation();
-                if (!window.confirm(t('planList.deleteConfirm'))) return;
+                if (!(await confirm(t('planList.deleteConfirm')))) return;
                 try {
                   await api.delete(`/users/plans/${p.id}/`);
                   onRefresh();
@@ -112,6 +114,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
           <Plus className="h-3.5 w-3.5"/>
         </Button>
       </div>
+      {Dialog}
     </Card>
   );
 };

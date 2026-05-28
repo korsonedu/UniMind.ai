@@ -1,19 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { useState } from 'react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
-  User as UserIcon, RefreshCcw, Save, Camera, Mail, Lock, Trash2, CreditCard, ArrowRight
+  RefreshCcw, Save, Camera, CreditCard, ArrowRight
 } from 'lucide-react';
 import api from '@/lib/api';
 import { Link } from 'react-router-dom';
-import { cn } from '@/lib/utils';
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,

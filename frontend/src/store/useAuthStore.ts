@@ -69,3 +69,8 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+// Clear in-memory state when 401 interceptor fires
+window.addEventListener('auth:logout', () => {
+  useAuthStore.getState().logout();
+});

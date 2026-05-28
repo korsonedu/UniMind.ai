@@ -112,6 +112,11 @@ class AssistantChatService:
         bot_type = bot.bot_type if bot else 'assistant'
         tools = filter_tools(bot_type, institution, tools)
 
+        # 意图预筛选（仅启用 use_intent_router 的 bot）
+        if profile.use_intent_router and user_message:
+            from ai_engine.tool_router import route_tools
+            tools = route_tools(user_message, tools, recent_messages=history_messages, bot_type=bot_type)
+
         # Force tool usage for agent bots
         forced_tool_choice = "required" if profile.force_tool_choice else "auto"
 

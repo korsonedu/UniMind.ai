@@ -23,6 +23,7 @@ from .views_ai import (
     AIPreviewParseView,
     AdversarialPipelineView, PipelineReviewListView, PipelineReviewActionView,
     WorkbenchTaskListView, WorkbenchTaskStatusView,
+    WorkbenchSaveQuestionsView, WorkbenchLaunchArcView,
 )
 from .views_templates import ExamTemplateListCreateView, ExamTemplateDetailView
 from .views_admin import (
@@ -73,6 +74,8 @@ urlpatterns = [
     # 工作台
     path('workbench/tasks/', WorkbenchTaskListView.as_view(), name='workbench-task-list'),
     path('workbench/tasks/<int:pk>/status/', WorkbenchTaskStatusView.as_view(), name='workbench-task-status'),
+    path('workbench/save-questions/', WorkbenchSaveQuestionsView.as_view(), name='workbench-save-questions'),
+    path('workbench/launch-arc/', WorkbenchLaunchArcView.as_view(), name='workbench-launch-arc'),
     path('admin/prompt-templates/', AdminPromptTemplateListView.as_view(), name='admin-prompt-template-list'),
     path('admin/prompt-templates/detail/', AdminPromptTemplateDetailView.as_view(), name='admin-prompt-template-detail'),
     path('admin/prompt-templates/rollback/', AdminPromptTemplateRollbackView.as_view(), name='admin-prompt-template-rollback'),

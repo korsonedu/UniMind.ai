@@ -12,11 +12,13 @@ import { Bot, Upload, Edit3, Trash2, Plus } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useConfirm } from '@/components/useConfirm';
 import { InstitutionBotSection } from './InstitutionBotSection';
 
 export const BotSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
   const { user } = useAuthStore();
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   // 机构管理员看到可见性开关 + 自定义 bot 管理
   if (user?.is_institution_admin && !user?.is_admin) {
@@ -76,7 +78,7 @@ export const BotSection: React.FC = () => {
   };
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`删除机器人「${name}」？此操作不可撤销。`)) return;
+    if (!(await confirm(`删除机器人「${name}」？此操作不可撤销。`))) return;
     try {
       await api.delete(`/ai/bots/${id}/`);
       toast.success('已删除');
@@ -215,6 +217,7 @@ export const BotSection: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };

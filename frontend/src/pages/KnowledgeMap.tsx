@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { useNavigate } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
 import {
   Target, Maximize2, ZoomIn, ZoomOut, GitMerge,
-  ChevronRight, ChevronDown, BookOpen, FileText, Video,
+  ChevronRight, ChevronDown, FileText, Video,
   Search, X, Layers, List,
 } from 'lucide-react';
 import api from '@/lib/api';
@@ -749,7 +750,7 @@ export const KnowledgeMap: React.FC = () => {
   });
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [treeSearch, setTreeSearch] = useState('');
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile();
   const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph');
   const [graphRootId, setGraphRootId] = useState<string>('all');
@@ -791,15 +792,6 @@ export const KnowledgeMap: React.FC = () => {
       setMasteryData(data || {});
     } catch { /* silently fail if no mastery data */ }
   };
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const media = window.matchMedia('(max-width: 1023px)');
-    const sync = () => setIsMobile(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
 
   const fetchMap = async () => {
     try {

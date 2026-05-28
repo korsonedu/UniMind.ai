@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UniMind — 教育 AI Agent 平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800&family=Instrument+Serif:ital@0;1&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #2563EB;
+    --blue-dark: #1D4ED8;
+    --blue-glow: rgba(37,99,235,0.12);
+    --green: #10B981;
+    --green-bg: rgba(16,185,129,0.08);
+    --orange: #F97316;
+    --orange-bg: rgba(249,115,22,0.08);
+    --pink: #EC4899;
+    --pink-bg: rgba(236,72,153,0.08);
+    --black: #111827;
+    --gray-700: #374151;
+    --gray-500: #6B7280;
+    --gray-400: #9CA3AF;
+    --gray-300: #D1D5DB;
+    --gray-200: #E5E7EB;
+    --gray-100: #F3F4F6;
+    --gray-50: #F9FAFB;
+    --white: #FFFFFF;
+    --red: #EF4444;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Noto Sans SC', 'DM Sans', sans-serif;
+    background: #D0D5DD;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .poster-frame {
+    width: 900px;
+    height: 1200px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 30px 90px rgba(0,0,0,0.18), 0 6px 24px rgba(0,0,0,0.08);
+  }
+  .poster-inner {
+    width: 900px;
+    background: var(--white);
+    position: relative;
+    overflow: visible;
+  }
+  .poster-inner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle at 1px 1px, rgba(37,99,235,0.03) 1px, transparent 0);
+    background-size: 20px 20px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ===== BANNER ===== */
+  .banner {
+    position: relative; z-index: 1;
+    background: linear-gradient(135deg, var(--blue) 0%, var(--blue-dark) 55%, #1E3A8A 100%);
+    padding: 24px 32px 18px;
+    color: var(--white);
+    overflow: hidden;
+  }
+  .banner::after {
+    content: '';
+    position: absolute;
+    top: -60%; right: -8%;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba(255,255,255,0.07) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .banner-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .banner-logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+  .banner-logo span { color: #22D3EE; }
+  .banner-robot { width: 52px; height: 52px; }
+  .banner-tagline {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 14px;
+    font-weight: 300;
+    opacity: 0.85;
+    text-align: right;
+    max-width: 280px;
+    line-height: 1.4;
+  }
+  .value-chain {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+  .vc-node {
+    padding: 4px 14px;
+    border-radius: 14px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .vc-node.green { background: rgba(16,185,129,0.25); color: #A7F3D0; }
+  .vc-node.blue { background: rgba(59,130,246,0.3); color: #BFDBFE; }
+  .vc-node.pink { background: rgba(236,72,153,0.25); color: #FBCFE8; }
+  .vc-node.orange { background: rgba(249,115,22,0.25); color: #FED7AA; }
+  .vc-arrow {
+    width: 20px; height: 2px;
+    background: rgba(255,255,255,0.3);
+    position: relative; flex-shrink: 0;
+  }
+  .vc-arrow::after {
+    content: '';
+    position: absolute;
+    right: -1px; top: -3px;
+    border: 3px solid transparent;
+    border-left: 4px solid rgba(255,255,255,0.3);
+  }
+
+  /* ===== 2x2 GRID ===== */
+  .content {
+    position: relative; z-index: 1;
+    padding: 14px 16px 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .panel {
+    border-radius: 10px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    padding: 14px 14px 14px 17px;
+    position: relative; overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+    border-radius: 10px 0 0 10px;
+  }
+  .panel.blue::before { background: var(--blue); }
+  .panel.orange::before { background: var(--orange); }
+  .panel.pink::before { background: var(--pink); }
+  .panel.green::before { background: var(--green); }
+
+  .panel-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+  .panel.blue .panel-num { color: var(--blue); }
+  .panel.orange .panel-num { color: var(--orange); }
+  .panel.pink .panel-num { color: var(--pink); }
+  .panel.green .panel-num { color: var(--green); }
+
+  .panel-title {
+    font-size: 16px; font-weight: 700;
+    color: var(--black); margin-bottom: 10px; line-height: 1.2;
+  }
+
+  .panel-visual {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .panel-visual:last-child { margin-bottom: 0; }
+
+  .badge-row { display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge {
+    padding: 3px 8px; border-radius: 4px;
+    font-size: 9px; font-weight: 600;
+  }
+  .badge.blue { background: var(--blue-glow); color: var(--blue); }
+  .badge.green { background: var(--green-bg); color: var(--green); }
+  .badge.orange { background: var(--orange-bg); color: var(--orange); }
+  .badge.pink { background: var(--pink-bg); color: var(--pink); }
+  .badge.gray { background: var(--gray-100); color: var(--gray-500); }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 9px; font-weight: 600; margin-top: 6px;
+  }
+  .status-badge.green {
+    background: var(--green-bg); color: var(--green);
+    border: 1px solid rgba(16,185,129,0.2);
+  }
+  .status-badge.blue {
+    background: var(--blue-glow); color: var(--blue);
+    border: 1px solid rgba(37,99,235,0.2);
+  }
+
+  .charts-row { display: flex; gap: 6px; }
+  .mini-chart {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: 6px; padding: 6px; flex: 1; min-width: 0;
+  }
+  .chart-label {
+    font-size: 8px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--gray-500); margin-bottom: 3px;
+  }
+  .chart-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px; font-weight: 700; line-height: 1;
+  }
+  .chart-value.green { color: var(--green); }
+  .chart-value.blue { color: var(--blue); }
+  .chart-value.orange { color: var(--orange); }
+  .chart-value.pink { color: var(--pink); }
+  .chart-change { font-size: 8px; font-weight: 600; margin-top: 2px; }
+  .chart-change.up { color: var(--green); }
+
+  .heatmap {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    gap: 2px; margin-top: 4px;
+  }
+  .heat-cell { aspect-ratio: 1; border-radius: 2px; }
+  .heat-cell.weak { background: #FCA5A5; }
+  .heat-cell.mid { background: #FCD34D; }
+  .heat-cell.strong { background: #6EE7B7; }
+
+  .progress-bar {
+    height: 6px; background: var(--gray-200);
+    border-radius: 3px; overflow: hidden; margin: 6px 0 4px;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--green), var(--blue));
+  }
+
+  .sparkline {
+    display: flex; align-items: flex-end; gap: 2px;
+    height: 18px; margin-top: 4px;
+  }
+  .spark-bar { flex: 1; border-radius: 1px; min-height: 2px; }
+
+  /* ===== BOTTOM ===== */
+  .bottom-section {
+    position: relative; z-index: 1;
+    padding: 0 16px 10px;
+  }
+  .bottom-panel {
+    background: var(--gray-50); border: 1px solid var(--gray-200);
+    border-radius: 10px; padding: 14px;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .section-connectors {
+    position: relative; z-index: 1;
+    padding: 0 16px; height: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .connector-line { display: flex; align-items: center; gap: 3px; }
+  .conn-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--gray-300); }
+  .conn-dot.blue { background: var(--blue); }
+  .conn-dot.green { background: var(--green); }
+  .conn-dot.orange { background: var(--orange); }
+  .conn-dot.pink { background: var(--pink); }
+
+  .vm-cell {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: 6px; padding: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .vm-icon { font-size: 18px; flex-shrink: 0; }
+  .vm-text { flex: 1; }
+  .vm-title { font-size: 11px; font-weight: 700; color: var(--black); }
+  .vm-desc { font-size: 9px; color: var(--gray-500); margin-top: 1px; }
+
+  .footer {
+    position: relative; z-index: 1;
+    padding: 8px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid var(--gray-200);
+  }
+  .footer-logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px; font-weight: 700; color: var(--blue); letter-spacing: -0.5px;
+  }
+  .footer-tagline {
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 12px; font-weight: 300; color: var(--gray-500);
+  }
+  .footer-url {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px; color: var(--gray-400);
+  }
+
+  .circuit-strip {
+    height: 3px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--blue) 0px, var(--blue) 16px,
+      transparent 16px, transparent 20px,
+      var(--green) 20px, var(--green) 28px,
+      transparent 28px, transparent 32px,
+      var(--orange) 32px, var(--orange) 40px,
+      transparent 40px, transparent 44px
+    );
+    opacity: 0.4;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.2); }
+    50% { box-shadow: 0 0 0 4px rgba(37,99,235,0.05); }
+  }
+  .timeline-item.active::before { animation: pulse-glow 2s infinite; }
+</style>
+</head>
+<body>
+
+<div class="poster-frame" id="posterFrame">
+<div class="poster-inner" id="posterInner">
+
+  <!-- BANNER -->
+  <div class="banner">
+    <div class="banner-top">
+      <div class="banner-logo">Uni<span>Mind</span></div>
+      <svg class="banner-robot" viewBox="0 0 64 64" fill="none">
+        <rect x="12" y="22" width="40" height="32" rx="10" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <circle cx="24" cy="36" r="4" fill="#22D3EE"/>
+        <circle cx="40" cy="36" r="4" fill="#22D3EE"/>
+        <rect x="26" y="44" width="12" height="3" rx="1.5" fill="rgba(255,255,255,0.4)"/>
+        <line x1="32" y1="8" x2="32" y2="22" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+        <circle cx="32" cy="8" r="3" fill="#22D3EE"/>
+        <rect x="8" y="30" width="4" height="10" rx="2" fill="rgba(255,255,255,0.3)"/>
+        <rect x="52" y="30" width="4" height="10" rx="2" fill="rgba(255,255,255,0.3)"/>
+      </svg>
+      <div class="banner-tagline">「让每位学生都拥有专属 AI 教练」</div>
+    </div>
+    <div class="value-chain">
+      <div class="vc-node green">诊断</div>
+      <div class="vc-arrow"></div>
+      <div class="vc-node blue">生成</div>
+      <div class="vc-arrow"></div>
+      <div class="vc-node pink">个性化</div>
+      <div class="vc-arrow"></div>
+      <div class="vc-node orange">引导</div>
+    </div>
+  </div>
+
+  <!-- 2x2 GRID -->
+  <div class="content">
+
+    <!-- PANEL 1 — 诊断 -->
+    <div class="panel blue">
+      <div class="panel-num">(1) 诊断</div>
+      <div class="panel-title">知识评估</div>
+
+      <div class="panel-visual">
+        <svg viewBox="0 0 200 100" width="100%" height="60">
+          <polygon points="100,8 180,40 155,90 45,90 20,40" fill="none" stroke="#E5E7EB" stroke-width="0.8"/>
+          <polygon points="100,24 150,48 135,76 65,76 50,48" fill="none" stroke="#E5E7EB" stroke-width="0.6"/>
+          <polygon points="100,40 120,52 115,62 85,62 80,52" fill="none" stroke="#E5E7EB" stroke-width="0.5"/>
+          <text x="100" y="5" text-anchor="middle" font-size="7" fill="#6B7280" font-family="Noto Sans SC">理论</text>
+          <text x="190" y="42" text-anchor="start" font-size="7" fill="#6B7280" font-family="Noto Sans SC">应用</text>
+          <text x="165" y="96" text-anchor="middle" font-size="7" fill="#6B7280" font-family="Noto Sans SC">计算</text>
+          <text x="35" y="96" text-anchor="middle" font-size="7" fill="#6B7280" font-family="Noto Sans SC">分析</text>
+          <text x="10" y="42" text-anchor="end" font-size="7" fill="#6B7280" font-family="Noto Sans SC">综合</text>
+          <polygon points="100,20 160,48 128,76 60,84 40,48" fill="rgba(37,99,235,0.12)" stroke="#2563EB" stroke-width="2"/>
+          <circle cx="100" cy="20" r="3" fill="#2563EB"/>
+          <circle cx="160" cy="48" r="3" fill="#2563EB"/>
+          <circle cx="128" cy="76" r="3" fill="#F97316"/>
+          <circle cx="60" cy="84" r="3" fill="#EF4444"/>
+          <circle cx="40" cy="48" r="3" fill="#2563EB"/>
+        </svg>
+      </div>
+
+      <div class="charts-row">
+        <div class="mini-chart">
+          <div class="chart-label">薄弱点</div>
+          <div class="heatmap">
+            <div class="heat-cell weak"></div><div class="heat-cell weak"></div><div class="heat-cell mid"></div><div class="heat-cell strong"></div><div class="heat-cell strong"></div><div class="heat-cell mid"></div>
+            <div class="heat-cell weak"></div><div class="heat-cell mid"></div><div class="heat-cell strong"></div><div class="heat-cell strong"></div><div class="heat-cell weak"></div><div class="heat-cell strong"></div>
+            <div class="heat-cell strong"></div><div class="heat-cell weak"></div><div class="heat-cell weak"></div><div class="heat-cell mid"></div><div class="heat-cell strong"></div><div class="heat-cell strong"></div>
+          </div>
+        </div>
+        <div class="mini-chart">
+          <div class="chart-label">15 题 / 8 分钟</div>
+          <div class="badge-row" style="margin-top:4px;">
+            <span class="badge blue">自适应</span>
+            <span class="badge gray">Memorix</span>
+          </div>
+        </div>
+      </div>
+      <div class="status-badge green">✓ 画像已建立</div>
+    </div>
+
+    <!-- PANEL 2 — 出题 -->
+    <div class="panel orange">
+      <div class="panel-num">(2) 出题</div>
+      <div class="panel-title">4-Agent<br>管线</div>
+
+      <div class="panel-visual" style="display:flex;flex-direction:column;gap:4px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--orange);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;flex-shrink:0;">A</div>
+          <div style="flex:1;"><div style="font-size:11px;font-weight:700;color:var(--black);">出题</div><div style="font-size:8px;color:var(--gray-500);">生成初始题目</div></div>
+        </div>
+        <div style="width:2px;height:6px;background:var(--gray-200);margin-left:10px;"></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;flex-shrink:0;">B</div>
+          <div style="flex:1;"><div style="font-size:11px;font-weight:700;color:var(--black);">审核</div><div style="font-size:8px;color:var(--gray-500);">深度逻辑检查</div></div>
+        </div>
+        <div style="width:2px;height:6px;background:var(--gray-200);margin-left:10px;"></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--pink);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;flex-shrink:0;">C</div>
+          <div style="flex:1;"><div style="font-size:11px;font-weight:700;color:var(--black);">修正</div><div style="font-size:8px;color:var(--gray-500);">定向修复</div></div>
+        </div>
+        <div style="width:2px;height:6px;background:var(--gray-200);margin-left:10px;"></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;flex-shrink:0;">D</div>
+          <div style="flex:1;"><div style="font-size:11px;font-weight:700;color:var(--black);">分类</div><div style="font-size:8px;color:var(--gray-500);">归档打标</div></div>
+        </div>
+      </div>
+
+      <div class="badge-row" style="margin-top:6px;">
+        <span class="badge orange">选择题</span>
+        <span class="badge blue">简答题</span>
+        <span class="badge pink">论述题</span>
+        <span class="badge green">计算题</span>
+      </div>
+      <div style="margin-top:6px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;color:var(--green);">✓ 质量 98.5%</div>
+    </div>
+
+    <!-- PANEL 3 — 个性化学习 -->
+    <div class="panel pink">
+      <div class="panel-num">(3) 学习</div>
+      <div class="panel-title">自适应<br>学习计划</div>
+
+      <div class="panel-visual">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:16px;height:16px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div><div style="font-size:11px;font-weight:600;color:var(--black);">诊断完成</div><div style="font-size:8px;color:var(--gray-500);">画像已建立</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+          <div style="width:16px;height:16px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div><div style="font-size:11px;font-weight:600;color:var(--black);">基础模块完成</div><div style="font-size:8px;color:var(--gray-500);">12/12 已掌握</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:16px;height:16px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px var(--blue-glow);"></div>
+          <div><div style="font-size:11px;font-weight:600;color:var(--black);">核心概念</div><div style="font-size:8px;color:var(--blue);font-weight:600;">进行中 8/15</div></div>
+        </div>
+      </div>
+
+      <div class="progress-bar"><div class="progress-fill" style="width:47%;"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--gray-500);margin-bottom:6px;">
+        <span>47%</span><span>预计 3 周</span>
+      </div>
+
+      <div class="charts-row">
+        <div class="mini-chart">
+          <div class="chart-label">掌握度</div>
+          <svg viewBox="0 0 100 30" width="100%" height="24">
+            <defs><linearGradient id="mg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2563EB"/><stop offset="100%" stop-color="#2563EB" stop-opacity="0"/></linearGradient></defs>
+            <polygon points="5,26 20,22 35,20 50,16 65,12 80,8 95,4 95,30 5,30" fill="url(#mg)" opacity="0.15"/>
+            <polyline points="5,26 20,22 35,20 50,16 65,12 80,8 95,4" fill="none" stroke="#2563EB" stroke-width="2"/>
+          </svg>
+        </div>
+        <div class="mini-chart">
+          <div class="chart-label">AI vs 自学</div>
+          <div style="display:flex;align-items:flex-end;gap:6px;height:24px;">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;height:10px;background:var(--gray-200);border-radius:2px;"></div><span style="font-size:7px;color:var(--gray-400);">自学</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="width:100%;height:22px;background:linear-gradient(var(--blue),#3B82F6);border-radius:2px;"></div><span style="font-size:7px;color:var(--blue);font-weight:700;">AI +40%</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="status-badge blue">🧠 Memorix 运行中</div>
+    </div>
+
+    <!-- PANEL 4 — AI 辅导 -->
+    <div class="panel green">
+      <div class="panel-num">(4) AI 辅导</div>
+      <div class="panel-title">实时<br>学习支持</div>
+
+      <div class="panel-visual" style="padding:6px;">
+        <div style="max-width:75%;padding:5px 8px;border-radius:8px 8px 8px 3px;font-size:9px;line-height:1.4;margin-bottom:4px;background:var(--gray-100);color:var(--gray-700);">我不太理解供给和需求的关系...</div>
+        <div style="max-width:80%;padding:5px 8px;border-radius:8px 8px 3px 8px;font-size:9px;line-height:1.4;margin-bottom:4px;background:var(--blue);color:var(--white);">苹果 2 元/斤，降到 1 元/斤，买的人变多。这就是需求定律。</div>
+        <div style="max-width:60%;padding:5px 8px;border-radius:8px 8px 8px 3px;font-size:9px;line-height:1.4;background:var(--gray-100);color:var(--gray-700);">懂了！能来道更难的吗？</div>
+      </div>
+
+      <div class="charts-row">
+        <div class="mini-chart">
+          <div class="chart-label">学生数</div>
+          <div class="chart-value blue">1,247</div>
+          <div class="chart-change up">↑ 12%</div>
+        </div>
+        <div class="mini-chart">
+          <div class="chart-label">已出题</div>
+          <div class="chart-value orange">12.4K</div>
+          <div class="sparkline">
+            <div class="spark-bar" style="height:40%;background:var(--orange);opacity:0.3;"></div>
+            <div class="spark-bar" style="height:55%;background:var(--orange);opacity:0.4;"></div>
+            <div class="spark-bar" style="height:70%;background:var(--orange);opacity:0.5;"></div>
+            <div class="spark-bar" style="height:85%;background:var(--orange);opacity:0.7;"></div>
+            <div class="spark-bar" style="height:100%;background:var(--orange);opacity:0.9;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="charts-row" style="margin-top:4px;">
+        <div class="mini-chart">
+          <div class="chart-label">提分</div>
+          <div class="chart-value green">+23%</div>
+        </div>
+        <div class="mini-chart">
+          <div class="chart-label">节省时间</div>
+          <div class="chart-value pink">15h/周</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CONNECTORS -->
+  <div class="section-connectors">
+    <div class="connector-line">
+      <span class="conn-dot blue"></span><span class="conn-dot"></span>
+      <span class="conn-dot orange"></span><span class="conn-dot"></span>
+      <span class="conn-dot pink"></span><span class="conn-dot"></span>
+      <span class="conn-dot green"></span><span class="conn-dot"></span>
+      <span class="conn-dot blue"></span>
+    </div>
+  </div>
+
+  <!-- BOTTOM — VALUE -->
+  <div class="bottom-section">
+    <div class="bottom-panel">
+      <div class="vm-cell"><div class="vm-icon">🎯</div><div class="vm-text"><div class="vm-title">精准诊断</div><div class="vm-desc">8 分钟定位知识盲区</div></div></div>
+      <div class="vm-cell"><div class="vm-icon">⚡</div><div class="vm-text"><div class="vm-title">即时出题</div><div class="vm-desc">4 Agent 质量保证</div></div></div>
+      <div class="vm-cell"><div class="vm-icon">🧠</div><div class="vm-text"><div class="vm-title">自适应学习</div><div class="vm-desc">AI 动态调整难度</div></div></div>
+      <div class="vm-cell"><div class="vm-icon">📊</div><div class="vm-text"><div class="vm-title">实时洞察</div><div class="vm-desc">班级学情分析</div></div></div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-logo">UniMind</div>
+    <div class="footer-tagline">教育，重新定义</div>
+    <div class="footer-url">unimind.ai</div>
+  </div>
+  <div class="circuit-strip"></div>
+
+</div>
+</div>
+
+<script>
+  function fitPoster() {
+    const frame = document.getElementById('posterFrame');
+    const inner = document.getElementById('posterInner');
+    const frameH = 1200;
+    const frameW = 900;
+    inner.style.transform = 'none';
+    const naturalH = inner.scrollHeight;
+    const naturalW = 900;
+    const scaleH = frameH / naturalH;
+    const scaleW = frameW / naturalW;
+    const scale = Math.min(scaleW, scaleH);
+    inner.style.transform = 'scale(' + scale + ')';
+    inner.style.transformOrigin = 'top left';
+    frame.style.height = frameH + 'px';
+    const vw = window.innerWidth - 40;
+    if (vw < frameW) {
+      const responsiveScale = vw / frameW;
+      frame.style.transform = 'scale(' + responsiveScale + ')';
+      frame.style.transformOrigin = 'top center';
+      frame.style.height = (frameH * responsiveScale) + 'px';
+      frame.style.width = (frameW * responsiveScale) + 'px';
+    } else {
+      frame.style.transform = 'none';
+      frame.style.width = frameW + 'px';
+      frame.style.height = frameH + 'px';
+    }
+  }
+  fitPoster();
+  window.addEventListener('resize', fitPoster);
+</script>
+
+</body>
+</html>

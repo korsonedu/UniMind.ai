@@ -18,12 +18,14 @@ import { useUploadStore } from '@/store/useUploadStore';
 import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 const CHUNKED_THRESHOLD = 100 * 1024 * 1024;
 const CHUNK_SIZE = 10 * 1024 * 1024;
 
 export const CourseSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [kpList, setKpList] = useState<any[]>([]);
@@ -147,7 +149,7 @@ export const CourseSection: React.FC = () => {
   };
 
   const handleDelete = async (id: number, title: string) => {
-    if (!confirm(`删除课程「${title}」？此操作不可撤销。`)) return;
+    if (!(await confirm(`删除课程「${title}」？此操作不可撤销。`))) return;
     try {
       await api.delete(`/courses/${id}/`);
       toast.success('已删除');
@@ -370,6 +372,7 @@ export const CourseSection: React.FC = () => {
       {/* Quick Create Dialogs */}
       <QuickCreateKPDialog open={showNewKP} onOpenChange={setShowNewKP} kpList={kpList} onCreated={onKPCreated} onRefresh={fetchData} />
       <QuickCreateAlbumDialog open={showNewAlbum} onOpenChange={setShowNewAlbum} onCreated={onAlbumCreated} onRefresh={fetchData} />
+      {ConfirmDialog}
     </div>
   );
 };

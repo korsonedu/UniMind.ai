@@ -20,7 +20,10 @@
       "Bash(system_profiler SPFontsDataType)",
       "Bash(fc-list :lang=zh)",
       "Bash(npm run *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(make backend-check *)",
+      "Bash(python -c \"from ai_assistant.prompt_sync import load_system_prompt, load_tool_guide, load_personality_template; print\\('OK'\\)\")",
+      "Bash(DJANGO_SETTINGS_MODULE=school_system.settings /Users/eular/Desktop/UniMind/UniMindCode/backend/.venv/bin/python -c \"import django; django.setup\\(\\); from ai_assistant.management.commands.seed_xiaoyu import Command; from ai_assistant.management.commands.seed_exam_agent import Command; print\\('OK'\\)\")"
     ]
   }
 }

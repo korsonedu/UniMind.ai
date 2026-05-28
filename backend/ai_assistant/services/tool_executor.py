@@ -27,6 +27,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'get_active_plan': lambda a: "获取当前学习计划",
         'update_plan_task': lambda a: f"更新计划任务「{a.get('task_id', '')}」",
         'set_dashboard_layout': lambda a: "更新仪表盘布局",
+        'create_dashboard_card': lambda a: f"创建数据卡片「{a.get('title', '')}」",
         'search_courses': lambda a: f"搜索课程「{a.get('query', '')}」",
         'search_asr': lambda a: f"搜索视频字幕「{a.get('query', '')}」",
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
@@ -43,6 +44,52 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         except Exception:
             pass
     return f"执行 {tool_name}"
+
+
+def summarize_tool_result(tool_name: str, result) -> str:
+    """将工具结果转为人类可读摘要（用于前端步骤卡片展示）。"""
+    import json as _json
+    if isinstance(result, str):
+        try:
+            result = _json.loads(result)
+        except Exception:
+            return result[:200]
+
+    if not isinstance(result, dict):
+        return str(result)[:200]
+
+    summaries = {
+        'search_knowledge_tree': lambda r: f"找到 {r.get('found', 0)} 个知识点",
+        'get_user_weak_points': lambda r: f"发现 {len(r.get('weak_points', []))} 个薄弱点",
+        'get_learning_stats': lambda r: f"正确率 {r.get('accuracy', 0)}%，已练 {r.get('total_questions_attempted', 0)} 题",
+        'get_knowledge_mastery_map': lambda r: f"覆盖 {len(r.get('mastery_map', {}))} 个学科",
+        'get_due_reviews': lambda r: f"{r.get('due_count', 0)} 个待复习",
+        'get_exam_history': lambda r: f"共 {len(r.get('exams', []))} 次考试",
+        'get_active_plan': lambda r: (
+            f"「{r.get('title', '')}」进度 {r.get('progress_pct', 0):.0f}%"
+            if r.get('has_active_plan') else "无活跃计划"
+        ),
+        'save_study_plan': lambda r: f"已保存「{r.get('title', '')}」共 {r.get('task_count', 0)} 个任务",
+        'search_courses': lambda r: f"找到 {len(r.get('courses', []))} 门课程",
+        'search_articles': lambda r: f"找到 {len(r.get('articles', []))} 篇文章",
+        'generate_questions': lambda r: f"生成 {len(r.get('questions', []))} 道题",
+        'create_dashboard_card': lambda r: (
+            _json.dumps(r.get('card', {}), ensure_ascii=False) if r.get('status') == 'ok' else r.get('error', '创建失败')
+        ),
+    }
+
+    fn = summaries.get(tool_name)
+    if fn:
+        try:
+            return fn(result)
+        except Exception:
+            pass
+
+    # Fallback: pick first meaningful value
+    for key in ('found', 'count', 'total', 'due_count', 'accuracy'):
+        if key in result:
+            return f"{key}: {result[key]}"
+    return str(result)[:150]
 
 
 class AssistantToolExecutor:
@@ -513,26 +560,65 @@ class PlannerToolExecutor(AssistantToolExecutor):
 
     def _handle_set_dashboard_layout(self, args: Dict) -> Dict:
         """配置 Dashboard 面板布局。"""
-        valid_sections = {'plan', 'stats', 'mastery', 'reviews', 'exams'}
+        valid_sections = {'plan', 'stats', 'mastery', 'reviews', 'exams', 'custom_cards'}
         section_order = args.get('section_order', [])
         highlight = args.get('highlight', '')
 
         # Validate
         section_order = [s for s in section_order if s in valid_sections]
         if not section_order:
-            section_order = ['plan', 'stats', 'mastery', 'reviews', 'exams']
+            section_order = ['plan', 'stats', 'mastery', 'reviews', 'exams', 'custom_cards']
         if highlight and highlight not in valid_sections:
             highlight = ''
 
-        config = {
-            'section_order': section_order,
-            'highlight': highlight or section_order[0] if section_order else 'stats',
-        }
+        # Preserve existing config keys (e.g. custom_cards)
+        config = self.user.dashboard_config or {}
+        config['section_order'] = section_order
+        config['highlight'] = highlight or section_order[0] if section_order else 'stats'
 
         self.user.dashboard_config = config
         self.user.save(update_fields=['dashboard_config'])
 
         return {"dashboard_config": config}
+
+    def _handle_create_dashboard_card(self, args: Dict) -> Dict:
+        """创建自定义数据卡片，持久化到 dashboard_config。支持开放式数据结构。"""
+        title = args.get('title', '').strip()
+        items = args.get('items', [])
+        if not title or not items:
+            return {"error": "标题和数据项不能为空"}
+
+        allowed_item_keys = ('label', 'value', 'trend', 'progress', 'emphasis', 'action_link')
+        card = {
+            "title": title,
+            "items": [
+                {k: item[k] for k in item if k in allowed_item_keys}
+                for item in items[:8]
+            ],
+        }
+        if args.get('subtitle'):
+            card['subtitle'] = args['subtitle']
+        if args.get('cta'):
+            card['cta'] = {
+                'label': args['cta'].get('label', ''),
+                'link': args['cta'].get('link', ''),
+            }
+
+        config = self.user.dashboard_config or {}
+        cards = config.get('custom_cards', [])
+        cards.append(card)
+        config['custom_cards'] = cards[-10:]
+
+        # Ensure custom_cards is in section_order so cards are visible
+        order = config.get('section_order', [])
+        if 'custom_cards' not in order:
+            order.append('custom_cards')
+            config['section_order'] = order
+
+        self.user.dashboard_config = config
+        self.user.save(update_fields=['dashboard_config'])
+
+        return {"status": "ok", "card": card}
 
     def _handle_search_courses(self, args: Dict) -> Dict:
         """搜索课程库，推荐学习资源。"""

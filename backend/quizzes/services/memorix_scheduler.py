@@ -179,7 +179,12 @@ def get_memorix_session_plan(user, minutes: int = 25, preferred_limit: Optional[
     weak_focus_count = active_qs.filter(Q(wrong_count__gte=2) | Q(last_correct=False)).count()
 
     attempted_ids = status_qs.values_list("question_id", flat=True)
-    new_questions_count = Question.objects.exclude(id__in=attempted_ids).count()
+    new_qs = Question.objects.exclude(id__in=attempted_ids)
+    inst = getattr(user, 'institution', None)
+    if inst:
+        from django.db.models import Q
+        new_qs = new_qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+    new_questions_count = new_qs.count()
 
     if preferred_limit is not None:
         recommended_questions = _clamp(_safe_int(preferred_limit, 10), 1, 50)

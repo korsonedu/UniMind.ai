@@ -11,6 +11,7 @@ import { Bot, Upload, Edit3, Trash2, Plus, Eye } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useInstitutionStore, FEATURES } from '@/store/useInstitutionStore';
+import { useConfirm } from '@/components/useConfirm';
 
 interface GlobalBotVis {
   bot_id: number;
@@ -21,6 +22,7 @@ interface GlobalBotVis {
 
 export const InstitutionBotSection: React.FC = () => {
   const { hasFeature, usage } = useInstitutionStore();
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const canCreateCustom = hasFeature(FEATURES.AI_BOT_CUSTOM);
   const customBotQuota = usage?.custom_bot;
 
@@ -100,7 +102,7 @@ export const InstitutionBotSection: React.FC = () => {
   };
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`删除机器人「${name}」？此操作不可撤销。`)) return;
+    if (!(await confirm(`删除机器人「${name}」？此操作不可撤销。`))) return;
     try {
       await api.delete(`/ai/bots/${id}/`);
       toast.success('已删除');
@@ -287,6 +289,7 @@ export const InstitutionBotSection: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {ConfirmDialog}
     </div>
   );
 };
