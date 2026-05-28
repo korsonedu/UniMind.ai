@@ -814,6 +814,7 @@ class InstitutionCreateView(APIView):
         contact_email = (request.data.get('contact_email') or user.email or '').strip()
         contact_phone = (request.data.get('contact_phone') or '').strip()
         description = (request.data.get('description') or '').strip()
+        student_scale = (request.data.get('student_scale') or '').strip()
 
         # Clone knowledge trees for selected subjects
         subject_names = (request.data.get('subject_names') or [])
@@ -836,6 +837,7 @@ class InstitutionCreateView(APIView):
             contact_email=contact_email,
             contact_phone=contact_phone,
             description=description,
+            student_scale=student_scale,
             plan=plan,
             plan_expires_at=compute_expiry(duration_days),
             created_by=user,

@@ -15,7 +15,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
             'contact_name', 'contact_email', 'contact_phone',
             'plan', 'plan_expires_at', 'is_active', 'is_plan_active',
             'max_students', 'student_count', 'features',
-            'custom_domain', 'logo', 'business_type', 'description', 'notes',
+            'custom_domain', 'logo', 'business_type', 'student_scale', 'description', 'notes',
             'created_by', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at',
