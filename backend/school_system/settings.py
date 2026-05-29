@@ -391,3 +391,13 @@ if OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET and OSS_BUCKET_NAME and OSS_ENDPO
         },
     }
     MEDIA_URL = f"https://{OSS_BUCKET_NAME}.{OSS_ENDPOINT}/media/"
+
+# Celery Beat 定时任务
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-expired-chunks': {
+        'task': 'courses.tasks.cleanup_expired_chunks_task',
+        'schedule': crontab(hour=3, minute=0),  # 每天凌晨3点执行
+    },
+}

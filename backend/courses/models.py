@@ -40,6 +40,41 @@ class Course(models.Model):
     def __str__(self):
         return self.title
 
+    def save(self, *args, **kwargs):
+        # 如果是更新操作，清理旧文件
+        if self.pk:
+            try:
+                old_instance = Course.objects.get(pk=self.pk)
+                # 清理旧的视频文件
+                if old_instance.video_file and old_instance.video_file != self.video_file:
+                    old_instance.video_file.delete(save=False)
+                # 清理旧的封面图片
+                if old_instance.cover_image and old_instance.cover_image != self.cover_image:
+                    old_instance.cover_image.delete(save=False)
+                # 清理旧的课件
+                if old_instance.courseware and old_instance.courseware != self.courseware:
+                    old_instance.courseware.delete(save=False)
+                # 清理旧的参考资料
+                if old_instance.reference_materials and old_instance.reference_materials != self.reference_materials:
+                    old_instance.reference_materials.delete(save=False)
+            except Course.DoesNotExist:
+                pass
+
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # 删除时清理所有文件
+        if self.video_file:
+            self.video_file.delete(save=False)
+        if self.cover_image:
+            self.cover_image.delete(save=False)
+        if self.courseware:
+            self.courseware.delete(save=False)
+        if self.reference_materials:
+            self.reference_materials.delete(save=False)
+
+        super().delete(*args, **kwargs)
+
 
 class CourseOutline(models.Model):
     STATUS_CHOICES = [

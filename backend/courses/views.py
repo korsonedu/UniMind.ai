@@ -136,6 +136,28 @@ def _load_meta(upload_id: str):
         return json.load(f)
 
 
+def cleanup_expired_chunks(max_age_hours: int = 24):
+    """清理过期的分片上传临时文件"""
+    import time
+    cutoff = time.time() - (max_age_hours * 3600)
+
+    if not CHUNK_DIR.exists():
+        return
+
+    cleaned_count = 0
+    for upload_dir in CHUNK_DIR.iterdir():
+        if not upload_dir.is_dir():
+            continue
+
+        # 检查目录修改时间
+        if upload_dir.stat().st_mtime < cutoff:
+            shutil.rmtree(upload_dir, ignore_errors=True)
+            cleaned_count += 1
+
+    if cleaned_count > 0:
+        logger.info(f"清理了 {cleaned_count} 个过期的分片上传目录")
+
+
 def _add_chunk_to_meta(upload_id: str, chunk_index: int) -> dict:
     """原子化添加分片索引 — 使用文件锁防止并发覆写。"""
     meta_path = _meta_path(upload_id)
