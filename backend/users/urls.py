@@ -3,7 +3,7 @@ from .views import (
     RegisterView, LoginView, UserDetailView, UpdateProfileView,
     OnlineUserListView, UpdateEmailView, UpdatePasswordView,
     DailyPlanListView, DailyPlanDetailView,
-    ActivateMembershipView, ActivationCodeListView, ActivationCodeDetailView,
+    ActivateMembershipView,
     BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
     DiagnosticGenerateView, DiagnosticSubmitView,
@@ -54,8 +54,6 @@ urlpatterns = [
     path('plans/<int:pk>/', DailyPlanDetailView.as_view(), name='daily-plan-detail'),
 
     # Admin
-    path('admin/codes/', ActivationCodeListView.as_view(), name='activation-codes'),
-    path('admin/codes/<int:pk>/', ActivationCodeDetailView.as_view(), name='activation-code-detail'),
     path('admin/bi/', BIAnalyticsView.as_view(), name='admin-bi'),
     path('admin/superusers/users/', SuperuserUserListView.as_view(), name='admin-superuser-users'),
     path('admin/superusers/users/<int:pk>/', SuperuserUserListView.as_view(), name='admin-superuser-user-detail'),

@@ -38,12 +38,11 @@ export function BillingPage() {
   const [loadingOrders, setLoadingOrders] = useState(false);
 
   const currentTier = user?.institution?.plan || user?.membership_tier || 'free';
-  const isTrial = user?.is_member && currentTier === 'free';
-  const trialEnd = user?.trial_ends_at ? new Date(user?.trial_ends_at) : null;
-  const daysLeft = trialEnd
-    ? Math.max(0, Math.ceil((trialEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    : 0;
+  const isTrial = user?.is_member && user?.membership_source === 'trial';
   const membershipEnd = user?.membership_expires_at ? new Date(user?.membership_expires_at) : null;
+  const daysLeft = membershipEnd
+    ? Math.max(0, Math.ceil((membershipEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0;
 
   useEffect(() => { fetchOrders(); }, []);
 

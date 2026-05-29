@@ -921,7 +921,8 @@ class PlanInviteCodeListView(APIView):
         if plan_filter:
             qs = qs.filter(plan=plan_filter)
         return Response([{
-            'id': c.id, 'code': c.code, 'plan': c.plan,
+            'id': c.id, 'code': c.code, 'code_type': c.code_type,
+            'plan': c.plan,
             'plan_label': c.get_plan_display(),
             'duration_days': c.duration_days,
             'max_uses': c.max_uses, 'used_count': c.used_count,
@@ -936,18 +937,25 @@ class PlanInviteCodeGenerateView(APIView):
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def post(self, request):
+        code_type = (request.data.get('code_type') or 'formal').strip()
+        if code_type not in ('trial', 'formal'):
+            return Response({'error': '无效的码类型'}, status=400)
+
         plan = (request.data.get('plan') or '').strip()
-        if plan not in dict(Institution.PLAN_CHOICES):
+        if code_type == 'trial':
+            plan = 'growth'
+        elif plan not in dict(Institution.PLAN_CHOICES):
             return Response({'error': '无效的方案类型'}, status=400)
 
         count = max(1, min(int(request.data.get('count', 1)), 100))
         max_uses = max(1, min(int(request.data.get('max_uses', 1)), 1000))
-        duration_days = max(DURATION_PERMANENT, min(int(request.data.get('duration_days', DEFAULT_DURATION_DAYS)), MAX_DURATION_DAYS))
+        duration_days = 7 if code_type == 'trial' else max(DURATION_PERMANENT, min(int(request.data.get('duration_days', DEFAULT_DURATION_DAYS)), MAX_DURATION_DAYS))
         note = (request.data.get('note') or '').strip()
 
-        codes = PlanInviteCode.generate(plan=plan, created_by=request.user, count=count, max_uses=max_uses, duration_days=duration_days, note=note)
+        codes = PlanInviteCode.generate(plan=plan, created_by=request.user, count=count, max_uses=max_uses, duration_days=duration_days, note=note, code_type=code_type)
         return Response({
             'generated': len(codes),
+            'code_type': code_type,
             'plan': plan,
             'plan_label': dict(Institution.PLAN_CHOICES).get(plan, plan),
             'duration_days': duration_days,

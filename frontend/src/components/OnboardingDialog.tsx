@@ -17,6 +17,7 @@ const SCALE_OPTIONS = ['1-50', '50-200', '200-500', '500+'] as const;
 export function OnboardingDialog() {
   const { user, updateUser } = useAuthStore();
   const institution = useInstitutionStore(s => s.institution);
+  const fetchFeatures = useInstitutionStore(s => s.fetchFeatures);
   const { t } = useTranslation('onboarding');
 
   const [dismissed, setDismissed] = useState(false);
@@ -30,7 +31,8 @@ export function OnboardingDialog() {
   const [role, setRole] = useState<'student' | 'teacher' | null>(null);
 
   // Form state
-  const [inviteCode, setInviteCode] = useState('');
+  const [activationCode, setActivationCode] = useState('');
+  const [codeActivated, setCodeActivated] = useState(false);
   const [instName, setInstName] = useState('');
   const [studentScale, setStudentScale] = useState('');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
@@ -60,25 +62,25 @@ export function OnboardingDialog() {
   const handleRoleSelect = (selected: 'student' | 'teacher') => {
     setRole(selected);
     if (selected === 'teacher') {
-      goToStep(2);
+      goToStep(2); // activation code step
     }
     // student: stay on step 1, show guidance message
   };
 
-  // Step 2: Validate invite code
-  const handleValidateCode = async () => {
-    if (!inviteCode.trim()) return setError(t('step1.error_empty'));
+  // Step 2: Activate membership code (optional)
+  const handleActivateCode = async () => {
+    if (!activationCode.trim()) return;
     setLoading(true); setError('');
     try {
-      const { data } = await api.post('/users/institutions/validate-invite-code/', {
-        invite_code: inviteCode.trim().toUpperCase(),
-      });
+      const { data } = await api.post('/users/me/activate/', { code: activationCode.trim() });
+      setCodeActivated(true);
+      updateUser(data.user);
       setPlan(data.plan);
       const subRes = await api.get('/quizzes/knowledge-points/subjects/');
       setSubjects(subRes.data.categories || []);
       goToStep(3);
     } catch (err: any) {
-      setError(err.response?.data?.error || t('step1.error_invalid'));
+      setError(err.response?.data?.error || '激活码无效');
     }
     setLoading(false);
   };
@@ -105,13 +107,14 @@ export function OnboardingDialog() {
     setLoading(true); setError('');
     try {
       const { data } = await api.post('/users/institutions/create/', {
-        invite_code: inviteCode.trim().toUpperCase(),
+        invite_code: activationCode.trim().toUpperCase(),
         name: instName.trim(),
         description: description.trim(),
         student_scale: studentScale,
         subject_names: selectedSubjects.length > 0 ? selectedSubjects : ['custom'],
       });
       updateUser({ institution_id: data.institution.id, institution_role: 'owner' });
+      await fetchFeatures();
       setDone(true);
     } catch (err: any) {
       setError(err.response?.data?.error || '创建失败');
@@ -127,13 +130,14 @@ export function OnboardingDialog() {
       ? 'opacity-0 translate-y-5'
       : 'opacity-100 translate-y-0';
 
-  // Step 1 is role selection; teacher steps are 2-6
   const showTeacherProgress = role === 'teacher' && currentStep >= 2;
   const teacherCurrentStep = currentStep - 1; // map step 2-6 to 1-5 for dots
 
+  const shouldShow = !dismissed && user && !user.institution && !user.institution_id && !institution && !user.is_admin;
+
   return (
-    <Dialog open={!dismissed} onOpenChange={(open) => { if (!open) setDismissed(true); }}>
-      <DialogContent className="sm:max-w-lg rounded-2xl border-none shadow-2xl bg-card p-8 min-h-[400px]"
+    <Dialog open={shouldShow} onOpenChange={(open) => { if (!open) setDismissed(true); }}>
+      <DialogContent className="sm:max-w-lg rounded-2xl border-none shadow-2xl bg-card p-8 h-[480px]"
         showClose={false}
       >
         {done ? (
@@ -200,22 +204,27 @@ export function OnboardingDialog() {
                 </div>
               )}
 
-              {/* Step 2: Validate invite code (teacher path) */}
+              {/* Step 2: Activation code (optional, teacher path) */}
               {currentStep === 2 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <h2 className="text-xl font-black">{t('step1.title')}</h2>
-                    <p className="text-sm font-medium text-muted-foreground">{t('step1.subtitle')}</p>
+                    <h2 className="text-xl font-black">输入激活码</h2>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      如果您有激活码，可以在此输入以解锁会员功能
+                    </p>
                   </div>
                   <Input
-                    placeholder={t('step1.placeholder')}
-                    value={inviteCode}
-                    onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                    placeholder="请输入激活码"
+                    value={activationCode}
+                    onChange={e => setActivationCode(e.target.value.toUpperCase())}
                     spellCheck={false}
                     autoComplete="off"
                     className="h-12 rounded-xl font-mono text-center tracking-widest text-lg"
-                    onKeyDown={e => e.key === 'Enter' && handleValidateCode()}
+                    onKeyDown={e => e.key === 'Enter' && handleActivateCode()}
                   />
+                  {codeActivated && (
+                    <p className="text-xs text-emerald-600 font-bold text-center">激活码已使用，会员已开通！</p>
+                  )}
                 </div>
               )}
 
@@ -321,7 +330,7 @@ export function OnboardingDialog() {
               </div>
             )}
 
-            {/* Navigation buttons (teacher path only, step 1 has its own buttons in the cards) */}
+            {/* Navigation buttons */}
             {role === 'teacher' && currentStep >= 2 && (
               <div className="flex gap-2">
                 {currentStep > 2 && currentStep < 6 && (
@@ -331,9 +340,14 @@ export function OnboardingDialog() {
                   </Button>
                 )}
                 {currentStep === 2 && (
-                  <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleValidateCode} disabled={loading}>
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('wizard.next')}
-                  </Button>
+                  <>
+                    <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={() => goToStep(3)}>
+                      跳过
+                    </Button>
+                    <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleActivateCode} disabled={loading || !activationCode.trim()}>
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : '激活'}
+                    </Button>
+                  </>
                 )}
                 {currentStep === 3 && (
                   <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleNameNext}>

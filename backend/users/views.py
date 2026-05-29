@@ -10,9 +10,8 @@ from .serializers import (
     UserSerializer,
     RegisterSerializer,
     DailyPlanSerializer,
-    ActivationCodeSerializer,
 )
-from .models import User, DailyPlan, ActivationCode
+from .models import User, DailyPlan
 from .permissions import IsPlatformAdmin, IsAdmin, is_platform_admin
 from django.utils import timezone
 from django.conf import settings
@@ -29,48 +28,43 @@ security_logger = logging.getLogger('core.security')
 from users.permissions import IsMember  # noqa: F401 — 向后兼容 re-export
 
 class ActivateMembershipView(APIView):
+    """用户输入邀请码激活会员。只查 PlanInviteCode 表。"""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        from .models import PlanInviteCode
+
         code_str = request.data.get('code')
         if not code_str:
             return Response({'error': '请输入激活码'}, status=400)
-        
+
         try:
-            code_obj = ActivationCode.objects.get(code=code_str, is_used=False)
-        except ActivationCode.DoesNotExist:
+            invite = PlanInviteCode.objects.get(code=code_str, is_active=True)
+        except PlanInviteCode.DoesNotExist:
             return Response({'error': '无效或已被使用的激活码'}, status=400)
-        
-        # 激活会员
+
+        if invite.is_exhausted:
+            return Response({'error': '邀请码已达到使用次数上限'}, status=400)
+
         user = request.user
-        user.is_member = True
-        user.save()
-        
-        # 标记激活码已使用
-        code_obj.is_used = True
-        code_obj.used_by = user
-        code_obj.used_at = timezone.now()
-        code_obj.save()
-        
-        return Response({'status': 'ok', 'message': '会员已成功激活', 'user': UserSerializer(user).data})
+        plan = invite.plan
+        duration_days = invite.duration_days
+        code_type = invite.code_type
 
-class ActivationCodeListView(generics.ListCreateAPIView):
-    queryset = ActivationCode.objects.all().order_by('-created_at')
-    serializer_class = ActivationCodeSerializer
-    permission_classes = [IsAdmin]
+        from .services.membership import activate_membership
+        activate_membership(user, plan, duration_days, source='code')
+        # 不在这里消耗邀请码，由 InstitutionCreateView 统一消耗
 
-    def perform_create(self, serializer):
-        # 可以在这里增加逻辑自动生成 code，或者由前端传入
-        serializer.save()
+        return Response({
+            'status': 'ok',
+            'message': '会员已成功激活',
+            'code_type': code_type,
+            'plan': plan,
+            'duration_days': duration_days,
+            'user': UserSerializer(user).data,
+        })
 
-class ActivationCodeDetailView(generics.DestroyAPIView):
-    queryset = ActivationCode.objects.all()
-    serializer_class = ActivationCodeSerializer
-    permission_classes = [IsAdmin]
 
-    def perform_destroy(self, instance):
-        # 删除激活码不撤销已激活会员的权限（避免管理误操作影响用户）
-        instance.delete()
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -119,8 +113,6 @@ class RegisterView(generics.CreateAPIView):
         user.email_verified = True
         user.verification_code = ''
         user.set_password(password)
-        user.trial_ends_at = timezone.now() + timedelta(days=14)
-        user.is_member = True
         user.save()
 
 class UpdateProfileView(generics.UpdateAPIView):

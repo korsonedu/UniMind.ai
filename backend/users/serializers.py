@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, DailyPlan, ActivationCode
+from .models import User, DailyPlan
 
 class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.ReadOnlyField()
@@ -10,8 +10,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'is_member', 'membership_tier', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'institution', 'institution_role', 'institution_id')
-        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'institution_role', 'institution_id')
+        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'is_member', 'membership_tier', 'membership_expires_at', 'membership_source', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'institution', 'institution_role', 'institution_id')
+        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'membership_tier', 'membership_expires_at', 'membership_source', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'institution_role', 'institution_id')
 
     def get_is_admin(self, obj):
         return obj.is_superuser and obj.institution_id is None
@@ -36,13 +36,6 @@ class UserSerializer(serializers.ModelSerializer):
             'student_count': inst.student_count,
             'invite_slug': inst.invite_slug,
         }
-
-class ActivationCodeSerializer(serializers.ModelSerializer):
-    used_by_username = serializers.CharField(source='used_by.username', read_only=True)
-
-    class Meta:
-        model = ActivationCode
-        fields = ('id', 'code', 'is_used', 'used_by', 'used_at', 'duration_days', 'created_at', 'used_by_username')
 
 class DailyPlanSerializer(serializers.ModelSerializer):
     class Meta:

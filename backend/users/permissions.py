@@ -52,13 +52,9 @@ def is_member_or_admin(user) -> bool:
         return True
     if not getattr(user, "is_member", False):
         return False
-    # 检查会员是否到期
     from django.utils import timezone
     now = timezone.now()
     if getattr(user, 'membership_expires_at', None) and user.membership_expires_at < now:
-        return False
-    # trial 到期但没有正式会员
-    if getattr(user, 'trial_ends_at', None) and user.trial_ends_at < now and not getattr(user, 'membership_expires_at', None):
         return False
     return True
 
@@ -133,6 +129,15 @@ class IsMember(permissions.BasePermission):
     message = "您需要先成为学员（激活会员）才能使用此功能。"
 
     def has_permission(self, request, view):
+        return is_member_or_admin(request.user)
+
+
+class IsMemberOrReadOnlyList(permissions.BasePermission):
+    """非会员可读列表接口（逛逛模式），写操作需要会员权限。"""
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return request.user and request.user.is_authenticated
         return is_member_or_admin(request.user)
 
 

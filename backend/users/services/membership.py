@@ -4,7 +4,7 @@ from django.utils import timezone
 
 from users.models import Institution, InstitutionAuditLog
 
-DEFAULT_TRIAL_DAYS = 14
+DEFAULT_TRIAL_DAYS = 7
 
 
 def activate_membership(user, plan, duration_days, source='payment'):
@@ -22,8 +22,8 @@ def activate_membership(user, plan, duration_days, source='payment'):
     user.is_member = True
     user.membership_tier = plan
     user.membership_expires_at = expires_at
-    user.trial_ends_at = None  # paid activation overrides trial
-    user.save(update_fields=['is_member', 'membership_tier', 'membership_expires_at', 'trial_ends_at'])
+    user.membership_source = source
+    user.save(update_fields=['is_member', 'membership_tier', 'membership_expires_at', 'membership_source'])
 
     # Upgrade affiliated institution if applicable
     inst = user.institution
@@ -54,5 +54,5 @@ def downgrade_to_free(user):
     user.is_member = False
     user.membership_tier = 'free'
     user.membership_expires_at = None
-    user.trial_ends_at = None
-    user.save(update_fields=['is_member', 'membership_tier', 'membership_expires_at', 'trial_ends_at'])
+    user.membership_source = None
+    user.save(update_fields=['is_member', 'membership_tier', 'membership_expires_at', 'membership_source'])

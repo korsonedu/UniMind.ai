@@ -219,7 +219,7 @@
   "pricing": {
     "label": "Pricing",
     "title": "Plans for every stage of growth",
-    "subtitle": "All plans include a 14-day full-feature trial. No credit card required. Start free, upgrade when you're ready.",
+    "subtitle": "Get a trial code for 7 days of full-feature access. No credit card required. Start free, upgrade when you're ready.",
     "monthly": "Monthly",
     "annually": "Annual",
     "saveBadge": "Save 23-33%",
@@ -227,14 +227,14 @@
     "annualTotal": "Annual total ¥",
     "popularBadge": "Most Popular",
     "trialTitle": "One Trial, All Features — Zero Risk",
-    "trialDesc": "Every new account gets 14 days of full-feature access (Growth tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
+    "trialDesc": "Use a trial code to unlock 7 days of full-feature access (Growth tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
     "pageTitle": "Choose Your Plan",
-    "pageSubtitle": "14-day full-feature trial · No credit card · Cancel anytime",
+    "pageSubtitle": "Trial code unlocks 7-day access · No credit card · Cancel anytime",
     "backHome": "Back to Home",
     "footer": "First 20 paying customers lock in early-adopter pricing for life.",
     "freeForever": "Free forever",
     "bottomCtaTitle": "Ready to automate your tutoring business?",
-    "bottomCtaSubtitle": "14-day full-feature trial. After that, keep using Free — no card, no catch.",
+    "bottomCtaSubtitle": "Trial code unlocks 7-day access. After that, keep using Free — no card, no catch.",
     "plans": [
       {
         "label": "Free",
@@ -246,13 +246,13 @@
         "label": "Starter",
         "desc": "Growing institution · 1-2 teachers",
         "persona": "For early-stage training centers: AI gen + Memorix review + full reports — automate repetitive lesson prep.",
-        "cta": "14-Day Free Trial"
+        "cta": "7-Day Free Trial"
       },
       {
         "label": "Growth",
         "desc": "Scaling institution · Multi-teacher ops",
         "persona": "For growing centers: multi-teacher collaboration, knowledge graph, mock exams, Q&A — systematic teaching management.",
-        "cta": "14-Day Free Trial"
+        "cta": "7-Day Free Trial"
       },
       {
         "label": "Enterprise",
@@ -424,7 +424,7 @@
       },
       {
         "q": "How does the free trial work?",
-        "a": "You get 14 days of full Growth-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
+        "a": "You get 7 days of full Growth-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
       },
       {
         "q": "What makes Memorix different from Anki or spaced repetition?",

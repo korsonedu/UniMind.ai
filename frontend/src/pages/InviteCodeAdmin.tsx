@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 interface InviteCode {
   id: number;
   code: string;
+  code_type: 'trial' | 'formal';
   plan: string;
   plan_label: string;
   duration_days: number;
@@ -30,6 +31,11 @@ const PLAN_COLORS: Record<string, string> = {
   enterprise: 'bg-amber-500',
 };
 
+const TYPE_COLORS: Record<string, string> = {
+  trial: 'bg-blue-500',
+  formal: 'bg-emerald-600',
+};
+
 const DEFAULT_DURATION_DAYS = 30;
 
 function formatDuration(days: number) {
@@ -39,6 +45,7 @@ function formatDuration(days: number) {
 export default function InviteCodeAdmin() {
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [loading, setLoading] = useState(true);
+  const [codeType, setCodeType] = useState<'trial' | 'formal'>('trial');
   const [plan, setPlan] = useState('growth');
   const [count, setCount] = useState(1);
   const [maxUses, setMaxUses] = useState(1);
@@ -46,6 +53,8 @@ export default function InviteCodeAdmin() {
   const [note, setNote] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState<string[]>([]);
+
+  const isTrial = codeType === 'trial';
 
   const fetchCodes = async () => {
     setLoading(true);
@@ -62,11 +71,16 @@ export default function InviteCodeAdmin() {
     setGenerating(true);
     try {
       const { data } = await api.post('/users/admin/plan-invite-codes/generate/', {
-        plan, count, max_uses: maxUses, duration_days: durationDays, note,
+        code_type: codeType,
+        plan: isTrial ? 'growth' : plan,
+        count,
+        max_uses: maxUses,
+        duration_days: isTrial ? 7 : durationDays,
+        note,
       });
       setGenerated(data.codes.map((c: any) => c.code));
       fetchCodes();
-      toast.success(`已生成 ${data.generated} 条 ${data.plan_label} 邀请码`);
+      toast.success(`已生成 ${data.generated} 条${isTrial ? '试用' : '正式'}邀请码`);
     } catch { toast.error('生成邀请码失败，请重试'); }
     setGenerating(false);
   };
@@ -97,9 +111,18 @@ export default function InviteCodeAdmin() {
         </h3>
         <div className="flex items-end gap-2.5 flex-wrap">
           <div className="space-y-1">
-            <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">方案</p>
-            <select value={plan} onChange={e => setPlan(e.target.value)}
+            <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">类型</p>
+            <select value={codeType} onChange={e => setCodeType(e.target.value as 'trial' | 'formal')}
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-bold">
+              <option value="trial">试用码</option>
+              <option value="formal">正式码</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">方案</p>
+            <select value={isTrial ? 'growth' : plan} onChange={e => setPlan(e.target.value)}
+              disabled={isTrial}
+              className={cn("h-10 rounded-xl border border-border bg-background px-3 text-sm font-bold", isTrial && "opacity-50 cursor-not-allowed")}>
               <option value="free">Free 免费</option>
               <option value="starter">Starter 入门</option>
               <option value="growth">Growth 成长</option>
@@ -108,9 +131,10 @@ export default function InviteCodeAdmin() {
           </div>
           <div className="space-y-1">
             <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">有效期(天)</p>
-            <Input type="number" min={0} max={3650} value={durationDays}
+            <Input type="number" min={0} max={3650} value={isTrial ? 7 : durationDays}
               onChange={e => setDurationDays(parseInt(e.target.value, 10) || 0)}
-              className="h-10 w-22 rounded-xl text-sm" />
+              disabled={isTrial}
+              className={cn("h-10 w-22 rounded-xl text-sm", isTrial && "opacity-50 cursor-not-allowed")} />
           </div>
           <div className="space-y-1">
             <p className="text-[10px] font-bold text-unimind-text-quaternary uppercase">数量</p>
@@ -134,6 +158,9 @@ export default function InviteCodeAdmin() {
             {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : '生成'}
           </Button>
         </div>
+        {isTrial && (
+          <p className="text-[11px] text-muted-foreground mt-2">试用码固定为 Growth 方案 7 天，无法修改。</p>
+        )}
 
         {generated.length > 0 && (
           <div className="mt-4 bg-unimind-green/6 border border-unimind-green/20 rounded-xl p-3">
@@ -171,6 +198,9 @@ export default function InviteCodeAdmin() {
               <div key={c.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-unimind-bg-secondary text-sm">
                 <div className="flex items-center gap-3 min-w-0">
                   <code className="font-mono font-extrabold text-foreground cursor-pointer select-all">{c.code}</code>
+                  <Badge className={cn('text-[10px] font-bold text-white shrink-0', TYPE_COLORS[c.code_type] || 'bg-gray-400')}>
+                    {c.code_type === 'trial' ? '试用' : '正式'}
+                  </Badge>
                   <Badge className={cn('text-[10px] font-bold text-white shrink-0', PLAN_COLORS[c.plan] || 'bg-unimind-text-quaternary')}>
                     {c.plan_label}
                   </Badge>

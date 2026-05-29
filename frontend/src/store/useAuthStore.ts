@@ -15,8 +15,8 @@ interface User {
   show_others_broadcast: boolean;
   is_member: boolean;
   membership_tier?: string;
-  trial_ends_at?: string;
   membership_expires_at?: string;
+  membership_source?: string;
   has_completed_initial_assessment: boolean;
   current_task?: string;
   current_timer_end?: string;

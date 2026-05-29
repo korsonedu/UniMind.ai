@@ -103,7 +103,7 @@
     "growthDesc": "每月 ¥1,299，解锁完整机构教学平台。",
     "enterpriseDesc": "企业旗舰版，解锁品牌定制与 API 接入。",
     "coreFeatures": "{{plan}} 版核心功能",
-    "freeTrialNote": "所有方案均含 14 天免费试用",
+    "freeTrialNote": "所有方案均含 7 天免费试用",
     "upgradeTo": "升级到 {{plan}} 方案",
     "later": "稍后再说",
     "learnMore": "了解详情"

@@ -41,8 +41,7 @@ const PromoPlus: React.FC = () => {
             首批机构专享<br />Growth 方案免费开放
           </h1>
           <p className="text-lg text-[#5a5a7a] max-w-xl mx-auto leading-relaxed">
-            我们正在寻找首批合作伙伴，共同探索 AI 驱动的教育新模式。<br />
-            入选机构将免费获得 Growth 方案全部功能（原价 ¥1,299/月）。
+            我们正在寻找首批合作伙伴，共同探索 AI 驱动的教育新模式。入选机构将免费获得 Growth 方案全部功能，为期 6 个月（原价 ¥1,299/月）。
           </p>
           <div className="flex items-center justify-center gap-4 text-sm">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-semibold text-[#FF3B30]" style={{ background: 'rgba(255,59,48,0.08)' }}>
@@ -65,17 +64,17 @@ const PromoPlus: React.FC = () => {
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">什么是 UniMind？</h2>
             <div className="space-y-4 text-[15px] leading-[1.8] text-[#4a4a6a]">
               <p>
-                UniMind 是面向培训机构的 AI 教育基础设施。我们解决的不是「怎么考试」，而是「怎么教、怎么学」——
-                从出题、组卷、批改、个性化复习到学情分析，讲师之外的一切由 AI 接管。
+                UniMind 不是又一个题库、网课平台或教育管理系统。它是<strong className="text-[#1a1a2e]">以 AI Agent 为核心的学习操作系统</strong>——
+                让 AI 深度嵌入教与学的每一个环节，讲师之外的一切由 AI 接管。
               </p>
               <p>
-                核心能力包括：<strong className="text-[#1a1a2e]">AI 智能出题</strong>（三智能体对抗管线，可用率 85%+）、
-                <strong className="text-[#1a1a2e]">Memorix 自适应复习</strong>（论文级遗忘建模，预测精度比 FSRS v4.5 高 13.7%）、
-                <strong className="text-[#1a1a2e]">知识工作台</strong>（可视化知识图谱，薄弱点一目了然）。
+                核心是两个自治 AI Agent：<strong className="text-[#1a1a2e]">小宇</strong>（学习教练，主动分析学生数据、制定个性化计划）
+                和<strong className="text-[#1a1a2e]">出题助手</strong>（教研搭档，背后 4 个 AI 对抗博弈，出题可用率从 60% 提升至 85%+）。
+                底层是自研的 <strong className="text-[#1a1a2e]">Memorix 自进化记忆调度算法</strong>，比 FSRS v4.5 预测精度高 13.7%，每个学生的记忆模型都在实时进化。
               </p>
               <p>
-                目前已支持金融 431、CPA、法考、医学、高中数理等 10+ 学科，50+ 机构正在使用。
-                输入考点即出题，学生扫码即练——10 分钟完成部署，无需技术团队。
+                已支持考研、CPA、法考、高中数理等 10+ 学科，50+ 机构正在使用。
+                你的老师只管讲课，剩下的 UniMind 全包了。
               </p>
             </div>
           </div>
@@ -115,7 +114,7 @@ const PromoPlus: React.FC = () => {
               <div className="p-6 rounded-2xl border border-[#e5e7eb] bg-white space-y-3">
                 <p className="text-sm font-bold text-[#1a1a2e]">直接注册</p>
                 <p className="text-[13px] text-[#5a5a7a] leading-relaxed">
-                  注册即可获得 14 天全功能体验，到期后自动切换至免费版，数据全部保留。适合快速了解产品。
+                  注册后输入试用码即可体验 7 天全功能，到期后自动切换至免费版，数据全部保留。适合快速了解产品。
                 </p>
                 <button
                   onClick={() => navigate('/register')}
@@ -130,7 +129,7 @@ const PromoPlus: React.FC = () => {
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: '#5b5fef' }}>推荐</span>
                 </div>
                 <p className="text-[13px] text-[#5a5a7a] leading-relaxed">
-                  通过邮件申请，入选后获得 Growth 方案的长期深度使用权限，充分验证 AI 驱动的教学效果。名额有限。
+                  通过邮件申请，入选后免费使用 Growth 方案 6 个月，充分验证 AI 驱动的教学效果。名额有限。
                 </p>
                 <a
                   href="mailto:korsonedu@gmail.com"

@@ -23,12 +23,11 @@ export const Register: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
 
-  // 清除残留 auth 状态，防止 cookie 残留导致验证码发到旧邮箱
+  // 已登录则跳转首页
   useEffect(() => {
     const { token } = useAuthStore.getState();
     if (token) {
-      api.post('/users/logout/').catch(() => {});
-      useAuthStore.getState().logout();
+      navigate('/', { replace: true });
     }
   }, []);
 

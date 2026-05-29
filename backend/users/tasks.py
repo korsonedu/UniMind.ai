@@ -12,37 +12,22 @@ User = get_user_model()
 
 @shared_task
 def check_membership_expiry():
-    """每日检查会员和试用到期，自动降级。"""
+    """每日检查会员到期，自动降级。"""
     now = timezone.now()
 
-    # 试用到期
-    trial_expired = User.objects.filter(
-        is_member=True,
-        membership_tier='free',
-        trial_ends_at__lt=now,
-        membership_expires_at__isnull=True,
-    )
-    count_trial = trial_expired.update(
-        is_member=False,
-        membership_tier='free',
-        trial_ends_at=None,
-    )
-
-    # 付费会员到期
-    paid_expired = User.objects.filter(
+    expired = User.objects.filter(
         is_member=True,
         membership_expires_at__lt=now,
     )
-    count_paid = paid_expired.update(
+    count = expired.update(
         is_member=False,
         membership_tier='free',
         membership_expires_at=None,
-        trial_ends_at=None,
+        membership_source=None,
     )
 
-    total = count_trial + count_paid
-    if total > 0:
-        logger.info("check_membership_expiry: %s users downgraded (trial=%s paid=%s)", total, count_trial, count_paid)
+    if count > 0:
+        logger.info("check_membership_expiry: %s users downgraded", count)
 
 
 @shared_task
@@ -55,9 +40,8 @@ def notify_trial_expiring():
         target_date = now + timedelta(days=days_left)
         users = User.objects.filter(
             is_member=True,
-            membership_tier='free',
-            trial_ends_at__date=target_date.date(),
-            membership_expires_at__isnull=True,
+            membership_source='trial',
+            membership_expires_at__date=target_date.date(),
         )
         for user in users:
             Notification.objects.create(

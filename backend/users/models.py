@@ -33,7 +33,11 @@ class User(AbstractUser):
     email_verified = models.BooleanField(default=False, verbose_name="邮箱已验证")
     membership_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="会员到期时间")
     membership_tier = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="会员等级")
-    trial_ends_at = models.DateTimeField(null=True, blank=True, verbose_name="试用到期时间")
+    trial_ends_at = models.DateTimeField(null=True, blank=True, verbose_name="试用到期时间（已废弃，保留兼容）")
+    MEMBERSHIP_SOURCE_CHOICES = (
+        ('trial', '试用'), ('code', '激活码'), ('payment', '付费'), ('admin', '管理员'),
+    )
+    membership_source = models.CharField(max_length=20, choices=MEMBERSHIP_SOURCE_CHOICES, null=True, blank=True, verbose_name="会员来源")
     verification_code = models.CharField(max_length=128, blank=True, verbose_name="验证码哈希")
     verification_code_sent_at = models.DateTimeField(null=True, blank=True, verbose_name="验证码发送时间")
     institution_role = models.CharField(max_length=20, choices=INSTITUTION_ROLE_CHOICES, default='student', verbose_name="机构内角色")
@@ -60,11 +64,14 @@ class User(AbstractUser):
 
 
 class ActivationCode(models.Model):
+    CODE_TYPE_CHOICES = (('trial', '试用'), ('formal', '正式'))
     code = models.CharField(max_length=50, unique=True, verbose_name="激活码")
+    code_type = models.CharField(max_length=10, choices=CODE_TYPE_CHOICES, default='formal', verbose_name="码类型")
+    membership_tier = models.CharField(max_length=20, choices=User.MEMBERSHIP_TIER_CHOICES, default='growth', verbose_name="会员等级")
+    duration_days = models.IntegerField(default=30, verbose_name="有效天数")
     is_used = models.BooleanField(default=False, verbose_name="是否已使用")
     used_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="used_codes")
     used_at = models.DateTimeField(null=True, blank=True, verbose_name="使用时间")
-    duration_days = models.IntegerField(default=30, verbose_name="有效天数")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -279,7 +286,9 @@ class PlanInviteCode(models.Model):
     PLAN_CHOICES = [
         ('free', 'Free'), ('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise'),
     ]
+    CODE_TYPE_CHOICES = (('trial', '试用'), ('formal', '正式'))
     code = models.CharField(max_length=16, unique=True, verbose_name="邀请码")
+    code_type = models.CharField(max_length=10, choices=CODE_TYPE_CHOICES, default='formal', verbose_name="码类型")
     plan = models.CharField(max_length=20, choices=PLAN_CHOICES, verbose_name="对应方案")
     max_uses = models.IntegerField(default=1, verbose_name="可使用次数")
     used_count = models.IntegerField(default=0, verbose_name="已使用次数")
@@ -318,14 +327,17 @@ class PlanInviteCode(models.Model):
         return True, (plan, duration_days)
 
     @classmethod
-    def generate(cls, plan, created_by, count=1, max_uses=1, duration_days=30, note=''):
+    def generate(cls, plan, created_by, count=1, max_uses=1, duration_days=30, note='', code_type='formal'):
         import secrets, string
+        if code_type == 'trial':
+            plan = 'growth'
+            duration_days = 7
         codes = []
         for _ in range(count):
             raw = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(12))
             code = f'{raw[:4]}-{raw[4:8]}-{raw[8:12]}'
             obj = cls.objects.create(
-                code=code, plan=plan, max_uses=max_uses,
+                code=code, code_type=code_type, plan=plan, max_uses=max_uses,
                 duration_days=duration_days, note=note,
                 created_by=created_by,
             )

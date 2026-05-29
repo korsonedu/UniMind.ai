@@ -10,13 +10,13 @@ export function TrialBanner() {
   const [show, setShow] = useState(true);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 
-  if (!user?.is_member || user?.membership_tier !== 'free') return null;
+  if (!user?.is_member || user?.membership_source !== 'trial') return null;
 
-  const trialEnd = user.trial_ends_at ? new Date(user.trial_ends_at) : null;
-  if (!trialEnd) return null;
+  const expiresAt = user.membership_expires_at ? new Date(user.membership_expires_at) : null;
+  if (!expiresAt) return null;
 
   const now = new Date();
-  const daysLeft = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+  const daysLeft = Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
 
   if (daysLeft === 0) {
     return (

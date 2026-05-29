@@ -21,12 +21,11 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // 清除残留 auth 状态，防止 cookie 残留影响登录
+  // 已登录则跳转首页
   useEffect(() => {
     const { token } = useAuthStore.getState();
     if (token) {
-      api.post('/users/logout/').catch(() => {});
-      useAuthStore.getState().logout();
+      navigate('/', { replace: true });
     }
   }, []);
 
