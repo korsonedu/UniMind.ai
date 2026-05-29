@@ -196,7 +196,7 @@ const Hero: React.FC = () => {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#5b5fef]/20 hover:border-[#5b5fef]/40 transition-all duration-300 cursor-pointer group"
             style={{ background: 'rgba(91,95,239,0.06)' }}
           >
-            <span className="text-[11px] font-semibold text-[#5b5fef]">首批机构专享 · Plus 方案免费开放</span>
+            <span className="text-[11px] font-semibold text-[#5b5fef]">首批机构专享 · Growth 方案免费开放</span>
             <ArrowRight className="h-3 w-3 text-[#5b5fef] group-hover:translate-x-0.5 transition-transform" />
           </button>
 

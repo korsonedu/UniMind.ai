@@ -38,12 +38,18 @@ const PromoPlus: React.FC = () => {
             <span className="text-[12px] font-semibold text-[#5b5fef]">限时活动</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-[#1a1a2e] leading-tight">
-            首批机构专享<br />Plus 方案免费开放
+            首批机构专享<br />Growth 方案免费开放
           </h1>
           <p className="text-lg text-[#5a5a7a] max-w-xl mx-auto leading-relaxed">
             我们正在寻找首批合作伙伴，共同探索 AI 驱动的教育新模式。<br />
-            入选机构将免费获得 Plus 方案全部功能。
+            入选机构将免费获得 Growth 方案全部功能（原价 ¥1,299/月）。
           </p>
+          <div className="flex items-center justify-center gap-4 text-sm">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-semibold text-[#FF3B30]" style={{ background: 'rgba(255,59,48,0.08)' }}>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#FF3B30] animate-pulse" />
+              首批 20 个名额
+            </span>
+          </div>
           <div className="flex items-center justify-center gap-2 text-sm text-[#9ca3af]">
             <Clock className="h-4 w-4" />
             <span>活动截止：2026 年 6 月 30 日</span>
@@ -76,8 +82,8 @@ const PromoPlus: React.FC = () => {
 
           {/* Plus plan highlights */}
           <div className="space-y-8">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef]">Plus Plan Includes</p>
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">Plus 方案包含</h2>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef]">Growth Plan Includes</p>
+            <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">Growth 方案包含</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
                 'AI 出题无限制',
@@ -124,7 +130,7 @@ const PromoPlus: React.FC = () => {
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: '#5b5fef' }}>推荐</span>
                 </div>
                 <p className="text-[13px] text-[#5a5a7a] leading-relaxed">
-                  通过邮件申请，入选后获得 Plus 方案的长期深度使用权限，充分验证 AI 驱动的教学效果。名额有限。
+                  通过邮件申请，入选后获得 Growth 方案的长期深度使用权限，充分验证 AI 驱动的教学效果。名额有限。
                 </p>
                 <a
                   href="mailto:korsonedu@gmail.com"
