@@ -283,9 +283,17 @@ export const XiaoYu: React.FC = () => {
     setMessages(prev => [...prev, userMsg]);
 
     try {
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      try {
+        const stored = localStorage.getItem('auth-storage');
+        if (stored) {
+          const token = JSON.parse(stored)?.state?.token;
+          if (token) authHeaders['Authorization'] = `Token ${token}`;
+        }
+      } catch { /* ignore */ }
       const res = await fetch('/api/ai/chat/stream/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         credentials: 'include',
         body: JSON.stringify({ message: text, bot_id: bot.id }),
       });
