@@ -3,6 +3,13 @@ from django.conf import settings
 
 from quizzes.models import KnowledgePoint
 
+
+def institution_upload_path(instance, filename):
+    """按机构隔离的文件上传路径"""
+    institution_id = instance.institution_id or "public"
+    return f"institutions/{institution_id}/{filename}"
+
+
 class Album(models.Model):
     name = models.CharField(max_length=100, verbose_name="专辑名称")
     description = models.TextField(blank=True, verbose_name="专辑描述")
@@ -18,11 +25,11 @@ class Course(models.Model):
     album_obj = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name="所属专辑")
     description = models.TextField(blank=True, null=True)
     knowledge_point = models.ForeignKey(KnowledgePoint, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name="挂载知识点")
-    cover_image = models.ImageField(upload_to='course_covers/', blank=True, null=True)
-    video_file = models.FileField(upload_to='course_videos/', blank=True, null=True)
+    cover_image = models.ImageField(upload_to=institution_upload_path, blank=True, null=True)
+    video_file = models.FileField(upload_to=institution_upload_path, blank=True, null=True)
     elo_reward = models.IntegerField(default=50, verbose_name="观看完成奖励 ELO")
-    courseware = models.FileField(upload_to='courseware/', blank=True, null=True, verbose_name="课件")
-    reference_materials = models.FileField(upload_to='references/', blank=True, null=True, verbose_name="参考资料")
+    courseware = models.FileField(upload_to=institution_upload_path, blank=True, null=True, verbose_name="课件")
+    reference_materials = models.FileField(upload_to=institution_upload_path, blank=True, null=True, verbose_name="参考资料")
     sort_order = models.PositiveIntegerField(default=0, verbose_name="专辑内排序")
     ai_outline_enabled = models.BooleanField(default=True, verbose_name="启用AI智能大纲")
     institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="courses", verbose_name="所属机构")

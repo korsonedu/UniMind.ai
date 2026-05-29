@@ -300,6 +300,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "ai_assistant.tasks.reflect_teacher_patterns",
         "schedule": 86400.0,
     },
+    "aggregate-platform-stats-daily": {
+        "task": "core.tasks.aggregate_daily_platform_stats",
+        "schedule": 86400.0,
+    },
 }
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "visibility_timeout": _get_int("CELERY_VISIBILITY_TIMEOUT", 3600),
@@ -367,3 +371,23 @@ LOGGING = {
         },
     },
 }
+
+# ============================================================
+# 阿里云 OSS 存储配置
+# ============================================================
+OSS_ACCESS_KEY_ID = os.environ.get("OSS_ACCESS_KEY_ID", "")
+OSS_ACCESS_KEY_SECRET = os.environ.get("OSS_ACCESS_KEY_SECRET", "")
+OSS_BUCKET_NAME = os.environ.get("OSS_BUCKET_NAME", "")
+OSS_ENDPOINT = os.environ.get("OSS_ENDPOINT", "")
+
+# 如果配置了 OSS，使用 OSS 作为默认文件存储
+if OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET and OSS_BUCKET_NAME and OSS_ENDPOINT:
+    STORAGES = {
+        "default": {
+            "BACKEND": "core.oss_storage.OssMediaStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+    MEDIA_URL = f"https://{OSS_BUCKET_NAME}.{OSS_ENDPOINT}/media/"

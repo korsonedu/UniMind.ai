@@ -11,7 +11,7 @@ import re
 from email.utils import formatdate, parsedate_to_datetime
 
 from django.conf import settings
-from django.http import HttpResponse, StreamingHttpResponse
+from django.http import HttpResponse, StreamingHttpResponse, HttpResponseRedirect
 
 
 _RANGE_RE = re.compile(r"bytes\s*=\s*(\d*)\s*-\s*(\d*)")
@@ -58,6 +58,35 @@ def _iter_chunks(file_path: str, offset: int = 0, size: int | None = None, chunk
 
 
 def media_serve(request, path):
+    # 权限检查：租户只能访问自己机构的文件
+    if request.user.is_authenticated:
+        # 检查是否访问的是机构文件
+        if path.startswith('institutions/'):
+            # 提取机构 ID
+            parts = path.split('/')
+            if len(parts) >= 2:
+                institution_id = parts[1]
+
+                # 超管可以访问所有文件
+                if request.user.is_superuser:
+                    pass
+                # 普通用户只能访问自己机构的文件
+                elif hasattr(request.user, 'institution_id') and str(request.user.institution_id) == institution_id:
+                    pass
+                else:
+                    return HttpResponse(status=403)
+
+    # 如果配置了 OSS，使用签名 URL
+    if hasattr(settings, 'OSS_ACCESS_KEY_ID') and settings.OSS_ACCESS_KEY_ID:
+        import oss2
+        auth = oss2.Auth(settings.OSS_ACCESS_KEY_ID, settings.OSS_ACCESS_KEY_SECRET)
+        bucket = oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
+
+        # 生成签名 URL（有效期 1 小时）
+        url = bucket.sign_url('GET', path, 3600)
+        return HttpResponseRedirect(url)
+
+    # 本地文件服务（开发环境）
     document_root = settings.MEDIA_ROOT
 
     full = os.path.normpath(os.path.join(document_root, path))
