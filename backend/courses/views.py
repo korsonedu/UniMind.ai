@@ -18,11 +18,35 @@ from rest_framework import generics, permissions
 from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
+from django.db.models import Q
+from users.permissions import is_platform_admin
+
+
+def _apply_institution_filter(qs, user, request=None):
+    """按机构过滤查询集。支持 preview_institution 参数覆盖超管权限。"""
+    preview_inst_id = None
+    if request:
+        preview_inst_id = request.query_params.get('preview_institution')
+    if preview_inst_id:
+        return qs.filter(Q(institution_id=preview_inst_id) | Q(institution__isnull=True))
+    if is_platform_admin(user):
+        return qs
+    inst = getattr(user, 'institution', None)
+    if inst:
+        return qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+    return qs.filter(institution__isnull=True)
+
+
+def _get_course_for_user(pk, user, request=None):
+    """按机构隔离获取课程，无权限返回 None。"""
+    qs = _apply_institution_filter(Course.objects.all(), user, request)
+    return qs.filter(pk=pk).first()
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.views import IsMember
 from quizzes.utils import safe_int as _safe_int
 from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES
 from core.rate_limit import user_rate_limit
+from core.analytics import record_event
 from users.quota import validate_storage_quota, add_storage_usage
 
 # 上传限流：20 次/小时/用户
@@ -321,7 +345,9 @@ class VideoProgressUpdateView(APIView):
 
     def post(self, request, pk):
         try:
-            course = Course.objects.get(pk=pk)
+            course = _get_course_for_user(pk, request.user, request)
+            if not course:
+                return Response({'error': 'Course not found'}, status=404)
             pos = request.data.get('position', 0)
             finished = request.data.get('is_finished', False)
             
@@ -329,7 +355,9 @@ class VideoProgressUpdateView(APIView):
                 user=request.user,
                 course=course
             )
-            
+            if created:
+                record_event('course_view', user=request.user, properties={'course_id': course.id})
+
             # 如果之前没完成，现在标记为完成，则发放奖励
             elo_added = 0
             if finished and not progress.is_finished:
@@ -338,6 +366,7 @@ class VideoProgressUpdateView(APIView):
                 user.elo_score += course.elo_reward
                 user.save()
                 elo_added = course.elo_reward
+                record_event('course_complete', user=request.user, properties={'course_id': course.id})
             
             progress.last_position = pos
             progress.save()
@@ -353,18 +382,20 @@ class VideoProgressUpdateView(APIView):
 
 @_upload_rl
 class StartupMaterialListCreateView(generics.ListCreateAPIView):
-    queryset = StartupMaterial.objects.all().order_by('-created_at')
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
+
+    def get_queryset(self):
+        return _apply_institution_filter(StartupMaterial.objects.all().order_by('-created_at'), self.request.user, self.request)
 
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("file"))
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
         validate_storage_quota(inst, total_size)
-        serializer.save()
+        serializer.save(institution=inst)
         add_storage_usage(inst, total_size)
 
     def list(self, request, *args, **kwargs):
@@ -383,18 +414,21 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
         })
 
 class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = StartupMaterial.objects.all()
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
         return [permissions.AllowAny()]
+
+    def get_queryset(self):
+        return _apply_institution_filter(StartupMaterial.objects.all(), self.request.user, self.request)
 
 @_upload_rl
 class AlbumListCreateView(generics.ListCreateAPIView):
     serializer_class = AlbumSerializer
     def get_queryset(self):
         from django.db.models import Count
-        return Album.objects.annotate(course_count=Count('courses')).prefetch_related('courses').order_by('-created_at')
+        qs = Album.objects.annotate(course_count=Count('courses')).prefetch_related('courses').order_by('-created_at')
+        return _apply_institution_filter(qs, self.request.user, self.request)
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
@@ -404,24 +438,25 @@ class AlbumListCreateView(generics.ListCreateAPIView):
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
         validate_storage_quota(inst, total_size)
-        serializer.save()
+        serializer.save(institution=inst)
         add_storage_usage(inst, total_size)
 
 class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Album.objects.all()
     serializer_class = AlbumSerializer
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
         return [permissions.AllowAny()]
+
+    def get_queryset(self):
+        return _apply_institution_filter(Album.objects.all(), self.request.user, self.request)
 
 
 class AlbumCoursesView(APIView):
     permission_classes = [IsMember]
 
     def get(self, request, album_id):
-        try:
-            album = Album.objects.get(pk=album_id)
-        except Album.DoesNotExist:
+        album = _apply_institution_filter(Album.objects.all(), request.user, request).filter(pk=album_id).first()
+        if not album:
             return Response({'error': '专辑不存在'}, status=404)
 
         courses = album.courses.all().order_by('sort_order', '-created_at')
@@ -439,15 +474,7 @@ class CourseListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Course.objects.all().order_by('-created_at')
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
+        qs = _apply_institution_filter(Course.objects.all().order_by('-created_at'), user, self.request)
         q = self.request.query_params.get('search')
         kp = self.request.query_params.get('kp')
         if q: qs = qs.filter(title__icontains=q)
@@ -516,17 +543,7 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CourseSerializer
 
     def get_queryset(self):
-        user = self.request.user
-        qs = super().get_queryset()
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
-        return qs
+        return _apply_institution_filter(super().get_queryset(), self.request.user, self.request)
 
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']:
@@ -538,9 +555,8 @@ class CourseOutlineView(APIView):
     permission_classes = [IsMember]
 
     def get(self, request, pk):
-        try:
-            course = Course.objects.get(pk=pk)
-        except Course.DoesNotExist:
+        course = _get_course_for_user(pk, request.user, request)
+        if not course:
             return Response({'error': '课程不存在'}, status=404)
 
         try:
@@ -555,9 +571,8 @@ class CourseOutlineView(APIView):
         })
 
     def post(self, request, pk):
-        try:
-            course = Course.objects.get(pk=pk)
-        except Course.DoesNotExist:
+        course = _get_course_for_user(pk, request.user, request)
+        if not course:
             return Response({'error': '课程不存在'}, status=404)
 
         transcript = getattr(course, 'transcript', None)
@@ -576,9 +591,8 @@ class CourseTranscriptView(APIView):
     permission_classes = [IsMember]
 
     def get(self, request, pk):
-        try:
-            course = Course.objects.get(pk=pk)
-        except Course.DoesNotExist:
+        course = _get_course_for_user(pk, request.user, request)
+        if not course:
             return Response({'error': '课程不存在'}, status=404)
 
         try:
@@ -594,9 +608,8 @@ class CourseTranscriptView(APIView):
         })
 
     def post(self, request, pk):
-        try:
-            course = Course.objects.get(pk=pk)
-        except Course.DoesNotExist:
+        course = _get_course_for_user(pk, request.user, request)
+        if not course:
             return Response({'error': '课程不存在'}, status=404)
 
         from .services.task_dispatcher import dispatch_transcription

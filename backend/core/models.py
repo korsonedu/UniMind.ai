@@ -97,3 +97,125 @@ class SecurityAuditLog(models.Model):
 
     def __str__(self):
         return f"{self.get_event_type_display()} — {self.user or 'anonymous'} @ {self.created_at}"
+
+
+# ──────────────────────────────────────────────
+# 平台数据分析
+# ──────────────────────────────────────────────
+
+class AnalyticsEvent(models.Model):
+    """轻量级业务事件，用于平台统计分析（仅超管可见）。"""
+    EVENT_TYPES = [
+        ('user_login', '用户登录'),
+        ('diagnostic_start', '诊断开始'),
+        ('diagnostic_complete', '诊断完成'),
+        ('quiz_attempt', '刷题'),
+        ('ai_chat_start', 'AI对话开始'),
+        ('course_view', '课程浏览'),
+        ('course_complete', '课程完成'),
+        ('pdf_export', 'PDF导出'),
+        ('invite_click', '邀请链接点击'),
+    ]
+    event_type = models.CharField(max_length=50, choices=EVENT_TYPES, db_index=True)
+    user = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='analytics_events', verbose_name="用户",
+    )
+    institution = models.ForeignKey(
+        'users.Institution', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='analytics_events', verbose_name="机构",
+    )
+    properties = models.JSONField(default=dict, blank=True, verbose_name="属性")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name="发生时间")
+
+    class Meta:
+        db_table = 'core_analytics_event'
+        verbose_name = '分析事件'
+        verbose_name_plural = '分析事件'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['event_type', 'created_at']),
+            models.Index(fields=['institution', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_event_type_display()} — {self.user or '-'} @ {self.created_at:%Y-%m-%d}"
+
+
+class DailyPlatformStats(models.Model):
+    """每日平台聚合指标快照，超管 Dashboard 专用。"""
+    date = models.DateField(unique=True, verbose_name="日期")
+
+    # 用户
+    total_users = models.IntegerField(default=0, verbose_name="总用户数")
+    new_users = models.IntegerField(default=0, verbose_name="新增用户")
+    dau = models.IntegerField(default=0, verbose_name="DAU")
+    wau = models.IntegerField(default=0, verbose_name="WAU")
+    mau = models.IntegerField(default=0, verbose_name="MAU")
+
+    # 机构
+    total_institutions = models.IntegerField(default=0, verbose_name="总机构数")
+    new_institutions = models.IntegerField(default=0, verbose_name="新增机构")
+    active_institutions = models.IntegerField(default=0, verbose_name="活跃机构")
+
+    # 学习
+    quiz_attempts = models.IntegerField(default=0, verbose_name="答题次数")
+    quiz_correct_rate = models.FloatField(default=0, verbose_name="答题正确率")
+    diagnostic_completions = models.IntegerField(default=0, verbose_name="诊断完成数")
+
+    # AI
+    ai_chat_sessions = models.IntegerField(default=0, verbose_name="AI对话次数")
+    ai_calls_total = models.IntegerField(default=0, verbose_name="AI调用总量")
+
+    # 课程
+    course_views = models.IntegerField(default=0, verbose_name="课程浏览")
+    course_completions = models.IntegerField(default=0, verbose_name="课程完成")
+    pdf_exports = models.IntegerField(default=0, verbose_name="PDF导出")
+
+    # 留存
+    day1_retention = models.FloatField(default=0, verbose_name="次日留存率")
+    day7_retention = models.FloatField(default=0, verbose_name="7日留存率")
+    day30_retention = models.FloatField(default=0, verbose_name="30日留存率")
+
+    class Meta:
+        db_table = 'core_daily_platform_stats'
+        verbose_name = '每日平台统计'
+        verbose_name_plural = '每日平台统计'
+        ordering = ['-date']
+
+    def __str__(self):
+        return f"平台统计 {self.date}"
+
+
+class NPSSurvey(models.Model):
+    """NPS 问卷响应，用于产品满意度追踪。"""
+    user = models.ForeignKey(
+        'users.User', on_delete=models.CASCADE,
+        related_name='nps_surveys', verbose_name="用户",
+    )
+    score = models.IntegerField(verbose_name="评分 (0-10)")
+    feedback = models.TextField(blank=True, default='', verbose_name="文字反馈")
+    source = models.CharField(
+        max_length=50, default='auto',
+        choices=[('auto', '系统弹出'), ('manual', '主动提交')],
+        verbose_name="来源",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="提交时间")
+
+    class Meta:
+        db_table = 'core_nps_survey'
+        verbose_name = 'NPS问卷'
+        verbose_name_plural = 'NPS问卷'
+        ordering = ['-created_at']
+
+    @property
+    def category(self):
+        """NPS 分类：promoter / passive / detractor"""
+        if self.score >= 9:
+            return 'promoter'
+        elif self.score >= 7:
+            return 'passive'
+        return 'detractor'
+
+    def __str__(self):
+        return f"NPS {self.score} ({self.category}) — {self.user}"

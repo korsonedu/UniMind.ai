@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import api from '@/lib/api';
+import api, { setPreviewInstitutionId } from '@/lib/api';
 
 interface InstitutionInfo {
   id: number;
@@ -115,6 +115,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
   enterPreview: async (institutionId: number) => {
     try {
       const { data } = await api.get(`/users/institutions/${institutionId}/preview/`);
+      setPreviewInstitutionId(institutionId);
       set({
         previewMode: true,
         previewInstitution: data.institution,
@@ -130,6 +131,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
   },
 
   exitPreview: async () => {
+    setPreviewInstitutionId(null);
     set({ previewMode: false, previewInstitution: null, loading: true });
     try {
       const { data } = await api.get('/users/institution/me/features/');
@@ -152,14 +154,17 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
     return features.includes(feature);
   },
 
-  clear: () => set({
-    isPlatformAdmin: false,
-    institution: null,
-    features: [],
-    loading: false,
-    previewMode: false,
-    previewInstitution: null,
-  }),
+  clear: () => {
+    setPreviewInstitutionId(null);
+    set({
+      isPlatformAdmin: false,
+      institution: null,
+      features: [],
+      loading: false,
+      previewMode: false,
+      previewInstitution: null,
+    });
+  },
 }));
 
 // Feature flag constants matching backend PLAN_FEATURES

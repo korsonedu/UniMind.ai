@@ -5,6 +5,11 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Preview mode: platform admin previews another institution
+let _previewInstitutionId: number | null = null;
+export function setPreviewInstitutionId(id: number | null) { _previewInstitutionId = id; }
+export function getPreviewInstitutionId() { return _previewInstitutionId; }
+
 api.interceptors.request.use((config) => {
   const stored = localStorage.getItem('auth-storage');
   if (stored) {
@@ -17,6 +22,10 @@ api.interceptors.request.use((config) => {
     } catch {
       // ignore parse errors
     }
+  }
+  // Attach preview institution ID for backend filtering
+  if (_previewInstitutionId) {
+    config.params = { ...config.params, preview_institution: _previewInstitutionId };
   }
   return config;
 });

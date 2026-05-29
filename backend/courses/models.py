@@ -7,6 +7,7 @@ class Album(models.Model):
     name = models.CharField(max_length=100, verbose_name="专辑名称")
     description = models.TextField(blank=True, verbose_name="专辑描述")
     cover_image = models.ImageField(upload_to='album_covers/', blank=True, null=True)
+    institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="albums", verbose_name="所属机构")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -95,6 +96,7 @@ class StartupMaterial(models.Model):
     name = models.CharField(max_length=200, verbose_name="资料名称")
     description = models.TextField(blank=True, verbose_name="资料简介")
     file = models.FileField(upload_to='startup_materials/', verbose_name="文件")
+    institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="startup_materials", verbose_name="所属机构")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

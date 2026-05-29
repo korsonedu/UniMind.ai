@@ -12,6 +12,22 @@ from users.quota import validate_storage_quota, add_storage_usage
 
 _upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
 
+
+def _apply_institution_filter(qs, user, request=None):
+    """按机构过滤查询集。支持 preview_institution 参数覆盖超管权限。"""
+    from django.db.models import Q
+    preview_inst_id = None
+    if request:
+        preview_inst_id = request.query_params.get('preview_institution')
+    if preview_inst_id:
+        return qs.filter(Q(institution_id=preview_inst_id) | Q(institution__isnull=True))
+    if is_platform_admin(user):
+        return qs
+    inst = getattr(user, 'institution', None)
+    if inst:
+        return qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+    return qs.filter(institution__isnull=True)
+
 @_upload_rl
 class ArticleListCreateView(generics.ListCreateAPIView):
     serializer_class = ArticleSerializer
@@ -24,16 +40,7 @@ class ArticleListCreateView(generics.ListCreateAPIView):
         return [IsAdminWriteMemberRead()]
 
     def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
-        user = self.request.user
-        qs = Article.objects.all().order_by('-created_at')
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
+        qs = _apply_institution_filter(Article.objects.all().order_by('-created_at'), self.request.user, self.request)
         tag = self.request.query_params.get('tag')
         q = self.request.query_params.get('search')
         kp = self.request.query_params.get('kp')
@@ -92,32 +99,12 @@ class ArticleDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminWriteMemberRead]
 
     def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
-        user = self.request.user
-        qs = super().get_queryset()
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
-        return qs
+        return _apply_institution_filter(super().get_queryset(), self.request.user, self.request)
 
 class ArticleIncrementViewView(generics.GenericAPIView):
 
     def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
-        user = self.request.user
-        qs = Article.objects.all()
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
-        return qs
+        return _apply_institution_filter(Article.objects.all(), self.request.user, self.request)
     permission_classes = [IsMember]
 
     def post(self, request, *args, **kwargs):
