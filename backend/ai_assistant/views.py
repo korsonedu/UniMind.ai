@@ -21,7 +21,7 @@ from users.views import IsMember
 from core.analytics import record_event
 from core.rate_limit import user_rate_limit
 from ai_service import AIService
-from ai_assistant.services.tool_executor import AssistantToolExecutor
+from ai_assistant.services.tool_executor import BaseToolExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
 
     # 获取记忆上下文 (dual-layer: structured + mem0 semantic + adaptive directives)
     from ai_assistant.services.memory_service import build_memory_context
-    memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type if bot else 'assistant')
+    memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type if bot else 'planner')
 
     from ai_assistant.services.chat_dispatch import dispatch_bot_chat
 
@@ -491,16 +491,18 @@ class AIChatStreamView(APIView):
                         'bot': bot,
                         'conversation_id': conversation_id,
                     }
-                    # 写入出题 Agent 的结构化数据
+                    # 写入 Agent 结构化数据（题目、管线、可视化）
+                    metadata = {}
                     if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
-                        msg_kwargs['metadata'] = {
-                            'generated_questions': tool_executor._last_generated,
-                            'pipeline_task_id': getattr(tool_executor, '_last_pipeline_task_id', None),
-                        }
+                        metadata['generated_questions'] = tool_executor._last_generated
+                        metadata['pipeline_task_id'] = getattr(tool_executor, '_last_pipeline_task_id', None)
                     elif hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
-                        msg_kwargs['metadata'] = {
-                            'pipeline_task_id': tool_executor._last_pipeline_task_id,
-                        }
+                        metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
+                    if hasattr(tool_executor, 'pending_visual') and tool_executor.pending_visual:
+                        metadata['visual'] = tool_executor.pending_visual
+                        tool_executor.pending_visual = None
+                    if metadata:
+                        msg_kwargs['metadata'] = metadata
                     await sync_to_async(AIChatMessage.objects.create)(**msg_kwargs)
                     if hasattr(tool_executor, 'user'):
                         await sync_to_async(request.user.refresh_from_db)()

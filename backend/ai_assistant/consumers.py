@@ -57,6 +57,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             return
 
         message = data.get('message', '').strip()
+        conversation_id = data.get('conversation_id')
         logger.info("WS received: bot=%s, user=%s, msg=%s", self.bot_id, self.user, message[:50])
         if not message:
             await self.send(text_data=json.dumps(
@@ -67,7 +68,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
 
         loop = asyncio.get_event_loop()
         try:
-            await loop.run_in_executor(None, self._run_agent, message, loop)
+            await loop.run_in_executor(None, self._run_agent, message, loop, conversation_id)
         except Exception as e:
             logger.exception("Agent WS error: %s", e)
             await self.send(text_data=json.dumps(
@@ -75,7 +76,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 ensure_ascii=False,
             ))
 
-    def _run_agent(self, message: str, loop=None):
+    def _run_agent(self, message: str, loop=None, conversation_id=None):
         """同步方法，在线程池中执行完整的 agent loop。"""
         import asyncio as _asyncio
         from .models import AIChatMessage
@@ -97,12 +98,13 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             send_sync(event)
 
         try:
-            user_msg = self._save_message(self.user, self.bot, 'user', message)
+            user_msg = self._save_message(self.user, self.bot, 'user', message, conversation_id=conversation_id)
 
             history_limit = 10
-            history_objs = AIChatMessage.objects.filter(
-                user=self.user, bot=self.bot,
-            ).order_by('-timestamp')[:history_limit]
+            base_qs = AIChatMessage.objects.filter(user=self.user, bot=self.bot)
+            if conversation_id:
+                base_qs = base_qs.filter(conversation_id=conversation_id)
+            history_objs = base_qs.order_by('-timestamp')[:history_limit]
             history_msgs = [
                 {"role": h.role, "content": h.content}
                 for h in reversed(history_objs)
@@ -149,7 +151,8 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             on_step({"type": "done", "full_content": ai_content})
 
             self._save_message(self.user, self.bot, 'assistant', ai_content,
-                              metadata=self._build_metadata(tool_executor))
+                              metadata=self._build_metadata(tool_executor),
+                              conversation_id=conversation_id)
 
             try:
                 from .services.memory_service import extract_memories_async
@@ -188,9 +191,11 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         except Token.DoesNotExist:
             return None
 
-    def _save_message(self, user, bot, role, content, metadata=None):
+    def _save_message(self, user, bot, role, content, metadata=None, conversation_id=None):
         from .models import AIChatMessage
         msg = AIChatMessage(user=user, bot=bot, role=role, content=content)
+        if conversation_id:
+            msg.conversation_id = conversation_id
         if metadata:
             msg.metadata = metadata
         msg.save()
@@ -202,4 +207,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             metadata['generated_questions'] = tool_executor._last_generated
         if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
             metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
+        if hasattr(tool_executor, 'pending_visual') and tool_executor.pending_visual:
+            metadata['visual'] = tool_executor.pending_visual
+            tool_executor.pending_visual = None  # Clear cache after persisting
         return metadata or None
