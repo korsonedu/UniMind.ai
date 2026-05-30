@@ -57,6 +57,7 @@ def _incr_cache(cache_key: str, window_seconds: int) -> int | None:
             return 1
         return cache.incr(cache_key) or 1
     except Exception:
+        logger.warning("Rate limiting disabled: Redis unavailable")
         return None
 
 

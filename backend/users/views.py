@@ -18,6 +18,7 @@ from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from core.rate_limit import rate_limit, _get_client_ip
 from core.analytics import record_event
+from quizzes.utils import safe_int as _safe_int
 import datetime
 import logging
 import re
@@ -243,8 +244,12 @@ class WeeklyCognitiveReportView(APIView):
         permanent_assets = last_week_qs.filter(stability__gte=21).count()
         conversion_rate = round(permanent_assets / total_attempted * 100, 1) if total_attempted > 0 else 0
 
-        # 2. ELO 战胜率
-        all_active_users = User.objects.filter(is_active=True).order_by('elo_score')
+        # 2. ELO 战胜率（仅同机构用户排名）
+        inst = getattr(user, 'institution', None)
+        if inst:
+            all_active_users = User.objects.filter(is_active=True, institution=inst).order_by('elo_score')
+        else:
+            all_active_users = User.objects.filter(is_active=True, institution__isnull=True).order_by('elo_score')
         total_active = all_active_users.count()
         below_me = all_active_users.filter(elo_score__lt=user.elo_score).count()
         percentile = round(below_me / total_active * 100, 1) if total_active > 0 else 0
@@ -586,8 +591,8 @@ class UpdatePasswordView(generics.UpdateAPIView):
         user = self.get_object()
         old_p = request.data.get('old_password', '')
         new_p = request.data.get('new_password', '')
-        if not new_p or len(str(new_p)) < 6:
-            return Response({'error': '新密码至少需要 6 位'}, status=400)
+        if not new_p or len(str(new_p)) < 8:
+            return Response({'error': '新密码至少需要 8 位'}, status=400)
         if user.check_password(old_p):
             user.set_password(new_p)
             user.save(update_fields=['password'])
@@ -763,7 +768,7 @@ class AnalyticsDashboardView(APIView):
         from core.models import DailyPlatformStats, AnalyticsEvent, NPSSurvey
         from django.db.models import Sum, Count
 
-        days = int(request.query_params.get('days', 30))
+        days = _safe_int(request.query_params.get('days'), 30)
         stats = list(DailyPlatformStats.objects.order_by('-date')[:days])
 
         # ── 汇总 ──
@@ -882,7 +887,7 @@ class AnalyticsExportView(APIView):
         from core.models import DailyPlatformStats, AnalyticsEvent, NPSSurvey
 
         export_type = request.query_params.get('type', 'trends')
-        days = int(request.query_params.get('days', 90))
+        days = _safe_int(request.query_params.get('days'), 90)
 
         if export_type == 'trends':
             return self._export_trends(days)

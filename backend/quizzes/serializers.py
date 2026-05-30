@@ -15,9 +15,10 @@ class KnowledgePointSerializer(serializers.ModelSerializer):
         fields = ('id', 'code', 'name', 'level', 'prefix_category', 'description', 'parent', 'institution', 'order', 'created_at', 'questions_count', 'children')
 
     def get_children(self, obj):
-        if obj.children.exists():
-            return KnowledgePointSerializer(obj.children.all().order_by('order', 'id'), many=True, context=self.context).data
-        return []
+        children = obj.children.all()  # uses prefetch cache when available
+        if not children:
+            return []
+        return KnowledgePointSerializer(children, many=True, context=self.context).data
 
 class QuestionSerializer(serializers.ModelSerializer):
     knowledge_point_detail = KnowledgePointSerializer(source='knowledge_point', read_only=True)
@@ -30,6 +31,10 @@ class QuestionSerializer(serializers.ModelSerializer):
         fields = ('id', 'knowledge_point', 'text', 'q_type', 'subjective_type', 'difficulty_level', 'grading_points', 'options', 'correct_answer', 'ai_answer', 'rubric', 'difficulty', 'institution', 'created_at', 'knowledge_point_detail', 'is_favorite', 'is_mastered', 'difficulty_level_display')
 
     def get_is_favorite(self, obj):
+        status_map = self.context.get('status_map')
+        if status_map is not None:
+            s = status_map.get(obj.pk)
+            return s.is_favorite if s else False
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             status = UserQuestionStatus.objects.filter(user=request.user, question=obj).first()
@@ -37,6 +42,10 @@ class QuestionSerializer(serializers.ModelSerializer):
         return False
 
     def get_is_mastered(self, obj):
+        status_map = self.context.get('status_map')
+        if status_map is not None:
+            s = status_map.get(obj.pk)
+            return s.is_mastered if s else False
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             status = UserQuestionStatus.objects.filter(user=request.user, question=obj).first()

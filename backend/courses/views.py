@@ -376,7 +376,6 @@ class ChunkedUploadCompleteView(APIView):
             total_upload_size += cover_image.size
         if courseware:
             total_upload_size += courseware.size
-        from users.quota import check_and_add_storage_usage
         check_and_add_storage_usage(inst, total_upload_size)
 
         upload_path = _upload_dir(upload_id)
@@ -492,14 +491,13 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
         validate_upload_file(self.request.FILES.get("file"))
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
-        from users.quota import check_and_add_storage_usage
         check_and_add_storage_usage(inst, total_size)
         serializer.save(institution=inst)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 10))
+        page = _safe_int(request.query_params.get('page'), 1)
+        page_size = _safe_int(request.query_params.get('page_size'), 10)
         total = queryset.count()
         offset = (page - 1) * page_size
         paged = queryset[offset:offset + page_size]
@@ -535,7 +533,6 @@ class AlbumListCreateView(generics.ListCreateAPIView):
         validate_upload_file(self.request.FILES.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
-        from users.quota import check_and_add_storage_usage
         check_and_add_storage_usage(inst, total_size)
         serializer.save(institution=inst)
 
@@ -590,8 +587,8 @@ class CourseListCreateView(generics.ListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 10))
+        page = _safe_int(request.query_params.get('page'), 1)
+        page_size = _safe_int(request.query_params.get('page_size'), 10)
         total = queryset.count()
         offset = (page - 1) * page_size
         paged = queryset[offset:offset + page_size]
@@ -611,7 +608,6 @@ class CourseListCreateView(generics.ListCreateAPIView):
         validate_upload_file(files.get("reference_materials"), max_size_bytes=DOC_MAX_BYTES)
         total_size = sum(f.size for f in files.values() if f)
         inst = self.request.user.institution
-        from users.quota import check_and_add_storage_usage
         check_and_add_storage_usage(inst, total_size)
 
         # 支持 OSS 直传：如果提供了 video_file_url，使用 OSS URL

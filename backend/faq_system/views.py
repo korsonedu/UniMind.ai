@@ -23,7 +23,7 @@ class QuestionListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Question.objects.all().select_related('user').prefetch_related('answers__user')
+        qs = Question.objects.all().select_related('user').prefetch_related('answers__user', 'likes', 'followers', 'answers__likes')
         if not is_platform_admin(user):
             inst = getattr(user, 'institution', None)
             if inst:
@@ -49,7 +49,6 @@ class QuestionListCreateView(generics.ListCreateAPIView):
         validate_upload_file(self.request.FILES.get("attachment"))
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
-        from users.quota import check_and_add_storage_usage
         check_and_add_storage_usage(inst, total_size)
         serializer.save(user=self.request.user, institution=inst)
 

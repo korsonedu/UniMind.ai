@@ -15,7 +15,7 @@ class AnswerSerializer(serializers.ModelSerializer):
     def get_is_liked(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.likes.filter(id=request.user.id).exists()
+            return request.user.pk in {u.pk for u in obj.likes.all()}
         return False
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -38,22 +38,23 @@ class QuestionSerializer(serializers.ModelSerializer):
         return AnswerSerializer(qs, many=True, context=self.context).data
 
     def get_first_answer(self, obj):
-        first = obj.answers.first()
+        answers = obj.answers.all()
+        first = next(iter(answers), None)
         if first:
             return AnswerSerializer(first, context=self.context).data
         return None
 
     def get_reply_count(self, obj):
-        return obj.answers.count()
+        return len(obj.answers.all())
 
     def get_is_liked(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.likes.filter(id=request.user.id).exists()
+            return request.user.pk in {u.pk for u in obj.likes.all()}
         return False
 
     def get_is_followed(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
-            return obj.followers.filter(id=request.user.id).exists()
+            return request.user.pk in {u.pk for u in obj.followers.all()}
         return False

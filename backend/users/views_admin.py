@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import PermissionGroup, UserTag, UserAccessProfile
 from .permissions import IsPlatformAdmin
+from quizzes.utils import safe_int as _safe_int
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class SuperuserUserListView(APIView):
             qs = qs.filter(username__icontains=search) | qs.filter(email__icontains=search) | qs.filter(nickname__icontains=search)
         qs = qs.distinct()
 
-        page_size = int(request.query_params.get('page_size', 200))
+        page_size = _safe_int(request.query_params.get('page_size'), 200)
         qs = qs[:page_size]
 
         users_data = []

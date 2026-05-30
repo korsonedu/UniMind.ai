@@ -18,7 +18,7 @@ def _build_annotation_map(user):
 
 class KnowledgePointListView(generics.ListCreateAPIView):
     # 只返回 parent__isnull=True 的顶层，序列化器会通过 children 把下面所有的全拉出来。
-    queryset = KnowledgePoint.objects.filter(parent__isnull=True).order_by('order', 'id')
+    queryset = KnowledgePoint.objects.filter(parent__isnull=True).prefetch_related('children').order_by('order', 'id')
     serializer_class = KnowledgePointSerializer
     permission_classes = [IsAdminWriteMemberRead]
     quota_resource = 'knowledge_point'
