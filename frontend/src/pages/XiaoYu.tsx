@@ -9,10 +9,9 @@ import { Send, Loader2, RotateCcw, Lightbulb, BarChart3, Target, CheckCircle2, C
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 import { useTypewriter } from '@/hooks/useTypewriter';
-import { VisualCanvas, type DashboardData as VisualData } from './xiaoyu/DashboardPanel';
+import { VisualCanvas, type VisualData } from './xiaoyu/DashboardPanel';
 import ChatBubble from '@/components/ChatBubble';
 import { ToolStepMessage } from '@/components/AgentStepCard';
 import { useAgentConversation, type Bot, type Message } from '@/hooks/useAgentConversation';
@@ -98,29 +97,20 @@ const extractLastVisual = (msgs: Message[]): VisualData | null => {
 
 export const XiaoYu: React.FC = () => {
   const setPageHeader = useSystemStore(state => state.setPageHeader);
-  const [dashboard, setDashboard] = useState<VisualData | null>(null);
   const [visual, setVisual] = useState<VisualData | null>(null);
-
-  const fetchDashboard = useCallback(async () => {
-    try {
-      const res = await api.get('/ai/dashboard/');
-      setDashboard(res.data);
-    } catch { toast.error('加载会话失败'); }
-  }, []);
 
   const {
     bot, messages, input, loading, isComposing, initialized, skillOpen,
     sessions, activeSessionId, sessionOpen, chatWidth, dragging, hasConversation,
     scrollRef, inputRef,
     setMessages, setInput, setBot, setInitialized, setSkillOpen, setSessionOpen,
-    setIsComposition, setActiveSessionId, setSessions,
+    setIsComposition, setActiveSessionId, setSessions, setConversationId,
     handleDragStart, handleLoadSession, handleRefreshSessions, handleSend, handleReset,
     handleSkillSelect, groupIntoSessions,
   } = useAgentConversation({
     findBot: (bots) => bots.find((b: Bot) => b.name === '小宇'),
     getExtraPayload: () => ({}),
     onDone: () => {
-      fetchDashboard();
       handleRefreshSessions();
     },
     onStepDone: (step, prev) => {
@@ -153,11 +143,8 @@ export const XiaoYu: React.FC = () => {
       }
       return updated;
     },
-    onStepDoneEffect: (step) => {
-      // Side effects outside state updater
-      if (step.name === 'create_dashboard_card' || step.name === 'create_indicator_card') {
-        fetchDashboard();
-      }
+    onStepDoneEffect: () => {
+      // Reserved for future side effects
     },
     resetMessage: '已开始新对话',
   });
@@ -201,6 +188,9 @@ export const XiaoYu: React.FC = () => {
             const grouped = groupIntoSessions(allMsgs);
             setSessions(grouped);
             const lastMsg = hRes.data[hRes.data.length - 1];
+            if (lastMsg.conversation_id) {
+              setConversationId(lastMsg.conversation_id);
+            }
             const isRecent = Date.now() - new Date(lastMsg.timestamp).getTime() < 86400000;
             if (isRecent && grouped.length > 0) {
               const latest = grouped[grouped.length - 1];
@@ -217,8 +207,7 @@ export const XiaoYu: React.FC = () => {
       }
     };
     init();
-    fetchDashboard();
-  }, [fetchDashboard]);
+  }, []);
 
   if (!initialized) {
     return (
