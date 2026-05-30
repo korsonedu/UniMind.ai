@@ -23,17 +23,17 @@ class AIPreviewParseView(APIView):
     required_feature = 'ai.generate'
     quota_resource = 'ai_question'
     def post(self, request):
-        raw_text = extract_raw_text(
-            request.data.get('raw_text', ''),
-            request.FILES.get('file'),
-        )
-
-        if not raw_text.strip(): return Response({'error': '内容为空'}, status=400)
-
         upload_file = request.FILES.get('file')
         if upload_file:
             from core.file_validation import validate_upload_file
             validate_upload_file(upload_file, allowed_extensions={'.pdf', '.doc', '.docx', '.txt', '.md'})
+
+        raw_text = extract_raw_text(
+            request.data.get('raw_text', ''),
+            upload_file,
+        )
+
+        if not raw_text.strip(): return Response({'error': '内容为空'}, status=400)
         payload = {
             "raw_text_chars": len(raw_text),
             "has_file": bool(upload_file),
@@ -193,7 +193,21 @@ class PipelineReviewActionView(APIView):
         if action not in {'approve', 'reject'}:
             return Response({'error': 'action 必须为 approve 或 reject'}, status=400)
 
-        task = get_object_or_404(ContentPipelineTask, pk=pk, status='review')
+        from users.permissions import is_platform_admin
+        from django.db.models import Q
+        if is_platform_admin(request.user):
+            task = get_object_or_404(ContentPipelineTask, pk=pk, status='review')
+        else:
+            inst = getattr(request.user, 'institution', None)
+            if inst:
+                task = get_object_or_404(
+                    ContentPipelineTask,
+                    Q(created_by__institution=inst) | Q(created_by__institution__isnull=True),
+                    pk=pk, status='review',
+                )
+            else:
+                task = get_object_or_404(ContentPipelineTask, pk=pk, status='review',
+                    created_by__institution__isnull=True)
         if action == 'approve':
             questions = list((task.result or {}).get('questions', []))
             if not questions:
