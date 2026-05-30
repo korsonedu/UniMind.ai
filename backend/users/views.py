@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from core.rate_limit import rate_limit, _get_client_ip
+from core.analytics import record_event
 import datetime
 import logging
 import re
@@ -117,6 +118,7 @@ class RegisterView(generics.CreateAPIView):
 
 class UpdateProfileView(generics.UpdateAPIView):
     serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
     def get_object(self):
         return self.request.user
     
@@ -174,6 +176,8 @@ class BIAnalyticsView(APIView):
         is_platform = is_platform_admin(user)
 
         # 机构管理员只看本机构数据
+        if not is_platform and not inst:
+            return Response({"results": []})
         user_filter = {} if is_platform else {'user__institution': inst}
         qs_filter = {} if is_platform else {'institution': inst}
 
@@ -486,6 +490,7 @@ class LoginView(APIView):
                 user_agent=user_agent,
             )
             security_logger.info("login_success user=%s ip=%s", user.username, client_ip)
+            record_event('user_login', user=user)
             response = Response({
                 'token': token.key,
                 'user': UserSerializer(user).data
@@ -539,8 +544,8 @@ class LogoutView(APIView):
 
 
 class UserDetailView(generics.RetrieveAPIView):
-
     serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
 
@@ -700,6 +705,8 @@ class DiagnosticGenerateView(APIView):
         if not questions:
             return Response({'error': '暂无可用知识点，请联系管理员'}, status=400)
 
+        record_event('diagnostic_start', user=user)
+
         return Response({
             'questions': questions,
             'time_limit_seconds': DIAGNOSTIC_TIME_LIMIT_SECONDS,
@@ -730,6 +737,10 @@ class DiagnosticSubmitView(APIView):
         # 标记诊断完成
         user.has_completed_initial_assessment = True
         user.save(update_fields=['has_completed_initial_assessment'])
+        record_event('diagnostic_complete', user=user, properties={
+            'total_score': sum(1 for r in results if r['is_correct']),
+            'total_questions': len(results),
+        })
 
         total_correct = sum(1 for r in results if r['is_correct'])
         return Response({
@@ -738,3 +749,245 @@ class DiagnosticSubmitView(APIView):
             'results': results,
             'study_plan': study_plan,
         })
+
+
+# ──────────────────────────────────────────────
+# 平台数据分析 Dashboard（仅超管）
+# ──────────────────────────────────────────────
+
+class AnalyticsDashboardView(APIView):
+    """平台数据分析 Dashboard，仅超管可见。"""
+    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+
+    def get(self, request):
+        from core.models import DailyPlatformStats, AnalyticsEvent, NPSSurvey
+        from django.db.models import Sum, Count
+
+        days = int(request.query_params.get('days', 30))
+        stats = list(DailyPlatformStats.objects.order_by('-date')[:days])
+
+        # ── 汇总 ──
+        today = stats[0] if stats else None
+        summary = {
+            'total_users': today.total_users if today else 0,
+            'total_institutions': today.total_institutions if today else 0,
+            'dau': today.dau if today else 0,
+            'mau': today.mau if today else 0,
+            'day7_retention': round(today.day7_retention, 4) if today else 0,
+        }
+
+        # ── 趋势 ──
+        trends = [{
+            'date': str(s.date),
+            'dau': s.dau,
+            'new_users': s.new_users,
+            'new_institutions': s.new_institutions,
+            'quiz_attempts': s.quiz_attempts,
+            'quiz_correct_rate': round(s.quiz_correct_rate, 4),
+            'ai_chat_sessions': s.ai_chat_sessions,
+            'course_views': s.course_views,
+            'day1_retention': round(s.day1_retention, 4),
+        } for s in reversed(stats)]
+
+        # ── 功能使用分布（近 N 天事件计数）──
+        from_date = stats[-1].date if stats else timezone.now().date()
+        event_counts = (
+            AnalyticsEvent.objects
+            .filter(created_at__date__gte=from_date)
+            .values('event_type')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        feature_breakdown = {e['event_type']: e['count'] for e in event_counts}
+
+        # ── 机构 Top 10（按学生数）──
+        from users.models import Institution
+        institution_top = []
+        for inst in Institution.objects.order_by('-created_at')[:10]:
+            student_count = inst.members.filter(institution_role='student').count()
+            institution_top.append({
+                'id': inst.id,
+                'name': inst.name,
+                'student_count': student_count,
+                'created_at': str(inst.created_at.date()),
+            })
+        institution_top.sort(key=lambda x: x['student_count'], reverse=True)
+
+        # ── NPS 汇总 ──
+        nps_data = self._get_nps_summary()
+
+        return Response({
+            'summary': summary,
+            'trends': trends,
+            'feature_breakdown': feature_breakdown,
+            'institution_top': institution_top[:10],
+            'nps': nps_data,
+        })
+
+    def _get_nps_summary(self):
+        from core.models import NPSSurvey
+        from django.db.models import Count
+
+        total = NPSSurvey.objects.count()
+        if total == 0:
+            return {'score': 0, 'total': 0, 'distribution': {}, 'recent_feedback': []}
+
+        distribution = (
+            NPSSurvey.objects
+            .values('score')
+            .annotate(count=Count('id'))
+            .order_by('score')
+        )
+        dist = {d['score']: d['count'] for d in distribution}
+
+        promoters = sum(dist.get(s, 0) for s in [9, 10])
+        detractors = sum(dist.get(s, 0) for s in range(0, 7))
+        nps_score = round((promoters - detractors) / total * 100)
+
+        recent = list(
+            NPSSurvey.objects
+            .select_related('user')
+            .filter(feedback__gt='')
+            .order_by('-created_at')[:5]
+            .values('user__username', 'score', 'feedback', 'created_at')
+        )
+
+        return {
+            'score': nps_score,
+            'total': total,
+            'distribution': {
+                'promoters': promoters,
+                'passives': total - promoters - detractors,
+                'detractors': detractors,
+            },
+            'recent_feedback': [{
+                'username': r['user__username'],
+                'score': r['score'],
+                'feedback': r['feedback'],
+                'created_at': str(r['created_at']),
+            } for r in recent],
+        }
+
+
+class AnalyticsExportView(APIView):
+    """导出平台分析数据为 CSV，仅超管可见。
+
+    GET /api/users/admin/analytics/export/?type=trends|events|nps&days=30
+    """
+    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+
+    def get(self, request):
+        import csv
+        from django.http import HttpResponse
+        from core.models import DailyPlatformStats, AnalyticsEvent, NPSSurvey
+
+        export_type = request.query_params.get('type', 'trends')
+        days = int(request.query_params.get('days', 90))
+
+        if export_type == 'trends':
+            return self._export_trends(days)
+        elif export_type == 'events':
+            return self._export_events(days)
+        elif export_type == 'nps':
+            return self._export_nps()
+        return Response({'error': '无效的导出类型，支持: trends, events, nps'}, status=400)
+
+    def _export_trends(self, days):
+        import csv
+        from django.http import HttpResponse
+        from core.models import DailyPlatformStats
+
+        stats = DailyPlatformStats.objects.order_by('-date')[:days]
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="platform_trends.csv"'
+        writer = csv.writer(response)
+        writer.writerow([
+            '日期', '总用户', '新增用户', 'DAU', 'WAU', 'MAU',
+            '总机构', '新增机构', '活跃机构',
+            '答题次数', '答题正确率', '诊断完成',
+            'AI对话', 'AI调用总量',
+            '课程浏览', '课程完成', 'PDF导出',
+            '次日留存', '7日留存', '30日留存',
+        ])
+        for s in stats:
+            writer.writerow([
+                s.date, s.total_users, s.new_users, s.dau, s.wau, s.mau,
+                s.total_institutions, s.new_institutions, s.active_institutions,
+                s.quiz_attempts, f'{s.quiz_correct_rate:.4f}', s.diagnostic_completions,
+                s.ai_chat_sessions, s.ai_calls_total,
+                s.course_views, s.course_completions, s.pdf_exports,
+                f'{s.day1_retention:.4f}', f'{s.day7_retention:.4f}', f'{s.day30_retention:.4f}',
+            ])
+        return response
+
+    def _export_events(self, days):
+        import csv
+        from django.http import HttpResponse
+        from core.models import AnalyticsEvent
+        from django.utils import timezone
+
+        since = timezone.now() - timezone.timedelta(days=days)
+        events = AnalyticsEvent.objects.filter(created_at__gte=since).order_by('-created_at')[:10000]
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="analytics_events.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['时间', '事件类型', '用户ID', '用户名', '机构ID', '机构名', '属性'])
+        for e in events:
+            writer.writerow([
+                e.created_at, e.get_event_type_display(),
+                e.user_id, getattr(e.user, 'username', ''),
+                e.institution_id, getattr(e.institution, 'name', ''),
+                str(e.properties),
+            ])
+        return response
+
+    def _export_nps(self):
+        import csv
+        from django.http import HttpResponse
+        from core.models import NPSSurvey
+
+        surveys = NPSSurvey.objects.select_related('user').order_by('-created_at')
+        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="nps_surveys.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['时间', '用户', '评分', '分类', '反馈', '来源'])
+        for s in surveys:
+            writer.writerow([
+                s.created_at, s.user.username, s.score,
+                s.category, s.feedback, s.source,
+            ])
+        return response
+
+
+# ──────────────────────────────────────────────
+# NPS 问卷
+# ──────────────────────────────────────────────
+
+class NPSSubmitView(APIView):
+    """提交 NPS 问卷响应。"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from core.models import NPSSurvey
+        score = request.data.get('score')
+        feedback = request.data.get('feedback', '')
+
+        if score is None or not (0 <= int(score) <= 10):
+            return Response({'error': '评分必须为 0-10'}, status=400)
+
+        NPSSurvey.objects.create(
+            user=request.user,
+            score=int(score),
+            feedback=feedback,
+            source=request.data.get('source', 'auto'),
+        )
+        return Response({'status': 'ok'})
+
+
+class NPSStatusView(APIView):
+    """检查当前用户是否需要填写 NPS。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from core.analytics import should_show_nps
+        return Response({'should_show': should_show_nps(request.user)})

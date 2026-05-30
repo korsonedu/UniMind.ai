@@ -5,6 +5,7 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from payments.models import Order, PaymentTransaction
@@ -51,27 +52,35 @@ def create_order(*, user, plan: str, billing_cycle: str, gateway: str, instituti
     )
 
 
-def confirm_order(order: Order, gateway_txn_id: str, raw_callback: dict, amount_cents: int | None = None):
-    """Called when a payment gateway confirms payment."""
-    if order.status == 'paid':
-        logger.warning("Order %s already paid, ignoring duplicate callback", order.id)
-        return
+def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount_cents: int | None = None):
+    """Called when a payment gateway confirms payment.
 
-    PaymentTransaction.objects.create(
-        order=order,
-        gateway=order.gateway,
-        gateway_txn_id=gateway_txn_id,
-        raw_callback=raw_callback,
-        amount_cents=amount_cents,
-        status='success',
-    )
+    Uses select_for_update() to prevent race conditions from concurrent
+    webhook deliveries — only one thread can process a given order.
+    """
+    with transaction.atomic():
+        order = Order.objects.select_for_update().get(id=order_id)
 
-    order.status = 'paid'
-    order.paid_at = timezone.now()
-    order.gateway_order_id = gateway_txn_id
-    order.save(update_fields=['status', 'paid_at', 'gateway_order_id'])
+        if order.status == 'paid':
+            logger.warning("Order %s already paid, ignoring duplicate callback", order.id)
+            return
 
-    # Activate membership for the paying user
+        PaymentTransaction.objects.create(
+            order=order,
+            gateway=order.gateway,
+            gateway_txn_id=gateway_txn_id,
+            raw_callback=raw_callback,
+            amount_cents=amount_cents,
+            status='success',
+        )
+
+        order.status = 'paid'
+        order.paid_at = timezone.now()
+        order.gateway_order_id = gateway_txn_id
+        order.save(update_fields=['status', 'paid_at', 'gateway_order_id'])
+
+    # Activate membership for the paying user (outside the lock to minimise
+    # lock-held time; idempotent if called twice).
     duration = PLAN_DURATION_DAYS.get(order.billing_cycle, 30)
     activate_membership(order.user, order.plan, duration, source=order.gateway)
 

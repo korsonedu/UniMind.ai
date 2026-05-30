@@ -5,28 +5,13 @@ from .serializers import ArticleSerializer
 from django.db.models import Count, F
 from django.utils.decorators import method_decorator
 from users.views import IsMember
-from users.permissions import is_platform_admin, IsAdminWriteMemberRead, HasQuota
+from users.permissions import IsAdminWriteMemberRead, HasQuota
 from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES
 from core.rate_limit import user_rate_limit
-from users.quota import validate_storage_quota, add_storage_usage
+from users.quota import check_and_add_storage_usage
+from core.utils import apply_institution_filter
 
 _upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
-
-
-def _apply_institution_filter(qs, user, request=None):
-    """按机构过滤查询集。支持 preview_institution 参数覆盖超管权限。"""
-    from django.db.models import Q
-    preview_inst_id = None
-    if request:
-        preview_inst_id = request.query_params.get('preview_institution')
-    if preview_inst_id:
-        return qs.filter(Q(institution_id=preview_inst_id) | Q(institution__isnull=True))
-    if is_platform_admin(user):
-        return qs
-    inst = getattr(user, 'institution', None)
-    if inst:
-        return qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-    return qs.filter(institution__isnull=True)
 
 @_upload_rl
 class ArticleListCreateView(generics.ListCreateAPIView):
@@ -40,7 +25,7 @@ class ArticleListCreateView(generics.ListCreateAPIView):
         return [IsAdminWriteMemberRead()]
 
     def get_queryset(self):
-        qs = _apply_institution_filter(Article.objects.all().order_by('-created_at'), self.request.user, self.request)
+        qs = apply_institution_filter(Article.objects.all().order_by('-created_at'), self.request.user, self.request)
         tag = self.request.query_params.get('tag')
         q = self.request.query_params.get('search')
         kp = self.request.query_params.get('kp')
@@ -89,9 +74,9 @@ class ArticleListCreateView(generics.ListCreateAPIView):
         validate_upload_file(self.request.FILES.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
-        validate_storage_quota(inst, total_size)
+        from users.quota import check_and_add_storage_usage
+        check_and_add_storage_usage(inst, total_size)
         serializer.save(author=self.request.user, institution=inst)
-        add_storage_usage(inst, total_size)
 
 class ArticleDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Article.objects.all()
@@ -99,12 +84,12 @@ class ArticleDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminWriteMemberRead]
 
     def get_queryset(self):
-        return _apply_institution_filter(super().get_queryset(), self.request.user, self.request)
+        return apply_institution_filter(super().get_queryset(), self.request.user, self.request)
 
 class ArticleIncrementViewView(generics.GenericAPIView):
 
     def get_queryset(self):
-        return _apply_institution_filter(Article.objects.all(), self.request.user, self.request)
+        return apply_institution_filter(Article.objects.all(), self.request.user, self.request)
     permission_classes = [IsMember]
 
     def post(self, request, *args, **kwargs):

@@ -58,6 +58,10 @@ def _iter_chunks(file_path: str, offset: int = 0, size: int | None = None, chunk
 
 
 def media_serve(request, path):
+    # 权限检查：机构文件必须登录才能访问
+    if path.startswith('institutions/') and not request.user.is_authenticated:
+        return HttpResponse(status=401)
+
     # 权限检查：租户只能访问自己机构的文件
     if request.user.is_authenticated:
         # 检查是否访问的是机构文件

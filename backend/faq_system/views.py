@@ -10,7 +10,7 @@ from users.views import IsMember
 from users.permissions import is_platform_admin, is_institution_admin
 from core.file_validation import validate_upload_file
 from core.rate_limit import user_rate_limit
-from users.quota import validate_storage_quota, add_storage_usage
+from users.quota import check_and_add_storage_usage
 
 _upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
 
@@ -49,9 +49,9 @@ class QuestionListCreateView(generics.ListCreateAPIView):
         validate_upload_file(self.request.FILES.get("attachment"))
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
-        validate_storage_quota(inst, total_size)
+        from users.quota import check_and_add_storage_usage
+        check_and_add_storage_usage(inst, total_size)
         serializer.save(user=self.request.user, institution=inst)
-        add_storage_usage(inst, total_size)
 
 class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Question.objects.all()
@@ -239,7 +239,9 @@ class AnswerActionView(APIView):
         user = request.user
         if not is_platform_admin(user):
             inst = getattr(user, 'institution', None)
-            if inst and answer.question.institution != inst:
+            if not inst:
+                return Response({'detail': '无权操作'}, status=403)
+            if answer.question.institution != inst:
                 return Response({'detail': '无权操作'}, status=403)
 
         # Like Logic (Any User)

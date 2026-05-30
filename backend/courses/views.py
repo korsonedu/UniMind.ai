@@ -18,28 +18,13 @@ from rest_framework import generics, permissions
 from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
-from django.db.models import Q
-from users.permissions import is_platform_admin
 
-
-def _apply_institution_filter(qs, user, request=None):
-    """按机构过滤查询集。支持 preview_institution 参数覆盖超管权限。"""
-    preview_inst_id = None
-    if request:
-        preview_inst_id = request.query_params.get('preview_institution')
-    if preview_inst_id:
-        return qs.filter(Q(institution_id=preview_inst_id) | Q(institution__isnull=True))
-    if is_platform_admin(user):
-        return qs
-    inst = getattr(user, 'institution', None)
-    if inst:
-        return qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-    return qs.filter(institution__isnull=True)
+from core.utils import apply_institution_filter
 
 
 def _get_course_for_user(pk, user, request=None):
     """按机构隔离获取课程，无权限返回 None。"""
-    qs = _apply_institution_filter(Course.objects.all(), user, request)
+    qs = apply_institution_filter(Course.objects.all(), user, request)
     return qs.filter(pk=pk).first()
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.views import IsMember
@@ -47,7 +32,7 @@ from quizzes.utils import safe_int as _safe_int
 from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES
 from core.rate_limit import user_rate_limit
 from core.analytics import record_event
-from users.quota import validate_storage_quota, add_storage_usage
+from users.quota import check_and_add_storage_usage
 
 # 上传限流：20 次/小时/用户
 _upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
@@ -186,6 +171,14 @@ class OSSSignatureURLView(APIView):
         if not file_name:
             return Response({"error": "缺少文件名"}, status=400)
 
+        # 文件类型校验（OSS 直传也必须经过白名单检查）
+        from core.file_validation import DANGEROUS_EXTENSIONS, ALLOWED_UPLOAD_TYPES
+        ext = os.path.splitext(file_name)[1].lower()
+        if ext in DANGEROUS_EXTENSIONS:
+            return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
+        if ext not in ALLOWED_UPLOAD_TYPES:
+            return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
+
         # 生成唯一的文件路径
         institution_id = request.user.institution_id or "public"
         ext = os.path.splitext(file_name)[1]
@@ -220,6 +213,16 @@ class OSSUploadCompleteView(APIView):
 
         if not object_key:
             return Response({"error": "缺少 object_key"}, status=400)
+
+        # P1-8: 校验 object_key 归属当前用户机构，防止跨机构文件枚举/覆盖
+        user_inst_id = getattr(request.user, 'institution_id', None)
+        if user_inst_id:
+            expected_prefix = f"institutions/{user_inst_id}/"
+            if not object_key.startswith(expected_prefix):
+                return Response({"error": "无权操作此文件"}, status=403)
+        else:
+            if not object_key.startswith("public/"):
+                return Response({"error": "无权操作此文件"}, status=403)
 
         # 验证文件是否存在
         import oss2
@@ -298,6 +301,7 @@ class ChunkedUploadInitView(APIView):
         )
 
 
+@_upload_rl
 class ChunkedUploadChunkView(APIView):
     permission_classes = [IsAdmin]
 
@@ -365,14 +369,15 @@ class ChunkedUploadCompleteView(APIView):
         validate_upload_file(cover_image, max_size_bytes=IMAGE_MAX_BYTES)
         validate_upload_file(courseware, max_size_bytes=DOC_MAX_BYTES)
 
-        # 存储配额预检
+        # 存储配额预检（原子化：检查+递增，解决 TOCTOU 竞态）
         inst = request.user.institution
         total_upload_size = _safe_int(meta.get("total_size"), 0)
         if cover_image:
             total_upload_size += cover_image.size
         if courseware:
             total_upload_size += courseware.size
-        validate_storage_quota(inst, total_upload_size)
+        from users.quota import check_and_add_storage_usage
+        check_and_add_storage_usage(inst, total_upload_size)
 
         upload_path = _upload_dir(upload_id)
         merged_path = upload_path / "merged_video.bin"
@@ -404,7 +409,6 @@ class ChunkedUploadCompleteView(APIView):
             with merged_path.open("rb") as merged_file:
                 course.video_file.save(original_name, File(merged_file), save=False)
             course.save()
-            add_storage_usage(inst, total_upload_size)
         except Exception as exc:
             return Response({"error": f"合并失败：{exc}"}, status=500)
         finally:
@@ -482,15 +486,15 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
         return [permissions.AllowAny()]
 
     def get_queryset(self):
-        return _apply_institution_filter(StartupMaterial.objects.all().order_by('-created_at'), self.request.user, self.request)
+        return apply_institution_filter(StartupMaterial.objects.all().order_by('-created_at'), self.request.user, self.request)
 
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("file"))
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
-        validate_storage_quota(inst, total_size)
+        from users.quota import check_and_add_storage_usage
+        check_and_add_storage_usage(inst, total_size)
         serializer.save(institution=inst)
-        add_storage_usage(inst, total_size)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -514,7 +518,7 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [permissions.AllowAny()]
 
     def get_queryset(self):
-        return _apply_institution_filter(StartupMaterial.objects.all(), self.request.user, self.request)
+        return apply_institution_filter(StartupMaterial.objects.all(), self.request.user, self.request)
 
 @_upload_rl
 class AlbumListCreateView(generics.ListCreateAPIView):
@@ -522,7 +526,7 @@ class AlbumListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         from django.db.models import Count
         qs = Album.objects.annotate(course_count=Count('courses')).prefetch_related('courses').order_by('-created_at')
-        return _apply_institution_filter(qs, self.request.user, self.request)
+        return apply_institution_filter(qs, self.request.user, self.request)
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
         return [permissions.AllowAny()]
@@ -531,9 +535,9 @@ class AlbumListCreateView(generics.ListCreateAPIView):
         validate_upload_file(self.request.FILES.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
-        validate_storage_quota(inst, total_size)
+        from users.quota import check_and_add_storage_usage
+        check_and_add_storage_usage(inst, total_size)
         serializer.save(institution=inst)
-        add_storage_usage(inst, total_size)
 
 class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AlbumSerializer
@@ -542,14 +546,14 @@ class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [permissions.AllowAny()]
 
     def get_queryset(self):
-        return _apply_institution_filter(Album.objects.all(), self.request.user, self.request)
+        return apply_institution_filter(Album.objects.all(), self.request.user, self.request)
 
 
 class AlbumCoursesView(APIView):
     permission_classes = [IsMember]
 
     def get(self, request, album_id):
-        album = _apply_institution_filter(Album.objects.all(), request.user, request).filter(pk=album_id).first()
+        album = apply_institution_filter(Album.objects.all(), request.user, request).filter(pk=album_id).first()
         if not album:
             return Response({'error': '专辑不存在'}, status=404)
 
@@ -568,7 +572,7 @@ class CourseListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = _apply_institution_filter(Course.objects.all().order_by('-created_at'), user, self.request)
+        qs = apply_institution_filter(Course.objects.all().order_by('-created_at'), user, self.request)
         q = self.request.query_params.get('search')
         kp = self.request.query_params.get('kp')
         if q: qs = qs.filter(title__icontains=q)
@@ -607,7 +611,8 @@ class CourseListCreateView(generics.ListCreateAPIView):
         validate_upload_file(files.get("reference_materials"), max_size_bytes=DOC_MAX_BYTES)
         total_size = sum(f.size for f in files.values() if f)
         inst = self.request.user.institution
-        validate_storage_quota(inst, total_size)
+        from users.quota import check_and_add_storage_usage
+        check_and_add_storage_usage(inst, total_size)
 
         # 支持 OSS 直传：如果提供了 video_file_url，使用 OSS URL
         video_file_url = self.request.data.get('video_file_url')
@@ -622,8 +627,6 @@ class CourseListCreateView(generics.ListCreateAPIView):
         else:
             # 传统上传模式：文件通过后端上传
             course = serializer.save(author=self.request.user, institution=inst)
-
-        add_storage_usage(inst, total_size)
 
         # 未上传封面 → 后台线程提取第一帧
         if not course.cover_image and course.video_file:
@@ -651,7 +654,7 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CourseSerializer
 
     def get_queryset(self):
-        return _apply_institution_filter(super().get_queryset(), self.request.user, self.request)
+        return apply_institution_filter(super().get_queryset(), self.request.user, self.request)
 
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']:

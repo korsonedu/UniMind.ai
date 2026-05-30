@@ -3,7 +3,7 @@ import threading
 import logging
 from asgiref.sync import sync_to_async
 from django.db import models, connections
-from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin
+from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin, IsMemberOrReadOnlyList
 from rest_framework import generics, permissions, serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -18,6 +18,8 @@ from .prompt_sync import (
     write_bot_prompt_file,
 )
 from users.views import IsMember
+from core.analytics import record_event
+from core.rate_limit import user_rate_limit
 from ai_service import AIService
 from ai_assistant.services.tool_executor import AssistantToolExecutor
 
@@ -26,9 +28,11 @@ logger = logging.getLogger(__name__)
 _AI_CHAT_SEMAPHORE = threading.Semaphore(5)  # max 5 concurrent AI chats
 
 
-def process_ai_chat(user, bot, user_message, pending_msg_id, history_limit=10):
-    # Filter out pending messages from history
-    history_objs = AIChatMessage.objects.filter(user=user, bot=bot).order_by('-timestamp')[:history_limit]
+def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None, history_limit=10):
+    base_qs = AIChatMessage.objects.filter(user=user, bot=bot)
+    if conversation_id:
+        base_qs = base_qs.filter(conversation_id=conversation_id)
+    history_objs = base_qs.order_by('-timestamp')[:history_limit]
     history_msgs = [{"role": h.role, "content": h.content} for h in reversed(history_objs) if h.content != "[Thinking...]"]
 
     student_context = ""
@@ -140,7 +144,7 @@ class BotListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == 'POST':
             return [IsAdmin(), HasPlanFeature()]
-        return [IsMember()]
+        return [IsMemberOrReadOnlyList()]
 
     required_feature = 'ai.bot.custom'
 
@@ -197,7 +201,7 @@ class BotDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_permissions(self):
         if self.request.method in ('PUT', 'PATCH', 'DELETE'):
             return [IsAdmin()]
-        return [IsMember()]
+        return [IsMemberOrReadOnlyList()]
 
     def check_object_permissions(self, request, obj):
         super().check_object_permissions(request, obj)
@@ -274,10 +278,20 @@ class AIChatView(APIView):
     quota_resource = 'ai_call_total'
 
     def post(self, request):
+        import uuid as _uuid
         user_message = request.data.get('message')
         bot_id = request.data.get('bot_id')
+        conversation_id = request.data.get('conversation_id')
         if not user_message:
             return Response({'error': 'Message is required'}, status=400)
+
+        if conversation_id:
+            try:
+                conversation_id = _uuid.UUID(conversation_id)
+            except (ValueError, AttributeError):
+                conversation_id = _uuid.uuid4()
+        else:
+            conversation_id = _uuid.uuid4()
 
         bot = Bot.objects.filter(id=bot_id).first()
         if bot:
@@ -286,15 +300,16 @@ class AIChatView(APIView):
             sync_bot_prompt(bot)
 
         # 1. Save User Message
-        AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot)
+        AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot, conversation_id=conversation_id)
+        record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
         # 2. Create Pending Assistant Message
-        pending_msg = AIChatMessage.objects.create(user=request.user, role='assistant', content="[Thinking...]", bot=bot)
+        pending_msg = AIChatMessage.objects.create(user=request.user, role='assistant', content="[Thinking...]", bot=bot, conversation_id=conversation_id)
 
         # 3. Start Background Thread
         thread = threading.Thread(
             target=process_ai_chat,
-            args=(request.user, bot, user_message, pending_msg.id),
+            args=(request.user, bot, user_message, pending_msg.id, conversation_id),
             daemon=True,
         )
         thread.start()
@@ -307,14 +322,18 @@ class AIChatListView(generics.ListAPIView):
     permission_classes = [IsMember]
     def get_queryset(self):
         bot_id = self.request.query_params.get('bot_id')
+        conversation_id = self.request.query_params.get('conversation_id')
         qs = AIChatMessage.objects.filter(user=self.request.user)
         if bot_id:
             qs = qs.filter(bot_id=bot_id)
+        if conversation_id:
+            qs = qs.filter(conversation_id=conversation_id)
         return qs
 
 
 class AIChatResetView(APIView):
     permission_classes = [IsMember]
+    @user_rate_limit(key_prefix='chat_reset', max_requests=10, window_seconds=3600)
     def post(self, request):
         bot_id = request.data.get('bot_id')
         qs = AIChatMessage.objects.filter(user=request.user)
@@ -331,15 +350,25 @@ class AIChatStreamView(APIView):
 
     def post(self, request):
         import json
+        import uuid as _uuid
         from django.http import StreamingHttpResponse
         from ai_engine.service import AIEngine
 
         user_message = request.data.get('message', '').strip()
         bot_id = request.data.get('bot_id')
         web_search = request.data.get('web_search', False)
+        conversation_id = request.data.get('conversation_id')
 
         if not user_message:
             return Response({'error': 'Message is required'}, status=400)
+
+        if conversation_id:
+            try:
+                conversation_id = _uuid.UUID(conversation_id)
+            except (ValueError, AttributeError):
+                conversation_id = _uuid.uuid4()
+        else:
+            conversation_id = _uuid.uuid4()
 
         bot = Bot.objects.filter(id=bot_id).first()
         if not bot:
@@ -351,12 +380,12 @@ class AIChatStreamView(APIView):
         sync_bot_prompt(bot)
 
         # Save user message
-        AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot)
+        AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot, conversation_id=conversation_id)
 
         def _sync_setup():
             """All sync DB/ORM work — called once via sync_to_async."""
             history_objs = AIChatMessage.objects.filter(
-                user=request.user, bot=bot
+                user=request.user, bot=bot, conversation_id=conversation_id
             ).order_by('-timestamp')[:10]
             history_msgs = [
                 {"role": h.role, "content": h.content}
@@ -432,15 +461,25 @@ class AIChatStreamView(APIView):
                 agent_thread.join(timeout=5)
                 result = _result_container[0]
 
+                # P1-11: 如果 5 秒内 agent 未完成，再等 10 秒
+                if result is None:
+                    agent_thread.join(timeout=10)
+                    result = _result_container[0]
+
                 ai_content = ""
                 is_error = False
-                if isinstance(result, dict) and 'content' in result:
+                if result is None:
+                    # agent 超时未返回结果，发送超时提示，不写入数据库
+                    ai_content = "AI 正在处理中，请稍候重试。"
+                    is_error = True
+                elif isinstance(result, dict) and 'content' in result:
                     ai_content = result['content']
                 elif result and 'choices' in result:
                     ai_content = result['choices'][0]['message']['content'] or ''
 
                 error_patterns = ("AI 服务暂时不可用", "AI 暂时无法响应", "LLM_API_KEY")
-                is_error = any(p in ai_content for p in error_patterns) if ai_content else True
+                if not is_error:
+                    is_error = any(p in ai_content for p in error_patterns) if ai_content else True
 
                 ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ').replace('\\(', ' $ ').replace('\\)', ' $ ')
 
@@ -450,6 +489,7 @@ class AIChatStreamView(APIView):
                         'role': 'assistant',
                         'content': ai_content,
                         'bot': bot,
+                        'conversation_id': conversation_id,
                     }
                     # 写入出题 Agent 的结构化数据
                     if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:

@@ -7,7 +7,7 @@ from django.utils.text import slugify
 from .models import Course, CourseTag, CourseTagRelation
 from .serializers import CourseTagSerializer
 from users.permissions import IsAdmin
-from .views import _apply_institution_filter
+from core.utils import apply_institution_filter
 
 
 def _assign_tags(course, tag_names, institution):
@@ -74,7 +74,7 @@ class BatchAssignTagsView(APIView):
 
         if not course_id:
             return Response({"error": "course_id is required"}, status=400)
-        course = _apply_institution_filter(Course.objects.all(), request.user, request).filter(pk=course_id).first()
+        course = apply_institution_filter(Course.objects.all(), request.user, request).filter(pk=course_id).first()
         if not course:
             return Response({"error": "Course not found"}, status=404)
 

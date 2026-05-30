@@ -115,7 +115,7 @@ class SimulatePaymentView(APIView):
 
         import uuid
         txn_id = f'stub_{uuid.uuid4().hex[:12]}'
-        confirm_order(order, txn_id, {'source': 'simulate'}, order.amount_cents)
+        confirm_order(order.id, txn_id, {'source': 'simulate'}, order.amount_cents)
         return Response({
             'status': 'paid',
             'order_id': order.id,
@@ -132,7 +132,11 @@ class WebhookView(APIView):
     def post(self, request):
         from django.conf import settings
         webhook_secret = getattr(settings, 'PAYMENT_WEBHOOK_SECRET', '')
-        if webhook_secret:
+        if not webhook_secret:
+            if not getattr(settings, 'DEBUG', False):
+                return Response({"error": "Webhook not configured"}, status=500)
+            # In DEBUG mode, allow without secret (development convenience)
+        else:
             provided = request.headers.get('X-Webhook-Secret', '')
             if provided != webhook_secret:
                 return Response({'detail': 'Invalid webhook secret'}, status=403)
@@ -142,8 +146,7 @@ class WebhookView(APIView):
             result = process_webhook_event(event)
             if not result:
                 return Response({'status': 'ignored'})
-            order = Order.objects.get(id=result['order_id'])
-            confirm_order(order, result['gateway_txn_id'], result['raw'], result.get('amount_cents'))
+            confirm_order(result['order_id'], result['gateway_txn_id'], result['raw'], result.get('amount_cents'))
             return Response({'status': 'ok'})
         except Order.DoesNotExist:
             return Response({'status': 'order not found'}, status=404)
