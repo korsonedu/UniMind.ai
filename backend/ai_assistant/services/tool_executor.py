@@ -1,5 +1,5 @@
 """
-AI 助教 Agent 工具执行器。
+Agent 工具执行器。
 
 每个工具方法返回 JSON 字符串，供模型在多轮工具调用中消费。
 """
@@ -92,8 +92,8 @@ def summarize_tool_result(tool_name: str, result) -> str:
     return str(result)[:150]
 
 
-class AssistantToolExecutor:
-    """将 tool_name 映射到实际数据库查询。捕获 user 和 institution 上下文。"""
+class BaseToolExecutor:
+    """基础工具执行器。将 tool_name 映射到实际数据库查询，捕获 user 和 institution 上下文。"""
 
     def __init__(self, user, institution=None):
         self.user = user
@@ -129,29 +129,36 @@ class AssistantToolExecutor:
 
         qs = KnowledgePoint.objects.filter(
             name__icontains=query,
-            level='kp',
         )
         if subject:
             qs = qs.filter(subject=subject)
         else:
-            # Auto-filter to user's subjects when none specified
             user_subjects = self._get_user_subjects()
             if user_subjects:
                 qs = qs.filter(subject__in=user_subjects)
         if self.institution:
             qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
 
-        kps = qs.values('code', 'name', 'subject', 'description')[:10]
+        nodes = list(qs.select_related('parent').values(
+            'id', 'code', 'name', 'level', 'subject', 'parent__name',
+        )[:15])
+
+        for node in nodes:
+            node['child_count'] = KnowledgePoint.objects.filter(parent_id=node['id']).count()
+
         return {
-            "found": len(kps),
+            "found": len(nodes),
             "results": [
                 {
-                    "code": kp['code'],
-                    "name": kp['name'],
-                    "subject": kp['subject'] or '',
-                    "description": (kp['description'] or '')[:300],
+                    "id": n['id'],
+                    "code": n['code'] or '',
+                    "name": n['name'],
+                    "level": n['level'],
+                    "subject": n['subject'] or '',
+                    "parent": n['parent__name'] or '',
+                    "child_count": n['child_count'],
                 }
-                for kp in kps
+                for n in nodes
             ],
         }
 
@@ -333,8 +340,12 @@ class AssistantToolExecutor:
         }
 
 
-class PlannerToolExecutor(AssistantToolExecutor):
-    """扩展助教工具执行器，增加规划相关工具。继承全部 4 个助教工具。"""
+class PlannerToolExecutor(BaseToolExecutor):
+    """扩展基础工具执行器，增加规划相关工具。继承全部基础工具。"""
+
+    def __init__(self, user, institution=None):
+        super().__init__(user, institution)
+        self.pending_visual = None
 
     def _handle_get_learning_stats(self, args: Dict) -> Dict:
         from django.utils import timezone
@@ -757,3 +768,15 @@ class PlannerToolExecutor(AssistantToolExecutor):
             ],
             "total_found": qs.count(),
         }
+
+    def _handle_render_visual(self, args: Dict) -> Dict:
+        """将可视化数据返回给前端，同时缓存到实例供消息持久化。"""
+        visual_type = args.get('type', '')
+        payload = args.get('payload', {})
+
+        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map'}
+        if visual_type not in valid_types:
+            return {"error": f"不支持的可视化类型: {visual_type}，支持: {', '.join(valid_types)}"}
+
+        self.pending_visual = {"type": visual_type, "payload": payload}
+        return {"status": "ok", "type": visual_type}
