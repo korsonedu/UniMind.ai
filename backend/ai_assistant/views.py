@@ -2,7 +2,7 @@ import asyncio
 import threading
 import logging
 from asgiref.sync import sync_to_async
-from django.db import models, connections
+from django.db import models, close_old_connections
 from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin, IsMemberOrReadOnlyList
 from rest_framework import generics, permissions, serializers
 from rest_framework.exceptions import PermissionDenied
@@ -112,7 +112,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
             extract_memories_with_mem0(user, full_history)
         except Exception:
             pass
-        connections.close_all()
+        close_old_connections()
 
 
 def _user_can_access_bot(user, bot):
@@ -522,7 +522,7 @@ class AIChatStreamView(APIView):
                     await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     pass
-                await sync_to_async(connections.close_all)()
+                await sync_to_async(close_old_connections)()
 
                 from users.quota import increment_quota
                 if request.user.institution:

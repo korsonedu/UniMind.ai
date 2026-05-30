@@ -1,7 +1,6 @@
 from rest_framework import generics, permissions, status, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Q
 from django.utils.decorators import method_decorator
 from .models import Question, Answer
 from .serializers import QuestionSerializer, AnswerSerializer
@@ -10,6 +9,7 @@ from users.views import IsMember
 from users.permissions import is_platform_admin, is_institution_admin
 from core.file_validation import validate_upload_file
 from core.rate_limit import user_rate_limit
+from core.utils import apply_institution_filter
 from users.quota import check_and_add_storage_usage
 
 _upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
@@ -22,14 +22,8 @@ class QuestionListCreateView(generics.ListCreateAPIView):
     search_fields = ['content', 'user__nickname']
 
     def get_queryset(self):
-        user = self.request.user
         qs = Question.objects.all().select_related('user').prefetch_related('answers__user', 'likes', 'followers', 'answers__likes')
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
+        qs = apply_institution_filter(qs, self.request.user, self.request)
 
         # Filter Logic
         filter_type = self.request.query_params.get('filter', 'all')
@@ -58,15 +52,8 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        user = self.request.user
         qs = super().get_queryset()
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
-        return qs
+        return apply_institution_filter(qs, self.request.user, self.request)
 
     def perform_update(self, serializer):
         if self.request.user == serializer.instance.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
@@ -86,15 +73,8 @@ class AnswerDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        user = self.request.user
         qs = super().get_queryset().select_related('question')
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(question__institution=inst) | Q(question__institution__isnull=True))
-            else:
-                qs = qs.filter(question__institution__isnull=True)
-        return qs
+        return apply_institution_filter(qs, self.request.user, self.request, institution_field='question__institution')
 
     def perform_update(self, serializer):
         if self.request.user == serializer.instance.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
@@ -115,14 +95,8 @@ class AnswerCreateView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         question_id = request.data.get('question')
         try:
-            if is_platform_admin(request.user):
-                question = Question.objects.get(id=question_id)
-            else:
-                inst = request.user.institution
-                if inst:
-                    question = Question.objects.get(Q(id=question_id) & (Q(institution=inst) | Q(institution__isnull=True)))
-                else:
-                    question = Question.objects.get(id=question_id, institution__isnull=True)
+            qs = apply_institution_filter(Question.objects.all(), request.user, request)
+            question = qs.get(id=question_id)
         except Question.DoesNotExist:
             return Response({'error': 'Question not found'}, status=404)
 
@@ -173,17 +147,9 @@ class QuestionActionView(APIView):
     permission_classes = [IsMember]
 
     def patch(self, request, pk):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
         try:
-            if is_platform_admin(request.user):
-                question = Question.objects.get(pk=pk)
-            else:
-                inst = request.user.institution
-                if inst:
-                    question = Question.objects.get(Q(pk=pk) & (Q(institution=inst) | Q(institution__isnull=True)))
-                else:
-                    question = Question.objects.get(pk=pk, institution__isnull=True)
+            qs = apply_institution_filter(Question.objects.all(), request.user, request)
+            question = qs.get(pk=pk)
         except Question.DoesNotExist:
             return Response({'error': 'Not found'}, status=404)
 

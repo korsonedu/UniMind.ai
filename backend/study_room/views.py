@@ -12,6 +12,7 @@ from users.models import DailyPlan
 from .serializers import ChatMessageSerializer
 from users.views import IsMember
 from core.rate_limit import rate_limit
+from core.utils import apply_institution_filter
 
 
 def _task_state_message_q() -> Q:
@@ -31,17 +32,8 @@ class ChatMessageListView(generics.ListCreateAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        from users.permissions import is_platform_admin
-        from django.db.models import Q
-        user = self.request.user
         qs = super().get_queryset()
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
-        return qs
+        return apply_institution_filter(qs, self.request.user, self.request)
 
     def perform_create(self, serializer):
         related_plan_id = self.request.data.get('related_plan_id')
@@ -91,33 +83,14 @@ class UndoBroadcastView(APIView):
 
 class ImageUploadView(APIView):
     permission_classes = [IsMember]
-    MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
-    ALLOWED_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-    ALLOWED_MAGIC = {
-        'image/jpeg': [b'\xff\xd8\xff'],
-        'image/png': [b'\x89PNG'],
-        'image/gif': [b'GIF87a', b'GIF89a'],
-        'image/webp': [b'RIFF'],  # RIFF....WEBP
-    }
-
-    def _validate_magic_bytes(self, file):
-        magic_list = self.ALLOWED_MAGIC.get(file.content_type, [])
-        if not magic_list:
-            return False
-        header = file.read(8)
-        file.seek(0)  # reset position
-        return any(header.startswith(m) for m in magic_list)
 
     def post(self, request):
+        from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES
+
         file = request.FILES.get('image')
         if not file:
             return Response({'error': 'No file uploaded'}, status=400)
-        if file.size > self.MAX_UPLOAD_BYTES:
-            return Response({'error': '图片不能超过 10MB'}, status=400)
-        if file.content_type not in self.ALLOWED_TYPES:
-            return Response({'error': '仅支持 JPEG/PNG/GIF/WebP 格式'}, status=400)
-        if not self._validate_magic_bytes(file):
-            return Response({'error': '文件内容与声明的格式不匹配'}, status=400)
+        validate_upload_file(file, allowed_extensions={'.jpg', '.jpeg', '.png', '.gif', '.webp'}, max_size_bytes=IMAGE_MAX_BYTES)
 
         import uuid
         ext = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else 'jpg'
