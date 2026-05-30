@@ -37,6 +37,57 @@ export type ChunkedUploadStatus =
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export interface OSSSignatureResult {
+  upload_url: string;
+  object_key: string;
+  file_name: string;
+  expires_in: number;
+}
+
+export async function getOSSSignature(fileName: string, fileType: string, contentType: string): Promise<OSSSignatureResult> {
+  const res = await api.post('/courses/oss/signature/', {
+    file_name: fileName,
+    file_type: fileType,
+    content_type: contentType,
+  });
+  return res.data;
+}
+
+export async function uploadToOSS(uploadUrl: string, file: File, onProgress?: (percent: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl, true);
+    xhr.setRequestHeader('Content-Type', file.type);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        resolve();
+      } else {
+        reject(new Error(`上传失败: ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('上传失败'));
+    xhr.send(file);
+  });
+}
+
+export async function completeOSSUpload(objectKey: string, fileName: string, fileType: string, fileSize: number) {
+  const res = await api.post('/courses/oss/complete/', {
+    object_key: objectKey,
+    file_name: fileName,
+    file_type: fileType,
+    file_size: fileSize,
+  });
+  return res.data;
+}
+
 export async function uploadFileInChunks(config: ChunkedUploadConfig): Promise<ChunkedUploadRunResult> {
   const {
     file,
@@ -215,22 +266,42 @@ export async function createCourseWithSmartUpload(params: CreateCourseWithUpload
     if (tags && tags.length > 0) fd.append('tags', JSON.stringify(tags));
   };
 
-  if (video.size <= thresholdBytes) {
-    if (onStatus) onStatus({ phase: 'init', totalChunks: 1, resumed: false });
+  // 使用 OSS 直传（所有文件）
+  if (onStatus) onStatus({ phase: 'init', totalChunks: 1, resumed: false });
+
+  try {
+    // 1. 获取签名 URL
+    const signature = await getOSSSignature(video.name, 'video', video.type || 'video/mp4');
+
+    // 2. 直传到 OSS
+    await uploadToOSS(signature.upload_url, video, (percent) => {
+      if (onProgress) onProgress(Math.round(percent * 0.9)); // 90% for upload
+    });
+
+    // 3. 通知后端上传完成
+    const result = await completeOSSUpload(
+      signature.object_key,
+      video.name,
+      'video',
+      video.size
+    );
+
+    // 4. 创建课程记录
     const fd = new FormData();
     applyCommonFields(fd);
-    fd.append('video_file', video);
+    fd.append('video_file_url', result.file_info.url);
+    fd.append('video_object_key', signature.object_key);
     if (cover) fd.append('cover_image', cover);
     if (courseware) fd.append('courseware', courseware);
-    const res = await api.post('/courses/', fd, {
-      signal,
-      onUploadProgress: (p) => {
-        if (p.total && onProgress) onProgress(Math.round((p.loaded / p.total) * 100));
-      },
-    });
-    if (onStatus) onStatus({ phase: 'completed', uploadId: 'single-part', totalChunks: 1 });
+
+    const res = await api.post('/courses/', fd, { signal });
+    if (onProgress) onProgress(100);
+    if (onStatus) onStatus({ phase: 'completed', uploadId: 'oss-direct', totalChunks: 1 });
     clearStoredUploadId();
     return res.data;
+  } catch (error) {
+    console.error('OSS 直传失败，回退到分片上传:', error);
+    // 回退到原来的分片上传逻辑
   }
 
   const uploadResult = await uploadFileInChunks({

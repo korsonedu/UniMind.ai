@@ -174,6 +174,78 @@ def _add_chunk_to_meta(upload_id: str, chunk_index: int) -> dict:
         return meta
 
 
+class OSSSignatureURLView(APIView):
+    """生成 OSS 签名 URL，供前端直传文件到 OSS"""
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        file_name = str(request.data.get("file_name", "")).strip()
+        file_type = str(request.data.get("file_type", "video")).strip()
+        content_type = str(request.data.get("content_type", "video/mp4")).strip()
+
+        if not file_name:
+            return Response({"error": "缺少文件名"}, status=400)
+
+        # 生成唯一的文件路径
+        institution_id = request.user.institution_id or "public"
+        ext = os.path.splitext(file_name)[1]
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        object_key = f"institutions/{institution_id}/{file_type}/{unique_name}"
+
+        # 生成签名 URL
+        import oss2
+        auth = oss2.Auth(settings.OSS_ACCESS_KEY_ID, settings.OSS_ACCESS_KEY_SECRET)
+        bucket = oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
+
+        # 生成 PUT 签名 URL（有效期 1 小时）
+        url = bucket.sign_url("PUT", object_key, 3600, headers={"Content-Type": content_type})
+
+        return Response({
+            "upload_url": url,
+            "object_key": object_key,
+            "file_name": file_name,
+            "expires_in": 3600,
+        })
+
+
+class OSSUploadCompleteView(APIView):
+    """OSS 上传完成后，记录文件信息到数据库"""
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        object_key = str(request.data.get("object_key", "")).strip()
+        file_name = str(request.data.get("file_name", "")).strip()
+        file_type = str(request.data.get("file_type", "video")).strip()
+        file_size = _safe_int(request.data.get("file_size"), 0)
+
+        if not object_key:
+            return Response({"error": "缺少 object_key"}, status=400)
+
+        # 验证文件是否存在
+        import oss2
+        auth = oss2.Auth(settings.OSS_ACCESS_KEY_ID, settings.OSS_ACCESS_KEY_SECRET)
+        bucket = oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
+
+        if not bucket.object_exists(object_key):
+            return Response({"error": "文件不存在"}, status=400)
+
+        # 记录文件信息（可以存储到数据库或缓存）
+        file_info = {
+            "object_key": object_key,
+            "file_name": file_name,
+            "file_type": file_type,
+            "file_size": file_size,
+            "url": f"https://{settings.OSS_BUCKET_NAME}.{settings.OSS_ENDPOINT}/{object_key}",
+            "uploaded_by": request.user.id,
+            "institution_id": request.user.institution_id,
+        }
+
+        return Response({
+            "message": "文件上传成功",
+            "file_info": file_info,
+        })
+
+
 @_upload_rl
 class ChunkedUploadInitView(APIView):
     permission_classes = [IsAdmin]
@@ -536,7 +608,21 @@ class CourseListCreateView(generics.ListCreateAPIView):
         total_size = sum(f.size for f in files.values() if f)
         inst = self.request.user.institution
         validate_storage_quota(inst, total_size)
-        course = serializer.save(author=self.request.user, institution=inst)
+
+        # 支持 OSS 直传：如果提供了 video_file_url，使用 OSS URL
+        video_file_url = self.request.data.get('video_file_url')
+        video_object_key = self.request.data.get('video_object_key')
+
+        if video_file_url and video_object_key:
+            # OSS 直传模式：URL 已经在 OSS 上
+            course = serializer.save(author=self.request.user, institution=inst)
+            # 更新视频文件字段为 OSS URL
+            course.video_file = video_file_url
+            course.save(update_fields=['video_file'])
+        else:
+            # 传统上传模式：文件通过后端上传
+            course = serializer.save(author=self.request.user, institution=inst)
+
         add_storage_usage(inst, total_size)
 
         # 未上传封面 → 后台线程提取第一帧

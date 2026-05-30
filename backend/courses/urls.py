@@ -6,11 +6,14 @@ from .views import (
     VideoProgressUpdateView, ChunkedUploadInitView,
     ChunkedUploadChunkView, ChunkedUploadCompleteView,
     CourseOutlineView, CourseTranscriptView,
+    OSSSignatureURLView, OSSUploadCompleteView,
 )
 from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
 
 urlpatterns = [
     path('', CourseListCreateView.as_view(), name='course-list'),
+    path('oss/signature/', OSSSignatureURLView.as_view(), name='oss-signature'),
+    path('oss/complete/', OSSUploadCompleteView.as_view(), name='oss-complete'),
     path('chunked/init/', ChunkedUploadInitView.as_view(), name='course-chunked-init'),
     path('chunked/<str:upload_id>/chunk/', ChunkedUploadChunkView.as_view(), name='course-chunked-chunk'),
     path('chunked/<str:upload_id>/complete/', ChunkedUploadCompleteView.as_view(), name='course-chunked-complete'),
