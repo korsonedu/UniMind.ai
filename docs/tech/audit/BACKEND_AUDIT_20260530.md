@@ -339,17 +339,15 @@ if result:
 **问题**: 对每个知识点执行 `children.exists()` + `children.all()` 两次查询  
 **修复**: 使用 `prefetch_related('children')` 或 `annotate(has_children=Count('children'))`
 
-### P2-16: 简历上传未使用中心化文件校验
+### P2-16: 简历上传未使用中心化文件校验 ~~（误报）~~
 
-**文件**: `backend/interviews/views.py:302-376`  
-**问题**: 自行定义 `ALLOWED_EXTS` 和大小限制，未调用 `core/file_validation.py` 的 `validate_upload_file()`，缺少 magic bytes 检查  
-**修复**: 替换为中心化校验函数
+**文件**: `backend/interviews/views.py:329`  
+**结论**: **误报** — 代码已使用 `validate_upload_file()` 中心化校验（含 magic bytes 检查）
 
-### P2-17: 分片上传清理无定时任务
+### P2-17: 分片上传清理无定时任务 ~~（误报）~~
 
-**文件**: `backend/courses/views.py:139`  
-**问题**: `cleanup_expired_chunks()` 函数存在但无 Celery beat 或 cron 调用  
-**修复**: 添加 Celery periodic task 或系统 cron
+**文件**: `backend/courses/tasks.py:34`, `backend/school_system/settings.py:398`  
+**结论**: **误报** — `cleanup_expired_chunks_task` 已定义，Celery beat 已配置每天凌晨 3 点执行
 
 ### P2-18: 密码修改允许弱密码
 
@@ -405,24 +403,31 @@ if result:
 
 ---
 
-## 修复优先级建议
+## 修复状态（2026-05-30）
 
 ```
-本周必修（P0）:
+✅ P0 全部修复（commit 09c24c2）:
 ├── P0-1  preview_institution IDOR
 ├── P0-2  媒体文件未认证访问
 ├── P0-3  支付竞态条件
 ├── P0-4  Webhook secret 强制校验
 └── P0-5  UpdateProfileView 权限
 
-下周排期（P1）:
+✅ P1 全部修复（commit 09c24c2）:
 ├── P1-6  FAQ 无机构用户隔离
 ├── P1-7  BIAnalytics 无机构数据泄露
 ├── P1-8  OSS object_key 校验
-└── P1-10~12  AI 线程管理
+├── P1-11 SSE 空响应保护
+└── P1-12 AIChatReset 速率限制
 
-后续改进（P2）:
+✅ P2 全部修复（commit 47b8e38）:
 ├── P2-13~15  N+1 查询优化
-├── P2-16~17  文件上传清理
-└── P2-18~21  代码质量
+├── P2-16     误报（已使用中心化校验）
+├── P2-17     误报（已有 Celery beat 定时任务）
+├── P2-18     密码策略统一
+├── P2-19     int() 安全转换
+├── P2-20     Redis 降级日志
+└── P2-21     CSP unsafe-eval 移除
+
+⬜ P1-10 AI 线程超时 kill（需架构调整，暂未修）
 ```
