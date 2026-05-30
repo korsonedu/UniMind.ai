@@ -1,9 +1,10 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   BookOpen, FileText, Target, Bot, Sparkles, Bell, Tag,
-  BrainCircuit, Layers, Rocket, BarChart3,
+  BrainCircuit, Layers, Rocket, BarChart3, LineChart,
 } from 'lucide-react';
 
 import { CourseSection } from './maintenance/CourseSection';
@@ -15,11 +16,14 @@ import { MaterialSection } from './maintenance/MaterialSection';
 import { TagSection } from './maintenance/TagSection';
 import { NotificationSection } from './maintenance/NotificationSection';
 import { InsightsPanel } from './maintenance/InsightsPanel';
+import { AnalyticsPanel } from './maintenance/AnalyticsPanel';
 import { KnowledgeSystemPanel } from './maintenance/KnowledgeSystemPanel';
 import { PipelinePanel } from './maintenance/PipelinePanel';
 
 export const Maintenance: React.FC = () => {
   const { t } = useTranslation('maintenance');
+  const { user } = useAuthStore();
+  const isPlatformAdmin = user?.is_admin;
 
   return (
     <div className="min-h-screen bg-[#F2F2F6] p-6 md:p-8 space-y-8 max-w-[1600px] mx-auto text-left">
@@ -53,12 +57,19 @@ export const Maintenance: React.FC = () => {
             <TabsTrigger value="notifications" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
               <Bell className="w-3.5 h-3.5" />{t('tabs.siteBroadcast')}
             </TabsTrigger>
-            <TabsTrigger value="insights" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
-              <BarChart3 className="w-3.5 h-3.5" />{t('tabs.insights')}
-            </TabsTrigger>
-            <TabsTrigger value="pipeline" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
-              <Sparkles className="w-3.5 h-3.5" />{t('tabs.aiPipeline')}
-            </TabsTrigger>
+            {isPlatformAdmin && (
+              <>
+                <TabsTrigger value="insights" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
+                  <BarChart3 className="w-3.5 h-3.5" />{t('tabs.insights')}
+                </TabsTrigger>
+                <TabsTrigger value="analytics" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
+                  <LineChart className="w-3.5 h-3.5" />数据分析
+                </TabsTrigger>
+                <TabsTrigger value="pipeline" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
+                  <Sparkles className="w-3.5 h-3.5" />{t('tabs.aiPipeline')}
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
         </div>
 
@@ -71,8 +82,13 @@ export const Maintenance: React.FC = () => {
         <TabsContent value="sm"><MaterialSection /></TabsContent>
         <TabsContent value="tags"><TagSection /></TabsContent>
         <TabsContent value="notifications"><NotificationSection /></TabsContent>
-        <TabsContent value="insights"><InsightsPanel /></TabsContent>
-        <TabsContent value="pipeline"><PipelinePanel /></TabsContent>
+        {isPlatformAdmin && (
+          <>
+            <TabsContent value="insights"><InsightsPanel /></TabsContent>
+            <TabsContent value="analytics"><AnalyticsPanel /></TabsContent>
+            <TabsContent value="pipeline"><PipelinePanel /></TabsContent>
+          </>
+        )}
       </Tabs>
     </div>
   );
