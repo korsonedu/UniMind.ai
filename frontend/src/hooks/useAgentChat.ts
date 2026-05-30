@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export interface AgentStep {
   call_id: string;
@@ -8,6 +8,7 @@ export interface AgentStep {
   label: string;
   args_summary?: string;
   result_summary?: string;
+  visual?: { type: string; payload: any };
 }
 
 type AgentEvent =
@@ -27,6 +28,16 @@ export function useAgentChat(botId: number) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, []);
 
   const upsertStep = useCallback((prev: AgentStep[], event: AgentStep): AgentStep[] => {
     const idx = prev.findIndex(s => s.call_id === event.call_id);
