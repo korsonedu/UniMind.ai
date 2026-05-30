@@ -697,16 +697,20 @@ class AIEngine:
                 except Exception as e:
                     result = json.dumps({"error": str(e)}, ensure_ascii=False)
 
+                step_event = {
+                    "type": "step",
+                    "call_id": call_id,
+                    "step": round_i + 1,
+                    "status": "done",
+                    "name": name,
+                    "label": label,
+                    "result_summary": summarize_tool_result(name, result) if summarize_tool_result else str(result)[:200],
+                }
+                # render_visual needs full payload for frontend rendering
+                if name == "render_visual" and isinstance(result, dict):
+                    step_event["visual"] = result
                 if on_step:
-                    on_step({
-                        "type": "step",
-                        "call_id": call_id,
-                        "step": round_i + 1,
-                        "status": "done",
-                        "name": name,
-                        "label": label,
-                        "result_summary": summarize_tool_result(name, result) if summarize_tool_result else str(result)[:200],
-                    })
+                    on_step(step_event)
 
                 all_messages.append({
                     "role": "tool",

@@ -76,6 +76,7 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'create_dashboard_card': lambda r: (
             _json.dumps(r.get('card', {}), ensure_ascii=False) if r.get('status') == 'ok' else r.get('error', '创建失败')
         ),
+        'render_visual': lambda r: f"渲染可视化: {r.get('type', '')}",
     }
 
     fn = summaries.get(tool_name)
