@@ -693,6 +693,8 @@ def get_planner_tools():
             impl_summary="创建或更新 dashboard_config 记录，存储 JSON 格式的布局配置（区块列表、排列顺序、高亮规则）。需要 user_id。"),
         _make_tool("create_dashboard_card", "在 Dashboard 中创建自定义数据卡片。根据学生当前数据自由组织展示内容：可包含趋势指标、进度条、高亮数字、普通文本等。每个 item 通过 trend/progress/emphasis 字段控制渲染样式。每次对话可创建多张卡片。", CREATE_DASHBOARD_CARD_SCHEMA,
             impl_summary="将卡片数据写入 user.dashboard_config.custom_cards[]，保留最近 10 张。前端根据 items 的字段自动选择渲染样式（进度条/趋势/高亮/普通行）。"),
+        _make_tool("render_visual", "在 Dashboard 画布上渲染可视化内容。用于展示数学推导过程、解题步骤、知识图谱、数据统计等需要视觉呈现的内容。纯文字问答不需要调用此工具。", RENDER_VISUAL_SCHEMA,
+            impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到 Dashboard 画布。"),
     ]
     return assistant + planner_only
 
@@ -819,3 +821,21 @@ def get_exam_generator_tools():
         _make_tool("save_questions_to_library", "将最近一次生成的题目存入机构题库。可选择保存全部或部分题目。", SAVE_QUESTIONS_TO_LIBRARY_SCHEMA,
             impl_summary="将候选池中的题目批量插入 question 表，关联 knowledge_point 和 institution。支持通过 question_indices 选择性保存。"),
     ]
+
+# ── 小宇可视化工具 Schema ──────────────────────────────────────
+
+RENDER_VISUAL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "type": {
+            "type": "string",
+            "enum": ["data_card", "latex_derivation", "step_solution", "knowledge_map"],
+            "description": "可视化类型。data_card=数据卡片，latex_derivation=数学推导，step_solution=解题步骤，knowledge_map=知识图谱",
+        },
+        "payload": {
+            "type": "object",
+            "description": "可视化内容，结构由 type 决定。详见各类型 schema。",
+        },
+    },
+    "required": ["type", "payload"],
+}
