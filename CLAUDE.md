@@ -1,16 +1,15 @@
 # CLAUDE.md — UniMind.ai
 
-新一代智能教育基础设施（Agent-Native 学习操作系统）。Django 6.0 + React 19 + DeepSeek V4。
+Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepSeek V4。
 
 ## Agent 架构
 
-三个自治 AI Agent 共享统一运行时：
+两个自治 AI Agent 共享统一运行时：
 
 | Agent | bot_type | 工具数 | 意图路由 | 职责 |
 |-------|----------|--------|---------|------|
-| 小宇 | `planner` | 15+ | ✅ 7类意图 | 学习规划，教练式对话，主动分析数据给建议 |
+| 小宇 | `planner` | 19 | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 教练式对话 |
 | 命题官 | `exam_generator` | 5 专用 | ✅ 5类意图 | 教研出题，背靠 4-Agent ARC 对抗管线 |
-| AI 助教 | `assistant` | 6+ | — | 学生辅导，跨会话记忆，深度数据钩稽 |
 
 运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
 意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。
@@ -36,9 +35,9 @@ UniMindCode/                  ← git 仓库根目录
 ├── backend/
 │   ├── school_system/          # Django 配置 (settings, urls, celery, asgi, middleware)
 │   ├── ai_engine/              # AI 引擎 (路由、熔断、可观测性、模型配置、工具权限沙箱)
-│   ├── ai_assistant/           # Agent 运行时（Bot/BotRegistry/ToolExecutor/记忆系统/mem0 语义记忆，3 个自治 Agent）
+│   ├── ai_assistant/           # Agent 运行时（Bot/BotRegistry/ToolExecutor/记忆系统/mem0 语义记忆，2 个自治 Agent）
 │   │   ├── bot_registry.py     #   Bot 注册表：bot_type → (Executor, tools, prompt_dir)
-│   │   └── services/chat_dispatch.py  # 统一调度：3 个入口共用
+│   │   └── services/chat_dispatch.py  # 统一调度：SSE/WS/polling 共用
 │   ├── quizzes/                # 核心刷题
 │   │   ├── services/           #   出题管线、评分、解析、PDF
 │   │   ├── memorix/            #   Memorix 自进化记忆调度算法
@@ -46,7 +45,7 @@ UniMindCode/                  ← git 仓库根目录
 │   │   └── views_*.py          #   views 已拆分为 6 个文件（原始 views.py 已删除）
 │   ├── users/                  # 用户/会员/RBAC/ELO/机构管理
 │   │   └── services/           #   会员服务 (membership.py)
-│   ├── courses/                # 课程/专辑/AI大纲/ASR/分片上传
+│   ├── courses/                # 课程/专辑/AI大纲/ASR/OSS分片直传
 │   ├── articles/               # 深度文章
 │   ├── interviews/             # AI 模拟面试
 │   ├── study_room/             # 在线自习室
@@ -89,12 +88,18 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/users/institution/me/analytics/class-performance/` | GET 班级 KP 正确率分析 |
 | `/api/users/institution/me/analytics/suggested-topics/` | GET Top 5 薄弱知识点建议 |
 | `/api/users/institution/join-by-invite-slug/` | POST 已登录用户通过邀请链接加入机构 |
+| `/api/users/admin/analytics/dashboard/` | GET 平台数据分析 Dashboard（仅超管） |
+| `/api/users/admin/analytics/export/` | GET CSV 导出（trends/events/nps，仅超管） |
+| `/api/users/nps/submit/` | POST 提交 NPS 问卷 |
+| `/api/users/nps/status/` | GET 检查是否需要弹 NPS |
 | `/api/quizzes/` | 题库/考试 API |
 | `/api/quizzes/templates/` | GET/POST 出题模板（系统预设+机构自定义） |
 | `/api/quizzes/templates/<id>/` | PATCH/DELETE 模板详情 |
 | `/api/quizzes/ai/streaming-generate/` | POST 启动流式出题（返回 task_id） |
 | `/api/quizzes/ai/streaming-generate/status/` | GET 轮询出题进度 |
 | `/api/courses/` | 课程/视频 API |
+| `/api/courses/oss/multipart/init/` | POST 初始化 OSS 分片上传（返回签名 URL 列表） |
+| `/api/courses/oss/multipart/complete/` | POST 确认 OSS 分片完成 + 创建课程 |
 | `/api/ai/` | AI 生成/管线 API |
 | `/api/ai/memories/` | GET/POST Agent 记忆 CRUD（结构化） |
 | `/api/ai/memories/<id>/` | PATCH/DELETE Agent 记忆（结构化） |
@@ -149,6 +154,12 @@ AI_EMBEDDING_BASE_URL=https://api.deepseek.com/v1  # Embedding API 地址
 AI_BULK_GENERATE_MAX_PER_REQUEST=3  AI_BULK_GENERATE_CONCURRENCY=4
 ELO_K_FACTOR=32  USE_MEMORIX=false  ONLINE_USER_ACTIVE_WINDOW_SECONDS=300
 ENCRYPTION_KEY=xxx                # 加密密钥（可选，默认 SECRET_KEY 派生），用于 EncryptedCharField/EncryptedTextField
+
+# 阿里云 OSS 存储（可选，配置后文件存储到 OSS）
+OSS_ACCESS_KEY_ID=xxx             # 阿里云 AccessKey ID
+OSS_ACCESS_KEY_SECRET=xxx         # 阿里云 AccessKey Secret
+OSS_BUCKET_NAME=unimind-courses   # OSS Bucket 名称
+OSS_ENDPOINT=oss-cn-beijing.aliyuncs.com  # OSS 访问域名
 ```
 
 ## 常用命令
@@ -228,5 +239,6 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/WOW_MOMENT_TECH_FLOWS.md` | 6 个核心功能技术流程图（数据流/消息协议/架构图） |
 | `docs/tech/features/MULTI_TENANT_AGENT_MEMORY.md` | 多租户 Agent 记忆（mem0+pgvector、工具权限沙箱、机构人格） |
 | `docs/tech/features/INTELLIGENT_TOOL_ROUTING.md` | 智能工具路由（SkillRouter 论文落地、impl_summary、意图预筛选） |
+| `docs/tech/features/PLATFORM_ANALYTICS.md` | 平台数据分析（事件截留/每日聚合/NPS问卷/CSV导出，仅超管可见） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |
