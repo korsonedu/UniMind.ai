@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import {
   PlayCircle,
   PenLine,
@@ -7,18 +7,9 @@ import {
   TrendingUp,
   Calendar,
   FileText,
+  ArrowRight,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-
-const useSafeNavigate = () => {
-  const navigate = useNavigate();
-  return useCallback((link: string) => {
-    if (!link) return;
-    if (link.startsWith('/')) navigate(link);
-    else if (link.startsWith('http')) window.open(link, '_blank', 'noopener,noreferrer');
-  }, [navigate]);
-};
 
 type Priority = 'high' | 'normal' | 'low';
 
@@ -71,9 +62,13 @@ const PRIORITY_ORDER: Record<Priority, number> = {
   low: 2,
 };
 
-export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({ payload }) => {
-  const safeNavigate = useSafeNavigate();
+function navigateTo(url: string) {
+  if (!url) return;
+  if (url.startsWith('/')) window.location.href = url;
+  else if (url.startsWith('http')) window.open(url, '_blank', 'noopener,noreferrer');
+}
 
+export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({ payload }) => {
   const sorted = useMemo(
     () => [...(payload.cards || [])].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]),
     [payload.cards],
@@ -91,7 +86,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
           return (
             <button
               key={i}
-              onClick={() => safeNavigate(card.action.url)}
+              onClick={() => navigateTo(card.action.url)}
               className={cn(
                 'group flex flex-col gap-2 rounded-lg border border-l-4 bg-card p-3 text-left transition-all',
                 'hover:-translate-y-px hover:shadow-md',
@@ -110,8 +105,9 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                   </p>
                 </div>
               </div>
-              <div className="text-xs font-medium text-primary/70 group-hover:text-primary transition-colors">
-                {card.action.label} &rarr;
+              <div className="flex items-center gap-1 text-xs font-medium text-primary/70 group-hover:text-primary transition-colors">
+                {card.action.label}
+                <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
               </div>
             </button>
           );
