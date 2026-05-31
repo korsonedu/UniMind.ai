@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Send, Loader2, RotateCcw, Lightbulb, BarChart3, Target, CheckCircle2, CalendarCheck, BookOpen, History, ArrowRight, MessageCircleQuestion, BrainCircuit } from 'lucide-react';
+import { Send, Loader2, RotateCcw, Lightbulb, BarChart3, Target, CheckCircle2, CalendarCheck, BookOpen, History, MessageCircleQuestion, BrainCircuit, Trash2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
@@ -14,18 +13,8 @@ import { useTypewriter } from '@/hooks/useTypewriter';
 import { VisualCanvas, type VisualData } from './xiaoyu/DashboardPanel';
 import ChatBubble from '@/components/ChatBubble';
 import { ToolStepMessage } from '@/components/AgentStepCard';
-import { useAgentConversation, type Bot, type Message } from '@/hooks/useAgentConversation';
+import { useAgentConversation, type Bot, type Message, RECENT_SESSION_MS } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/hooks/useAgentChat';
-
-// Extend Message for XiaoYu-specific inlineCard
-interface XiaoYuMessage extends Message {
-  inlineCard?: {
-    title: string;
-    subtitle?: string;
-    items: Array<{ label: string; value: string; trend?: string; progress?: number; emphasis?: boolean; action_link?: string }>;
-    cta?: { label: string; link: string };
-  };
-}
 
 const SKILLS = [
   { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
@@ -38,58 +27,11 @@ const SKILLS = [
   { icon: BrainCircuit, label: '总结知识点', prompt: '帮我总结某个知识点的核心内容' },
 ];
 
-const InlineCardMessage: React.FC<{
-  card: NonNullable<XiaoYuMessage['inlineCard']>;
-  index: number;
-}> = ({ card, index }) => {
-  const navigate = useNavigate();
-  return (
-    <div className="ml-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="rounded-lg border border-border/50 bg-card/80 p-2.5 space-y-1.5 max-w-[280px]">
-        <div className="flex items-center gap-1">
-          <BarChart3 className="h-3 w-3 text-primary/50" />
-          <span className="text-[10px] font-semibold text-foreground/80">{card.title}</span>
-          {card.subtitle && <span className="text-[9px] text-muted-foreground/40 ml-auto">{card.subtitle}</span>}
-        </div>
-        <div className="space-y-0.5">
-          {card.items?.map((item, ii) => {
-            const clickable = !!item.action_link;
-            const content = (
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground/60 truncate">{item.label}</span>
-                <span className={cn(
-                  "font-semibold tabular-nums shrink-0 ml-1",
-                  item.trend === 'up' && "text-emerald-500",
-                  item.trend === 'down' && "text-red-400",
-                )}>
-                  {item.value}
-                  {item.trend === 'up' && ' ↑'}
-                  {item.trend === 'down' && ' ↓'}
-                </span>
-              </div>
-            );
-            return clickable ? (
-              <button key={ii} className="w-full text-left hover:bg-muted/40 rounded px-0.5 -mx-0.5 cursor-pointer transition-colors" onClick={() => navigate(item.action_link!)}>
-                {content}
-              </button>
-            ) : (
-              <div key={ii}>{content}</div>
-            );
-          })}
-        </div>
-        {card.cta && (
-          <Button variant="ghost" size="sm" className="w-full h-5 text-[10px] text-primary/70 gap-0.5" onClick={() => navigate(card.cta!.link)}>
-            {card.cta.label} <ArrowRight className="h-2.5 w-2.5" />
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const extractLastVisual = (msgs: Message[]): VisualData | null => {
+const extractLastVisual = (msgs: Message[]): VisualData | VisualData[] | null => {
   for (let i = msgs.length - 1; i >= 0; i--) {
     const m = msgs[i];
+    const all = m.metadata?.all_visuals as VisualData[] | undefined;
+    if (all?.length) return all;
     if (m.metadata?.visual) return m.metadata.visual as VisualData;
   }
   return null;
@@ -97,19 +39,20 @@ const extractLastVisual = (msgs: Message[]): VisualData | null => {
 
 export const XiaoYu: React.FC = () => {
   const setPageHeader = useSystemStore(state => state.setPageHeader);
-  const [visual, setVisual] = useState<VisualData | null>(null);
+  const [visual, setVisual] = useState<VisualData | VisualData[] | null>(null);
+  const pendingVisualsRef = useRef<VisualData[]>([]);
 
   const {
     bot, messages, input, loading, isComposing, initialized, skillOpen,
-    sessions, activeSessionId, sessionOpen, chatWidth, dragging, hasConversation,
+    sessions, activeSessionId, sessionOpen, chatWidth, dragging, hasConversation, conversationId,
     scrollRef, inputRef,
     setMessages, setInput, setBot, setInitialized, setSkillOpen, setSessionOpen,
     setIsComposition, setActiveSessionId, setSessions, setConversationId,
-    handleDragStart, handleLoadSession, handleRefreshSessions, handleSend, handleReset,
+    handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleSend, handleReset,
     handleSkillSelect, groupIntoSessions,
   } = useAgentConversation({
     findBot: (bots) => bots.find((b: Bot) => b.name === '小宇'),
-    getExtraPayload: () => ({}),
+    getExtraPayload: () => ({ conversation_id: conversationId }),
     onDone: () => {
       handleRefreshSessions();
     },
@@ -117,37 +60,33 @@ export const XiaoYu: React.FC = () => {
       const updated = prev.map(m =>
         m.toolStep?.call_id === step.call_id ? { ...m, toolStep: step } : m
       );
-      // render_visual: update visual canvas from step result
-      if (step.name === 'render_visual' && step.visual) {
-        setVisual(step.visual as VisualData);
-      }
-      // Insert inline card after the tool step (pure transform, no side effects)
-      if ((step.name === 'create_dashboard_card' || step.name === 'create_indicator_card') && step.result_summary) {
-        try {
-          const cardData = JSON.parse(step.result_summary);
-          if (cardData.title && (cardData.items || cardData.indicators)) {
-            const idx = updated.findIndex(m => m.toolStep?.call_id === step.call_id);
-            const cardId = `msg_card_${Date.now()}`;
-            const cardMsg: Message = {
-              _id: cardId,
-              role: 'assistant',
-              content: '',
-              inlineCard: cardData,
-              visible: false,
-              timestamp: new Date().toISOString(),
-            };
-            updated.splice(idx >= 0 ? idx + 1 : updated.length, 0, cardMsg);
-            return updated;
-          }
-        } catch { /* not valid JSON card */ }
-      }
       return updated;
     },
-    onStepDoneEffect: () => {
-      // Reserved for future side effects
+    onStepDoneEffect: (step) => {
+      console.log('[onStepDoneEffect]', step.name, 'hasVisual:', !!step.visual, 'callId:', step.call_id);
+      if (step.name === 'render_visual' && step.visual) {
+        pendingVisualsRef.current.push(step.visual as VisualData);
+        console.log('[onStepDoneEffect] collected visual, total:', pendingVisualsRef.current.length);
+      }
+    },
+    onAllVisuals: (visuals) => {
+      console.log('[onAllVisuals] received', visuals.length, 'visuals');
+      pendingVisualsRef.current = [];
+      setVisual(visuals as VisualData[]);
     },
     resetMessage: '已开始新对话',
   });
+
+  // Apply pending visuals after messages state updates (avoids setVisual inside setMessages updater)
+  const prevMsgLenRef = useRef(0);
+  useEffect(() => {
+    if (messages.length !== prevMsgLenRef.current && pendingVisualsRef.current.length > 0) {
+      prevMsgLenRef.current = messages.length;
+      const collected = [...pendingVisualsRef.current];
+      pendingVisualsRef.current = [];
+      setVisual(collected.length === 1 ? collected[0] : collected);
+    }
+  }, [messages]);
 
   // Wrap handleLoadSession to also restore visual from session messages
   const handleLoadSessionWithVisual = useCallback((session: Parameters<typeof handleLoadSession>[0]) => {
@@ -173,12 +112,15 @@ export const XiaoYu: React.FC = () => {
 
   // Init: load bot, history, and dashboard
   useEffect(() => {
+    let cancelled = false;
     const init = async () => {
       try {
         const bRes = await api.get('/ai/bots/');
+        if (cancelled) return;
         const xiaoyu = bRes.data.find((b: Bot) => b.name === '小宇');
         if (xiaoyu) {
           setBot(xiaoyu);
+          let foundSessionVisual: VisualData | VisualData[] | null = null;
           const hRes = await api.get('/ai/history/', { params: { bot_id: xiaoyu.id } });
           if (hRes.data.length > 0) {
             const allMsgs: Message[] = hRes.data.map((m: Record<string, unknown>) => ({
@@ -191,22 +133,27 @@ export const XiaoYu: React.FC = () => {
             if (lastMsg.conversation_id) {
               setConversationId(lastMsg.conversation_id);
             }
-            const isRecent = Date.now() - new Date(lastMsg.timestamp).getTime() < 86400000;
+            const isRecent = Date.now() - new Date(lastMsg.timestamp).getTime() < RECENT_SESSION_MS;
             if (isRecent && grouped.length > 0) {
               const latest = grouped[grouped.length - 1];
               setMessages(latest.messages);
               setActiveSessionId(latest.id);
-              setVisual(extractLastVisual(latest.messages));
+              foundSessionVisual = extractLastVisual(latest.messages);
+              console.log('[init] isRecent=true, msgs:', latest.messages.length, 'lastMsg metadata:', lastMsg.metadata, 'extracted visual:', foundSessionVisual);
+              if (foundSessionVisual) {
+                setVisual(foundSessionVisual);
+              }
             }
           }
         }
       } catch {
-        toast.error('Failed to load XiaoYu');
+        if (!cancelled) toast.error('Failed to load XiaoYu');
       } finally {
-        setInitialized(true);
+        if (!cancelled) setInitialized(true);
       }
     };
     init();
+    return () => { cancelled = true; };
   }, []);
 
   if (!initialized) {
@@ -268,14 +215,21 @@ export const XiaoYu: React.FC = () => {
                     <PopoverContent align="start" side="top" className="w-56 p-1 rounded-lg border-border/60 shadow-lg max-h-52 overflow-y-auto">
                       <div className="space-y-0.5">
                         {[...sessions].reverse().map(session => (
-                          <button key={session.id} onClick={() => handleLoadSessionWithVisual(session)}
-                            className="w-full flex flex-col gap-0.5 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors text-left">
-                            <span className="text-[11px] font-medium truncate">{session.label}</span>
-                            <span className="text-[9px] text-muted-foreground/50">
-                              {session.messages.length} 条消息
-                              {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
-                            </span>
-                          </button>
+                          <div key={session.id}
+                            className="w-full flex items-start gap-1 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors group">
+                            <button onClick={() => handleLoadSessionWithVisual(session)}
+                              className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
+                              <span className="text-[11px] font-medium truncate">{session.label}</span>
+                              <span className="text-[9px] text-muted-foreground/50">
+                                {session.messages.length} 条消息
+                                {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                              </span>
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteSession(session); }}
+                              className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
                         ))}
                       </div>
                     </PopoverContent>
@@ -351,14 +305,23 @@ export const XiaoYu: React.FC = () => {
                   <PopoverContent align="start" side="bottom" className="w-56 p-1 rounded-lg border-border/60 shadow-lg max-h-52 overflow-y-auto">
                     <div className="space-y-0.5">
                       {[...sessions].reverse().map(session => (
-                        <button key={session.id} onClick={() => { handleLoadSessionWithVisual(session); setSessionOpen(false); }}
-                          className={cn("w-full flex flex-col gap-0.5 px-2 py-1.5 rounded-md transition-colors text-left", session.id === activeSessionId ? "bg-muted/50" : "hover:bg-muted/50")}>
-                          <span className="text-[11px] font-medium truncate">{session.label}</span>
-                          <span className="text-[9px] text-muted-foreground/50">
-                            {session.messages.length} 条消息
-                            {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
-                          </span>
-                        </button>
+                        <div key={session.id}
+                          className={cn("w-full flex items-start gap-1 px-2 py-1.5 rounded-md transition-colors group", session.id === activeSessionId ? "bg-muted/50" : "hover:bg-muted/50")}>
+                          <button onClick={() => { handleLoadSessionWithVisual(session); setSessionOpen(false); }}
+                            className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
+                            <span className="text-[11px] font-medium truncate">{session.label}</span>
+                            <span className="text-[9px] text-muted-foreground/50">
+                              {session.messages.length} 条消息
+                              {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                            </span>
+                          </button>
+                          {session.id !== activeSessionId && (
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteSession(session); }}
+                              className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </PopoverContent>
@@ -375,9 +338,7 @@ export const XiaoYu: React.FC = () => {
           <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
             <div className="p-2.5 space-y-2">
               {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => (
-                (msg as XiaoYuMessage).inlineCard ? (
-                  <InlineCardMessage key={msg._id || i} card={(msg as XiaoYuMessage).inlineCard!} index={i} />
-                ) : msg.toolStep ? (
+                msg.toolStep ? (
                   <ToolStepMessage key={msg._id || i} step={msg.toolStep} index={i} />
                 ) : (
                   <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} compact />
