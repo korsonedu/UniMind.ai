@@ -20,16 +20,14 @@ const useSafeNavigate = () => {
   }, [navigate]);
 };
 
-type ActionType = 'video' | 'quiz' | 'review' | 'course' | 'article' | 'plan' | 'exam';
-type IconType = 'video' | 'quiz' | 'review' | 'course' | 'chart' | 'plan' | 'exam';
 type Priority = 'high' | 'normal' | 'low';
 
 interface ActionCard {
   title: string;
   description: string;
   priority: Priority;
-  icon: IconType;
-  action: { type: ActionType; url: string; label: string };
+  icon: string;
+  action: { type: string; url: string; label: string };
 }
 
 interface ActionCardsPayload {
@@ -37,7 +35,7 @@ interface ActionCardsPayload {
   cards: ActionCard[];
 }
 
-const ICON_MAP: Record<IconType, React.ComponentType<{ className?: string }>> = {
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   video: PlayCircle,
   quiz: PenLine,
   review: RotateCcw,
@@ -47,7 +45,7 @@ const ICON_MAP: Record<IconType, React.ComponentType<{ className?: string }>> = 
   exam: FileText,
 };
 
-const ICON_COLOR: Record<IconType, string> = {
+const ICON_COLOR: Record<string, string> = {
   video: 'text-violet-500 bg-violet-50',
   quiz: 'text-amber-500 bg-amber-50',
   review: 'text-sky-500 bg-sky-50',
@@ -57,7 +55,7 @@ const ICON_COLOR: Record<IconType, string> = {
   exam: 'text-orange-500 bg-orange-50',
 };
 
-const BORDER_COLOR: Record<IconType, string> = {
+const BORDER_COLOR: Record<string, string> = {
   video: 'border-l-violet-400',
   quiz: 'border-l-amber-400',
   review: 'border-l-sky-400',
@@ -88,7 +86,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
       {payload.title && <h3 className="text-sm font-semibold">{payload.title}</h3>}
       <div className="grid grid-cols-2 gap-3">
         {sorted.map((card, i) => {
-          const Icon = ICON_MAP[card.icon];
+          const Icon = ICON_MAP[card.icon] || TrendingUp;
           const span2 = card.priority === 'high';
           return (
             <button
@@ -97,12 +95,12 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
               className={cn(
                 'group flex flex-col gap-2 rounded-lg border border-l-4 bg-card p-3 text-left transition-all',
                 'hover:-translate-y-px hover:shadow-md',
-                BORDER_COLOR[card.icon],
+                BORDER_COLOR[card.icon] || 'border-l-gray-400',
                 span2 && 'col-span-2',
               )}
             >
               <div className="flex items-start gap-2.5">
-                <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md', ICON_COLOR[card.icon])}>
+                <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md', ICON_COLOR[card.icon] || 'text-gray-500 bg-gray-50')}>
                   <Icon className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
