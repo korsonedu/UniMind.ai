@@ -20,6 +20,7 @@ const useSafeNavigate = () => {
   }, [navigate]);
 };
 
+type ActionType = 'video' | 'quiz' | 'review' | 'course' | 'article' | 'plan' | 'exam';
 type IconType = 'video' | 'quiz' | 'review' | 'course' | 'chart' | 'plan' | 'exam';
 type Priority = 'high' | 'normal' | 'low';
 
@@ -28,7 +29,7 @@ interface ActionCard {
   description: string;
   priority: Priority;
   icon: IconType;
-  action: { type: string; url: string; label: string };
+  action: { type: ActionType; url: string; label: string };
 }
 
 interface ActionCardsPayload {
@@ -94,8 +95,8 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
               key={i}
               onClick={() => safeNavigate(card.action.url)}
               className={cn(
-                'group flex flex-col gap-2 rounded-lg border border-l-[3px] bg-card p-3 text-left transition-all',
-                'hover:-translate-y-0.5 hover:shadow-md',
+                'group flex flex-col gap-2 rounded-lg border border-l-4 bg-card p-3 text-left transition-all',
+                'hover:-translate-y-px hover:shadow-md',
                 BORDER_COLOR[card.icon],
                 span2 && 'col-span-2',
               )}
