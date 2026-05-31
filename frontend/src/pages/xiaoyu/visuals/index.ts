@@ -10,7 +10,8 @@ export interface VisualData {
   payload: Record<string, unknown>;
 }
 
-const RENDERERS: Record<string, React.ComponentType<{ payload: Record<string, unknown> }>> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const RENDERERS: Record<string, React.ComponentType<{ payload: any }>> = {
   data_card: DataCardRenderer,
   latex_derivation: LatexRenderer,
   step_solution: StepSolutionRenderer,
