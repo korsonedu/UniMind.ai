@@ -8,6 +8,7 @@ import { ActionCardsRenderer } from './ActionCardsRenderer';
 export interface VisualData {
   type: string;
   payload: Record<string, unknown>;
+  priority?: 'high' | 'normal' | 'low';
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

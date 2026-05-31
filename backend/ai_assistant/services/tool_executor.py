@@ -5,9 +5,12 @@ Agent 工具执行器。
 """
 
 import json
+import logging
 from datetime import timedelta
 from typing import Any, Dict, List
 from django.db import models
+
+logger = logging.getLogger(__name__)
 
 
 def generate_step_label(tool_name: str, args: dict) -> str:
@@ -29,12 +32,12 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'search_courses': lambda a: f"搜索课程「{a.get('query', '')}」",
         'search_asr': lambda a: f"搜索视频字幕「{a.get('query', '')}」",
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
-        'search_knowledge_points': lambda a: f"搜索知识点「{a.get('query', '')}」",
-        'generate_questions': lambda a: f"基于{len(a.get('knowledge_point_ids', []))}个知识点生成{a.get('count', 5)}道题",
+        'search_knowledge': lambda a: f"搜索知识点「{a.get('query', '')}」",
+        'quick_generate': lambda a: f"快速生成{a.get('count', 5)}道题",
         'render_visual': lambda a: f"渲染{a.get('type', '可视化')}",
-        'launch_arc_pipeline': lambda a: "启动题目审查（ARC 管线）",
+        'launch_arc_pipeline': lambda a: "启动 ARC 精修管线",
         'check_pipeline_status': lambda a: "检查管线执行进度",
-        'save_questions_to_library': lambda a: f"保存{len(a.get('question_ids', []))}道题到题库",
+        'get_workbench_stats': lambda a: "获取题库统计",
     }
     generator = labels.get(tool_name)
     if generator:
@@ -71,7 +74,7 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'save_study_plan': lambda r: f"已保存「{r.get('title', '')}」共 {r.get('task_count', 0)} 个任务",
         'search_courses': lambda r: f"找到 {len(r.get('courses', []))} 门课程",
         'search_articles': lambda r: f"找到 {len(r.get('articles', []))} 篇文章",
-        'generate_questions': lambda r: f"生成 {len(r.get('questions', []))} 道题",
+        'quick_generate': lambda r: f"生成 {r.get('count', len(r.get('questions', [])))} 道题",
         'render_visual': lambda r: f"渲染可视化: {r.get('type', '')}",
     }
 
@@ -718,6 +721,7 @@ class PlannerToolExecutor(BaseToolExecutor):
         """将可视化数据返回给前端，同时缓存到实例供消息持久化。"""
         visual_type = args.get('type', '')
         payload = args.get('payload', {})
+        priority = args.get('priority', 'normal')
         # DeepSeek 有时把 payload 作为 JSON 字符串传入
         if isinstance(payload, str):
             try:
@@ -731,6 +735,6 @@ class PlannerToolExecutor(BaseToolExecutor):
                          'progress': 'data_card', 'radar': 'data_card'}
             visual_type = alias_map.get(visual_type, 'data_card')
 
-        visual = {"type": visual_type, "payload": payload}
+        visual = {"type": visual_type, "payload": payload, "priority": priority}
         self.pending_visuals.append(visual)
         return visual

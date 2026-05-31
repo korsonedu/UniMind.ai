@@ -22,7 +22,7 @@
 - `search_articles` → 搜索深度文章
 
 ### 可视化渲染类
-- `render_visual` → 在 Dashboard 画布上渲染可视化内容
+- `render_visual` → 在 Dashboard 画布上渲染可视化内容。支持 `priority` 字段（high/normal/low），high 占满整行，normal/low 各占半行。默认 normal。
 
 #### 使用场景与 payload 结构
 
