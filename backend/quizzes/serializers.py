@@ -20,7 +20,49 @@ class KnowledgePointSerializer(serializers.ModelSerializer):
             return []
         return KnowledgePointSerializer(children, many=True, context=self.context).data
 
+class QuestionListSerializer(serializers.ModelSerializer):
+    """学生端题目列表 serializer — 不含答案/解析等敏感字段。"""
+    knowledge_point_detail = KnowledgePointSerializer(source='knowledge_point', read_only=True)
+    is_favorite = serializers.SerializerMethodField()
+    is_mastered = serializers.SerializerMethodField()
+    difficulty_level_display = serializers.CharField(source='get_difficulty_level_display', read_only=True)
+
+    class Meta:
+        model = Question
+        fields = ('id', 'knowledge_point', 'text', 'q_type', 'subjective_type', 'difficulty_level', 'options', 'difficulty', 'institution', 'created_at', 'knowledge_point_detail', 'is_favorite', 'is_mastered', 'difficulty_level_display')
+
+    def get_is_favorite(self, obj):
+        status_map = self.context.get('status_map')
+        if status_map is not None:
+            s = status_map.get(obj.pk)
+            return s.is_favorite if s else False
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            status = UserQuestionStatus.objects.filter(user=request.user, question=obj).first()
+            return status.is_favorite if status else False
+        return False
+
+    def get_is_mastered(self, obj):
+        status_map = self.context.get('status_map')
+        if status_map is not None:
+            s = status_map.get(obj.pk)
+            return s.is_mastered if s else False
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            status = UserQuestionStatus.objects.filter(user=request.user, question=obj).first()
+            return status.is_mastered if status else False
+        return False
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        options = data.get('options')
+        if isinstance(options, dict):
+            data['options'] = [options[k] for k in sorted(options.keys())]
+        return data
+
+
 class QuestionSerializer(serializers.ModelSerializer):
+    """管理员/内部用 serializer — 含完整答案和评分标准。"""
     knowledge_point_detail = KnowledgePointSerializer(source='knowledge_point', read_only=True)
     is_favorite = serializers.SerializerMethodField()
     is_mastered = serializers.SerializerMethodField()

@@ -26,13 +26,12 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'save_study_plan': lambda a: "保存学习计划",
         'get_active_plan': lambda a: "获取当前学习计划",
         'update_plan_task': lambda a: f"更新计划任务「{a.get('task_id', '')}」",
-        'set_dashboard_layout': lambda a: "更新仪表盘布局",
-        'create_dashboard_card': lambda a: f"创建数据卡片「{a.get('title', '')}」",
         'search_courses': lambda a: f"搜索课程「{a.get('query', '')}」",
         'search_asr': lambda a: f"搜索视频字幕「{a.get('query', '')}」",
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
         'search_knowledge_points': lambda a: f"搜索知识点「{a.get('query', '')}」",
         'generate_questions': lambda a: f"基于{len(a.get('knowledge_point_ids', []))}个知识点生成{a.get('count', 5)}道题",
+        'render_visual': lambda a: f"渲染{a.get('type', '可视化')}",
         'launch_arc_pipeline': lambda a: "启动题目审查（ARC 管线）",
         'check_pipeline_status': lambda a: "检查管线执行进度",
         'save_questions_to_library': lambda a: f"保存{len(a.get('question_ids', []))}道题到题库",
@@ -73,9 +72,6 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'search_courses': lambda r: f"找到 {len(r.get('courses', []))} 门课程",
         'search_articles': lambda r: f"找到 {len(r.get('articles', []))} 篇文章",
         'generate_questions': lambda r: f"生成 {len(r.get('questions', []))} 道题",
-        'create_dashboard_card': lambda r: (
-            _json.dumps(r.get('card', {}), ensure_ascii=False) if r.get('status') == 'ok' else r.get('error', '创建失败')
-        ),
         'render_visual': lambda r: f"渲染可视化: {r.get('type', '')}",
     }
 
@@ -99,8 +95,14 @@ class BaseToolExecutor:
     def __init__(self, user, institution=None):
         self.user = user
         self.institution = institution or getattr(user, 'institution', None)
+        self.on_step = None  # 由 views 注入，用于工具内部发进度事件
 
     def __call__(self, tool_name: str, args: Dict[str, Any]) -> str:
+        # 工具白名单校验：防止 LLM 被注入后调用非预期工具
+        allowed = getattr(self, '_allowed_tool_names', None)
+        if allowed is not None and tool_name not in allowed:
+            return json.dumps({"error": f"Tool not allowed: {tool_name}"}, ensure_ascii=False)
+
         handler = getattr(self, f'_handle_{tool_name}', None)
         if handler is None:
             return json.dumps({"error": f"Unknown tool: {tool_name}"}, ensure_ascii=False)
@@ -136,7 +138,7 @@ class BaseToolExecutor:
         else:
             user_subjects = self._get_user_subjects()
             if user_subjects:
-                qs = qs.filter(subject__in=user_subjects)
+                qs = qs.filter(Q(subject__in=user_subjects) | Q(subject__isnull=True))
         if self.institution:
             qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
 
@@ -319,11 +321,15 @@ class BaseToolExecutor:
         }
 
     def _handle_lookup_question(self, args: Dict) -> Dict:
+        from django.db.models import Q
         from quizzes.models import Question
 
         qid = int(args.get('question_id', 0))
+        qs = Question.objects.select_related('knowledge_point')
+        if self.institution:
+            qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
         try:
-            q = Question.objects.select_related('knowledge_point').get(id=qid)
+            q = qs.get(id=qid)
         except Question.DoesNotExist:
             return {"error": f"Question #{qid} not found"}
 
@@ -346,7 +352,7 @@ class PlannerToolExecutor(BaseToolExecutor):
 
     def __init__(self, user, institution=None):
         super().__init__(user, institution)
-        self.pending_visual = None
+        self.pending_visuals = []  # Collect all render_visual outputs
 
     def _handle_get_learning_stats(self, args: Dict) -> Dict:
         from django.utils import timezone
@@ -570,68 +576,6 @@ class PlannerToolExecutor(BaseToolExecutor):
             "plan_status": plan.status,
         }
 
-    def _handle_set_dashboard_layout(self, args: Dict) -> Dict:
-        """配置 Dashboard 面板布局。"""
-        valid_sections = {'plan', 'stats', 'mastery', 'reviews', 'exams', 'custom_cards'}
-        section_order = args.get('section_order', [])
-        highlight = args.get('highlight', '')
-
-        # Validate
-        section_order = [s for s in section_order if s in valid_sections]
-        if not section_order:
-            section_order = ['plan', 'stats', 'mastery', 'reviews', 'exams', 'custom_cards']
-        if highlight and highlight not in valid_sections:
-            highlight = ''
-
-        # Preserve existing config keys (e.g. custom_cards)
-        config = self.user.dashboard_config or {}
-        config['section_order'] = section_order
-        config['highlight'] = highlight or section_order[0] if section_order else 'stats'
-
-        self.user.dashboard_config = config
-        self.user.save(update_fields=['dashboard_config'])
-
-        return {"dashboard_config": config}
-
-    def _handle_create_dashboard_card(self, args: Dict) -> Dict:
-        """创建自定义数据卡片，持久化到 dashboard_config。支持开放式数据结构。"""
-        title = args.get('title', '').strip()
-        items = args.get('items', [])
-        if not title or not items:
-            return {"error": "标题和数据项不能为空"}
-
-        allowed_item_keys = ('label', 'value', 'trend', 'progress', 'emphasis', 'action_link')
-        card = {
-            "title": title,
-            "items": [
-                {k: item[k] for k in item if k in allowed_item_keys}
-                for item in items[:8]
-            ],
-        }
-        if args.get('subtitle'):
-            card['subtitle'] = args['subtitle']
-        if args.get('cta'):
-            card['cta'] = {
-                'label': args['cta'].get('label', ''),
-                'link': args['cta'].get('link', ''),
-            }
-
-        config = self.user.dashboard_config or {}
-        cards = config.get('custom_cards', [])
-        cards.append(card)
-        config['custom_cards'] = cards[-10:]
-
-        # Ensure custom_cards is in section_order so cards are visible
-        order = config.get('section_order', [])
-        if 'custom_cards' not in order:
-            order.append('custom_cards')
-            config['section_order'] = order
-
-        self.user.dashboard_config = config
-        self.user.save(update_fields=['dashboard_config'])
-
-        return {"status": "ok", "card": card}
-
     def _handle_search_courses(self, args: Dict) -> Dict:
         """搜索课程库，推荐学习资源。"""
         from courses.models import Course
@@ -774,10 +718,19 @@ class PlannerToolExecutor(BaseToolExecutor):
         """将可视化数据返回给前端，同时缓存到实例供消息持久化。"""
         visual_type = args.get('type', '')
         payload = args.get('payload', {})
+        # DeepSeek 有时把 payload 作为 JSON 字符串传入
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except (json.JSONDecodeError, TypeError):
+                payload = {}
 
         valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map'}
         if visual_type not in valid_types:
-            return {"error": f"不支持的可视化类型: {visual_type}，支持: {', '.join(valid_types)}"}
+            alias_map = {'table': 'data_card', 'chart': 'data_card', 'gauge': 'data_card',
+                         'progress': 'data_card', 'radar': 'data_card'}
+            visual_type = alias_map.get(visual_type, 'data_card')
 
-        self.pending_visual = {"type": visual_type, "payload": payload}
-        return {"status": "ok", "type": visual_type}
+        visual = {"type": visual_type, "payload": payload}
+        self.pending_visuals.append(visual)
+        return visual

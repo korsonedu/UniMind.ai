@@ -102,7 +102,7 @@ class SimulatePaymentView(APIView):
 
     def post(self, request, order_id):
         from django.conf import settings
-        if not getattr(settings, 'DEBUG', False) and getattr(settings, 'DJANGO_ENV', 'production') != 'development':
+        if not getattr(settings, 'DEBUG', False):
             return Response({'detail': 'Not available in production'}, status=404)
 
         try:
@@ -130,15 +130,14 @@ class WebhookView(APIView):
     permission_classes = []
 
     def post(self, request):
+        import hmac
         from django.conf import settings
         webhook_secret = getattr(settings, 'PAYMENT_WEBHOOK_SECRET', '')
         if not webhook_secret:
-            if not getattr(settings, 'DEBUG', False):
-                return Response({"error": "Webhook not configured"}, status=500)
-            # In DEBUG mode, allow without secret (development convenience)
+            return Response({"error": "Webhook not configured"}, status=500)
         else:
             provided = request.headers.get('X-Webhook-Secret', '')
-            if provided != webhook_secret:
+            if not hmac.compare_digest(str(provided), str(webhook_secret)):
                 return Response({'detail': 'Invalid webhook secret'}, status=403)
 
         try:

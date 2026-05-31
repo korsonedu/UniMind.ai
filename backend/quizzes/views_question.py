@@ -10,7 +10,7 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import Question, UserQuestionStatus, KnowledgePoint
-from quizzes.serializers import QuestionSerializer
+from quizzes.serializers import QuestionSerializer, QuestionListSerializer
 from users.models import User
 from users.views import IsMember
 from users.permissions import IsAdmin, is_platform_admin, HasQuota
@@ -46,8 +46,12 @@ def _get_descendant_kp_ids(sub_ids):
 
 
 class QuestionListView(generics.ListCreateAPIView):
-    serializer_class = QuestionSerializer
     quota_resource = 'question'
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return QuestionSerializer  # 管理员创建题目需要完整字段
+        return QuestionListSerializer  # 学生列表不含答案
 
     def get_permissions(self):
         if self.request.method == 'POST':
@@ -58,8 +62,17 @@ class QuestionListView(generics.ListCreateAPIView):
         user = self.request.user
         qs = Question.objects.all().order_by('-created_at')
 
-        # 机构数据隔离：机构成员可见本机构题库 + 全局题库；独立用户仅见全局题库
-        if not is_platform_admin(user):
+        # 预览模式：平台管理员查看指定机构题库
+        preview_inst_id = self.request.query_params.get('preview_institution')
+        if preview_inst_id:
+            if not is_platform_admin(user):
+                qs = qs.filter(institution__isnull=True)
+            else:
+                qs = qs.filter(
+                    Q(institution_id=preview_inst_id) | Q(institution__isnull=True)
+                )
+        elif not is_platform_admin(user):
+            # 机构数据隔离：机构成员可见本机构题库 + 全局题库；独立用户仅见全局题库
             inst = getattr(user, 'institution', None)
             if inst:
                 qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
@@ -169,7 +182,7 @@ class QuestionListView(generics.ListCreateAPIView):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        question = serializer.save()
+        question = serializer.save(institution=self.request.user.institution)
         if not question.ai_answer:
             self.generate_ai_answer(question)
 
@@ -346,6 +359,7 @@ class ImportCSVQuestionsView(APIView):
             return Response({'error': '仅支持 .csv 格式文件'}, status=400)
 
         try:
+            from django.db import transaction
             decoded_file = file_obj.read().decode('utf-8-sig')
             io_string = io.StringIO(decoded_file)
             reader = csv.DictReader(io_string)
@@ -353,31 +367,29 @@ class ImportCSVQuestionsView(APIView):
             count = 0
             errors = []
 
-            for row in reader:
-                try:
-                    # Expected CSV headers: text, answer, type(optional), difficulty(optional)
-                    # Mapping flexible headers
-                    text = row.get('text') or row.get('question') or row.get('题目')
-                    answer = row.get('answer') or row.get('correct_answer') or row.get('答案')
-                    q_type = row.get('type') or row.get('q_type') or row.get('题型') or 'objective'
-                    difficulty = row.get('difficulty') or row.get('难度') or '1000'
+            with transaction.atomic():
+                for row in reader:
+                    try:
+                        text = row.get('text') or row.get('question') or row.get('题目')
+                        answer = row.get('answer') or row.get('correct_answer') or row.get('答案')
+                        q_type = row.get('type') or row.get('q_type') or row.get('题型') or 'objective'
+                        difficulty = row.get('difficulty') or row.get('难度') or '1000'
 
-                    if not text: continue
+                        if not text: continue
 
-                    # Clean type
-                    if '客观' in q_type or 'choice' in q_type: q_type = 'objective'
-                    elif '主观' in q_type: q_type = 'subjective'
+                        if '客观' in q_type or 'choice' in q_type: q_type = 'objective'
+                        elif '主观' in q_type: q_type = 'subjective'
 
-                    Question.objects.create(
-                        text=text,
-                        correct_answer=answer,
-                        q_type=q_type,
-                        difficulty=int(difficulty) if str(difficulty).isdigit() else 1000,
-                        institution=request.user.institution,
-                    )
-                    count += 1
-                except Exception as e:
-                    errors.append(f"Row error: {str(e)}")
+                        Question.objects.create(
+                            text=text,
+                            correct_answer=answer,
+                            q_type=q_type,
+                            difficulty=int(difficulty) if str(difficulty).isdigit() else 1000,
+                            institution=request.user.institution,
+                        )
+                        count += 1
+                    except Exception as e:
+                        errors.append(f"Row error: {str(e)}")
 
             return Response({'status': 'success', 'count': count, 'errors': errors[:5]})
 

@@ -39,7 +39,12 @@ class EncryptedCharField(models.CharField):
             return ''
 
     def to_python(self, value):
-        return value
+        if value is None or value == '':
+            return value
+        try:
+            return _get_fernet().decrypt(value.encode()).decode()
+        except Exception:
+            return value  # 非密文（如表单输入的明文）直接返回
 
 
 class EncryptedTextField(models.TextField):
@@ -60,4 +65,9 @@ class EncryptedTextField(models.TextField):
             return ''
 
     def to_python(self, value):
-        return value
+        if value is None or value == '':
+            return value
+        try:
+            return _get_fernet().decrypt(value.encode()).decode()
+        except Exception:
+            return value  # 非密文（如表单输入的明文）直接返回

@@ -65,6 +65,11 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
             logger.warning("Order %s already paid, ignoring duplicate callback", order.id)
             return
 
+        # 校验回调金额与订单金额一致，防止金额篡改
+        if amount_cents is not None and amount_cents != order.amount_cents:
+            logger.error("Order %s amount mismatch: expected %s, got %s", order.id, order.amount_cents, amount_cents)
+            raise ValueError(f"Payment amount mismatch: expected {order.amount_cents}, got {amount_cents}")
+
         PaymentTransaction.objects.create(
             order=order,
             gateway=order.gateway,
@@ -79,10 +84,9 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
         order.gateway_order_id = gateway_txn_id
         order.save(update_fields=['status', 'paid_at', 'gateway_order_id'])
 
-    # Activate membership for the paying user (outside the lock to minimise
-    # lock-held time; idempotent if called twice).
-    duration = PLAN_DURATION_DAYS.get(order.billing_cycle, 30)
-    activate_membership(order.user, order.plan, duration, source=order.gateway)
+        # 会员激活移入 atomic 块内，确保崩溃窗口中不会出现已付款未激活
+        duration = PLAN_DURATION_DAYS.get(order.billing_cycle, 30)
+        activate_membership(order.user, order.plan, duration, source=order.gateway)
 
     # Generate invoice asynchronously
     from payments.tasks import generate_invoice

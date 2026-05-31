@@ -755,11 +755,9 @@ class InstitutionJoinBySlugView(APIView):
         if not inst.is_plan_active:
             return Response({'error': '该机构服务已到期'}, status=403)
 
-        role = request.data.get('role', 'student')
-        if role not in ('student', 'teacher'):
-            role = 'student'
+        role = 'student'  # 通过邀请链接加入的用户只能是学生，教师角色需机构管理员指定
 
-        if role == 'student' and inst.student_count >= inst.max_students:
+        if inst.student_count >= inst.max_students:
             return Response({'error': '该机构学员数已达上限'}, status=403)
 
         user = request.user

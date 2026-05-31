@@ -143,8 +143,6 @@ def reflect_user_learning(self):
         except Exception:
             logger.exception("reflect_user_learning failed for user %d", user.id)
             errors += 1
-        finally:
-            connections.close_all()
 
     logger.info("reflect_user_learning done: processed=%d, errors=%d", processed, errors)
 
@@ -314,8 +312,6 @@ def reflect_teacher_patterns(self):
         except Exception:
             logger.exception("reflect_teacher_patterns failed for user %d", teacher.id)
             errors += 1
-        finally:
-            connections.close_all()
 
     logger.info("reflect_teacher_patterns done: processed=%d, errors=%d", processed, errors)
 
@@ -445,3 +441,79 @@ def _analyze_teacher(teacher, exam_bot, cutoff, now):
             })
 
     return insights
+
+
+@shared_task(
+    bind=True,
+    soft_time_limit=300,
+    time_limit=360,
+    acks_late=True,
+)
+def cleanup_stale_memories(self):
+    """Weekly cleanup of stale structured memories.
+
+    Rules:
+    - use_count=0 and updated_at > 30 days → soft delete
+    - confidence < 0.3 and updated_at > 60 days → soft delete
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    from .models import AgentMemory
+
+    now = timezone.now()
+    deleted_count = 0
+
+    # Rule 1: never used, old enough
+    qs1 = AgentMemory.objects.filter(
+        is_active=True,
+        use_count=0,
+        updated_at__lt=now - timedelta(days=30),
+    )
+    count1 = qs1.update(is_active=False)
+    deleted_count += count1
+
+    # Rule 2: low confidence, old enough
+    qs2 = AgentMemory.objects.filter(
+        is_active=True,
+        confidence__lt=0.3,
+        updated_at__lt=now - timedelta(days=60),
+    )
+    count2 = qs2.update(is_active=False)
+    deleted_count += count2
+
+    logger.info("cleanup_stale_memories: soft-deleted %d memories (rule1=%d, rule2=%d)", deleted_count, count1, count2)
+
+    # Cleanup mem0 semantic memories if enabled
+    if USE_MEM0:
+        _cleanup_semantic_memories()
+
+    return deleted_count
+
+
+def _cleanup_semantic_memories():
+    """Cleanup stale semantic memories via mem0."""
+    from django.contrib.auth import get_user_model
+    from .models import AIChatMessage
+    from django.utils import timezone
+    from datetime import timedelta
+
+    User = get_user_model()
+    now = timezone.now()
+    cutoff = now - timedelta(days=90)
+
+    # Find institutions with active users in last 90 days
+    active_inst_ids = (
+        AIChatMessage.objects.filter(timestamp__gte=cutoff)
+        .values_list('user__institution_id', flat=True)
+        .distinct()
+    )
+
+    for inst_id in active_inst_ids:
+        if not inst_id:
+            continue
+        try:
+            manager = TenantMemoryManager(institution_id=inst_id)
+            all_memories = manager.get_all()
+            logger.info("cleanup_stale_memories: institution %d has %d semantic memories", inst_id, len(all_memories))
+        except Exception:
+            logger.exception("cleanup_stale_memories: failed for institution %d", inst_id)

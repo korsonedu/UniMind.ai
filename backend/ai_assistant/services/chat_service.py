@@ -33,13 +33,25 @@ class AssistantChatService:
             p = bot.institution_personality
             parts = []
             if p.get('teaching_style'):
-                parts.append(f"教学风格：{p['teaching_style']}")
+                parts.append(f"教学风格：{p['teaching_style'][:200]}")
             if p.get('tone'):
-                parts.append(f"语气：{p['tone']}")
+                parts.append(f"语气：{p['tone'][:100]}")
             if p.get('knowledge_domain'):
-                parts.append(f"知识领域：{p['knowledge_domain']}")
+                parts.append(f"知识领域：{p['knowledge_domain'][:200]}")
             if p.get('custom_instructions'):
-                parts.append(p['custom_instructions'])
+                custom = p['custom_instructions'][:500]
+                # prompt injection 防护
+                import re
+                injection_patterns = [
+                    r'(?i)(忽略|放弃|forget|ignore|disregard|override)\s*(以上|上面|之前的|所有|previous|above|prior)\s*(指令|规则|提示|instructions|rules|prompts)',
+                    r'(?i)(system\s*:|user\s*:|assistant\s*:|human\s*:|ai\s*:)',
+                    r'(?i)(你现在是|从现在起|you are now|from now on|new instructions)',
+                    r'(?i)(输出|显示|print|reveal|show)\s*(你的|your|system|系统)\s*(prompt|提示词|指令)',
+                    r'(?i)(jailbreak|DAN|越狱|roleplay\s+as)',
+                ]
+                for pattern in injection_patterns:
+                    custom = re.sub(pattern, '[filtered]', custom)
+                parts.append(custom)
             if parts:
                 personality_section = "\n\n## 机构教学配置\n" + "\n".join(f"- {x}" for x in parts)
 
@@ -84,6 +96,7 @@ class AssistantChatService:
         student_context: str = '',
         memory_context: str = '',
         on_step=None,
+        on_message=None,
         adaptive_directives='',
     ):
         """Agent 化对话：模型可自主调用工具获取信息后再回答。"""
@@ -105,11 +118,11 @@ class AssistantChatService:
         messages.append({'role': 'user', 'content': user_message})
 
         # 从 registry 获取 tools
-        profile = get_bot_profile(bot.bot_type if bot else 'assistant')
+        profile = get_bot_profile(bot.bot_type if bot else 'planner')
         tools = profile.tools_factory()
 
         # Apply tool permission sandbox
-        bot_type = bot.bot_type if bot else 'assistant'
+        bot_type = bot.bot_type if bot else 'planner'
         tools = filter_tools(bot_type, institution, tools)
 
         # 意图预筛选（仅启用 use_intent_router 的 bot）
@@ -117,8 +130,18 @@ class AssistantChatService:
             from ai_engine.tool_router import route_tools
             tools = route_tools(user_message, tools, recent_messages=history_messages, bot_type=bot_type)
 
+        # 设置工具白名单，防止 LLM 被注入后调用非预期工具
+        tool_executor._allowed_tool_names = {t['function']['name'] for t in tools}
+
         # Force tool usage for agent bots
-        forced_tool_choice = "required" if profile.force_tool_choice else "auto"
+        # DeepSeek 不支持 tool_choice="required"，显式降级
+        from ai_engine.config import get_model_for_task
+        model_config = get_model_for_task('assistant.chat')
+        is_deepseek = 'deepseek' in model_config.get('model', '').lower()
+        if profile.force_tool_choice and not is_deepseek:
+            forced_tool_choice = "required"
+        else:
+            forced_tool_choice = "auto"
 
         if on_step:
             return AIEngine.call_ai_with_streaming_tools(
@@ -126,6 +149,7 @@ class AssistantChatService:
                 tools=tools,
                 tool_executor=tool_executor,
                 on_step=on_step,
+                on_message=on_message,
                 tool_choice=forced_tool_choice,
                 temperature=0.6,
                 max_tokens=2500,

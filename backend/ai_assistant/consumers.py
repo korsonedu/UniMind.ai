@@ -16,22 +16,18 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.bot_id = self.scope['url_route']['kwargs']['bot_id']
         self.user = self.scope.get('user')
+        self._pending_auth = False
         logger.info("WS connect: bot_id=%s, session_user=%s", self.bot_id, self.user)
 
-        # Try session auth first, then fallback to token query param
-        if not self.user or not self.user.is_authenticated:
-            from urllib.parse import parse_qs
-            qs = self.scope.get('query_string', b'').decode()
-            params = parse_qs(qs)
-            token = params.get('token', [None])[0]
-            logger.info("WS auth fallback: token=%s", bool(token))
-            if token:
-                self.user = await self._authenticate_token(token)
-                logger.info("WS token auth result: %s", self.user)
-            if not self.user or not self.user.is_authenticated:
-                logger.warning("WS rejected: unauthenticated")
-                await self.close(code=4001)
-                return
+        # Try session auth (cookie-based)
+        if self.user and self.user.is_authenticated:
+            # Session auth succeeded — accept immediately
+            pass
+        else:
+            # No session auth — accept and wait for auth_token in first message
+            self._pending_auth = True
+            await self.accept()
+            return
 
         bot = await self._get_bot(self.bot_id)
         if not bot:
@@ -40,6 +36,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             return
 
         self.bot = bot
+        self.institution = getattr(self.user, 'institution', None)
         logger.info("WS accepted: user=%s, bot=%s (%s)", self.user, bot.name, bot.bot_type)
         await self.accept()
 
@@ -55,6 +52,33 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 ensure_ascii=False,
             ))
             return
+
+        # Handle token auth as first message (token sent in message body, not URL)
+        if self._pending_auth:
+            token = data.get('auth_token', '').strip()
+            if token:
+                self.user = await self._authenticate_token(token)
+            if not self.user or not self.user.is_authenticated:
+                logger.warning("WS auth via message failed")
+                await self.send(text_data=json.dumps(
+                    {"type": "error", "message": "Authentication failed"},
+                    ensure_ascii=False,
+                ))
+                await self.close(code=4001)
+                return
+            self._pending_auth = False
+            # Now that we're authenticated, set up bot
+            bot = await self._get_bot(self.bot_id)
+            if not bot:
+                logger.warning("WS rejected: bot %s not found or no access", self.bot_id)
+                await self.close(code=4004)
+                return
+            self.bot = bot
+            self.institution = getattr(self.user, 'institution', None)
+            logger.info("WS auth via message OK: user=%s, bot=%s", self.user, bot.name)
+            # If this message also contains a chat message, fall through to process it
+            if not data.get('message', '').strip():
+                return
 
         message = data.get('message', '').strip()
         conversation_id = data.get('conversation_id')
@@ -72,7 +96,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.exception("Agent WS error: %s", e)
             await self.send(text_data=json.dumps(
-                {"type": "error", "message": f"Agent 执行失败: {e}"},
+                {"type": "error", "message": "连接中断，请稍后再试"},
                 ensure_ascii=False,
             ))
 
@@ -97,6 +121,13 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         def on_step(event):
             send_sync(event)
 
+        _sent_any_message = False
+
+        def on_message(text):
+            nonlocal _sent_any_message
+            _sent_any_message = True
+            send_sync({"type": "message", "content": text})
+
         try:
             user_msg = self._save_message(self.user, self.bot, 'user', message, conversation_id=conversation_id)
 
@@ -116,9 +147,12 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 student_context = get_student_academic_context(self.user)
 
             memory_context = ""
+            adaptive_directives = ""
             try:
-                from .services.memory_service import get_memories_for_injection
-                memory_context = get_memories_for_injection(self.user)
+                from .services.memory_service import build_memory_context
+                memory_context, adaptive_directives = build_memory_context(
+                    self.user, message, bot_type=self.bot.bot_type if self.bot else 'planner'
+                )
             except Exception:
                 pass
 
@@ -129,11 +163,13 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 user=self.user,
                 message=message,
                 history=history_msgs,
-                institution=getattr(self, 'institution', None),
+                institution=self.institution,
                 stream=True,
                 on_step=on_step,
+                on_message=on_message,
                 student_context=student_context,
                 memory_context=memory_context,
+                adaptive_directives=adaptive_directives,
             )
             result = dispatch_result['result']
             tool_executor = dispatch_result['tool_executor']
@@ -148,7 +184,11 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ')
             ai_content = ai_content.replace('\\(', ' $ ').replace('\\)', ' $ ')
 
-            on_step({"type": "done", "full_content": ai_content})
+            msg_metadata = self._build_metadata(tool_executor)
+            done_event = {"type": "done", "full_content": ai_content, "has_intermediate": _sent_any_message}
+            if msg_metadata:
+                done_event["metadata"] = msg_metadata
+            on_step(done_event)
 
             self._save_message(self.user, self.bot, 'assistant', ai_content,
                               metadata=self._build_metadata(tool_executor),
@@ -162,22 +202,46 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
 
         except Exception as e:
             logger.exception("Agent execution error: %s", e)
-            on_step({"type": "error", "message": str(e)})
+            on_step({"type": "error", "message": "AI 助教暂时无法响应，请稍后再试"})
+        finally:
+            try:
+                from users.quota import increment_quota
+                if self.user and getattr(self.user, 'institution', None):
+                    increment_quota(self.user.institution, 'ai_call_total')
+            except Exception:
+                pass
 
     @database_sync_to_async
     def _get_bot(self, bot_id):
-        from .models import Bot
+        from .models import Bot, BotVisibility
         from users.permissions import is_platform_admin
         try:
             bot = Bot.objects.get(id=bot_id)
             user = self.user
+
+            # 平台管理员：始终允许
             if is_platform_admin(user):
                 return bot
-            if bot.is_exclusive and hasattr(user, 'institution') and user.institution:
-                if bot.institution == user.institution:
+
+            # 全局 bot (institution=None)
+            if bot.institution is None:
+                if not bot.is_active:
+                    return None
+                # planner/exam_generator 始终可见，不允许租户隐藏
+                if bot.bot_type in ('planner', 'exam_generator'):
                     return bot
-            if not bot.is_exclusive:
+                if user.institution:
+                    vis = BotVisibility.objects.filter(
+                        institution=user.institution, bot=bot
+                    ).first()
+                    if vis and not vis.is_visible:
+                        return None
                 return bot
+
+            # 机构 bot：必须匹配用户机构
+            if bot.institution == user.institution:
+                return bot
+
             return None
         except Bot.DoesNotExist:
             return None
@@ -207,7 +271,10 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             metadata['generated_questions'] = tool_executor._last_generated
         if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
             metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
-        if hasattr(tool_executor, 'pending_visual') and tool_executor.pending_visual:
-            metadata['visual'] = tool_executor.pending_visual
-            tool_executor.pending_visual = None  # Clear cache after persisting
+        if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
+            visuals = tool_executor.pending_visuals
+            metadata['visual'] = visuals[-1]  # Last visual for backward compat
+            if len(visuals) > 1:
+                metadata['all_visuals'] = visuals
+            tool_executor.pending_visuals = []
         return metadata or None

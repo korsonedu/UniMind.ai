@@ -29,6 +29,14 @@ class BotSerializer(serializers.ModelSerializer):
             'institution', 'institution_name',
         )
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # 非管理员不暴露 system_prompt（含敏感指令和工具配置）
+        request = self.context.get('request')
+        if request and not getattr(request.user, 'is_staff', False):
+            data.pop('system_prompt', None)
+        return data
+
     def get_prompt_template_name(self, obj):
         return get_bot_prompt_template_name(obj)
 
@@ -44,7 +52,7 @@ class BotSerializer(serializers.ModelSerializer):
 class AIChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = AIChatMessage
-        fields = ('role', 'content', 'timestamp', 'bot', 'metadata')
+        fields = ('role', 'content', 'timestamp', 'bot', 'metadata', 'conversation_id')
 
 
 class StudyPlanSerializer(serializers.ModelSerializer):

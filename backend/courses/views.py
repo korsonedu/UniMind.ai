@@ -1,13 +1,10 @@
-import fcntl
 import json
 import logging
 import os
-import shutil
 import subprocess
 import tempfile
 import threading
 import uuid
-from pathlib import Path
 
 from django.conf import settings
 from django.core.files import File
@@ -29,7 +26,7 @@ def _get_course_for_user(pk, user, request=None):
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.views import IsMember
 from quizzes.utils import safe_int as _safe_int
-from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES
+from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES, DANGEROUS_EXTENSIONS, ALLOWED_UPLOAD_TYPES
 from core.rate_limit import user_rate_limit
 from core.analytics import record_event
 from users.quota import check_and_add_storage_usage
@@ -37,9 +34,7 @@ from users.quota import check_and_add_storage_usage
 # 上传限流：20 次/小时/用户
 _upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
 
-
-CHUNK_DIR = Path(settings.MEDIA_ROOT) / "chunk_uploads"
-MAX_CHUNK_SIZE_BYTES = 20 * 1024 * 1024  # 20MB per chunk
+OSS_PART_SIZE = 10 * 1024 * 1024  # 10MB per part
 
 
 logger = logging.getLogger(__name__)
@@ -101,261 +96,117 @@ def _extract_cover_async(course_id: int) -> None:
     threading.Thread(target=_run, daemon=True).start()
 
 
-def _upload_dir(upload_id: str) -> Path:
-    return CHUNK_DIR / upload_id
+def _get_oss_bucket():
+    import oss2
+    auth = oss2.Auth(settings.OSS_ACCESS_KEY_ID, settings.OSS_ACCESS_KEY_SECRET)
+    return oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
 
 
-def _meta_path(upload_id: str) -> Path:
-    return _upload_dir(upload_id) / "meta.json"
-
-
-def _chunk_path(upload_id: str, chunk_index: int) -> Path:
-    return _upload_dir(upload_id) / f"chunk_{chunk_index:08d}.part"
-
-
-def _load_meta(upload_id: str):
-    meta_file = _meta_path(upload_id)
-    if not meta_file.exists():
-        return None
-    with meta_file.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def cleanup_expired_chunks(max_age_hours: int = 24):
-    """清理过期的分片上传临时文件"""
-    import time
-    cutoff = time.time() - (max_age_hours * 3600)
-
-    if not CHUNK_DIR.exists():
-        return
-
-    cleaned_count = 0
-    for upload_dir in CHUNK_DIR.iterdir():
-        if not upload_dir.is_dir():
-            continue
-
-        # 检查目录修改时间
-        if upload_dir.stat().st_mtime < cutoff:
-            shutil.rmtree(upload_dir, ignore_errors=True)
-            cleaned_count += 1
-
-    if cleaned_count > 0:
-        logger.info(f"清理了 {cleaned_count} 个过期的分片上传目录")
-
-
-def _add_chunk_to_meta(upload_id: str, chunk_index: int) -> dict:
-    """原子化添加分片索引 — 使用文件锁防止并发覆写。"""
-    meta_path = _meta_path(upload_id)
-    with open(meta_path, "r+") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
-        f.seek(0)
-        meta = json.load(f)
-        uploaded_chunks = set(meta.get("uploaded_chunks", []))
-        uploaded_chunks.add(chunk_index)
-        meta["uploaded_chunks"] = sorted(uploaded_chunks)
-        f.seek(0)
-        f.truncate()
-        json.dump(meta, f, ensure_ascii=False)
-        return meta
-
-
-class OSSSignatureURLView(APIView):
-    """生成 OSS 签名 URL，供前端直传文件到 OSS"""
+@_upload_rl
+class OSSMultipartInitView(APIView):
+    """初始化 OSS 分片上传，返回 upload_id + 各片签名 URL。"""
     permission_classes = [IsAdmin]
 
     def post(self, request):
         file_name = str(request.data.get("file_name", "")).strip()
-        file_type = str(request.data.get("file_type", "video")).strip()
-        content_type = str(request.data.get("content_type", "video/mp4")).strip()
-
-        if not file_name:
-            return Response({"error": "缺少文件名"}, status=400)
-
-        # 文件类型校验（OSS 直传也必须经过白名单检查）
-        from core.file_validation import DANGEROUS_EXTENSIONS, ALLOWED_UPLOAD_TYPES
-        ext = os.path.splitext(file_name)[1].lower()
-        if ext in DANGEROUS_EXTENSIONS:
-            return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
-        if ext not in ALLOWED_UPLOAD_TYPES:
-            return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
-
-        # 生成唯一的文件路径
-        institution_id = request.user.institution_id or "public"
-        ext = os.path.splitext(file_name)[1]
-        unique_name = f"{uuid.uuid4().hex}{ext}"
-        object_key = f"institutions/{institution_id}/{file_type}/{unique_name}"
-
-        # 生成签名 URL
-        import oss2
-        auth = oss2.Auth(settings.OSS_ACCESS_KEY_ID, settings.OSS_ACCESS_KEY_SECRET)
-        bucket = oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
-
-        # 生成 PUT 签名 URL（有效期 1 小时）
-        url = bucket.sign_url("PUT", object_key, 3600, headers={"Content-Type": content_type})
-
-        return Response({
-            "upload_url": url,
-            "object_key": object_key,
-            "file_name": file_name,
-            "expires_in": 3600,
-        })
-
-
-class OSSUploadCompleteView(APIView):
-    """OSS 上传完成后，记录文件信息到数据库"""
-    permission_classes = [IsAdmin]
-
-    def post(self, request):
-        object_key = str(request.data.get("object_key", "")).strip()
-        file_name = str(request.data.get("file_name", "")).strip()
-        file_type = str(request.data.get("file_type", "video")).strip()
         file_size = _safe_int(request.data.get("file_size"), 0)
 
-        if not object_key:
-            return Response({"error": "缺少 object_key"}, status=400)
-
-        # P1-8: 校验 object_key 归属当前用户机构，防止跨机构文件枚举/覆盖
-        user_inst_id = getattr(request.user, 'institution_id', None)
-        if user_inst_id:
-            expected_prefix = f"institutions/{user_inst_id}/"
-            if not object_key.startswith(expected_prefix):
-                return Response({"error": "无权操作此文件"}, status=403)
-        else:
-            if not object_key.startswith("public/"):
-                return Response({"error": "无权操作此文件"}, status=403)
-
-        # 验证文件是否存在
-        import oss2
-        auth = oss2.Auth(settings.OSS_ACCESS_KEY_ID, settings.OSS_ACCESS_KEY_SECRET)
-        bucket = oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
-
-        if not bucket.object_exists(object_key):
-            return Response({"error": "文件不存在"}, status=400)
-
-        # 记录文件信息（可以存储到数据库或缓存）
-        file_info = {
-            "object_key": object_key,
-            "file_name": file_name,
-            "file_type": file_type,
-            "file_size": file_size,
-            "url": f"https://{settings.OSS_BUCKET_NAME}.{settings.OSS_ENDPOINT}/{object_key}",
-            "uploaded_by": request.user.id,
-            "institution_id": request.user.institution_id,
-        }
-
-        return Response({
-            "message": "文件上传成功",
-            "file_info": file_info,
-        })
-
-
-@_upload_rl
-class ChunkedUploadInitView(APIView):
-    permission_classes = [IsAdmin]
-
-    def post(self, request):
-        from core.file_validation import validate_upload_file, DANGEROUS_EXTENSIONS, ALLOWED_UPLOAD_TYPES
-
-        file_name = str(request.data.get("file_name", "")).strip()
-        total_size = _safe_int(request.data.get("total_size"), 0)
-        chunk_size = _safe_int(request.data.get("chunk_size"), 0)
-        total_chunks = _safe_int(request.data.get("total_chunks"), 0)
-        mime_type = str(request.data.get("mime_type", "")).strip()
-
         if not file_name:
             return Response({"error": "缺少文件名"}, status=400)
-        if total_size <= 0 or chunk_size <= 0 or total_chunks <= 0:
-            return Response({"error": "分片参数非法"}, status=400)
+        if file_size <= 0:
+            return Response({"error": "文件大小非法"}, status=400)
 
-        # 文件类型校验
         ext = os.path.splitext(file_name)[1].lower()
         if ext in DANGEROUS_EXTENSIONS:
             return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
         if ext not in ALLOWED_UPLOAD_TYPES:
             return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
-        if chunk_size > MAX_CHUNK_SIZE_BYTES:
-            return Response({"error": f"单片过大，单片上限 {MAX_CHUNK_SIZE_BYTES // (1024 * 1024)}MB"}, status=400)
 
-        upload_id = uuid.uuid4().hex
-        upload_path = _upload_dir(upload_id)
-        upload_path.mkdir(parents=True, exist_ok=True)
+        institution_id = request.user.institution_id or "public"
+        unique_name = f"{uuid.uuid4().hex}{ext}"
+        object_key = f"institutions/{institution_id}/video/{unique_name}"
 
-        meta = {
+        bucket = _get_oss_bucket()
+        result = bucket.init_multipart_upload(object_key)
+        upload_id = result.upload_id
+
+        total_parts = (file_size + OSS_PART_SIZE - 1) // OSS_PART_SIZE
+        signed_urls = []
+        for part_number in range(1, total_parts + 1):
+            url = bucket.sign_url(
+                "PUT", object_key, 3600,
+                headers={
+                    "x-oss-sequential-read": "true",
+                },
+                params={
+                    "uploadId": upload_id,
+                    "partNumber": str(part_number),
+                },
+            )
+            signed_urls.append(url)
+
+        return Response({
             "upload_id": upload_id,
-            "file_name": file_name,
-            "total_size": total_size,
-            "chunk_size": chunk_size,
-            "total_chunks": total_chunks,
-            "mime_type": mime_type,
-            "uploaded_chunks": [],
-            "user_id": request.user.id,
-        }
-        with _meta_path(upload_id).open("w", encoding="utf-8") as f:
-            json.dump(meta, f, ensure_ascii=False)
-
-        return Response(
-            {
-                "upload_id": upload_id,
-                "max_chunk_size": MAX_CHUNK_SIZE_BYTES,
-            }
-        )
+            "object_key": object_key,
+            "part_size": OSS_PART_SIZE,
+            "total_parts": total_parts,
+            "signed_urls": signed_urls,
+        })
 
 
 @_upload_rl
-class ChunkedUploadChunkView(APIView):
-    permission_classes = [IsAdmin]
-
-    def post(self, request, upload_id):
-        meta = _load_meta(upload_id)
-        if not meta:
-            return Response({"error": "上传会话不存在或已失效"}, status=404)
-        if meta.get("user_id") != request.user.id:
-            return Response({"error": "无权限访问该上传会话"}, status=403)
-
-        chunk_index = _safe_int(request.data.get("chunk_index"), -1)
-        chunk = request.FILES.get("chunk")
-
-        if chunk is None:
-            return Response({"error": "缺少分片文件"}, status=400)
-        if chunk_index < 0 or chunk_index >= _safe_int(meta.get("total_chunks"), 0):
-            return Response({"error": "分片索引非法"}, status=400)
-        if chunk.size > MAX_CHUNK_SIZE_BYTES:
-            return Response({"error": "分片超出大小限制"}, status=400)
-
-        chunk_file = _chunk_path(upload_id, chunk_index)
-        with chunk_file.open("wb") as f:
-            for part in chunk.chunks():
-                f.write(part)
-
-        updated_meta = _add_chunk_to_meta(upload_id, chunk_index)
-
-        return Response(
-            {
-                "status": "ok",
-                "uploaded_count": len(updated_meta["uploaded_chunks"]),
-                "total_chunks": updated_meta["total_chunks"],
-            }
-        )
-
-
-@_upload_rl
-class ChunkedUploadCompleteView(APIView):
+class OSSMultipartCompleteView(APIView):
+    """确认 OSS 分片上传完成 + 创建课程记录。"""
     permission_classes = [IsAdmin, HasQuota]
     quota_resource = 'course'
 
-    def post(self, request, upload_id):
-        meta = _load_meta(upload_id)
-        if not meta:
-            return Response({"error": "上传会话不存在或已失效"}, status=404)
-        if meta.get("user_id") != request.user.id:
-            return Response({"error": "无权限访问该上传会话"}, status=403)
+    def post(self, request):
+        upload_id = str(request.data.get("upload_id", "")).strip()
+        object_key = str(request.data.get("object_key", "")).strip()
+        parts_json = str(request.data.get("parts", "[]")).strip()
 
-        total_chunks = _safe_int(meta.get("total_chunks"), 0)
-        uploaded_chunks = set(meta.get("uploaded_chunks", []))
-        missing = [i for i in range(total_chunks) if i not in uploaded_chunks]
-        if missing:
-            return Response({"error": f"仍有分片缺失，缺失数：{len(missing)}"}, status=400)
+        if not upload_id or not object_key:
+            return Response({"error": "缺少 upload_id 或 object_key"}, status=400)
 
+        # 校验 object_key 归属当前用户机构
+        user_inst_id = getattr(request.user, 'institution_id', None)
+        expected_prefix = f"institutions/{user_inst_id or 'public'}/"
+        if not object_key.startswith(expected_prefix):
+            return Response({"error": "无权操作此文件"}, status=403)
+
+        # 解析 parts: [{"number": 1, "etag": "..."}, ...]
+        try:
+            parts = json.loads(parts_json)
+        except (json.JSONDecodeError, TypeError):
+            return Response({"error": "parts 格式非法"}, status=400)
+        if not isinstance(parts, list) or not parts:
+            return Response({"error": "parts 不能为空"}, status=400)
+
+        # 完成 OSS 分片合并
+        import oss2
+        bucket = _get_oss_bucket()
+        try:
+            oss_parts = []
+            for p in parts:
+                part_number = _safe_int(p.get("number"), 0)
+                etag = str(p.get("etag", "")).strip()
+                if part_number <= 0 or not etag:
+                    return Response({"error": f"part 数据非法: {p}"}, status=400)
+                oss_parts.append(oss2.models.PartInfo(part_number, etag))
+            bucket.complete_multipart_upload(upload_id, object_key, oss_parts)
+        except Exception as exc:
+            logger.error("OSS complete_multipart_upload failed: %s", exc)
+            return Response({"error": f"OSS 合并失败: {exc}"}, status=500)
+
+        # 验证文件确实存在
+        if not bucket.object_exists(object_key):
+            return Response({"error": "文件在 OSS 上不存在"}, status=500)
+
+        # 获取实际文件大小
+        obj_meta = bucket.head_object(object_key)
+        video_size = obj_meta.content_length if obj_meta else 0
+
+        # 校验课程元数据
         title = str(request.data.get("title", "")).strip()
         if not title:
             return Response({"error": "课程标题必填"}, status=400)
@@ -366,60 +217,51 @@ class ChunkedUploadCompleteView(APIView):
         knowledge_point_id = request.data.get("knowledge_point")
         cover_image = request.FILES.get("cover_image")
         courseware = request.FILES.get("courseware")
+        reference_materials = request.FILES.get("reference_materials")
+
         validate_upload_file(cover_image, max_size_bytes=IMAGE_MAX_BYTES)
         validate_upload_file(courseware, max_size_bytes=DOC_MAX_BYTES)
+        validate_upload_file(reference_materials, max_size_bytes=DOC_MAX_BYTES)
 
-        # 存储配额预检（原子化：检查+递增，解决 TOCTOU 竞态）
+        # 存储配额（原子化）
         inst = request.user.institution
-        total_upload_size = _safe_int(meta.get("total_size"), 0)
-        if cover_image:
-            total_upload_size += cover_image.size
-        if courseware:
-            total_upload_size += courseware.size
+        total_upload_size = video_size
+        for f in (cover_image, courseware, reference_materials):
+            if f:
+                total_upload_size += f.size
         check_and_add_storage_usage(inst, total_upload_size)
 
-        upload_path = _upload_dir(upload_id)
-        merged_path = upload_path / "merged_video.bin"
+        # 创建课程
+        course = Course(
+            title=title,
+            description=description,
+            elo_reward=elo_reward,
+            author=request.user,
+            institution=inst,
+        )
+        if str(album_obj_id or "").strip() and str(album_obj_id) != "0":
+            course.album_obj_id = _safe_int(album_obj_id, None)
+        if str(knowledge_point_id or "").strip() and str(knowledge_point_id) != "0":
+            course.knowledge_point_id = _safe_int(knowledge_point_id, None)
+        if cover_image:
+            course.cover_image = cover_image
+        if courseware:
+            course.courseware = courseware
+        if reference_materials:
+            course.reference_materials = reference_materials
 
-        try:
-            with merged_path.open("wb") as merged:
-                for chunk_index in range(total_chunks):
-                    chunk_file = _chunk_path(upload_id, chunk_index)
-                    with chunk_file.open("rb") as cf:
-                        shutil.copyfileobj(cf, merged, length=8 * 1024 * 1024)
+        # 将 OSS object_key 关联到 video_file 字段
+        original_name = os.path.basename(object_key)
+        course.video_file.name = object_key
+        course.save()
 
-            original_name = os.path.basename(meta.get("file_name") or "video.mp4")
-            course = Course(
-                title=title,
-                description=description,
-                elo_reward=elo_reward,
-                author=request.user,
-                institution=request.user.institution,
-            )
-            if str(album_obj_id or "").strip() and str(album_obj_id) != "0":
-                course.album_obj_id = _safe_int(album_obj_id, None)
-            if str(knowledge_point_id or "").strip() and str(knowledge_point_id) != "0":
-                course.knowledge_point_id = _safe_int(knowledge_point_id, None)
-            if cover_image:
-                course.cover_image = cover_image
-            if courseware:
-                course.courseware = courseware
-
-            with merged_path.open("rb") as merged_file:
-                course.video_file.save(original_name, File(merged_file), save=False)
-            course.save()
-        except Exception as exc:
-            return Response({"error": f"合并失败：{exc}"}, status=500)
-        finally:
-            shutil.rmtree(upload_path, ignore_errors=True)
-
-        # Assign tags from chunked upload
+        # Tags
         tags_json = request.data.get("tags", "")
         if tags_json:
             try:
                 tag_names = json.loads(tags_json)
                 from .views_tags import _assign_tags
-                _assign_tags(course, tag_names, request.user.institution)
+                _assign_tags(course, tag_names, inst)
             except Exception:
                 pass
 
@@ -458,12 +300,22 @@ class VideoProgressUpdateView(APIView):
             # 如果之前没完成，现在标记为完成，则发放奖励
             elo_added = 0
             if finished and not progress.is_finished:
+                from django.db.models import F
+                from django.db import transaction
+                with transaction.atomic():
+                    user = request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
+                    # 双重检查：atomic 内再次确认未完成，防止并发重复发放
+                    progress_check = VideoProgress.objects.select_for_update().get(pk=progress.pk)
+                    if not progress_check.is_finished:
+                        progress_check.is_finished = True
+                        progress_check.save(update_fields=['is_finished'])
+                        user.elo_score = F('elo_score') + course.elo_reward
+                        user.save(update_fields=['elo_score'])
+                        elo_added = course.elo_reward
+                        record_event('course_complete', user=request.user, properties={'course_id': course.id})
+                # refresh to get actual value instead of F expression
+                request.user.refresh_from_db(fields=['elo_score'])
                 progress.is_finished = True
-                user = request.user
-                user.elo_score += course.elo_reward
-                user.save()
-                elo_added = course.elo_reward
-                record_event('course_complete', user=request.user, properties={'course_id': course.id})
             
             progress.last_position = pos
             progress.save()

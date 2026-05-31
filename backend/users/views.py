@@ -18,6 +18,7 @@ from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from core.rate_limit import rate_limit, _get_client_ip
 from core.analytics import record_event
+from core.utils import apply_institution_filter
 from quizzes.utils import safe_int as _safe_int
 import datetime
 import logging
@@ -373,13 +374,7 @@ class OnlineUserListView(generics.ListAPIView):
         active_window_seconds = max(getattr(settings, "ONLINE_USER_ACTIVE_WINDOW_SECONDS", 300), 10)
         threshold = now - datetime.timedelta(seconds=active_window_seconds)
         qs = User.objects.filter(is_active=True, last_active__gte=threshold)
-        user = self.request.user
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-            else:
-                qs = qs.filter(institution__isnull=True)
+        qs = apply_institution_filter(qs, self.request.user, self.request)
         return qs.order_by('-last_active', '-elo_score')
 
 
@@ -588,15 +583,26 @@ class UpdatePasswordView(generics.UpdateAPIView):
         return self.request.user
 
     def patch(self, request, *args, **kwargs):
+        from rest_framework.authtoken.models import Token
         user = self.get_object()
         old_p = request.data.get('old_password', '')
         new_p = request.data.get('new_password', '')
         if not new_p or len(str(new_p)) < 8:
             return Response({'error': '新密码至少需要 8 位'}, status=400)
+        if old_p and old_p == new_p:
+            return Response({'error': '新密码不能与旧密码相同'}, status=400)
         if user.check_password(old_p):
             user.set_password(new_p)
             user.save(update_fields=['password'])
-            return Response({'status': 'ok'})
+            # 删除所有旧 token，使泄露的 token 失效，创建新 token 保持登录
+            Token.objects.filter(user=user).delete()
+            new_token = Token.objects.create(user=user)
+            resp = Response({'status': 'ok'})
+            resp.set_cookie(
+                'auth_token', new_token.key,
+                max_age=30 * 24 * 3600, httponly=True, samesite='Lax',
+            )
+            return resp
         return Response({'error': '旧密码错误'}, status=400)
 
 
