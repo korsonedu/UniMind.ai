@@ -725,7 +725,7 @@ class PlannerToolExecutor(BaseToolExecutor):
             except (json.JSONDecodeError, TypeError):
                 payload = {}
 
-        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map'}
+        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards'}
         if visual_type not in valid_types:
             alias_map = {'table': 'data_card', 'chart': 'data_card', 'gauge': 'data_card',
                          'progress': 'data_card', 'radar': 'data_card'}
