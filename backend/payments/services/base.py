@@ -23,9 +23,9 @@ PLAN_PRICES_MONTHLY = {
     'enterprise': 399900,
 }
 PLAN_PRICES_ANNUAL = {
-    'starter': 49900,
-    'growth': 129900,
-    'enterprise': 399900,
+    'starter': 499200,     # ¥416/月 × 12 = ¥4,992/年
+    'growth': 1299600,     # ¥1,083/月 × 12 = ¥12,996/年
+    'enterprise': 3999600, # ¥3,333/月 × 12 = ¥39,996/年
 }
 PLAN_DURATION_DAYS = {
     'monthly': 30,
