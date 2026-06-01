@@ -7,7 +7,7 @@ keyword matching on mem0 semantic memory text.
 """
 
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -182,16 +182,19 @@ def get_adaptive_directives(memories: List[Dict], bot_type: str = "planner") -> 
 
 def get_adaptive_directives_llm(
     memories: List[Dict],
-    bot_type: str = "planner"
+    bot_type: str = "planner",
+    user_id: Optional[int] = None
 ) -> str:
     """
     使用 LLM 分析生成自适应指令。
 
-    优先使用 LLM 分析，如果失败或置信度低则 fallback 到规则匹配。
+    优先从缓存读取用户画像，缓存未命中时调用 LLM 分析。
+    分析失败或置信度低时 fallback 到规则匹配。
 
     Args:
         memories: mem0 或 AgentMemory 格式的记忆列表
         bot_type: 'planner' 或 'exam_generator'
+        user_id: 用户 ID（用于缓存查询）
 
     Returns:
         格式化的指令字符串
@@ -202,7 +205,7 @@ def get_adaptive_directives_llm(
             profile_to_directives
         )
 
-        profile = analyze_user_profile(memories, bot_type=bot_type)
+        profile = analyze_user_profile(memories, bot_type=bot_type, user_id=user_id)
         if profile and profile.confidence >= 0.6:
             logger.info(
                 "LLM analysis succeeded with confidence %.2f for bot_type=%s",

@@ -40,10 +40,15 @@ GEPA 自进化（后续阶段）
 ### 2. trajectory_recorder.py
 
 **关键函数：**
-- `record_trajectory(...)`: 记录一条对话轨迹
+- `record_trajectory(..., async_mode=True)`: 记录一条对话轨迹（默认异步）
 - `evaluate_trajectory(trajectory_id, outcome, outcome_metrics)`: 评估轨迹结果
 - `get_trajectory_stats(user_id, days)`: 获取用户轨迹统计
 - `get_successful_trajectories(...)`: 获取成功轨迹用于 prompt 优化
+
+**异步模式：**
+- 默认使用 Celery 异步记录（`async_mode=True`）
+- 通过 `record_trajectory_async` task 异步写入数据库
+- 不阻塞主线程，提升用户体验
 
 ### 3. 记录时机
 

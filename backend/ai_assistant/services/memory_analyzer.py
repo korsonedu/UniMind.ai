@@ -82,18 +82,43 @@ ANALYSIS_PROMPT = """你是一个学习行为分析专家。分析以下用户�
 
 def analyze_user_profile(
     memories: List[Dict],
-    bot_type: str = "planner"
+    bot_type: str = "planner",
+    user_id: Optional[int] = None
 ) -> Optional[UserProfile]:
     """
     使用 LLM 分析用户记忆，生成学习画像。
 
+    优先从 Redis 缓存读取，缓存未命中时调用 LLM 分析。
+
     Args:
         memories: mem0 或 AgentMemory 格式的记忆列表
         bot_type: 'planner' 或 'exam_generator'
+        user_id: 用户 ID（用于缓存查询）
 
     Returns:
         UserProfile 或 None（如果分析失败）
     """
+    # 尝试从缓存读取
+    if user_id:
+        try:
+            from django.core.cache import cache
+            cache_key = f"user_profile:{user_id}"
+            cached = cache.get(cache_key)
+            if cached:
+                logger.info("Cache hit for user profile %d", user_id)
+                return UserProfile(
+                    learning_style=cached['learning_style'],
+                    response_length=cached['response_length'],
+                    interaction_style=cached['interaction_style'],
+                    cognitive_state=cached['cognitive_state'],
+                    domain_expertise=cached['domain_expertise'],
+                    confidence=cached['confidence'],
+                    raw_analysis='(from cache)'
+                )
+        except Exception:
+            pass  # 缓存失败不影响主流程
+    
+    # 缓存未命中，调用 LLM 分析
     if not memories:
         return None
 
@@ -142,7 +167,7 @@ def analyze_user_profile(
 
             data = json.loads(content.strip())
 
-            return UserProfile(
+            profile = UserProfile(
                 learning_style=data.get('learning_style', 'balanced'),
                 response_length=data.get('response_length', 'balanced'),
                 interaction_style=data.get('interaction_style', 'passive_learner'),
@@ -151,6 +176,25 @@ def analyze_user_profile(
                 confidence=float(data.get('confidence', 0.5)),
                 raw_analysis=data.get('reasoning', '')
             )
+            
+            # 异步更新缓存
+            if user_id and profile.confidence >= 0.6:
+                try:
+                    from django.core.cache import cache
+                    cache_key = f"user_profile:{user_id}"
+                    cache.set(cache_key, {
+                        'learning_style': profile.learning_style,
+                        'response_length': profile.response_length,
+                        'interaction_style': profile.interaction_style,
+                        'cognitive_state': profile.cognitive_state,
+                        'domain_expertise': profile.domain_expertise,
+                        'confidence': profile.confidence,
+                    }, timeout=86400)
+                except Exception:
+                    pass  # 缓存写入失败不影响返回
+            
+            return profile
+            
         except (json.JSONDecodeError, KeyError) as e:
             logger.warning("Failed to parse LLM analysis JSON: %s", e)
             return None

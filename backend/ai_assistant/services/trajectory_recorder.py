@@ -3,6 +3,7 @@ Trajectory recorder: capture agent conversations for GEPA self-evolution.
 
 Part of xiaoyu self-evolution optimization.
 Records conversation trajectories for future GEPA (Genetic-Pareto) optimization.
+Uses Celery for async recording to avoid blocking the main thread.
 """
 
 import logging
@@ -20,7 +21,8 @@ def record_trajectory(
     messages: List[Dict],
     tool_calls: List[Dict],
     tool_outputs: List[Dict],
-    prompt_variant: str = 'baseline'
+    prompt_variant: str = 'baseline',
+    async_mode: bool = True
 ) -> Optional[AITrajectory]:
     """
     记录一条对话轨迹。
@@ -33,10 +35,26 @@ def record_trajectory(
         tool_calls: 工具调用序列
         tool_outputs: 工具返回结果
         prompt_variant: 使用的 prompt 变体标识
+        async_mode: 是否异步记录（默认 True）
 
     Returns:
-        创建的 AITrajectory 实例，失败返回 None
+        创建的 AITrajectory 实例（同步模式）或 None（异步模式）
     """
+    if async_mode:
+        from ..tasks import record_trajectory_async
+        record_trajectory_async.delay(
+            user_id=user_id,
+            bot_id=bot_id,
+            conversation_id=str(conversation_id),
+            messages=messages,
+            tool_calls=tool_calls,
+            tool_outputs=tool_outputs,
+            prompt_variant=prompt_variant,
+        )
+        logger.info("Queued trajectory recording for user %d, conversation %s", user_id, conversation_id)
+        return None
+    
+    # 同步记录
     try:
         trajectory = AITrajectory.objects.create(
             user_id=user_id,

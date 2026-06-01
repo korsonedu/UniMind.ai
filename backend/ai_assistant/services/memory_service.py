@@ -201,7 +201,7 @@ def build_memory_context(user, user_message: str = '', bot_type: str = 'planner'
             from ai_assistant.services.tenant_memory import TenantMemoryManager
             mgr = TenantMemoryManager(institution_id=user.institution_id)
             raw_memories = mgr.get_all(user_id=user.id)[:20]
-            adaptive_directives = get_adaptive_directives_llm(raw_memories, bot_type=bot_type)
+            adaptive_directives = get_adaptive_directives_llm(raw_memories, bot_type=bot_type, user_id=user.id)
     except Exception:
         logger.exception("Failed to build memory context for user %s", user.id)
 

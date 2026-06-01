@@ -491,7 +491,7 @@ def cleanup_stale_memories(self):
 
 
 def _cleanup_semantic_memories():
-    """Cleanup stale semantic memories via mem0."""
+    """Cleanup stale semantic memories: delete all memories for users inactive > 90 days."""
     from django.contrib.auth import get_user_model
     from .models import AIChatMessage
     from django.utils import timezone
@@ -501,19 +501,151 @@ def _cleanup_semantic_memories():
     now = timezone.now()
     cutoff = now - timedelta(days=90)
 
-    # Find institutions with active users in last 90 days
-    active_inst_ids = (
+    # Find users with recent activity per institution
+    active_user_ids = set(
         AIChatMessage.objects.filter(timestamp__gte=cutoff)
-        .values_list('user__institution_id', flat=True)
+        .values_list('user_id', flat=True)
         .distinct()
     )
 
-    for inst_id in active_inst_ids:
-        if not inst_id:
-            continue
+    # Find institutions that have any users
+    inst_ids = (
+        User.objects.filter(institution_id__isnull=False)
+        .values_list('institution_id', flat=True)
+        .distinct()
+    )
+
+    deleted_total = 0
+    for inst_id in inst_ids:
         try:
             manager = TenantMemoryManager(institution_id=inst_id)
-            all_memories = manager.get_all()
-            logger.info("cleanup_stale_memories: institution %d has %d semantic memories", inst_id, len(all_memories))
+            # Get all users in this institution
+            inst_user_ids = User.objects.filter(
+                institution_id=inst_id
+            ).values_list('id', flat=True)
+
+            for uid in inst_user_ids:
+                if uid in active_user_ids:
+                    continue
+                # User inactive > 90 days — delete their semantic memories
+                try:
+                    manager.delete_all(user_id=uid)
+                    deleted_total += 1
+                except Exception:
+                    logger.exception("cleanup_stale_memories: failed to delete mem0 for user %d", uid)
         except Exception:
             logger.exception("cleanup_stale_memories: failed for institution %d", inst_id)
+
+    if deleted_total:
+        logger.info("cleanup_stale_memories: cleaned semantic memories for %d inactive users", deleted_total)
+
+
+@shared_task(
+    soft_time_limit=30,
+    time_limit=60,
+    acks_late=True,
+)
+def record_trajectory_async(
+    user_id: int,
+    bot_id: int,
+    conversation_id: str,
+    messages: list,
+    tool_calls: list,
+    tool_outputs: list,
+    prompt_variant: str = 'baseline'
+):
+    """异步记录对话轨迹到数据库。"""
+    from .models import AITrajectory
+    
+    try:
+        trajectory = AITrajectory.objects.create(
+            user_id=user_id,
+            bot_id=bot_id,
+            conversation_id=conversation_id,
+            messages=messages,
+            tool_calls=tool_calls,
+            tool_outputs=tool_outputs,
+            prompt_variant=prompt_variant,
+        )
+        logger.info(
+            "Async recorded trajectory %d for user %d, conversation %s",
+            trajectory.id, user_id, conversation_id
+        )
+    except Exception:
+        logger.exception("Failed to async record trajectory for user %d", user_id)
+    finally:
+        connections.close_all()
+
+
+@shared_task(
+    soft_time_limit=120,
+    time_limit=180,
+    acks_late=True,
+)
+def precompute_user_profile(user_id: int):
+    """
+    预计算用户画像并缓存到 Redis。
+    
+    触发时机：
+    - 用户登录时
+    - 对话结束时
+    - 定时任务（每天一次）
+    """
+    from django.core.cache import cache
+    from .services.memory_analyzer import analyze_user_profile
+    
+    cache_key = f"user_profile:{user_id}"
+    
+    try:
+        from users.models import User
+        user = User.objects.get(id=user_id)
+        
+        # 获取用户记忆
+        memories = []
+        
+        # 结构化记忆
+        from .models import AgentMemory
+        agent_memories = AgentMemory.objects.filter(
+            user=user, is_active=True
+        ).order_by('-confidence')[:20]
+        for m in agent_memories:
+            memories.append({'key': m.key, 'value': m.value})
+        
+        # 语义记忆（如果启用）
+        USE_MEM0 = os.getenv('USE_MEM0', 'false').lower() == 'true'
+        if USE_MEM0 and user.institution_id:
+            try:
+                from .services.tenant_memory import TenantMemoryManager
+                manager = TenantMemoryManager(institution_id=user.institution_id)
+                semantic_memories = manager.get_all(user_id=user.id)[:20]
+                memories.extend(semantic_memories)
+            except Exception:
+                logger.warning("Failed to get semantic memories for user %d", user_id)
+        
+        if not memories:
+            logger.info("No memories found for user %d, skipping profile precomputation", user_id)
+            return
+        
+        # 分析用户画像
+        profile = analyze_user_profile(memories)
+        
+        if profile and profile.confidence >= 0.6:
+            # 缓存 24 小时
+            cache.set(cache_key, {
+                'learning_style': profile.learning_style,
+                'response_length': profile.response_length,
+                'interaction_style': profile.interaction_style,
+                'cognitive_state': profile.cognitive_state,
+                'domain_expertise': profile.domain_expertise,
+                'confidence': profile.confidence,
+            }, timeout=86400)
+            logger.info("Precomputed and cached user profile for user %d (confidence=%.2f)", user_id, profile.confidence)
+        else:
+            logger.info("User profile analysis below threshold for user %d, not caching", user_id)
+    
+    except User.DoesNotExist:
+        logger.warning("User %d not found for profile precomputation", user_id)
+    except Exception:
+        logger.exception("Failed to precompute user profile for user %d", user_id)
+    finally:
+        connections.close_all()

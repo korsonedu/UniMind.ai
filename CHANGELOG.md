@@ -11,6 +11,8 @@
 **自适应指令 LLM 化：**
 - **LLM 分析服务**：新增 `memory_analyzer.py`，使用 LLM 分析用户记忆生成学习画像（UserProfile）
 - **分析维度**：learning_style、response_length、interaction_style、cognitive_state、domain_expertise
+- **缓存策略**：用户画像预计算后缓存到 Redis（24 小时过期），对话时直接读取
+- **异步预计算**：用户登录时触发 Celery 异步任务预计算画像
 - **置信度阈值**：>= 0.6 使用 LLM 结果，< 0.6 fallback 到规则匹配
 - **prompt_adapter.py**：新增 `get_adaptive_directives_llm()` 函数
 - **memory_service.py**：`build_memory_context` 使用新的 LLM 驱动自适应指令
@@ -25,6 +27,8 @@
 **Trajectory 数据收集：**
 - **AITrajectory 模型**：记录对话轨迹（messages、tool_calls、tool_outputs、outcome、outcome_metrics、prompt_variant）
 - **trajectory_recorder.py**：提供 `record_trajectory`、`evaluate_trajectory`、`get_trajectory_stats`、`get_successful_trajectories` 函数
+- **Celery 异步**：默认使用 Celery 异步记录，不阻塞主线程
+- **新增 tasks**：`record_trajectory_async`、`precompute_user_profile`
 - **Migration**：0015_aitrajectory.py
 - **为 GEPA 自进化做数据储备**
 

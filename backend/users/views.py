@@ -84,6 +84,11 @@ class RegisterView(generics.CreateAPIView):
         nickname = str(self.request.data.get('nickname', '')).strip()
         password = self.request.data.get('password', '')
 
+        agreed_to_terms = self.request.data.get('agreed_to_terms', False)
+        if not agreed_to_terms:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': '请先阅读并同意用户协议和隐私政策'})
+
         if not email or not code or not password:
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'error': '邮箱、验证码、密码为必填项'})
@@ -115,6 +120,8 @@ class RegisterView(generics.CreateAPIView):
             user.nickname = nickname
         user.email_verified = True
         user.verification_code = ''
+        user.agreed_to_terms = True
+        user.agreed_to_terms_at = timezone.now()
         user.set_password(password)
         user.save()
 
@@ -491,6 +498,14 @@ class LoginView(APIView):
             )
             security_logger.info("login_success user=%s ip=%s", user.username, client_ip)
             record_event('user_login', user=user)
+            
+            # 异步预计算用户画像（用于自适应指令）
+            try:
+                from ai_assistant.tasks import precompute_user_profile
+                precompute_user_profile.delay(user_id=user.id)
+            except Exception:
+                pass  # 异步任务失败不影响登录
+            
             response = Response({
                 'token': token.key,
                 'user': UserSerializer(user).data
@@ -729,25 +744,28 @@ class DiagnosticSubmitView(APIView):
     permission_classes = [IsMember]
 
     def post(self, request):
-        user = request.user
-        if user.has_completed_initial_assessment:
-            return Response({'error': '诊断已完成'}, status=400)
+        from django.db import transaction
 
         answers = request.data.get('answers', [])
         if not answers:
             return Response({'error': '请提交答案'}, status=400)
 
-        from quizzes.services.diagnostic_service import (
-            grade_diagnostic_answers, initialize_memorix_from_diagnostic, build_study_plan,
-        )
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=request.user.pk)
+            if user.has_completed_initial_assessment:
+                return Response({'error': '诊断已完成'}, status=400)
 
-        results, kp_scores = grade_diagnostic_answers(user, answers)
-        initialize_memorix_from_diagnostic(user, kp_scores)
-        study_plan = build_study_plan(kp_scores)
+            from quizzes.services.diagnostic_service import (
+                grade_diagnostic_answers, initialize_memorix_from_diagnostic, build_study_plan,
+            )
 
-        # 标记诊断完成
-        user.has_completed_initial_assessment = True
-        user.save(update_fields=['has_completed_initial_assessment'])
+            results, kp_scores = grade_diagnostic_answers(user, answers)
+            initialize_memorix_from_diagnostic(user, kp_scores)
+            study_plan = build_study_plan(kp_scores)
+
+            # 标记诊断完成
+            user.has_completed_initial_assessment = True
+            user.save(update_fields=['has_completed_initial_assessment'])
         record_event('diagnostic_complete', user=user, properties={
             'total_score': sum(1 for r in results if r['is_correct']),
             'total_questions': len(results),
@@ -1002,3 +1020,274 @@ class NPSStatusView(APIView):
     def get(self, request):
         from core.analytics import should_show_nps
         return Response({'should_show': should_show_nps(request.user)})
+
+
+# ──────────────────────────────────────────────
+# 账户注销（个保法第47条）
+# ──────────────────────────────────────────────
+
+class AccountDeleteView(APIView):
+    """注销当前用户账户。
+
+    流程：
+    1. 验证密码（或邮箱验证码）
+    2. 匿名化个人数据（保留统计聚合）
+    3. 删除关联的学习数据
+    4. 停用账户
+    5. 记录安全审计日志
+
+    POST /api/users/me/delete/
+    Body: { "password": "xxx" }  或  { "verification_code": "123456" }
+    """
+    permission_classes = [IsAuthenticated]
+
+    @method_decorator(rate_limit(key_prefix="account_delete", max_requests=3, window_seconds=3600))
+    def post(self, request):
+        user = request.user
+        password = request.data.get('password', '')
+        verification_code = request.data.get('verification_code', '')
+
+        # 验证身份
+        if not password and not verification_code:
+            return Response({'error': '请提供密码或验证码以确认操作'}, status=400)
+
+        if password:
+            if not user.has_usable_password() or not user.check_password(password):
+                return Response({'error': '密码错误'}, status=400)
+        elif verification_code:
+            from django.contrib.auth.hashers import check_password as check_pw
+            if not user.verification_code or not check_pw(verification_code, user.verification_code):
+                return Response({'error': '验证码错误'}, status=400)
+
+        from django.db import transaction
+
+        with transaction.atomic():
+            # 1. 匿名化个人数据
+            user.username = f'deleted_{user.id}'
+            user.email = ''
+            user.nickname = ''
+            user.bio = ''
+            user.avatar_seed = ''
+            user.verification_code = ''
+            user.set_unusable_password()
+            user.is_active = False
+            user.email_verified = False
+            user.is_member = False
+            user.membership_tier = 'free'
+            user.membership_expires_at = None
+
+            # 清空敏感字段
+            user.current_task = ''
+            user.today_completed_tasks = []
+            user.dashboard_config = {}
+
+            user.save()
+
+            # 2. 删除 Token（使所有登录态失效）
+            Token.objects.filter(user=user).delete()
+
+            # 3. 匿名化关联数据
+            # AI 对话历史
+            from ai_assistant.models import ChatMessage, AgentMemory, StudyPlan, CardInteraction
+            ChatMessage.objects.filter(user=user).delete()
+            AgentMemory.objects.filter(user=user).delete()
+            StudyPlan.objects.filter(user=user).delete()
+            CardInteraction.objects.filter(user=user).delete()
+
+            # 学习数据
+            from quizzes.models import (
+                UserQuestionStatus, UserExam, ReviewLog,
+                KnowledgeState, MemorixProfile, KnowledgeAnnotation,
+            )
+            UserQuestionStatus.objects.filter(user=user).delete()
+            UserExam.objects.filter(user=user).delete()
+            ReviewLog.objects.filter(user=user).delete()
+            KnowledgeState.objects.filter(user=user).delete()
+            MemorixProfile.objects.filter(user=user).delete()
+            KnowledgeAnnotation.objects.filter(user=user).delete()
+
+            # 其他关联
+            from notifications.models import Notification
+            Notification.objects.filter(recipient=user).delete()
+
+            from study_room.models import StudySession, StudyMessage
+            StudySession.objects.filter(user=user).delete()
+            StudyMessage.objects.filter(user=user).delete()
+
+            from faq_system.models import Question
+            Question.objects.filter(user=user).delete()
+
+            # 4. 脱离机构
+            user.institution = None
+            user.institution_role = 'student'
+            user.save(update_fields=['institution', 'institution_role'])
+
+            # 5. 安全审计日志
+            from core.models import SecurityAuditLog
+            SecurityAuditLog.objects.create(
+                user=None,  # user 已匿名化
+                action='account_deletion',
+                ip_address=_get_client_ip(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+                detail=f'Account {user.id} deleted and anonymized',
+            )
+
+        security_logger.info(f'Account deleted: user_id={user.id}')
+
+        return Response({'status': 'ok', 'message': '账户已注销，所有个人数据已删除'})
+
+
+# ──────────────────────────────────────────────
+# 数据导出（个保法第45条 - 数据可携带权）
+# ──────────────────────────────────────────────
+
+class DataExportView(APIView):
+    """导出当前用户的所有个人数据为 JSON。
+
+    GET /api/users/me/data-export/
+    """
+    permission_classes = [IsAuthenticated]
+
+    @method_decorator(rate_limit(key_prefix="data_export", max_requests=5, window_seconds=3600))
+    def get(self, request):
+        import json
+        from django.http import HttpResponse
+        user = request.user
+
+        data = {
+            'export_info': {
+                'user_id': user.id,
+                'username': user.username,
+                'exported_at': timezone.now().isoformat(),
+                'version': '1.0',
+            },
+            'profile': {
+                'username': user.username,
+                'nickname': user.nickname,
+                'email': user.email,
+                'bio': user.bio,
+                'role': user.role,
+                'elo_score': user.elo_score,
+                'is_member': user.is_member,
+                'membership_tier': user.membership_tier,
+                'membership_expires_at': str(user.membership_expires_at) if user.membership_expires_at else None,
+                'has_completed_initial_assessment': user.has_completed_initial_assessment,
+                'date_joined': user.date_joined.isoformat(),
+                'last_login': str(user.last_login) if user.last_login else None,
+            },
+            'daily_plans': list(
+                DailyPlan.objects.filter(user=user).values('content', 'is_completed', 'completed_at', 'created_at')
+            ),
+            'quiz_history': [],
+            'ai_conversations': [],
+            'study_plans': [],
+            'notifications': [],
+        }
+
+        # 答题记录
+        from quizzes.models import UserQuestionStatus, UserExam
+        uqs = UserQuestionStatus.objects.filter(user=user).select_related('question')
+        data['quiz_history'] = [
+            {
+                'question_id': s.question_id,
+                'status': s.status,
+                'correct_count': s.correct_count,
+                'wrong_count': s.wrong_count,
+                'last_review': str(s.last_review) if s.last_review else None,
+                'stability': s.stability,
+            }
+            for s in uqs[:5000]  # 上限防止导出过大
+        ]
+
+        # 考试记录
+        exams = UserExam.objects.filter(user=user)
+        data['exam_history'] = [
+            {
+                'exam_id': e.id,
+                'score': e.score,
+                'total_score': e.total_score,
+                'submitted_at': str(e.submitted_at) if e.submitted_at else None,
+            }
+            for e in exams[:1000]
+        ]
+
+        # AI 对话（最近 200 条）
+        from ai_assistant.models import ChatMessage
+        messages = ChatMessage.objects.filter(user=user).order_by('-created_at')[:200]
+        data['ai_conversations'] = [
+            {
+                'role': m.role,
+                'content': m.content[:500],  # 截断防止过大
+                'bot_type': m.bot_type,
+                'created_at': m.created_at.isoformat(),
+            }
+            for m in messages
+        ]
+
+        # 学习计划
+        from ai_assistant.models import StudyPlan
+        plans = StudyPlan.objects.filter(user=user)
+        data['study_plans'] = [
+            {
+                'title': p.title,
+                'content': p.content,
+                'status': p.status,
+                'created_at': p.created_at.isoformat(),
+            }
+            for p in plans
+        ]
+
+        # 通知
+        from notifications.models import Notification
+        notifs = Notification.objects.filter(recipient=user).order_by('-created_at')[:100]
+        data['notifications'] = [
+            {
+                'title': n.title,
+                'message': n.message,
+                'is_read': n.is_read,
+                'created_at': n.created_at.isoformat(),
+            }
+            for n in notifs
+        ]
+
+        response = HttpResponse(
+            json.dumps(data, ensure_ascii=False, indent=2, default=str),
+            content_type='application/json; charset=utf-8',
+        )
+        response['Content-Disposition'] = f'attachment; filename="unimind_data_export_{user.id}.json"'
+        return response
+
+
+# ──────────────────────────────────────────────
+# 用户反馈
+# ──────────────────────────────────────────────
+
+class FeedbackSubmitView(APIView):
+    """提交用户反馈。
+
+    POST /api/users/feedback/
+    Body: { "category": "bug|feature|other", "content": "...", "contact": "optional" }
+    """
+    permission_classes = [IsAuthenticated]
+
+    @method_decorator(rate_limit(key_prefix="feedback", max_requests=10, window_seconds=3600))
+    def post(self, request):
+        from core.models import Feedback
+        category = request.data.get('category', 'other')
+        content = request.data.get('content', '').strip()
+        contact = request.data.get('contact', '').strip()
+
+        if not content:
+            return Response({'error': '请输入反馈内容'}, status=400)
+        if len(content) > 2000:
+            return Response({'error': '反馈内容不能超过 2000 字'}, status=400)
+
+        Feedback.objects.create(
+            user=request.user,
+            category=category,
+            content=content,
+            contact=contact,
+            page_url=request.data.get('page_url', ''),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+        )
+        return Response({'status': 'ok', 'message': '感谢您的反馈！'})
