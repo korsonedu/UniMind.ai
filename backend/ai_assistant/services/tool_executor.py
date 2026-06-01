@@ -24,7 +24,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'lookup_question': lambda a: f"查找题目（ID: {a.get('question_id', '')}）",
         'get_learning_stats': lambda a: "获取学习统计数据",
         'get_knowledge_mastery_map': lambda a: f"生成{a.get('subject', '')}知识掌握图谱" if a.get('subject') else "生成知识掌握图谱",
-        'get_due_reviews': lambda a: f"查询未来{a.get('days', 7)}天的复习任务",
+        'get_due_reviews': lambda a: "查询到期待复习的题目",
         'get_exam_history': lambda a: "查询考试历史",
         'save_study_plan': lambda a: "保存学习计划",
         'get_active_plan': lambda a: "获取当前学习计划",
@@ -33,6 +33,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'search_asr': lambda a: f"搜索视频字幕「{a.get('query', '')}」",
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
         'search_knowledge': lambda a: f"搜索知识点「{a.get('query', '')}」",
+        'get_practice_questions': lambda a: f"抽取{a.get('kp_name', '')}相关练习题" if a.get('kp_name') else "抽取练习题",
         'quick_generate': lambda a: f"快速生成{a.get('count', 5)}道题",
         'render_visual': lambda a: f"渲染{a.get('type', '可视化')}",
         'launch_arc_pipeline': lambda a: "启动 ARC 精修管线",
@@ -76,6 +77,10 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'search_articles': lambda r: f"找到 {len(r.get('articles', []))} 篇文章",
         'quick_generate': lambda r: f"生成 {r.get('count', len(r.get('questions', [])))} 道题",
         'render_visual': lambda r: f"渲染可视化: {r.get('type', '')}",
+        'get_user_wrong_questions': lambda r: f"找到 {r.get('total_found', 0)} 道错题",
+        'search_asr': lambda r: f"找到 {r.get('total_found', 0)} 个视频片段",
+        'get_practice_questions': lambda r: f"抽取 {len(r.get('questions', []))} 道练习题",
+        'update_plan_task': lambda r: f"任务已更新为 {r.get('new_status', 'unknown')}",
     }
 
     fn = summaries.get(tool_name)
@@ -97,6 +102,7 @@ class BaseToolExecutor:
 
     def __init__(self, user, institution=None):
         self.user = user
+        self._allowed_tool_names = None
         self.institution = institution or getattr(user, 'institution', None)
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
 
@@ -134,7 +140,7 @@ class BaseToolExecutor:
         subject = (args.get('subject') or '').strip()
 
         qs = KnowledgePoint.objects.filter(
-            name__icontains=query,
+            Q(name__icontains=query) | Q(description__icontains=query),
         )
         if subject:
             qs = qs.filter(subject=subject)
@@ -149,8 +155,16 @@ class BaseToolExecutor:
             'id', 'code', 'name', 'level', 'subject', 'parent__name',
         )[:15])
 
+        from django.db.models import Count
+        node_ids = [n['id'] for n in nodes]
+        child_counts = dict(
+            KnowledgePoint.objects.filter(parent_id__in=node_ids)
+            .values_list('parent_id')
+            .annotate(cnt=Count('id'))
+            .values_list('parent_id', 'cnt')
+        )
         for node in nodes:
-            node['child_count'] = KnowledgePoint.objects.filter(parent_id=node['id']).count()
+            node['child_count'] = child_counts.get(node['id'], 0)
 
         return {
             "found": len(nodes),
@@ -365,6 +379,9 @@ class PlannerToolExecutor(BaseToolExecutor):
         now = timezone.now()
         uqs = UserQuestionStatus.objects.filter(user=self.user)
         total_questions = uqs.count()
+        # NOTE: 真正的答题正确率需要 correct_reps/lapse_reps 字段，
+        # 当前 UserQuestionStatus 只有 reps/lapses，无法精确计算。
+        # 此处用 last_correct 占比近似"至少答对过一次的题目占比"。
         total_correct = uqs.filter(last_correct=True).count()
         total_wrong = uqs.filter(wrong_count__gt=0).count()
 
@@ -374,14 +391,16 @@ class PlannerToolExecutor(BaseToolExecutor):
             .values_list('review_time__date', flat=True)
             .distinct()
         )
+        sorted_days = sorted(set(review_days), reverse=True)
         streak = 0
-        check_date = now.date()
-        for d in sorted(set(review_days), reverse=True):
-            if d == check_date:
-                streak += 1
-                check_date -= timedelta(days=1)
-            elif d < check_date:
-                break
+        if sorted_days:
+            check_date = sorted_days[0]
+            for d in sorted_days:
+                if d == check_date:
+                    streak += 1
+                    check_date -= timedelta(days=1)
+                elif d < check_date:
+                    break
 
         # Subject coverage
         subjects_with_progress = (
@@ -449,6 +468,18 @@ class PlannerToolExecutor(BaseToolExecutor):
         due_count = due_qs.count()
         due_list = due_qs[:limit]
 
+        def _calculate_memorix_priority(d):
+            """基于 Memorix 数据计算复习优先级。"""
+            if d.lapses >= 3:
+                return "critical"  # 反复遗忘，需要重点关注
+            if d.difficulty >= 7:
+                return "high"  # 高难度
+            if d.stability < 2:
+                return "high"  # 稳定性低
+            if d.stability < 7:
+                return "medium"
+            return "low"
+
         return {
             "due_count": due_count,
             "reviews": [
@@ -458,10 +489,106 @@ class PlannerToolExecutor(BaseToolExecutor):
                     "kp_name": d.question.knowledge_point.name if d.question.knowledge_point else '',
                     "wrong_count": d.wrong_count,
                     "stability": round(d.stability, 2),
+                    "difficulty": round(d.difficulty, 1),
+                    "reps": d.reps,
+                    "lapses": d.lapses,
+                    "memorix_priority": _calculate_memorix_priority(d),
                     "next_review_at": d.next_review_at.isoformat() if d.next_review_at else None,
                 }
                 for d in due_list
             ],
+        }
+
+    def _handle_get_practice_questions(self, args: Dict) -> Dict:
+        """根据知识点或薄弱点从题库中抽取题目供学生练习。
+
+        参数:
+            kp_name: 知识点名称（模糊匹配）
+            subject: 学科过滤
+            difficulty: 难度过滤（entry/easy/normal/hard/extreme）
+            limit: 题目数量，默认 5，最大 10
+            exclude_mastered: 是否排除已掌握题目，默认 true
+        """
+        from quizzes.models import Question, UserQuestionStatus
+
+        kp_name = (args.get('kp_name') or '').strip()
+        subject = (args.get('subject') or '').strip()
+        difficulty = (args.get('difficulty') or '').strip()
+        limit = min(int(args.get('limit', 5)), 10)
+        exclude_mastered = args.get('exclude_mastered', True)
+
+        qs = Question.objects.select_related('knowledge_point')
+
+        # 机构隔离
+        if self.institution:
+            qs = qs.filter(
+                models.Q(institution=self.institution) |
+                models.Q(institution__isnull=True)
+            )
+
+        # 知识点过滤
+        if kp_name:
+            qs = qs.filter(knowledge_point__name__icontains=kp_name)
+        if subject:
+            qs = qs.filter(knowledge_point__subject=subject)
+
+        # 难度过滤
+        if difficulty:
+            qs = qs.filter(difficulty_level=difficulty)
+
+        # 排除已掌握的题目
+        if exclude_mastered:
+            mastered_ids = set(
+                UserQuestionStatus.objects.filter(
+                    user=self.user, is_mastered=True
+                ).values_list('question_id', flat=True)
+            )
+            if mastered_ids:
+                qs = qs.exclude(id__in=mastered_ids)
+
+        # 优先选薄弱题目（做错过的），然后补充新题
+        wrong_qids = set(
+            UserQuestionStatus.objects.filter(
+                user=self.user, wrong_count__gt=0
+            ).values_list('question_id', flat=True)
+        )
+
+        # 先选做错过的题目
+        wrong_qs = qs.filter(id__in=wrong_qids).order_by('?')[:limit]
+        wrong_list = list(wrong_qs)
+
+        remaining = limit - len(wrong_list)
+        new_list = []
+        if remaining > 0:
+            wrong_ids = {q.id for q in wrong_list}
+            new_qs = qs.exclude(id__in=wrong_ids | wrong_qids).order_by('?')[:remaining]
+            new_list = list(new_qs)
+
+        all_questions = wrong_list + new_list
+
+        return {
+            "total_found": qs.count(),
+            "questions": [
+                {
+                    "id": q.id,
+                    "text": (q.text or '')[:500],
+                    "q_type": q.q_type,
+                    "subjective_type": q.subjective_type or '',
+                    "options": q.options or [],
+                    "difficulty_level": q.difficulty_level,
+                    "kp_name": q.knowledge_point.name if q.knowledge_point else '',
+                    "kp_code": q.knowledge_point.code if q.knowledge_point else '',
+                    "is_review": q.id in wrong_qids,
+                }
+                for q in all_questions
+            ],
+            "practice_url": "/quiz/practice",
+            "message": f"已从题库抽取 {len(all_questions)} 道题目" + (
+                f"（{len(wrong_list)} 道错题复习 + {len(new_list)} 道新题）"
+                if wrong_list and new_list else
+                f"（{len(wrong_list)} 道错题复习）" if wrong_list else
+                f"（{len(new_list)} 道新题）"
+            ),
         }
 
     def _handle_get_exam_history(self, args: Dict) -> Dict:
@@ -542,6 +669,8 @@ class PlannerToolExecutor(BaseToolExecutor):
         plan_id = int(args.get('plan_id', 0))
         task_id = args.get('task_id', '')
         new_status = args.get('status', 'pending')
+        if new_status not in ('pending', 'completed', 'skipped'):
+            return {"error": f"无效的状态值: {new_status}，支持: pending, completed, skipped"}
 
         try:
             plan = StudyPlan.objects.get(id=plan_id, user=self.user)
@@ -607,7 +736,7 @@ class PlannerToolExecutor(BaseToolExecutor):
         if subject:
             qs = qs.filter(knowledge_point__subject=subject)
 
-        courses = qs[:limit]
+        courses = qs.order_by('-created_at')[:limit]
 
         return {
             "courses": [
@@ -717,6 +846,94 @@ class PlannerToolExecutor(BaseToolExecutor):
             "total_found": qs.count(),
         }
 
+    def _handle_get_knowledge_difficulty_analysis(self, args: Dict) -> Dict:
+        """获取知识点的 Memorix 难度分析。"""
+        from quizzes.models import UserQuestionStatus
+
+        subject = (args.get('subject') or '').strip()
+
+        # 获取用户的复习状态
+        qs = UserQuestionStatus.objects.filter(
+            user=self.user,
+            is_active=True
+        ).select_related('question__knowledge_point')
+
+        if self.institution:
+            qs = qs.filter(
+                models.Q(question__institution=self.institution) |
+                models.Q(question__institution__isnull=True)
+            )
+
+        if subject:
+            qs = qs.filter(question__knowledge_point__subject=subject)
+
+        # 按知识点聚合
+        kp_stats = {}
+        for status in qs:
+            kp = status.question.knowledge_point
+            if not kp:
+                continue
+            kp_name = kp.name
+            if kp_name not in kp_stats:
+                kp_stats[kp_name] = {
+                    "difficulties": [],
+                    "stabilities": [],
+                    "total_reviews": 0,
+                    "lapse_counts": []
+                }
+            kp_stats[kp_name]["difficulties"].append(status.difficulty)
+            kp_stats[kp_name]["stabilities"].append(status.stability)
+            kp_stats[kp_name]["total_reviews"] += status.reps
+            kp_stats[kp_name]["lapse_counts"].append(status.lapses)
+
+        # 计算统计
+        knowledge_points = []
+        for kp_name, stats in kp_stats.items():
+            avg_diff = sum(stats["difficulties"]) / len(stats["difficulties"])
+            avg_stab = sum(stats["stabilities"]) / len(stats["stabilities"])
+            total_lapses = sum(stats["lapse_counts"])
+
+            # 判断掌握程度
+            if avg_diff >= 7 or avg_stab < 2:
+                mastery = "weak"
+            elif avg_diff >= 5 or avg_stab < 5:
+                mastery = "developing"
+            else:
+                mastery = "strong"
+
+            # 生成 Memorix 洞察
+            insight_parts = []
+            if avg_diff >= 7:
+                insight_parts.append(f"平均难度较高（{avg_diff:.1f}）")
+            if avg_stab < 3:
+                insight_parts.append(f"记忆稳定性低（{avg_stab:.1f}天）")
+            if total_lapses >= 5:
+                insight_parts.append(f"累计遗忘 {total_lapses} 次")
+
+            if insight_parts:
+                insight = f"该知识点{', '.join(insight_parts)}，建议增加复习频率并使用间隔重复策略"
+            else:
+                insight = "该知识点掌握情况良好"
+
+            knowledge_points.append({
+                "name": kp_name,
+                "avg_difficulty": round(avg_diff, 1),
+                "avg_stability": round(avg_stab, 1),
+                "total_reviews": stats["total_reviews"],
+                "mastery_level": mastery,
+                "memorix_insight": insight
+            })
+
+        # 按难度排序
+        knowledge_points.sort(key=lambda x: x["avg_difficulty"], reverse=True)
+
+        weak_count = sum(1 for kp in knowledge_points if kp["mastery_level"] == "weak")
+
+        return {
+            "knowledge_points": knowledge_points,
+            "summary": f"共 {len(knowledge_points)} 个知识点，其中 {weak_count} 个需要重点关注"
+        }
+
     def _handle_render_visual(self, args: Dict) -> Dict:
         """将可视化数据返回给前端，同时缓存到实例供消息持久化。"""
         visual_type = args.get('type', '')
@@ -731,9 +948,7 @@ class PlannerToolExecutor(BaseToolExecutor):
 
         valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards'}
         if visual_type not in valid_types:
-            alias_map = {'table': 'data_card', 'chart': 'data_card', 'gauge': 'data_card',
-                         'progress': 'data_card', 'radar': 'data_card'}
-            visual_type = alias_map.get(visual_type, 'data_card')
+            visual_type = 'data_card'
 
         visual = {"type": visual_type, "payload": payload, "priority": priority}
         self.pending_visuals.append(visual)

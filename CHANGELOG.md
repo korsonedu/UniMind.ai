@@ -4,6 +4,136 @@
 
 ---
 
+## [v2.10.0-dev] - 2026-06-01
+
+### 🧠 小宇自进化优化（GEPA 准备）
+
+**自适应指令 LLM 化：**
+- **LLM 分析服务**：新增 `memory_analyzer.py`，使用 LLM 分析用户记忆生成学习画像（UserProfile）
+- **分析维度**：learning_style、response_length、interaction_style、cognitive_state、domain_expertise
+- **置信度阈值**：>= 0.6 使用 LLM 结果，< 0.6 fallback 到规则匹配
+- **prompt_adapter.py**：新增 `get_adaptive_directives_llm()` 函数
+- **memory_service.py**：`build_memory_context` 使用新的 LLM 驱动自适应指令
+
+**Memorix↔Agent 联动：**
+- **get_due_reviews 扩展**：新增 difficulty、reps、lapses、memorix_priority 字段
+- **新增工具**：`get_knowledge_difficulty_analysis` 获取知识点 Memorix 难度分析
+- **优先级计算**：基于 lapses、difficulty、stability 自动计算复习优先级
+- **tool_executor.py**：新增 `_handle_get_knowledge_difficulty_analysis` 处理器
+- **tools.py**：新增 `GET_KNOWLEDGE_DIFFICULTY_ANALYSIS_SCHEMA`
+
+**Trajectory 数据收集：**
+- **AITrajectory 模型**：记录对话轨迹（messages、tool_calls、tool_outputs、outcome、outcome_metrics、prompt_variant）
+- **trajectory_recorder.py**：提供 `record_trajectory`、`evaluate_trajectory`、`get_trajectory_stats`、`get_successful_trajectories` 函数
+- **Migration**：0015_aitrajectory.py
+- **为 GEPA 自进化做数据储备**
+
+**文档更新：**
+- `docs/tech/features/ADAPTIVE_PROMPT_LLM.md`：自适应指令 LLM 化文档
+- `docs/tech/features/MEMORIX_AGENT_INTEGRATION.md`：Memorix↔Agent 联动文档
+- `docs/tech/features/GEPA_TRAJECTORY.md`：Trajectory 数据收集文档
+
+---
+
+## [v2.9.2-dev] - 2026-05-31
+
+### 🎨 小宇可视化渲染（render_visual）
+
+- **新增 `render_visual` 工具**：小宇可主动渲染 4 类可视化卡片（`data_card` 数据卡片、`latex_derivation` LaTeX 推导、`step_solution` 分步解题、`knowledge_map` 知识拓扑）。
+- **工具定义**：`RENDER_VISUAL_SCHEMA`（`ai_engine/tools.py`），PlannerToolExecutor 新增 `_handle_render_visual` 处理器。
+- **消息持久化**：可视化输出存储在 message metadata 中，前端 `VisualCanvas` 组件按类型分发渲染。
+- **前端重构**：`DashboardPanel` 重构为 `VisualCanvas`，支持类型分发（数据卡片/LaTeX/分步解题/知识图谱）；`XiaoYu.tsx` 移除旧 dashboard 状态，改用 `useAgentConversation` hook。
+- **Step 事件**：流式步骤事件包含完整 visual payload，前端实时展示渲染结果。
+
+### 🔒 全量后端安全审计
+
+- **P0 修复（4 项）**：SQL 注入、路径遍历、认证绕过、敏感信息泄露。
+- **P1 修复（7 项）**：权限提升、IDOR、CSRF、文件上传绕过等。
+- **P2 修复（8 项）**：性能优化、代码质量改进。
+- **审计报告**：`docs/tech/audit/BACKEND_AUDIT_20260530.md`。
+
+### 🏢 机构隔离 + 管理后台修复
+
+- **DB 连接管理**：统一机构过滤逻辑，修复数据库连接泄漏。
+- **管理后台权限**：Insights/Analytics/Pipeline tab 仅对平台管理员可见（机构管理员不再看到）。
+- **bot_type 清理**：migration 0013 移除已废弃的 `assistant` bot_type，仅保留 `planner` 和 `exam_generator`。
+
+### 💰 定价一致性
+
+- **年度定价**：前端 pricing 页年度价格与方案配置保持一致。
+
+---
+
+## [v2.9.1-dev] - 2026-05-30
+
+### 🔒 文件上传安全审计 + 架构重构
+
+**安全修复：**
+- **SVG XSS**：从文件白名单移除 `.svg`，防止存储型 XSS
+- **OSS 签名校验**：`OSSSignatureURLView` 新增扩展名黑白名单检查
+- **先校验后解析**：`AIPreviewParseView` 和 `ResumeTuneView` 文件校验移到解析之前
+- **统一校验模块**：`study_room/ImageUploadView` 和 `interviews/ResumeTuneView` 改用 `validate_upload_file()`
+- **Magic bytes 扩展**：校验覆盖从仅图片扩展到视频/文档（mp4/webm/pdf/docx 等）
+- **分片限流**：`ChunkedUploadChunkView` 新增 20 次/小时限流
+
+**业务逻辑修复：**
+- **配额一致性**：Album、StartupMaterial 删除时扣减存储配额（新增 post_delete 信号）
+- **考试配额追踪**：TeacherExam/StudentExamSubmission 上传时检查并计入存储配额
+- **TOCTOU 竞态**：新增 `check_and_add_storage_usage()` 原子函数，替代分离的 validate + add
+
+**上传架构重构：**
+- **旧方案**：3 条路径（FormData / 后端分片 / OSS 单次 PUT 直传），大文件失败回退后端中转
+- **新方案**：2 条路径
+  - 小文件（封面/课件等）→ FormData POST 后端
+  - 视频 → OSS 原生分片直传（3 并发，10MB/片，自动重试，后端不碰字节流）
+- **删除 5 个旧 View**：`OSSSignatureURLView`、`OSSUploadCompleteView`、`ChunkedUploadInitView`、`ChunkedUploadChunkView`、`ChunkedUploadCompleteView`
+- **新增 2 个 View**：`OSSMultipartInitView`（签名）、`OSSMultipartCompleteView`（确认+创建课程）
+- **删除**：分片清理定时任务 `cleanup_expired_chunks_task`、相关辅助函数
+- **前端重写**：`chunkedUpload.ts` 从 364 行精简到 116 行
+
+## [v2.9.0-dev] - 2026-05-30
+
+### 📊 平台数据分析 Dashboard（仅超管）
+
+- **事件截留**：`core/analytics.py` 的 `record_event()` 在登录、诊断、答题等关键路径埋点，写入 `AnalyticsEvent` 模型。
+- **每日聚合**：`core/tasks.py` 的 `aggregate_daily_platform_stats` Celery 定时任务，按天聚合 DAU/MAU/留存/功能使用等 20+ 指标，存入 `DailyPlatformStats`。
+- **Dashboard API**：`/api/users/admin/analytics/dashboard/` — 汇总+趋势+功能分布+机构 Top10+NPS 概览，仅超管可见。
+- **CSV 导出**：`/api/users/admin/analytics/export/?type=trends|events|nps` — 支持趋势、事件明细、NPS 三类数据导出。
+- **NPS 问卷**：`NPSSurvey` 模型 + `/api/users/nps/submit/` + `/api/users/nps/status/`，前端 `NPSSurvey` 组件自动弹出。
+- **前端面板**：管理后台新增「数据分析」Tab（`AnalyticsPanel`），展示趋势图、功能分布、NPS 评分。
+- **技术文档**：`docs/tech/features/PLATFORM_ANALYTICS.md`
+
+### 🏢 机构隔离强化
+
+- **课程/文章隔离**：课程列表和文章列表按机构过滤，机构管理员只能看到本机构内容。
+- **预览模式隔离**：非登录用户预览课程/文章时，仅显示标记为公开的内容。
+- **邀请码重构**：激活码和计划邀请码类型分离，`plan_invite_code` 与 `activation_code` 逻辑解耦。
+- **方案重命名**：Plus 方案更名为 Growth，促销页增加稀缺性徽章。
+
+### 💬 对话会话管理
+
+- **conversation_id 贯穿**：Workbench 和小宇页面新增 `conversation_id`（UUID），首次发送自动创建，「新对话」重置。
+- **后端路由支持**：`views.py` 和 `consumers.py` 接收 `conversation_id` 参数，历史消息按会话隔离。
+
+### 🗄️ 阿里云 OSS 存储
+
+- **OSS 后端**：`core/oss_storage.py` 实现 `OssMediaStorage`，基于 `oss2` SDK。
+- **自动挂载**：配置 `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET` / `OSS_BUCKET_NAME` / `OSS_ENDPOINT` 四个环境变量后，`STORAGES.default` 自动切换为 OSS。
+- **Celery 定时任务**：新增 `aggregate-platform-stats-daily` 每日聚合任务。
+
+### 🤖 Agent 运行时增强
+
+- **知识点搜索兜底**：`exam_generator_tool_executor.py` 的 `search_knowledge_points` 在 kp 层无结果时，回溯搜索知识树结构节点并返回匹配的模块/章节，附带 `hint` 提示 Agent 换关键词重试。
+- **小宇 prompt 文件化**：新增 `prompts/ai_assistant/bots/xiaoyu/system_prompt.txt` 和 `tool_guide.txt`。
+- **Authorization 修复**：原始 `fetch` 调用补充 `Authorization` header，修复流式聊天认证问题。
+
+### 📚 文档
+
+- 新增 `docs/tech/features/PLATFORM_ANALYTICS.md`：平台数据分析完整技术文档。
+- 更新 `docs/tech/architecture/PERMISSION_ARCHITECTURE.md`：新增超管权限模型说明。
+
+---
+
 ## [v2.8.0-dev] - 2026-05-27
 
 ### 🧠 Multi-Tenant Agent Memory (mem0 + pgvector)

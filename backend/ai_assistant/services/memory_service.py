@@ -17,23 +17,26 @@ MEMORY_CHAR_LIMIT = 800
 def get_memories_for_injection(user, limit=10):
     """检索用户最相关的记忆，用于注入 system prompt。"""
     now = timezone.now()
-    memories = AgentMemory.objects.filter(
+    memories = list(AgentMemory.objects.filter(
         user=user, is_active=True
-    ).order_by('-confidence', '-use_count', '-updated_at')[:limit]
+    ).order_by('-confidence', '-use_count', '-updated_at')[:limit])
 
     if not memories:
         return ''
 
     lines = []
     total_len = 0
+    used_pks = []
     for m in memories:
         line = f"- {m.key}：{m.value}（来源：{'历史对话' if m.source == 'auto' else '用户设置'}）"
         if total_len + len(line) > MEMORY_CHAR_LIMIT:
             break
         lines.append(line)
         total_len += len(line)
-        # 标记使用
-        AgentMemory.objects.filter(pk=m.pk).update(
+        used_pks.append(m.pk)
+
+    if used_pks:
+        AgentMemory.objects.filter(pk__in=used_pks).update(
             use_count=F('use_count') + 1, last_used_at=now
         )
 
@@ -44,19 +47,14 @@ def get_memories_for_injection(user, limit=10):
 
 def extract_memories_async(user, conversation_history):
     """后台线程：从对话中提取记忆。"""
-    thread = threading.Thread(
-        target=_extract_memories_worker,
-        args=(user.id, conversation_history),
-        daemon=True,
-    )
-    thread.start()
+    from ai_assistant.utils import _THREAD_POOL
+    _THREAD_POOL.submit(_extract_memories_worker, user.id, conversation_history)
 
 
 def _extract_memories_worker(user_id, conversation_history):
     """提取记忆的实际工作函数。"""
     from django.db import connections
     try:
-        from ai_service import AIService
         from users.models import User
 
         user = User.objects.filter(id=user_id).first()
@@ -179,8 +177,8 @@ def extract_memories_with_mem0(user, conversation_history):
         finally:
             connections.close_all()
 
-    thread = threading.Thread(target=_worker, daemon=True)
-    thread.start()
+    from ai_assistant.utils import _THREAD_POOL
+    _THREAD_POOL.submit(_worker)
 
 
 def build_memory_context(user, user_message: str = '', bot_type: str = 'planner'):
@@ -199,11 +197,11 @@ def build_memory_context(user, user_message: str = '', bot_type: str = 'planner'
         memory_context = "\n\n".join(parts)
 
         if USE_MEM0 and user.institution_id:
-            from ai_assistant.services.prompt_adapter import get_adaptive_directives
+            from ai_assistant.services.prompt_adapter import get_adaptive_directives_llm
             from ai_assistant.services.tenant_memory import TenantMemoryManager
             mgr = TenantMemoryManager(institution_id=user.institution_id)
             raw_memories = mgr.get_all(user_id=user.id)[:20]
-            adaptive_directives = get_adaptive_directives(raw_memories, bot_type=bot_type)
+            adaptive_directives = get_adaptive_directives_llm(raw_memories, bot_type=bot_type)
     except Exception:
         logger.exception("Failed to build memory context for user %s", user.id)
 

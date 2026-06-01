@@ -178,3 +178,45 @@ def get_adaptive_directives(memories: List[Dict], bot_type: str = "planner") -> 
         return ""
 
     return "## 自适应指令（基于用户历史行为分析）\n" + "\n".join(directives)
+
+
+def get_adaptive_directives_llm(
+    memories: List[Dict],
+    bot_type: str = "planner"
+) -> str:
+    """
+    使用 LLM 分析生成自适应指令。
+
+    优先使用 LLM 分析，如果失败或置信度低则 fallback 到规则匹配。
+
+    Args:
+        memories: mem0 或 AgentMemory 格式的记忆列表
+        bot_type: 'planner' 或 'exam_generator'
+
+    Returns:
+        格式化的指令字符串
+    """
+    try:
+        from ai_assistant.services.memory_analyzer import (
+            analyze_user_profile,
+            profile_to_directives
+        )
+
+        profile = analyze_user_profile(memories, bot_type=bot_type)
+        if profile and profile.confidence >= 0.6:
+            logger.info(
+                "LLM analysis succeeded with confidence %.2f for bot_type=%s",
+                profile.confidence, bot_type
+            )
+            return profile_to_directives(profile, bot_type=bot_type)
+        else:
+            confidence = profile.confidence if profile else 0
+            logger.info(
+                "LLM analysis confidence %.2f < 0.6, falling back to rules",
+                confidence
+            )
+    except Exception as e:
+        logger.warning("LLM analysis failed, falling back to rules: %s", e)
+
+    # Fallback to rule-based
+    return get_adaptive_directives(memories, bot_type=bot_type)

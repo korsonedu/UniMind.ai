@@ -420,6 +420,16 @@ GET_DUE_REVIEWS_SCHEMA = {
     },
 }
 
+GET_KNOWLEDGE_DIFFICULTY_ANALYSIS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "subject": {
+            "type": "string",
+            "description": "可选，限定学科。不传则返回全部学科的难度分析。",
+        },
+    },
+}
+
 GET_EXAM_HISTORY_SCHEMA = {
     "type": "object",
     "properties": {
@@ -428,6 +438,35 @@ GET_EXAM_HISTORY_SCHEMA = {
             "minimum": 1,
             "maximum": 20,
             "description": "返回考试次数，默认 10",
+        },
+    },
+}
+
+GET_PRACTICE_QUESTIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kp_name": {
+            "type": "string",
+            "description": "知识点名称（模糊匹配），如'函数单调性'",
+        },
+        "subject": {
+            "type": "string",
+            "description": "学科过滤，如'高中数学'",
+        },
+        "difficulty": {
+            "type": "string",
+            "enum": ["entry", "easy", "normal", "hard", "extreme"],
+            "description": "难度等级过滤",
+        },
+        "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "抽取题数，默认 5",
+        },
+        "exclude_mastered": {
+            "type": "boolean",
+            "description": "是否排除已掌握题目，默认 true",
         },
     },
 }
@@ -477,80 +516,6 @@ UPDATE_PLAN_TASK_SCHEMA = {
         },
     },
     "required": ["plan_id", "task_id", "status"],
-}
-
-SET_DASHBOARD_LAYOUT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "section_order": {
-            "type": "array",
-            "items": {
-                "type": "string",
-                "enum": ["plan", "stats", "mastery", "reviews", "exams", "custom_cards"],
-            },
-            "description": "Dashboard 区块排列顺序，从上到下。未列出的区块自动隐藏。custom_cards 是自定义数据卡片区块。",
-        },
-        "highlight": {
-            "type": "string",
-            "enum": ["plan", "stats", "mastery", "reviews", "exams", "custom_cards"],
-            "description": "高亮（强调）的区块，该区块会以更醒目的样式展示。",
-        },
-    },
-    "required": ["section_order"],
-}
-
-CREATE_DASHBOARD_CARD_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "title": {
-            "type": "string",
-            "description": "卡片标题（如'本周学习概览'、'薄弱知识点 Top5'）",
-        },
-        "subtitle": {
-            "type": "string",
-            "description": "副标题/时间范围（如'5.22 - 5.28'），可选",
-        },
-        "items": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string", "description": "项目名称"},
-                    "value": {"type": "string", "description": "项目值"},
-                    "trend": {
-                        "type": "string",
-                        "enum": ["up", "down", "neutral"],
-                        "description": "趋势方向（可选）",
-                    },
-                    "progress": {
-                        "type": "number",
-                        "minimum": 0,
-                        "maximum": 100,
-                        "description": "进度百分比 0-100，渲染为进度条（可选）",
-                    },
-                    "emphasis": {
-                        "type": "boolean",
-                        "description": "是否大字高亮展示（可选，适合关键数字）",
-                    },
-                    "action_link": {
-                        "type": "string",
-                        "description": "点击该数据项后跳转的前端路由（如'/tests/review'、'/knowledge-map'），可选",
-                    },
-                },
-                "required": ["label", "value"],
-            },
-            "description": "数据项列表，2-8 个。每个项可自由组合 trend/progress/emphasis 来决定展示样式",
-        },
-        "cta": {
-            "type": "object",
-            "properties": {
-                "label": {"type": "string", "description": "按钮文字（如'立即复习'、'查看详情'）"},
-                "link": {"type": "string", "description": "点击后跳转的前端路由"},
-            },
-            "description": "卡片底部的行动按钮（可选），引导学生采取具体行动",
-        },
-    },
-    "required": ["title", "items"],
 }
 
 SEARCH_COURSES_SCHEMA = {
@@ -681,6 +646,10 @@ def get_planner_tools():
             impl_summary="查询 knowledge_mastery 表，按 subject → chapter → section 分组返回掌握度百分比。支持 subject 过滤。需要 user_id。"),
         _make_tool("get_due_reviews", "获取今日待复习的题目列表（来自间隔重复调度）。用于安排今日复习任务。", GET_DUE_REVIEWS_SCHEMA,
             impl_summary="查询 memorix_schedule 表 WHERE next_review <= today AND user_id=current_user，按 priority 降序返回待复习题目列表。"),
+        _make_tool("get_knowledge_difficulty_analysis", "获取知识点的 Memorix 难度分析，识别薄弱知识点。用于回答'我哪些知识点最薄弱'等问题。", GET_KNOWLEDGE_DIFFICULTY_ANALYSIS_SCHEMA,
+            impl_summary="查询 UserQuestionStatus 表，按知识点聚合 avg_difficulty、avg_stability、total_reviews，返回掌握程度和 Memorix 洞察。"),
+        _make_tool("get_practice_questions", "从题库中抽取相关题目供学生练习。支持按知识点、学科、难度筛选，优先返回做错过的题目。用于'给我出几道题''我想练练XX'等场景。", GET_PRACTICE_QUESTIONS_SCHEMA,
+            impl_summary="查询 question 表，按知识点/学科/难度过滤，排除已掌握题目。优先返回 UserQuestionStatus 中 wrong_count>0 的薄弱题，再补充新题。随机抽取，返回题目列表（不含答案）。"),
         _make_tool("get_exam_history", "获取用户的考试成绩历史和趋势。用于评估学习进展。", GET_EXAM_HISTORY_SCHEMA,
             impl_summary="查询 exam_record 表 WHERE user_id=current_user，按 created_at 降序返回最近 N 次考试成绩（分数、科目、日期）。"),
         _make_tool("save_study_plan", "将生成的学习计划持久化到数据库。调用后用户可在计划页面查看。", SAVE_STUDY_PLAN_SCHEMA,
@@ -689,10 +658,6 @@ def get_planner_tools():
             impl_summary="查询 study_plan 表 WHERE user_id=current_user AND status='active'，返回计划详情及关联的 plan_task 列表。"),
         _make_tool("update_plan_task", "更新学习计划中某个任务的状态（完成/跳过/重置）。", UPDATE_PLAN_TASK_SCHEMA,
             impl_summary="更新 plan_task 表的 status 字段（completed/skipped/pending），同时更新关联 study_plan 的 progress 百分比。需要 task_id。"),
-        _make_tool("set_dashboard_layout", "配置小宇 Dashboard 面板的布局。根据学生当前状态决定展示哪些区块、排列顺序和高亮重点。每次对话后应调用此工具更新面板。", SET_DASHBOARD_LAYOUT_SCHEMA,
-            impl_summary="创建或更新 dashboard_config 记录，存储 JSON 格式的布局配置（区块列表、排列顺序、高亮规则）。需要 user_id。"),
-        _make_tool("create_dashboard_card", "在 Dashboard 中创建自定义数据卡片。根据学生当前数据自由组织展示内容：可包含趋势指标、进度条、高亮数字、普通文本等。每个 item 通过 trend/progress/emphasis 字段控制渲染样式。每次对话可创建多张卡片。", CREATE_DASHBOARD_CARD_SCHEMA,
-            impl_summary="将卡片数据写入 user.dashboard_config.custom_cards[]，保留最近 10 张。前端根据 items 的字段自动选择渲染样式（进度条/趋势/高亮/普通行）。"),
         _make_tool("render_visual", "在 Dashboard 画布上渲染可视化内容。用于展示数学推导过程、解题步骤、知识图谱、数据统计等需要视觉呈现的内容。纯文字问答不需要调用此工具。", RENDER_VISUAL_SCHEMA,
             impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到 Dashboard 画布。"),
     ]
@@ -709,22 +674,27 @@ def get_reviewer_research_tools():
 
 # ── Exam Generator Agent 工具 Schema ──────────────────────────
 
-SEARCH_KP_SCHEMA = {
+SEARCH_KNOWLEDGE_SCHEMA = {
     "type": "object",
     "properties": {
         "query": {
             "type": "string",
-            "description": "搜索关键词（知识点名称或编码）",
+            "description": "搜索关键词（知识点名称、编码或知识树节点名称）",
         },
         "subject": {
             "type": "string",
             "description": "可选，限定学科（如'金融431''高中数学'）",
         },
+        "mode": {
+            "type": "string",
+            "enum": ["kp", "tree", "auto"],
+            "description": "搜索模式：kp=仅搜知识点，tree=仅搜知识树，auto=先搜kp再搜tree（默认）",
+        },
     },
     "required": ["query"],
 }
 
-GENERATE_QUESTIONS_SCHEMA = {
+QUICK_GENERATE_SCHEMA = {
     "type": "object",
     "properties": {
         "kp_ids": {
@@ -732,21 +702,11 @@ GENERATE_QUESTIONS_SCHEMA = {
             "items": {"type": "integer"},
             "description": "知识点 ID 列表",
         },
-        "count_per_kp": {
+        "count": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 10,
-            "description": "每个知识点生成的题数，默认 3",
-        },
-        "difficulty": {
-            "type": "string",
-            "enum": ["entry", "easy", "normal", "hard", "extreme", "mixed"],
-            "description": "目标难度，默认 normal",
-        },
-        "types": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "题型筛选，如 ['objective', 'subjective:short']，不传则全题型",
+            "maximum": 20,
+            "description": "总题数，默认 5",
         },
     },
     "required": ["kp_ids"],
@@ -795,31 +755,31 @@ CHECK_PIPELINE_STATUS_SCHEMA = {
     "required": ["task_id"],
 }
 
-SAVE_QUESTIONS_TO_LIBRARY_SCHEMA = {
+GET_WORKBENCH_STATS_SCHEMA = {
     "type": "object",
     "properties": {
-        "question_indices": {
-            "type": "array",
-            "items": {"type": "integer"},
-            "description": "要保存的题目序号（从 0 开始），不传则全部保存",
+        "scope": {
+            "type": "string",
+            "enum": ["summary", "recent", "insights"],
+            "description": "数据范围：summary=题库统计（默认），recent=最近出题，insights=教师偏好",
         },
     },
 }
 
 
 def get_exam_generator_tools():
-    """出题 Agent 工具集。"""
+    """出题 Agent 工具集（5 个工具）。"""
     return [
-        _make_tool("search_knowledge_points", "搜索可用知识点，按名称或编码查找。出题前先用此工具确认知识点存在。", SEARCH_KP_SCHEMA,
-            impl_summary="模糊匹配 knowledge_point 表的 name 和 code 字段，支持 subject 过滤。返回知识点 ID 和名称，用于后续 generate_questions 的 kp_ids 参数。"),
-        _make_tool("generate_questions", "快速生成题目（同步，约 10 秒）。根据知识点、难度、题型生成候选题目。", GENERATE_QUESTIONS_SCHEMA,
-            impl_summary="调用 LLM 根据知识点描述生成题目 JSON，验证 schema 后存入内存候选池。返回生成的题目列表供用户审阅。支持 count、difficulty、types 参数。"),
-        _make_tool("launch_arc_pipeline", "启动 ARC 精修管线（异步，2-5 分钟）。4-agent 对抗循环：Author→Reviewer→Revise→Classifier，质量更高。", LAUNCH_ARC_PIPELINE_SCHEMA,
-            impl_summary="创建 PipelineTask 记录并 dispatch Celery 异步任务。执行 Author→Reviewer→AuthorRevise→Classifier 四阶段对抗，每阶段调用 LLM。返回 task_id 用于轮询进度。"),
+        _make_tool("search_knowledge", "搜索知识点或知识树结构。出题前先用此工具确认知识点存在并获取 ID。", SEARCH_KNOWLEDGE_SCHEMA,
+            impl_summary="合并搜索：mode=kp 时模糊匹配 knowledge_point 表的 name 和 code；mode=tree 时搜索知识树结构（sub/ch/sec 层级）；mode=auto 时先搜 kp，无结果则自动搜 tree。支持 subject 过滤。返回知识点 ID 和名称。"),
+        _make_tool("quick_generate", "快速出题（Author 单步，约 5-10 秒）。根据知识点生成候选题目，教师审阅后可选择 ARC 精修。", QUICK_GENERATE_SCHEMA,
+            impl_summary="调用 single_generate_pipeline 的 Author 阶段（skip_review=True），仅做 LLM 生成 + 去重 + schema 校验 + 本地完整性检查。返回题目列表存入内存候选池，通过 metadata 传给前端 QuestionPanel 展示。"),
+        _make_tool("launch_arc_pipeline", "启动 ARC 精修管线（异步，2-5 分钟）。对已出的题目进行 4-agent 对抗精修：Author→Reviewer→Revise→Classifier。", LAUNCH_ARC_PIPELINE_SCHEMA,
+            impl_summary="创建 PipelineTask 记录并 dispatch Celery 异步任务。返回 task_id 用于轮询进度。前端 QuestionPanel 有进度条实时展示。"),
         _make_tool("check_pipeline_status", "查询 ARC 管线的执行进度。", CHECK_PIPELINE_STATUS_SCHEMA,
             impl_summary="主键查询 pipeline_task 表，返回 status（pending/running/completed/failed）、current_stage、progress 百分比、已生成题目数。"),
-        _make_tool("save_questions_to_library", "将最近一次生成的题目存入机构题库。可选择保存全部或部分题目。", SAVE_QUESTIONS_TO_LIBRARY_SCHEMA,
-            impl_summary="将候选池中的题目批量插入 question 表，关联 knowledge_point 和 institution。支持通过 question_indices 选择性保存。"),
+        _make_tool("get_workbench_stats", "获取题库统计数据。教师问'出了多少题''题库情况'时使用。", GET_WORKBENCH_STATS_SCHEMA,
+            impl_summary="scope=summary 返回总题数和按学科/难度/题型分布；scope=recent 返回最近 20 道题；scope=insights 返回教师出题偏好分析。所有数据按机构隔离。"),
     ]
 
 # ── 小宇可视化工具 Schema ──────────────────────────────────────
@@ -829,12 +789,24 @@ RENDER_VISUAL_SCHEMA = {
     "properties": {
         "type": {
             "type": "string",
-            "enum": ["data_card", "latex_derivation", "step_solution", "knowledge_map"],
-            "description": "可视化类型。data_card=数据卡片，latex_derivation=数学推导，step_solution=解题步骤，knowledge_map=知识图谱",
+            "enum": ["data_card", "latex_derivation", "step_solution", "knowledge_map", "action_cards"],
+            "description": "可视化类型。data_card=数据卡片，latex_derivation=数学推导，step_solution=解题步骤，knowledge_map=知识图谱，action_cards=行动引导卡片",
         },
         "payload": {
             "type": "object",
-            "description": "可视化内容，结构由 type 决定。详见各类型 schema。",
+            "description": (
+                "可视化内容，结构由 type 决定：\n"
+                "• data_card: {title: string, subtitle?: string, items: [{label, value, trend?: 'up'|'down'|'neutral', progress?: 0-100, emphasis?: bool, action_link?: string}], cta?: {label, link}}\n"
+                "• latex_derivation: {title: string, steps: [{latex: string, note?: string}]}\n"
+                "• step_solution: {title: string, steps: [{text: string, latex?: string}]}\n"
+                "• knowledge_map: {title?: string, nodes: [{id: string, label: string, mastery?: 0-1}], edges: [{from: string, to: string}], highlights?: [string]}\n"
+                "• action_cards: {title?: string, cards: [{title, description, icon(video/quiz/review/course/chart/plan/exam), action: {type, url, label}, priority?(high/normal/low)}]}"
+            ),
+        },
+        "priority": {
+            "type": "string",
+            "enum": ["high", "normal", "low"],
+            "description": "可视化优先级。high 占满整行，normal/low 各占半行。默认 normal。",
         },
     },
     "required": ["type", "payload"],
