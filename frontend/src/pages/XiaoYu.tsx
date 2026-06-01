@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Send, Loader2, RotateCcw, Lightbulb, BarChart3, Target, CheckCircle2, CalendarCheck, BookOpen, History, MessageCircleQuestion, BrainCircuit, Trash2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import api from '@/lib/api';
-import { processMathContent, cn } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import { VisualCanvas, type VisualData } from './xiaoyu/DashboardPanel';
@@ -63,14 +63,11 @@ export const XiaoYu: React.FC = () => {
       return updated;
     },
     onStepDoneEffect: (step) => {
-      console.log('[onStepDoneEffect]', step.name, 'hasVisual:', !!step.visual, 'callId:', step.call_id);
       if (step.name === 'render_visual' && step.visual) {
         pendingVisualsRef.current.push(step.visual as VisualData);
-        console.log('[onStepDoneEffect] collected visual, total:', pendingVisualsRef.current.length);
       }
     },
     onAllVisuals: (visuals) => {
-      console.log('[onAllVisuals] received', visuals.length, 'visuals');
       pendingVisualsRef.current = [];
       setVisual(visuals as VisualData[]);
     },
@@ -123,10 +120,13 @@ export const XiaoYu: React.FC = () => {
           let foundSessionVisual: VisualData | VisualData[] | null = null;
           const hRes = await api.get('/ai/history/', { params: { bot_id: xiaoyu.id } });
           if (hRes.data.length > 0) {
-            const allMsgs: Message[] = hRes.data.map((m: Record<string, unknown>) => ({
-              ...m,
-              content: processMathContent(m.content as string),
-            }));
+            const allMsgs: Message[] = hRes.data
+              .filter((m: Record<string, unknown>) => m.content !== '[Thinking...]')
+              .map((m: Record<string, unknown>) => ({
+                ...m,
+                content: m.content as string,
+                visible: true,  // History messages are always visible
+              }));
             const grouped = groupIntoSessions(allMsgs);
             setSessions(grouped);
             const lastMsg = hRes.data[hRes.data.length - 1];
@@ -139,7 +139,6 @@ export const XiaoYu: React.FC = () => {
               setMessages(latest.messages);
               setActiveSessionId(latest.id);
               foundSessionVisual = extractLastVisual(latest.messages);
-              console.log('[init] isRecent=true, msgs:', latest.messages.length, 'lastMsg metadata:', lastMsg.metadata, 'extracted visual:', foundSessionVisual);
               if (foundSessionVisual) {
                 setVisual(foundSessionVisual);
               }
@@ -280,7 +279,7 @@ export const XiaoYu: React.FC = () => {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="h-full flex animate-in fade-in duration-300">
-        <div className="flex-1 min-w-0 h-full">
+        <div className="flex-1 min-w-0 h-full" style={{ minWidth: '55%' }}>
           <VisualCanvas visual={visual} />
         </div>
 

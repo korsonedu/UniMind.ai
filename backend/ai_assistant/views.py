@@ -33,7 +33,8 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
     if conversation_id:
         base_qs = base_qs.filter(conversation_id=conversation_id)
     history_objs = base_qs.order_by('-timestamp')[:history_limit]
-    history_msgs = [{"role": h.role, "content": h.content} for h in reversed(history_objs) if h.content != "[Thinking...]"]
+    history_msgs = [{"role": h.role, "content": h.content} for h in reversed(history_objs)
+                    if h.content != "[Thinking...]" and not (h.role == 'user' and h.content == user_message)]
 
     student_context = ""
     if bot and bot.is_exclusive:
@@ -52,6 +53,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
                 user=user,
                 message=user_message,
                 history=history_msgs,
+                institution=getattr(user, 'institution', None),
                 student_context=student_context,
                 memory_context=memory_context,
                 adaptive_directives=adaptive_directives,
@@ -73,16 +75,19 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
 
             if pending_msg:
                 pending_msg.content = ai_content
-                # 写入出题 Agent 的结构化数据
+                # 统一 metadata 构建
+                msg_metadata = {}
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
-                    pending_msg.metadata = {
-                        'generated_questions': tool_executor._last_generated,
-                        'pipeline_task_id': getattr(tool_executor, '_last_pipeline_task_id', None),
-                    }
-                elif hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
-                    pending_msg.metadata = {
-                        'pipeline_task_id': tool_executor._last_pipeline_task_id,
-                    }
+                    msg_metadata['generated_questions'] = tool_executor._last_generated
+                if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
+                    msg_metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
+                if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
+                    visuals = tool_executor.pending_visuals
+                    msg_metadata['visual'] = visuals[-1]
+                    if len(visuals) > 1:
+                        msg_metadata['all_visuals'] = visuals
+                if msg_metadata:
+                    pending_msg.metadata = msg_metadata
                 pending_msg.save()
 
             # 计入 AI 调用总次数
@@ -111,7 +116,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
             extract_memories_async(user, full_history)
             extract_memories_with_mem0(user, full_history)
         except Exception:
-            pass
+            logger.warning("Memory extraction failed (polling)", exc_info=True)
         close_old_connections()
 
 
@@ -307,12 +312,11 @@ class AIChatView(APIView):
         pending_msg = AIChatMessage.objects.create(user=request.user, role='assistant', content="[Thinking...]", bot=bot, conversation_id=conversation_id)
 
         # 3. Start Background Thread
-        thread = threading.Thread(
-            target=process_ai_chat,
-            args=(request.user, bot, user_message, pending_msg.id, conversation_id),
-            daemon=True,
+        from ai_assistant.utils import _THREAD_POOL
+        _THREAD_POOL.submit(
+            process_ai_chat,
+            request.user, bot, user_message, pending_msg.id, conversation_id,
         )
-        thread.start()
 
         return Response({'status': 'pending'})
 
@@ -341,6 +345,20 @@ class AIChatResetView(APIView):
             qs = qs.filter(bot_id=bot_id)
         qs.delete()
         return Response({'status': 'cleared'})
+
+
+class AIChatDeleteConversationView(APIView):
+    """删除指定 conversation_id 的对话记录。"""
+    permission_classes = [IsMember]
+
+    def post(self, request):
+        conversation_id = request.data.get('conversation_id')
+        if not conversation_id:
+            return Response({'error': 'conversation_id is required'}, status=400)
+        deleted, _ = AIChatMessage.objects.filter(
+            user=request.user, conversation_id=conversation_id
+        ).delete()
+        return Response({'status': 'deleted', 'count': deleted})
 
 
 class AIChatStreamView(APIView):
@@ -381,6 +399,12 @@ class AIChatStreamView(APIView):
 
         # Save user message
         AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot, conversation_id=conversation_id)
+        
+        # Create pending assistant message (for refresh recovery)
+        pending_msg = AIChatMessage.objects.create(
+            user=request.user, role='assistant', content="[Thinking...]",
+            bot=bot, conversation_id=conversation_id
+        )
 
         def _sync_setup():
             """All sync DB/ORM work — called once via sync_to_async."""
@@ -407,27 +431,45 @@ class AIChatStreamView(APIView):
                 user=request.user,
                 message=user_message,
                 history=history_msgs,
+                institution=getattr(request.user, 'institution', None),
                 student_context=student_context,
                 memory_context=memory_context,
                 adaptive_directives=adaptive_directives,
             )
 
-            return history_msgs, messages, tools, tool_executor
+            # 意图路由（与 WS/Polling 路径一致）
+            if profile.use_intent_router and user_message:
+                from ai_engine.tool_router import route_tools
+                tools = route_tools(user_message, tools, recent_messages=history_msgs, bot_type=bot.bot_type)
+
+            # 工具白名单（防止 prompt injection 调用非预期工具）
+            tool_executor._allowed_tool_names = {t['function']['name'] for t in tools}
+
+            return history_msgs, messages, tools, tool_executor, profile
 
         async def generate():
             history_msgs = []
-            collected = []
             try:
-                history_msgs, messages, tools, tool_executor = await sync_to_async(_sync_setup)()
+                history_msgs, messages, tools, tool_executor, profile = await sync_to_async(_sync_setup)()
 
                 step_queue: asyncio.Queue = asyncio.Queue()
                 _SENTINEL = object()
                 _result_container = [None]
+                _sent_any_message = False
 
                 def on_step(event):
                     step_queue.put_nowait(event)
 
-                forced_tool_choice = "required" if bot.bot_type in ('planner', 'exam_generator') else "auto"
+                def on_message(text):
+                    nonlocal _sent_any_message
+                    _sent_any_message = True
+                    step_queue.put_nowait({"type": "message", "content": text})
+
+                # 挂到 tool_executor，让工具内部也能发进度事件
+                tool_executor.on_step = on_step
+
+                from ai_assistant.services.chat_dispatch import resolve_tool_choice
+                forced_tool_choice = resolve_tool_choice(profile)
 
                 def _run_agent():
                     try:
@@ -437,6 +479,7 @@ class AIChatStreamView(APIView):
                                 tools=tools,
                                 tool_executor=tool_executor,
                                 on_step=on_step,
+                                on_message=on_message,
                                 tool_choice=forced_tool_choice,
                                 temperature=0.6,
                                 max_tokens=2500,
@@ -449,27 +492,34 @@ class AIChatStreamView(APIView):
                     finally:
                         step_queue.put_nowait(_SENTINEL)
 
-                agent_thread = threading.Thread(target=_run_agent, daemon=True)
-                agent_thread.start()
+                from ai_assistant.utils import _THREAD_POOL
+                agent_future = _THREAD_POOL.submit(_run_agent)
 
                 while True:
                     event = await step_queue.get()
                     if event is _SENTINEL:
                         break
+                    # Log step events with visual for debugging
+                    if event.get("type") == "step" and event.get("name") == "render_visual":
+                        logging.getLogger("agent_debug").info(
+                            "SSE out render_visual: status=%s has_visual=%s call_id=%s",
+                            event.get("status"), "visual" in event, event.get("call_id"),
+                        )
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-                agent_thread.join(timeout=5)
+                agent_future.result(timeout=5)
                 result = _result_container[0]
 
-                # P1-11: 如果 5 秒内 agent 未完成，再等 10 秒
                 if result is None:
-                    agent_thread.join(timeout=10)
+                    try:
+                        agent_future.result(timeout=10)
+                    except Exception:
+                        pass
                     result = _result_container[0]
 
                 ai_content = ""
                 is_error = False
                 if result is None:
-                    # agent 超时未返回结果，发送超时提示，不写入数据库
                     ai_content = "AI 正在处理中，请稍候重试。"
                     is_error = True
                 elif isinstance(result, dict) and 'content' in result:
@@ -479,35 +529,53 @@ class AIChatStreamView(APIView):
 
                 error_patterns = ("AI 服务暂时不可用", "AI 暂时无法响应", "LLM_API_KEY")
                 if not is_error:
-                    is_error = any(p in ai_content for p in error_patterns) if ai_content else True
+                    is_error = any(p in ai_content for p in error_patterns) if ai_content else False
 
-                ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ').replace('\\(', ' $ ').replace('\\)', ' $ ')
+                metadata = {}
+                if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
+                    metadata['generated_questions'] = tool_executor._last_generated
+                    metadata['pipeline_task_id'] = getattr(tool_executor, '_last_pipeline_task_id', None)
+                if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
+                    metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
+                if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
+                    visuals = tool_executor.pending_visuals
+                    metadata['visual'] = visuals[-1]  # Last visual for backward compat
+                    if len(visuals) > 1:
+                        metadata['all_visuals'] = visuals
+                    tool_executor.pending_visuals = []
 
-                if ai_content and not is_error:
-                    msg_kwargs = {
-                        'user': request.user,
-                        'role': 'assistant',
-                        'content': ai_content,
-                        'bot': bot,
-                        'conversation_id': conversation_id,
-                    }
-                    # 写入 Agent 结构化数据（题目、管线、可视化）
-                    metadata = {}
-                    if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
-                        metadata['generated_questions'] = tool_executor._last_generated
-                        metadata['pipeline_task_id'] = getattr(tool_executor, '_last_pipeline_task_id', None)
-                    elif hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
-                        metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
-                    if hasattr(tool_executor, 'pending_visual') and tool_executor.pending_visual:
-                        metadata['visual'] = tool_executor.pending_visual
-                        tool_executor.pending_visual = None
-                    if metadata:
-                        msg_kwargs['metadata'] = metadata
-                    await sync_to_async(AIChatMessage.objects.create)(**msg_kwargs)
+                # Save assistant message even when ai_content is empty (tool-only responses)
+                has_metadata = bool(metadata)
+                should_save = (ai_content or has_metadata or _sent_any_message) and not is_error
+                logger.info("[SSE done] ai_content_len=%s has_metadata=%s sent_any=%s is_error=%s should_save=%s pending_visuals=%s metadata_keys=%s",
+                    len(ai_content), has_metadata, _sent_any_message, is_error, should_save,
+                    len(tool_executor.pending_visuals) if hasattr(tool_executor, 'pending_visuals') else 'N/A',
+                    list(metadata.keys()) if metadata else [])
+                if should_save:
+                    save_content = ai_content or ' '  # Empty content breaks some queries
+                    # Update pending message instead of creating new one
+                    def _update_pending():
+                        pending_msg.content = save_content
+                        if metadata:
+                            pending_msg.metadata = metadata
+                        pending_msg.save()
+                    await sync_to_async(_update_pending)()
                     if hasattr(tool_executor, 'user'):
                         await sync_to_async(request.user.refresh_from_db)()
 
-                yield f"data: {json.dumps({'done': True, 'full_content': ai_content, 'is_error': is_error}, ensure_ascii=False)}\n\n"
+                    from users.quota import increment_quota
+                    def _bump_quota():
+                        if request.user.institution:
+                            increment_quota(request.user.institution, 'ai_call_total')
+                    await sync_to_async(_bump_quota)()
+                else:
+                    # Delete pending message if not saving
+                    await sync_to_async(pending_msg.delete)()
+
+                done_payload = {'done': True, 'full_content': ai_content, 'is_error': is_error, 'has_intermediate': _sent_any_message}
+                if metadata:
+                    done_payload['metadata'] = metadata
+                yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
             except Exception as e:
                 logger.exception("AI Chat Stream Error [%s]: %s", type(e).__name__, e)
@@ -523,12 +591,8 @@ class AIChatStreamView(APIView):
                     await sync_to_async(extract_memories_async)(request.user, full_history)
                     await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
-                    pass
+                    logger.warning("Memory extraction failed (SSE)", exc_info=True)
                 await sync_to_async(close_old_connections)()
-
-                from users.quota import increment_quota
-                if request.user.institution:
-                    await sync_to_async(increment_quota)(request.user.institution, 'ai_call_total')
 
         response = StreamingHttpResponse(
             generate(),
@@ -661,3 +725,57 @@ class SemanticMemoryDeleteView(APIView):
         except Exception:
             logger.exception("Failed to delete semantic memory")
             return Response({"error": "删除记忆失败"}, status=500)
+
+
+class ActionCardInteractionView(APIView):
+    """行动卡片交互追踪：记录点击/完成，查询完成状态。"""
+    permission_classes = [IsMember]
+
+    def get(self, request):
+        """查询当前用户所有卡片完成状态。可选 ?type=quiz 过滤。"""
+        from .models import ActionCardInteraction
+        qs = ActionCardInteraction.objects.filter(user=request.user)
+        action_type = request.query_params.get('type')
+        if action_type:
+            qs = qs.filter(card_action_type=action_type)
+
+        interactions = qs.values(
+            'card_action_url', 'card_title', 'card_action_type',
+            'completed', 'clicked_at', 'completed_at',
+        )
+        return Response({"interactions": list(interactions)})
+
+    def post(self, request):
+        """记录或更新卡片交互。
+
+        body: {card_title, card_action_type, card_action_url, card_icon?, card_description?, completed?, metadata?}
+        如果 completed=true，同时更新 completed_at。
+        """
+        from .models import ActionCardInteraction
+        from django.utils import timezone
+
+        data = request.data
+        url = data.get('card_action_url', '')
+        if not url:
+            return Response({"error": "card_action_url 必填"}, status=400)
+
+        completed = data.get('completed', False)
+        interaction, created = ActionCardInteraction.objects.update_or_create(
+            user=request.user,
+            card_action_url=url,
+            defaults={
+                'card_title': data.get('card_title', ''),
+                'card_action_type': data.get('card_action_type', 'quiz'),
+                'card_icon': data.get('card_icon', ''),
+                'card_description': data.get('card_description', ''),
+                'completed': completed,
+                'completed_at': timezone.now() if completed else None,
+                'metadata': data.get('metadata', {}),
+            },
+        )
+        return Response({
+            "id": interaction.id,
+            "created": created,
+            "completed": interaction.completed,
+            "completed_at": interaction.completed_at.isoformat() if interaction.completed_at else None,
+        })
