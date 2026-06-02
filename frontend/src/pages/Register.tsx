@@ -169,9 +169,9 @@ export const Register: React.FC = () => {
               />
               <label htmlFor="agree-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
                 我已阅读并同意{' '}
-                <Link to="/terms" className="text-black font-medium hover:underline" target="_blank">用户协议</Link>
+                <Link to="/terms" className="text-black font-medium hover:underline">用户协议</Link>
                 {' '}和{' '}
-                <Link to="/privacy" className="text-black font-medium hover:underline" target="_blank">隐私政策</Link>
+                <Link to="/privacy" className="text-black font-medium hover:underline">隐私政策</Link>
               </label>
             </div>
 
