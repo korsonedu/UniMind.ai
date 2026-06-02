@@ -780,6 +780,8 @@ def get_exam_generator_tools():
             impl_summary="主键查询 pipeline_task 表，返回 status（pending/running/completed/failed）、current_stage、progress 百分比、已生成题目数。"),
         _make_tool("get_workbench_stats", "获取题库统计数据。教师问'出了多少题''题库情况'时使用。", GET_WORKBENCH_STATS_SCHEMA,
             impl_summary="scope=summary 返回总题数和按学科/难度/题型分布；scope=recent 返回最近 20 道题；scope=insights 返回教师出题偏好分析。所有数据按机构隔离。"),
+        _make_tool("get_class_weak_points", "获取班级最薄弱的知识点（按正确率排序）。仅教师/机构主可用。教师说'针对薄弱点出题'时先调用此工具获取实际薄弱知识点，再用 search_knowledge 确认知识点 ID，最后 quick_generate。", GET_CLASS_WEAK_POINTS_SCHEMA,
+            impl_summary="查询 UserQuestionStatus 表，按 knowledge_point 聚合学生正确率，返回最低的前 N 个知识点（含正确率、尝试次数、涉及学生数）。数据按机构隔离。"),
     ]
 
 # ── 小宇可视化工具 Schema ──────────────────────────────────────
