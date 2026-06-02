@@ -28,6 +28,7 @@ import {
   Bot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -575,7 +576,7 @@ export const MainLayout: React.FC = () => {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel className="rounded-xl font-bold border-border text-foreground hover:bg-muted">{t('layout:logout.cancel')}</AlertDialogCancel>
-              <AlertDialogAction onClick={() => { logout(); navigate('/login'); }} className="rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90">{t('layout:logout.confirm')}</AlertDialogAction>
+              <AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch {} logout(); navigate('/login'); }} className="rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90">{t('layout:logout.confirm')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
