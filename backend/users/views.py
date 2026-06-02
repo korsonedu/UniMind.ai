@@ -613,9 +613,10 @@ class UpdatePasswordView(generics.UpdateAPIView):
             Token.objects.filter(user=user).delete()
             new_token = Token.objects.create(user=user)
             resp = Response({'status': 'ok'})
+            is_secure = getattr(settings, 'IS_PROD', False)
             resp.set_cookie(
                 'auth_token', new_token.key,
-                max_age=30 * 24 * 3600, httponly=True, samesite='Lax',
+                max_age=30 * 24 * 3600, httponly=True, secure=is_secure, samesite='Lax',
             )
             return resp
         return Response({'error': '旧密码错误'}, status=400)
