@@ -45,7 +45,9 @@ export const NotificationBell = () => {
 
   useEffect(() => {
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 5000); 
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchUnreadCount();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -58,7 +60,7 @@ export const NotificationBell = () => {
     if (!notif.is_read) await markAsRead(notif.id);
     if (notif.link) {
         if (notif.link.startsWith('/')) navigate(notif.link);
-        else window.open(notif.link, '_blank');
+        else window.open(notif.link, '_blank', 'noopener,noreferrer');
     }
   };
 

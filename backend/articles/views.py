@@ -74,7 +74,6 @@ class ArticleListCreateView(generics.ListCreateAPIView):
         validate_upload_file(self.request.FILES.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
-        from users.quota import check_and_add_storage_usage
         check_and_add_storage_usage(inst, total_size)
         serializer.save(author=self.request.user, institution=inst)
 

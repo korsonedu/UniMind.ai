@@ -1210,3 +1210,41 @@ class InstitutionPaymentConfigView(APIView):
             'wechat_has_key': bool(cfg.wechat_api_v3_key),
             'alipay_has_key': bool(cfg.alipay_private_key),
         })
+
+
+class InstitutionAuditLogView(APIView):
+    """机构操作审计日志（机构管理员可见）。
+
+    GET /api/users/institution/me/audit-logs/?page=1
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        inst = request.user.institution
+        if not inst:
+            return Response({'error': '未加入机构'}, status=400)
+        if request.user.institution_role not in ('owner', 'teacher'):
+            return Response({'error': '无权限'}, status=403)
+
+        from .models import InstitutionAuditLog
+        page = int(request.query_params.get('page', 1))
+        page_size = 20
+        qs = InstitutionAuditLog.objects.filter(institution=inst).select_related('operator')
+        total = qs.count()
+        items = qs[(page - 1) * page_size: page * page_size]
+
+        return Response({
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'items': [
+                {
+                    'id': log.id,
+                    'operator': log.operator.username if log.operator else '系统',
+                    'action': log.action,
+                    'detail': log.detail,
+                    'created_at': log.created_at.isoformat(),
+                }
+                for log in items
+            ],
+        })

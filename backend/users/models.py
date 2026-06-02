@@ -45,6 +45,8 @@ class User(AbstractUser):
     failed_login_count = models.IntegerField(default=0, verbose_name="连续登录失败次数")
     locked_until = models.DateTimeField(null=True, blank=True, verbose_name="锁定截止时间")
     dashboard_config = models.JSONField(default=dict, blank=True, verbose_name="小宇 Dashboard 配置")
+    agreed_to_terms = models.BooleanField(default=False, verbose_name="已同意用户协议")
+    agreed_to_terms_at = models.DateTimeField(null=True, blank=True, verbose_name="同意协议时间")
 
     @property
     def avatar_url(self):

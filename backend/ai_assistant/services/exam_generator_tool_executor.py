@@ -1,95 +1,161 @@
 """
 出题 Agent 工具执行器。
 
-继承 AssistantToolExecutor，提供出题专用工具：
-- search_knowledge_points: 搜索知识点
-- generate_questions: 快速管线出题
+继承 BaseToolExecutor，提供出题专用工具：
+- search_knowledge: 搜索知识点或知识树（合并）
+- quick_generate: Author 单步快速出题
 - launch_arc_pipeline: 启动 ARC 精修管线
 - check_pipeline_status: 查询管线进度
-- save_questions_to_library: 存入题库
+- get_workbench_stats: 题库统计
 """
 
-import json
 import logging
 from typing import Any, Dict, List
 
-from ai_assistant.services.tool_executor import AssistantToolExecutor
+from ai_assistant.services.tool_executor import BaseToolExecutor
 
 logger = logging.getLogger(__name__)
 
 
-class ExamGeneratorToolExecutor(AssistantToolExecutor):
-    """出题 Agent 工具执行器。继承助教基础工具。"""
+class ExamGeneratorToolExecutor(BaseToolExecutor):
+    """出题 Agent 工具执行器。"""
 
     def __init__(self, user, institution=None):
         super().__init__(user, institution)
         self._last_generated: List[Dict[str, Any]] = []
         self._last_pipeline_task_id: int | None = None
 
-    # ── 搜索知识点 ──────────────────────────────────────────
+    # ── 搜索知识点（合并） ────────────────────────────────────
 
-    def _handle_search_knowledge_points(self, args: Dict) -> Dict:
+    def _handle_search_knowledge(self, args: Dict) -> Dict:
         from django.db.models import Q
         from quizzes.models import KnowledgePoint
 
         query = (args.get('query') or '').strip()
         subject = (args.get('subject') or '').strip()
+        mode = args.get('mode', 'auto')
 
-        qs = KnowledgePoint.objects.filter(
-            name__icontains=query,
-            level='kp',
-        )
-        if subject:
-            qs = qs.filter(subject=subject)
+        result = {}
+
+        # mode=kp 或 auto：搜知识点
+        if mode in ('kp', 'auto'):
+            qs = KnowledgePoint.objects.filter(name__icontains=query, level='kp')
+            if subject:
+                qs = qs.filter(subject=subject)
+            if self.institution:
+                qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
+
+            kps = list(qs.values('id', 'code', 'name', 'subject', 'description')[:15])
+            result = {
+                "found": len(kps),
+                "results": [
+                    {
+                        "id": kp['id'],
+                        "code": kp['code'] or '',
+                        "name": kp['name'],
+                        "subject": kp['subject'] or '',
+                        "description": (kp['description'] or '')[:200],
+                    }
+                    for kp in kps
+                ],
+            }
+
+            if kps:
+                return result
+
+        # mode=tree 或 auto（kp 无结果时）：搜知识树
+        if mode in ('tree', 'auto'):
+            tree_qs = KnowledgePoint.objects.filter(
+                name__icontains=query,
+                level__in=['sub', 'ch', 'sec'],
+            )
+            if subject:
+                tree_qs = tree_qs.filter(subject=subject)
+            if self.institution:
+                tree_qs = tree_qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
+
+            tree_nodes = list(tree_qs.select_related('parent').values(
+                'id', 'code', 'name', 'level', 'subject', 'parent__name',
+            )[:8])
+
+            if tree_nodes:
+                for node in tree_nodes:
+                    child_count = KnowledgePoint.objects.filter(parent_id=node['id']).count()
+                    node['child_count'] = child_count
+                result["tree_matches"] = [
+                    {
+                        "id": n['id'],
+                        "code": n['code'] or '',
+                        "name": n['name'],
+                        "level": n['level'],
+                        "subject": n['subject'] or '',
+                        "parent": n['parent__name'] or '',
+                        "child_count": n['child_count'],
+                    }
+                    for n in tree_nodes
+                ]
+                result["hint"] = "在知识树结构中找到匹配的模块/章节。可以用这些节点名称重新搜索知识点。"
+                return result
+
+        # 全无结果：提供引导
+        base_qs = KnowledgePoint.objects.filter(level='kp')
         if self.institution:
-            qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
+            base_qs = base_qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
+        subjects = list(base_qs.values_list('subject', flat=True).distinct()[:10])
+        result["available_subjects"] = [s for s in subjects if s]
+        sample_kps = list(base_qs.order_by('?').values_list('name', flat=True)[:8])
+        result["sample_keywords"] = sample_kps
+        result["hint"] = "搜索无结果。可用学科和知识点示例见上方，换关键词重试。"
+        return result
 
-        kps = qs.values('id', 'code', 'name', 'subject', 'description')[:15]
-        return {
-            "found": len(kps),
-            "results": [
-                {
-                    "id": kp['id'],
-                    "code": kp['code'] or '',
-                    "name": kp['name'],
-                    "subject": kp['subject'] or '',
-                    "description": (kp['description'] or '')[:200],
-                }
-                for kp in kps
-            ],
-        }
+    # ── 快速出题（Author 单步） ────────────────────────────────
 
-    # ── 快速出题 ────────────────────────────────────────────
-
-    def _handle_generate_questions(self, args: Dict) -> Dict:
+    def _handle_quick_generate(self, args: Dict) -> Dict:
         from quizzes.services.single_generate_pipeline import run_single_generate_pipeline
 
         kp_ids = args.get('kp_ids', [])
         if not kp_ids:
             return {"error": "请提供至少一个知识点 ID"}
 
-        count_per_kp = int(args.get('count_per_kp', 3))
-        difficulty = args.get('difficulty', 'normal')
-        types = args.get('types')
+        count = int(args.get('count', 5))
+        count_per_kp = max(1, count // len(kp_ids))
 
-        # 主路径：管线生成
+        _on_step = self.on_step
+        _call_id = getattr(self, '_current_call_id', 'quick_generate')
+
+        def _on_progress(completed: int, total: int, batch_count: int):
+            if _on_step:
+                try:
+                    _on_step({
+                        "type": "step",
+                        "call_id": _call_id,
+                        "step": 0,
+                        "status": "calling",
+                        "name": "quick_generate",
+                        "label": f"正在生成第 {completed}/{total} 批（已出 {batch_count} 题）",
+                    })
+                except Exception:
+                    pass
+
         try:
             result = run_single_generate_pipeline(
                 kp_ids=kp_ids,
                 count_per_kp=count_per_kp,
-                target_types=types,
-                target_difficulty=difficulty,
+                target_difficulty='normal',
                 institution=self.institution,
+                on_progress=_on_progress,
+                skip_review=True,
             )
             questions = result.get('questions', [])
         except Exception as e:
-            logger.warning("管线生成失败，降级到 fallback: %s", e)
-            # fallback：直接用 AI 生成
-            questions = self._fallback_generate(kp_ids, count_per_kp, difficulty, types)
+            logger.warning("quick_generate 失败: %s", e)
+            return {"error": f"出题失败：{e}。请换一个知识点或减少题量重试。"}
 
         if not questions:
             return {"error": "题目生成失败，请重试或换一个知识点"}
 
+        # 截取到目标数量
+        questions = questions[:count]
         self._last_generated = questions
 
         return {
@@ -106,64 +172,6 @@ class ExamGeneratorToolExecutor(AssistantToolExecutor):
                 for i, q in enumerate(questions)
             ],
         }
-
-    def _fallback_generate(self, kp_ids, count_per_kp, difficulty, types):
-        """管线失败时的 fallback：直接调 AI 生成题目。"""
-        import json as _json
-        from quizzes.models import KnowledgePoint
-        from ai_service import AIService
-
-        kps = list(KnowledgePoint.objects.filter(id__in=kp_ids, level='kp').values('id', 'code', 'name', 'subject'))
-        if not kps:
-            return []
-
-        kp_desc = ', '.join(f"{k['name']}(id={k['id']})" for k in kps[:5])
-        type_str = '客观题和主观题' if not types else '、'.join(types)
-        total = count_per_kp * len(kps)
-
-        prompt = (
-            f"请为以下知识点生成 {total} 道题目：{kp_desc}\n"
-            f"题型：{type_str}，难度：{difficulty}\n\n"
-            "请以 JSON 数组格式输出，每道题包含以下字段：\n"
-            '{"question": "题干", "q_type": "objective或subjective", '
-            '"subjective_type": "名词解释/简答/论述/计算 或 null", '
-            '"options": ["A.xx", "B.xx", "C.xx", "D.xx"] 或 null, '
-            '"answer": "正确答案", "grading_points": ["得分点1"] 或 null, '
-            '"difficulty_level": "entry/easy/normal/hard/extreme", '
-            '"related_knowledge_id": "知识点编码"}\n\n'
-            "只输出 JSON 数组，不要其他文字。"
-        )
-
-        raw = AIService.simple_chat_text(
-            system_prompt='你是专业命题专家。只输出 JSON 数组。',
-            user_prompt=prompt,
-            temperature=0.4,
-            max_tokens=4000,
-            operation='exam_generator.fallback',
-        )
-
-        if not raw:
-            logger.warning("fallback_generate: AI 返回空结果")
-            return []
-
-        data = AIService.extract_json(raw)
-        if not isinstance(data, list):
-            logger.warning("fallback_generate: JSON 解析失败，raw=%s", raw[:200])
-            return []
-
-        # 填充 kp_id
-        kp_by_code = {k['code']: k['id'] for k in kps if k.get('code')}
-        fallback_kp_id = kps[0]['id']
-        for item in data:
-            if not item.get('kp_id'):
-                code = (item.get('related_knowledge_id') or '').strip()
-                item['kp_id'] = kp_by_code.get(code, fallback_kp_id)
-            if not item.get('kp_name'):
-                kp_match = next((k for k in kps if k['id'] == item.get('kp_id')), None)
-                if kp_match:
-                    item['kp_name'] = kp_match['name']
-
-        return data
 
     # ── ARC 管线 ────────────────────────────────────────────
 
@@ -209,7 +217,6 @@ class ExamGeneratorToolExecutor(AssistantToolExecutor):
         except ContentPipelineTask.DoesNotExist:
             return {"error": f"任务 #{task_id} 不存在"}
 
-        # 机构隔离
         if not self.user.is_superuser and self.institution:
             if task.created_by and getattr(task.created_by, 'institution', None) != self.institution:
                 return {"error": "无权查看该任务"}
@@ -223,50 +230,73 @@ class ExamGeneratorToolExecutor(AssistantToolExecutor):
             "status_text": task.payload.get('status_text', ''),
         }
 
-    # ── 存入题库 ────────────────────────────────────────────
+    # ── 题库统计 ────────────────────────────────────────────
 
-    def _handle_save_questions_to_library(self, args: Dict) -> Dict:
-        from quizzes.models import Question, KnowledgePoint
+    def _handle_get_workbench_stats(self, args: Dict) -> Dict:
+        from django.db.models import Count
+        from quizzes.models import Question
 
-        if not self._last_generated:
-            return {"error": "没有可保存的题目。请先调用 generate_questions 生成题目。"}
+        scope = args.get('scope', 'summary')
+        base_qs = Question.objects.all()
+        if self.institution:
+            base_qs = base_qs.filter(institution=self.institution)
 
-        indices = args.get('question_indices')
-        if indices:
-            to_save = [self._last_generated[i] for i in indices if i < len(self._last_generated)]
-        else:
-            to_save = self._last_generated
+        if scope == 'summary':
+            total = base_qs.count()
+            by_subject = list(
+                base_qs.values('knowledge_point__subject')
+                .annotate(count=Count('id'))
+                .order_by('-count')[:10]
+            )
+            by_difficulty = list(
+                base_qs.values('difficulty_level')
+                .annotate(count=Count('id'))
+                .order_by('-count')
+            )
+            by_type = list(
+                base_qs.values('q_type')
+                .annotate(count=Count('id'))
+                .order_by('-count')
+            )
+            return {
+                "total": total,
+                "by_subject": [
+                    {"subject": s['knowledge_point__subject'] or '未分类', "count": s['count']}
+                    for s in by_subject
+                ],
+                "by_difficulty": [
+                    {"difficulty": d['difficulty_level'] or 'normal', "count": d['count']}
+                    for d in by_difficulty
+                ],
+                "by_type": [
+                    {"type": t['q_type'] or 'unknown', "count": t['count']}
+                    for t in by_type
+                ],
+            }
 
-        if not to_save:
-            return {"error": "未选择有效题目"}
+        elif scope == 'recent':
+            recent = base_qs.order_by('-created_at')[:20]
+            return {
+                "questions": [
+                    {
+                        "id": q.id,
+                        "text": (q.text or '')[:100],
+                        "q_type": q.q_type,
+                        "difficulty": q.difficulty_level,
+                        "subject": getattr(q.knowledge_point, 'subject', '') if q.knowledge_point else '',
+                        "created_at": q.created_at.isoformat() if q.created_at else '',
+                    }
+                    for q in recent
+                ]
+            }
 
-        saved_count = 0
-        errors = []
-        for q in to_save:
+        elif scope == 'insights':
+            # 从 mem0 获取教师偏好
             try:
-                kp = None
-                kp_id = q.get('kp_id')
-                if kp_id:
-                    kp = KnowledgePoint.objects.filter(id=kp_id).first()
+                from ai_assistant.services.memory_service import build_memory_context
+                memory_text, _ = build_memory_context(self.user, bot_type='exam_generator')
+                return {"insights": memory_text or "暂无足够数据生成教师偏好分析。"}
+            except Exception:
+                return {"insights": "暂无足够数据生成教师偏好分析。"}
 
-                question = Question(
-                    text=q.get('question', ''),
-                    q_type=q.get('q_type', 'objective'),
-                    subjective_type=q.get('subjective_type'),
-                    difficulty_level=q.get('difficulty_level', 'normal'),
-                    options=q.get('options'),
-                    correct_answer=q.get('answer', ''),
-                    grading_points='\n'.join(q.get('grading_points', []) or []) if q.get('grading_points') else None,
-                    knowledge_point=kp,
-                    institution=self.institution,
-                )
-                question.save()
-                saved_count += 1
-            except Exception as e:
-                errors.append(str(e))
-
-        return {
-            "saved": saved_count,
-            "total": len(to_save),
-            "errors": errors[:3] if errors else [],
-        }
+        return {"error": f"未知 scope: {scope}，支持 summary/recent/insights"}

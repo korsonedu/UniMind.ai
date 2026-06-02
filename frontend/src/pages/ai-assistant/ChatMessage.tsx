@@ -57,7 +57,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
               <Loader2 className="h-4 w-4 animate-spin opacity-40" />
             </div>
           ) : (
-            <div className={cn("prose prose-sm max-w-none text-left prose-headings:font-black prose-headings:tracking-tight prose-p:leading-relaxed prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground")}>
+            <div className={cn("prose prose-sm max-w-none text-left prose-headings:font-black prose-headings:tracking-tight prose-p:leading-relaxed", isUser ? "prose-p:text-primary-foreground prose-strong:text-primary-foreground prose-li:text-primary-foreground" : "prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground")}>
               <ReactMarkdown 
                 remarkPlugins={[remarkMath]} 
                 rehypePlugins={[rehypeKatex]}

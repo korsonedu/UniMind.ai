@@ -62,8 +62,8 @@ class BaselineOptimizer:
                     loss += (actual_r - pred_r) ** 2
                     count += 1
             except OverflowError:
-                return float('inf')
-        return np.sqrt(loss / count) if count > 0 else float('inf')
+                return 999999
+        return np.sqrt(loss / count) if count > 0 else 999999
 
     def optimize(self):
         bounds = [(0.01, 10.0)] * len(self.weights)

@@ -12,7 +12,6 @@ ALLOWED_UPLOAD_TYPES = {
     ".png": ["image/png"],
     ".gif": ["image/gif"],
     ".webp": ["image/webp"],
-    ".svg": ["image/svg+xml"],
     # 视频
     ".mp4": ["video/mp4"],
     ".webm": ["video/webm"],
@@ -37,18 +36,33 @@ DOC_MAX_BYTES = 50 * 1024 * 1024         # 50 MB
 VIDEO_MAX_BYTES = 500 * 1024 * 1024      # 500 MB
 DEFAULT_MAX_BYTES = 50 * 1024 * 1024     # 50 MB
 
-_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"}
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 _VIDEO_EXTS = {".mp4", ".webm", ".mov"}
 _DOC_EXTS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
 
-# 图片 magic bytes（用于内容校验，防止伪造扩展名）
-IMAGE_MAGIC_BYTES = {
+# 文件 magic bytes（用于内容校验，防止伪造扩展名）
+MAGIC_BYTES = {
+    # 图片
     ".jpg": [b"\xff\xd8\xff"],
     ".jpeg": [b"\xff\xd8\xff"],
     ".png": [b"\x89PNG"],
     ".gif": [b"GIF87a", b"GIF89a"],
     ".webp": [b"RIFF"],
+    # 视频
+    ".mp4": [b"\x00\x00\x00", b"ftyp"],  # ISO BM4 / ftyp box
+    ".webm": [b"\x1a\x45\xdf\xa3"],  # EBML header
+    # 文档
+    ".pdf": [b"%PDF"],
+    ".doc": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],  # OLE2
+    ".docx": [b"PK"],  # ZIP-based (OOXML)
+    ".ppt": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],
+    ".pptx": [b"PK"],
+    ".xls": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],
+    ".xlsx": [b"PK"],
 }
+
+# 保留旧名称兼容
+IMAGE_MAGIC_BYTES = {k: v for k, v in MAGIC_BYTES.items() if k in _IMAGE_EXTS}
 
 # 危险扩展名黑名单（优先于白名单）
 DANGEROUS_EXTENSIONS = {
@@ -69,9 +83,9 @@ def _get_default_max_bytes(ext: str) -> int:
     return DEFAULT_MAX_BYTES
 
 
-def _validate_image_magic(file_obj, ext: str) -> None:
-    """校验图片文件的 magic bytes，防止伪造扩展名。"""
-    magic_list = IMAGE_MAGIC_BYTES.get(ext)
+def _validate_magic_bytes(file_obj, ext: str) -> None:
+    """校验文件的 magic bytes，防止伪造扩展名。"""
+    magic_list = MAGIC_BYTES.get(ext)
     if not magic_list:
         return
     header = file_obj.read(8)
@@ -127,6 +141,5 @@ def validate_upload_file(
         limit_mb = limit // (1024 * 1024)
         raise ValidationError({"error": f"文件大小超出限制（上限 {limit_mb}MB）"})
 
-    # 图片 magic bytes 校验
-    if ext in _IMAGE_EXTS:
-        _validate_image_magic(file_obj, ext)
+    # magic bytes 校验（图片/视频/文档）
+    _validate_magic_bytes(file_obj, ext)

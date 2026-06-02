@@ -14,7 +14,8 @@ export interface AgentStep {
 type AgentEvent =
   | { type: 'step' } & AgentStep
   | { type: 'text_delta'; delta: string }
-  | { type: 'done'; full_content: string }
+  | { type: 'message'; content: string }
+  | { type: 'done'; full_content: string; has_intermediate?: boolean }
   | { type: 'error'; message: string };
 
 const WS_BASE = import.meta.env.VITE_WS_URL || (
@@ -24,6 +25,7 @@ const WS_BASE = import.meta.env.VITE_WS_URL || (
 export function useAgentChat(botId: number) {
   const [steps, setSteps] = useState<AgentStep[]>([]);
   const [streamingText, setStreamingText] = useState('');
+  const [messages, setMessages] = useState<string[]>([]);
   const [isDone, setIsDone] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,18 +55,7 @@ export function useAgentChat(botId: number) {
     reset();
     setIsConnected(true);
 
-    // Pass auth token via query string (WebSocket can't send custom headers)
-    let token: string | null = null;
-    try {
-      const stored = localStorage.getItem('auth-storage');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        token = parsed?.state?.token || null;
-      }
-    } catch { /* ignore */ }
-
-    const authQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-    const ws = new WebSocket(`${WS_BASE}/ws/ai/chat/${botId}/${authQuery}`);
+    const ws = new WebSocket(`${WS_BASE}/ws/ai/chat/${botId}/`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -79,17 +70,28 @@ export function useAgentChat(botId: number) {
             setSteps(prev => upsertStep(prev, event as AgentStep));
             break;
           case 'text_delta':
-            setStreamingText(prev => prev + (event as any).delta);
+            setStreamingText(prev => prev + (event as { type: 'text_delta'; delta: string }).delta);
             break;
-          case 'done':
-            setStreamingText((event as any).full_content);
+          case 'message': {
+            const msg = event as { type: 'message'; content: string };
+            if (msg.content) {
+              setMessages(prev => [...prev, msg.content]);
+            }
+            break;
+          }
+          case 'done': {
+            const done = event as { type: 'done'; full_content: string };
+            setStreamingText(done.full_content);
             setIsDone(true);
             setIsConnected(false);
             break;
-          case 'error':
-            setError((event as any).message);
+          }
+          case 'error': {
+            const err = event as { type: 'error'; message: string };
+            setError(err.message);
             setIsConnected(false);
             break;
+          }
         }
       } catch (err) {
         console.error('Failed to parse WS message:', err);
@@ -101,10 +103,11 @@ export function useAgentChat(botId: number) {
       setIsConnected(false);
     };
 
+    const currentWs = ws;
     ws.onclose = (e) => {
       setIsConnected(false);
-      // If closed abnormally (not by done event), ensure UI unblocks
-      if (e.code !== 1000 && !wsRef.current) {
+      // If closed abnormally and this socket is still the active one, ensure UI unblocks
+      if (e.code !== 1000 && wsRef.current === currentWs) {
         setIsDone(true);
       }
     };
@@ -113,6 +116,7 @@ export function useAgentChat(botId: number) {
   const reset = useCallback(() => {
     setSteps([]);
     setStreamingText('');
+    setMessages([]);
     setIsDone(false);
     setError(null);
     setIsConnected(false);
@@ -125,6 +129,7 @@ export function useAgentChat(botId: number) {
   return {
     steps,
     streamingText,
+    messages,
     isDone,
     isConnected,
     error,

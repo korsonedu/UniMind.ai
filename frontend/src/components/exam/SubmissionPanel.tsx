@@ -121,12 +121,12 @@ export const SubmissionPanel: React.FC<SubmissionPanelProps> = ({ examId }) => {
                     <td className="py-2">
                       <div className="flex items-center gap-1">
                         {s.answer_pdf_url && (
-                          <Button size="sm" variant="outline" className="h-7 text-[10px] rounded" onClick={() => window.open(s.answer_pdf_url, '_blank')}>
+                          <Button size="sm" variant="outline" className="h-7 text-[10px] rounded" onClick={() => window.open(s.answer_pdf_url, '_blank', 'noopener,noreferrer')}>
                             {t('submissionsDialog.studentAnswer')}
                           </Button>
                         )}
                         {s.graded_pdf_url && (
-                          <Button size="sm" variant="outline" className="h-7 text-[10px] rounded text-green-700 border-green-300" onClick={() => window.open(s.graded_pdf_url, '_blank')}>
+                          <Button size="sm" variant="outline" className="h-7 text-[10px] rounded text-green-700 border-green-300" onClick={() => window.open(s.graded_pdf_url, '_blank', 'noopener,noreferrer')}>
                             {t('submissionsDialog.gradedPdf')}
                           </Button>
                         )}

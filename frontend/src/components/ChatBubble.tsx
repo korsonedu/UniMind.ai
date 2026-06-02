@@ -22,7 +22,7 @@ interface ChatBubbleProps {
   compact?: boolean;
 }
 
-const ChatBubble: React.FC<ChatBubbleProps> = ({
+const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
   msg,
   isUser,
   isThinking = false,
@@ -63,15 +63,17 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
         ) : (
           <div className={cn(
             "prose prose-sm max-w-full text-left overflow-x-auto",
-            "prose-p:my-0.5 prose-p:leading-relaxed prose-p:text-foreground",
-            "prose-strong:text-foreground prose-li:text-foreground",
+            "prose-p:my-0.5 prose-p:leading-relaxed",
+            isUser ? "prose-p:text-background prose-strong:text-background prose-li:text-background" : "prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground",
             "prose-headings:font-bold prose-headings:tracking-tight",
             "prose-table:text-xs prose-table:border-collapse prose-table:my-2 prose-table:min-w-[200px]",
-            "prose-th:px-2.5 prose-th:py-1.5 prose-th:text-left prose-th:font-bold prose-th:bg-muted/80 prose-th:border prose-th:border-border prose-th:whitespace-nowrap",
+            "prose-th:px-2.5 prose-th:py-1.5 prose-th:text-left prose-th:font-bold prose-th:bg-primary/5 prose-th:border prose-th:border-border prose-th:whitespace-nowrap",
             "prose-td:px-2.5 prose-td:py-1.5 prose-td:border prose-td:border-border",
-            "prose-thead:border-b-2 prose-thead:border-border",
+            "prose-thead:border-b-2 prose-thead:border-primary/20",
             "prose-code:text-[11px] prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded",
             "prose-pre:bg-muted prose-pre:border prose-pre:border-border",
+            // KaTeX display math spacing
+            "prose-[.katex-display]:my-2 prose-[.katex-display]:overflow-x-auto",
           )}>
             <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
               {msg.content}
@@ -81,6 +83,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
       </div>
     </div>
   </div>
-);
+));
 
 export default ChatBubble;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ArrowRight, Check, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -206,7 +206,11 @@ const PricingPage: React.FC = () => {
               <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
               <span className="font-bold text-sm tracking-tight text-white/70">UniMind.ai</span>
             </div>
-            <p className="text-[11px] text-white/40">© {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}</p>
+            <div className="flex items-center gap-4 text-[11px] text-white/40">
+              <Link to="/privacy" className="hover:text-white/70 transition-colors">隐私政策</Link>
+              <Link to="/terms" className="hover:text-white/70 transition-colors">用户协议</Link>
+              <span>© {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}</span>
+            </div>
           </div>
         </footer>
       </div>

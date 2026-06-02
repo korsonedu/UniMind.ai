@@ -1,0 +1,14 @@
+[Unit]
+Description=UniMind daily database backup
+Wants=unimind-backup.timer
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/unimind
+ExecStart=/bin/bash /opt/unimind/scripts/backup_db.sh
+StandardOutput=append:/var/log/unimind-backup.log
+StandardError=append:/var/log/unimind-backup.log
+
+[Install]
+WantedBy=multi-user.target

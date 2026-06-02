@@ -326,11 +326,8 @@ class ResumeTuneView(APIView):
         resume_text = str(request.data.get("resume_text", "")).strip()
         resume_file = request.FILES.get("file")
         if resume_file is not None:
-            if resume_file.size > self.MAX_SIZE:
-                return Response({'error': f'文件大小不能超过 {self.MAX_SIZE // (1024*1024)}MB'}, status=400)
-            file_ext = '.' + str(resume_file.name).rsplit('.', 1)[-1].lower() if '.' in str(resume_file.name) else ''
-            if file_ext not in self.ALLOWED_EXTS:
-                return Response({'error': '仅支持 PDF / DOCX / TXT 格式'}, status=400)
+            from core.file_validation import validate_upload_file
+            validate_upload_file(resume_file, allowed_extensions=self.ALLOWED_EXTS, max_size_bytes=self.MAX_SIZE)
         if not resume_text and resume_file is not None:
             parsed = ""
             name = str(getattr(resume_file, "name", "")).lower()

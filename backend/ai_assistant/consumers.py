@@ -16,17 +16,11 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.bot_id = self.scope['url_route']['kwargs']['bot_id']
         self.user = self.scope.get('user')
-        self._pending_auth = False
         logger.info("WS connect: bot_id=%s, session_user=%s", self.bot_id, self.user)
 
-        # Try session auth (cookie-based)
-        if self.user and self.user.is_authenticated:
-            # Session auth succeeded — accept immediately
-            pass
-        else:
-            # No session auth — accept and wait for auth_token in first message
-            self._pending_auth = True
-            await self.accept()
+        if not (self.user and self.user.is_authenticated):
+            logger.warning("WS rejected: no session auth")
+            await self.close(code=4001)
             return
 
         bot = await self._get_bot(self.bot_id)
@@ -52,33 +46,6 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 ensure_ascii=False,
             ))
             return
-
-        # Handle token auth as first message (token sent in message body, not URL)
-        if self._pending_auth:
-            token = data.get('auth_token', '').strip()
-            if token:
-                self.user = await self._authenticate_token(token)
-            if not self.user or not self.user.is_authenticated:
-                logger.warning("WS auth via message failed")
-                await self.send(text_data=json.dumps(
-                    {"type": "error", "message": "Authentication failed"},
-                    ensure_ascii=False,
-                ))
-                await self.close(code=4001)
-                return
-            self._pending_auth = False
-            # Now that we're authenticated, set up bot
-            bot = await self._get_bot(self.bot_id)
-            if not bot:
-                logger.warning("WS rejected: bot %s not found or no access", self.bot_id)
-                await self.close(code=4004)
-                return
-            self.bot = bot
-            self.institution = getattr(self.user, 'institution', None)
-            logger.info("WS auth via message OK: user=%s, bot=%s", self.user, bot.name)
-            # If this message also contains a chat message, fall through to process it
-            if not data.get('message', '').strip():
-                return
 
         message = data.get('message', '').strip()
         conversation_id = data.get('conversation_id')
@@ -157,20 +124,25 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 pass
 
             from .services.chat_dispatch import dispatch_bot_chat
+            from .views import _AI_CHAT_SEMAPHORE
 
-            dispatch_result = dispatch_bot_chat(
-                bot=self.bot,
-                user=self.user,
-                message=message,
-                history=history_msgs,
-                institution=self.institution,
-                stream=True,
-                on_step=on_step,
-                on_message=on_message,
-                student_context=student_context,
-                memory_context=memory_context,
-                adaptive_directives=adaptive_directives,
-            )
+            _AI_CHAT_SEMAPHORE.acquire()
+            try:
+                dispatch_result = dispatch_bot_chat(
+                    bot=self.bot,
+                    user=self.user,
+                    message=message,
+                    history=history_msgs,
+                    institution=self.institution,
+                    stream=True,
+                    on_step=on_step,
+                    on_message=on_message,
+                    student_context=student_context,
+                    memory_context=memory_context,
+                    adaptive_directives=adaptive_directives,
+                )
+            finally:
+                _AI_CHAT_SEMAPHORE.release()
             result = dispatch_result['result']
             tool_executor = dispatch_result['tool_executor']
 
@@ -191,25 +163,24 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             on_step(done_event)
 
             self._save_message(self.user, self.bot, 'assistant', ai_content,
-                              metadata=self._build_metadata(tool_executor),
+                              metadata=msg_metadata,
                               conversation_id=conversation_id)
 
+            from users.quota import increment_quota
+            if self.user and getattr(self.user, 'institution', None):
+                increment_quota(self.user.institution, 'ai_call_total')
+
             try:
-                from .services.memory_service import extract_memories_async
-                extract_memories_async(self.user, history_msgs + [{'role': 'user', 'content': message}])
+                from .services.memory_service import extract_memories_async, extract_memories_with_mem0
+                full_history = history_msgs + [{'role': 'user', 'content': message}]
+                extract_memories_async(self.user, full_history)
+                extract_memories_with_mem0(self.user, full_history)
             except Exception:
-                pass
+                logger.warning("Memory extraction failed (WS)", exc_info=True)
 
         except Exception as e:
             logger.exception("Agent execution error: %s", e)
             on_step({"type": "error", "message": "AI 助教暂时无法响应，请稍后再试"})
-        finally:
-            try:
-                from users.quota import increment_quota
-                if self.user and getattr(self.user, 'institution', None):
-                    increment_quota(self.user.institution, 'ai_call_total')
-            except Exception:
-                pass
 
     @database_sync_to_async
     def _get_bot(self, bot_id):
@@ -244,15 +215,6 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
 
             return None
         except Bot.DoesNotExist:
-            return None
-
-    @database_sync_to_async
-    def _authenticate_token(self, token: str):
-        from rest_framework.authtoken.models import Token
-        try:
-            auth_token = Token.objects.get(key=token)
-            return auth_token.user
-        except Token.DoesNotExist:
             return None
 
     def _save_message(self, user, bot, role, content, metadata=None, conversation_id=None):

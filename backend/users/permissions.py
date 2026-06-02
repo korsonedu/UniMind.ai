@@ -160,8 +160,12 @@ class IsInstitutionAdmin(permissions.BasePermission):
 
     def has_permission(self, request, view):
         user = request.user
-        return (user and user.is_authenticated
-                and user.institution is not None
+        if not (user and user.is_authenticated):
+            return False
+        # 平台管理员预览模式：直接放行
+        if request.query_params.get('preview_institution') and is_platform_admin(user):
+            return True
+        return (user.institution is not None
                 and user.institution_role in ('owner', 'teacher'))
 
 
@@ -217,8 +221,13 @@ class IsInstitutionMember(permissions.BasePermission):
     message = "需要机构成员身份。"
 
     def has_permission(self, request, view):
-        return (request.user and request.user.is_authenticated
-                and request.user.institution is not None)
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        # 平台管理员预览模式：直接放行
+        if request.query_params.get('preview_institution') and is_platform_admin(user):
+            return True
+        return user.institution is not None
 
 
 class HasQuota(permissions.BasePermission):

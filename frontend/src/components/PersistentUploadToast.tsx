@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { X, Loader2, CheckCircle2, XCircle, Upload, FileWarning } from 'lucide-react';
 import { useUploadStore } from '@/store/useUploadStore';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,14 @@ const statusLabel = (status: string) => {
 
 export const PersistentUploadToast: React.FC = () => {
   const { tasks, cancelTask, removeTask } = useUploadStore();
+  const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(t => clearTimeout(t));
+      timeoutsRef.current.clear();
+    };
+  }, []);
 
   if (tasks.length === 0) return null;
 
@@ -46,9 +54,12 @@ export const PersistentUploadToast: React.FC = () => {
               'border-zinc-700/50',
             )}
             onAnimationEnd={() => {
-              if (isDone) {
-                // Auto-remove after 5s when done
-                setTimeout(() => removeTask(task.id), 5000);
+              if (isDone && !timeoutsRef.current.has(task.id)) {
+                const t = setTimeout(() => {
+                  timeoutsRef.current.delete(task.id);
+                  removeTask(task.id);
+                }, 5000);
+                timeoutsRef.current.set(task.id, t);
               }
             }}
           >

@@ -9,6 +9,7 @@ from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from users.views import IsMember
+from users.permissions import IsMemberOrReadOnlyList
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ USE_MEM0 = os.getenv('USE_MEM0', 'false').lower() == 'true'
 
 class XiaoYuDashboardView(APIView):
     """GET /api/xiaoyu/dashboard/ — 聚合小宇 dashboard 所需的全部数据。"""
-    permission_classes = [IsMember]
+    permission_classes = [IsMemberOrReadOnlyList]
 
     def get(self, request):
         user = request.user
@@ -39,14 +40,14 @@ class XiaoYuDashboardView(APIView):
         # 5. Exam History
         data['exams'] = self._get_exams(user)
 
-        # 6. Dashboard layout config (set by XiaoYu AI via set_dashboard_layout tool)
+        # 6. Dashboard layout config (legacy, from user.dashboard_config)
         default_config = {
             'section_order': ['plan', 'stats', 'mastery', 'reviews', 'exams', 'custom_cards'],
             'highlight': 'stats',
         }
         data['dashboard_config'] = user.dashboard_config or default_config
 
-        # 7. Custom data cards (set by XiaoYu AI via create_dashboard_card tool)
+        # 7. Custom data cards (legacy, from user.dashboard_config)
         data['custom_cards'] = (user.dashboard_config or {}).get('custom_cards', [])
 
         return Response(data)

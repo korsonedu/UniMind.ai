@@ -1,11 +1,18 @@
 import { useEffect } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 
-export const PageWrapper = ({ children, title, subtitle, action }: any) => {
+interface PageWrapperProps {
+  children: React.ReactNode;
+  title?: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+}
+
+export const PageWrapper = ({ children, title, subtitle, action }: PageWrapperProps) => {
   const setPageHeader = useSystemStore(state => state.setPageHeader);
 
   useEffect(() => {
-    setPageHeader(title, subtitle);
+    setPageHeader(title ?? '', subtitle ?? '');
     return () => setPageHeader('', '');
   }, [title, subtitle, setPageHeader]);
 

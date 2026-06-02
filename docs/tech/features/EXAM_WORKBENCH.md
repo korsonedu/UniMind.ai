@@ -2,9 +2,9 @@
 
 ## 概述
 
-命题官是老师/机构主的核心工作界面，采用**对话式 Agent 架构**——教师通过自然语言描述出题需求，Agent 自主调用工具搜索知识点、生成题目、精修入库。结构与小宇（XiaoYu）学习规划 Agent 对齐：未对话时大片留白，对话后左右分栏。
+命题官是老师/机构主的核心工作界面，采用**对话式 Agent 架构**——教师通过自然语言描述出题需求，Agent 自主调用工具搜索知识点、快速出题、ARC 精修。结构与小宇（XiaoYu）学习规划 Agent 对齐：未对话时大片留白，对话后左右分栏。
 
-2026-05-29 从小宇同步大规模更新：意图路由器（5类意图预筛选工具子集）、Prompt 自适应（检测教师出题偏好）、Meta-cognition（每日分析出题模式）、Dashboard API（聚合面板数据）。
+2026-05-31 重构：工具集精简为 5 个（search_knowledge + quick_generate + launch_arc_pipeline + check_pipeline_status + get_workbench_stats），存入题库改为前端按钮，dispatch 层通用化。
 
 ## 页面布局
 
@@ -56,9 +56,9 @@
 | Bot | `ai_assistant/models.py` (`bot_type='exam_generator'`) | 命题官 Bot |
 | BotRegistry | `ai_assistant/bot_registry.py` | 注册表：bot_type → (Executor, tools, prompt_dir, use_intent_router) |
 | chat_dispatch | `ai_assistant/services/chat_dispatch.py` | 统一调度：3 个入口共用 |
-| Prompt 模板 | `prompts/ai_assistant/bots/exam_generator/` | system_prompt.txt + tool_guide.txt + personality.txt |
+| Prompt 模板 | `prompts/ai_assistant/bots/exam_generator/` | system_prompt.txt + tool_guide.txt + personality.txt + intent_guide.txt |
 | ToolExecutor | `ai_assistant/services/exam_generator_tool_executor.py` | 5 个出题专用工具的执行器 |
-| 意图路由器 | `ai_engine/tool_router.py` (`EXAM_GENERATOR_INTENT_MAP`) | 5 类意图预筛选：generate/refine/save/status/general |
+| 意图路由器 | `ai_engine/tool_router.py` (`EXAM_GENERATOR_INTENT_MAP`) | 5 类意图预筛选：generate/refine/status/stats/general |
 | Prompt 自适应 | `ai_assistant/services/prompt_adapter.py` (`_TEACHING_STYLE_RULES`) | 7 条教师偏好规则（题型/难度/学科） |
 | Meta-cognition | `ai_assistant/tasks.py` (`reflect_teacher_patterns`) | 每日分析出题模式，存入 mem0 语义记忆 |
 | Dashboard | `ai_assistant/views_dashboard.py` (`ExamWorkbenchDashboardView`) | GET /api/ai/workbench/dashboard/ |
@@ -68,13 +68,11 @@
 
 | 工具 | 用途 | 模式 |
 |------|------|------|
-| `search_knowledge_points` | 搜索可用知识点（按名称+学科） | 同步 |
-| `generate_questions` | 快速管线出题（~10 秒） | 同步 |
+| `search_knowledge` | 搜索知识点或知识树（auto 模式先 kp 后 tree，合并原 search_knowledge_points + search_knowledge_tree） | 同步 |
+| `quick_generate` | Author 单步快速出题（skip_review=True，~5-10 秒） | 同步 |
 | `launch_arc_pipeline` | 启动 ARC 精修管线（2-5 分钟） | 异步 Celery |
 | `check_pipeline_status` | 查询 ARC 管线进度 | 同步 |
-| `save_questions_to_library` | 将题目存入机构题库 | 同步 |
-
-继承自 `AssistantToolExecutor` 的基础工具（`search_knowledge_tree`、`get_user_weak_points` 等）也可用。
+| `get_workbench_stats` | 题库统计（summary/recent/insights） | 同步 |
 
 ### 对话式指令
 
@@ -82,11 +80,13 @@ Agent 识别口语化指令，直接调用对应工具，不反问确认：
 
 | 用户说 | Agent 做 |
 |--------|----------|
-| "入库" / "保存" / "存入题库" | `save_questions_to_library` |
-| "ARC精修" / "精修一下" | `launch_arc_pipeline` |
+| "出题" / "出几道" / "来几道" | `search_knowledge` → `quick_generate` |
+| "ARC精修" / "精修一下" / "高质量" | `launch_arc_pipeline` |
 | "看看进度" / "跑完没" | `check_pipeline_status` |
-| "再来一组" / "换XX出题" | 重新 `search_knowledge_points` + `generate_questions` |
-| "难度改成hard" / "加到10题" | 用新参数重新 `generate_questions` |
+| "题库统计" / "出了多少题" | `get_workbench_stats` |
+| "入库" / "保存到题库" | 告知使用前端"存入题库"按钮 |
+| "再来一组" / "换XX出题" | 用新参数重新 `quick_generate` |
+| "难度改成hard" / "加到10题" | 用新参数重新 `quick_generate` |
 
 ## 消息 Metadata
 
@@ -106,7 +106,7 @@ Agent 识别口语化指令，直接调用对应工具，不反问确认：
 
 ### 跨轮次缓存
 
-`process_ai_chat` 在每次调用时从最近一条助手消息的 `metadata` 中恢复 `tool_executor._last_generated`，使"入库"等指令在后续对话轮次中仍能找到之前生成的题目。
+`BotProfile.restore_state` 钩子（`bot_registry.py`）在每次调用时从最近一条助手消息的 `metadata` 中恢复 `tool_executor._last_generated`，使后续对话轮次仍能找到之前生成的题目。
 
 ## 核心流程
 
@@ -115,12 +115,13 @@ Agent 识别口语化指令，直接调用对应工具，不反问确认：
 ```
 教师: "出10道微积分极限的客观题"
   ↓ 前端 SSE POST /api/ai/chat/stream/ → 流式接收 step 事件
-  ↓ Agent 调用 search_knowledge_points → 获取知识点 ID
-  ↓ Agent 调用 generate_questions → 同步生成题目
+  ↓ Agent 调用 search_knowledge → 获取知识点 ID
+  ↓ Agent 调用 quick_generate → Author 单步生成题目
   ↓ metadata.generated_questions 写入消息
   ↓ 前端 done 事件 → 刷新历史 → 渲染题目卡片到左侧面板
-教师: "入库"
-  ↓ Agent 调用 save_questions_to_library → 题目存入 Question 表
+教师: 选题 → 点击"存入题库"按钮
+  ↓ 前端 POST /quizzes/workbench/save-questions/ → 题目存入 Question 表
+  ↓ 前端发系统消息通知 LLM，LLM 可接话（"需要 ARC 精修吗？"）
 ```
 
 ### ARC 精修
@@ -149,10 +150,10 @@ Agent 识别口语化指令，直接调用对应工具，不反问确认：
 
 | 意图 | 触发关键词 | 筛选工具 |
 |------|-----------|---------|
-| `generate` | 出题/生成/命题/出一组 | search_knowledge_points, generate_questions |
+| `generate` | 出题/生成/命题/出一组 | search_knowledge, quick_generate |
 | `refine` | 精修/ARC/润色/改进 | launch_arc_pipeline, check_pipeline_status |
-| `save` | 入库/存下来/保存/收录 | save_questions_to_library |
 | `status` | 进度/跑完没/状态/结果 | check_pipeline_status |
+| `stats` | 统计/题库/多少题 | get_workbench_stats |
 | `general` | 无匹配 | 返回全量工具 |
 
 两轮匹配：先用户消息，无匹配则回退最近 3 轮对话上下文。

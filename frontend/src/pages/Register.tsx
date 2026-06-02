@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 
 import { useTranslation } from 'react-i18next';
 
@@ -18,6 +19,7 @@ export const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
   const [error, setError] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -81,7 +83,7 @@ export const Register: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      await api.post('/users/register/', { email, code, nickname, password });
+      await api.post('/users/register/', { email, code, nickname, password, agreed_to_terms: agreedToTerms });
       navigate(institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login');
     } catch (err: any) {
       setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat()[0] as string || t('register.errors.registerFailed'));
@@ -158,7 +160,22 @@ export const Register: React.FC = () => {
               />
             </div>
 
-            <Button className="w-full h-12 bg-black text-white rounded-xl font-medium hover:bg-black/90 transition-all" disabled={loading}>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="agree-terms"
+                checked={agreedToTerms}
+                onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="agree-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                我已阅读并同意{' '}
+                <Link to="/terms" className="text-black font-medium hover:underline" target="_blank">用户协议</Link>
+                {' '}和{' '}
+                <Link to="/privacy" className="text-black font-medium hover:underline" target="_blank">隐私政策</Link>
+              </label>
+            </div>
+
+            <Button className="w-full h-12 bg-black text-white rounded-xl font-medium hover:bg-black/90 transition-all" disabled={loading || !agreedToTerms}>
               {loading ? t('register.registering') : t('register.submit')}
             </Button>
           </form>

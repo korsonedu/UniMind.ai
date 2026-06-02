@@ -219,3 +219,59 @@ class NPSSurvey(models.Model):
 
     def __str__(self):
         return f"NPS {self.score} ({self.category}) — {self.user}"
+
+
+class Feedback(models.Model):
+    """用户反馈。"""
+    CATEGORY_CHOICES = [
+        ('bug', 'Bug 反馈'),
+        ('feature', '功能建议'),
+        ('other', '其他'),
+    ]
+    user = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='feedbacks', verbose_name="用户",
+    )
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other', verbose_name="分类")
+    content = models.TextField(verbose_name="反馈内容")
+    contact = models.CharField(max_length=200, blank=True, verbose_name="联系方式")
+    page_url = models.CharField(max_length=500, blank=True, verbose_name="页面 URL")
+    user_agent = models.CharField(max_length=500, blank=True, verbose_name="User-Agent")
+    is_resolved = models.BooleanField(default=False, verbose_name="已处理")
+    resolved_at = models.DateTimeField(null=True, blank=True, verbose_name="处理时间")
+    admin_note = models.TextField(blank=True, verbose_name="管理员备注")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="提交时间")
+
+    class Meta:
+        db_table = 'core_feedback'
+        verbose_name = '用户反馈'
+        verbose_name_plural = '用户反馈'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"[{self.get_category_display()}] {self.content[:50]} — {self.user}"
+
+
+class LegalDocument(models.Model):
+    """法律文档版本管理（用户协议、隐私政策等）。"""
+    DOC_TYPE_CHOICES = [
+        ('privacy', '隐私政策'),
+        ('terms', '用户协议'),
+    ]
+    doc_type = models.CharField(max_length=20, choices=DOC_TYPE_CHOICES, verbose_name="文档类型")
+    version = models.CharField(max_length=20, default='1.0', verbose_name="版本号")
+    title = models.CharField(max_length=200, verbose_name="标题")
+    content = models.TextField(verbose_name="正文 (HTML/Markdown)")
+    is_active = models.BooleanField(default=True, verbose_name="是否生效")
+    effective_date = models.DateField(verbose_name="生效日期")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        db_table = 'core_legal_document'
+        verbose_name = '法律文档'
+        verbose_name_plural = '法律文档'
+        ordering = ['-effective_date']
+        unique_together = [('doc_type', 'version')]
+
+    def __str__(self):
+        return f"{self.get_doc_type_display()} v{self.version} ({'生效' if self.is_active else '历史'})"

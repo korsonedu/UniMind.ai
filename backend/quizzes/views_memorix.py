@@ -93,7 +93,16 @@ class QuizStatsView(APIView):
         ).count()
 
         attempted_ids = status_qs.values_list('question_id', flat=True)
-        new_questions_count = Question.objects.exclude(id__in=attempted_ids).count()
+        from django.db.models import Q
+        inst = getattr(user, 'institution', None)
+        if inst:
+            new_questions_count = Question.objects.exclude(id__in=attempted_ids).filter(
+                Q(institution=inst) | Q(institution__isnull=True)
+            ).count()
+        else:
+            new_questions_count = Question.objects.exclude(id__in=attempted_ids).filter(
+                institution__isnull=True
+            ).count()
 
         plan = get_memorix_session_plan(user=user, minutes=25)
 

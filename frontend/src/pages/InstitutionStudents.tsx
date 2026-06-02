@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -96,7 +96,7 @@ function PlatformUserManagement() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<PlatformUser | null>(null);
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const [uRes, tRes, gRes] = await Promise.all([
@@ -109,9 +109,9 @@ function PlatformUserManagement() {
       setGroups((gRes.data || []).filter((g: any) => g.is_active));
     } catch { toast.error('加载成员列表失败'); }
     setLoading(false);
-  };
+  }, [search]);
 
-  useEffect(() => { fetchAll(); }, [search]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   return (
     <div>
@@ -229,13 +229,15 @@ function PlatformPermissionEditor({
 
   const save = async () => {
     setSaving(true);
-    await api.patch(`/users/admin/superusers/users/${user.id}/`, {
-      role: e.role, is_member: e.is_member, is_staff: e.is_staff, is_superuser: e.is_superuser,
-      tag_ids: e.tag_ids, permission_group_ids: e.group_ids,
-      extra_permissions: e.extra, blocked_permissions: e.blocked, note: e.note,
-    });
-    toast.success(t('institution.saved')); onSaved();
-    setSaving(false);
+    try {
+      await api.patch(`/users/admin/superusers/users/${user.id}/`, {
+        role: e.role, is_member: e.is_member, is_staff: e.is_staff, is_superuser: e.is_superuser,
+        tag_ids: e.tag_ids, permission_group_ids: e.group_ids,
+        extra_permissions: e.extra, blocked_permissions: e.blocked, note: e.note,
+      });
+      toast.success(t('institution.saved')); onSaved();
+    } catch { toast.error(t('institution.saveFailed', '保存失败')); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -373,7 +375,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
   });
 
   const studentCount = members.filter(m => m.institution_role === 'student').length;
-  const teacherCount = members.filter(m => m.institution_role === 'teacher').length;
+  const teacherCount = members.filter(m => m.institution_role === 'teacher' || m.institution_role === 'owner').length;
   const avgElo = members.length ? Math.round(members.reduce((a, s) => a + s.elo_score, 0) / members.length) : 0;
 
   const handleRoleChange = async (memberId: number, newRole: string) => {
@@ -483,7 +485,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
         <AddStudentDialog onAdded={fetch} disabled={studentCount >= institution.max_students} />
         <BatchImportDialog onImported={fetch} />
         <Button variant="outline" size="sm" onClick={() => {
-          const csv = `${t('institution.nickname')},${t('institution.usernameRequired').replace(' *', '')},${t('institution.emailRequired').replace(' *', '')},${t('institution.role')},ELO\n` + filtered.map(s => `${s.nickname},${s.username},${s.email},${s.institution_role === 'teacher' ? t('institution.teacher') : t('institution.students')},${s.elo_score}`).join('\n');
+          const csv = `${t('institution.nickname')},${t('institution.usernameRequired').replace(' *', '')},${t('institution.emailRequired').replace(' *', '')},${t('institution.role')},ELO\n` + filtered.map(s => `${s.nickname},${s.username},${s.email},${s.institution_role === 'teacher' || s.institution_role === 'owner' ? t('institution.teacher') : t('institution.students')},${s.elo_score}`).join('\n');
           const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = '成员列表.csv'; a.click();
         }} disabled={members.length === 0}><Download className="h-4 w-4" /> {t('institution.export')}</Button>
         <Button variant="ghost" size="icon" onClick={fetch}><RefreshCw className="h-4 w-4" /></Button>
@@ -509,8 +511,8 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={cn('h-9 w-9 rounded-full flex items-center justify-center shrink-0',
-                    s.institution_role === 'teacher' ? 'bg-amber-500/10' : 'bg-primary/10')}>
-                    {s.institution_role === 'teacher'
+                    s.institution_role === 'teacher' || s.institution_role === 'owner' ? 'bg-amber-500/10' : 'bg-primary/10')}>
+                    {s.institution_role === 'teacher' || s.institution_role === 'owner'
                       ? <Shield className="h-4 w-4 text-amber-500" />
                       : <GraduationCap className="h-4 w-4 text-primary" />
                     }
@@ -519,8 +521,8 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-foreground truncate">{s.nickname || s.username}</p>
                       <Badge className={cn('text-[10px]',
-                        s.institution_role === 'teacher' ? 'bg-amber-500/10 text-amber-500' : 'bg-muted text-muted-foreground/60')}>
-                        {s.institution_role === 'teacher' ? t('institution.teacher') : t('institution.students')}
+                        s.institution_role === 'teacher' || s.institution_role === 'owner' ? 'bg-amber-500/10 text-amber-500' : 'bg-muted text-muted-foreground/60')}>
+                        {s.institution_role === 'teacher' || s.institution_role === 'owner' ? t('institution.teacher') : t('institution.students')}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">{s.email}{s.date_joined && <span className="text-muted-foreground/50"> · {t('institution.joinedOn')} {s.date_joined.slice(0, 10)}</span>}</p>

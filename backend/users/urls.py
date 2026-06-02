@@ -7,6 +7,8 @@ from .views import (
     BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
     DiagnosticGenerateView, DiagnosticSubmitView,
+    AnalyticsDashboardView, AnalyticsExportView, NPSSubmitView, NPSStatusView,
+    AccountDeleteView, DataExportView, FeedbackSubmitView,
 )
 from .views_admin import (
     SuperuserUserListView, UserTagListView, PermissionGroupListView,
@@ -29,6 +31,7 @@ from .views_institution import (
     PublicInstitutionView, InstitutionJoinBySlugView, InstitutionJoinByInviteSlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
     InstitutionClassPerformanceView, InstitutionSuggestedTopicsView,
+    InstitutionAuditLogView,
 )
 
 urlpatterns = [
@@ -47,6 +50,8 @@ urlpatterns = [
     path('me/diagnostic/generate/', DiagnosticGenerateView.as_view(), name='diagnostic-generate'),
     path('me/diagnostic/submit/', DiagnosticSubmitView.as_view(), name='diagnostic-submit'),
     path('heartbeat/', HeartbeatView.as_view(), name='heartbeat'),
+    path('nps/submit/', NPSSubmitView.as_view(), name='nps-submit'),
+    path('nps/status/', NPSStatusView.as_view(), name='nps-status'),
 
     # System
     path('online/', OnlineUserListView.as_view(), name='online-users'),
@@ -55,6 +60,8 @@ urlpatterns = [
 
     # Admin
     path('admin/bi/', BIAnalyticsView.as_view(), name='admin-bi'),
+    path('admin/analytics/dashboard/', AnalyticsDashboardView.as_view(), name='admin-analytics-dashboard'),
+    path('admin/analytics/export/', AnalyticsExportView.as_view(), name='admin-analytics-export'),
     path('admin/superusers/users/', SuperuserUserListView.as_view(), name='admin-superuser-users'),
     path('admin/superusers/users/<int:pk>/', SuperuserUserListView.as_view(), name='admin-superuser-user-detail'),
     path('admin/user-tags/', UserTagListView.as_view(), name='admin-user-tags'),
@@ -97,6 +104,9 @@ urlpatterns = [
     path('institution/me/analytics/class-performance/', InstitutionClassPerformanceView.as_view(), name='institution-class-performance'),
     path('institution/me/analytics/suggested-topics/', InstitutionSuggestedTopicsView.as_view(), name='institution-suggested-topics'),
 
+    # Institution — audit log
+    path('institution/me/audit-logs/', InstitutionAuditLogView.as_view(), name='institution-audit-logs'),
+
     # Institution — payment config (Pro)
     path('institution/me/payment-config/', InstitutionPaymentConfigView.as_view(), name='institution-payment-config'),
 
@@ -107,4 +117,9 @@ urlpatterns = [
 
     # Validate invite code (for onboarding flow)
     path('institutions/validate-invite-code/', ValidateInviteCodeView.as_view(), name='validate-invite-code'),
+
+    # Account management (P0: 个保法合规)
+    path('me/delete/', AccountDeleteView.as_view(), name='account-delete'),
+    path('me/data-export/', DataExportView.as_view(), name='data-export'),
+    path('feedback/', FeedbackSubmitView.as_view(), name='feedback-submit'),
 ]

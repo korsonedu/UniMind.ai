@@ -3,20 +3,16 @@ from .views import (
     CourseListCreateView, CourseDetailView,
     AlbumListCreateView, AlbumDetailView, AlbumCoursesView,
     StartupMaterialListCreateView, StartupMaterialDetailView,
-    VideoProgressUpdateView, ChunkedUploadInitView,
-    ChunkedUploadChunkView, ChunkedUploadCompleteView,
+    VideoProgressUpdateView,
     CourseOutlineView, CourseTranscriptView,
-    OSSSignatureURLView, OSSUploadCompleteView,
+    OSSMultipartInitView, OSSMultipartCompleteView,
 )
 from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
 
 urlpatterns = [
     path('', CourseListCreateView.as_view(), name='course-list'),
-    path('oss/signature/', OSSSignatureURLView.as_view(), name='oss-signature'),
-    path('oss/complete/', OSSUploadCompleteView.as_view(), name='oss-complete'),
-    path('chunked/init/', ChunkedUploadInitView.as_view(), name='course-chunked-init'),
-    path('chunked/<str:upload_id>/chunk/', ChunkedUploadChunkView.as_view(), name='course-chunked-chunk'),
-    path('chunked/<str:upload_id>/complete/', ChunkedUploadCompleteView.as_view(), name='course-chunked-complete'),
+    path('oss/multipart/init/', OSSMultipartInitView.as_view(), name='oss-multipart-init'),
+    path('oss/multipart/complete/', OSSMultipartCompleteView.as_view(), name='oss-multipart-complete'),
     path('tags/', TagListCreateView.as_view(), name='tag-list'),
     path('tags/batch-assign/', BatchAssignTagsView.as_view(), name='tag-batch-assign'),
     path('tags/<int:pk>/', TagDetailView.as_view(), name='tag-detail'),

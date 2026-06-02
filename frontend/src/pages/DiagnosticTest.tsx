@@ -61,6 +61,8 @@ export function DiagnosticTest() {
   }, [phase]);
 
   const handleSubmit = useCallback(async () => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setLoading(true);
     try {
       const formattedAnswers = questions.map((q, i) => ({
@@ -74,6 +76,7 @@ export function DiagnosticTest() {
       updateUser({ has_completed_initial_assessment: true });
       setPhase('results');
     } catch (err: any) {
+      submittedRef.current = false;
       toast.error(err.response?.data?.error || '提交失败');
     } finally {
       setLoading(false);
@@ -81,8 +84,7 @@ export function DiagnosticTest() {
   }, [questions, answers]);
 
   useEffect(() => {
-    if (timeLeft <= 0 && phase === 'testing' && !submittedRef.current) {
-      submittedRef.current = true;
+    if (timeLeft <= 0 && phase === 'testing') {
       handleSubmit();
     }
   }, [timeLeft, phase, handleSubmit]);

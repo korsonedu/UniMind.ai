@@ -1,3 +1,7 @@
+import concurrent.futures
+
+_THREAD_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix='ai-chat')
+
 from django.utils import timezone
 from django.db.models import Count, Q, Avg
 from quizzes.models import UserQuestionStatus, Question, KnowledgePoint

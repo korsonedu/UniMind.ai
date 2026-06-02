@@ -259,38 +259,45 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 | **Model** | deepseek-v4-pro |
 | **请求参数** | temperature=0.3, max_tokens=16384 |
 
-#### 5c. AI 助教对话（Agent 多轮工具调用）
+#### 5c. 小宇对话（Agent 多轮工具调用）
 
 | 维度 | 值 |
 |------|---|
 | **入口** | `ai_assistant/views.py` → `AIChatView.post` → `dispatch_bot_chat` |
 | **服务** | `ai_assistant/services/chat_dispatch.py` → `dispatch_bot_chat` → `chat_service.py` |
-| **AI 方法** | **`call_ai_with_tools`**（多轮 Agent 循环，非流式）/ **`call_ai_with_streaming_tools`**（流式 + on_step 回调，出题助手/小宇使用） |
-| **Prompt** | `prompts/ai_assistant/bots/assistant/system_prompt.txt` + `tool_guide.txt`（文件模板，见 PROMPT_MANAGEMENT_SYSTEM.md） |
+| **AI 方法** | **`call_ai_with_tools`**（多轮 Agent 循环，非流式）/ **`call_ai_with_streaming_tools`**（流式 + on_step 回调） |
+| **Prompt** | `prompts/ai_assistant/bots/xiaoyu/system_prompt.txt` + `tool_guide.txt` |
 | **Model** | deepseek-v4-flash |
-| **工具** | 4 个：`search_knowledge_tree` / `get_user_weak_points` / `get_user_wrong_questions` / `lookup_question` |
-| **工具执行器** | `ai_assistant/bot_registry.py` → `BotRegistry` → `AssistantToolExecutor` |
+| **工具** | 19 个（基础查询 9 + 规划 9 + render_visual） |
+| **工具执行器** | `ai_assistant/bot_registry.py` → `BotRegistry` → `PlannerToolExecutor` |
 
-**Agent 行为**：助教在回复前可自主调用工具查询知识库和用户数据，而非仅凭模型参数记忆回答。工具查询结果注入上下文后，模型基于准确数据进行回复。
+**Agent 行为**：小宇在回复前可自主调用工具查询知识库和用户数据，基于准确数据回复。支持情境行为：讲知识时引导式，看数据时分析式。
 
-**多步可见 Agent**（2026-05-26，2026-05-27 流式修复）：exam_generator 和 planner bot 使用 `call_ai_with_streaming_tools`，每步 tool call 实时推送给前端（折叠卡片形式），文本回复逐 token 流式输出。exam_generator 通过 WebSocket（`ws/ai/chat/<bot_id>/`），小宇通过 SSE（`POST /api/ai/chat/stream/`），详见 `docs/tech/features/MULTI_STEP_AGENT.md`。
+**多步可见 Agent**：exam_generator 和 planner bot 使用 `call_ai_with_streaming_tools`，每步 tool call 实时推送给前端（折叠卡片形式），文本回复逐 token 流式输出。exam_generator 通过 WebSocket（`ws/ai/chat/<bot_id>/`），小宇通过 SSE（`POST /api/ai/chat/stream/`），详见 `docs/tech/features/MULTI_STEP_AGENT.md`。
 
-**Planner 专用工具**（小宇）：
+**可视化 Dashboard**：小宇可通过 `render_visual` 工具在 Dashboard 画布上渲染 LaTeX 推导、解题步骤、知识图谱、数据卡片。Visual 数据随消息持久化，历史会话自动恢复。
+
+**Planner 工具集**（17 个）：
 
 | 工具 | 用途 |
 |------|------|
-| `get_learning_stats` | 获取学习统计概览 |
+| `search_knowledge_tree` | 搜索知识点树 |
+| `get_user_weak_points` | 获取薄弱知识点 |
+| `get_user_wrong_questions` | 获取错题列表 |
+| `lookup_question` | 按 ID 查询题目详情 |
+| `search_courses` | 搜索课程 |
+| `search_asr` | 搜索视频字幕 |
+| `search_articles` | 搜索文章 |
+| `get_class_weak_points` | 班级薄弱知识点（教师） |
+| `get_class_performance_summary` | 班级数据概览（教师） |
+| `get_learning_stats` | 学习统计概览 |
 | `get_knowledge_mastery_map` | 知识点掌握度地图 |
 | `get_due_reviews` | 今日待复习题目 |
 | `get_exam_history` | 考试成绩历史 |
 | `save_study_plan` | 保存学习计划 |
-| `get_active_plan` | 获取当前学习计划 |
+| `get_active_plan` | 获取当前计划 |
 | `update_plan_task` | 更新计划任务状态 |
-| `set_dashboard_layout` | 配置 Dashboard 布局 |
-| `create_indicator_card` | 创建自定义指标卡片（持久化到 Dashboard） |
-| `search_courses` | 搜索课程 |
-| `search_asr` | 搜索视频字幕 |
-| `search_articles` | 搜索文章 |
+| `render_visual` | 渲染可视化内容到画布（data_card/latex_derivation/step_solution/knowledge_map） |
 
 **工具说明**：
 - `search_knowledge_tree(query, subject?)`：按名称查找知识点（模糊匹配）
@@ -354,10 +361,10 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 
 | Schema | 行号 | 用途 | 使用者 |
 |--------|------|------|--------|
-| `SEARCH_KNOWLEDGE_TREE_SCHEMA` | 338 | 按名称搜索知识点 | AI 助教 |
-| `GET_USER_WEAK_POINTS_SCHEMA` | 353 | 获取用户薄弱知识点 | AI 助教 |
-| `GET_USER_WRONG_QUESTIONS_SCHEMA` | 359 | 获取用户错题列表 | AI 助教 |
-| `LOOKUP_QUESTION_SCHEMA` | 371 | 按 ID 查询题目详情 | AI 助教 |
+| `SEARCH_KNOWLEDGE_TREE_SCHEMA` | 338 | 按名称搜索知识点 | 小宇 |
+| `GET_USER_WEAK_POINTS_SCHEMA` | 353 | 获取用户薄弱知识点 | 小宇 |
+| `GET_USER_WRONG_QUESTIONS_SCHEMA` | 359 | 获取用户错题列表 | 小宇 |
+| `LOOKUP_QUESTION_SCHEMA` | 371 | 按 ID 查询题目详情 | 小宇 |
 | `LOOKUP_KNOWLEDGE_POINT_SCHEMA` | 384 | 按 code 查询知识点定义 | Reviewer |
 | `SEARCH_SIMILAR_QUESTIONS_SCHEMA` | 395 | 搜索同知识点已有题目 | Reviewer |
 | `SEARCH_KP_SCHEMA` | — | 搜索可用知识点 | 出题助手 |
@@ -395,11 +402,13 @@ prompts/
 ├── courses/
 │   └── transcript_outline_prompt.txt   ← 视频大纲生成
 └── ai_assistant/
-    ├── base_assistant_prompt.txt       ← AI 助教基础
     └── bots/
-        ├── bot_1_prompt.txt            ← 助教角色 1
-        ├── bot_2_prompt.txt            ← 助教角色 2
-        └── bot_3_prompt.txt            ← 助教角色 3
+        ├── xiaoyu/                     ← 小宇（学生端唯一 AI）
+        │   ├── system_prompt.txt
+        │   └── tool_guide.txt
+        └── exam_generator/             ← 命题官（教师端出题）
+            ├── system_prompt.txt
+            └── tool_guide.txt
 ```
 
 **模板语法**：Python `str.format_map()`，占位符用 `{key_name}`。缺少 key 时返回 `{key_name}` 原样（`_SafeDict` 兜底），不会抛异常。
@@ -422,7 +431,7 @@ prompts/
 | `pipeline.reviewer` | deepseek-v4-pro | **high** | 对抗管线深度审查 |
 | `pipeline.author_revise` | deepseek-v4-pro | **medium** | 基于反馈修订 |
 | `pipeline.classifier` | deepseek-v4-**flash** | 关 | 题目分类（轻量） |
-| `chat` | deepseek-v4-flash | 关 | AI 助教对话 |
+| `chat` | deepseek-v4-flash | 关 | 小宇/命题官对话 |
 | `interviews` | deepseek-v4-flash | 关 | 面试追问/简历/复盘 |
 | `generate_knowledge_tree` | deepseek-v4-pro | 关 | 知识树生成 |
 | `grading` / `grade` | deepseek-v4-pro | **high** | 主观题判分 |
@@ -500,7 +509,7 @@ def get_model_for_task(operation: str):
 
 ### 新增一个多轮 Agent 功能（研究+输出）
 
-适用场景：模型在输出前需要查数据库/外部资源。如 Reviewer（查知识点+已有题目）、AI 助教（查知识树+错题）。
+适用场景：模型在输出前需要查数据库/外部资源。如 Reviewer（查知识点+已有题目）、小宇（查知识树+错题+学习数据）。
 
 核心方法：`agentic_structured_output` — 多轮研究工具调用 + 最后一轮结构化提交。
 

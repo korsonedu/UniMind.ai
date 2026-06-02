@@ -9,10 +9,10 @@
     "enterConsole": "Dashboard"
   },
   "hero": {
-    "badge": "The Operations Layer for Tutoring Businesses",
+    "badge": "Agent-Driven Education Infrastructure",
     "titleLine1": "Your tutors teach.",
     "titleLine2": "We run everything else.",
-    "subtitle": "Question generation, grading, review scheduling, analytics, Q&A — the entire back-office of your tutoring business, automated. Pick a subject, AI creates the content. Students jump in with a link. No engineering team, no instructional designers, no overhead.",
+    "subtitle": "Question generation, practice, tracking — full-chain Agent automation. Ready to use out of the box.",
     "cta": "Get Started Free",
     "secondary": "See How It Works",
     "footnote": "First cohort gets Growth plan free · Offer ends June 30, 2026"
@@ -464,7 +464,7 @@
     "footnote": "50+ tutoring businesses on UniMind · Offer ends June 30, 2026"
   },
   "footer": {
-    "tagline": "The Operations Layer for Tutoring",
+    "tagline": "Agent-Driven Education Infrastructure",
     "copyrightEntity": "Beijing Rongzhi Gaoke · UniMind.ai",
     "features": "Features",
     "pricing": "Pricing",

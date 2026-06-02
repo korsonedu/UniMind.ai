@@ -41,7 +41,7 @@ export const ArticleSection: React.FC = () => {
       setTotal(a.data.total ?? (a.data.articles || []).length);
       setTotalPages(a.data.total_pages ?? 1);
       setKpList(k.data);
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[ArticleSection] fetch failed:', e); }
     finally { setLoading(false); }
   }, []);
 

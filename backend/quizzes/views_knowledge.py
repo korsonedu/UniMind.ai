@@ -33,6 +33,12 @@ class KnowledgePointListView(generics.ListCreateAPIView):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
+        # 预览模式：平台管理员可查看任意机构知识树
+        preview_inst_id = self.request.query_params.get('preview_institution')
+        if preview_inst_id:
+            if not is_platform_admin(user):
+                return qs.none()
+            return qs.filter(institution_id=preview_inst_id)
         # 平台管理员：只看全局知识树（institution=NULL），不得接触机构资产
         if is_platform_admin(user) and user.institution is None:
             return qs.filter(institution__isnull=True)
@@ -65,6 +71,12 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
+        # 预览模式：平台管理员可查看任意机构知识树
+        preview_inst_id = self.request.query_params.get('preview_institution')
+        if preview_inst_id:
+            if not is_platform_admin(user):
+                return qs.none()
+            return qs.filter(institution_id=preview_inst_id)
         # 平台管理员：只接触全局节点
         if is_platform_admin(user) and user.institution is None:
             return qs.filter(institution__isnull=True)

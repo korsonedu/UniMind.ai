@@ -12,6 +12,7 @@ from users.views import IsMember
 from quizzes.ai_workflow import mark_questions_reviewed
 from users.quota import increment_quota
 from quizzes.services.task_dispatcher import dispatch_exam_grading
+from core.analytics import record_event
 
 logger = logging.getLogger(__name__)
 
@@ -97,16 +98,20 @@ class TeacherExamCreateView(APIView):
         from core.file_validation import validate_upload_file
         validate_upload_file(exam_file, allowed_extensions={'.pdf'})
 
+        inst = request.user.institution
+        from users.quota import check_and_add_storage_usage
+        check_and_add_storage_usage(inst, exam_file.size)
+
         exam = TeacherExam.objects.create(
             title=title,
             description=description,
             exam_pdf=exam_file,
             created_by=request.user,
-            institution=request.user.institution,
+            institution=inst,
         )
         # 计入 PDF 导出配额
-        if request.user.institution:
-            increment_quota(request.user.institution, 'pdf_export')
+        if inst:
+            increment_quota(inst, 'pdf_export')
         return Response(TeacherExamSerializer(exam).data, status=201)
 
 
@@ -131,11 +136,16 @@ class StudentExamSubmissionView(APIView):
             inst = getattr(user, 'institution', None)
             if inst and exam.institution != inst:
                 return Response({'detail': '无权操作'}, status=403)
+            if inst is None and exam.institution is not None:
+                return Response({'detail': '无权操作'}, status=403)
         answer_file = request.FILES.get('file')
         if not answer_file:
             return Response({'error': '未上传解答文件'}, status=400)
         from core.file_validation import validate_upload_file
         validate_upload_file(answer_file, allowed_extensions={'.pdf', '.jpg', '.jpeg', '.png'})
+
+        from users.quota import check_and_add_storage_usage
+        check_and_add_storage_usage(exam.institution, answer_file.size)
 
         submission, created = StudentExamSubmission.objects.update_or_create(
             exam=exam, user=request.user,
@@ -186,6 +196,8 @@ class TeacherGradeSubmissionView(APIView):
         if graded_file:
             from core.file_validation import validate_upload_file
             validate_upload_file(graded_file, allowed_extensions={'.pdf'})
+            from users.quota import check_and_add_storage_usage
+            check_and_add_storage_usage(submission.exam.institution if submission.exam else None, graded_file.size)
         if score is not None:
             try:
                 submission.score = float(score)
@@ -220,6 +232,10 @@ class SubmitExamView(APIView):
         )
 
         dispatch_exam_grading(request.user.id, exam.id, questions_data)
+        record_event('quiz_attempt', user=request.user, properties={
+            'exam_id': exam.id,
+            'question_count': len(questions_data),
+        })
 
         # 统一走后台批改，避免前端刷新/离开导致用户侧状态丢失。
         message = '试卷已提交后台批改，结果将通过通知发送。'

@@ -489,7 +489,7 @@ class AIEngine:
 
     @classmethod
     def call_ai_with_streaming_tools(cls, messages, tools, tool_executor,
-                                      on_step=None, tool_choice="auto",
+                                      on_step=None, on_message=None, tool_choice="auto",
                                       temperature=0.7, max_tokens=8192,
                                       operation='general', max_tool_rounds=5,
                                       raise_on_error=False):
@@ -501,14 +501,15 @@ class AIEngine:
         2. 每步 tool call/result 通过 on_step 回调推送
 
         on_step: callable(event_dict) — 接收 step/text_delta/done/error 事件
-        返回: {"content": str} 最终文本
+        on_message: callable(text) — 有 tool_calls 的轮次，通过此回调发送中间消息
+        返回: {"content": str} 最后一轮文本（无 tool_calls 时）
         """
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from django.conf import settings as _settings
 
         all_messages = list(messages)
         accumulated_text = ""
-        total_text = ""  # Track total text across all rounds for done event
+        all_rounds_text = []  # 收集所有轮次的中间文本，避免耗尽 rounds 时丢失
 
         for round_i in range(max_tool_rounds):
             config = get_model_for_task(operation)
@@ -645,15 +646,19 @@ class AIEngine:
                         round_i, len(accumulated_text), len(tool_calls), finish_reason)
 
             if not tool_calls:
-                total_text += accumulated_text
-                return {"content": total_text}
+                return {"content": accumulated_text}
 
             # Emit any remaining text that wasn't streamed during this round
             # (text_delta events are already sent during the stream loop above)
             remaining = accumulated_text[text_emitted_this_round:]
             if remaining and on_step:
                 on_step({"type": "text_delta", "delta": remaining})
-            total_text += accumulated_text
+
+            # 有 tool_calls 的轮次：该轮文本通过 on_message 发出（因为不会 return）
+            if accumulated_text.strip():
+                all_rounds_text.append(accumulated_text.strip())
+                if on_message:
+                    on_message(accumulated_text.strip())
 
             # Build assistant message matching DeepSeek API format
             assistant_msg = {
@@ -692,6 +697,10 @@ class AIEngine:
                         "args_summary": json.dumps(args, ensure_ascii=False)[:200],
                     })
 
+                # 让工具内部能拿到真实 call_id，用于发送进度事件
+                if hasattr(tool_executor, '_current_call_id'):
+                    tool_executor._current_call_id = call_id
+
                 try:
                     result = tool_executor(name, args)
                 except Exception as e:
@@ -706,9 +715,18 @@ class AIEngine:
                     "label": label,
                     "result_summary": summarize_tool_result(name, result) if summarize_tool_result else str(result)[:200],
                 }
-                # render_visual needs full payload for frontend rendering
-                if name == "render_visual" and isinstance(result, dict):
-                    step_event["visual"] = result
+                # render_visual: attach full payload for frontend rendering
+                if name == "render_visual" and hasattr(tool_executor, 'pending_visuals'):
+                    logger.info("[step] render_visual pending_visuals count=%d", len(tool_executor.pending_visuals))
+                    if tool_executor.pending_visuals:
+                        pv = tool_executor.pending_visuals[-1]  # Latest visual for step event
+                        # Ensure payload is dict (DeepSeek may pass it as JSON string)
+                        if isinstance(pv.get('payload'), str):
+                            try:
+                                pv['payload'] = json.loads(pv['payload'])
+                            except (json.JSONDecodeError, TypeError):
+                                pv['payload'] = {}
+                        step_event["visual"] = pv
                 if on_step:
                     on_step(step_event)
 
@@ -725,10 +743,41 @@ class AIEngine:
                 tool_choice = "auto"
 
         logger.warning(
-            "call_ai_with_streaming_tools: exhausted max_tool_rounds=%s",
+            "call_ai_with_streaming_tools: exhausted max_tool_rounds=%s, forcing final text reply",
             max_tool_rounds,
         )
-        return {"content": accumulated_text or total_text}
+        # 工具轮次用完后，强制追加一轮纯文本生成
+        all_messages.append({
+            "role": "system",
+            "content": "工具调用轮次已用完。请根据已有信息直接给出最终回复，不要再调用任何工具。",
+        })
+        try:
+            config = get_model_for_task(operation)
+            final_resp = cls.call_ai(
+                messages=all_messages,
+                tools=None,
+                tool_choice="none",
+                temperature=temperature,
+                max_tokens=max_tokens,
+                operation=operation,
+            )
+            final_text = ""
+            if final_resp and isinstance(final_resp, dict):
+                final_text = final_resp.get("content", "") or ""
+                if not final_text and "choices" in final_resp:
+                    final_text = final_resp["choices"][0]["message"]["content"] or ""
+            if final_text:
+                if on_step:
+                    on_step({"type": "text_delta", "delta": final_text})
+                return {"content": final_text}
+        except Exception as e:
+            logger.exception("Final text reply failed: %s", e)
+
+        # 合并所有轮次的中间文本，避免丢失
+        combined = accumulated_text or ""
+        if not combined and all_rounds_text:
+            combined = "\n\n".join(all_rounds_text)
+        return {"content": combined}
 
     @classmethod
     def agentic_structured_output(cls, messages, schema, tool_name, tool_description,

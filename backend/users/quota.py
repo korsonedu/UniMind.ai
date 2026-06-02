@@ -293,6 +293,34 @@ def validate_storage_quota(institution, file_size: int):
         )
 
 
+def check_and_add_storage_usage(institution, file_size: int):
+    """原子化：检查配额 + 递增用量。解决 TOCTOU 竞态。
+
+    在一个事务中完成配额检查和用量递增，使用 select_for_update 锁定行。
+    配额不足时抛 ValidationError。
+    """
+    if institution is None or file_size <= 0:
+        if institution is None:
+            import logging
+            logging.getLogger(__name__).warning("check_and_add_storage_usage called with institution=None, skipping quota check")
+        return
+    from users.models import Institution
+    with transaction.atomic():
+        inst = Institution.objects.select_for_update().filter(pk=institution.pk).first()
+        if not inst:
+            return
+        limit = STORAGE_QUOTA_BYTES.get(inst.plan)
+        if limit is not None and inst.storage_used_bytes + file_size > limit:
+            limit_mb = limit // (1024 * 1024)
+            used_mb = inst.storage_used_bytes // (1024 * 1024)
+            raise ValidationError(
+                {"error": f"机构存储空间不足（已用 {used_mb}MB / 上限 {limit_mb}MB），请联系管理员升级方案。"}
+            )
+        Institution.objects.filter(pk=inst.pk).update(
+            storage_used_bytes=F('storage_used_bytes') + file_size
+        )
+
+
 def get_storage_usage(institution) -> dict:
     """返回机构存储用量信息。"""
     if institution is None:

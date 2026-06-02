@@ -25,7 +25,7 @@ export const TagSection: React.FC = () => {
     try {
       const res = await api.get('/courses/tags/');
       setTags(res.data);
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[TagSection] fetch failed:', e); }
     finally { setLoading(false); }
   }, []);
 

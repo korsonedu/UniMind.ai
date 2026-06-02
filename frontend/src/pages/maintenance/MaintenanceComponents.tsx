@@ -29,7 +29,7 @@ export const TagInput = ({ tags, setTags, compact = false }: { tags: string[], s
       </div>
       <div className="flex flex-wrap gap-1 min-h-[1rem]">
         {tags.map((tag, i) => (
-          <Badge key={i} className="bg-black text-white hover:bg-black/80 gap-1 pl-2 pr-1 py-0.5 rounded-lg text-[11px] font-bold uppercase tracking-wider">
+          <Badge key={`${tag}-${i}`} className="bg-black text-white hover:bg-black/80 gap-1 pl-2 pr-1 py-0.5 rounded-lg text-[11px] font-bold uppercase tracking-wider">
             {tag} <X className="w-2.5 h-2.5 cursor-pointer opacity-50 hover:opacity-100" onClick={() => setTags(tags.filter((_, idx) => idx !== i))} />
           </Badge>
         ))}

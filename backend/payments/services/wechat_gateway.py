@@ -51,6 +51,23 @@ def create_native_order(order, mch_id='', api_v3_key='', cert_serial='', private
     }
 
 
+def create_checkout_session(order) -> dict:
+    """Unified interface: create WeChat Native order → return checkout_url (QR code URL)."""
+    result = create_native_order(order)
+    return {'checkout_url': result['code_url']}
+
+
+# Gateway router interface aliases
+def verify_webhook(headers, body: bytes):
+    """Verify WeChat webhook notification. Compatible with gateway router interface."""
+    return verify_notify(headers, body)
+
+
+def process_webhook_event(event: dict) -> dict | None:
+    """Process WeChat webhook event. Compatible with gateway router interface."""
+    return process_notify(event)
+
+
 def verify_notify(headers: dict, body: bytes):
     """Verify WeChat Pay callback and return decrypted resource."""
     wx = _get_client()

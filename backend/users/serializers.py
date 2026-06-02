@@ -49,10 +49,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     code = serializers.CharField(required=True, write_only=True)
     nickname = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, required=True)
+    agreed_to_terms = serializers.BooleanField(required=True)
 
     class Meta:
         model = User
-        fields = ("username", "email", "code", "nickname", "password")
+        fields = ("username", "email", "code", "nickname", "password", "agreed_to_terms")
 
     def create(self, validated_data):
         # 如果是第一个用户，设为管理员且具有后台权限

@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework.authtoken",
+    "drf_spectacular",
     "corsheaders",
     "channels",
     "users",
@@ -205,6 +206,23 @@ REST_FRAMEWORK = {
         "user": "2000/hour",
         "anon": "120/hour",
     },
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# DRF Spectacular (OpenAPI/Swagger)
+SPECTACULAR_SETTINGS = {
+    "TITLE": "UniMind.ai API",
+    "DESCRIPTION": "Agent 驱动的智能教育基础设施 API",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "TAGS": [
+        {"name": "auth", "description": "认证与用户管理"},
+        {"name": "ai", "description": "AI Agent 对话"},
+        {"name": "quizzes", "description": "题库与考试"},
+        {"name": "courses", "description": "课程管理"},
+        {"name": "institution", "description": "机构管理"},
+    ],
 }
 
 ONLINE_USER_ACTIVE_WINDOW_SECONDS = _get_int("ONLINE_USER_ACTIVE_WINDOW_SECONDS", 300)
@@ -284,6 +302,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "users.tasks.notify_trial_expiring",
         "schedule": 86400.0,
     },
+    "send-membership-expiry-reminders-daily": {
+        "task": "users.tasks.send_membership_expiry_reminders",
+        "schedule": 86400.0,
+    },
     "send-expiry-reminders-daily": {
         "task": "notifications.tasks_reminder.send_expiry_reminders",
         "schedule": 86400.0,
@@ -299,6 +321,10 @@ CELERY_BEAT_SCHEDULE = {
     "reflect-teacher-patterns-daily": {
         "task": "ai_assistant.tasks.reflect_teacher_patterns",
         "schedule": 86400.0,
+    },
+    "cleanup-stale-memories-weekly": {
+        "task": "ai_assistant.tasks.cleanup_stale_memories",
+        "schedule": 604800.0,  # weekly
     },
     "aggregate-platform-stats-daily": {
         "task": "core.tasks.aggregate_daily_platform_stats",
@@ -353,6 +379,14 @@ LOGGING = {
             "formatter": "verbose",
             "encoding": "utf-8",
         },
+        "file_agent": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(LOG_DIR, "agent_debug.log"),
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 3,
+            "formatter": "verbose",
+            "encoding": "utf-8",
+        },
     },
     "loggers": {
         "": {
@@ -366,6 +400,16 @@ LOGGING = {
         },
         "core.security": {
             "handlers": ["console", "file_security"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "agent_debug": {
+            "handlers": ["console", "file_agent"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "ai_assistant.services.tool_executor": {
+            "handlers": ["console", "file_agent"],
             "level": "INFO",
             "propagate": False,
         },
@@ -392,12 +436,31 @@ if OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET and OSS_BUCKET_NAME and OSS_ENDPO
     }
     MEDIA_URL = f"https://{OSS_BUCKET_NAME}.{OSS_ENDPOINT}/media/"
 
-# Celery Beat 定时任务
-from celery.schedules import crontab
 
-CELERY_BEAT_SCHEDULE = {
-    'cleanup-expired-chunks': {
-        'task': 'courses.tasks.cleanup_expired_chunks_task',
-        'schedule': crontab(hour=3, minute=0),  # 每天凌晨3点执行
-    },
-}
+# ============================================================
+# Sentry 错误追踪（仅生产环境启用）
+# ============================================================
+SENTRY_DSN = os.environ.get("SENTRY_DSN", "")
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=DJANGO_ENV,
+        integrations=[
+            DjangoIntegration(
+                transaction_style="url",
+                middleware_spans=True,
+            ),
+            CeleryIntegration(),
+            RedisIntegration(),
+        ],
+        traces_sample_rate=0.2 if IS_PROD else 1.0,
+        send_default_pii=False,
+        attach_stacktrace=True,
+        before_send=lambda event, hint: event if IS_PROD else None,
+    )
+

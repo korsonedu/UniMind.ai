@@ -1,6 +1,12 @@
 from django.urls import path
+from .views import (
+    LegalDocumentView, LegalDocumentListView,
+    FeedbackAdminListView, FeedbackAdminDetailView,
+)
 
 urlpatterns = [
-    # AI 模型配置已迁移至 settings.py，不再提供 API 端点。
-    # 如需查看当前配置，请检查 Django settings 中的 AI_MODEL_CONFIG 字典。
+    path('legal/', LegalDocumentListView.as_view(), name='legal-list'),
+    path('legal/<str:doc_type>/', LegalDocumentView.as_view(), name='legal-detail'),
+    path('admin/feedback/', FeedbackAdminListView.as_view(), name='admin-feedback-list'),
+    path('admin/feedback/<int:pk>/', FeedbackAdminDetailView.as_view(), name='admin-feedback-detail'),
 ]

@@ -130,7 +130,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                       remarkPlugins={[remarkMath, remarkSoftBreaks]}
                       rehypePlugins={[rehypeKatex]}
                       components={{
-                        img: ({node, ...props}) => <img {...props} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank')}/>,
+                        img: ({node, ...props}) => <img {...props} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank', 'noopener,noreferrer')}/>,
                         p: ({node, ...props}) => <p {...props} className="m-0 leading-normal w-fit" />,
                         div: ({node, ...props}) => <div {...props} className="w-fit" />,
                         br: () => <br />

@@ -442,6 +442,7 @@ class QuestionGenerator:
         target_difficulty: Any = 'normal',
         target_type_ratio: Optional[Dict[str, Any]] = None,
         institution=None,
+        on_progress=None,
     ):
         kps = list(KnowledgePoint.objects.filter(id__in=list(kp_ids), level='kp').order_by('id'))
         if not kps:
@@ -485,6 +486,8 @@ class QuestionGenerator:
             max_concurrency,
         )
 
+        total_jobs = len(jobs)
+        completed_jobs = 0
         job_results: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
         if jobs:
             first_error: Optional[BaseException] = None
@@ -510,7 +513,11 @@ class QuestionGenerator:
                 for future in as_completed(future_map):
                     kp_id, batch_index = future_map[future]
                     try:
-                        job_results[(kp_id, batch_index)] = future.result()
+                        result = future.result()
+                        job_results[(kp_id, batch_index)] = result
+                        completed_jobs += 1
+                        if on_progress:
+                            on_progress(completed_jobs, total_jobs, len(result))
                     except Exception as exc:
                         first_error = exc
                         for pending in future_map:

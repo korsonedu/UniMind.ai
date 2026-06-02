@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '@/components/useConfirm';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 interface Institution {
   id: number;
@@ -50,36 +51,43 @@ export default function InstitutionAdmin() {
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [planFilter, setPlanFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Institution | null>(null);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
-  const fetchInstitutions = async () => {
+  const fetchInstitutions = useCallback(async () => {
     try {
       const params: Record<string, string> = {};
-      if (search) params.search = search;
+      if (debouncedSearch) params.search = debouncedSearch;
       if (planFilter) params.plan = planFilter;
       const { data } = await api.get('/users/institutions/', { params });
       setInstitutions(data);
-    } catch { /* ignore */ }
+    } catch (e) { console.error('[InstitutionAdmin] fetch failed:', e); }
     setLoading(false);
-  };
+  }, [debouncedSearch, planFilter]);
 
-  useEffect(() => { fetchInstitutions(); }, [search, planFilter]);
+  useEffect(() => { fetchInstitutions(); }, [fetchInstitutions]);
 
   const handleActivate = async (id: number) => {
-    await api.post(`/users/institutions/${id}/activate/`);
-    fetchInstitutions();
+    try {
+      await api.post(`/users/institutions/${id}/activate/`);
+      fetchInstitutions();
+    } catch { toast.error('激活失败'); }
   };
   const handleDeactivate = async (id: number) => {
-    await api.post(`/users/institutions/${id}/deactivate/`);
-    fetchInstitutions();
+    try {
+      await api.post(`/users/institutions/${id}/deactivate/`);
+      fetchInstitutions();
+    } catch { toast.error('停用失败'); }
   };
   const handleDelete = async (id: number, name: string) => {
     if (!(await confirm(`确认删除机构「${name}」？该操作不可撤销。`))) return;
-    await api.delete(`/users/institutions/${id}/`);
-    fetchInstitutions();
+    try {
+      await api.delete(`/users/institutions/${id}/`);
+      fetchInstitutions();
+    } catch { toast.error('删除失败'); }
   };
 
   // 机构所有者 → 自己的机构设置
@@ -465,7 +473,10 @@ function InstitutionSelfSettings() {
       setStudentCount(data.student_count || 0);
       setMaxStudents(data.max_students || 0);
       setPlanActive(data.is_plan_active);
-    }).catch(() => {});
+    }).catch((e) => {
+      console.error('[InstitutionSelfSettings] fetch failed:', e);
+      toast.error('加载机构信息失败');
+    });
   }, []);
 
   const handleSave = async () => {

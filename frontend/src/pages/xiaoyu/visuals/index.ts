@@ -4,6 +4,7 @@ import { LatexRenderer } from './LatexRenderer';
 import { StepSolutionRenderer } from './StepSolutionRenderer';
 import { KnowledgeMapRenderer } from './KnowledgeMapRenderer';
 import { ActionCardsRenderer } from './ActionCardsRenderer';
+import { FunctionGraphRenderer } from './FunctionGraphRenderer';
 
 export interface VisualData {
   type: string;
@@ -18,6 +19,7 @@ const RENDERERS: Record<string, React.ComponentType<{ payload: any }>> = {
   step_solution: StepSolutionRenderer,
   knowledge_map: KnowledgeMapRenderer,
   action_cards: ActionCardsRenderer,
+  function_graph: FunctionGraphRenderer,
 };
 
 export const getVisualRenderer = (type: string) => RENDERERS[type] || null;

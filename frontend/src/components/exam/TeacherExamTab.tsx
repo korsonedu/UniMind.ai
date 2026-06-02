@@ -101,7 +101,7 @@ export const TeacherExamTab: React.FC<TeacherExamTabProps> = ({
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0 max-md:w-full max-md:justify-end">
-                <Button size="sm" variant="default" className="h-9 text-xs" disabled={!item.exam_pdf_url} onClick={() => window.open(item.exam_pdf_url, '_blank')}>
+                <Button size="sm" variant="default" className="h-9 text-xs" disabled={!item.exam_pdf_url} onClick={() => window.open(item.exam_pdf_url, '_blank', 'noopener,noreferrer')}>
                   {t('teacherSection.downloadPdf')}
                 </Button>
                 {isAdmin && (
@@ -144,11 +144,11 @@ export const TeacherExamTab: React.FC<TeacherExamTabProps> = ({
                           {t('teacherSection.submittedWaiting')}
                         </Badge>
                       )}
-                      <Button size="sm" variant="link" className="h-6 px-0 text-xs" onClick={() => window.open(item.submission!.answer_pdf_url, '_blank')}>
+                      <Button size="sm" variant="link" className="h-6 px-0 text-xs" onClick={() => window.open(item.submission!.answer_pdf_url, '_blank', 'noopener,noreferrer')}>
                         {t('teacherSection.viewMyAnswer')}
                       </Button>
                       {item.submission.graded_pdf_url && (
-                        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => window.open(item.submission!.graded_pdf_url, '_blank')}>
+                        <Button size="sm" variant="default" className="h-7 text-xs" onClick={() => window.open(item.submission!.graded_pdf_url, '_blank', 'noopener,noreferrer')}>
                           {t('teacherSection.downloadGraded')}
                         </Button>
                       )}

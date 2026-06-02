@@ -35,10 +35,12 @@ interface Bot {
 
 interface Props {
   questions: QuestionData[];
+  savedIndices: Set<number>;
   pipelineTaskId: number | null;
   bot: Bot | null;
   onPipelineStart?: (taskId: number) => void;
   onQuestionsSaved?: (indices: number[]) => void;
+  onSystemMessage?: (msg: string) => void;
 }
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -62,7 +64,12 @@ const QTYPE_LABEL: Record<string, string> = {
   subjective: '主观题',
 };
 
-export default function QuestionPanel({ questions, pipelineTaskId, bot, onPipelineStart, onQuestionsSaved }: Props) {
+export default function QuestionPanel({ questions, savedIndices, pipelineTaskId, bot, onPipelineStart, onQuestionsSaved, onSystemMessage }: Props) {
+  // 过滤掉已保存的题目，用原始索引
+  const displayQuestions = questions
+    .map((q, i) => ({ q, originalIndex: i }))
+    .filter(({ originalIndex }) => !savedIndices.has(originalIndex));
+
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
@@ -111,33 +118,39 @@ export default function QuestionPanel({ questions, pipelineTaskId, bot, onPipeli
   }, []);
 
   const toggleAll = useCallback(() => {
-    if (selected.size === questions.length) {
+    if (selected.size === displayQuestions.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(questions.map((_, i) => i)));
+      setSelected(new Set(displayQuestions.map((_, i) => i)));
     }
-  }, [selected.size, questions.length]);
+  }, [selected.size, displayQuestions.length]);
 
   const handleSave = useCallback(async () => {
-    const indices = selected.size > 0 ? Array.from(selected) : undefined;
-    const toSave = indices ? indices.map(i => questions[i]) : questions;
+    const selectedDisplayIndices = selected.size > 0 ? Array.from(selected) : undefined;
+    // 映射回原始索引
+    const originalIndices = selectedDisplayIndices
+      ? selectedDisplayIndices.map(i => displayQuestions[i].originalIndex)
+      : displayQuestions.map(d => d.originalIndex);
+    const toSave = originalIndices.map(i => questions[i]);
     setSaving(true);
     try {
       const res = await api.post('/quizzes/workbench/save-questions/', { questions: toSave });
       toast.success(`已入库 ${res.data.saved} 题`);
-      if (indices) onQuestionsSaved?.(indices);
-      else onQuestionsSaved?.(questions.map((_, i) => i));
+      onQuestionsSaved?.(originalIndices);
+      // 通知 LLM
+      const summary = toSave.map(q => q.question?.substring(0, 20)).join('、');
+      onSystemMessage?.(`用户已将以下题目存入题库：${summary}`);
       setSelected(new Set());
     } catch {
       toast.error('入库失败');
     }
     setSaving(false);
-  }, [selected, questions, onQuestionsSaved]);
+  }, [selected, displayQuestions, questions, onQuestionsSaved, onSystemMessage]);
 
   const handleArcRefine = useCallback(async () => {
     if (selected.size === 0) return;
-    const indices = Array.from(selected);
-    const toRefine = indices.map(i => questions[i]);
+    const selectedDisplayIndices = Array.from(selected);
+    const toRefine = selectedDisplayIndices.map(i => displayQuestions[i].q);
     setSaving(true);
     try {
       const res = await api.post('/quizzes/workbench/launch-arc/', { questions: toRefine });
@@ -150,7 +163,7 @@ export default function QuestionPanel({ questions, pipelineTaskId, bot, onPipeli
   }, [selected, questions, onPipelineStart]);
 
   // 空状态
-  if (questions.length === 0 && !pipelineTaskId) {
+  if (displayQuestions.length === 0 && !pipelineTaskId) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-unimind-text-quaternary">
         <Sparkles className="h-10 w-10 mb-3 opacity-20" />
@@ -176,19 +189,19 @@ export default function QuestionPanel({ questions, pipelineTaskId, bot, onPipeli
       )}
 
       {/* 题目列表 */}
-      {questions.length > 0 && (
+      {displayQuestions.length > 0 && (
         <>
           {/* 汇总栏 */}
           <div className="shrink-0 px-4 py-2.5 border-b bg-muted/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-xs font-bold text-foreground">
-                共 {questions.length} 题
+                共 {displayQuestions.length} 题
               </span>
               <button
                 onClick={toggleAll}
                 className="text-[11px] text-primary hover:underline font-medium"
               >
-                {selected.size === questions.length ? '取消全选' : '全选'}
+                {selected.size === displayQuestions.length ? '取消全选' : '全选'}
               </button>
               {selected.size > 0 && (
                 <span className="text-[11px] text-unimind-text-tertiary">
@@ -223,9 +236,9 @@ export default function QuestionPanel({ questions, pipelineTaskId, bot, onPipeli
 
           {/* 题目卡片 */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {questions.map((q, i) => (
+            {displayQuestions.map(({ q, originalIndex }, i) => (
               <div
-                key={i}
+                key={originalIndex}
                 className={cn(
                   "border rounded-lg p-3.5 transition-all cursor-pointer",
                   selected.has(i) ? "border-primary bg-primary/5" : "hover:border-border/80",
@@ -289,7 +302,7 @@ export default function QuestionPanel({ questions, pipelineTaskId, bot, onPipeli
       )}
 
       {/* 管线运行中但尚无题目 */}
-      {questions.length === 0 && pipelineTaskId && taskStatus && (
+      {displayQuestions.length === 0 && pipelineTaskId && taskStatus && (
         <div className="flex-1 flex items-center justify-center text-unimind-text-quaternary">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />

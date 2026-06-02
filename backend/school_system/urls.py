@@ -7,12 +7,13 @@ from django.http import HttpResponse, JsonResponse
 from django.utils.html import escape
 from pathlib import Path
 from school_system.media_serve import media_serve
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 _INTRO_PATH_RE = re.compile(r'^/intro/([^/]+)$')
 
 _DEFAULT_META = {
-    'title': 'UniMind.ai - 新一代AI教育基础设施',
-    'description': 'UniMind.ai 是新一代 AI 驱动的智能学习基础设施，为培训机构提供刷题、模考、AI 助教等一站式解决方案。',
+    'title': 'UniMind.ai — Agent 驱动的新一代智能教育基础设施',
+    'description': '从教师出题、学生刷题、评分批改到知识追踪，全链路 Agent 化。学生有专属 AI 教练，教师有对话式命题官。',
 }
 
 
@@ -22,9 +23,9 @@ def _get_institution_meta(slug: str, request) -> dict | None:
     if inst is None:
         return None
     name = escape(inst.name)
-    desc = escape(inst.description) if inst.description else f'{name}，使用 UniMind.ai 智能学习系统，AI 助教 + 自适应刷题 + 模考，助力高效提分。'
+    desc = escape(inst.description) if inst.description else f'{name}，使用 UniMind.ai Agent 驱动的智能教育基础设施，AI 教练 + 对话式出题 + 自适应刷题。'
     meta = {
-        'title': f'{name} - UniMind.ai - 新一代AI教育基础设施',
+        'title': f'{name} - UniMind.ai — Agent 驱动的新一代智能教育基础设施',
         'description': desc,
     }
     if inst.logo:
@@ -93,6 +94,9 @@ def health_check(request):
 urlpatterns = [
     path("health/", health_check, name='health-check'),
     path("admin/", admin.site.urls),
+    path("api/schema/", SpectacularAPIView.as_view(), name='schema'),
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path("api/redoc/", SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path("api/users/", include("users.urls")),
     path("api/quizzes/", include("quizzes.urls")),
     path("api/study/", include("study_room.urls")),
@@ -103,6 +107,7 @@ urlpatterns = [
     path("api/notifications/", include("notifications.urls")),
     path("api/interviews/", include("interviews.urls")),
     path("api/payments/", include("payments.urls")),
+    path("api/", include("core.urls")),
     re_path(r'^media/(?P<path>.*)$', media_serve, name='media-serve'),
     re_path(r'^(?!api/|admin/|media/|static/).*$', serve_spa, name='spa-catchall'),
 ] + static(settings.STATIC_URL, document_root=settings.BASE_DIR / 'static')

@@ -53,6 +53,33 @@ def create_page_pay(order, app_id='', private_key='', alipay_public_key=''):
     return {'pay_url': pay_url, 'out_trade_no': out_trade_no}
 
 
+def create_checkout_session(order) -> dict:
+    """Unified interface: create Alipay page pay → return checkout_url."""
+    result = create_page_pay(order)
+    return {'checkout_url': result['pay_url']}
+
+
+# Gateway router interface aliases
+def verify_webhook(headers, body: bytes):
+    """Verify Alipay webhook notification. Compatible with gateway router interface."""
+    data = {}
+    for key, val in (headers.items() if hasattr(headers, 'items') else []):
+        if key.lower().startswith('x-') or key.lower() == 'sign':
+            data[key] = val
+    # Alipay sends form-encoded data in body, parse it
+    from urllib.parse import parse_qs
+    parsed = {k: v[0] if len(v) == 1 else v for k, v in parse_qs(body.decode('utf-8')).items()}
+    signature = parsed.pop('sign', '') or headers.get('sign', '')
+    if not verify_notify(parsed, signature):
+        raise ValueError('Alipay webhook signature verification failed')
+    return parsed
+
+
+def process_webhook_event(event: dict) -> dict | None:
+    """Process Alipay webhook event. Compatible with gateway router interface."""
+    return process_notify(event)
+
+
 def verify_notify(data: dict, signature: str):
     """Verify Alipay notify signature. Returns True if valid."""
     alipay = _get_client()

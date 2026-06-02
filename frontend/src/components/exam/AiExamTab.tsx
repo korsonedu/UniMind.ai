@@ -58,10 +58,10 @@ export const AiExamTab: React.FC<AiExamTabProps> = ({
               <div className="flex gap-2 shrink-0 max-md:w-full max-md:justify-end">
                 {item.status === 'ready' && (
                   <>
-                    <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => window.open(item.exam_pdf_url, '_blank')}>
+                    <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => window.open(item.exam_pdf_url, '_blank', 'noopener,noreferrer')}>
                       {t('aiSection.downloadExam')}
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => window.open(item.answer_pdf_url, '_blank')}>
+                    <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => window.open(item.answer_pdf_url, '_blank', 'noopener,noreferrer')}>
                       {t('aiSection.downloadAnswer')}
                     </Button>
                   </>

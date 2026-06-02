@@ -41,7 +41,7 @@ export const InstitutionBotSection: React.FC = () => {
     try {
       const { data } = await api.get('/ai/bots/visibility/');
       setGlobalBots(data);
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[InstitutionBotSection] fetch failed:', e); }
     finally { setGlobalLoading(false); }
   }, []);
 
@@ -49,7 +49,7 @@ export const InstitutionBotSection: React.FC = () => {
     try {
       const { data } = await api.get('/ai/bots/');
       setCustomBots(data.filter((b: any) => b.institution !== null));
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[InstitutionBotSection] fetch failed:', e); }
     finally { setCustomLoading(false); }
   }, []);
 

@@ -405,9 +405,9 @@ class MemorixOptimizer:
                     total_loss += (p - y) ** 2
                     count += 1
             except (OverflowError, ValueError):
-                return float('inf')
+                return 999999
 
-        return float(math.sqrt(total_loss / count)) if count > 0 else float('inf')
+        return float(math.sqrt(total_loss / count)) if count > 0 else 999999
 
     # ── Diagnostics ────────────────────────────────────────────────
 

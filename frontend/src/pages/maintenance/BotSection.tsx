@@ -34,7 +34,7 @@ export const BotSection: React.FC = () => {
     try {
       const res = await api.get('/ai/bots/');
       setItems(res.data);
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[BotSection] fetch failed:', e); }
     finally { setLoading(false); }
   }, []);
 

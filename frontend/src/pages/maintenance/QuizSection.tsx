@@ -27,7 +27,7 @@ export const QuizSection: React.FC = () => {
     try {
       const res = await api.get('/quizzes/knowledge-points/');
       setKpList(res.data);
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[QuizSection] fetch failed:', e); }
   }, []);
 
   useEffect(() => { fetchKPList(); }, [fetchKPList]);

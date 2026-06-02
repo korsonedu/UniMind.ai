@@ -33,7 +33,7 @@ export const MaterialSection: React.FC = () => {
       setItems(res.data.items || res.data);
       setTotal(res.data.total ?? (Array.isArray(res.data) ? res.data.length : 0));
       setTotalPages(res.data.total_pages ?? 1);
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[MaterialSection] fetch failed:', e); }
     finally { setLoading(false); }
   }, []);
 

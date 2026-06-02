@@ -9,10 +9,10 @@
     "enterConsole": "进入控制台"
   },
   "hero": {
-    "badge": "培训机构的 AI 运营系统",
+    "badge": "Agent 驱动的新一代智能教育基础设施",
     "titleLine1": "你的老师，只管讲课",
     "titleLine2": "剩下的，UniMind 全包了",
-    "subtitle": "出题、组卷、批改、复习、学情——讲师之外的一切，AI 接管。开箱即用，输入考点即出题，学生扫码即练。",
+    "subtitle": "出题、刷题、追踪——全链路 Agent 化，开箱即用。",
     "cta": "免费开始",
     "secondary": "了解功能",
     "footnote": "首批机构免费获得 Growth 方案 · 活动截止 2026.6.30"
@@ -437,7 +437,7 @@
     "footnote": "已有 50+ 机构在使用 UniMind · 活动截止 2026.6.30"
   },
   "footer": {
-    "tagline": "培训机构的 AI 基础设施",
+    "tagline": "Agent 驱动的智能教育基础设施",
     "copyrightEntity": "北京融知高科 · UniMind.ai",
     "features": "功能",
     "pricing": "定价",

@@ -174,10 +174,6 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
   },
 
   reset: () => {
-    // Clear all poll timers
-    const timers = _pollTimers;
-    timers.forEach((timer) => clearInterval(timer));
-    timers.clear();
     set({
       outlineStatus: 'idle',
       outlineItems: [],
@@ -185,5 +181,11 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       transcriptSegments: [],
       fullText: null,
     });
+  },
+
+  /** Clear all poll timers — call on app-level cleanup only, not per-course unmount */
+  clearAllTimers: () => {
+    _pollTimers.forEach((timer) => clearInterval(timer));
+    _pollTimers.clear();
   },
 }));

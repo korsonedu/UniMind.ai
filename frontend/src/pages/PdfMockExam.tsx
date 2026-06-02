@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PageWrapper } from '@/components/PageWrapper';
 import api from '@/lib/api';
@@ -20,7 +20,7 @@ export const PdfMockExam: React.FC = () => {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.is_admin || user?.is_institution_admin || user?.role === 'admin';
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setFailed('');
     try {
@@ -33,16 +33,15 @@ export const PdfMockExam: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
-    const hasProcessing = items.some((i) => i.status === 'processing');
-    if (!hasProcessing) return;
-    const timer = setInterval(() => loadData(), 5000);
+    if (!items.some((i) => i.status === 'processing')) return;
+    const timer = setInterval(loadData, 5000);
     return () => clearInterval(timer);
-  }, [items]);
+  }, [items, loadData]);
 
   const createExam = async () => {
     setCreating(true);

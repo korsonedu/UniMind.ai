@@ -10,8 +10,11 @@ import { Loading } from '@/components/Loading';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
 import i18n from '@/lib/i18n';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const WeeklyReportDialog = lazy(() => import('./components/WeeklyReportDialog').then(m => ({ default: m.WeeklyReportDialog })));
+const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
+import { FeedbackButton } from './components/FeedbackButton';
 
 // Lazy-loaded pages — named exports need .then() wrapper
 const lazyNamed = <T extends Record<string, React.ComponentType<any>>>(loader: () => Promise<T>, name: keyof T) =>
@@ -28,7 +31,6 @@ const Register = lazyNamed(() => import('./pages/Register'), 'Register');
 const VideoLesson = lazyNamed(() => import('./pages/VideoLesson'), 'VideoLesson');
 const ArticleDetail = lazyNamed(() => import('./pages/ArticleDetail'), 'ArticleDetail');
 const ArticleCenter = lazyNamed(() => import('./pages/ArticleCenter'), 'ArticleCenter');
-const AIAssistant = lazyNamed(() => import('./pages/AIAssistant'), 'AIAssistant');
 const SystemSettings = lazyNamed(() => import('./pages/SystemSettings'), 'SystemSettings');
 const KnowledgeMap = lazyNamed(() => import('./pages/KnowledgeMap'), 'KnowledgeMap');
 const KnowledgeNodeDetail = lazyNamed(() => import('./pages/KnowledgeNodeDetail'), 'KnowledgeNodeDetail');
@@ -53,8 +55,11 @@ const InstitutionStudents = lazy(() => import('./pages/InstitutionStudents'));
 const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
 const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
 const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
+const PlatformAnalytics = lazyNamed(() => import('./pages/PlatformAnalytics'), 'PlatformAnalytics');
 const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
 const NotFound = lazy(() => import('./pages/NotFound'));
+const AuditLogs = lazy(() => import('./pages/AuditLogs'));
+const Legal = lazy(() => import('./pages/Legal'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
 const PromoPlus = lazy(() => import('./pages/PromoPlus'));
 
@@ -70,34 +75,36 @@ const LanguageRedirect = ({ lang }: { lang: string }) => {
 
 // Auth Guard with Persistence
 const RequireAuth = ({ children }: { children: ReactNode }) => {
-  const { token, user, setAuth } = useAuthStore();
+  const { user, setAuth } = useAuthStore();
   const { theme, setTheme } = useSystemStore();
-  const [loading, setLoading] = useState(!user && !!token);
+  const [loading, setLoading] = useState(!user);
 
+  // Theme policy: dark mode beta is only for admins.
   useEffect(() => {
-    // Theme policy: dark mode beta is only for admins.
     if (user?.role === 'admin') {
       if (theme === 'dark') setTheme('dark');
     } else if (user && theme !== 'light') {
       setTheme('light');
     }
+  }, [user?.role, user, theme, setTheme]);
 
-    if (!user && token) {
+  // Fetch user on mount if not in memory (session cookie handles auth)
+  useEffect(() => {
+    if (!user) {
       api.get('/users/me/')
-        .then(res => setAuth(res.data, token))
+        .then(res => setAuth(res.data, null))
         .catch(() => {
-          api.post('/users/logout/').catch(() => {});
           window.location.href = '/login';
         })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
-  }, [user, token, theme, setTheme]);
+  }, [user, setAuth]);
 
   if (loading) return <Loading message="Synchronizing Secure Session…" fullScreen size="lg" />;
 
-  if (!token) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 };
 
@@ -123,7 +130,18 @@ const RequireInstitution = ({ children }: { children: ReactNode }) => {
   const { user } = useAuthStore();
   const institution = useInstitutionStore(s => s.institution);
   const isPlatformAdmin = useInstitutionStore(s => s.isPlatformAdmin);
+  const featuresLoading = useInstitutionStore(s => s.loading);
+  const fetchFeatures = useInstitutionStore(s => s.fetchFeatures);
+
+  useEffect(() => {
+    if (user && !institution && !featuresLoading) {
+      fetchFeatures();
+    }
+  }, [user, institution, featuresLoading, fetchFeatures]);
+
   if (!user) return <Navigate to="/login" replace />;
+  if (featuresLoading) return <Loading message="Loading institution…" fullScreen size="lg" />;
+  if (!institution && !isPlatformAdmin) return <Navigate to="/" replace />;
   if (isPlatformAdmin) return children;
   if (!institution?.id) return <Navigate to="/" replace />;
   // 机构管理员（owner / teacher）可访问管理类页面
@@ -157,28 +175,33 @@ const HomeRedirect = () => {
 
 // Root entry handler to manage landing vs app logic
 const RootRedirect = () => {
-  const { token, user } = useAuthStore();
+  const { user, setAuth } = useAuthStore();
   const hasHydrated = useAuthStore.persist.hasHydrated();
-  const [checkingInvite, setCheckingInvite] = useState(true);
+  const [checking, setChecking] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!hasHydrated) return;
-    if (token || user) { setCheckingInvite(false); return; }
-    const controller = new AbortController();
-    api.get('/users/check-invite/', { signal: controller.signal })
+    if (user) { setChecking(false); return; }
+    // Try to rehydrate user from session cookie
+    api.get('/users/me/')
       .then(res => {
-        if (res.data?.has_invite) navigate('/register', { replace: true });
+        setAuth(res.data, null);
       })
-      .catch(() => {})
-      .finally(() => setCheckingInvite(false));
-    return () => controller.abort();
-  }, [token, user, hasHydrated]);
+      .catch(() => {
+        // Not logged in — check invite for unauthenticated users
+        api.get('/users/check-invite/')
+          .then(res => {
+            if (res.data?.has_invite) navigate('/register', { replace: true });
+          })
+          .catch(() => {});
+      })
+      .finally(() => setChecking(false));
+  }, [user, hasHydrated, setAuth, navigate]);
 
-  if (!hasHydrated || checkingInvite) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+  if (!hasHydrated || checking) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
-  // Token exists → let RequireAuth handle user fetching, render page immediately
-  if (token) return <Outlet />;
+  if (user) return <Outlet />;
 
   return <Suspense fallback={<PageLoader />}><Landing /></Suspense>;
 };
@@ -203,7 +226,6 @@ const router = createBrowserRouter([
           { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
           { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
-          { path: "ai", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}>{lazyPage(AIAssistant)}</FeatureGuard> },
           { path: "home", element: lazyPage(StudentHome) },
           { path: "xiaoyu", element: lazyPage(XiaoYu) },
           { path: "plan", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}>{lazyPage(StudyPlan)}</FeatureGuard> },
@@ -221,8 +243,10 @@ const router = createBrowserRouter([
           { path: "institution", element: <RequireInstitution>{lazyPage(InstitutionDashboard)}</RequireInstitution> },
           { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },
+          { path: "institution/audit-logs", element: <RequireAdmin>{lazyPage(AuditLogs)}</RequireAdmin> },
           { path: "invite-codes", element: <RequirePlatformAdmin>{lazyPage(InviteCodeAdmin)}</RequirePlatformAdmin> },
           { path: "prompt-templates", element: <RequirePlatformAdmin>{lazyPage(PromptTemplatesAdmin)}</RequirePlatformAdmin> },
+          { path: "platform-analytics", element: <RequirePlatformAdmin>{lazyPage(PlatformAnalytics)}</RequirePlatformAdmin> },
           { path: "*", element: lazyPage(NotFound) },
         ],
       },
@@ -237,6 +261,8 @@ const router = createBrowserRouter([
   { path: "/promo/plus", element: lazyPage(PromoPlus) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/register", element: lazyPage(Register) },
+  { path: "/privacy", element: lazyPage(Legal) },
+  { path: "/terms", element: lazyPage(Legal) },
   { path: "/diagnostic", element: <RequireAuth>{lazyPage(DiagnosticTest)}</RequireAuth> },
   { path: "/checkout", element: <RequireAuth>{lazyPage(Checkout)}</RequireAuth> },
   { path: "/payments/result", element: <RequireAuth>{lazyPage(PaymentResult)}</RequireAuth> },
@@ -245,13 +271,15 @@ const router = createBrowserRouter([
 
 function App() {
   return (
-    <>
+    <ErrorBoundary>
       <Toaster position="top-center" richColors />
       <Suspense fallback={null}>
         <WeeklyReportDialog />
+        <NPSSurvey />
       </Suspense>
       <RouterProvider router={router} />
-    </>
+      <FeedbackButton />
+    </ErrorBoundary>
   );
 }
 

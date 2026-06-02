@@ -11,18 +11,28 @@ from ai_assistant.bot_registry import get_bot_profile
 logger = logging.getLogger(__name__)
 
 
+def resolve_tool_choice(profile):
+    """根据 bot profile 和当前模型决定 tool_choice 值。"""
+    from ai_engine.config import get_model_for_task
+    model_config = get_model_for_task('assistant.chat')
+    is_deepseek = 'deepseek' in model_config.get('model', '').lower()
+    if profile.force_tool_choice and not is_deepseek:
+        return "required"
+    return "auto"
+
+
 def create_tool_executor(bot, user):
     """根据 bot_type 创建 ToolExecutor 实例。"""
-    profile = get_bot_profile(bot.bot_type if bot else 'assistant')
+    profile = get_bot_profile(bot.bot_type if bot else 'planner')
     return profile.executor_class(user=user)
 
 
 def create_tools(bot, user, institution=None):
     """根据 bot_type 创建 tools 列表。"""
     from ai_engine.tool_permissions import filter_tools
-    profile = get_bot_profile(bot.bot_type if bot else 'assistant')
+    profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tools = profile.tools_factory()
-    bot_type = bot.bot_type if bot else 'assistant'
+    bot_type = bot.bot_type if bot else 'planner'
     return filter_tools(bot_type, institution, tools)
 
 
@@ -34,21 +44,6 @@ def build_system_prompt(bot, user, student_context='', memory_context='', instit
     )
 
 
-def _restore_exam_cache(tool_executor, user, bot):
-    """从最近一条助手消息的 metadata 中恢复已生成的题目缓存。"""
-    from ai_assistant.models import AIChatMessage
-    try:
-        last_with_questions = AIChatMessage.objects.filter(
-            user=user, bot=bot, role='assistant',
-        ).exclude(metadata={}).order_by('-timestamp').first()
-        if last_with_questions:
-            cached = last_with_questions.metadata.get('generated_questions')
-            if cached:
-                tool_executor._last_generated = cached
-    except Exception:
-        pass
-
-
 def dispatch_bot_chat(
     bot,
     user,
@@ -58,6 +53,7 @@ def dispatch_bot_chat(
     *,
     stream: bool = False,
     on_step: Optional[Callable] = None,
+    on_message: Optional[Callable] = None,
     student_context: str = '',
     memory_context: str = '',
     adaptive_directives: str = '',
@@ -71,11 +67,12 @@ def dispatch_bot_chat(
     from ai_service import AIService
 
     # Create tool executor
-    tool_executor = create_tool_executor(bot, user)
+    profile = get_bot_profile(bot.bot_type if bot else 'planner')
+    tool_executor = profile.executor_class(user=user)
 
-    # ExamGenerator cache recovery
-    if bot and bot.bot_type == 'exam_generator':
-        _restore_exam_cache(tool_executor, user, bot)
+    # 通用状态恢复钩子
+    if profile.restore_state:
+        profile.restore_state(tool_executor, user, bot)
 
     if stream and on_step:
         result = AIService.chat_with_assistant_agent(
@@ -86,6 +83,7 @@ def dispatch_bot_chat(
             student_context=student_context,
             memory_context=memory_context,
             on_step=on_step,
+            on_message=on_message,
             adaptive_directives=adaptive_directives,
         )
     else:
@@ -121,11 +119,12 @@ def dispatch_bot_chat_sync(
     """
     from ai_engine.tool_permissions import filter_tools
 
-    profile = get_bot_profile(bot.bot_type if bot else 'assistant')
+    profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tool_executor = profile.executor_class(user=user)
 
-    if bot and bot.bot_type == 'exam_generator':
-        _restore_exam_cache(tool_executor, user, bot)
+    # 通用状态恢复钩子
+    if profile.restore_state:
+        profile.restore_state(tool_executor, user, bot)
 
     system_prompt = build_system_prompt(bot, user, student_context, memory_context, institution, adaptive_directives)
     messages = [{'role': 'system', 'content': system_prompt}]
@@ -135,7 +134,7 @@ def dispatch_bot_chat_sync(
     messages.append({'role': 'user', 'content': message})
 
     tools = profile.tools_factory()
-    bot_type = bot.bot_type if bot else 'assistant'
+    bot_type = bot.bot_type if bot else 'planner'
     tools = filter_tools(bot_type, institution, tools)
 
     return messages, tools, tool_executor, profile

@@ -267,7 +267,7 @@ export function KnowledgeSystemPanel() {
       };
       walk(data);
       setAllNodes(flat);
-    } catch { /* */ }
+    } catch (e) { console.debug('[KnowledgeSystemPanel] fetch failed:', e); }
     setLoading(false);
   };
 

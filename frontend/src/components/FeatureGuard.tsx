@@ -24,7 +24,7 @@ export function FeatureGuard({
   feature: string;
   children: React.ReactNode;
 }) {
-  const { hasFeature, loading } = useInstitutionStore();
+  const { hasFeature, loading, featuresError, fetchFeatures } = useInstitutionStore();
   const user = useAuthStore(s => s.user);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
@@ -32,6 +32,17 @@ export function FeatureGuard({
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (featuresError) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <p className="text-muted-foreground text-sm mb-4">加载功能配置失败</p>
+          <Button variant="outline" onClick={() => fetchFeatures()}>重试</Button>
+        </div>
       </div>
     );
   }

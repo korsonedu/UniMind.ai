@@ -11,7 +11,7 @@ const SingleVisual: React.FC<{ visual: VisualData }> = ({ visual }) => {
   if (!Renderer) {
     return (
       <div className="flex items-center justify-center py-8">
-        <p className="text-sm text-muted-foreground/40">不支持的可视化类型: {visual.type}</p>
+        <p className="text-[12px] text-foreground/25">不支持的可视化类型: {visual.type}</p>
       </div>
     );
   }
@@ -24,9 +24,9 @@ export const VisualCanvas: React.FC<VisualCanvasProps> = ({ visual }) => {
   if (!visual) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-center space-y-2">
-          <p className="text-sm text-muted-foreground/40">小宇会在对话中为你生成可视化内容</p>
-          <p className="text-xs text-muted-foreground/25">数学推导、解题步骤、知识图谱、学习数据</p>
+        <div className="text-center space-y-1">
+          <p className="text-[13px] text-foreground/40 font-medium">在右侧对话，内容在此呈现</p>
+          <p className="text-[11px] text-foreground/20">公式推导 · 函数图像 · 知识图谱 · 学习数据</p>
         </div>
       </div>
     );
@@ -35,19 +35,17 @@ export const VisualCanvas: React.FC<VisualCanvasProps> = ({ visual }) => {
   const visuals = Array.isArray(visual) ? visual : [visual];
   const sorted = [...visuals].sort((a, b) => (PRIORITY_ORDER[a.priority || 'normal'] ?? 1) - (PRIORITY_ORDER[b.priority || 'normal'] ?? 1));
 
-  // Single visual: render directly without grid
   if (sorted.length === 1) {
     return (
-      <div className="h-full overflow-y-auto p-2">
+      <div className="h-full overflow-y-auto">
         <SingleVisual visual={sorted[0]} />
       </div>
     );
   }
 
-  // Multiple visuals: masonry grid
   return (
-    <div className="h-full overflow-y-auto p-2">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="h-full overflow-y-auto p-4">
+      <div className="grid grid-cols-2 gap-4">
         {sorted.map((v, i) => (
           <div key={`${v.type}-${i}`} className={cn(v.priority === 'high' && 'col-span-2')}>
             <SingleVisual visual={v} />

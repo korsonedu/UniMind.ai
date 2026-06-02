@@ -64,8 +64,8 @@ const PromoPlus: React.FC = () => {
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">什么是 UniMind？</h2>
             <div className="space-y-4 text-[15px] leading-[1.8] text-[#4a4a6a]">
               <p>
-                UniMind 不是又一个题库、网课平台或教育管理系统。它是<strong className="text-[#1a1a2e]">以 AI Agent 为核心的学习操作系统</strong>——
-                让 AI 深度嵌入教与学的每一个环节，讲师之外的一切由 AI 接管。
+                UniMind 不是又一个题库、网课平台或教育管理系统。它是<strong className="text-[#1a1a2e]">Agent 驱动的新一代智能教育基础设施</strong>——
+                从出题、刷题到知识追踪，全链路 Agent 化。
               </p>
               <p>
                 核心是两个自治 AI Agent：<strong className="text-[#1a1a2e]">小宇</strong>（学习教练，主动分析学生数据、制定个性化计划）
@@ -74,7 +74,7 @@ const PromoPlus: React.FC = () => {
               </p>
               <p>
                 已支持考研、CPA、法考、高中数理等 10+ 学科，50+ 机构正在使用。
-                你的老师只管讲课，剩下的 UniMind 全包了。
+                对话即学习，Agent 即基建。
               </p>
             </div>
           </div>

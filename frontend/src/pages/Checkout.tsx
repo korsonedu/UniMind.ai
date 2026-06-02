@@ -21,13 +21,23 @@ export function Checkout() {
 
     (async () => {
       try {
-        const { data } = await api.post('/api/payments/create-session/', {
+        const { data } = await api.post('/payments/create-session/', {
           plan,
           billing_cycle: cycle,
           gateway,
         });
         if (cancelled) return;
         if (data.checkout_url) {
+          // Validate URL is from a known payment provider
+          const url = new URL(data.checkout_url);
+          const allowedHosts = ['checkout.stripe.com', 'pay.stripe.com', 'mapi.alipay.com', 'openapi.alipay.com', 'airwallex.com'];
+          if (!allowedHosts.some(h => url.hostname === h || url.hostname.endsWith('.' + h))) {
+            // Allow same-origin redirects and localhost for dev
+            if (url.origin !== window.location.origin && url.hostname !== 'localhost') {
+              setError('支付网关地址异常，请联系客服');
+              return;
+            }
+          }
           window.location.href = data.checkout_url;
         } else {
           setError('支付网关未返回结算地址');

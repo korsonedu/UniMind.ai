@@ -790,7 +790,7 @@ export const KnowledgeMap: React.FC = () => {
     try {
       const { data } = await api.get('/users/me/knowledge-mastery/');
       setMasteryData(data || {});
-    } catch { /* silently fail if no mastery data */ }
+    } catch (e) { console.debug('[KnowledgeMap] mastery fetch failed:', e); }
   };
 
   const fetchMap = async () => {

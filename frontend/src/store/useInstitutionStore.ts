@@ -67,6 +67,7 @@ interface InstitutionState {
   features: string[];
   usage: UsageInfo | null;
   loading: boolean;
+  featuresError: boolean;
 
   // Preview mode: platform admin previews another institution's perspective
   previewMode: boolean;
@@ -85,6 +86,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
   features: [],
   usage: null,
   loading: false,
+  featuresError: false,
   previewMode: false,
   previewInstitution: null,
 
@@ -103,11 +105,12 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
         features: data.features || [],
         usage: data.usage || null,
         loading: false,
+        featuresError: false,
       });
     } catch {
       console.error('Fetch institution features failed');
       if (isInitial) {
-        set({ loading: false, features: [] });
+        set({ loading: false, features: [], featuresError: true });
       }
     }
   },

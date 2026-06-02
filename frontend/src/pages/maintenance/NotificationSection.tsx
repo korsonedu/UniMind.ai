@@ -23,7 +23,7 @@ export const NotificationSection: React.FC = () => {
     try {
       const res = await api.get('/notifications/');
       setHistory(Array.isArray(res.data) ? res.data : res.data?.results || []);
-    } catch { /* endpoint may not support listing sent broadcasts */ }
+    } catch (e) { console.debug('[NotificationSection] endpoint not available:', e); }
     finally { setLoading(false); }
   }, []);
 

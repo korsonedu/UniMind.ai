@@ -23,9 +23,14 @@ class AssistantChatService:
         base = cls.build_system_prompt(bot, student_context)
         memory_section = f"\n\n{memory_context}" if memory_context else ''
 
-        # 从文件加载 tool guide
-        from ai_assistant.prompt_sync import load_tool_guide
+        # 从文件加载 tool guide 和 intent guide
+        from ai_assistant.prompt_sync import load_tool_guide, read_prompt_file
         tool_guide = load_tool_guide(bot) if bot else ''
+        intent_guide = ''
+        if bot:
+            ig = read_prompt_file(bot, 'intent_guide.txt')
+            if ig:
+                intent_guide = f"\n\n{ig}"
 
         # Inject institution personality
         personality_section = ''
@@ -56,7 +61,7 @@ class AssistantChatService:
                 personality_section = "\n\n## 机构教学配置\n" + "\n".join(f"- {x}" for x in parts)
 
         adaptive_section = f"\n\n{adaptive_directives}" if adaptive_directives else ''
-        return base + memory_section + tool_guide + personality_section + adaptive_section
+        return base + memory_section + tool_guide + intent_guide + personality_section + adaptive_section
 
     @classmethod
     def chat_with_assistant(

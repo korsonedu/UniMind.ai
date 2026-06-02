@@ -1,5 +1,5 @@
 """
-Payment views — 当前使用 stub 网关，接入真实支付平台时换 import 即可。
+Payment views — 通过 gateway_router 动态选择支付网关。
 """
 import logging
 
@@ -11,11 +11,7 @@ from rest_framework.views import APIView
 from payments.models import Order, Invoice
 from payments.serializers import CreateOrderSerializer, OrderSerializer, InvoiceSerializer
 from payments.services.base import create_order, confirm_order
-from payments.services.stub_gateway import (
-    create_checkout_session,
-    verify_webhook,
-    process_webhook_event,
-)
+from payments.services.gateway_router import get_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +26,11 @@ class CreateCheckoutSessionView(APIView):
 
         plan = ser.validated_data['plan']
         billing_cycle = ser.validated_data['billing_cycle']
-        gateway = ser.validated_data.get('gateway', 'stub')
+        gateway = ser.validated_data['gateway']
+
+        from django.conf import settings as django_settings
+        if gateway == 'stub' and not getattr(django_settings, 'DEBUG', False):
+            return Response({'error': '当前环境不支持该支付方式'}, status=400)
 
         order = create_order(
             user=request.user,
@@ -41,9 +41,10 @@ class CreateCheckoutSessionView(APIView):
         )
 
         try:
-            data = create_checkout_session(order)
+            gw = get_gateway(gateway)
+            data = gw.create_checkout_session(order)
         except Exception:
-            logger.exception('Stub session create failed for order %s', order.id)
+            logger.exception('Session create failed for order %s (gateway=%s)', order.id, gateway)
             order.status = 'cancelled'
             order.save(update_fields=['status'])
             return Response({'error': '创建支付会话失败'}, status=500)
@@ -126,7 +127,7 @@ class SimulatePaymentView(APIView):
 # ── Webhook (no auth — 真实支付时校验签名) ──
 
 class WebhookView(APIView):
-    """支付网关 webhook 接收端。当前 stub 实现永远返回 ok。"""
+    """支付网关 webhook 接收端。通过 ?gateway=xxx 路由到对应网关。"""
     permission_classes = []
 
     def post(self, request):
@@ -140,9 +141,22 @@ class WebhookView(APIView):
             if not hmac.compare_digest(str(provided), str(webhook_secret)):
                 return Response({'detail': 'Invalid webhook secret'}, status=403)
 
+        gateway_name = request.query_params.get('gateway')
+        if not gateway_name:
+            return Response({'error': 'Missing gateway parameter'}, status=400)
+
+        from django.conf import settings as django_settings
+        if gateway_name == 'stub' and not getattr(django_settings, 'DEBUG', False):
+            return Response({'error': 'Stub gateway not available in production'}, status=400)
+
         try:
-            event = verify_webhook(request.headers, request.body)
-            result = process_webhook_event(event)
+            gw = get_gateway(gateway_name)
+        except ValueError:
+            return Response({'error': f'Unknown gateway: {gateway_name}'}, status=400)
+
+        try:
+            event = gw.verify_webhook(request.headers, request.body)
+            result = gw.process_webhook_event(event)
             if not result:
                 return Response({'status': 'ignored'})
             confirm_order(result['order_id'], result['gateway_txn_id'], result['raw'], result.get('amount_cents'))

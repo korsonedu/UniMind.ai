@@ -80,6 +80,7 @@ export const Settings: React.FC = () => {
 
   const handleUpdatePassword = async () => {
     if (!passwords.old || !passwords.new) return toast.error(t('security.passwordEmpty'));
+    if (passwords.new.length < 6) return toast.error(t('security.passwordTooShort', '密码至少需要 6 个字符'));
     try {
       await api.patch('/users/me/password/', { old_password: passwords.old, new_password: passwords.new });
       toast.success(t('security.passwordSaved'));
@@ -168,6 +169,60 @@ export const Settings: React.FC = () => {
                <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><Save className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
              </div>
           </Card>
+
+          {/* 数据导出 */}
+          <Card className="border-none shadow-sm rounded-3xl bg-white p-8 border border-black/[0.03]">
+            <div className="text-left space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">数据导出</h4>
+              <p className="text-xs text-muted-foreground ml-1">导出您的所有个人数据（JSON 格式），包括学习记录、答题历史等。</p>
+              <Button
+                variant="outline"
+                className="rounded-xl h-10 text-xs font-bold"
+                onClick={async () => {
+                  try {
+                    const resp = await api.get('/users/me/data-export/', { responseType: 'blob' });
+                    const url = URL.createObjectURL(resp.data);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `unimind_data_export.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success('数据导出成功');
+                  } catch { toast.error('导出失败'); }
+                }}
+              >
+                下载我的数据
+              </Button>
+            </div>
+          </Card>
+
+          {/* 账户注销 */}
+          <Card className="border-none shadow-sm rounded-3xl bg-white p-8 border border-red-100">
+            <div className="text-left space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-widest text-red-500 ml-1">危险区域</h4>
+              <p className="text-xs text-muted-foreground ml-1">注销账户将永久删除您的所有数据，此操作不可撤销。</p>
+              <Button
+                variant="destructive"
+                className="rounded-xl h-10 text-xs font-bold"
+                onClick={() => {
+                  const pwd = prompt('请输入密码以确认注销：');
+                  if (!pwd) return;
+                  if (!confirm('确认注销账户？所有数据将被永久删除，此操作不可撤销。')) return;
+                  api.post('/users/me/delete/', { password: pwd })
+                    .then(() => { toast.success('账户已注销'); window.location.href = '/'; })
+                    .catch(e => toast.error(e.response?.data?.error || '注销失败'));
+                }}
+              >
+                注销账户
+              </Button>
+            </div>
+          </Card>
+
+          {/* 法律文档链接 */}
+          <div className="flex gap-4 text-xs text-muted-foreground ml-1">
+            <a href="/privacy" className="hover:text-foreground underline underline-offset-2">隐私政策</a>
+            <a href="/terms" className="hover:text-foreground underline underline-offset-2">用户协议</a>
+          </div>
         </div>
       </div>
     </PageWrapper>

@@ -9,11 +9,11 @@
 
 **标题：** UniMind.ai
 
-**副标题：** 培训机构的 AI 运营系统 — The Operations Layer for Tutoring Businesses
+**副标题：** Agent 驱动的新一代智能教育基础设施 — Agent-Driven Education Infrastructure
 
 **公司：** 北京融知高科
 
-**Slogan：** 你的老师只管讲课，剩下的 UniMind 全包了。
+**Slogan：** 对话即学习，Agent 即基建。
 
 **视觉：** 产品全景图 + 品牌 logo
 
@@ -306,7 +306,7 @@ Author（生成） → Reviewer（审核，带自主研究工具） → AuthorRe
 **三层递进：**
 1. **今天：** AI 出题 + 自适应复习 + 机构管理 SaaS
 2. **明天：** 学科知识图谱平台，连接机构、学生、内容
-3. **未来：** 教育领域的 AI 基础设施，重新定义"教"与"学"
+3. **未来：** Agent 驱动的智能教育基础设施，重新定义"教"与"学"
 
 **底部：** 北京融知高科 · UniMind.ai · korsonedu@gmail.com
 

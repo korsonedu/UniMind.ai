@@ -1,9 +1,28 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Check, Loader2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AgentStep } from '@/hooks/useAgentChat';
 
-export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = ({ step, compact = false }) => {
+/** 计时器：step 从 calling 开始计时，done 后停止。 */
+function useElapsed(status: string) {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number>(0);
+  const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  useEffect(() => {
+    if (status === 'calling') {
+      startRef.current = Date.now();
+      timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [status]);
+
+  return elapsed;
+}
+
+export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = React.memo(({ step, compact = false }) => {
+  const elapsed = useElapsed(step.status);
+
   const icon = step.status === 'done' ? (
     <Check className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-emerald-500 animate-in zoom-in duration-300")} />
   ) : step.status === 'calling' ? (
@@ -17,7 +36,7 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = (
       "rounded-lg border transition-all duration-300",
       compact ? "text-[11px]" : "text-[13px]",
       step.status === 'calling'
-        ? "border-primary/25 bg-primary/[0.04] shadow-[0_0_0_1px] shadow-primary/10 animate-pulse"
+        ? "border-primary/25 bg-primary/[0.04] shadow-[0_0_0_1px] shadow-primary/10 [animation:gentle-breathe_3s_ease-in-out_infinite]"
         : step.status === 'done'
           ? "border-emerald-500/20 bg-emerald-500/[0.04]"
           : "border-border/60 bg-muted/30"
@@ -28,6 +47,11 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = (
       )}>
         {icon}
         <span className="flex-1 font-medium text-foreground">{step.label}</span>
+        {step.status === 'calling' && elapsed >= 3 && (
+          <span className="text-[10px] text-muted-foreground/60 font-normal tabular-nums">
+            {elapsed >= 60 ? `${Math.floor(elapsed / 60)}m${elapsed % 60}s` : `${elapsed}s`}
+          </span>
+        )}
         {step.status === 'done' && step.result_summary && (
           <span className="text-[10px] text-muted-foreground/50 font-normal truncate max-w-[120px]">
             {step.result_summary}
@@ -36,7 +60,7 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = (
       </div>
     </div>
   );
-};
+});
 
 /** 独立工具步骤气泡 — 与 ChatBubble 同布局，内嵌 AgentStepCard。 */
 export const ToolStepMessage: React.FC<{

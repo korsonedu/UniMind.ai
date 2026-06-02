@@ -8,9 +8,9 @@ PLAN_TOOL_ACCESS = {
             "get_due_reviews", "search_knowledge_tree",
         ],
         "exam_generator": [
-            "search_knowledge_points", "generate_questions",
-            "save_questions_to_library", "launch_arc_pipeline",
-            "check_pipeline_status",
+            "search_knowledge", "quick_generate",
+            "launch_arc_pipeline", "check_pipeline_status",
+            "get_workbench_stats",
         ],
     },
     "starter": {
@@ -20,12 +20,13 @@ PLAN_TOOL_ACCESS = {
         ],
         "planner": [
             "get_learning_stats", "get_knowledge_mastery_map",
-            "get_due_reviews",
+            "get_due_reviews", "search_knowledge_tree",
+            "get_user_weak_points", "save_study_plan", "get_active_plan",
         ],
         "exam_generator": [
-            "search_knowledge_points", "generate_questions",
-            "save_questions_to_library", "launch_arc_pipeline",
-            "check_pipeline_status",
+            "search_knowledge", "quick_generate",
+            "launch_arc_pipeline", "check_pipeline_status",
+            "get_workbench_stats",
         ],
     },
     "growth": {"assistant": "all", "planner": "all", "exam_generator": "all"},

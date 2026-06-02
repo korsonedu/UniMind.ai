@@ -20,9 +20,6 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
-const CHUNKED_THRESHOLD = 100 * 1024 * 1024;
-const CHUNK_SIZE = 10 * 1024 * 1024;
-
 export const CourseSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
@@ -57,7 +54,7 @@ export const CourseSection: React.FC = () => {
       setTotalPages(c.data.total_pages ?? 1);
       setKpList(k.data);
       setAlbumList(a.data);
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[CourseSection] fetch failed:', e); }
     finally { setLoading(false); }
   }, []);
 
@@ -71,7 +68,6 @@ export const CourseSection: React.FC = () => {
   const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (!file) return setForm({ ...form, video: null });
-    if (file.size > CHUNKED_THRESHOLD) toast.message(t('course.largeFileNotice'));
     setForm({ ...form, video: file });
   };
 
@@ -109,8 +105,6 @@ export const CourseSection: React.FC = () => {
         video: file,
         cover,
         courseware,
-        thresholdBytes: CHUNKED_THRESHOLD,
-        chunkSizeBytes: CHUNK_SIZE,
         signal: controller.signal,
         onProgress: (p) => {
           updateProgress(uploadId, p);

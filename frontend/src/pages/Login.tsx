@@ -23,8 +23,8 @@ export const Login: React.FC = () => {
 
   // 已登录则跳转首页
   useEffect(() => {
-    const { token } = useAuthStore.getState();
-    if (token) {
+    const { user } = useAuthStore.getState();
+    if (user) {
       navigate('/', { replace: true });
     }
   }, []);

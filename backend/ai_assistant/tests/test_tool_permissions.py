@@ -20,10 +20,12 @@ class TestToolPermissions:
         assert "get_learning_stats" in names
         assert "save_study_plan" not in names
 
-    def test_free_plan_exam_generator_empty(self):
+    def test_free_plan_exam_generator_has_basic_tools(self):
         inst = MagicMock(plan="free")
-        result = filter_tools("exam_generator", inst, self._make_tools(["generate_questions"]))
-        assert result == []
+        result = filter_tools("exam_generator", inst, self._make_tools(["search_knowledge", "quick_generate", "launch_arc_pipeline"]))
+        names = {t["function"]["name"] for t in result}
+        assert "search_knowledge" in names
+        assert "quick_generate" in names
 
     def test_starter_plan_subset(self):
         inst = MagicMock(plan="starter")

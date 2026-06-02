@@ -19,3 +19,5 @@ def apply_institution_filter(qs, user, request=None, institution_field='institut
     if inst:
         return qs.filter(Q(**{institution_field: inst}) | Q(**{f'{institution_field}__isnull': True}))
     return qs.filter(**{f'{institution_field}__isnull': True})
+
+

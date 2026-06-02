@@ -54,8 +54,7 @@ backend/prompts/ai_assistant/bots/
 ```python
 BOT_REGISTRY = {
     'planner': BotProfile(name='小宇', prompt_dir='xiaoyu', ...),
-    'exam_generator': BotProfile(name='出题助手', prompt_dir='exam_generator', ...),
-    'assistant': BotProfile(name='AI 助教', prompt_dir='assistant', ...),
+    'exam_generator': BotProfile(name='命题官', prompt_dir='exam_generator', ...),
 }
 ```
 

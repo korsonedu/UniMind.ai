@@ -26,7 +26,7 @@ export const AlbumSection: React.FC = () => {
     try {
       const res = await api.get('/courses/albums/');
       setItems(res.data);
-    } catch { /* ignore */ }
+    } catch (e) { console.debug('[AlbumSection] fetch failed:', e); }
     finally { setLoading(false); }
   }, []);
 

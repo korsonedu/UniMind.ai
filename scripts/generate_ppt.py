@@ -219,7 +219,7 @@ def gen_customer():
     txt(s, Inches(2), Inches(4.0), Inches(9.3), Inches(0.5),
         "出题 → 练习 → 沉淀 → 更好的题 — 一个越用越聪明的闭环", size=18, color=C['cyan'], align=PP_ALIGN.CENTER)
     txt(s, Inches(2), Inches(5.0), Inches(9.3), Inches(0.4),
-        "培训机构的 AI 运营系统  |  北京融知高科 · UniMind.ai", size=14, color=C['dim'], align=PP_ALIGN.CENTER)
+        "Agent 驱动的新一代智能教育基础设施  |  北京融知高科 · UniMind.ai", size=14, color=C['dim'], align=PP_ALIGN.CENTER)
     page_num(s, 1, T)
 
     # ── 2. Problem ──
@@ -517,8 +517,8 @@ def gen_investor():
     if os.path.exists(LOGO):
         s.shapes.add_picture(LOGO, Inches(5.7), Inches(0.8), height=Inches(1.2))
     txt(s, Inches(1.5), Inches(2.5), Inches(10.3), Inches(0.8), "UniMind.ai", size=52, color=C['white'], bold=True, align=PP_ALIGN.CENTER)
-    txt(s, Inches(2), Inches(3.5), Inches(9.3), Inches(0.5), "培训机构的 AI 运营系统", size=22, color=C['cyan'], align=PP_ALIGN.CENTER)
-    txt(s, Inches(2), Inches(4.2), Inches(9.3), Inches(0.4), "The Operations Layer for Tutoring Businesses", size=14, color=C['dim'], align=PP_ALIGN.CENTER, font='Menlo')
+    txt(s, Inches(2), Inches(3.5), Inches(9.3), Inches(0.5), "Agent 驱动的新一代智能教育基础设施", size=22, color=C['cyan'], align=PP_ALIGN.CENTER)
+    txt(s, Inches(2), Inches(4.2), Inches(9.3), Inches(0.4), "Agent-Driven Education Infrastructure", size=14, color=C['dim'], align=PP_ALIGN.CENTER, font='Menlo')
     txt(s, Inches(2), Inches(5.2), Inches(9.3), Inches(0.4), "教师出题 → 学生练习 → Memorix 沉淀 → 越用越聪明的飞轮", size=16, color=C['indigo_l'], align=PP_ALIGN.CENTER)
     txt(s, Inches(2), Inches(6.2), Inches(9.3), Inches(0.3), "北京融知高科", size=13, color=C['dim'], align=PP_ALIGN.CENTER)
     page_num(s, 1, T)

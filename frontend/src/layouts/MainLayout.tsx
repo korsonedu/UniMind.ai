@@ -15,6 +15,7 @@ import {
   Settings2,
   BrainCircuit,
   BarChart3,
+  LineChart,
   Building2,
   MessageCircleQuestion,
   Wrench,
@@ -68,7 +69,15 @@ import { toast } from 'sonner';
 import UnimindLogo from '../../Unimind_logo.png';
 import { PersistentUploadToast } from '@/components/PersistentUploadToast';
 
-const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: any) => {
+interface SidebarItemProps {
+  to: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active: boolean;
+  collapsed: boolean;
+}
+
+const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: SidebarItemProps) => {
   const content = (
     <div className="px-1">
       <Button
@@ -124,14 +133,17 @@ export const MainLayout: React.FC = () => {
     pathname === '/qa' ||
     pathname.startsWith('/qa/') ||
     pathname === '/study' ||
-    pathname === '/ai' ||
     pathname === '/knowledge-map' ||
     pathname.startsWith('/knowledge-map/') ||
     pathname === '/tests' ||
     pathname.startsWith('/tests/') ||
     pathname === '/settings' ||
     pathname === '/courses' ||
-    pathname.startsWith('/course/');
+    pathname.startsWith('/course/') ||
+    pathname === '/xiaoyu' ||
+    pathname === '/workbench' ||
+    pathname === '/plan' ||
+    pathname.startsWith('/institution');
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && location.pathname.startsWith('/tests/session');
   const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/');
@@ -171,14 +183,13 @@ export const MainLayout: React.FC = () => {
   const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 4 })[p] || 1;
   const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
 
-  type NavItem = { to: string; icon: any; label: string };
+  type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string };
 
   // ── 路由 → 功能标志映射（与 App.tsx FeatureGuard 一致）──
   const NAV_FEATURE_MAP: Record<string, string> = {
     '/tests': 'quiz.exam',
     '/knowledge-map': 'knowledge.graph',
     '/qa': 'faq.system',
-    '/ai': 'ai.assistant',
     '/plan': 'ai.assistant',
     '/study': 'study.room',
     '/interviews': 'interview.mock',
@@ -198,6 +209,7 @@ export const MainLayout: React.FC = () => {
     ? [
         { to: '/institution/admin', icon: Building2, label: t('layout:nav.institutionAdmin') },
         { to: '/invite-codes', icon: Sparkles, label: t('layout:nav.inviteCodes') },
+        { to: '/platform-analytics', icon: LineChart, label: '数据分析' },
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
       ]
     : [
@@ -207,7 +219,6 @@ export const MainLayout: React.FC = () => {
         { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeMap') },
         { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
         { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qa') },
-        { to: '/ai', icon: Sparkles, label: t('layout:nav.aiLab') },
         { to: '/plan', icon: CalendarCheck, label: t('layout:nav.plan') },
         { to: '/study', icon: Clock, label: t('layout:nav.studyRoom') },
 

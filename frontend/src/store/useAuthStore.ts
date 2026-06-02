@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useInstitutionStore } from './useInstitutionStore';
 
 interface User {
   id: number;
@@ -43,7 +44,7 @@ interface User {
 interface AuthState {
   user: User | null;
   token: string | null;
-  setAuth: (user: User, token: string) => void;
+  setAuth: (user: User, token?: string | null) => void;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
 }
@@ -58,6 +59,7 @@ export const useAuthStore = create<AuthState>()(
       },
       logout: () => {
         set({ user: null, token: null });
+        useInstitutionStore.getState().clear();
       },
       updateUser: (updatedUser) => set((state) => ({
         user: state.user ? { ...state.user, ...updatedUser } : null
@@ -65,7 +67,6 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
-      partialize: (state) => ({ token: state.token }),
     }
   )
 );
