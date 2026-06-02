@@ -892,9 +892,10 @@ class InstitutionCreateView(APIView):
 
         user.institution = inst
         user.institution_role = 'owner'
+        user.role = 'admin'
         user.is_member = True
         user.membership_tier = user.institution.plan if user.institution else 'free'
-        user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
+        user.save(update_fields=['institution', 'institution_role', 'role', 'is_member', 'membership_tier'])
 
         return Response({
             'status': 'ok',

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,13 @@ export function OnboardingDialog() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+
+  // Listen for 403-triggered onboarding requirement
+  useEffect(() => {
+    const handler = () => setDismissed(false);
+    window.addEventListener('onboarding:required', handler);
+    return () => window.removeEventListener('onboarding:required', handler);
+  }, []);
 
   // Role selection
   const [role, setRole] = useState<'student' | 'teacher' | null>(null);
