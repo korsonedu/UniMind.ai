@@ -210,7 +210,7 @@ export const MainLayout: React.FC = () => {
     ? [
         { to: '/institution/admin', icon: Building2, label: t('layout:nav.institutionAdmin') },
         { to: '/invite-codes', icon: Sparkles, label: t('layout:nav.inviteCodes') },
-        { to: '/platform-analytics', icon: LineChart, label: '数据分析' },
+        { to: '/platform-analytics', icon: LineChart, label: t('layout:nav.platformAnalytics') },
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
       ]
     : [
@@ -230,7 +230,7 @@ export const MainLayout: React.FC = () => {
   if (!isSuperAdmin && instInfo) {
     if (user?.is_institution_admin) {
       navItems.unshift({ to: '/workbench', icon: Sparkles, label: t('layout:nav.workbench') });
-      navItems.push({ to: '/institution/students', icon: Users, label: '成员管理' });
+      navItems.push({ to: '/institution/students', icon: Users, label: t('layout:nav.members') });
       navItems.push({ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') });
     }
   }
@@ -244,6 +244,7 @@ export const MainLayout: React.FC = () => {
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptShort') },
       ]
     : [
+        { to: '/xiaoyu', icon: Bot, label: t('layout:nav.xiaoyuShort', '小宇') },
         { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.testsShort') },
         { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeShort') },
@@ -343,7 +344,7 @@ export const MainLayout: React.FC = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                     <CreditCard className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">方案与账单</span>
+                    <span className="font-bold text-xs">{t('layout:nav.billing')}</span>
                   </DropdownMenuItem>
                   {/* 机构设置：仅机构所有者可见 */}
                   {!isSuperAdmin && instInfo && user?.is_institution_owner && (
@@ -454,7 +455,7 @@ export const MainLayout: React.FC = () => {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <CreditCard className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">方案与账单</span>
+                      <span className="font-bold text-xs">{t('layout:nav.billing')}</span>
                     </DropdownMenuItem>
                     {!isSuperAdmin && instInfo && user?.is_institution_owner && (
                       <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">

@@ -24,6 +24,7 @@ import zhVideoLesson from '@/locales/zh/videoLesson.json';
 import zhTestSession from '@/locales/zh/testSession.json';
 import zhMaintenance from '@/locales/zh/maintenance.json';
 import zhPlan from '@/locales/zh/plan.json';
+import zhDiagnostic from '@/locales/zh/diagnostic.json';
 
 // ── 英文 ──
 import enCommon from '@/locales/en/common.json';
@@ -47,6 +48,7 @@ import enVideoLesson from '@/locales/en/videoLesson.json';
 import enTestSession from '@/locales/en/testSession.json';
 import enMaintenance from '@/locales/en/maintenance.json';
 import enPlan from '@/locales/en/plan.json';
+import enDiagnostic from '@/locales/en/diagnostic.json';
 
 i18n
   .use(LanguageDetector)
@@ -75,6 +77,7 @@ i18n
         testSession: zhTestSession,
         maintenance: zhMaintenance,
         plan: zhPlan,
+        diagnostic: zhDiagnostic,
       },
       en: {
         common: enCommon,
@@ -98,6 +101,7 @@ i18n
         testSession: enTestSession,
         maintenance: enMaintenance,
         plan: enPlan,
+        diagnostic: enDiagnostic,
       },
     },
     fallbackLng: 'zh',

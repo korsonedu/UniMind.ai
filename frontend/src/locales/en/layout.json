@@ -30,7 +30,10 @@
     "qaShort": "Q&A",
     "institutionShort": "Institution",
     "inviteShort": "Invite",
-    "promptShort": "Prompts"
+    "promptShort": "Prompts",
+    "platformAnalytics": "Analytics",
+    "members": "Members",
+    "billing": "Billing"
   },
   "userMenu": {
     "accountPreferences": "Account & Preferences",

@@ -1,0 +1,31 @@
+{
+  "welcome": {
+    "title": "Diagnostic Test",
+    "subtitle": "Answer 10 questions to assess your knowledge. The system will create a personalized study plan for you.",
+    "questions": "questions",
+    "minutes": "minutes",
+    "aiAnalysis": "AI Analysis",
+    "startButton": "Start Test"
+  },
+  "testing": {
+    "previous": "Previous",
+    "next": "Next",
+    "submitting": "Submitting...",
+    "submit": "Submit",
+    "placeholder": "Enter your answer..."
+  },
+  "results": {
+    "title": "Diagnostic Complete",
+    "correctOf": "{{score}} / {{total}} correct",
+    "strongKPs": "Strong Areas",
+    "weakKPs": "Needs Improvement",
+    "aiAdvice": "AI Advice",
+    "goHome": "Go Home",
+    "startPractice": "Start Practice"
+  },
+  "errors": {
+    "alreadyCompleted": "Diagnostic already completed. You can start practicing directly.",
+    "generateFailed": "Failed to generate diagnostic questions",
+    "submitFailed": "Submission failed"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "welcome": {
+    "title": "诊断测试",
+    "subtitle": "通过 10 道题快速了解你的知识掌握情况，系统将为你制定个性化学习计划。",
+    "questions": "道题",
+    "minutes": "分钟",
+    "aiAnalysis": "智能分析",
+    "startButton": "开始测试"
+  },
+  "testing": {
+    "previous": "上一题",
+    "next": "下一题",
+    "submitting": "提交中...",
+    "submit": "提交答卷",
+    "placeholder": "输入你的答案..."
+  },
+  "results": {
+    "title": "诊断完成",
+    "correctOf": "答对 {{score}} / {{total}} 题",
+    "strongKPs": "掌握较好",
+    "weakKPs": "需要加强",
+    "aiAdvice": "AI 建议",
+    "goHome": "回到首页",
+    "startPractice": "开始练习"
+  },
+  "errors": {
+    "alreadyCompleted": "诊断已完成，你可以直接开始练习",
+    "generateFailed": "生成诊断题失败",
+    "submitFailed": "提交失败"
+  }
+}

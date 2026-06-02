@@ -30,7 +30,10 @@
     "qaShort": "答疑",
     "institutionShort": "机构",
     "inviteShort": "邀请",
-    "promptShort": "Prompt"
+    "promptShort": "Prompt",
+    "platformAnalytics": "数据分析",
+    "members": "成员管理",
+    "billing": "方案与账单"
   },
   "userMenu": {
     "accountPreferences": "账户与偏好",

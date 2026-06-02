@@ -83,15 +83,15 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-unimind-bg-secondary flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-white/80 backdrop-blur-xl">
+    <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-card/80 backdrop-blur-xl">
         <CardHeader className="p-6 space-y-1 text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">{t('login.title')}</CardTitle>
           <CardDescription>{t('login.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
-            {error && <p className="text-sm text-center bg-red-50 text-red-600 rounded-xl py-2.5 px-3">{error}</p>}
+            {error && <p className="text-sm text-center bg-destructive/10 text-destructive rounded-xl py-2.5 px-3">{error}</p>}
             <div className="space-y-2">
               <Input
                 placeholder={t('login.usernamePlaceholder')}
@@ -99,7 +99,7 @@ export const Login: React.FC = () => {
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 spellCheck={false}
-                className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
+                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring"
                 required
               />
             </div>
@@ -111,17 +111,17 @@ export const Login: React.FC = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 spellCheck={false}
-                className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
+                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring"
                 required
               />
             </div>
-            <Button className="w-full h-12 bg-black text-white rounded-xl font-medium hover:bg-black/90 transition-all" disabled={loading}>
+            <Button className="w-full h-12 bg-primary text-primary-foreground rounded-xl font-medium hover:opacity-90 transition-all" disabled={loading}>
               {loading ? t('login.loggingIn') : t('login.submit')}
             </Button>
           </form>
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {t('login.noAccount')}{" "}
-            <Link to={institutionSlug ? `/register?institution=${institutionSlug}` : '/register'} className="text-black font-semibold hover:underline">
+            <Link to={institutionSlug ? `/register?institution=${institutionSlug}` : '/register'} className="text-foreground font-semibold hover:underline">
               {t('login.registerLink')}
             </Link>
           </div>

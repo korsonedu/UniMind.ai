@@ -54,13 +54,6 @@ interface UseAgentConversationOptions {
   resetMessage?: string;
 }
 
-// ── Auth header helper ──
-
-function getAuthHeaders(): Record<string, string> {
-  return { 'Content-Type': 'application/json' };
-  // Auth via httpOnly cookie (credentials: 'include') — no Authorization header needed
-}
-
 // ── Hook ──
 
 export function useAgentConversation(options: UseAgentConversationOptions) {
@@ -234,10 +227,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      const authHeaders = getAuthHeaders();
       const res = await fetch('/api/ai/chat/stream/', {
         method: 'POST',
-        headers: authHeaders,
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ message: text, bot_id: bot.id, ...(getExtraPayloadRef.current?.() ?? {}) }),
         signal: controller.signal,

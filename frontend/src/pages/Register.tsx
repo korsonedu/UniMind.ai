@@ -27,8 +27,8 @@ export const Register: React.FC = () => {
 
   // 已登录则跳转首页
   useEffect(() => {
-    const { token } = useAuthStore.getState();
-    if (token) {
+    const { user } = useAuthStore.getState();
+    if (user) {
       navigate('/', { replace: true });
     }
   }, []);
@@ -93,15 +93,15 @@ export const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-unimind-bg-secondary flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-white/80 backdrop-blur-xl">
+    <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-card/80 backdrop-blur-xl">
         <CardHeader className="p-6 space-y-1 text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">{t('register.title')}</CardTitle>
           <CardDescription>{t('register.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">
-            {error && <p className="text-sm text-center bg-red-50 text-red-600 rounded-xl py-2.5 px-3">{error}</p>}
+            {error && <p className="text-sm text-center bg-destructive/10 text-destructive rounded-xl py-2.5 px-3">{error}</p>}
 
             <div className="flex gap-2">
               <Input
@@ -111,14 +111,14 @@ export const Register: React.FC = () => {
                 onChange={(e) => { setEmail(e.target.value); setCodeSent(false); }}
                 autoComplete="email"
                 spellCheck={false}
-                className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black flex-1"
+                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring flex-1"
                 required
               />
               <Button
                 type="button"
                 onClick={handleSendCode}
                 disabled={sendingCode || !email.trim() || countdown > 0}
-                className="h-12 rounded-xl bg-black text-white font-medium shrink-0"
+                className="h-12 rounded-xl bg-primary text-primary-foreground font-medium shrink-0"
               >
                 {sendingCode ? t('register.sending') : countdown > 0 ? `${countdown}s` : t('register.getCode')}
               </Button>
@@ -131,7 +131,7 @@ export const Register: React.FC = () => {
                 onChange={(e) => setCode(e.target.value)}
                 autoComplete="one-time-code"
                 spellCheck={false}
-                className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black text-lg tracking-widest font-mono"
+                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring text-lg tracking-widest font-mono"
                 maxLength={6}
                 required
               />
@@ -142,7 +142,7 @@ export const Register: React.FC = () => {
                 placeholder={t('register.nickname')}
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
+                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring"
               />
             </div>
 
@@ -154,7 +154,7 @@ export const Register: React.FC = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
                 spellCheck={false}
-                className="bg-slate-50/50 border-none h-12 rounded-xl focus-visible:ring-black"
+                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring"
                 minLength={6}
                 required
               />
@@ -169,19 +169,19 @@ export const Register: React.FC = () => {
               />
               <label htmlFor="agree-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
                 我已阅读并同意{' '}
-                <Link to="/terms" className="text-black font-medium hover:underline">用户协议</Link>
+                <Link to="/terms" className="text-foreground font-medium hover:underline">用户协议</Link>
                 {' '}和{' '}
-                <Link to="/privacy" className="text-black font-medium hover:underline">隐私政策</Link>
+                <Link to="/privacy" className="text-foreground font-medium hover:underline">隐私政策</Link>
               </label>
             </div>
 
-            <Button className="w-full h-12 bg-black text-white rounded-xl font-medium hover:bg-black/90 transition-all" disabled={loading || !agreedToTerms}>
+            <Button className="w-full h-12 bg-primary text-primary-foreground rounded-xl font-medium hover:opacity-90 transition-all" disabled={loading || !agreedToTerms}>
               {loading ? t('register.registering') : t('register.submit')}
             </Button>
           </form>
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {t('register.hasAccount')}{" "}
-            <Link to={institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login'} className="text-black font-semibold hover:underline">
+            <Link to={institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login'} className="text-foreground font-semibold hover:underline">
               {t('register.loginLink')}
             </Link>
           </div>

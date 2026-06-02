@@ -15,8 +15,6 @@ import { useTranslation } from 'react-i18next';
 
 const DARK = '#0a0a14';
 const DARK2 = '#0e0e1a';
-const LIGHT = '#f8f9fb';
-const LIGHT2 = '#ffffff';
 
 /* ────────────────────────────────────────────
    Scroll reveal
@@ -276,7 +274,7 @@ const StatsBar: React.FC = () => {
   const displays = [`${c0}+`, `${(c1 / 1000).toFixed(0)}k+`, `${c2}+`, `${c3}×`];
 
   return (
-    <section ref={ref} className="py-20 border-y border-[#e5e7eb]" style={{ background: LIGHT }}>
+    <section ref={ref} className="py-20 border-y border-border bg-background">
       <div className="max-w-5xl mx-auto px-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-16">
           {stats.map((item, i) => (
@@ -284,7 +282,7 @@ const StatsBar: React.FC = () => {
               <p className="text-5xl md:text-6xl font-bold tracking-tight" style={{ fontFamily: '"DM Mono", monospace', background: 'linear-gradient(135deg, #818cf8, #5b5fef, #38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 {displays[i]}
               </p>
-              <p className="text-[12px] font-medium uppercase tracking-[0.2em] text-[#6b7280]">{item.label}</p>
+              <p className="text-[12px] font-medium uppercase tracking-[0.2em] text-muted-foreground">{item.label}</p>
             </div>
           ))}
         </div>
@@ -353,7 +351,7 @@ const DemoMedia: React.FC<{
           loop
           muted
           playsInline
-          className="w-full rounded-2xl border border-[#e5e7eb]"
+          className="w-full rounded-2xl border border-border"
           style={{ boxShadow: '0 20px 60px rgba(91,95,239,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
           onError={() => setUseVideo(false)}
         />
@@ -361,7 +359,7 @@ const DemoMedia: React.FC<{
         <img
           src={imgSrc}
           alt={alt}
-          className="w-full rounded-2xl border border-[#e5e7eb]"
+          className="w-full rounded-2xl border border-border"
           style={{ boxShadow: '0 20px 60px rgba(91,95,239,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
         />
       )}
@@ -386,12 +384,12 @@ const Showcase: React.FC = () => {
   useMouseParallax(sectionRef, 0.015);
 
   return (
-    <section id="features" ref={sectionRef} className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: LIGHT }}>
+    <section id="features" ref={sectionRef} className="py-28 md:py-36 px-6 relative overflow-hidden bg-background">
       <div className="max-w-6xl mx-auto relative z-10">
         <div className="reveal mb-20 text-center">
           <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef] mb-4">{t('features.label')}</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-[#1a1a2e]">{t('features.title')}</h2>
-          <p className="text-base md:text-lg text-[#5a5a7a] max-w-xl mx-auto mt-4">{t('features.subtitle')}</p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">{t('features.title')}</h2>
+          <p className="text-base md:text-lg text-muted-foreground max-w-xl mx-auto mt-4">{t('features.subtitle')}</p>
         </div>
 
         <div className="space-y-24 md:space-y-32">
@@ -406,8 +404,8 @@ const Showcase: React.FC = () => {
               {/* Text */}
               <div className={cn('flex-1 min-w-0', `reveal-delay-${i + 1}`)}>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#5b5fef] mb-3">{item.subtitle}</p>
-                <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-[#1a1a2e] mb-4">{item.title}</h3>
-                <p className="text-sm leading-relaxed text-[#5a5a7a]">{item.desc}</p>
+                <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-4">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
               </div>
 
               {/* Video / Screenshot */}
@@ -482,12 +480,12 @@ const HowItWorks: React.FC = () => {
   const steps = t('how.steps', { returnObjects: true }) as Array<{ title: string; desc: string }>;
 
   return (
-    <section className="py-28 md:py-36 px-6" style={{ background: LIGHT2 }}>
+    <section className="py-28 md:py-36 px-6 bg-card">
       <div className="max-w-4xl mx-auto">
         <div className="reveal text-center mb-20">
           <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef] mb-4">{t('how.label')}</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-[#1a1a2e]">{t('how.title')}</h2>
-          <p className="text-sm text-[#5a5a7a] max-w-lg mx-auto mt-4">{t('how.subtitle')}</p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">{t('how.title')}</h2>
+          <p className="text-sm text-muted-foreground max-w-lg mx-auto mt-4">{t('how.subtitle')}</p>
         </div>
 
         <div className="space-y-0">
@@ -499,13 +497,13 @@ const HowItWorks: React.FC = () => {
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <div className="pt-1">
-                  <h3 className="text-xl font-bold text-[#1a1a2e] mb-2">{step.title}</h3>
-                  <p className="text-sm leading-relaxed text-[#5a5a7a] max-w-md">{step.desc}</p>
+                  <h3 className="text-xl font-bold text-foreground mb-2">{step.title}</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground max-w-md">{step.desc}</p>
                 </div>
               </div>
               {/* Dashed connector line */}
               {i < steps.length - 1 && (
-                <div className="ml-10 md:ml-12 border-l border-dashed border-[#d1d5db] h-0" />
+                <div className="ml-10 md:ml-12 border-l border-dashed border-border h-0" />
               )}
             </div>
           ))}
@@ -603,29 +601,29 @@ const Footer: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <footer className="py-12 border-t border-[#e5e7eb]" style={{ background: LIGHT }}>
+    <footer className="py-12 border-t border-border bg-background">
       <div className="max-w-6xl mx-auto px-6">
         <div className="flex flex-col md:flex-row items-start justify-between gap-8 mb-8">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
-              <span className="font-bold text-sm text-[#1a1a2e] tracking-tight">UniMind.ai</span>
+              <span className="font-bold text-sm text-foreground tracking-tight">UniMind.ai</span>
             </div>
-            <p className="text-[12px] text-[#9ca3af]">{t('footer.tagline')}</p>
+            <p className="text-[12px] text-muted-foreground">{t('footer.tagline')}</p>
           </div>
           <div className="flex items-center gap-8">
-            <button onClick={() => document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' })} className="text-[12px] font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors">{t('footer.features')}</button>
-            <button onClick={() => navigate('/pricing')} className="text-[12px] font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors">{t('footer.pricing')}</button>
-            <button onClick={() => navigate('/pricing#faq')} className="text-[12px] font-medium text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors">{t('footer.faq')}</button>
+            <button onClick={() => document.querySelector('#features')?.scrollIntoView({ behavior: 'smooth' })} className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors">{t('footer.features')}</button>
+            <button onClick={() => navigate('/pricing')} className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors">{t('footer.pricing')}</button>
+            <button onClick={() => navigate('/pricing#faq')} className="text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors">{t('footer.faq')}</button>
           </div>
         </div>
-        <div className="border-t border-[#e5e7eb] pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-[10px] font-medium text-[#9ca3af]">
+        <div className="border-t border-border pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="text-[10px] font-medium text-muted-foreground">
             © {COPYRIGHT_YEAR} {t('footer.copyrightEntity')} · {APP_VERSION}
           </p>
           <div className="flex items-center gap-4">
-            <Link to="/terms" className="text-[10px] font-medium text-[#9ca3af] hover:text-[#5a5a7a] transition-colors">{t('footer.terms')}</Link>
-            <Link to="/privacy" className="text-[10px] font-medium text-[#9ca3af] hover:text-[#5a5a7a] transition-colors">{t('footer.privacy')}</Link>
+            <Link to="/terms" className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors">{t('footer.terms')}</Link>
+            <Link to="/privacy" className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors">{t('footer.privacy')}</Link>
           </div>
         </div>
       </div>

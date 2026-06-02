@@ -56,9 +56,9 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
       )}>
         {isThinking ? (
           <div className="flex items-center gap-1 py-0.5">
-            <span className="inline-block w-1 h-1 rounded-full bg-foreground/20 animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="inline-block w-1 h-1 rounded-full bg-foreground/20 animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="inline-block w-1 h-1 rounded-full bg-foreground/20 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span className="inline-block w-1 h-1 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="inline-block w-1 h-1 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="inline-block w-1 h-1 rounded-full bg-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
         ) : (
           <div className={cn(
