@@ -74,6 +74,17 @@ class AIEngine:
         return text.strip()
 
     @staticmethod
+    def _has_open_dsml(text: str) -> bool:
+        """检查文本中是否存在未闭合的 DSML 标记块。"""
+        import re as _re
+        if '<龘' not in text:
+            return False
+        # 统计开标签数 vs 闭标签数
+        opens = len(_re.findall(r'<龘\w+[\s>]|<龘\w+/>', text))
+        closes = len(_re.findall(r'</龘\w+>', text))
+        return opens > closes
+
+    @staticmethod
     def _parse_dsml_tool_calls(text: str):
         """从含有 DSML 标记的文本中提取工具调用列表（OpenAI 兼容格式）。"""
         import re as _re
@@ -689,12 +700,15 @@ class AIEngine:
                 content = delta.get('content', '')
                 if content:
                     accumulated_text += content
-                    # 流式 DSML 过滤：剥离工具调用标记后再 emit，防止 DSML 泄露到前端
-                    clean_text = cls._strip_dsml(accumulated_text)
-                    new_clean = clean_text[text_emitted_this_round:]
-                    if new_clean and on_step:
-                        on_step({"type": "text_delta", "delta": new_clean})
-                    text_emitted_this_round = len(clean_text)
+                    # 流式 DSML 过滤：如果在 DSML 块中（有 <龘 且未闭合），
+                    # 暂不 emit，等完整后再一次性剥离+发送，防止 DSML 泄露到前端
+                    in_dsml = cls._has_open_dsml(accumulated_text)
+                    if not in_dsml:
+                        clean_text = cls._strip_dsml(accumulated_text)
+                        new_clean = clean_text[text_emitted_this_round:]
+                        if new_clean and on_step:
+                            on_step({"type": "text_delta", "delta": new_clean})
+                        text_emitted_this_round = len(clean_text)
 
                 for tc_chunk in delta.get('tool_calls', []):
                     idx = tc_chunk.get('index', 0)
