@@ -26,8 +26,9 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('auth-storage');
       window.dispatchEvent(new Event('auth:logout'));
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      // Redirect to root — RootRedirect will show landing page
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
       }
       return Promise.reject(error);
     }
