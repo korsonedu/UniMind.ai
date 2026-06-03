@@ -105,21 +105,16 @@ const PricingPage: React.FC = () => {
                     {plan.persona && <p className="text-[11px] mt-1.5 leading-relaxed text-white/45 line-clamp-2">{plan.persona}</p>}
                   </div>
 
-                  <div className="mb-5" style={{ minHeight: '50px' }}>
+                  <div className="mb-5" style={{ minHeight: '62px' }}>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-bold tracking-tight text-white" style={{ fontFamily: '"DM Mono", monospace' }}>
                         {price}
                       </span>
                       {!isFree && <span className="text-sm text-white/55">{t('pricing.perMonth')}</span>}
                     </div>
-                    {!isFree && annual && (
-                      <p className="text-[11px] mt-1 text-white/45">
-                        {t('pricing.annualTotal')}{parseInt(prices[pi].yearly.replace('¥', '').replace(',', '')) * 12}
-                      </p>
-                    )}
-                    {isFree && (
-                      <p className="text-[11px] mt-1 font-medium text-green-400">{t('pricing.freeForever')}</p>
-                    )}
+                    <p className="text-[11px] mt-1 h-4" style={{ color: isFree ? '#4ade80' : 'rgba(255,255,255,0.45)' }}>
+                      {!isFree && annual ? `${t('pricing.annualTotal')}${parseInt(prices[pi].yearly.replace('¥', '').replace(',', '')) * 12}` : isFree ? t('pricing.freeForever') : ''}
+                    </p>
                   </div>
 
                   <Button
