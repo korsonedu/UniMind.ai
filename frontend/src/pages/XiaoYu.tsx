@@ -1,9 +1,7 @@
 import React from 'react';
 import { Target, CalendarCheck, CheckCircle2, BarChart3, BookOpen, Lightbulb, MessageCircleQuestion, BrainCircuit } from 'lucide-react';
-import { VisualCanvas, type VisualData } from './xiaoyu/DashboardPanel';
 import AgentChatLayout from '@/components/AgentChatLayout';
-import type { RightPanelProps } from '@/components/AgentChatLayout';
-import type { Bot, Message, ConversationSession } from '@/hooks/useAgentConversation';
+import type { Bot, ConversationSession } from '@/hooks/useAgentConversation';
 
 const SKILLS = [
   { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
@@ -16,19 +14,10 @@ const SKILLS = [
   { icon: BrainCircuit, label: '总结知识点', prompt: '帮我总结某个知识点的核心内容' },
 ];
 
-const extractLastVisual = (msgs: Message[]): VisualData | VisualData[] | null => {
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    const m = msgs[i];
-    const all = m.metadata?.all_visuals as VisualData[] | undefined;
-    if (all?.length) return all;
-    if (m.metadata?.visual) return m.metadata.visual as VisualData;
-  }
-  return null;
-};
-
 export const XiaoYu: React.FC = () => {
   return (
     <AgentChatLayout
+      layout="inline"
       findBot={(bots) => bots.find((b: Bot) => b.name === '小宇')}
       skills={SKILLS}
       typewriterWords={['让小宇帮你制定学习计划', '让小宇分析薄弱知识点', '让小宇推荐适合的课程', '让小宇看看复习进度']}
@@ -49,15 +38,6 @@ export const XiaoYu: React.FC = () => {
           m.toolStep?.call_id === step.call_id ? { ...m, toolStep: step } : m
         );
       }}
-      extractVisualFromStep={(step) => {
-        if (step.name === 'render_visual' && step.visual) {
-          return step.visual as VisualData;
-        }
-        return null;
-      }}
-      renderRightPanel={(rp: RightPanelProps) => (
-        <VisualCanvas visual={rp.visual} />
-      )}
     />
   );
 };

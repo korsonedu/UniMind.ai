@@ -93,6 +93,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const abortRef = useRef<AbortController | null>(null);
   const timersRef = useRef<number[]>([]);
   const sendCountRef = useRef(0);
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
 
   const hasConversation = activeSessionId !== null || messages.some(m => m.role === 'user');
 
@@ -231,7 +233,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ message: text, bot_id: bot.id, ...(getExtraPayloadRef.current?.() ?? {}) }),
+        body: JSON.stringify({ message: text, bot_id: bot.id, conversation_id: conversationIdRef.current, ...(getExtraPayloadRef.current?.() ?? {}) }),
         signal: controller.signal,
       });
 

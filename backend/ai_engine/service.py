@@ -50,6 +50,29 @@ class AICallError(Exception):
 class AIEngine:
     """底层的 AI 引擎服务类，负责通用的 AI 模型调用逻辑"""
 
+    # DeepSeek DSML 工具调用标记正则
+    # 匹配完整块 <龘xxx>...</龘xxx> 或自闭合 <龘xxx/>
+    _DSML_RE = re.compile(r'<龘.*?(?:</龘\w+>|/>)', re.DOTALL)
+
+    @staticmethod
+    def _strip_dsml(text: str) -> str:
+        """剥离 DeepSeek DSML 工具调用标记，返回干净的用户可见文本。"""
+        if not text:
+            return text
+        # 循环剥离直到无变化：处理嵌套 DSML（.*? 非贪婪只匹配到内层 </龘xxx>，
+        # 外层的 </龘invoke>/</龘tool_calls> 需要下一轮才被剥离）
+        prev = None
+        while prev != text:
+            prev = text
+            text = AIEngine._DSML_RE.sub('', text)
+        # 剥离残留的孤立闭合标签（</龘xxx>）
+        text = re.sub(r'</龘\w+>', '', text)
+        # 流式截断场景：如果仍有 <龘 开头（SSE 流在 DSML 中截断），丢弃之后全部内容
+        idx = text.find('<龘')
+        if idx >= 0:
+            text = text[:idx]
+        return text.strip()
+
     @staticmethod
     def _build_body(config, messages, temperature, max_tokens, tools, tool_choice, stream=False):
         """构建 LLM 请求体。处理 DeepSeek thinking mode 对 tool_choice 的限制。"""
@@ -447,6 +470,10 @@ class AIEngine:
 
             tool_calls = cls._extract_tool_calls(response)
             if not tool_calls:
+                # 剥离可能混入 content 的 DSML 工具调用标记
+                raw_content = response['choices'][0]['message'].get('content') or ''
+                if raw_content:
+                    response['choices'][0]['message']['content'] = cls._strip_dsml(raw_content)
                 return response
 
             # 将 assistant 消息（含 tool_calls + reasoning_content）追加到历史
@@ -592,7 +619,7 @@ class AIEngine:
             tool_calls_map = {}
             finish_reason = None
             reasoning_content = ""
-            text_emitted_this_round = 0  # Track how much text was already streamed this round
+            text_emitted_this_round = 0  # Track how much clean text was already emitted
 
             for line in r.iter_lines(decode_unicode=True):
                 if not line or not line.startswith('data: '):
@@ -617,9 +644,12 @@ class AIEngine:
                 content = delta.get('content', '')
                 if content:
                     accumulated_text += content
-                    text_emitted_this_round += len(content)
-                    if on_step:
-                        on_step({"type": "text_delta", "delta": content})
+                    # 流式 DSML 过滤：剥离工具调用标记后再 emit，防止 DSML 泄露到前端
+                    clean_text = cls._strip_dsml(accumulated_text)
+                    new_clean = clean_text[text_emitted_this_round:]
+                    if new_clean and on_step:
+                        on_step({"type": "text_delta", "delta": new_clean})
+                    text_emitted_this_round = len(clean_text)
 
                 for tc_chunk in delta.get('tool_calls', []):
                     idx = tc_chunk.get('index', 0)
@@ -645,25 +675,27 @@ class AIEngine:
             logger.info("call_ai_with_streaming_tools round=%s done: text_len=%s tool_calls=%s finish_reason=%s",
                         round_i, len(accumulated_text), len(tool_calls), finish_reason)
 
-            if not tool_calls:
-                return {"content": accumulated_text}
+            # 预先剥离 DSML，避免后续多处重复计算
+            clean_accumulated = cls._strip_dsml(accumulated_text)
 
-            # Emit any remaining text that wasn't streamed during this round
-            # (text_delta events are already sent during the stream loop above)
-            remaining = accumulated_text[text_emitted_this_round:]
+            if not tool_calls:
+                return {"content": clean_accumulated}
+
+            # Emit any remaining clean text that wasn't streamed during this round
+            remaining = clean_accumulated[text_emitted_this_round:]
             if remaining and on_step:
                 on_step({"type": "text_delta", "delta": remaining})
 
             # 有 tool_calls 的轮次：该轮文本通过 on_message 发出（因为不会 return）
-            if accumulated_text.strip():
-                all_rounds_text.append(accumulated_text.strip())
+            if clean_accumulated:
+                all_rounds_text.append(clean_accumulated)
                 if on_message:
-                    on_message(accumulated_text.strip())
+                    on_message(clean_accumulated)
 
             # Build assistant message matching DeepSeek API format
             assistant_msg = {
                 "role": "assistant",
-                "content": accumulated_text or None,
+                "content": clean_accumulated or None,
                 "tool_calls": tool_calls,
             }
             if reasoning_content:
@@ -767,6 +799,7 @@ class AIEngine:
                 if not final_text and "choices" in final_resp:
                     final_text = final_resp["choices"][0]["message"]["content"] or ""
             if final_text:
+                final_text = cls._strip_dsml(final_text)
                 if on_step:
                     on_step({"type": "text_delta", "delta": final_text})
                 return {"content": final_text}
@@ -777,7 +810,7 @@ class AIEngine:
         combined = accumulated_text or ""
         if not combined and all_rounds_text:
             combined = "\n\n".join(all_rounds_text)
-        return {"content": combined}
+        return {"content": cls._strip_dsml(combined)}
 
     @classmethod
     def agentic_structured_output(cls, messages, schema, tool_name, tool_description,

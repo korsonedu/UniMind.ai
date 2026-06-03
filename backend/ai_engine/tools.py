@@ -471,6 +471,21 @@ GET_PRACTICE_QUESTIONS_SCHEMA = {
     },
 }
 
+GRADE_STUDENT_ANSWER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "question_id": {
+            "type": "integer",
+            "description": "题目ID（来自 get_practice_questions 返回的题目 id）",
+        },
+        "user_answer": {
+            "type": "string",
+            "description": "学生的回答文本或选项（如 'A' 或完整作答文本）",
+        },
+    },
+    "required": ["question_id", "user_answer"],
+}
+
 SAVE_STUDY_PLAN_SCHEMA = {
     "type": "object",
     "properties": {
@@ -660,6 +675,8 @@ def get_planner_tools():
             impl_summary="更新 plan_task 表的 status 字段（completed/skipped/pending），同时更新关联 study_plan 的 progress 百分比。需要 task_id。"),
         _make_tool("render_visual", "在 Dashboard 画布上渲染可视化内容。用于展示数学推导过程、解题步骤、知识图谱、数据统计等需要视觉呈现的内容。纯文字问答不需要调用此工具。", RENDER_VISUAL_SCHEMA,
             impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到 Dashboard 画布。"),
+        _make_tool("grade_student_answer", "批改学生对某道题的回答。传入题目ID和学生答案，返回评分、反馈和解析。用于模拟考试和练习批改场景。", GRADE_STUDENT_ANSWER_SCHEMA,
+            impl_summary="查找题目→QuizAITaskService.grade_question 判分→返回 score/feedback/analysis。需要 question_id 和 user_answer。"),
     ]
     return assistant + planner_only
 

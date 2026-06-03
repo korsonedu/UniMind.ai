@@ -34,6 +34,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
         'search_knowledge': lambda a: f"搜索知识点「{a.get('query', '')}」",
         'get_practice_questions': lambda a: f"抽取{a.get('kp_name', '')}相关练习题" if a.get('kp_name') else "抽取练习题",
+        'grade_student_answer': lambda a: f"批改题目 #{a.get('question_id', '')}",
         'quick_generate': lambda a: f"快速生成{a.get('count', 5)}道题",
         'render_visual': lambda a: f"渲染{a.get('type', '可视化')}",
         'launch_arc_pipeline': lambda a: "启动 ARC 精修管线",
@@ -80,6 +81,7 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'get_user_wrong_questions': lambda r: f"找到 {r.get('total_found', 0)} 道错题",
         'search_asr': lambda r: f"找到 {r.get('total_found', 0)} 个视频片段",
         'get_practice_questions': lambda r: f"抽取 {len(r.get('questions', []))} 道练习题",
+        'grade_student_answer': lambda r: f"得分 {r.get('score', 0)}/{r.get('max_score', 0)}",
         'update_plan_task': lambda r: f"任务已更新为 {r.get('new_status', 'unknown')}",
     }
 
@@ -623,6 +625,14 @@ class PlannerToolExecutor(BaseToolExecutor):
                 task['id'] = f"task_{i + 1}"
             task.setdefault('status', 'pending')
             task.setdefault('completed_at', None)
+            # 归一化 LLM 可能用错的字段名
+            if 'task' in task and 'title' not in task:
+                task['title'] = task.pop('task')
+            task.setdefault('title', task.get('description', f'任务 {i + 1}'))
+            task.setdefault('day', 1)
+            task.setdefault('estimated_minutes', 0)
+            task.setdefault('subject', '')
+            task.setdefault('description', '')
 
         # Archive any existing active plan
         StudyPlan.objects.filter(user=self.user, status='active').update(status='archived')
@@ -932,6 +942,49 @@ class PlannerToolExecutor(BaseToolExecutor):
         return {
             "knowledge_points": knowledge_points,
             "summary": f"共 {len(knowledge_points)} 个知识点，其中 {weak_count} 个需要重点关注"
+        }
+
+    def _handle_grade_student_answer(self, args: Dict) -> Dict:
+        """批改学生的回答。查找题目→调用判分服务→返回评分反馈。"""
+        from quizzes.models import Question
+        from quizzes.services.ai_task_service import QuizAITaskService
+        from ai_engine.ai_service import AIService
+
+        question_id = int(args.get('question_id', 0))
+        user_answer = str(args.get('user_answer', '')).strip()
+
+        if not question_id:
+            return {"error": "请提供 question_id"}
+        if not user_answer:
+            return {"error": "请提供学生的回答内容", "score": 0, "max_score": 0,
+                    "feedback": "学生未作答", "is_correct": False}
+
+        try:
+            question = Question.objects.select_related('knowledge_point').get(id=question_id)
+        except Question.DoesNotExist:
+            return {"error": f"题目 #{question_id} 不存在"}
+
+        ai = AIService()
+        result = QuizAITaskService.grade_question(
+            ai=ai,
+            question_text=question.question,
+            user_answer=user_answer,
+            correct_answer=question.answer,
+            q_type=question.q_type,
+            max_score=10.0,
+            grading_points=question.grading_points,
+            options=question.options,
+            subjective_type=question.subjective_type or '主观题',
+        )
+
+        return {
+            "question_id": question_id,
+            "kp_name": question.knowledge_point.name if question.knowledge_point else '',
+            "score": result.get('score', 0),
+            "max_score": 10.0,
+            "is_correct": result.get('score', 0) >= 10.0 * 0.6,
+            "feedback": result.get('feedback', ''),
+            "analysis": result.get('analysis', ''),
         }
 
     def _handle_render_visual(self, args: Dict) -> Dict:

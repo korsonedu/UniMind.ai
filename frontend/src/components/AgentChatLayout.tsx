@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import ChatBubble from '@/components/ChatBubble';
 import { ToolStepMessage } from '@/components/AgentStepCard';
+import { InlineVisualCard } from '@/components/InlineVisualCard';
 import {
   useAgentConversation,
   type Bot,
@@ -20,7 +21,7 @@ import {
 } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/hooks/useAgentChat';
 import type { LucideIcon } from 'lucide-react';
-import type { VisualData } from '../pages/xiaoyu/DashboardPanel';
+import type { VisualData } from '@/pages/xiaoyu/visuals';
 
 // ── Types ──
 
@@ -78,8 +79,11 @@ export interface AgentChatLayoutProps {
   onReset?: (defaultHandler: () => void) => void;
   onDeleteSession?: (session: ConversationSession) => void;
 
-  // Right panel
-  renderRightPanel: (props: RightPanelProps) => React.ReactNode;
+  /** 布局模式。'split' = 左右分屏（默认），'inline' = 单栏对话流 */
+  layout?: 'split' | 'inline';
+
+  // Right panel（仅 split 模式使用）
+  renderRightPanel?: (props: RightPanelProps) => React.ReactNode;
 }
 
 // ── Component ──
@@ -94,6 +98,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     extractVisualFromStep,
     onLoadSession, onReset, onDeleteSession,
     renderRightPanel,
+    layout = 'split',
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -222,27 +227,25 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (!hasConversation) {
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full flex flex-col items-center justify-center px-4 animate-in fade-in duration-500">
-          <div className="w-full max-w-sm space-y-4">
-            <div className="text-center space-y-1">
-              <h1 className="text-base font-semibold tracking-tight text-foreground/90">{landingTitle}</h1>
-              <p className="text-[11px] text-muted-foreground/50">{landingDescription}</p>
+        <div className="h-full flex flex-col items-center px-4 animate-in fade-in duration-500 pt-[10vh]">
+          <div className="w-full max-w-xl">
+            <div className="space-y-3 mb-8">
+              <h1 className="text-4xl font-bold tracking-tight text-foreground/90">{landingTitle}</h1>
+              <p className="text-sm text-foreground/65">{landingDescription}</p>
             </div>
 
-            <div className="relative">
-              <div className="flex items-center gap-1.5 bg-card rounded-xl p-1 border border-border/60 transition-all duration-200 focus-within:border-border">
-                <Input
-                  ref={inputRef}
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onCompositionStart={() => setIsComposition(true)}
-                  onCompositionEnd={() => setIsComposition(false)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); handleSend(); } }}
-                  placeholder={placeholder}
-                  autoComplete="off"
-                  className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-8 px-2.5 placeholder:text-muted-foreground/40"
-                  disabled={loading}
-                />
+            <div className="bg-card rounded-xl border border-border/60 overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onCompositionStart={() => setIsComposition(true)}
+                onCompositionEnd={() => setIsComposition(false)}
+                placeholder={placeholder}
+                autoComplete="off"
+                className="w-full bg-transparent border-none resize-none text-sm px-3 py-3.5 placeholder:text-muted-foreground/60 focus:outline-none min-h-[120px]"
+                disabled={loading}
+              />
+              <div className="flex items-center justify-end px-2.5 py-2 border-t border-border/40">
                 <Button
                   onClick={handleSend}
                   disabled={loading || !input.trim()}
@@ -252,46 +255,139 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 </Button>
               </div>
+            </div>
 
-              <div className="flex items-center gap-0 mt-1 ml-0.5">
-                {sessions.length > 0 && (
-                  <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <PopoverTrigger asChild>
-                          <button className="p-1 rounded text-muted-foreground/40 hover:text-foreground/60 transition-colors">
-                            <History className="h-3 w-3" />
+            <div className="flex flex-wrap justify-center gap-1.5 mt-4">
+              {skills.map(skill => (
+                <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
+                  className="inline-flex items-center px-2.5 py-1 rounded-full border border-border text-[11px] text-foreground/70 hover:text-foreground/90 hover:bg-muted/40 transition-colors">
+                  {skill.label}
+                </button>
+              ))}
+            </div>
+
+            {sessions.length > 0 && (
+              <div className="flex justify-center mt-6">
+                <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="text-sm text-muted-foreground/65 hover:text-foreground/70 transition-colors flex items-center gap-1.5">
+                      <History className="h-3.5 w-3.5" />
+                      {sessions.length} 个历史对话
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" side="top" className="w-72 p-1.5 rounded-lg border-border/60 shadow-lg max-h-64 overflow-y-auto">
+                    <div className="space-y-0.5">
+                      {[...sessions].reverse().map(session => (
+                        <div key={session.id}
+                          className="w-full flex items-start gap-1.5 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors group">
+                          <button onClick={() => wrappedLoadSession(session)}
+                            className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
+                            <span className="text-[12px] font-medium truncate">{session.label}</span>
+                            <span className="text-[10px] text-muted-foreground/50">
+                              {session.messages.length} 条消息
+                              {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                            </span>
                           </button>
-                        </PopoverTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="text-[10px]">历史对话 ({sessions.length})</TooltipContent>
-                    </Tooltip>
-                    <PopoverContent align="start" side="top" className="w-56 p-1 rounded-lg border-border/60 shadow-lg max-h-52 overflow-y-auto">
-                      <div className="space-y-0.5">
-                        {[...sessions].reverse().map(session => (
-                          <div key={session.id}
-                            className="w-full flex items-start gap-1 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors group">
-                            <button onClick={() => wrappedLoadSession(session)}
-                              className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
-                              <span className="text-[11px] font-medium truncate">{session.label}</span>
-                              <span className="text-[9px] text-muted-foreground/50">
-                                {session.messages.length} 条消息
-                                {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
-                              </span>
+                          {onDeleteSession && (
+                            <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
+                              className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
+                              <Trash2 className="h-2.5 w-2.5" />
                             </button>
-                            {onDeleteSession && (
-                              <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
-                                className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
-                                <Trash2 className="h-2.5 w-2.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+          </div>
+        </div>
+      </TooltipProvider>
+    );
+  }
 
+  // ── Chat state ──
+
+  if (layout === 'inline') {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <div className="h-full flex flex-col animate-in fade-in duration-300">
+          {/* Header */}
+          <div className="h-10 shrink-0 px-4 flex items-center justify-between border-b border-border/40">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[12px] font-semibold text-foreground/80">{botDisplayName}</span>
+              {sessions.length > 1 && (
+                <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="text-[9px] text-muted-foreground/40 hover:text-foreground/60 transition-colors">
+                      {sessions.length} 个对话
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" side="bottom" className="w-56 p-1 rounded-lg border-border/60 shadow-lg max-h-52 overflow-y-auto">
+                    <div className="space-y-0.5">
+                      {[...sessions].reverse().map(session => (
+                        <div key={session.id}
+                          className={cn("w-full flex items-start gap-1 px-2 py-1.5 rounded-md transition-colors group", session.id === activeSessionId ? "bg-muted/50" : "hover:bg-muted/50")}>
+                          <button onClick={() => { wrappedLoadSession(session); }}
+                            className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
+                            <span className="text-[11px] font-medium truncate">{session.label}</span>
+                            <span className="text-[9px] text-muted-foreground/50">
+                              {session.messages.length} 条消息
+                              {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                            </span>
+                          </button>
+                          {onDeleteSession && session.id !== activeSessionId && (
+                            <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
+                              className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+            <Button variant="ghost" size="sm" onClick={wrappedReset}
+              className="rounded text-muted-foreground/40 hover:text-foreground/60 gap-0.5 px-1.5 h-5">
+              <RotateCcw className="h-2.5 w-2.5" />
+              <span className="text-[9px] font-medium">新对话</span>
+            </Button>
+          </div>
+
+          {/* Messages — 内联视觉卡片 */}
+          <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+            <div className="max-w-3xl mx-auto p-4 space-y-3">
+              {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
+                // render_visual 步骤 → 内联 VisualCard
+                if (msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && msg.toolStep.visual) {
+                  return (
+                    <InlineVisualCard
+                      key={msg._id || i}
+                      visual={msg.toolStep.visual as VisualData}
+                      index={i}
+                    />
+                  );
+                }
+                // 其他工具步骤 → ToolStepMessage
+                if (msg.toolStep) {
+                  return <ToolStepMessage key={msg._id || i} step={msg.toolStep} index={i} />;
+                }
+                // 普通消息 → ChatBubble
+                return <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} />;
+              })}
+              {loading && (
+                <ChatBubble msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
+              )}
+            </div>
+          </div>
+
+          {/* Input */}
+          <div className="shrink-0 p-4 border-t border-border/40">
+            <div className="max-w-3xl mx-auto">
+              <div className="flex items-center gap-0 mb-1 ml-0.5">
                 <Popover open={skillOpen} onOpenChange={setSkillOpen}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -301,7 +397,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                         </button>
                       </PopoverTrigger>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-[10px]">{skillTooltip}</TooltipContent>
+                    <TooltipContent side="top" className="text-[10px]">{skillTooltip}</TooltipContent>
                   </Tooltip>
                   <PopoverContent align="start" side="top" className="w-48 p-1 rounded-lg border-border/60 shadow-lg">
                     <div className="space-y-0.5">
@@ -316,15 +412,23 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   </PopoverContent>
                 </Popover>
               </div>
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {skills.map(skill => (
-                <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border/50 text-[10px] text-muted-foreground/60 hover:text-foreground/80 hover:border-border transition-colors">
-                  {skill.label}
-                </button>
-              ))}
+              <div className="flex items-center gap-1.5 bg-card rounded-xl p-1 border border-border/60 transition-all duration-200 focus-within:border-border">
+                <Input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onCompositionStart={() => setIsComposition(true)}
+                  onCompositionEnd={() => setIsComposition(false)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); handleSend(); } }}
+                  placeholder={chatPlaceholder}
+                  autoComplete="off"
+                  className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-9 px-3 placeholder:text-muted-foreground/40"
+                  disabled={loading}
+                />
+                <Button onClick={handleSend} disabled={loading || !input.trim()} size="icon"
+                  className="rounded-lg h-9 w-9 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -332,25 +436,26 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     );
   }
 
-  // ── Chat state ──
-
+  // split mode
   return (
     <TooltipProvider delayDuration={300}>
       <div className="h-full flex animate-in fade-in duration-300">
-        <div className="flex-1 min-w-0 h-full" style={{ minWidth: '55%' }}>
-          {renderRightPanel({
-            bot: bot!,
-            messages,
-            loading,
-            conversationId,
-            visual,
-            setVisual,
-            handleRefreshSessions,
-            doSend,
-            setSessions,
-            groupIntoSessions,
-          })}
-        </div>
+        {renderRightPanel && (
+          <div className="flex-1 min-w-0 h-full" style={{ minWidth: '55%' }}>
+            {renderRightPanel({
+              bot: bot!,
+              messages,
+              loading,
+              conversationId,
+              visual,
+              setVisual,
+              handleRefreshSessions,
+              doSend,
+              setSessions,
+              groupIntoSessions,
+            })}
+          </div>
+        )}
 
         <div
           className={cn("shrink-0 flex flex-col h-full border-l border-border/40 hidden md:flex relative", dragging && "select-none")}
