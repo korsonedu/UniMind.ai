@@ -74,6 +74,51 @@ class AIEngine:
         return text.strip()
 
     @staticmethod
+    def _parse_dsml_tool_calls(text: str):
+        """从含有 DSML 标记的文本中提取工具调用列表（OpenAI 兼容格式）。"""
+        import re as _re
+        tool_calls = []
+
+        # 匹配 <龘invoke name="NAME"> ... </龘invoke>
+        invoke_pattern = _re.compile(
+            r'<龘invoke\s+name="([^"]+)">(.*?)</龘invoke>',
+            _re.DOTALL
+        )
+        # 匹配 <龘parameter name="NAME" string="true|false">VALUE</龘parameter>
+        param_pattern = _re.compile(
+            r'<龘parameter\s+name="([^"]+)"\s+string="([^"]+)">(.*?)</龘parameter>',
+            _re.DOTALL
+        )
+
+        for idx, invoke_match in enumerate(invoke_pattern.finditer(text)):
+            func_name = invoke_match.group(1)
+            invoke_body = invoke_match.group(2)
+
+            args = {}
+            for p in param_pattern.finditer(invoke_body):
+                pname = p.group(1)
+                is_string = p.group(2) == 'true'
+                pval = p.group(3).strip()
+                if is_string:
+                    args[pname] = pval
+                else:
+                    try:
+                        args[pname] = json.loads(pval)
+                    except (json.JSONDecodeError, TypeError):
+                        args[pname] = pval
+
+            tool_calls.append({
+                "id": f"dsml_{idx}_{func_name}",
+                "type": "function",
+                "function": {
+                    "name": func_name,
+                    "arguments": json.dumps(args, ensure_ascii=False),
+                },
+            })
+
+        return tool_calls
+
+    @staticmethod
     def _build_body(config, messages, temperature, max_tokens, tools, tool_choice, stream=False):
         """构建 LLM 请求体。处理 DeepSeek thinking mode 对 tool_choice 的限制。"""
         body = {
@@ -671,6 +716,17 @@ class AIEngine:
             AICircuitBreaker.record_success(operation)
 
             tool_calls = [tool_calls_map[k] for k in sorted(tool_calls_map.keys())] if tool_calls_map else []
+
+            # DSML fallback: 如果 DeepSeek 把工具调用作为 DSML 文本输出而没有标准 tool_calls，
+            # 从 accumulated_text 中解析 DSML 并转为 tool_calls
+            if not tool_calls and '<龘' in accumulated_text:
+                dsml_tool_calls = cls._parse_dsml_tool_calls(accumulated_text)
+                if dsml_tool_calls:
+                    tool_calls = dsml_tool_calls
+                    logger.info(
+                        "call_ai_with_streaming_tools: parsed %d tool calls from DSML",
+                        len(tool_calls)
+                    )
 
             logger.info("call_ai_with_streaming_tools round=%s done: text_len=%s tool_calls=%s finish_reason=%s",
                         round_i, len(accumulated_text), len(tool_calls), finish_reason)
