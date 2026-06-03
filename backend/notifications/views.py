@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db.models import Q, Count, Exists, OuterRef
 from django.utils import timezone
 
 from .models import Notification, Announcement, AnnouncementRead
@@ -11,10 +11,38 @@ from .serializers import (
     AnnouncementReadSerializer,
 )
 from users.models import User
-from users.permissions import IsAdmin, IsPlatformAdmin, IsInstitutionOwner, is_platform_admin
+from users.permissions import (
+    IsAdmin,
+    IsPlatformAdmin,
+    IsInstitutionOwner,
+    is_platform_admin,
+    is_institution_admin,
+)
 
 
-# ── 现有 Notification 视图（保持不变）─────────────────────────────────
+# ── 权限类 ───────────────────────────────────────────────────────────
+
+class CanCreateAnnouncement(permissions.BasePermission):
+    """平台管理员或机构所有者可创建公告。"""
+    message = '仅机构所有者或平台管理员可发布公告。'
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return is_platform_admin(request.user) or request.user.institution_role == 'owner'
+
+
+class CanEditAnnouncement(permissions.BasePermission):
+    """发布者本人或平台管理员可编辑/删除；机构公告仅发布者和超管可操作。"""
+    message = '无权限编辑此公告。'
+
+    def has_object_permission(self, request, view, obj):
+        if is_platform_admin(request.user):
+            return True
+        return obj.publisher == request.user
+
+
+# ── 已有的 Notification 视图（不变）─────────────────────────────────
 
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
@@ -39,7 +67,6 @@ class AdminBroadcastView(APIView):
     permission_classes = [IsAdmin]
 
     def post(self, request):
-        from django.db.models import Q
         title = request.data.get('title', '')
         content = request.data.get('content', '')
 
@@ -86,7 +113,7 @@ class NotificationClearView(APIView):
 # ── 公告系统 ─────────────────────────────────────────────────────────
 
 def _visible_announcements_for(user):
-    """返回用户可看见的已发布公告 queryset。"""
+    """返回用户可看见的已发布公告 queryset（不含 annotation）。"""
     qs = Announcement.objects.filter(status='published')
 
     if is_platform_admin(user):
@@ -95,16 +122,13 @@ def _visible_announcements_for(user):
     inst = user.institution
     role = user.institution_role
 
-    # 机构公告：自己机构的
     inst_q = Q(is_platform=False, institution=inst)
 
-    # 平台公告：按 audience 过滤
     if role == 'owner':
         plat_q = Q(is_platform=True, audience__in=['institution_owners', 'all_teachers', 'everyone'])
     elif role == 'teacher':
         plat_q = Q(is_platform=True, audience__in=['all_teachers', 'everyone'])
     else:
-        # student 或无机构
         plat_q = Q(is_platform=True, audience='everyone')
 
     if inst:
@@ -112,32 +136,52 @@ def _visible_announcements_for(user):
     return qs.filter(plat_q)
 
 
+def _annotate_user_read(qs, user):
+    """给 queryset 加上 is_read / read_count annotation。"""
+    read_subq = AnnouncementRead.objects.filter(
+        announcement=OuterRef('pk'),
+        user=user,
+    )
+    return qs.annotate(
+        is_read=Exists(read_subq),
+        read_count=Count('reads'),
+    )
+
+
 class AnnouncementListCreateView(generics.ListCreateAPIView):
     serializer_class = AnnouncementSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, CanCreateAnnouncement]
 
     def get_queryset(self):
-        return _visible_announcements_for(self.request.user)
+        user = self.request.user
+        qs = _visible_announcements_for(user)
 
-    def check_permissions(self, request):
-        super().check_permissions(request)
-        if request.method == 'POST':
-            # 创建公告：超管或机构所有者
-            from users.permissions import is_institution_admin
-            if not is_platform_admin(request.user) and request.user.institution_role != 'owner':
-                self.permission_denied(request, message='仅机构所有者或平台管理员可发布公告')
+        # 筛选参数
+        audience = self.request.query_params.get('audience')
+        if audience and is_platform_admin(user):
+            valid = ['institution_owners', 'all_teachers', 'everyone']
+            if audience in valid:
+                qs = qs.filter(audience=audience)
+
+        status_q = self.request.query_params.get('status')
+        if status_q and is_platform_admin(user):
+            valid_status = ['draft', 'published', 'archived']
+            if status_q in valid_status:
+                qs = qs.filter(status=status_q)
+
+        qs = qs.select_related('publisher')
+        qs = _annotate_user_read(qs, user)
+        return qs
 
 
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AnnouncementSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, CanEditAnnouncement]
     lookup_field = 'pk'
 
     def get_queryset(self):
-        user = self.request.user
-        if is_platform_admin(user):
-            return Announcement.objects.all()
-        return Announcement.objects.filter(publisher=user)
+        qs = Announcement.objects.select_related('publisher')
+        return _annotate_user_read(qs, self.request.user)
 
     def perform_update(self, serializer):
         instance = serializer.instance

@@ -11,8 +11,8 @@ class NotificationSerializer(serializers.ModelSerializer):
 
 class AnnouncementSerializer(serializers.ModelSerializer):
     publisher_name = serializers.CharField(source='publisher.nickname', read_only=True)
-    is_read = serializers.SerializerMethodField()
-    read_count = serializers.SerializerMethodField()
+    is_read = serializers.BooleanField(read_only=True, default=False)
+    read_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Announcement
@@ -24,21 +24,11 @@ class AnnouncementSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ('publisher', 'institution', 'is_platform', 'published_at')
 
-    def get_is_read(self, obj) -> bool:
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return False
-        return obj.reads.filter(user=request.user).exists()
-
-    def get_read_count(self, obj) -> int:
-        return obj.reads.count()
-
     def validate(self, data):
         request = self.context.get('request')
         user = request.user
         from users.permissions import is_platform_admin
 
-        # 机构所有者只能给自己机构发，audience 强制 everyone
         if not is_platform_admin(user):
             data['audience'] = 'everyone'
             data['institution'] = user.institution
