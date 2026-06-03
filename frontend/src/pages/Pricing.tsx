@@ -11,8 +11,7 @@ const PricingPage: React.FC = () => {
   const navigate = useNavigate();
   const [annual, setAnnual] = useState(true);
 
-  const plans = t('pricing.plans', { returnObjects: true }) as Array<{ label: string; desc: string; persona?: string; cta: string }>;
-  const rows = t('pricing.rows', { returnObjects: true }) as string[][];
+  const plans = t('pricing.plans', { returnObjects: true }) as Array<{ label: string; desc: string; persona?: string; cta: string; features: string[] }>;
   const prices = [
     { monthly: '¥0', yearly: '¥0' },
     { monthly: '¥499', yearly: '¥416' },
@@ -93,7 +92,7 @@ const PricingPage: React.FC = () => {
                     ...(isPopular ? { boxShadow: '0 0 40px rgba(91,95,239,0.08)' } : {}),
                   }}
                 >
-                  <div className="mb-5">
+                  <div className="mb-5" style={{ minHeight: '100px' }}>
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-bold text-base text-white">{plan.label}</h3>
                       {isPopular && (
@@ -103,10 +102,10 @@ const PricingPage: React.FC = () => {
                       )}
                     </div>
                     <p className="text-[12px] text-white/55">{plan.desc}</p>
-                    {plan.persona && <p className="text-[11px] mt-1.5 leading-relaxed text-white/45">{plan.persona}</p>}
+                    {plan.persona && <p className="text-[11px] mt-1.5 leading-relaxed text-white/45 line-clamp-2">{plan.persona}</p>}
                   </div>
 
-                  <div className="mb-5" style={{ minHeight: '72px' }}>
+                  <div className="mb-5" style={{ minHeight: '50px' }}>
                     <div className="flex items-baseline gap-1">
                       <span className="text-3xl font-bold tracking-tight text-white" style={{ fontFamily: '"DM Mono", monospace' }}>
                         {price}
@@ -144,19 +143,12 @@ const PricingPage: React.FC = () => {
                   </Button>
 
                   <ul className="space-y-2 flex-1">
-                    {rows.map((row, ri) => {
-                      const text = row[pi];
-                      const has = text !== '—';
-                      return (
-                        <li key={ri} className="flex items-start gap-2 text-[12px]" style={{ color: has ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)' }}>
-                          {has
-                            ? <Check className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-400" />
-                            : <span className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                          }
-                          <span className={has ? '' : 'line-through'}>{has ? text : '—'}</span>
-                        </li>
-                      );
-                    })}
+                    {plan.features.map((f, fi) => (
+                      <li key={fi} className="flex items-start gap-2 text-[12px]" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                        <Check className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-400" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               );

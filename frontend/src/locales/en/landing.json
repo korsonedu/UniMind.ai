@@ -240,172 +240,99 @@
         "label": "Free",
         "desc": "Trial · Validate AI teaching",
         "persona": "Zero-cost trial with AI question generation, question bank, and basic analytics — see if it fits your institution.",
-        "cta": "Start Free"
+        "cta": "Start Free",
+        "features": [
+          "30 questions per month",
+          "AI auto-grading",
+          "Memorix adaptive review",
+          "Question bank · Manual",
+          "Mistake review center",
+          "Basic analytics",
+          "30 students",
+          "1 teacher · 1 subject",
+          "500 MB storage",
+          "200 questions"
+        ]
       },
       {
         "label": "Starter",
         "desc": "Growing institution · 1-2 teachers",
         "persona": "For early-stage training centers: AI gen + Memorix review + full reports — automate repetitive lesson prep.",
-        "cta": "7-Day Free Trial"
+        "cta": "7-Day Free Trial",
+        "features": [
+          "100 questions per month",
+          "AI auto-grading",
+          "Memorix adaptive review",
+          "Question bank · Manual",
+          "Mistake review center",
+          "Student reports",
+          "50 students",
+          "1 teacher · 3 subjects",
+          "XiaoYu chat 500 turns/mo",
+          "PDF export 10/mo",
+          "5 GB storage",
+          "2,000 questions",
+          "Up to 3 classes"
+        ]
       },
       {
         "label": "Growth",
         "desc": "Scaling institution · Multi-teacher ops",
         "persona": "For growing centers: multi-teacher collaboration, knowledge graph, mock exams, Q&A — systematic teaching management.",
-        "cta": "7-Day Free Trial"
+        "cta": "7-Day Free Trial",
+        "features": [
+          "Unlimited questions",
+          "AI auto-grading",
+          "Memorix adaptive review",
+          "Question bank · Manual+Auto",
+          "Mistake review center",
+          "Class comparison · Export",
+          "200 students",
+          "5 teachers · All subjects",
+          "XiaoYu chat 3,000 turns/mo",
+          "PDF export 100/mo",
+          "Course videos · AI outlines",
+          "Interactive knowledge graph",
+          "Online Q&A system",
+          "Teacher collaboration · RBAC",
+          "Online study rooms",
+          "AI mock exams 10/mo",
+          "50 GB storage",
+          "10,000 questions",
+          "Up to 10 classes"
+        ]
       },
       {
         "label": "Enterprise",
         "desc": "Enterprise chain · Data sovereignty",
         "persona": "For chains and corporate training: white-label, private deploy, API integration, SSO single sign-on.",
-        "cta": "Request Demo"
+        "cta": "Request Demo",
+        "features": [
+          "Unlimited questions",
+          "AI auto-grading",
+          "Memorix adaptive review",
+          "Question bank · Manual+Auto",
+          "Mistake review center",
+          "Advanced dashboard · AI insights",
+          "Unlimited students",
+          "Unlimited teachers & subjects",
+          "XiaoYu chat unlimited",
+          "PDF export unlimited",
+          "Course videos · AI outlines",
+          "Interactive knowledge graph",
+          "Online Q&A system",
+          "Teacher collaboration · RBAC",
+          "Online study rooms",
+          "AI mock exams 50/mo",
+          "Unlimited storage",
+          "Unlimited questions",
+          "Unlimited classes",
+          "White-label deployment",
+          "Data sovereignty",
+          "Custom knowledge trees",
+          "REST API access"
+        ]
       }
-    ],
-    "rows": [
-      [
-        "30 questions/mo",
-        "100 questions/mo",
-        "Unlimited questions",
-        "Unlimited questions"
-      ],
-      [
-        "AI auto-grading",
-        "AI auto-grading",
-        "AI auto-grading",
-        "AI auto-grading"
-      ],
-      [
-        "Memorix adaptive review",
-        "Memorix adaptive review",
-        "Memorix adaptive review",
-        "Memorix adaptive review"
-      ],
-      [
-        "Question bank · Manual",
-        "Question bank · Manual",
-        "Question bank · Manual+Auto",
-        "Question bank · Manual+Auto"
-      ],
-      [
-        "Mistake review center",
-        "Mistake review center",
-        "Mistake review center",
-        "Mistake review center"
-      ],
-      [
-        "Basic analytics",
-        "Student reports",
-        "Class comparison · Export",
-        "Advanced dashboard · AI insights"
-      ],
-      [
-        "30 students",
-        "50 students",
-        "200 students",
-        "Unlimited students"
-      ],
-      [
-        "1 teacher · 1 subject",
-        "1 teacher · 3 subjects",
-        "5 teachers · All subjects",
-        "Unlimited teachers & subjects"
-      ],
-      [
-        "—",
-        "XiaoYu chat 500 turns/mo",
-        "XiaoYu chat 3,000 turns/mo",
-        "XiaoYu chat unlimited"
-      ],
-      [
-        "—",
-        "PDF export 10/mo",
-        "PDF export 100/mo",
-        "PDF export unlimited"
-      ],
-      [
-        "—",
-        "—",
-        "Course videos · AI outlines",
-        "Course videos · AI outlines"
-      ],
-      [
-        "—",
-        "—",
-        "Interactive knowledge graph",
-        "Interactive knowledge graph"
-      ],
-      [
-        "—",
-        "—",
-        "Online Q&A system",
-        "Online Q&A system"
-      ],
-      [
-        "—",
-        "—",
-        "Teacher collaboration · RBAC",
-        "Teacher collaboration · RBAC"
-      ],
-      [
-        "—",
-        "—",
-        "Online study rooms",
-        "Online study rooms"
-      ],
-      [
-        "—",
-        "—",
-        "AI mock exams 10/mo",
-        "AI mock exams 50/mo"
-      ],
-      [
-        "—",
-        "2,000 questions",
-        "10,000 questions",
-        "Unlimited questions"
-      ],
-      [
-        "—",
-        "Up to 3 classes",
-        "Up to 10 classes",
-        "Unlimited classes"
-      ],
-      [
-        "500 MB storage",
-        "5 GB storage",
-        "50 GB storage",
-        "Unlimited storage"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "White-label deployment"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "Data sovereignty"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "Custom knowledge trees"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "REST API access"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "Dedicated account manager"
-      ]
     ]
   },
   "faq": {
