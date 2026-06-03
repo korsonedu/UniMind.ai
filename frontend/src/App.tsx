@@ -175,21 +175,25 @@ const HomeRedirect = () => {
 
 // Root entry handler to manage landing vs app logic
 const RootRedirect = () => {
-  const { user, setAuth } = useAuthStore();
+  const { user, setAuth, logout } = useAuthStore();
   const hasHydrated = useAuthStore.persist.hasHydrated();
   const [checking, setChecking] = useState(true);
+  const [validUser, setValidUser] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!hasHydrated) return;
-    if (user) { setChecking(false); return; }
-    // Try to rehydrate user from session cookie
+    // Always verify session with backend
     api.get('/users/me/')
       .then(res => {
         setAuth(res.data, null);
+        setValidUser(true);
       })
       .catch(() => {
-        // Not logged in — check invite for unauthenticated users
+        // Not logged in or session expired — clear stale localStorage
+        logout();
+        setValidUser(false);
+        // Check invite for unauthenticated users
         api.get('/users/check-invite/')
           .then(res => {
             if (res.data?.has_invite) navigate('/register', { replace: true });
@@ -197,11 +201,11 @@ const RootRedirect = () => {
           .catch(() => {});
       })
       .finally(() => setChecking(false));
-  }, [user, hasHydrated, setAuth, navigate]);
+  }, [hasHydrated, setAuth, logout, navigate]);
 
   if (!hasHydrated || checking) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
-  if (user) return <Outlet />;
+  if (validUser) return <Outlet />;
 
   return <Suspense fallback={<PageLoader />}><Landing /></Suspense>;
 };
