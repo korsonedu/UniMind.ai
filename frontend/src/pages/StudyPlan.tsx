@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ interface PlanTask {
   estimated_minutes?: number;
   status: 'pending' | 'completed' | 'skipped';
   completed_at?: string | null;
+  action?: string;
 }
 
 interface StudyPlan {
@@ -199,9 +200,15 @@ export function StudyPlan() {
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className={`font-medium text-sm ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
-                              {task.title}
-                            </span>
+                            {task.action ? (
+                              <Link to={task.action} className={`font-medium text-sm hover:underline ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground/90'}`}>
+                                {task.title}
+                              </Link>
+                            ) : (
+                              <span className={`font-medium text-sm ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
+                                {task.title}
+                              </span>
+                            )}
                             {task.subject && (
                               <Badge variant="secondary" className="text-xs">{task.subject}</Badge>
                             )}

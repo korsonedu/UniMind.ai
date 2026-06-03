@@ -50,11 +50,16 @@ export const TestSessionPage: React.FC = () => {
     return ['balanced', 'new_first', 'review_first'].includes(p) ? p : 'balanced';
   }, [searchParams]);
 
+  const kpId = useMemo(() => {
+    const kp = searchParams.get('kp');
+    return kp || undefined;
+  }, [searchParams]);
+
   useEffect(() => {
     const fetchQuestions = async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}`);
+        const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}${kpId ? `&kp=${kpId}` : ''}`);
         if (!res.data?.length) {
           toast.error(t('noQuestions'));
           navigate('/tests', { replace: true });
