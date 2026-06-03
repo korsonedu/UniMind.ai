@@ -94,7 +94,8 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
       api.get('/users/me/')
         .then(res => setAuth(res.data, null))
         .catch(() => {
-          window.location.href = '/login';
+          // Session invalid — redirect to root, let RootRedirect show landing
+          window.location.href = '/';
         })
         .finally(() => setLoading(false));
     } else {
