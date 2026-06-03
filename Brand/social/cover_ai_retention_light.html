@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #ffffff; }
+  .cover {
+    width: 1080px;
+    height: 1350px;
+    position: relative;
+    overflow: hidden;
+    background: #ffffff;
+    font-family: -apple-system, "SF Pro Display", "Helvetica Neue", "PingFang SC", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 浅网格装饰 */
+  .cover::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      linear-gradient(rgba(37, 99, 235, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37, 99, 235, 0.035) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* 光晕装饰 */
+  .glow {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    filter: blur(160px);
+    pointer-events: none;
+  }
+  .glow-1 {
+    top: -120px; right: -120px;
+    background: rgba(37, 99, 235, 0.07);
+  }
+  .glow-2 {
+    bottom: 150px; left: -180px;
+    background: rgba(16, 185, 129, 0.05);
+  }
+
+  /* 顶部 */
+  .header {
+    padding: 52px 60px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 2;
+  }
+  .logo-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .logo-group img {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+  }
+  .logo-text {
+    font-size: 26px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: 5px;
+  }
+  .tag {
+    font-size: 16px;
+    font-weight: 600;
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    padding: 8px 22px;
+    border-radius: 20px;
+    letter-spacing: 3px;
+  }
+
+  /* 中部主体 */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 60px;
+    z-index: 2;
+  }
+
+  /* 核心标题区 */
+  .title-block {
+    margin-bottom: 48px;
+  }
+  .question {
+    font-size: 42px;
+    color: rgba(15, 23, 42, 0.3);
+    font-weight: 400;
+    line-height: 1.5;
+    margin-bottom: 36px;
+  }
+  .question span {
+    color: rgba(15, 23, 42, 0.4);
+    text-decoration: line-through;
+    text-decoration-color: rgba(15, 23, 42, 0.15);
+  }
+  .divider {
+    width: 60px;
+    height: 4px;
+    background: #2563eb;
+    margin-bottom: 40px;
+    border-radius: 2px;
+  }
+  .title {
+    font-size: 96px;
+    font-weight: 900;
+    color: #0f172a;
+    line-height: 1.15;
+    margin-bottom: 28px;
+    letter-spacing: -1px;
+  }
+  .title .highlight {
+    color: #2563eb;
+  }
+  .subtitle {
+    font-size: 36px;
+    color: rgba(15, 23, 42, 0.45);
+    font-weight: 400;
+    line-height: 1.6;
+  }
+
+  /* 数据卡片 */
+  .data-cards {
+    display: flex;
+    gap: 28px;
+    margin-top: 32px;
+  }
+  .data-card {
+    flex: 1;
+    background: #f8fafc;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    border-radius: 20px;
+    padding: 36px 32px;
+  }
+  .data-card .number {
+    font-size: 56px;
+    font-weight: 900;
+    color: #2563eb;
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+  .data-card .label {
+    font-size: 22px;
+    color: rgba(15, 23, 42, 0.45);
+    line-height: 1.5;
+  }
+
+  /* 角色描述 */
+  .role-strip {
+    display: flex;
+    gap: 36px;
+    margin-top: 44px;
+    padding-top: 40px;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+  }
+  .role-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .role-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(37, 99, 235, 0.07);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+  .role-text {
+    font-size: 22px;
+    color: rgba(15, 23, 42, 0.5);
+  }
+  .role-text strong {
+    color: rgba(15, 23, 42, 0.8);
+    font-weight: 600;
+  }
+
+  /* 底部 */
+  .footer {
+    padding: 0 60px 52px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 2;
+  }
+  .footer .slogan {
+    font-size: 18px;
+    color: #94a3b8;
+  }
+  .footer .url {
+    font-size: 18px;
+    color: #94a3b8;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div class="cover">
+  <div class="glow glow-1"></div>
+  <div class="glow glow-2"></div>
+
+  <div class="header">
+    <div class="logo-group">
+      <img src="unimind-logo.png" alt="UniMind">
+      <span class="logo-text">UNIMIND</span>
+    </div>
+    <span class="tag">INSIGHT</span>
+  </div>
+
+  <div class="main">
+    <div class="title-block">
+      <div class="question">培训机构用 AI，第一反应是 <span>招生</span>？</div>
+      <div class="divider"></div>
+      <div class="title">
+        AI 最大的价值<br>
+        是<span class="highlight">记住了</span><br>
+        多少学生
+      </div>
+      <div class="subtitle">
+        续费率才是生命线。招一个新学生的成本，是续一个老学生的 5-7 倍。
+      </div>
+    </div>
+
+    <div class="data-cards">
+      <div class="data-card">
+        <div class="number">5-7×</div>
+        <div class="label">获客成本差距<br>招新 vs 续费</div>
+      </div>
+      <div class="data-card">
+        <div class="number">+10%</div>
+        <div class="label">续费率提升<br>对利润的影响更大</div>
+      </div>
+      <div class="data-card">
+        <div class="number">30</div>
+        <div class="label">一个班的人数<br>老师精力的极限</div>
+      </div>
+    </div>
+
+    <div class="role-strip">
+      <div class="role-item">
+        <div class="role-icon">🧠</div>
+        <div class="role-text"><strong>记住</strong>每个学生的强弱</div>
+      </div>
+      <div class="role-item">
+        <div class="role-icon">📅</div>
+        <div class="role-text"><strong>自动</strong>安排复习节奏</div>
+      </div>
+      <div class="role-item">
+        <div class="role-icon">🔔</div>
+        <div class="role-text"><strong>主动</strong>提醒老师关注</div>
+      </div>
+      <div class="role-item">
+        <div class="role-icon">📊</div>
+        <div class="role-text"><strong>生成</strong>学习进展报告</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span class="slogan">Agent 驱动的新一代智能教育基础设施</span>
+    <span class="url">unimind.ai</span>
+  </div>
+</div>
+</body>
+</html>

@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowRight, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
-import { CheckoutModal } from './CheckoutModal';
+import { ContactAdminModal } from './ContactAdminModal';
 
 const PLAN_ORDER = ['free', 'starter', 'growth', 'enterprise'] as const;
 
@@ -51,7 +51,7 @@ interface UpgradeModalProps {
 }
 
 export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free' }: UpgradeModalProps) {
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
   const { t } = useTranslation('layout');
 
   // Determine target plan
@@ -114,7 +114,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
               className="flex-1 h-11 rounded-xl text-sm font-extrabold"
               onClick={() => {
                 onOpenChange(false);
-                setCheckoutOpen(true);
+                setContactOpen(true);
               }}
             >
               {t('upgradeModal.learnMore')}
@@ -123,7 +123,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
           </div>
         </DialogContent>
       </Dialog>
-      <CheckoutModal open={checkoutOpen} onOpenChange={setCheckoutOpen} preselectedPlan={targetPlan} currentPlan={currentPlan} />
+      <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} planLabel={meta.label} />
     </>
   );
 }

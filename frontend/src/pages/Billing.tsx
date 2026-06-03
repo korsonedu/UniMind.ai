@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +8,7 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Check, Crown, CreditCard, Loader2, ArrowRight, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ContactAdminModal } from '@/components/ContactAdminModal';
 
 const PLAN: Record<string, { label: string; priceM: number; color: string; gradient: string }> = {
   free:       { label: 'Free', priceM: 0, color: 'bg-unimind-text-quaternary', gradient: 'from-neutral-400 to-neutral-500' },
@@ -33,9 +33,10 @@ const STATUS_LABEL: Record<string, string> = {
 
 export function BillingPage() {
   const { user } = useAuthStore();
-  const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactPlan, setContactPlan] = useState('');
 
   const currentTier = user?.institution?.plan || user?.membership_tier || 'free';
   const isTrial = user?.is_member && user?.membership_source === 'trial';
@@ -97,7 +98,7 @@ export function BillingPage() {
               </div>
               {currentTier !== 'enterprise' && (
                 <Button variant="apple" className="h-9 px-4 rounded-xl text-[12px] font-extrabold gap-1.5"
-                  onClick={() => navigate('/checkout?plan=starter&cycle=annual&gateway=stub')}>
+                  onClick={() => { setContactPlan('Starter'); setContactOpen(true); }}>
                   <Sparkles className="h-3.5 w-3.5" /> 升级方案
                 </Button>
               )}
@@ -145,7 +146,7 @@ export function BillingPage() {
                         </ul>
                         <Button variant="outline" size="sm"
                           className="w-full h-9 rounded-xl text-[11px] font-extrabold border border-black/[0.06] hover:bg-unimind-bg-secondary gap-1"
-                          onClick={() => navigate(`/checkout?plan=${k}&cycle=annual&gateway=stub`)}>
+                          onClick={() => { setContactPlan(p.label); setContactOpen(true); }}>
                           升级至 {p.label} <ArrowRight className="h-3 w-3" />
                         </Button>
                       </Card>
@@ -199,6 +200,7 @@ export function BillingPage() {
           </Card>
         </div>
       </div>
+      <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} planLabel={contactPlan} />
     </PageWrapper>
   );
 }

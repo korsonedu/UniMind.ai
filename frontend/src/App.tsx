@@ -215,7 +215,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <RootRedirect />,
     children: [
-      { index: true, element: <RequireAuth><HomeRedirect /></RequireAuth> },
+      { index: true, element: <HomeRedirect /> },
       {
         element: <RequireAuth><MainLayout /></RequireAuth>,
         children: [

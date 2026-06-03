@@ -249,6 +249,13 @@ ASR_PROVIDER_CONFIG = {
     "glm_asr": {
         "api_key": os.getenv("GLM_ASR_API_KEY", ""),
     },
+    "mimo_asr": {
+        "api_key": os.getenv("MIMO_ASR_API_KEY", ""),
+        "base_url": os.getenv("MIMO_ASR_BASE_URL", "https://api.xiaomimimo.com/v1"),
+        "model": os.getenv("MIMO_ASR_MODEL", "mimo-v2.5-asr"),
+        "language": os.getenv("MIMO_ASR_LANGUAGE", "zh"),
+        "timeout": int(os.getenv("MIMO_ASR_TIMEOUT", "120")),
+    },
 }
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
