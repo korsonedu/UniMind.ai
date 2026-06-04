@@ -148,10 +148,13 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
 
             if isinstance(result, dict) and 'content' in result:
                 ai_content = result['content']
+                _quota_earned = True
             elif result and 'choices' in result:
                 ai_content = result['choices'][0]['message']['content']
+                _quota_earned = True
             else:
                 ai_content = "AI 助教暂时无法响应，请稍后再试。"
+                _quota_earned = False
 
             ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ')
             ai_content = ai_content.replace('\\(', ' $ ').replace('\\)', ' $ ')
@@ -166,9 +169,10 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                               metadata=msg_metadata,
                               conversation_id=conversation_id)
 
-            from users.quota import increment_quota
-            if self.user and getattr(self.user, 'institution', None):
-                increment_quota(self.user.institution, 'ai_call_total')
+            if _quota_earned:
+                from users.quota import increment_quota
+                if self.user and getattr(self.user, 'institution', None):
+                    increment_quota(self.user.institution, 'ai_call_total')
 
             try:
                 from .services.memory_service import extract_memories_async, extract_memories_with_mem0
