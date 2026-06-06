@@ -46,7 +46,7 @@ PLANNER_TOOLS_META = [
     ),
     ToolMeta(
         name="get_due_reviews",
-        description="获取用户今日待复习的艾宾浩斯复习任务",
+        description="获取用户今日到期的间隔重复复习任务",
         body="获取用户今日到期的复习任务。参数: user_id(int)=用户ID。返回：待复习题目列表，含知识点、上次正确率、到期时间。适用于：提醒复习、规划今日学习、了解复习压力。不适用于：查看新题、查看历史成绩。",
     ),
     ToolMeta(

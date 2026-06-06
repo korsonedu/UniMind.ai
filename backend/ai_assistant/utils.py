@@ -16,7 +16,7 @@ def get_student_academic_context(user):
     elo_score = user.elo_score
     username = user.username
     
-    # 2. 统计复习压力（艾宾浩斯到期量）
+    # 2. 统计复习压力（Memorix 到期量）
     urgent_review_count = UserQuestionStatus.objects.filter(
         user=user, 
         next_review_at__lte=now
@@ -67,7 +67,7 @@ def get_student_academic_context(user):
         context_segments.append(f"优势领域: {', '.join(strong_points)}。")
         
     if urgent_review_count > 0:
-        context_segments.append(f"今日该生有 {urgent_review_count} 道题目已到达艾宾浩斯复习临界点，建议在对话结束时给予温馨提醒。")
+        context_segments.append(f"今日该生有 {urgent_review_count} 道题目已到达间隔重复复习临界点，建议在对话结束时给予温馨提醒。")
     else:
         context_segments.append("该生今日复习任务已完成，状态良好。")
 
