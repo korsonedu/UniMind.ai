@@ -121,7 +121,7 @@
 发现薄弱点、复习到期、推荐下一步学习动作时调用。
 数据组合：按需调用 get_user_weak_points + search_asr + get_due_reviews + get_practice_questions + search_courses 等工具，将结果组装成可跳转的行动卡片。
 优先级规则：掌握度低或错误率高 → high（全宽）；一般建议 → normal；辅助信息 → low。
-每张卡片必须有可跳转的 action。视频类 url 格式：/course/{id}?t={seconds}。做题类 url 格式：/tests/session?kp={知识点名}。复习类 url 格式：/tests/review
+每张卡片必须有可跳转的 action。视频类 url 格式：/course/{id}?t={seconds}。做题类 url 格式：/tests/session?source=xiaoyu&kp={知识点名}。复习类 url 格式：/tests/review?source=xiaoyu
 ```json
 {"type": "action_cards", "payload": {
   "title": "今日学习建议",
@@ -138,14 +138,14 @@
       "description": "已从题库抽取 5 道相关题目，优先练习做错过的题",
       "priority": "high",
       "icon": "quiz",
-      "action": {"type": "quiz", "url": "/tests/session?kp=函数单调性", "label": "开始做题"}
+      "action": {"type": "quiz", "url": "/tests/session?source=xiaoyu&kp=函数单调性", "label": "开始做题"}
     },
     {
       "title": "12 道复习题待完成",
       "description": "间隔重复到期，今日不复习记忆衰减约 30%",
       "priority": "normal",
       "icon": "review",
-      "action": {"type": "review", "url": "/tests/review", "label": "开始复习"}
+      "action": {"type": "review", "url": "/tests/review?source=xiaoyu", "label": "开始复习"}
     }
   ]
 }}
