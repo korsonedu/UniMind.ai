@@ -96,7 +96,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
 
-  const hasConversation = activeSessionId !== null || messages.some(m => m.role === 'user');
+  const hasConversation = activeSessionId !== null || messages.some(m => m.role === 'user') || sessions.length > 0;
 
   // ── Drag resize ──
 

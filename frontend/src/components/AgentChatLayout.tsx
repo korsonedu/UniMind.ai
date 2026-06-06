@@ -181,11 +181,12 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             const grouped = groupIntoSessions(allMsgs);
             setSessions(grouped);
             const lastMsg = hRes.data[hRes.data.length - 1];
-            if (lastMsg.conversation_id) {
+            const isRecent = lastMsg && Date.now() - new Date(lastMsg.timestamp).getTime() < RECENT_SESSION_MS;
+            if (isRecent && lastMsg.conversation_id) {
               setConversationId(lastMsg.conversation_id);
             }
-            const isRecent = Date.now() - new Date(lastMsg.timestamp).getTime() < RECENT_SESSION_MS;
-            if (isRecent && grouped.length > 0) {
+            // 有历史对话时，自动加载最新 session（不限制时间窗口）
+            if (grouped.length > 0) {
               const latest = grouped[grouped.length - 1];
               setMessages(latest.messages);
               setActiveSessionId(latest.id);
