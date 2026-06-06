@@ -141,6 +141,33 @@ def build_adaptive_question_ids(
         )
         _select_ids(last_resort, limit - len(selected), selected_set, selected)
 
+    # 文本去重：同一text的题目只保留第一道，其余替换为备选题
+    if len(selected) > 1:
+        texts = dict(Question.objects.filter(id__in=selected).values_list("id", "text"))
+        deduped = []
+        seen = set()
+        removed_count = 0
+        for qid in selected:
+            t = texts.get(qid)
+            if t and t in seen:
+                removed_count += 1
+                continue
+            if t:
+                seen.add(t)
+            deduped.append(qid)
+
+        if removed_count:
+            selected = deduped
+            selected_set = set(selected)
+            if len(selected) < limit:
+                remaining = list(
+                    base_queryset.exclude(id__in=selected_set)
+                    .exclude(id__in=mastered_ids_qs)
+                    .order_by("?")
+                    .values_list("id", flat=True)[: removed_count * 2]
+                )
+                _select_ids(remaining, removed_count, selected_set, selected)
+
     return {
         "question_ids": selected,
         "meta": {
