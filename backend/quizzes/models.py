@@ -116,6 +116,9 @@ class UserQuestionStatus(models.Model):
     next_review_at = models.DateTimeField(auto_now_add=True, db_index=True)
     last_correct = models.BooleanField(default=False)
 
+    error_type = models.CharField(max_length=32, blank=True, default='')
+    error_metadata = models.JSONField(default=dict, blank=True)
+
     class Meta:
         unique_together = ('user', 'question')
 

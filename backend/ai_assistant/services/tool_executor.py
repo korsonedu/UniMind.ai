@@ -494,6 +494,8 @@ class PlannerToolExecutor(BaseToolExecutor):
                     "difficulty": round(d.difficulty, 1),
                     "reps": d.reps,
                     "lapses": d.lapses,
+                    "error_type": d.error_type or '',
+                    "error_metadata": d.error_metadata or {},
                     "memorix_priority": _calculate_memorix_priority(d),
                     "next_review_at": d.next_review_at.isoformat() if d.next_review_at else None,
                 }
@@ -977,6 +979,25 @@ class PlannerToolExecutor(BaseToolExecutor):
             subjective_type=question.subjective_type or '主观题',
         )
 
+        error_analysis = result.get('error_analysis')
+        if error_analysis and error_analysis.get('type'):
+            try:
+                from quizzes.models import UserQuestionStatus
+                from django.utils import timezone
+                uqs = UserQuestionStatus.objects.filter(
+                    user=self.user, question_id=question_id
+                ).first()
+                if uqs:
+                    uqs.error_type = error_analysis['type']
+                    uqs.error_metadata = {
+                        'reasoning': error_analysis.get('reasoning', ''),
+                        'suggested_focus': error_analysis.get('suggested_focus', ''),
+                        'graded_at': timezone.now().isoformat(),
+                    }
+                    uqs.save(update_fields=['error_type', 'error_metadata'])
+            except Exception:
+                pass
+
         return {
             "question_id": question_id,
             "kp_name": question.knowledge_point.name if question.knowledge_point else '',
@@ -985,6 +1006,7 @@ class PlannerToolExecutor(BaseToolExecutor):
             "is_correct": result.get('score', 0) >= 10.0 * 0.6,
             "feedback": result.get('feedback', ''),
             "analysis": result.get('analysis', ''),
+            "error_analysis": error_analysis,
         }
 
     def _handle_render_visual(self, args: Dict) -> Dict:

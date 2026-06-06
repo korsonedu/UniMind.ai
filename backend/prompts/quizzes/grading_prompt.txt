@@ -20,9 +20,11 @@
   "score": 0,
   "feedback": "判分依据和深度解析（教学讲解风格，结构清晰）",
   "analysis": "标准答案（满分示范作答，包含必要公式/步骤/结论）",
+  "error_analysis": null,
   "memorix_rating": 1
 }}
 
 【字段约束】
 - score: 0 到 {max_score} 之间的数字
 - memorix_rating: 1/2/3/4
+- error_analysis: 仅当 score < max_score * 0.6 时填写；若 score >= max_score * 0.6 则设为 null。格式：{"type": "concept_error|calculation_error|careless_mistake", "reasoning": "错因详细分析", "suggested_focus": "针对性强化建议"}。三种错因类型：concept_error（概念/公式错误）、calculation_error（计算失误）、careless_mistake（审题/粗心）
