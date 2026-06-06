@@ -371,11 +371,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             <div className="max-w-3xl mx-auto p-4 space-y-3">
               {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
                 // render_visual 步骤 → 内联 VisualCard
-                if (msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && msg.toolStep.visual) {
+                const stepVisual = msg.toolStep?.visual;
+                const metaVisual = (msg as any).metadata?.visual;
+                const metaVisuals = (msg as any).metadata?.all_visuals;
+                const visual = stepVisual || metaVisual || (metaVisuals?.[0]);
+                if (msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && visual) {
                   return (
                     <InlineVisualCard
                       key={msg._id || i}
-                      visual={msg.toolStep.visual as VisualData}
+                      visual={visual as VisualData}
                       index={i}
                     />
                   );
