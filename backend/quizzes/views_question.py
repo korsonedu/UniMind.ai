@@ -88,6 +88,11 @@ class QuestionListView(generics.ListCreateAPIView):
         if kp_id: qs = qs.filter(knowledge_point_id=kp_id)
         if q_type: qs = qs.filter(q_type=q_type)
 
+        # 按知识点名称模糊匹配（小宇 action_cards 传的是 kp_name 而非 ID）
+        kp_name = self.request.query_params.get('kp_name')
+        if kp_name:
+            qs = qs.filter(knowledge_point__name__icontains=kp_name)
+
         # 按学科（SUB 级知识点）过滤；若过滤后为空则 fallback 到全量
         sub_ids = self.request.query_params.get('sub_ids', '')
         if sub_ids:

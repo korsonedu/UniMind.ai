@@ -52,7 +52,7 @@ export const TestSessionPage: React.FC = () => {
   }, [searchParams]);
 
   const kpId = useMemo(() => {
-    const kp = searchParams.get('kp');
+    const kp = searchParams.get('kp_name') || searchParams.get('kp');
     return kp || undefined;
   }, [searchParams]);
 
@@ -62,11 +62,11 @@ export const TestSessionPage: React.FC = () => {
     const fetchQuestions = async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}${kpId ? `&kp=${kpId}` : ''}`);
+        const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}${kpId ? `&kp_name=${kpId}` : ''}`);
         if (!res.data?.length) {
           // 任意 preference 无题目时 fallback 到 balanced
           if (preference !== 'balanced') {
-            const fallback = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=balanced${kpId ? `&kp=${kpId}` : ''}`);
+            const fallback = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=balanced${kpId ? `&kp_name=${kpId}` : ''}`);
             if (fallback.data?.length) {
               setQuestions(fallback.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
               setLoading(false);
