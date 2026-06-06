@@ -190,6 +190,21 @@ def analyze_user_profile(
                         'domain_expertise': profile.domain_expertise,
                         'confidence': profile.confidence,
                     }, timeout=86400)
+
+                    # 持久化写入 UserProfile
+                    from ai_assistant.models import UserProfile
+                    UserProfile.objects.update_or_create(
+                        user_id=user_id,
+                        defaults={
+                            'learning_style': profile.learning_style,
+                            'response_length': profile.response_length,
+                            'interaction_style': profile.interaction_style,
+                            'cognitive_state': profile.cognitive_state,
+                            'domain_expertise': profile.domain_expertise,
+                            'confidence': profile.confidence,
+                            'raw_analysis': profile.raw_analysis,
+                        }
+                    )
                 except Exception:
                     pass  # 缓存写入失败不影响返回
             

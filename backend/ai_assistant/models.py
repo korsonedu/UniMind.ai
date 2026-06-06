@@ -208,3 +208,85 @@ class AITrajectory(models.Model):
     
     def __str__(self):
         return f"{self.user} - {self.bot.name} - {self.conversation_id}"
+
+
+class UserProfile(models.Model):
+    """用户 6 维画像持久化存储，替代纯 Redis 缓存。
+
+    memory_analyzer.py 异步分析对话后写入此模型。
+    """
+
+    class LearningStyle(models.TextChoices):
+        FORMULA_ORIENTED = 'formula_oriented', '公式导向'
+        VISUAL_LEARNER = 'visual_learner', '视觉型'
+        EXAMPLE_DRIVEN = 'example_driven', '示例驱动'
+        MEMORIZATION_ORIENTED = 'memorization_oriented', '记忆导向'
+        BALANCED = 'balanced', '均衡'
+
+    class ResponseLength(models.TextChoices):
+        PREFERS_BRIEF = 'prefers_brief', '偏好简洁'
+        PREFERS_DETAILED = 'prefers_detailed', '偏好详细'
+        BALANCED = 'balanced', '均衡'
+
+    class InteractionStyle(models.TextChoices):
+        DEEP_QUESTIONER = 'deep_questioner', '深度提问者'
+        CRITICAL_THINKER = 'critical_thinker', '批判性思维者'
+        PASSIVE_LEARNER = 'passive_learner', '被动学习者'
+
+    class CognitiveState(models.TextChoices):
+        FOCUSED = 'focused', '专注'
+        ANXIOUS = 'anxious', '焦虑'
+        OVERWHELMED = 'overwhelmed', '不堪重负'
+        MOTIVATED = 'motivated', '积极进取'
+
+    class DomainExpertise(models.TextChoices):
+        BEGINNER = 'beginner', '初学者'
+        INTERMEDIATE = 'intermediate', '中级'
+        ADVANCED = 'advanced', '高级'
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='user_profile',
+    )
+    learning_style = models.CharField(
+        max_length=32,
+        choices=LearningStyle.choices,
+        default=LearningStyle.BALANCED,
+        blank=True,
+    )
+    response_length = models.CharField(
+        max_length=32,
+        choices=ResponseLength.choices,
+        default=ResponseLength.BALANCED,
+        blank=True,
+    )
+    interaction_style = models.CharField(
+        max_length=32,
+        choices=InteractionStyle.choices,
+        default=InteractionStyle.PASSIVE_LEARNER,
+        blank=True,
+    )
+    cognitive_state = models.CharField(
+        max_length=32,
+        choices=CognitiveState.choices,
+        default=CognitiveState.FOCUSED,
+        blank=True,
+    )
+    domain_expertise = models.CharField(
+        max_length=32,
+        choices=DomainExpertise.choices,
+        default=DomainExpertise.INTERMEDIATE,
+        blank=True,
+    )
+    confidence = models.FloatField(default=0.0)
+    raw_analysis = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '用户画像'
+        verbose_name_plural = '用户画像'
+
+    def __str__(self):
+        return f"UserProfile({self.user_id})"
