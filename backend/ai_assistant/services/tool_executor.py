@@ -949,7 +949,7 @@ class PlannerToolExecutor(BaseToolExecutor):
     def _handle_grade_student_answer(self, args: Dict) -> Dict:
         """批改学生的回答。查找题目→调用判分服务→返回评分反馈。"""
         from quizzes.models import Question
-        from quizzes.services.ai_task_service import QuizAITaskService
+        from ai_assistant.services.grading_engine import GradingEngine
         from ai_engine.ai_service import AIService
 
         question_id = int(args.get('question_id', 0))
@@ -967,7 +967,7 @@ class PlannerToolExecutor(BaseToolExecutor):
             return {"error": f"题目 #{question_id} 不存在"}
 
         ai = AIService()
-        result = QuizAITaskService.grade_question(
+        result = GradingEngine.grade(
             ai=ai,
             question_text=question.question,
             user_answer=user_answer,
@@ -997,6 +997,23 @@ class PlannerToolExecutor(BaseToolExecutor):
                     uqs.save(update_fields=['error_type', 'error_metadata'])
             except Exception:
                 pass
+
+        # 写入 GradingRecord 历史记录
+        try:
+            from quizzes.models import GradingRecord
+            GradingRecord.objects.create(
+                user=self.user,
+                question_id=question_id,
+                score=result.get('score', 0),
+                max_score=result.get('max_score', 10.0),
+                is_correct=result.get('is_correct', False),
+                error_type=result.get('error_analysis', {}).get('type', ''),
+                error_metadata=result.get('error_analysis', {}),
+                feedback=result.get('feedback', ''),
+                analysis=result.get('analysis', ''),
+            )
+        except Exception:
+            pass
 
         return {
             "question_id": question_id,

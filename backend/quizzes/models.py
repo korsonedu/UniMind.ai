@@ -328,3 +328,18 @@ class ExamTemplate(models.Model):
     def __str__(self):
         prefix = '[系统]' if self.is_system else ''
         return f"{prefix}{self.name}"
+
+
+# ── 0038 GradingRecord ──
+class GradingRecord(models.Model):
+    """记录每次评分的完整历史，用于追溯和分析。"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    question = models.ForeignKey(Question, on_delete=models.SET_NULL, null=True)
+    score = models.FloatField()
+    max_score = models.FloatField()
+    is_correct = models.BooleanField()
+    error_type = models.CharField(max_length=32, blank=True, default='')
+    error_metadata = models.JSONField(default=dict, blank=True)
+    feedback = models.TextField(blank=True)
+    analysis = models.TextField(blank=True)
+    graded_at = models.DateTimeField(auto_now_add=True, db_index=True)
