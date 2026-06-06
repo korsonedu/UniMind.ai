@@ -55,6 +55,8 @@ export const TestSessionPage: React.FC = () => {
     return kp || undefined;
   }, [searchParams]);
 
+  const returnPath = searchParams.get('source') === 'xiaoyu' ? '/xiaoyu' : '/tests';
+
   useEffect(() => {
     const fetchQuestions = async () => {
       setLoading(true);
@@ -62,13 +64,13 @@ export const TestSessionPage: React.FC = () => {
         const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}${kpId ? `&kp=${kpId}` : ''}`);
         if (!res.data?.length) {
           toast.error(t('noQuestions'));
-          navigate('/tests', { replace: true });
+          navigate(returnPath, { replace: true });
           return;
         }
         setQuestions(res.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
       } catch (e) {
         toast.error(t('loadFailed'));
-        navigate('/tests', { replace: true });
+        navigate(returnPath, { replace: true });
       } finally {
         setLoading(false);
       }
@@ -145,7 +147,7 @@ export const TestSessionPage: React.FC = () => {
 
     if (unmasteredQuestions.length === 0) {
       toast.info(t('practiceEnded'));
-      navigate('/tests', { replace: true });
+      navigate(returnPath, { replace: true });
       return;
     }
 
@@ -154,7 +156,7 @@ export const TestSessionPage: React.FC = () => {
       const payload = unmasteredQuestions.map((q) => ({ question_id: q.id, answer: answers[q.id] }));
       await api.post('/quizzes/submit-exam/', { answers: payload });
       toast.success(t('submitted'), { description: t('submittedDesc') });
-      navigate('/tests', { replace: true });
+      navigate(returnPath, { replace: true });
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('submitFailed'));
     } finally {
