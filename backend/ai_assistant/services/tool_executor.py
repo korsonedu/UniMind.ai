@@ -81,7 +81,11 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'get_user_wrong_questions': lambda r: f"找到 {r.get('total_found', 0)} 道错题",
         'search_asr': lambda r: f"找到 {r.get('total_found', 0)} 个视频片段",
         'get_practice_questions': lambda r: f"抽取 {len(r.get('questions', []))} 道练习题",
-        'grade_student_answer': lambda r: f"得分 {r.get('score', 0)}/{r.get('max_score', 0)}",
+        'grade_student_answer': lambda r: f"得分 {r.get('score', 0)}/{r.get('max_score', 0)}" + (
+            ' · ' + {'concept_error':'概念错误','calculation_error':'计算失误','careless_mistake':'审题失误'}.get(
+                r.get('error_analysis', {}).get('type', ''), ''
+            ) if r.get('error_analysis', {}).get('type') else ''
+        ),
         'update_plan_task': lambda r: f"任务已更新为 {r.get('new_status', 'unknown')}",
     }
 
