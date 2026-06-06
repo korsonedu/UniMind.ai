@@ -370,12 +370,14 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
             <div className="max-w-3xl mx-auto p-4 space-y-3">
               {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
-                // render_visual 步骤 → 内联 VisualCard
+                // render_visual → 内联 VisualCard
                 const stepVisual = msg.toolStep?.visual;
                 const metaVisual = (msg as any).metadata?.visual;
                 const metaVisuals = (msg as any).metadata?.all_visuals;
+                const isRenderStep = msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done';
+                const hasMetadataVisual = !!(metaVisual || metaVisuals?.length);
                 const visual = stepVisual || metaVisual || (metaVisuals?.[0]);
-                if (msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && visual) {
+                if ((isRenderStep || hasMetadataVisual) && visual) {
                   return (
                     <InlineVisualCard
                       key={msg._id || i}
