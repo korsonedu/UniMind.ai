@@ -63,6 +63,15 @@ export const TestSessionPage: React.FC = () => {
       try {
         const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}${kpId ? `&kp=${kpId}` : ''}`);
         if (!res.data?.length) {
+          if (preference === 'review_first') {
+            // 无错题时 fallback 到普通抽题
+            const fallback = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=balanced${kpId ? `&kp=${kpId}` : ''}`);
+            if (fallback.data?.length) {
+              setQuestions(fallback.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
+              setLoading(false);
+              return;
+            }
+          }
           toast.error(t('noQuestions'));
           navigate(returnPath, { replace: true });
           return;
