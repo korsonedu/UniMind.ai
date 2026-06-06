@@ -164,11 +164,23 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           if (hRes.data.length > 0) {
             const allMsgs: Message[] = hRes.data
               .filter((m: Record<string, unknown>) => m.content !== '[Thinking...]')
-              .map((m: Record<string, unknown>) => ({
-                ...m,
-                content: processContent ? processContent(m.content as string) : (m.content as string),
-                visible: true,
-              }));
+              .map((m: Record<string, unknown>) => {
+                const msg = {
+                  ...m,
+                  content: processContent ? processContent(m.content as string) : (m.content as string),
+                  visible: true,
+                } as Message;
+                // 恢复 render_visual 步骤的 visual 数据（历史加载时可能只有 result）
+                if (msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual && msg.toolStep.result) {
+                  try {
+                    const result = typeof msg.toolStep.result === 'string' ? JSON.parse(msg.toolStep.result) : msg.toolStep.result;
+                    if (result && typeof result === 'object' && !Array.isArray(result) && 'type' in result) {
+                      msg.toolStep = { ...msg.toolStep, visual: result as { type: string; payload: any } };
+                    }
+                  } catch {}
+                }
+                return msg;
+              });
             const grouped = groupIntoSessions(allMsgs);
             setSessions(grouped);
             const lastMsg = hRes.data[hRes.data.length - 1];
