@@ -274,3 +274,31 @@ class MemorySystem:
             "knowledge_points": knowledge_points,
             "summary": f"共 {len(knowledge_points)} 个知识点，其中 {weak_count} 个需要重点关注"
         }
+
+    @staticmethod
+    def query_user_wrong_questions(user, limit=5, institution=None):
+        """查询用户错题列表。"""
+        from quizzes.models import UserQuestionStatus
+
+        limit = min(int(limit), 10)
+        qs = UserQuestionStatus.objects.filter(user=user, wrong_count__gt=0)
+        if institution:
+            qs = qs.filter(
+                models.Q(question__institution=institution) |
+                models.Q(question__institution__isnull=True)
+            )
+        wrong_qs = qs.select_related('question__knowledge_point').order_by('-wrong_count')[:limit]
+
+        return {
+            "questions": [
+                {
+                    "id": wq.question_id,
+                    "text": (wq.question.text or '')[:500],
+                    "answer": (wq.question.correct_answer or '')[:300],
+                    "q_type": wq.question.q_type,
+                    "kp_name": wq.question.knowledge_point.name if wq.question.knowledge_point else '',
+                    "wrong_count": wq.wrong_count,
+                }
+                for wq in wrong_qs
+            ],
+        }

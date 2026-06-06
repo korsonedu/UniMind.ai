@@ -189,30 +189,9 @@ class BaseToolExecutor:
         return MemorySystem.query_weak_points(self.user, self.institution)
 
     def _handle_get_user_wrong_questions(self, args: Dict) -> Dict:
-        from quizzes.models import UserQuestionStatus
-
+        from ai_assistant.services.memory_system import MemorySystem
         limit = min(int(args.get('limit', 5)), 10)
-        qs = UserQuestionStatus.objects.filter(user=self.user, wrong_count__gt=0)
-        if self.institution:
-            qs = qs.filter(
-                models.Q(question__institution=self.institution) |
-                models.Q(question__institution__isnull=True)
-            )
-        wrong_qs = qs.select_related('question__knowledge_point').order_by('-wrong_count')[:limit]
-
-        return {
-            "questions": [
-                {
-                    "id": wq.question_id,
-                    "text": (wq.question.text or '')[:500],
-                    "answer": (wq.question.correct_answer or '')[:300],
-                    "q_type": wq.question.q_type,
-                    "kp_name": wq.question.knowledge_point.name if wq.question.knowledge_point else '',
-                    "wrong_count": wq.wrong_count,
-                }
-                for wq in wrong_qs
-            ],
-        }
+        return MemorySystem.query_user_wrong_questions(self.user, limit, self.institution)
 
     def _handle_get_class_weak_points(self, args: Dict) -> Dict:
         """获取班级最薄弱的知识点（仅 teacher/owner 可用）。"""
@@ -745,9 +724,9 @@ class PlannerToolExecutor(BaseToolExecutor):
         ai = AIService()
         result = GradingEngine.grade(
             ai=ai,
-            question_text=question.question,
+            question_text=question.text,
             user_answer=user_answer,
-            correct_answer=question.answer,
+            correct_answer=question.correct_answer,
             q_type=question.q_type,
             max_score=10.0,
             grading_points=question.grading_points,

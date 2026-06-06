@@ -281,3 +281,12 @@ html {
 [data-sonner-toast] [data-description] {
   @apply text-muted-foreground font-medium !important;
 }
+
+/* ── Hide scrollbar but keep scrolling ── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

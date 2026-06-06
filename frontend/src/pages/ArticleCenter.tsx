@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FileText, ChevronRight, ChevronLeft } from 'lucide-react';
 import { PageWrapper } from '@/components/PageWrapper';
@@ -12,8 +12,8 @@ import { useTranslation } from 'react-i18next';
 
 export const ArticleCenter: React.FC = () => {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [showAllTags, setShowAllTags] = useState(false);
   const [page, setPage] = useState(1);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { t, i18n } = useTranslation('common');
 
@@ -30,15 +30,26 @@ export const ArticleCenter: React.FC = () => {
   const articles = data?.articles || [];
   const tagStats = data?.tag_stats || [];
   const totalPages = data?.total_pages || 1;
+  const totalCount = tagStats.reduce((sum: number, t: any) => sum + (t.count || 0), 0);
 
   const handleTagChange = (tag: string | null) => {
-    setSelectedTag(tag);
+    // Clicking the active tag deselects it
+    setSelectedTag(selectedTag === tag ? null : tag);
     setPage(1);
   };
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
     document.querySelector('main')?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const scrollTags = (direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const amount = 200;
+    scrollRef.current.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    });
   };
 
   if (loading && articles.length === 0) return <Loading message="Loading articles..." />;
@@ -48,44 +59,61 @@ export const ArticleCenter: React.FC = () => {
     <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')}>
       <div className="flex flex-col gap-5 md:gap-8 w-full text-left">
         
-        {/* Tags */}
-        <div className="flex flex-col gap-3 px-1 md:px-2">
-          <div className={cn(
-            "flex flex-wrap gap-2 overflow-hidden transition-all duration-500",
-            !showAllTags ? "max-h-[32px]" : "max-h-[500px]"
-          )}>
-            <Button 
+        {/* Tag Pills — horizontal scroll */}
+        <div className="relative group/tags">
+          {/* Scroll button: left */}
+          <button
+            onClick={() => scrollTags('left')}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 shadow-md border border-border/50 flex items-center justify-center opacity-0 group-hover/tags:opacity-100 transition-opacity disabled:opacity-0"
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+
+          <div
+            ref={scrollRef}
+            className="flex gap-2 overflow-x-auto scrollbar-none pb-1 -mx-1 px-1"
+          >
+            {/* "全部" pill */}
+            <button
               onClick={() => handleTagChange(null)}
-              variant={selectedTag === null ? "default" : "outline"}
-              className="rounded-full h-7 px-4 text-[11px] font-bold uppercase tracking-widest transition-all"
+              className={cn(
+                "shrink-0 rounded-full h-8 px-4 text-xs font-semibold transition-all duration-200 whitespace-nowrap border",
+                selectedTag === null
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-card text-muted-foreground border-border hover:border-foreground/20 hover:text-foreground"
+              )}
             >
-              {t('all')}
-            </Button>
-            {tagStats && Array.isArray(tagStats) && tagStats.map((tag) => (
-              <Button 
-                key={tag.name}
-                onClick={() => handleTagChange(tag.name)}
-                variant={selectedTag === tag.name ? "default" : "outline"}
-                className="rounded-full h-7 px-4 text-[11px] font-bold uppercase tracking-widest transition-all border-black/5"
-              >
-                {tag.name} · {tag.count}
-              </Button>
-            ))}
+              {t('all')} · {totalCount}
+            </button>
+
+            {tagStats.map((tag: any) => {
+              const isActive = selectedTag === tag.name;
+              return (
+                <button
+                  key={tag.name}
+                  onClick={() => handleTagChange(tag.name)}
+                  className={cn(
+                    "shrink-0 rounded-full h-8 px-4 text-xs font-semibold transition-all duration-200 whitespace-nowrap border",
+                    isActive
+                      ? "bg-foreground text-background border-foreground"
+                      : "bg-card text-muted-foreground border-border hover:border-foreground/20 hover:text-foreground"
+                  )}
+                >
+                  {tag.name} · {tag.count}
+                </button>
+              );
+            })}
           </div>
-          {tagStats.length > 4 && (
-            <div className="flex justify-start mt-1">
-              <Button 
-                onClick={() => setShowAllTags(!showAllTags)}
-                variant="ghost"
-                className="h-6 px-2 text-[11px] font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-1 group"
-              >
-                {showAllTags ? t('collapseTags') : t('expandTags', { count: tagStats.length - 4 })}
-                <div className={cn("transition-transform duration-300", showAllTags ? "rotate-180" : "rotate-0")}>
-                  <ChevronRight className={cn("w-3 h-3 transform rotate-90")} />
-                </div>
-              </Button>
-            </div>
-          )}
+
+          {/* Scroll button: right */}
+          <button
+            onClick={() => scrollTags('right')}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 shadow-md border border-border/50 flex items-center justify-center opacity-0 group-hover/tags:opacity-100 transition-opacity disabled:opacity-0"
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
         </div>
 
         {/* List Content */}
