@@ -36,6 +36,7 @@ export const TestSessionPage: React.FC = () => {
   const [answers, setAnswers] = useState<Record<number, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [empty, setEmpty] = useState(false);
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
   const lastTypeReminderQidRef = useRef<number | null>(null);
 
@@ -63,8 +64,8 @@ export const TestSessionPage: React.FC = () => {
       try {
         const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}${kpId ? `&kp=${kpId}` : ''}`);
         if (!res.data?.length) {
-          if (preference === 'review_first') {
-            // 无错题时 fallback 到普通抽题
+          // 任意 preference 无题目时 fallback 到 balanced
+          if (preference !== 'balanced') {
             const fallback = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=balanced${kpId ? `&kp=${kpId}` : ''}`);
             if (fallback.data?.length) {
               setQuestions(fallback.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
@@ -72,8 +73,8 @@ export const TestSessionPage: React.FC = () => {
               return;
             }
           }
-          toast.error(t('noQuestions'));
-          navigate(returnPath, { replace: true });
+          setEmpty(true);
+          setLoading(false);
           return;
         }
         setQuestions(res.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
@@ -177,6 +178,18 @@ export const TestSessionPage: React.FC = () => {
     return (
       <div className="h-full min-h-0 flex items-center justify-center bg-background">
         <Loader2 className="h-7 w-7 animate-spin text-muted-foreground/50" />
+      </div>
+    );
+  }
+
+  if (empty) {
+    return (
+      <div className="h-full min-h-0 flex flex-col items-center justify-center bg-background gap-4">
+        <p className="text-sm text-muted-foreground">题库中没有匹配的题目</p>
+        <button onClick={() => navigate(returnPath, { replace: true })}
+          className="text-sm text-primary hover:underline">
+          {returnPath === '/xiaoyu' ? '回到小宇' : '返回'}
+        </button>
       </div>
     );
   }
