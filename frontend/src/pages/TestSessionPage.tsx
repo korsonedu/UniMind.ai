@@ -57,6 +57,7 @@ export const TestSessionPage: React.FC = () => {
   }, [searchParams]);
 
   const returnPath = searchParams.get('source') === 'xiaoyu' ? '/xiaoyu' : '/tests';
+  const practiceDone = searchParams.get('source') === 'xiaoyu' && searchParams.get('practiceDone') === '1';
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -166,7 +167,7 @@ export const TestSessionPage: React.FC = () => {
       const payload = unmasteredQuestions.map((q) => ({ question_id: q.id, answer: answers[q.id] }));
       await api.post('/quizzes/submit-exam/', { answers: payload });
       toast.success(t('submitted'), { description: t('submittedDesc') });
-      navigate(returnPath, { replace: true });
+      navigate(practiceDone ? '/xiaoyu?practiceDone=1' : returnPath, { replace: true });
     } catch (e: any) {
       toast.error(e.response?.data?.error || t('submitFailed'));
     } finally {
@@ -336,7 +337,9 @@ export const TestSessionPage: React.FC = () => {
                           {String.fromCharCode(65 + i)}
                         </span>
                         <span className={cn('text-[13px] leading-snug', selected ? 'text-white' : 'text-stone-700')}>
-                          {opt}
+                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                            {processMathContent(opt)}
+                          </ReactMarkdown>
                         </span>
                       </button>
                     );

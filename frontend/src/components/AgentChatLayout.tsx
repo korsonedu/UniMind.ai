@@ -175,6 +175,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 const visuals = meta?.all_visuals || (meta?.visual ? [meta.visual] : null);
                 if (visuals && msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual) {
                   msg.toolStep = { ...msg.toolStep, visual: visuals[0] as { type: string; payload: any } };
+                  // 清理 metadata 避免渲染时重复
+                  if ((msg as any).metadata) {
+                    delete (msg as any).metadata.visual;
+                    delete (msg as any).metadata.all_visuals;
+                  }
                 }
                 return msg;
               });
@@ -202,6 +207,16 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     init();
     return () => { cancelled = true; };
   }, []);
+
+  // 做题后回到小宇，自动触发判分分析
+  useEffect(() => {
+    if (!initialized) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('practiceDone') === '1') {
+      window.history.replaceState({}, '', window.location.pathname);
+      setTimeout(() => handleSend('帮我分析刚才的练习结果'), 500);
+    }
+  }, [initialized]);
 
   // ── Session load/reset wrappers ──
 
