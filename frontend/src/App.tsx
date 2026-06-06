@@ -167,9 +167,9 @@ const HomeRedirect = () => {
   if (user?.institution_role === 'owner' || user?.institution_role === 'teacher' || user?.is_institution_admin) {
     return <Navigate to="/workbench" replace />;
   }
-  // 通过邀请链接加入机构的学生，未完成诊断 → 诊断页（全屏，无 sidebar）
-  if (user?.institution_role === 'student' && user?.institution && !user?.has_completed_initial_assessment) {
-    return <Navigate to="/diagnostic" replace />;
+  // 学生 → 小宇（Agent 为入口，诊断由小宇引导）
+  if (user?.institution_role === 'student') {
+    return <Navigate to="/xiaoyu" replace />;
   }
   return <Navigate to="/xiaoyu" replace />;
 };
