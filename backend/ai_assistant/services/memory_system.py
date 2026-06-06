@@ -178,6 +178,19 @@ class MemorySystem:
         }
 
     @staticmethod
+    def query_user_profile(user, institution=None) -> Dict:
+        """查询用户综合画像 — 聚合学习统计 + 掌握图谱 + 薄弱点。"""
+        stats = MemorySystem.query_learning_stats(user, institution=institution)
+        mastery = MemorySystem.query_mastery_map(user, institution=institution)
+        weak = MemorySystem.query_weak_points(user, institution=institution)
+
+        return {
+            "stats": stats,
+            "mastery_map": mastery.get("mastery_map", {}),
+            "weak_points": weak.get("weak_points", []),
+        }
+
+    @staticmethod
     def query_difficulty_analysis(user, subject: Optional[str] = None, institution=None) -> Dict:
         """查询知识点的 Memorix 难度分析。"""
         from quizzes.models import UserQuestionStatus

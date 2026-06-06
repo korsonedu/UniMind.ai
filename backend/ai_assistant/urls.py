@@ -8,6 +8,7 @@ from .views import (
     ActionCardInteractionView,
 )
 from .views_dashboard import XiaoYuDashboardView, ExamWorkbenchDashboardView
+from .views_api import grade_view, profile_view, due_view, stats_view
 
 urlpatterns = [
     path('dashboard/', XiaoYuDashboardView.as_view(), name='xiaoyu-dashboard'),
@@ -29,4 +30,10 @@ urlpatterns = [
     path('plans/<int:pk>/', StudyPlanDetailView.as_view(), name='study-plan-detail'),
     path('plans/<int:plan_id>/tasks/<str:task_id>/', StudyPlanTaskUpdateView.as_view(), name='study-plan-task-update'),
     path('card-interactions/', ActionCardInteractionView.as_view(), name='card-interactions'),
+
+    # Phase 5: Grading & Memory API
+    path('grading/grade/', grade_view, name='grading-grade'),
+    path('memory/profile/', profile_view, name='memory-profile'),
+    path('memory/due/', due_view, name='memory-due'),
+    path('memory/stats/', stats_view, name='memory-stats'),
 ]
