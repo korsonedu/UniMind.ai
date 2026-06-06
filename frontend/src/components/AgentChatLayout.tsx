@@ -170,14 +170,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   content: processContent ? processContent(m.content as string) : (m.content as string),
                   visible: true,
                 } as Message;
-                // 恢复 render_visual 步骤的 visual 数据（历史加载时可能只有 result）
-                if (msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual && msg.toolStep.result) {
-                  try {
-                    const result = typeof msg.toolStep.result === 'string' ? JSON.parse(msg.toolStep.result) : msg.toolStep.result;
-                    if (result && typeof result === 'object' && !Array.isArray(result) && 'type' in result) {
-                      msg.toolStep = { ...msg.toolStep, visual: result as { type: string; payload: any } };
-                    }
-                  } catch {}
+                // 恢复 metadata 中的 visual 到 toolStep（历史加载时 SSE 的 visual 存在 metadata 中）
+                const meta = (m as any).metadata;
+                const visuals = meta?.all_visuals || (meta?.visual ? [meta.visual] : null);
+                if (visuals && msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual) {
+                  msg.toolStep = { ...msg.toolStep, visual: visuals[0] as { type: string; payload: any } };
                 }
                 return msg;
               });
