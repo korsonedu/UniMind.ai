@@ -15,6 +15,7 @@ from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
+from celery.schedules import crontab
 
 load_dotenv()
 
@@ -336,6 +337,10 @@ CELERY_BEAT_SCHEDULE = {
     "aggregate-platform-stats-daily": {
         "task": "core.tasks.aggregate_daily_platform_stats",
         "schedule": 86400.0,
+    },
+    "analyze-trajectory-weekly": {
+        "task": "ai_assistant.tasks.analyze_trajectory_task",
+        "schedule": crontab(minute=0, hour=2, day_of_week=0),  # 每周日凌晨 2:00
     },
 }
 CELERY_BROKER_TRANSPORT_OPTIONS = {

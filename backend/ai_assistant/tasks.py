@@ -649,3 +649,105 @@ def precompute_user_profile(user_id: int):
         logger.exception("Failed to precompute user profile for user %d", user_id)
     finally:
         connections.close_all()
+
+
+# ──────────────────────────────────────────────
+#  GEPA 自进化骨架（Phase 7）
+# ──────────────────────────────────────────────
+
+@shared_task(
+    soft_time_limit=300,
+    time_limit=360,
+    acks_late=True,
+)
+def analyze_trajectory_task():
+    """分析 Trajectory 数据，计算工具调用成功率与对话完成度。
+
+    每周日凌晨执行，统计周期内的：
+    - 各 bot 的 outcome 分布（success / partial / failure）
+    - 工具调用频次（从 tool_calls JSON 提取 tool_name）
+    - prompt_variant 维度的成功率对比
+    """
+    from .models import AITrajectory, Bot
+    from django.db.models import Count
+    from django.utils import timezone
+    from datetime import timedelta
+    from collections import Counter
+
+    now = timezone.now()
+    cutoff = now - timedelta(days=7)
+
+    base_qs = AITrajectory.objects.filter(created_at__gte=cutoff)
+    total = base_qs.count()
+
+    if total == 0:
+        logger.info("analyze_trajectory_task: no trajectories in the last 7 days, skipping")
+        return {"total": 0}
+
+    # 1. 按 outcome 分布
+    outcome_stats = (
+        base_qs.values('outcome')
+        .annotate(count=Count('id'))
+        .order_by('-count')
+    )
+    outcome_map = {item['outcome']: item['count'] for item in outcome_stats}
+    success_count = outcome_map.get('success', 0)
+
+    # 2. 按 bot 统计
+    bot_stats = (
+        base_qs.values('bot_id', 'bot__name')
+        .annotate(count=Count('id'))
+        .order_by('-count')
+    )
+
+    # 3. 工具调用频次（遍历 tool_calls JSON）
+    tool_counter = Counter()
+    for trajectory in base_qs.iterator(chunk_size=500):
+        for tc in (trajectory.tool_calls or []):
+            name = tc.get('name') if isinstance(tc, dict) else None
+            if name:
+                tool_counter[name] += 1
+
+    # 4. prompt_variant 维度成功率
+    variant_stats = (
+        base_qs.values('prompt_variant')
+        .annotate(total=Count('id'))
+    )
+    variant_breakdown = []
+    for vs in variant_stats:
+        variant = vs['prompt_variant']
+        success = base_qs.filter(prompt_variant=variant, outcome='success').count()
+        variant_breakdown.append({
+            'variant': variant,
+            'total': vs['total'],
+            'success': success,
+            'success_rate': round(success / vs['total'], 3) if vs['total'] else 0,
+        })
+
+    result = {
+        'period': f'{cutoff.date()} ~ {now.date()}',
+        'total': total,
+        'success_count': success_count,
+        'success_rate': round(success_count / total, 3) if total else 0,
+        'outcome_distribution': outcome_map,
+        'top_tools': tool_counter.most_common(10),
+        'bot_breakdown': list(bot_stats),
+        'prompt_variant_breakdown': variant_breakdown,
+    }
+
+    logger.info("analyze_trajectory_task: %s", result)
+    return result
+
+
+@shared_task(
+    soft_time_limit=600,
+    time_limit=660,
+    acks_late=True,
+)
+def optimize_prompt_task():
+    """GEPA: Generate → Evaluate → Polish → Adapt（Phase 7 骨架）
+
+    对 low-success-rate 场景自动生成 prompt 变体。
+    当前为数据收集阶段，后续 Phase 实现完整自进化闭环。
+    """
+    pass  # 数据收集阶段，Phase 7 后续实现

@@ -343,3 +343,84 @@ class GradingRecord(models.Model):
     feedback = models.TextField(blank=True)
     analysis = models.TextField(blank=True)
     graded_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+# ── Phase 6: IRT ItemParameter ──
+class ItemParameter(models.Model):
+    """IRT 项目参数模型 - 存储每道题的三参数 Logistic 模型参数。"""
+    question = models.OneToOneField(
+        Question,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        help_text="关联的题目"
+    )
+    discrimination = models.FloatField(
+        default=1.0,
+        help_text="IRT a参数，区分度"
+    )
+    difficulty = models.FloatField(
+        default=0.0,
+        help_text="IRT b参数，难度"
+    )
+    guessing = models.FloatField(
+        default=0.25,
+        help_text="IRT c参数，猜测概率"
+    )
+    responses_count = models.IntegerField(
+        default=0,
+        help_text="用于估计的答题次数"
+    )
+    last_estimated_at = models.DateTimeField(null=True)
+
+    def __str__(self):
+        return f"ItemParam(q={self.question_id}, a={self.discrimination:.2f}, b={self.difficulty:.2f})"
+
+
+# ── Phase 6: UserAbility ──
+class UserAbility(models.Model):
+    """IRT 学生能力模型 - 学生对每个知识点的能力 θ 估计。"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
+    knowledge_point = models.ForeignKey(
+        KnowledgePoint,
+        on_delete=models.CASCADE
+    )
+    theta = models.FloatField(
+        default=0.0,
+        help_text="IRT θ参数，学生能力"
+    )
+    responses_count = models.IntegerField(
+        default=0
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'knowledge_point')
+
+    def __str__(self):
+        return f"Ability(u={self.user_id}, kp={self.knowledge_point_id}, θ={self.theta:.3f})"
+
+
+# ── Phase 6: QMatrixEntry ──
+class QMatrixEntry(models.Model):
+    """Q-matrix 条目 - 题目与知识点的关联矩阵，标记该题是否需要掌握此知识点才能答对。"""
+    question = models.ForeignKey(
+        Question,
+        on_delete=models.CASCADE
+    )
+    knowledge_point = models.ForeignKey(
+        KnowledgePoint,
+        on_delete=models.CASCADE
+    )
+    required = models.BooleanField(
+        default=True,
+        help_text="该题是否需要掌握此知识点才能答对"
+    )
+
+    class Meta:
+        unique_together = ('question', 'knowledge_point')
+
+    def __str__(self):
+        return f"QMatrix(q={self.question_id}, kp={self.knowledge_point_id}, req={self.required})"
