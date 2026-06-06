@@ -225,83 +225,82 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   // ── Landing state ──
 
   if (!hasConversation) {
-    const isNew = sessions.length === 0;
-    const greeting = isNew
-      ? "你好，我是小宇 👋\n\n先做个诊断测试？5 分钟，帮你了解强项和薄弱点。"
-      : "欢迎回来！有什么我可以帮你的？";
-
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full flex flex-col animate-in fade-in duration-500">
-          {/* Greeting — XiaoYu is talking */}
-          <div className="flex-1 flex flex-col justify-end pb-4">
-            <div className="max-w-3xl mx-auto w-full px-4 space-y-4">
-              <ChatBubble
-                msg={{ role: 'assistant', content: greeting }}
-                isUser={false}
-                index={0}
-              />
+        <div className="h-full flex flex-col items-center px-4 animate-in fade-in duration-500 pt-[10vh]">
+          <div className="w-full max-w-xl">
+            <div className="space-y-3 mb-8">
+              <h1 className="text-4xl font-bold tracking-tight text-foreground/90">{landingTitle}</h1>
+              <p className="text-sm text-foreground/65">{landingDescription}</p>
             </div>
-          </div>
 
-          {/* Input area */}
-          <div className="shrink-0 border-t border-border/40 p-4">
-            <div className="max-w-3xl mx-auto">
-              <div className="flex items-center gap-1.5 bg-card rounded-xl p-1 border border-border/60 transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
-                <Input
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onCompositionStart={() => setIsComposition(true)}
-                  onCompositionEnd={() => setIsComposition(false)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); handleSend(); } }}
-                  placeholder={placeholder}
-                  autoComplete="off"
-                  className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-9 px-3 placeholder:text-muted-foreground/40"
-                  disabled={loading}
-                />
-                <Button onClick={handleSend} disabled={loading || !input.trim()} size="icon"
-                  className="rounded-lg h-9 w-9 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            <div className="bg-card rounded-xl border border-border/60 overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onCompositionStart={() => setIsComposition(true)}
+                onCompositionEnd={() => setIsComposition(false)}
+                placeholder={placeholder}
+                autoComplete="off"
+                className="w-full bg-transparent border-none resize-none text-sm px-3 py-3.5 placeholder:text-muted-foreground/60 focus:outline-none min-h-[120px]"
+                disabled={loading}
+              />
+              <div className="flex items-center justify-end px-2.5 py-2 border-t border-border/40">
+                <Button
+                  onClick={handleSend}
+                  disabled={loading || !input.trim()}
+                  size="icon"
+                  className="rounded-lg h-8 w-8 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90"
+                >
+                  {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 </Button>
               </div>
-              <div className="flex flex-wrap justify-center gap-1.5 mt-3">
-                {skills.map(skill => (
-                  <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
-                    className="inline-flex items-center px-2.5 py-1 rounded-full border border-border text-[11px] text-foreground/50 hover:text-foreground/70 hover:bg-muted/30 transition-colors">
-                    {skill.label}
-                  </button>
-                ))}
-              </div>
-              {sessions.length > 0 && (
-                <div className="flex justify-center mt-2">
-                  <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
-                    <PopoverTrigger asChild>
-                      <button className="text-[11px] text-muted-foreground/35 hover:text-foreground/50 transition-colors flex items-center gap-1">
-                        <History className="h-3 w-3" />
-                        {sessions.length} 个历史对话
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" side="top" className="w-64 p-1 rounded-lg border-border/60 shadow-lg max-h-48 overflow-y-auto">
-                      <div className="space-y-0.5">
-                        {[...sessions].reverse().map(session => (
-                          <div key={session.id}
-                            className="w-full flex items-start gap-1 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors group">
-                            <button onClick={() => wrappedLoadSession(session)}
-                              className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
-                              <span className="text-[11px] font-medium truncate">{session.label}</span>
-                              <span className="text-[9px] text-muted-foreground/40">
-                                {session.messages.length} 条消息
-                                {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
-                              </span>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              )}
             </div>
+
+            <div className="flex flex-wrap justify-center gap-1.5 mt-4">
+              {skills.map(skill => (
+                <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
+                  className="inline-flex items-center px-2.5 py-1 rounded-full border border-border text-[11px] text-foreground/70 hover:text-foreground/90 hover:bg-muted/40 transition-colors">
+                  {skill.label}
+                </button>
+              ))}
+            </div>
+
+            {sessions.length > 0 && (
+              <div className="flex justify-center mt-6">
+                <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="text-sm text-muted-foreground/65 hover:text-foreground/70 transition-colors flex items-center gap-1.5">
+                      <History className="h-3.5 w-3.5" />
+                      {sessions.length} 个历史对话
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" side="top" className="w-72 p-1.5 rounded-lg border-border/60 shadow-lg max-h-64 overflow-y-auto">
+                    <div className="space-y-0.5">
+                      {[...sessions].reverse().map(session => (
+                        <div key={session.id}
+                          className="w-full flex items-start gap-1.5 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors group">
+                          <button onClick={() => wrappedLoadSession(session)}
+                            className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
+                            <span className="text-[12px] font-medium truncate">{session.label}</span>
+                            <span className="text-[10px] text-muted-foreground/50">
+                              {session.messages.length} 条消息
+                              {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                            </span>
+                          </button>
+                          {onDeleteSession && (
+                            <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
+                              className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
           </div>
         </div>
       </TooltipProvider>
