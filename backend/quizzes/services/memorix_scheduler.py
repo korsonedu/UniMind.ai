@@ -346,47 +346,71 @@ def _field_rerank(question_ids, user, now, alpha):
     公式: score_i = α × urgency_i + (1-α) × field_benefit_i
     field_benefit_i = Σ_j w_ij × max(0, 1 - R_j(t))
     
+    urgency 计算取决于 MEMORIX_REC_ENABLED：
+      - 关闭：urgency_i = 1 - R_i(t)                     （标准 Weibull）
+      - 打开：urgency_i = P_i(t_elapsed) / P_i(t_opt)    （再巩固窗口）
+    
     返回重新排序后的 question_id 列表。
     """
     from quizzes.models import UserQuestionStatus, Question
     from quizzes.memorix.service import predict_retrievability
 
+    rec_enabled = getattr(settings, 'MEMORIX_REC_ENABLED', False)
+    rec_tau = getattr(settings, 'MEMORIX_REC_TAU', 0.042)  # 默认 1 小时（天）
+    rec_k = getattr(settings, 'MEMORIX_REC_K', 1.2)
+
     adj = _build_adjacency_from_edges()
     if not adj:
-        return question_ids  # 没有边，不重排
+        return question_ids
 
-    # 获取每个题目的 knowledge_point_id
     q_to_kp = dict(Question.objects.filter(
         id__in=question_ids
     ).values_list('id', 'knowledge_point_id'))
 
-    # 获取所有相关 KP 的 UserQuestionStatus
     kp_ids = set(q_to_kp.values())
     statuses = UserQuestionStatus.objects.filter(
         user=user,
         question__knowledge_point_id__in=kp_ids,
     ).select_related('question')
 
-    # kp_id → {stability, last_review}
+    # kp_id → {'R': float, 'stability': float, 'elapsed': float}
     kp_state = {}
     for st in statuses:
         kp_id = st.question.knowledge_point_id
         elapsed = (now - st.last_review).total_seconds() / 86400 if st.last_review else 999
         R = predict_retrievability(st.stability, elapsed, user_id=user.id)
-        kp_state[kp_id] = R
+        kp_state[kp_id] = {
+            'R': R,
+            'stability': st.stability,
+            'elapsed': elapsed,
+        }
 
     # 计算每个题目的 score
     scored = []
     for qid in question_ids:
         kp_id = q_to_kp.get(qid)
-        R_self = kp_state.get(kp_id, 0.0)
-        urgency = 1.0 - R_self
+        state = kp_state.get(kp_id, {})
+        R_self = state.get('R', 0.0)
+
+        # urgency
+        if rec_enabled and kp_id and kp_id in kp_state:
+            from quizzes.memorix.reconsolidation import compute_urgency
+            urgency = compute_urgency(
+                state['stability'],
+                state['elapsed'],
+                k=rec_k,
+                tau=rec_tau,
+            )
+        else:
+            urgency = 1.0 - R_self
 
         # field_benefit: 对每个邻居 j，贡献 = w_ij × (1 - R_j)
+        # 注意：field_benefit 始终用标准 (1-R_j)，不受 REC 影响
         fb = 0.0
         if kp_id and kp_id in adj:
             for neighbor_kp, w in adj[kp_id]:
-                R_neighbor = kp_state.get(neighbor_kp, 0.0)
+                nbr_state = kp_state.get(neighbor_kp, {})
+                R_neighbor = nbr_state.get('R', 0.0)
                 fb += w * max(0.0, 1.0 - R_neighbor)
 
         score = alpha * urgency + (1 - alpha) * fb
