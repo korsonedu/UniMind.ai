@@ -176,6 +176,10 @@ const HomeRedirect = () => {
 };
 
 // Root entry handler to manage landing vs app logic
+// korsonedu.com → 机构主页；unimind-ai.com → 正常 Landing/App
+const isKorsonedu = typeof window !== 'undefined' &&
+  /korsonedu\.com/.test(window.location.hostname);
+
 const RootRedirect = () => {
   const { user, setAuth, logout } = useAuthStore();
   const hasHydrated = useAuthStore.persist.hasHydrated();
@@ -185,17 +189,14 @@ const RootRedirect = () => {
 
   useEffect(() => {
     if (!hasHydrated) return;
-    // Always verify session with backend
     api.get('/users/me/')
       .then(res => {
         setAuth(res.data, null);
         setValidUser(true);
       })
       .catch(() => {
-        // Not logged in or session expired — clear stale localStorage
         logout();
         setValidUser(false);
-        // Check invite for unauthenticated users
         api.get('/users/check-invite/')
           .then(res => {
             if (res.data?.has_invite) navigate('/register', { replace: true });
@@ -208,6 +209,9 @@ const RootRedirect = () => {
   if (!hasHydrated || checking) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
   if (validUser) return <Outlet />;
+
+  // korsonedu.com → 直接展示机构主页
+  if (isKorsonedu) return <Suspense fallback={<PageLoader />}><InstitutionHome slug="korsonedu" /></Suspense>;
 
   return <Suspense fallback={<PageLoader />}><Landing /></Suspense>;
 };

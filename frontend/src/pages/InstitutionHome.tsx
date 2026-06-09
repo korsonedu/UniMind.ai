@@ -561,11 +561,11 @@ const ErrorState: React.FC<{ slug: string }> = ({ slug }) => (
 /* ──────────────────────────────────────────────────
    MAIN
    ────────────────────────────────────────────────── */
-const InstitutionHome: React.FC = () => {
+const InstitutionHome: React.FC<{ slug?: string }> = ({ slug: propSlug }) => {
   const { slug: paramSlug } = useParams<{ slug: string }>();
   const storeInst = useInstitutionStore(s => s.institution);
   const authInst = useAuthStore(s => s.user?.institution);
-  const slug = paramSlug || storeInst?.slug || authInst?.slug || '';
+  const slug = propSlug || paramSlug || storeInst?.slug || authInst?.slug || '';
   const [institution, setInstitution] = useState<InstitutionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
