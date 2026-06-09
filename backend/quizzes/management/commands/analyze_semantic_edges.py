@@ -184,13 +184,13 @@ class Command(BaseCommand):
                         {'role': 'user', 'content': user_msg},
                     ],
                     'temperature': 0.2,
-                    'max_tokens': 4096,
+                    'max_tokens': 8192,
                 },
                 headers={
                     'Authorization': f'Bearer {api_key}',
                     'Content-Type': 'application/json',
                 },
-                timeout=60,
+                timeout=90,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -199,19 +199,8 @@ class Command(BaseCommand):
             self.stderr.write(f" ❌ {e}")
             return []
 
-        # 解析 JSON
-        if content.startswith('```'):
-            lines = content.split('\n')
-            content = '\n'.join(lines[1:])
-            if content.endswith('```'):
-                content = content[:-3]
-
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            # 尝试修正常见问题
-            self.stderr.write(f" ⚠️ JSON parse failed, raw: {content[:200]}")
-            return []
+        # 解析 JSON，支持截断修复
+        return self._parse_json_response(content)
 
     def _find_id(self, name, summary_lines):
         """在全局摘要中按名字找 KP ID"""
@@ -226,6 +215,43 @@ class Command(BaseCommand):
                     except ValueError:
                         pass
         return None
+
+    def _parse_json_response(self, content):
+        """鲁棒 JSON 解析：处理 markdown 包裹、截断等"""
+        # 去掉 markdown 包裹
+        if content.startswith('```'):
+            lines = content.split('\n')
+            content = '\n'.join(lines[1:])
+            if content.endswith('```'):
+                content = content[:-3]
+
+        # 尝试完整解析
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            pass
+
+        # 截断修复：找到最后一个完整的对象 }，补上数组结尾 ]
+        content = content.strip()
+        if content.startswith('['):
+            # 找到最后一个 } 后面没有逗号或紧跟换行/空格的位置
+            last_brace = content.rfind('}')
+            if last_brace > 0:
+                truncated = content[:last_brace + 1] + '\n]'
+                try:
+                    return json.loads(truncated)
+                except json.JSONDecodeError:
+                    # 再试：找到最后一个 }, 加上 ]
+                    last_comma_obj = content.rfind('},')
+                    if last_comma_obj > 0:
+                        truncated = content[:last_comma_obj + 1] + '\n]'
+                        try:
+                            return json.loads(truncated)
+                        except json.JSONDecodeError:
+                            pass
+
+        self.stderr.write(f" ⚠️ JSON parse failed, raw: {content[:150]}")
+        return []
 
     def _create_edges(self, results):
         # 去重：同一对 KP 可能被 LLM 返回多个关系，只保留最高置信度的
