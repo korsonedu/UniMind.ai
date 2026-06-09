@@ -228,23 +228,35 @@ class Command(BaseCommand):
         return None
 
     def _create_edges(self, results):
-        created = 0
+        # 去重：同一对 KP 可能被 LLM 返回多个关系，只保留最高置信度的
+        best = {}  # (src, tgt, relation) → max confidence entry
         for r in results:
             if r.get('relation') == 'none':
                 continue
+            # 每个 (src, tgt) 只保留最高置信度的一条
+            pair_key = (r['source_id'], r['target_id'])
+            if pair_key not in best or r.get('confidence', 0) > best[pair_key].get('confidence', 0):
+                best[pair_key] = r
+
+        created = 0
+        for r in best.values():
             weight = min(1.0, r.get('confidence', 0.7))
             for src, tgt in [(r['source_id'], r['target_id']),
                               (r['target_id'], r['source_id'])]:
-                _, is_new = KnowledgeEdge.objects.get_or_create(
-                    source_id=src,
-                    target_id=tgt,
-                    edge_type=r['relation'],
-                    defaults={
-                        'weight': weight,
-                        'source_type': 'llm',
-                        'is_active': False,
-                    },
-                )
-                if is_new:
-                    created += 1
+                try:
+                    _, is_new = KnowledgeEdge.objects.get_or_create(
+                        source_id=src,
+                        target_id=tgt,
+                        edge_type=r['relation'],
+                        defaults={
+                            'weight': weight,
+                            'source_type': 'llm',
+                            'is_active': False,
+                        },
+                    )
+                    if is_new:
+                        created += 1
+                except Exception:
+                    # 并发或重复导致的 IntegrityError，跳过
+                    pass
         return created
