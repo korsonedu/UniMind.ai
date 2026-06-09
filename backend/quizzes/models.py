@@ -422,5 +422,59 @@ class QMatrixEntry(models.Model):
     class Meta:
         unique_together = ('question', 'knowledge_point')
 
+
+# ── Memorix Phase 1: KnowledgeEdge ──
+class KnowledgeEdge(models.Model):
+    """
+    知识图的有向边。source → target 表示"复习 source 会通过扩散
+    影响 target 的记忆状态"。边是有向的——扩散方向不一定可逆。
+    """
+    EDGE_TYPES = [
+        ('contains',     '包含'),
+        ('prerequisite', '前驱'),
+        ('similar',      '相似'),
+        ('contrast',     '对立'),
+        ('confusion',    '混淆'),
+        ('co_occur',     '共现'),
+        ('derivation',   '推导'),
+    ]
+    SOURCE_TYPES = [
+        ('tree',   '从 KnowledgePoint 树派生'),
+        ('llm',    'LLM 批量生成'),
+        ('manual', '手工标注'),
+        ('data',   'ReviewLog 数据驱动'),
+    ]
+
+    source = models.ForeignKey(
+        KnowledgePoint, on_delete=models.CASCADE,
+        related_name='out_edges',
+    )
+    target = models.ForeignKey(
+        KnowledgePoint, on_delete=models.CASCADE,
+        related_name='in_edges',
+    )
+    edge_type = models.CharField(max_length=16, choices=EDGE_TYPES)
+    weight = models.FloatField(default=1.0, help_text='扩散权重 [0, 1]')
+    source_type = models.CharField(max_length=16, choices=SOURCE_TYPES, default='tree')
+    is_active = models.BooleanField(default=True, help_text='权重<0.05自动标记为False')
+    institution = models.ForeignKey(
+        'users.Institution', on_delete=models.CASCADE,
+        null=True, blank=True,
+        help_text='机构专属边（NULL=全局）',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('source', 'target', 'edge_type', 'institution')
+        indexes = [
+            models.Index(fields=['source', 'is_active']),
+            models.Index(fields=['target', 'is_active']),
+            models.Index(fields=['institution', 'is_active']),
+            models.Index(fields=['source_type']),
+        ]
+        verbose_name = '知识图边'
+        verbose_name_plural = '知识图边'
+
     def __str__(self):
-        return f"QMatrix(q={self.question_id}, kp={self.knowledge_point_id}, req={self.required})"
+        return f"{self.source} → {self.target} ({self.edge_type}, w={self.weight})"

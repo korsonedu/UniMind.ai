@@ -1,44 +1,38 @@
-import logging
-from django.db.models.signals import post_delete
+"""
+知识图边自动维护信号。
+
+监听 KnowledgePoint (level='kp') 的变更：
+- 新增 KP → 自动生成父子边 + 兄弟边
+- 移动 KP（parent 变更）→ 删旧边、建新边、修复旧兄弟群
+- 删除 KP → CASCADE 自动删边，无需处理
+
+变更为 SEC/CH/SUB 层级时不触发（它们不参与边生成）。
+"""
+from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
-
-logger = logging.getLogger(__name__)
-
-
-def _get_file_size(field) -> int:
-    """安全获取文件大小，文件不存在时返回 0。"""
-    try:
-        if field and hasattr(field, 'size'):
-            return field.size or 0
-    except Exception:
-        pass
-    return 0
+from quizzes.models import KnowledgePoint
+from quizzes.services.knowledge_edge_sync import sync_kp_neighborhood
 
 
-@receiver(post_delete, sender='quizzes.TeacherExam')
-def _on_teacher_exam_deleted(sender, instance, **kwargs):
-    """教师试卷删除时递减机构存储用量。"""
-    inst = instance.institution
-    if not inst:
+@receiver(pre_save, sender=KnowledgePoint)
+def capture_old_parent(sender, instance, **kwargs):
+    """保存前记录旧 parent_id，供 post_save 做 diff。"""
+    if instance.level != 'kp':
         return
-    total = _get_file_size(instance.exam_pdf)
-    if total > 0:
-        from users.quota import remove_storage_usage
-        remove_storage_usage(inst, total)
-        logger.info("TeacherExam %s deleted, freed %d bytes from institution %s", instance.pk, total, inst.pk)
+    if instance.pk:
+        try:
+            old = KnowledgePoint.objects.get(pk=instance.pk)
+            instance._old_parent_id = old.parent_id
+        except KnowledgePoint.DoesNotExist:
+            instance._old_parent_id = None
+    else:
+        instance._old_parent_id = None
 
 
-@receiver(post_delete, sender='quizzes.StudentExamSubmission')
-def _on_exam_submission_deleted(sender, instance, **kwargs):
-    """学生答卷删除时递减机构存储用量。"""
-    inst = instance.exam.institution if instance.exam else None
-    if not inst:
+@receiver(post_save, sender=KnowledgePoint)
+def on_kp_saved(sender, instance, created, **kwargs):
+    """KP 保存后增量同步边。"""
+    if instance.level != 'kp':
         return
-    total = (
-        _get_file_size(instance.answer_pdf)
-        + _get_file_size(instance.graded_pdf)
-    )
-    if total > 0:
-        from users.quota import remove_storage_usage
-        remove_storage_usage(inst, total)
-        logger.info("StudentExamSubmission %s deleted, freed %d bytes from institution %s", instance.pk, total, inst.pk)
+    old_parent_id = getattr(instance, '_old_parent_id', None)
+    sync_kp_neighborhood(instance, old_parent_id=old_parent_id)

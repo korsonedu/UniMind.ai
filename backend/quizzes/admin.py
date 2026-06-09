@@ -1,5 +1,5 @@
 from django.contrib import admin, messages
-from .models import KnowledgePoint, Question, QuizAttempt, UserQuestionStatus, QuizExam, ExamQuestionResult
+from .models import KnowledgePoint, Question, QuizAttempt, UserQuestionStatus, QuizExam, ExamQuestionResult, KnowledgeEdge
 
 from ai_service import AIService 
 
@@ -46,3 +46,4 @@ admin.site.register(QuizAttempt)
 admin.site.register(UserQuestionStatus)
 admin.site.register(QuizExam)
 admin.site.register(ExamQuestionResult)
+admin.site.register(KnowledgeEdge)

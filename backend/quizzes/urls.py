@@ -31,6 +31,11 @@ from .views_admin import (
     AdminContentPipelineTaskDetailView, AdminContentPipelineTaskRetryView,
     AdminPromptTemplateListView, AdminPromptTemplateDetailView, AdminPromptTemplateRollbackView,
 )
+from .views_knowledge_edge import (
+    KnowledgeEdgeListCreateView, KnowledgeEdgeDetailView,
+    KnowledgeEdgeBulkCreateView, KnowledgeEdgeLLMAnalyzeView,
+    KnowledgeEdgeReviewListView, KnowledgeEdgeReviewActionView,
+)
 
 urlpatterns = [
     path('questions/', QuestionListView.as_view(), name='question-list'),
@@ -58,6 +63,13 @@ urlpatterns = [
     path('knowledge-points/<int:pk>/', KnowledgePointDetailView.as_view(), name='knowledge-point-detail'),
     path('knowledge-points/import-md/', KnowledgePointImportMDView.as_view(), name='knowledge-point-import-md'),
     path('knowledge-points/export-md/', KnowledgePointExportMDView.as_view(), name='knowledge-point-export-md'),
+    # 知识图边（教师端）
+    path('knowledge-edges/', KnowledgeEdgeListCreateView.as_view(), name='knowledge-edge-list'),
+    path('knowledge-edges/bulk/', KnowledgeEdgeBulkCreateView.as_view(), name='knowledge-edge-bulk'),
+    path('knowledge-edges/llm-analyze/', KnowledgeEdgeLLMAnalyzeView.as_view(), name='knowledge-edge-llm-analyze'),
+    path('knowledge-edges/review/', KnowledgeEdgeReviewListView.as_view(), name='knowledge-edge-review-list'),
+    path('knowledge-edges/review/action/', KnowledgeEdgeReviewActionView.as_view(), name='knowledge-edge-review-action'),
+    path('knowledge-edges/<int:pk>/', KnowledgeEdgeDetailView.as_view(), name='knowledge-edge-detail'),
     # 智能出题工作流
     path('ai-parse-raw-text/', AIPreviewParseView.as_view(), name='ai-parse-raw-text'),
     path('import-csv/', ImportCSVQuestionsView.as_view(), name='import-csv'),

@@ -196,6 +196,7 @@ const PricingPage: React.FC = () => {
             <div className="flex items-center gap-4 text-[11px] text-white/40">
               <Link to="/privacy" className="hover:text-white/70 transition-colors">隐私政策</Link>
               <Link to="/terms" className="hover:text-white/70 transition-colors">用户协议</Link>
+              <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="hover:text-white/70 transition-colors">京ICP备2023012726号-2</a>
               <span>© {COPYRIGHT_YEAR} {COPYRIGHT_ENTITY} · {APP_VERSION}</span>
             </div>
           </div>

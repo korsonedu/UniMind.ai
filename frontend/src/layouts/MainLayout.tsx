@@ -35,7 +35,6 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useSystemStore } from '@/store/useSystemStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { NotificationBell } from '@/components/NotificationBell';
-import { OnboardingDialog } from '@/components/OnboardingDialog';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
@@ -582,7 +581,6 @@ export const MainLayout: React.FC = () => {
           </AlertDialogContent>
         </AlertDialog>
 
-        <OnboardingDialog />
         <PersistentUploadToast />
       </div>
     </TooltipProvider>

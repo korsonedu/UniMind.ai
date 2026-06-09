@@ -14,7 +14,7 @@ const TEACHER_STEPS = 5;
 
 const SCALE_OPTIONS = ['1-50', '50-200', '200-500', '500+'] as const;
 
-export function OnboardingDialog() {
+export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean }) {
   const { user, updateUser } = useAuthStore();
   const institution = useInstitutionStore(s => s.institution);
   const fetchFeatures = useInstitutionStore(s => s.fetchFeatures);
@@ -61,8 +61,9 @@ export function OnboardingDialog() {
 
   const PLAN_DIRECTION_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 999999 };
 
-  // Don't show if: no user / has institution / dismissed / platform admin
-  if (!user || user.institution || user.institution_id || institution || dismissed) return null;
+  // Don't show if: no user / has institution / platform admin
+  if (!user || user.institution || user.institution_id || institution) return null;
+  if (!mandatory && dismissed) return null;
   if (user.is_admin) return null;
 
   // Step 1: Role selection
@@ -140,10 +141,10 @@ export function OnboardingDialog() {
   const showTeacherProgress = role === 'teacher' && currentStep >= 2;
   const teacherCurrentStep = currentStep - 1; // map step 2-6 to 1-5 for dots
 
-  const shouldShow = !dismissed && user && !user.institution && !user.institution_id && !institution && !user.is_admin;
+  const shouldShow = user && !user.institution && !user.institution_id && !institution && !user.is_admin;
 
   return (
-    <Dialog open={shouldShow} onOpenChange={(open) => { if (!open) setDismissed(true); }}>
+    <Dialog open={shouldShow} onOpenChange={mandatory ? undefined : (open: boolean) => { if (!open) setDismissed(true); }}>
       <DialogContent className="sm:max-w-lg rounded-2xl border-none shadow-2xl bg-card p-8 h-[480px]"
         showClose={false}
       >

@@ -111,7 +111,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     scrollRef, inputRef,
     setMessages, setInput, setBot, setInitialized, setSkillOpen, setSessionOpen,
     setIsComposition, setActiveSessionId, setSessions, setConversationId,
-    handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleSend, handleReset,
+    handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleReset,
     handleSkillSelect, groupIntoSessions, doSend,
   } = useAgentConversation({
     findBot,
@@ -214,7 +214,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     const params = new URLSearchParams(window.location.search);
     if (params.get('practiceDone') === '1') {
       window.history.replaceState({}, '', window.location.pathname);
-      setTimeout(() => handleSend('帮我分析刚才的练习结果'), 500);
+      setTimeout(() => doSend('帮我分析刚才的练习结果'), 500);
     }
   }, [initialized]);
 
@@ -272,7 +272,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
               />
               <div className="flex items-center justify-end px-2.5 py-2 border-t border-border/40">
                 <Button
-                  onClick={handleSend}
+                  onClick={() => doSend(input)}
                   disabled={loading || !input.trim()}
                   size="icon"
                   className="rounded-lg h-8 w-8 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90"
@@ -449,13 +449,13 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   onChange={e => setInput(e.target.value)}
                   onCompositionStart={() => setIsComposition(true)}
                   onCompositionEnd={() => setIsComposition(false)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); handleSend(); } }}
+                  onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); doSend(input); } }}
                   placeholder={chatPlaceholder}
                   autoComplete="off"
                   className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[13px] h-9 px-3 placeholder:text-muted-foreground/40"
                   disabled={loading}
                 />
-                <Button onClick={handleSend} disabled={loading || !input.trim()} size="icon"
+                <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
                   className="rounded-lg h-9 w-9 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
@@ -587,13 +587,13 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 onChange={e => setInput(e.target.value)}
                 onCompositionStart={() => setIsComposition(true)}
                 onCompositionEnd={() => setIsComposition(false)}
-                onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); handleSend(); } }}
+                onKeyDown={e => { if (e.key === 'Enter' && !isComposing) { e.preventDefault(); doSend(input); } }}
                 placeholder={chatPlaceholder}
                 autoComplete="off"
                 className="bg-transparent border-none shadow-none focus-visible:ring-0 text-[12px] h-7 px-2.5 placeholder:text-muted-foreground/35"
                 disabled={loading}
               />
-              <Button onClick={handleSend} disabled={loading || !input.trim()} size="icon"
+              <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
                 className="rounded-md h-7 w-7 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0">
                 <Send className="h-3 w-3" />
               </Button>

@@ -13,10 +13,30 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import {
   BrainCircuit, Upload, Download, Plus, Pencil, Trash2, Loader2,
-  ChevronRight, ChevronDown, FileUp, RefreshCw, Check,
+  ChevronRight, ChevronDown, FileUp, RefreshCw, Check, Search, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useConfirm } from '@/components/useConfirm';
+
+// 边类型常量
+const EDGE_TYPES = ['contains', 'prerequisite', 'similar', 'contrast', 'confusion', 'co_occur', 'derivation'] as const;
+type EdgeType = typeof EDGE_TYPES[number];
+const EDGE_LABELS: Record<string, string> = {
+  contains: '包含', prerequisite: '前驱', similar: '相似', contrast: '对立',
+  confusion: '混淆', co_occur: '共现', derivation: '推导',
+};
+const EDGE_COLORS: Record<string, string> = {
+  contains: '#6B7280', prerequisite: '#F59E0B', similar: '#10B981', contrast: '#EF4444',
+  confusion: '#EC4899', co_occur: '#06B6D4', derivation: '#8B5CF6',
+};
+const EDGE_DEFAULTS: Record<string, number> = {
+  contains: 0.8, prerequisite: 0.7, derivation: 0.6, similar: 0.3, contrast: 0.3, confusion: 0.5, co_occur: 0.2,
+};
+
+interface KEdge {
+  id: number; source: number; source_name: string; target: number; target_name: string;
+  edge_type: EdgeType; weight: number; source_type: string;
+}
 
 interface KPNode {
   id: number;
@@ -216,6 +236,12 @@ export function KnowledgeSystemPanel() {
   const [mdText, setMdText] = useState('');
   const [importing, setImporting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [edges, setEdges] = useState<KEdge[]>([]);
+  const [edgesLoading, setEdgesLoading] = useState(false);
+  const [edgeSearch, setEdgeSearch] = useState('');
+  const [edgeTargetId, setEdgeTargetId] = useState<number | null>(null);
+  const [edgeType, setEdgeType] = useState<EdgeType>('similar');
+  const [edgeWeight, setEdgeWeight] = useState(0.3);
   const dragCounter = useRef(0);
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -272,6 +298,42 @@ export function KnowledgeSystemPanel() {
   };
 
   useEffect(() => { fetchTree(); }, []);
+
+  // ── 边操作 ──
+  const fetchEdges = useCallback(async (kpId: number) => {
+    setEdgesLoading(true);
+    try {
+      const { data } = await api.get('/quizzes/knowledge-edges/', { params: { kp_id: kpId } });
+      setEdges(data || []);
+    } catch { setEdges([]); } finally { setEdgesLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (selectedId) { fetchEdges(selectedId); setEdgeTargetId(null); }
+    else setEdges([]);
+  }, [selectedId, fetchEdges]);
+
+  const handleCreateEdge = async () => {
+    if (!selectedId || !edgeTargetId) { toast.error('请选择目标知识点'); return; }
+    try {
+      await api.post('/quizzes/knowledge-edges/bulk/', {
+        edges: [{ source: selectedId, target: edgeTargetId, edge_type: edgeType, weight: edgeWeight }],
+      });
+      toast.success('关联已创建');
+      fetchEdges(selectedId);
+      setEdgeTargetId(null);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || '创建失败');
+    }
+  };
+
+  const handleDeleteEdge = async (edgeId: number) => {
+    try {
+      await api.delete(`/quizzes/knowledge-edges/${edgeId}/`);
+      toast.success('关联已删除');
+      if (selectedId) fetchEdges(selectedId);
+    } catch { toast.error('删除失败'); }
+  };
 
   const handleDelete = async (node: KPNode) => {
     if (!(await confirm(t('knowledgeSystem.deleteConfirm', { name: node.name })))) return;
@@ -373,26 +435,109 @@ export function KnowledgeSystemPanel() {
       {/* Right: Detail + Import */}
       <ScrollArea className="min-h-0">
       <div className="space-y-4">
-        {/* Detail */}
+        {/* Detail with Tabs */}
         {selectedNode ? (
-          <Card className="p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <Badge className={cn('text-[9px] font-bold', LEVEL_COLORS[selectedNode.level] || 'bg-muted')}>
-                {levelLabels[selectedNode.level] || selectedNode.level}
-              </Badge>
-              <div className="flex gap-1">
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditNode(selectedNode)}>
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-            <h4 className="text-sm font-extrabold text-foreground">{selectedNode.name}</h4>
-            {selectedNode.code && <p className="text-xs font-mono text-muted-foreground">{selectedNode.code}</p>}
-            {selectedNode.description && <p className="text-xs text-muted-foreground leading-relaxed">{selectedNode.description}</p>}
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1">
-              <span>{t('knowledgeSystem.questions', { count: selectedNode.questions_count })}</span>
-              <span>{t('knowledgeSystem.children', { count: selectedNode.children?.length || 0 })}</span>
-            </div>
+          <Card className="p-0 overflow-hidden">
+            <Tabs defaultValue="info" className="w-full">
+              <TabsList className="w-full rounded-none border-b bg-transparent h-9 px-2">
+                <TabsTrigger value="info" className="text-xs h-7">详情</TabsTrigger>
+                <TabsTrigger value="edges" className="text-xs h-7">
+                  关联{edges.length > 0 && <span className="ml-1 text-[10px] text-gray-400">({edges.length})</span>}
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="info" className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Badge className={cn('text-[9px] font-bold', LEVEL_COLORS[selectedNode.level] || 'bg-muted')}>
+                    {levelLabels[selectedNode.level] || selectedNode.level}
+                  </Badge>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditNode(selectedNode)}>
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </div>
+                <h4 className="text-sm font-extrabold text-foreground">{selectedNode.name}</h4>
+                {selectedNode.code && <p className="text-xs font-mono text-muted-foreground">{selectedNode.code}</p>}
+                {selectedNode.description && <p className="text-xs text-muted-foreground leading-relaxed">{selectedNode.description}</p>}
+                <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1">
+                  <span>{t('knowledgeSystem.questions', { count: selectedNode.questions_count })}</span>
+                  <span>{t('knowledgeSystem.children', { count: selectedNode.children?.length || 0 })}</span>
+                </div>
+              </TabsContent>
+              <TabsContent value="edges" className="p-3 space-y-2">
+                {/* 添加关联 */}
+                <div className="flex items-center gap-1.5">
+                  <Select value={String(edgeTargetId || '')} onValueChange={v => { setEdgeTargetId(Number(v)); }}>
+                    <SelectTrigger className="flex-1 h-8 rounded-lg bg-muted/50 border-none text-xs">
+                      <SelectValue placeholder="选择关联知识点..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-48">
+                      <div className="sticky top-0 bg-white px-2 py-1 border-b">
+                        <input className="w-full text-xs border-none outline-none py-1" placeholder="搜索..."
+                          value={edgeSearch} onChange={e => setEdgeSearch(e.target.value)} />
+                      </div>
+                      {allNodes
+                        .filter(n => n.level === 'kp' && n.id !== selectedId && (!edgeSearch || n.name.includes(edgeSearch)))
+                        .slice(0, 30)
+                        .map(n => (
+                          <SelectItem key={n.id} value={String(n.id)} className="text-xs">{n.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {edgeTargetId && (
+                  <div className="flex items-center gap-1.5">
+                    <Select value={edgeType} onValueChange={v => { setEdgeType(v as EdgeType); setEdgeWeight(EDGE_DEFAULTS[v] || 0.3); }}>
+                      <SelectTrigger className="h-7 rounded-lg bg-muted/50 border-none text-[10px] w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {EDGE_TYPES.map(t => (
+                          <SelectItem key={t} value={t} className="text-xs">
+                            <span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ backgroundColor: EDGE_COLORS[t] }} />
+                            {EDGE_LABELS[t]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input type="number" min={0.05} max={1} step={0.05} value={edgeWeight}
+                      onChange={e => setEdgeWeight(Number(e.target.value))}
+                      className="h-7 w-14 rounded-lg bg-muted/50 border-none text-[10px] text-center" />
+                    <Button size="sm" className="h-7 text-[10px] rounded-lg" onClick={handleCreateEdge}>添加</Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEdgeTargetId(null)}><X className="w-3 h-3" /></Button>
+                  </div>
+                )}
+
+                {/* 已有边列表 */}
+                {edgesLoading ? (
+                  <div className="py-4 text-center text-xs text-gray-400">加载中...</div>
+                ) : edges.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-gray-300">暂无关联</div>
+                ) : (
+                  edges.map(e => {
+                    const otherId = e.source === selectedId ? e.target : e.source;
+                    const otherName = e.source === selectedId ? e.target_name : e.source_name;
+                    return (
+                      <div key={e.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-2.5 py-2 text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: EDGE_COLORS[e.edge_type] || '#999' }} />
+                          <span className="font-medium text-[10px] shrink-0">{EDGE_LABELS[e.edge_type]}</span>
+                          <span className="text-gray-300 shrink-0">→</span>
+                          <span className="truncate">{otherName}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <span className="text-[10px] text-gray-300 font-mono">{e.weight.toFixed(1)}</span>
+                          {e.source_type !== 'tree' && (
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-red-300 hover:text-red-500"
+                              onClick={() => handleDeleteEdge(e.id)}>
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </TabsContent>
+            </Tabs>
           </Card>
         ) : (
           <Card className="p-4 text-center text-xs text-muted-foreground">

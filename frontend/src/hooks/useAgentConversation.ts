@@ -370,13 +370,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // ── Handlers ──
 
-  const handleSend = useCallback(() => {
-    if (!input.trim() || loading || !bot) return;
-    const text = input;
-    setInput('');
-    doSend(text);
-  }, [input, loading, bot, doSend]);
-
   const handleReset = useCallback(() => {
     if (!bot) return;
     if (abortRef.current) abortRef.current.abort();
@@ -442,7 +435,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     handleLoadSession,
     handleRefreshSessions,
     handleDeleteSession,
-    handleSend,
     handleReset,
     handleSkillSelect,
     doSend,

@@ -15,6 +15,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 const WeeklyReportDialog = lazy(() => import('./components/WeeklyReportDialog').then(m => ({ default: m.WeeklyReportDialog })));
 const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
 import { FeedbackButton } from './components/FeedbackButton';
+import { OnboardingDialog } from '@/components/OnboardingDialog';
 
 // Lazy-loaded pages — named exports need .then() wrapper
 const lazyNamed = <T extends Record<string, React.ComponentType<any>>>(loader: () => Promise<T>, name: keyof T) =>
@@ -282,10 +283,17 @@ function App() {
         <WeeklyReportDialog />
         <NPSSurvey />
       </Suspense>
+      <OnboardingOverlay />
       <RouterProvider router={router} />
       <FeedbackButton />
     </ErrorBoundary>
   );
+}
+
+function OnboardingOverlay() {
+  const hasHydrated = useAuthStore.persist.hasHydrated();
+  if (!hasHydrated) return null;
+  return <OnboardingDialog mandatory />;
 }
 
 export default App;

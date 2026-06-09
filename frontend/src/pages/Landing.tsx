@@ -622,6 +622,7 @@ const Footer: React.FC = () => {
             © {COPYRIGHT_YEAR} {t('footer.copyrightEntity')} · {APP_VERSION}
           </p>
           <div className="flex items-center gap-4">
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors">京ICP备2023012726号-2</a>
             <Link to="/terms" className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors">{t('footer.terms')}</Link>
             <Link to="/privacy" className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors">{t('footer.privacy')}</Link>
           </div>

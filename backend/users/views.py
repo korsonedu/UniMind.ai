@@ -103,23 +103,32 @@ class RegisterView(generics.CreateAPIView):
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'error': '该邮箱已被注册'})
 
-        from datetime import timedelta
-        existing = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
         from django.contrib.auth.hashers import check_password
-        if not existing or not check_password(code, existing.verification_code):
+        from django.core.cache import cache
+        from datetime import timedelta
+
+        cached = cache.get(f"verification_code:{email}")
+        if not cached or not check_password(code, cached.get("code_hash", "")):
             from rest_framework.exceptions import ValidationError
             raise ValidationError({'error': '验证码错误或已过期'})
-        if existing.verification_code_sent_at:
-            expires = existing.verification_code_sent_at + timedelta(minutes=10)
-            if timezone.now() > expires:
-                from rest_framework.exceptions import ValidationError
-                raise ValidationError({'error': '验证码已过期，请重新发送'})
 
-        user = existing
+        sent_at = parse_datetime(cached["sent_at"]) if cached.get("sent_at") else None
+        if sent_at and timezone.now() > sent_at + timedelta(minutes=10):
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': '验证码已过期，请重新发送'})
+
+        cache.delete(f"verification_code:{email}")
+
+        username_base = email.split('@')[0]
+        username = username_base
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{username_base}{counter}"
+            counter += 1
+        user = User.objects.create_user(username=username, email=email)
         if nickname:
             user.nickname = nickname
         user.email_verified = True
-        user.verification_code = ''
         user.agreed_to_terms = True
         user.agreed_to_terms_at = timezone.now()
         user.set_password(password)
@@ -623,7 +632,7 @@ class UpdatePasswordView(generics.UpdateAPIView):
 
 
 class SendVerificationCodeView(APIView):
-    """发送邮箱验证码。注册场景：自动创建临时未验证用户。"""
+    """发送邮箱验证码。存入 Redis 缓存（10 分钟有效），不建用户。"""
     permission_classes = [AllowAny]
 
     @method_decorator(rate_limit(key_prefix="send_code", max_requests=3, window_seconds=600))
@@ -640,28 +649,15 @@ class SendVerificationCodeView(APIView):
                 return Response({'error': '该邮箱已被注册'}, status=400)
 
         from core.email_service import generate_verification_code, send_verification_email
-        from datetime import timedelta
+        from django.contrib.auth.hashers import make_password
+        from django.core.cache import cache
 
         code = generate_verification_code()
-
-        user = User.objects.filter(email=email, email_verified=False).order_by('-date_joined').first()
-        if not user:
-            username_base = email.split('@')[0]
-            username = username_base
-            counter = 1
-            while User.objects.filter(username=username).exists():
-                username = f"{username_base}{counter}"
-                counter += 1
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-            )
-            user.set_unusable_password()
-
-        from django.contrib.auth.hashers import make_password
-        user.verification_code = make_password(code)
-        user.verification_code_sent_at = timezone.now()
-        user.save(update_fields=['email', 'verification_code', 'verification_code_sent_at'])
+        cache.set(
+            f"verification_code:{email}",
+            {"code_hash": make_password(code), "sent_at": timezone.now().isoformat()},
+            timeout=600,
+        )
 
         ok = send_verification_email(email, code)
         if not ok:
@@ -1057,8 +1053,11 @@ class AccountDeleteView(APIView):
                 return Response({'error': '密码错误'}, status=400)
         elif verification_code:
             from django.contrib.auth.hashers import check_password as check_pw
-            if not user.verification_code or not check_pw(verification_code, user.verification_code):
-                return Response({'error': '验证码错误'}, status=400)
+            from django.core.cache import cache
+            cached = cache.get(f"verification_code:{user.email}")
+            if not cached or not check_pw(verification_code, cached.get("code_hash", "")):
+                return Response({'error': '验证码错误或已过期'}, status=400)
+            cache.delete(f"verification_code:{user.email}")
 
         from django.db import transaction
 

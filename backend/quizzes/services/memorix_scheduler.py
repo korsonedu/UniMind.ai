@@ -149,11 +149,12 @@ def build_adaptive_question_ids(
         removed_count = 0
         for qid in selected:
             t = texts.get(qid)
-            if t and t in seen:
+            if t is None:
+                continue
+            if t in seen:
                 removed_count += 1
                 continue
-            if t:
-                seen.add(t)
+            seen.add(t)
             deduped.append(qid)
 
         if removed_count:
@@ -167,6 +168,12 @@ def build_adaptive_question_ids(
                     .values_list("id", flat=True)[: removed_count * 2]
                 )
                 _select_ids(remaining, removed_count, selected_set, selected)
+
+    # ── Memorix-Field: 图扩散重排 ──
+    if getattr(settings, 'MEMORIX_FIELD_ENABLED', False):
+        alpha = getattr(settings, 'MEMORIX_FIELD_ALPHA', 0.60)
+        boost = getattr(settings, 'MEMORIX_FIELD_BOOST', 0.20)
+        selected = _field_rerank(selected, user, now, alpha, boost)
 
     return {
         "question_ids": selected,
@@ -247,3 +254,77 @@ def get_memorix_session_plan(user, minutes: int = 25, preferred_limit: Optional[
             for row in top_weak_kps
         ],
     }
+
+
+# ═══════════════════════════════════════════
+# Memorix-Field: Graph Diffusion Scheduling
+# ═══════════════════════════════════════════
+
+def _build_adjacency_from_edges():
+    """从 KnowledgeEdge 表构建邻接表 {kp_id: [(neighbor_kp_id, weight)]}"""
+    from quizzes.models import KnowledgeEdge
+    from collections import defaultdict
+
+    adj = defaultdict(list)
+    for edge in KnowledgeEdge.objects.filter(is_active=True).only(
+        'source_id', 'target_id', 'weight'
+    ):
+        adj[edge.source_id].append((edge.target_id, edge.weight))
+    return adj
+
+
+def _field_rerank(question_ids, user, now, alpha, boost):
+    """
+    对候选题目列表进行图扩散重排。
+    
+    公式: score_i = α × urgency_i + (1-α) × field_benefit_i
+    field_benefit_i = Σ_j w_ij × max(0, 1 - R_j(t))
+    
+    返回重新排序后的 question_id 列表。
+    """
+    from quizzes.models import UserQuestionStatus, Question
+    from memorix.service import predict_retrievability
+
+    adj = _build_adjacency_from_edges()
+    if not adj:
+        return question_ids  # 没有边，不重排
+
+    # 获取每个题目的 knowledge_point_id
+    q_to_kp = dict(Question.objects.filter(
+        id__in=question_ids
+    ).values_list('id', 'knowledge_point_id'))
+
+    # 获取所有相关 KP 的 UserQuestionStatus
+    kp_ids = set(q_to_kp.values())
+    statuses = UserQuestionStatus.objects.filter(
+        user=user,
+        question__knowledge_point_id__in=kp_ids,
+    ).select_related('question')
+
+    # kp_id → {stability, last_review}
+    kp_state = {}
+    for st in statuses:
+        kp_id = st.question.knowledge_point_id
+        elapsed = (now - st.last_review).total_seconds() / 86400 if st.last_review else 999
+        R = predict_retrievability(st.stability, elapsed, user_id=user.id)
+        kp_state[kp_id] = R
+
+    # 计算每个题目的 score
+    scored = []
+    for qid in question_ids:
+        kp_id = q_to_kp.get(qid)
+        R_self = kp_state.get(kp_id, 0.0)
+        urgency = 1.0 - R_self
+
+        # field_benefit: 对每个邻居 j，贡献 = w_ij × (1 - R_j)
+        fb = 0.0
+        if kp_id and kp_id in adj:
+            for neighbor_kp, w in adj[kp_id]:
+                R_neighbor = kp_state.get(neighbor_kp, 0.0)
+                fb += w * max(0.0, 1.0 - R_neighbor)
+
+        score = alpha * urgency + (1 - alpha) * fb
+        scored.append((qid, score))
+
+    scored.sort(key=lambda x: -x[1])
+    return [qid for qid, _ in scored]

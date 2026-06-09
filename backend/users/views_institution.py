@@ -87,6 +87,11 @@ class InstitutionListView(APIView):
         serializer = CreateInstitutionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         institution = serializer.save(created_by=request.user)
+        # 创建机构的用户应升级为管理员
+        request.user.role = 'admin'
+        request.user.institution_role = 'owner'
+        request.user.institution = institution
+        request.user.save()
         return Response(InstitutionSerializer(institution).data, status=status.HTTP_201_CREATED)
 
 

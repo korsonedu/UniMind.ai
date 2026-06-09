@@ -1,0 +1,2007 @@
+{
+  "nodes": [
+    {
+      "id": 1025,
+      "parent_id": null,
+      "name": "道德与职业标准",
+      "level": "sub",
+      "code": "SUB-01"
+    },
+    {
+      "id": 1026,
+      "parent_id": 1025,
+      "name": "道德与信任",
+      "level": "ch",
+      "code": "CH-01"
+    },
+    {
+      "id": 1027,
+      "parent_id": 1026,
+      "name": "道德基础",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1028,
+      "parent_id": 1027,
+      "name": "道德与法律的区别",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1034,
+      "parent_id": 1033,
+      "name": "道德规范六大原则",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1039,
+      "parent_id": 1038,
+      "name": "专业性",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1040,
+      "parent_id": 1039,
+      "name": "Ⅰ 法律知识",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1045,
+      "parent_id": 1044,
+      "name": "Ⅱ 重大非公开信息",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1048,
+      "parent_id": 1047,
+      "name": "Ⅲ 忠诚、审慎与关心",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1054,
+      "parent_id": 1053,
+      "name": "Ⅳ 忠诚",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1058,
+      "parent_id": 1057,
+      "name": "投资分析、建议与行动",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1059,
+      "parent_id": 1058,
+      "name": "Ⅴ 勤勉与合理基础",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1063,
+      "parent_id": 1062,
+      "name": "Ⅵ 利益冲突披露",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1067,
+      "parent_id": 1066,
+      "name": "Ⅶ 会员与候选人行为",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1070,
+      "parent_id": 1069,
+      "name": "GIPS概述与合规基础",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1071,
+      "parent_id": 1070,
+      "name": "GIPS的目标与适用范围",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1076,
+      "parent_id": 1075,
+      "name": "组合群构建",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1081,
+      "parent_id": 1080,
+      "name": "定量方法",
+      "level": "ch",
+      "code": "CH-01"
+    },
+    {
+      "id": 1082,
+      "parent_id": 1081,
+      "name": "货币时间价值",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1083,
+      "parent_id": 1082,
+      "name": "利率的解释",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1089,
+      "parent_id": 1088,
+      "name": "中心趋势与离散度",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1094,
+      "parent_id": 1093,
+      "name": "中心极限定理",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1100,
+      "parent_id": 1099,
+      "name": "一元线性回归",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1106,
+      "parent_id": 1105,
+      "name": "微观经济学",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1107,
+      "parent_id": 1106,
+      "name": "需求与供给分析",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1113,
+      "parent_id": 1112,
+      "name": "GDP计量与结构",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1118,
+      "parent_id": 1117,
+      "name": "货币定义与创造过程",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1124,
+      "parent_id": 1123,
+      "name": "比较优势与贸易",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1129,
+      "parent_id": 1128,
+      "name": "财务报告环境",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1130,
+      "parent_id": 1129,
+      "name": "财务报告目标与准则制定机构",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1135,
+      "parent_id": 1134,
+      "name": "资产负债表要素与列报",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1140,
+      "parent_id": 1139,
+      "name": "共同比分析与趋势分析",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1146,
+      "parent_id": 1145,
+      "name": "存货计价方法",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1153,
+      "parent_id": 1152,
+      "name": "盈余管理动机与方法",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1158,
+      "parent_id": 1157,
+      "name": "资本预算",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1159,
+      "parent_id": 1158,
+      "name": "净现值与内部收益率",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1164,
+      "parent_id": 1163,
+      "name": "加权平均资本成本计算",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1169,
+      "parent_id": 1168,
+      "name": "经营杠杆与财务杠杆",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1174,
+      "parent_id": 1173,
+      "name": "现金转换周期",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1180,
+      "parent_id": 1179,
+      "name": "权益投资",
+      "level": "ch",
+      "code": "CH-01"
+    },
+    {
+      "id": 1181,
+      "parent_id": 1180,
+      "name": "市场结构与指数",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1182,
+      "parent_id": 1181,
+      "name": "证券市场功能与结构",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1187,
+      "parent_id": 1186,
+      "name": "普通股与优先股特征",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1192,
+      "parent_id": 1191,
+      "name": "股利折现模型",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1198,
+      "parent_id": 1197,
+      "name": "固定收益市场与基本要素",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1199,
+      "parent_id": 1198,
+      "name": "债券契约与基本条款",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1204,
+      "parent_id": 1203,
+      "name": "收益率度量",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1209,
+      "parent_id": 1208,
+      "name": "证券化过程与结构",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1214,
+      "parent_id": 1213,
+      "name": "信用评级体系",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1219,
+      "parent_id": 1218,
+      "name": "衍生品市场与基础工具",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1220,
+      "parent_id": 1219,
+      "name": "远期承诺与或有求偿权",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1225,
+      "parent_id": 1224,
+      "name": "远期合约定价",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1230,
+      "parent_id": 1229,
+      "name": "期权基本特征与盈亏结构",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1236,
+      "parent_id": 1235,
+      "name": "利率互换机制与定价",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1241,
+      "parent_id": 1240,
+      "name": "另类投资概述",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1242,
+      "parent_id": 1241,
+      "name": "另类投资特征与类别",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1247,
+      "parent_id": 1246,
+      "name": "私募股权策略",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1251,
+      "parent_id": 1250,
+      "name": "不动产投资形式",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1256,
+      "parent_id": 1255,
+      "name": "大宗商品投资方式",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1261,
+      "parent_id": 1260,
+      "name": "投资组合理论",
+      "level": "ch",
+      "code": "CH-01"
+    },
+    {
+      "id": 1262,
+      "parent_id": 1261,
+      "name": "风险与收益",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1263,
+      "parent_id": 1262,
+      "name": "历史收益率与风险度量",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1268,
+      "parent_id": 1267,
+      "name": "组合收益与风险计算",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1273,
+      "parent_id": 1272,
+      "name": "资本市场线",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1279,
+      "parent_id": 1278,
+      "name": "投资政策声明",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1280,
+      "parent_id": 1279,
+      "name": "IPS的构成要素",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1285,
+      "parent_id": 1284,
+      "name": "传统金融与行为金融比较",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1290,
+      "parent_id": 1289,
+      "name": "技术分析基本原理",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1295,
+      "parent_id": 1294,
+      "name": "风险管理框架",
+      "level": "sec",
+      "code": "SEC-01"
+    },
+    {
+      "id": 1296,
+      "parent_id": 1295,
+      "name": "风险类型与衡量",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1301,
+      "parent_id": 1300,
+      "name": "收益计算：时间加权与货币加权",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1307,
+      "parent_id": 1306,
+      "name": "金融科技主要领域",
+      "level": "kp",
+      "code": "KP-01"
+    },
+    {
+      "id": 1029,
+      "parent_id": 1027,
+      "name": "职业道德的重要性",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1033,
+      "parent_id": 1026,
+      "name": "CFA协会职业道德规范与标准",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1035,
+      "parent_id": 1033,
+      "name": "职业行为标准结构",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1038,
+      "parent_id": 1025,
+      "name": "职业行为标准Ⅰ-Ⅳ",
+      "level": "ch",
+      "code": "CH-02"
+    },
+    {
+      "id": 1041,
+      "parent_id": 1039,
+      "name": "Ⅰ 独立性与客观性",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1044,
+      "parent_id": 1038,
+      "name": "资本市场诚信",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1046,
+      "parent_id": 1044,
+      "name": "Ⅱ 市场操纵",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1049,
+      "parent_id": 1047,
+      "name": "Ⅲ 公平对待",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1055,
+      "parent_id": 1053,
+      "name": "Ⅳ 额外报酬安排",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1060,
+      "parent_id": 1058,
+      "name": "Ⅴ 与客户和潜在客户的沟通",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1062,
+      "parent_id": 1057,
+      "name": "利益冲突",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1064,
+      "parent_id": 1062,
+      "name": "Ⅵ 交易优先级",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1068,
+      "parent_id": 1066,
+      "name": "Ⅶ 引用CFA称号",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1072,
+      "parent_id": 1070,
+      "name": "合规的基本要求",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1075,
+      "parent_id": 1069,
+      "name": "GIPS组合和组合群要求",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1077,
+      "parent_id": 1075,
+      "name": "披露要求",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1080,
+      "parent_id": null,
+      "name": "投资工具",
+      "level": "sub",
+      "code": "SUB-02"
+    },
+    {
+      "id": 1084,
+      "parent_id": 1082,
+      "name": "单笔现金流的终值与现值",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1088,
+      "parent_id": 1081,
+      "name": "描述性统计与概率",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1090,
+      "parent_id": 1088,
+      "name": "正态分布与标准化",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1095,
+      "parent_id": 1093,
+      "name": "点估计与置信区间",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1101,
+      "parent_id": 1099,
+      "name": "判定系数与相关性",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1105,
+      "parent_id": 1080,
+      "name": "经济学",
+      "level": "ch",
+      "code": "CH-02"
+    },
+    {
+      "id": 1108,
+      "parent_id": 1106,
+      "name": "弹性",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1112,
+      "parent_id": 1105,
+      "name": "宏观经济学",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1114,
+      "parent_id": 1112,
+      "name": "总需求与总供给",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1119,
+      "parent_id": 1117,
+      "name": "中央银行工具与目标",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1125,
+      "parent_id": 1123,
+      "name": "国际收支账户",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1131,
+      "parent_id": 1129,
+      "name": "国际财务报告准则与美国通用会计准则比较",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1134,
+      "parent_id": 1128,
+      "name": "三大财务报表",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1136,
+      "parent_id": 1134,
+      "name": "利润表要素与列报",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1141,
+      "parent_id": 1139,
+      "name": "流动性比率",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1147,
+      "parent_id": 1145,
+      "name": "长期资产：资本化与折旧",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1154,
+      "parent_id": 1152,
+      "name": "会计操纵警示信号",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1160,
+      "parent_id": 1158,
+      "name": "回收期与折现回收期",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1163,
+      "parent_id": 1157,
+      "name": "资本成本",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1165,
+      "parent_id": 1163,
+      "name": "债务成本",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1170,
+      "parent_id": 1168,
+      "name": "资本结构理论",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1175,
+      "parent_id": 1173,
+      "name": "应收账款与存货管理",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1183,
+      "parent_id": 1181,
+      "name": "指数编制方法",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1186,
+      "parent_id": 1180,
+      "name": "权益证券与行业分析",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1188,
+      "parent_id": 1186,
+      "name": "行业生命周期分析",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1193,
+      "parent_id": 1191,
+      "name": "自由现金流折现模型",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1197,
+      "parent_id": 1179,
+      "name": "固定收益",
+      "level": "ch",
+      "code": "CH-02"
+    },
+    {
+      "id": 1200,
+      "parent_id": 1198,
+      "name": "固定收益市场分类",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1203,
+      "parent_id": 1197,
+      "name": "固定收益风险与收益",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1205,
+      "parent_id": 1203,
+      "name": "利率风险与久期",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1210,
+      "parent_id": 1208,
+      "name": "抵押贷款支持证券特征",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1215,
+      "parent_id": 1213,
+      "name": "传统信用分析：4C模型",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1221,
+      "parent_id": 1219,
+      "name": "衍生品市场参与者",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1224,
+      "parent_id": 1218,
+      "name": "远期与期货",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1226,
+      "parent_id": 1224,
+      "name": "期货合约特征与保证金",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1231,
+      "parent_id": 1229,
+      "name": "看跌-看涨平价",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1237,
+      "parent_id": 1235,
+      "name": "货币互换",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1243,
+      "parent_id": 1241,
+      "name": "另类投资在组合中的作用",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1246,
+      "parent_id": 1240,
+      "name": "私募股权",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1248,
+      "parent_id": 1246,
+      "name": "私募股权投资结构与退出途径",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1252,
+      "parent_id": 1250,
+      "name": "不动产估值：收益法与成本法",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1257,
+      "parent_id": 1255,
+      "name": "大宗商品定价与便利收益率",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1264,
+      "parent_id": 1262,
+      "name": "期望收益率与方差",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1267,
+      "parent_id": 1261,
+      "name": "资产组合构建",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1269,
+      "parent_id": 1267,
+      "name": "相关系数与分散化效应",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1274,
+      "parent_id": 1272,
+      "name": "资本资产定价模型与贝塔",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1278,
+      "parent_id": 1260,
+      "name": "投资组合管理实践",
+      "level": "ch",
+      "code": "CH-02"
+    },
+    {
+      "id": 1281,
+      "parent_id": 1279,
+      "name": "投资目标设定",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1284,
+      "parent_id": 1278,
+      "name": "行为金融学",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1286,
+      "parent_id": 1284,
+      "name": "认知偏差",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1291,
+      "parent_id": 1289,
+      "name": "图表形态分析",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1297,
+      "parent_id": 1295,
+      "name": "在险价值及其方法",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1300,
+      "parent_id": 1294,
+      "name": "业绩评估",
+      "level": "sec",
+      "code": "SEC-02"
+    },
+    {
+      "id": 1302,
+      "parent_id": 1300,
+      "name": "风险调整业绩指标",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1308,
+      "parent_id": 1306,
+      "name": "分布式账本技术",
+      "level": "kp",
+      "code": "KP-02"
+    },
+    {
+      "id": 1030,
+      "parent_id": 1027,
+      "name": "道德决策框架",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1036,
+      "parent_id": 1033,
+      "name": "准则与标准的适用对象与范围",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1042,
+      "parent_id": 1039,
+      "name": "Ⅰ 不当陈述",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1047,
+      "parent_id": 1038,
+      "name": "对客户的责任",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1050,
+      "parent_id": 1047,
+      "name": "Ⅲ 适当性",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1056,
+      "parent_id": 1053,
+      "name": "Ⅳ 主管的责任",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1057,
+      "parent_id": 1025,
+      "name": "职业行为标准Ⅴ-Ⅶ",
+      "level": "ch",
+      "code": "CH-03"
+    },
+    {
+      "id": 1061,
+      "parent_id": 1058,
+      "name": "Ⅴ 记录保存",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1065,
+      "parent_id": 1062,
+      "name": "Ⅵ 介绍费",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1066,
+      "parent_id": 1057,
+      "name": "CFA会员与候选人的责任",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1073,
+      "parent_id": 1070,
+      "name": "输入数据要求",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1078,
+      "parent_id": 1075,
+      "name": "展示与报告",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1085,
+      "parent_id": 1082,
+      "name": "年金与永续年金",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1091,
+      "parent_id": 1088,
+      "name": "概率概念与贝叶斯定理",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1093,
+      "parent_id": 1081,
+      "name": "抽样与假设检验",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1096,
+      "parent_id": 1093,
+      "name": "假设检验步骤与误差",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1102,
+      "parent_id": 1099,
+      "name": "回归系数的假设检验",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1109,
+      "parent_id": 1106,
+      "name": "消费者选择理论",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1115,
+      "parent_id": 1112,
+      "name": "经济增长源泉",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1117,
+      "parent_id": 1105,
+      "name": "货币与财政政策",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1120,
+      "parent_id": 1117,
+      "name": "货币政策传导机制",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1126,
+      "parent_id": 1123,
+      "name": "汇率制度与汇率决定",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1128,
+      "parent_id": 1080,
+      "name": "财务报表分析",
+      "level": "ch",
+      "code": "CH-03"
+    },
+    {
+      "id": 1132,
+      "parent_id": 1129,
+      "name": "审计与财务报告监管",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1137,
+      "parent_id": 1134,
+      "name": "现金流量表编制",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1139,
+      "parent_id": 1128,
+      "name": "财务报表分析技术",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1142,
+      "parent_id": 1139,
+      "name": "偿债能力与杠杆比率",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1148,
+      "parent_id": 1145,
+      "name": "债券的会计处理",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1155,
+      "parent_id": 1152,
+      "name": "现金流量分析在质量评估中的应用",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1161,
+      "parent_id": 1158,
+      "name": "现金流估算",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1166,
+      "parent_id": 1163,
+      "name": "权益成本：CAPM与DDM方法",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1168,
+      "parent_id": 1157,
+      "name": "杠杆与资本结构",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1171,
+      "parent_id": 1168,
+      "name": "目标资本结构与影响因素",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1176,
+      "parent_id": 1173,
+      "name": "短期融资渠道",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1179,
+      "parent_id": null,
+      "name": "资产类别",
+      "level": "sub",
+      "code": "SUB-03"
+    },
+    {
+      "id": 1184,
+      "parent_id": 1181,
+      "name": "主要权益指数与用途",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1189,
+      "parent_id": 1186,
+      "name": "波特五力与竞争分析",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1191,
+      "parent_id": 1180,
+      "name": "权益估值：基本面分析",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1194,
+      "parent_id": 1191,
+      "name": "剩余收益模型",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1201,
+      "parent_id": 1198,
+      "name": "债券定价基础",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1206,
+      "parent_id": 1203,
+      "name": "凸度",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1208,
+      "parent_id": 1197,
+      "name": "资产支持证券",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1211,
+      "parent_id": 1208,
+      "name": "资产支持证券与抵押债务凭证",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1216,
+      "parent_id": 1213,
+      "name": "量化信用风险模型",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1218,
+      "parent_id": 1179,
+      "name": "衍生品",
+      "level": "ch",
+      "code": "CH-03"
+    },
+    {
+      "id": 1222,
+      "parent_id": 1219,
+      "name": "套利与定价基础",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1227,
+      "parent_id": 1224,
+      "name": "期货定价与即期-期货平价",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1229,
+      "parent_id": 1218,
+      "name": "期权",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1232,
+      "parent_id": 1229,
+      "name": "期权价值的影响因素",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1238,
+      "parent_id": 1235,
+      "name": "股权互换",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1244,
+      "parent_id": 1241,
+      "name": "费用结构与收益计算",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1249,
+      "parent_id": 1246,
+      "name": "私募股权估值方法",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1250,
+      "parent_id": 1240,
+      "name": "不动产与基础设施",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1253,
+      "parent_id": 1250,
+      "name": "不动产投资信托特征",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1258,
+      "parent_id": 1255,
+      "name": "对冲基金策略分类",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1265,
+      "parent_id": 1262,
+      "name": "效用理论与风险厌恶",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1270,
+      "parent_id": 1267,
+      "name": "最小方差组合与有效前沿",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1272,
+      "parent_id": 1261,
+      "name": "资本资产定价模型与多因子模型",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1275,
+      "parent_id": 1272,
+      "name": "证券市场线与定价",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1282,
+      "parent_id": 1279,
+      "name": "投资约束",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1287,
+      "parent_id": 1284,
+      "name": "情绪偏差",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1289,
+      "parent_id": 1278,
+      "name": "技术分析",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1292,
+      "parent_id": 1289,
+      "name": "技术指标",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1294,
+      "parent_id": 1260,
+      "name": "风险管理与业绩评估",
+      "level": "ch",
+      "code": "CH-03"
+    },
+    {
+      "id": 1298,
+      "parent_id": 1295,
+      "name": "压力测试与情景分析",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1303,
+      "parent_id": 1300,
+      "name": "信息比率与跟踪误差",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1306,
+      "parent_id": 1294,
+      "name": "金融科技与投资管理",
+      "level": "sec",
+      "code": "SEC-03"
+    },
+    {
+      "id": 1309,
+      "parent_id": 1306,
+      "name": "智能投顾功能与局限",
+      "level": "kp",
+      "code": "KP-03"
+    },
+    {
+      "id": 1031,
+      "parent_id": 1027,
+      "name": "金融行业中的信任机制",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1037,
+      "parent_id": 1033,
+      "name": "违反准则的后果与纪律程序",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1043,
+      "parent_id": 1039,
+      "name": "Ⅰ 不当行为",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1051,
+      "parent_id": 1047,
+      "name": "Ⅲ 业绩展示",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1053,
+      "parent_id": 1038,
+      "name": "对雇主的责任",
+      "level": "sec",
+      "code": "SEC-04"
+    },
+    {
+      "id": 1069,
+      "parent_id": 1025,
+      "name": "全球投资业绩标准",
+      "level": "ch",
+      "code": "CH-04"
+    },
+    {
+      "id": 1074,
+      "parent_id": 1070,
+      "name": "计算方法",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1079,
+      "parent_id": 1075,
+      "name": "房地产与私募股权的特别规定",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1086,
+      "parent_id": 1082,
+      "name": "不等额现金流的现值与终值",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1092,
+      "parent_id": 1088,
+      "name": "收益率分布特征",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1097,
+      "parent_id": 1093,
+      "name": "单均值与双均值检验",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1099,
+      "parent_id": 1081,
+      "name": "回归分析",
+      "level": "sec",
+      "code": "SEC-04"
+    },
+    {
+      "id": 1103,
+      "parent_id": 1099,
+      "name": "方差分析与F检验",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1110,
+      "parent_id": 1106,
+      "name": "生产者理论与成本",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1116,
+      "parent_id": 1112,
+      "name": "经济周期理论",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1121,
+      "parent_id": 1117,
+      "name": "财政政策工具与乘数效应",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1123,
+      "parent_id": 1105,
+      "name": "国际经济学",
+      "level": "sec",
+      "code": "SEC-04"
+    },
+    {
+      "id": 1127,
+      "parent_id": 1123,
+      "name": "汇率平价条件",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1133,
+      "parent_id": 1129,
+      "name": "财务报告概念框架",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1138,
+      "parent_id": 1134,
+      "name": "综合收益与股东权益变动表",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1143,
+      "parent_id": 1139,
+      "name": "盈利能力与经营效率比率",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1145,
+      "parent_id": 1128,
+      "name": "主要资产与负债的会计处理",
+      "level": "sec",
+      "code": "SEC-04"
+    },
+    {
+      "id": 1149,
+      "parent_id": 1145,
+      "name": "租赁会计",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1156,
+      "parent_id": 1152,
+      "name": "会计变更与会计差错",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1157,
+      "parent_id": 1080,
+      "name": "公司金融",
+      "level": "ch",
+      "code": "CH-04"
+    },
+    {
+      "id": 1162,
+      "parent_id": 1158,
+      "name": "项目分析中的风险处理",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1167,
+      "parent_id": 1163,
+      "name": "资本结构权重",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1172,
+      "parent_id": 1168,
+      "name": "股利政策与股票回购",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1173,
+      "parent_id": 1157,
+      "name": "营运资本管理与公司治理",
+      "level": "sec",
+      "code": "SEC-04"
+    },
+    {
+      "id": 1177,
+      "parent_id": 1173,
+      "name": "公司治理结构与机制",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1185,
+      "parent_id": 1181,
+      "name": "市场效率与有效市场假说",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1190,
+      "parent_id": 1186,
+      "name": "行业分类系统",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1195,
+      "parent_id": 1191,
+      "name": "价格乘数法",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1202,
+      "parent_id": 1198,
+      "name": "固定收益证券的类型",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1207,
+      "parent_id": 1203,
+      "name": "收益率曲线与利差分析",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1212,
+      "parent_id": 1208,
+      "name": "ABS的信用增级与风险",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1213,
+      "parent_id": 1197,
+      "name": "信用分析",
+      "level": "sec",
+      "code": "SEC-04"
+    },
+    {
+      "id": 1217,
+      "parent_id": 1213,
+      "name": "信用违约互换基础",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1223,
+      "parent_id": 1219,
+      "name": "衍生品交易场所与机制",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1228,
+      "parent_id": 1224,
+      "name": "金融期货与商品期货的差异",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1233,
+      "parent_id": 1229,
+      "name": "布莱克-斯科尔斯-默顿模型简介",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1235,
+      "parent_id": 1218,
+      "name": "互换",
+      "level": "sec",
+      "code": "SEC-04"
+    },
+    {
+      "id": 1239,
+      "parent_id": 1235,
+      "name": "信用违约互换深入",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1240,
+      "parent_id": 1179,
+      "name": "另类投资",
+      "level": "ch",
+      "code": "CH-04"
+    },
+    {
+      "id": 1245,
+      "parent_id": 1241,
+      "name": "流动性、估值与风险",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1254,
+      "parent_id": 1250,
+      "name": "基础设施投资特征与风险",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1255,
+      "parent_id": 1240,
+      "name": "大宗商品与对冲基金",
+      "level": "sec",
+      "code": "SEC-04"
+    },
+    {
+      "id": 1259,
+      "parent_id": 1255,
+      "name": "对冲基金业绩评估与风险",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1260,
+      "parent_id": null,
+      "name": "投资组合管理与财富规划",
+      "level": "sub",
+      "code": "SUB-04"
+    },
+    {
+      "id": 1266,
+      "parent_id": 1262,
+      "name": "资本配置线",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1271,
+      "parent_id": 1267,
+      "name": "最优风险组合与无风险资产引入",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1276,
+      "parent_id": 1272,
+      "name": "法马-弗伦奇三因子模型",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1283,
+      "parent_id": 1279,
+      "name": "战略资产配置",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1288,
+      "parent_id": 1284,
+      "name": "行为偏差对投资决策的影响",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1293,
+      "parent_id": 1289,
+      "name": "周期理论与市场情绪",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1299,
+      "parent_id": 1295,
+      "name": "风险归因",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1304,
+      "parent_id": 1300,
+      "name": "业绩归因基础",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1310,
+      "parent_id": 1306,
+      "name": "环境、社会与治理数据分析应用",
+      "level": "kp",
+      "code": "KP-04"
+    },
+    {
+      "id": 1032,
+      "parent_id": 1027,
+      "name": "CFA协会职业行为准则概述",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1052,
+      "parent_id": 1047,
+      "name": "Ⅲ 客户信息保密",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1087,
+      "parent_id": 1082,
+      "name": "计息频率与连续复利",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1098,
+      "parent_id": 1093,
+      "name": "p值与统计显著性",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1104,
+      "parent_id": 1099,
+      "name": "多元回归与模型误设",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1111,
+      "parent_id": 1106,
+      "name": "市场结构",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1122,
+      "parent_id": 1117,
+      "name": "政策交互作用与挤出效应",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1144,
+      "parent_id": 1139,
+      "name": "杜邦分析体系",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1150,
+      "parent_id": 1145,
+      "name": "所得税会计",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1152,
+      "parent_id": 1128,
+      "name": "财务报告质量与盈利分析",
+      "level": "sec",
+      "code": "SEC-05"
+    },
+    {
+      "id": 1178,
+      "parent_id": 1173,
+      "name": "ESG在投资与公司分析中的整合",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1196,
+      "parent_id": 1191,
+      "name": "基于资产的价值评估",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1234,
+      "parent_id": 1229,
+      "name": "期权希腊字母初步",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1277,
+      "parent_id": 1272,
+      "name": "套利定价理论",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1305,
+      "parent_id": 1300,
+      "name": "GIPS在业绩展示中的应用回顾",
+      "level": "kp",
+      "code": "KP-05"
+    },
+    {
+      "id": 1151,
+      "parent_id": 1145,
+      "name": "长期股权投资",
+      "level": "kp",
+      "code": "KP-06"
+    }
+  ],
+  "total": 286
+}
