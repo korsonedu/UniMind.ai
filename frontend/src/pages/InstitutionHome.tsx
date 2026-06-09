@@ -56,6 +56,20 @@ const Hero: React.FC<{ institution: InstitutionData }> = ({ institution }) => {
         <div className="flex flex-col lg:flex-row gap-12 lg:gap-0">
           {/* LEFT */}
           <div className="flex-1 lg:pr-16 space-y-8">
+
+            {/* 迁移通知 */}
+            <div className="font-mono text-[13px] font-bold text-[#999] uppercase tracking-[0.15em] border-b-2 border-black pb-3">
+              UniMind.ai 已迁移至{' '}
+              <a href="https://unimind-ai.com" className="text-[#FF3333] hover:text-black transition-colors">
+                unimind-ai.com
+              </a>
+              {' '}—{' '}
+              <a href="https://unimind-ai.com" className="text-[#FF3333] hover:text-black transition-colors">
+                点击此处
+              </a>
+              {' '}访问新站
+            </div>
+
             <div className="flex items-center gap-3">
               <span className="h-2 w-2 bg-[#FF3333]" />
               <span className="font-mono text-[14px] font-black text-[#FF3333] uppercase tracking-[0.2em]">
@@ -598,19 +612,6 @@ const InstitutionHome: React.FC<{ slug?: string }> = ({ slug: propSlug }) => {
         .rv.on{opacity:1;transform:translateY(0)}
         ::selection{background:#FF3333;color:#fff}
       `}</style>
-
-      {/* 迁移通知顶栏 */}
-      <div className="bg-black text-white text-center py-2.5 px-4 font-sans text-[13px]">
-        UniMind.ai 已迁移至新网址{' '}
-        <a href="https://unimind-ai.com" className="text-[#FF3333] font-bold hover:underline">
-          unimind-ai.com
-        </a>
-        ，{' '}
-        <a href="https://unimind-ai.com" className="text-[#FF3333] font-bold hover:underline">
-          点击此处
-        </a>
-        {' '}访问新站
-      </div>
 
       {user && (
         <div className="bg-black text-white py-2 px-4 flex items-center justify-end gap-4 text-sm font-mono">
