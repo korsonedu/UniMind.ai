@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { ArrowUpRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/version';
@@ -45,9 +45,10 @@ const BrutalLabel: React.FC<{ text: string }> = ({ text }) => (
 /* ──────────────────────────────────────────────────
    HERO
    ────────────────────────────────────────────────── */
+const UNIMIND_BASE = 'https://unimind-ai.com';
+
 const Hero: React.FC<{ institution: InstitutionData }> = ({ institution }) => {
-  const navigate = useNavigate();
-  const registerUrl = `/register?institution=${institution.slug}`;
+  const registerUrl = `${UNIMIND_BASE}/register?institution=${institution.slug}`;
 
   return (
     <section className="relative bg-white pt-16 md:pt-28 pb-16 md:pb-24">
@@ -95,12 +96,12 @@ const Hero: React.FC<{ institution: InstitutionData }> = ({ institution }) => {
                 </div>
               </div>
               <div className="flex gap-2.5 pb-0.5">
-                <button
-                  onClick={() => navigate(registerUrl)}
-                  className="font-mono text-sm font-black text-white bg-black border-2 border-black px-7 py-3 uppercase hover:bg-[#FF3333] hover:border-[#FF3333]"
+                <a
+                  href={registerUrl}
+                  className="font-mono text-sm font-black text-white bg-black border-2 border-black px-7 py-3 uppercase hover:bg-[#FF3333] hover:border-[#FF3333] inline-block"
                 >
                   立即报名 <ArrowUpRight className="ml-1.5 h-4 w-4 inline" />
-                </button>
+                </a>
                 <button
                   onClick={() => document.querySelector('#courses')?.scrollIntoView({ behavior: 'smooth' })}
                   className="font-mono text-sm font-black text-black border-2 border-black px-7 py-3 uppercase hover:bg-black hover:text-white"
@@ -350,9 +351,8 @@ const PRICING_GROUPS = [
 ];
 
 const Pricing: React.FC<{ institution: InstitutionData }> = ({ institution }) => {
-  const navigate = useNavigate();
   const ref = useReveal();
-  const registerUrl = `/register?institution=${institution.slug}`;
+  const registerUrl = `${UNIMIND_BASE}/register?institution=${institution.slug}`;
 
   return (
     <section id="pricing" className="py-20 md:py-28 bg-[#FAFAFA] border-b-2 border-black" ref={ref}>
@@ -385,12 +385,12 @@ const Pricing: React.FC<{ institution: InstitutionData }> = ({ institution }) =>
                 <p className="font-mono text-[32px] font-black">¥8,150</p>
                 <p className="font-mono text-[14px] font-black text-[#FF3333] mt-0.5 uppercase">早鸟优惠价</p>
               </div>
-              <button
-                onClick={() => navigate(registerUrl)}
-                className="font-mono text-sm font-black text-black bg-[#FF3333] border-2 border-[#FF3333] px-6 py-3 uppercase hover:bg-white hover:text-black"
+              <a
+                href={registerUrl}
+                className="font-mono text-sm font-black text-black bg-[#FF3333] border-2 border-[#FF3333] px-6 py-3 uppercase hover:bg-white hover:text-black inline-block"
               >
                 立即报名 <ArrowUpRight className="ml-1 h-4 w-4 inline" />
-              </button>
+              </a>
             </div>
           </div>
         </div>
@@ -589,7 +589,7 @@ const InstitutionHome: React.FC = () => {
   if (loading) return <LoadingState />;
   if (error || !institution) return <ErrorState slug={slug || ''} />;
 
-  const registerUrl = `/register?institution=${institution.slug}`;
+  const registerUrl = `${UNIMIND_BASE}/register?institution=${institution.slug}`;
 
   return (
     <div className="w-full font-sans antialiased bg-white">
@@ -602,7 +602,7 @@ const InstitutionHome: React.FC = () => {
       {user && (
         <div className="bg-black text-white py-2 px-4 flex items-center justify-end gap-4 text-sm font-mono">
           <span className="text-white/60">已登录：{user.nickname || user.username}</span>
-          <Link to="/courses" className="font-black uppercase hover:text-[#FF3333]">进入学习 <ArrowUpRight className="h-3.5 w-3.5 inline" /></Link>
+          <a href={`${UNIMIND_BASE}/courses`} className="font-black uppercase hover:text-[#FF3333]">进入学习 <ArrowUpRight className="h-3.5 w-3.5 inline" /></a>
         </div>
       )}
 
