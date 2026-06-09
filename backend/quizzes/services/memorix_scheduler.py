@@ -172,8 +172,7 @@ def build_adaptive_question_ids(
     # ── Memorix-Field: 图扩散重排 ──
     if getattr(settings, 'MEMORIX_FIELD_ENABLED', False):
         alpha = getattr(settings, 'MEMORIX_FIELD_ALPHA', 0.60)
-        boost = getattr(settings, 'MEMORIX_FIELD_BOOST', 0.20)
-        selected = _field_rerank(selected, user, now, alpha, boost)
+        selected = _field_rerank(selected, user, now, alpha)
 
     return {
         "question_ids": selected,
@@ -260,20 +259,87 @@ def get_memorix_session_plan(user, minutes: int = 25, preferred_limit: Optional[
 # Memorix-Field: Graph Diffusion Scheduling
 # ═══════════════════════════════════════════
 
+MEMORIX_ADJ_CACHE_KEY = "memorix:adj"
+MEMORIX_ADJ_CACHE_TTL = 3600  # 1 hour
+MEMORIX_DYNAMIC_EDGE_PREFIX = "memorix:edge"  # Redis hash: memorix:edge:{source}:{target}
+
+
+def invalidate_adjacency_cache():
+    """KnowledgeEdge 变更时调用，清除邻接表缓存。"""
+    from django.core.cache import cache
+    cache.delete(MEMORIX_ADJ_CACHE_KEY)
+
+
 def _build_adjacency_from_edges():
-    """从 KnowledgeEdge 表构建邻接表 {kp_id: [(neighbor_kp_id, weight)]}"""
-    from quizzes.models import KnowledgeEdge
+    """
+    构建邻接表 {kp_id: [(neighbor_kp_id, weight)]}。
+    
+    两层合并：
+    1. KnowledgeEdge 表（固定边：树结构、LLM 生成、手工标注）
+    2. Redis 动态边缓存（ReviewLog 学出来的 co_occur/confusion）
+    
+    结果缓存在 Django cache（Redis），TTL 1 小时。
+    """
+    from django.core.cache import cache
     from collections import defaultdict
 
+    cached = cache.get(MEMORIX_ADJ_CACHE_KEY)
+    if cached is not None:
+        # cache 存的是 list-of-tuples，转回 defaultdict
+        adj = defaultdict(list)
+        for kp_id, neighbors in cached:
+            adj[kp_id] = neighbors
+        return adj
+
+    # ── 层 1：DB 固定边 ──
+    from quizzes.models import KnowledgeEdge
     adj = defaultdict(list)
     for edge in KnowledgeEdge.objects.filter(is_active=True).only(
         'source_id', 'target_id', 'weight'
     ):
-        adj[edge.source_id].append((edge.target_id, edge.weight))
+        adj[edge.source_id].append((edge.target_id, float(edge.weight)))
+
+    # ── 层 2：Redis 动态边 ──
+    try:
+        from django_redis import get_redis_connection
+        redis_conn = get_redis_connection("default")
+        # 扫描所有 memorix:edge:* 键
+        cursor = 0
+        dynamic_count = 0
+        while True:
+            cursor, keys = redis_conn.scan(
+                cursor, match=f"{MEMORIX_DYNAMIC_EDGE_PREFIX}:*", count=100
+            )
+            for key in keys:
+                # key 格式: memorix:edge:123:456
+                data = redis_conn.hgetall(key)
+                if not data:
+                    continue
+                try:
+                    source_id = int(data.get(b'source_id', 0))
+                    target_id = int(data.get(b'target_id', 0))
+                    weight = float(data.get(b'weight', 0))
+                except (ValueError, TypeError):
+                    continue
+                if weight <= 0:
+                    continue
+                adj[source_id].append((target_id, weight))
+                dynamic_count += 1
+            if cursor == 0:
+                break
+    except Exception:
+        # Redis 不可用时静默降级，只用 DB 固定边
+        pass
+
+    # ── 缓存结果 ──
+    # 转为可 pickle 的 list-of-tuples 结构
+    cache_payload = [(kp_id, list(neighbors)) for kp_id, neighbors in adj.items()]
+    cache.set(MEMORIX_ADJ_CACHE_KEY, cache_payload, MEMORIX_ADJ_CACHE_TTL)
+
     return adj
 
 
-def _field_rerank(question_ids, user, now, alpha, boost):
+def _field_rerank(question_ids, user, now, alpha):
     """
     对候选题目列表进行图扩散重排。
     
@@ -283,7 +349,7 @@ def _field_rerank(question_ids, user, now, alpha, boost):
     返回重新排序后的 question_id 列表。
     """
     from quizzes.models import UserQuestionStatus, Question
-    from memorix.service import predict_retrievability
+    from quizzes.memorix.service import predict_retrievability
 
     adj = _build_adjacency_from_edges()
     if not adj:

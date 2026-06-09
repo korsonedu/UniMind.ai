@@ -342,6 +342,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "ai_assistant.tasks.analyze_trajectory_task",
         "schedule": crontab(minute=0, hour=2, day_of_week=0),  # 每周日凌晨 2:00
     },
+    "learn-memorix-edge-weights-daily": {
+        "task": "quizzes.learn_edge_weights_from_reviews",
+        "schedule": 86400.0,  # 每天一次
+    },
 }
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "visibility_timeout": _get_int("CELERY_VISIBILITY_TIMEOUT", 3600),

@@ -85,6 +85,8 @@ class KnowledgeEdgeListCreateView(generics.ListCreateAPIView):
         )
         # 如果是非对称关系（prerequisite / derivation），创建提示
         _ensure_reverse_for_asymmetric(edge)
+        from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
+        invalidate_adjacency_cache()
 
 
 # ──────────────────────────────────────────────
@@ -112,6 +114,8 @@ class KnowledgeEdgeDetailView(generics.RetrieveUpdateDestroyAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         self.perform_destroy(instance)
+        from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
+        invalidate_adjacency_cache()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def perform_update(self, serializer):
@@ -124,6 +128,8 @@ class KnowledgeEdgeDetailView(generics.RetrieveUpdateDestroyAPIView):
             )
         # 如果 source_type 是 llm，修改后保持不变（仍是 llm 标注 + 人工校准）
         serializer.save()
+        from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
+        invalidate_adjacency_cache()
 
 
 # ──────────────────────────────────────────────
