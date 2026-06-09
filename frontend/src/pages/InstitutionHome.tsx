@@ -599,6 +599,19 @@ const InstitutionHome: React.FC<{ slug?: string }> = ({ slug: propSlug }) => {
         ::selection{background:#FF3333;color:#fff}
       `}</style>
 
+      {/* 迁移通知顶栏 */}
+      <div className="bg-black text-white text-center py-2.5 px-4 font-sans text-[13px]">
+        学习系统已迁移至{' '}
+        <a href="https://unimind-ai.com" className="text-[#FF3333] font-bold hover:underline">
+          UniMind.ai
+        </a>
+        ，{' '}
+        <a href="https://unimind-ai.com/login" className="text-[#FF3333] font-bold hover:underline">
+          点击此处
+        </a>
+        {' '}进入新系统
+      </div>
+
       {user && (
         <div className="bg-black text-white py-2 px-4 flex items-center justify-end gap-4 text-sm font-mono">
           <span className="text-white/60">已登录：{user.nickname || user.username}</span>
