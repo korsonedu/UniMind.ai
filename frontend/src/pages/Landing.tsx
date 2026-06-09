@@ -250,6 +250,35 @@ const Hero: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
+   Memorix Announcement — thin strip
+   ──────────────────────────────────────────── */
+
+const MemorixBanner: React.FC = () => {
+  const navigate = useNavigate();
+
+  return (
+    <div className="relative z-10 -mt-1" style={{ background: '#000' }}>
+      <div className="border-t border-white/[0.06]">
+        <div className="max-w-5xl mx-auto px-6 py-3.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#818cf8] bg-[#5b5fef]/10 px-2 py-0.5 rounded-full shrink-0">NEW</span>
+            <span className="text-[13px] font-medium text-white/80 truncate">
+              Introducing <strong className="text-white font-bold">Memorix-Field</strong> — 图扩散记忆调度算法，遗忘率降低 19.9% vs SOTA
+            </span>
+          </div>
+          <button
+            onClick={() => navigate('/memorix')}
+            className="shrink-0 text-[13px] font-medium text-[#818cf8] hover:text-white transition-colors flex items-center gap-1"
+          >
+            了解更多 <ArrowRight className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ────────────────────────────────────────────
    Stats — big numbers, no words
    ──────────────────────────────────────────── */
 
@@ -644,6 +673,7 @@ export const Landing: React.FC = () => {
     <div className="w-full min-h-screen font-sans text-left overflow-x-hidden antialiased scroll-smooth" style={{ background: DARK }}>
       <Nav token={token} />
       <Hero />
+      <MemorixBanner />
       <StatsBar />            {/* light */}
       <PainPoints />          {/* dark */}
       <Showcase />            {/* light */}

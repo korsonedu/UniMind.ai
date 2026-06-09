@@ -55,6 +55,7 @@ const InstitutionDashboard = lazy(() => import('./pages/InstitutionDashboard'));
 const InstitutionStudents = lazy(() => import('./pages/InstitutionStudents'));
 const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
 const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
+const MemorixPage = lazy(() => import('./pages/Memorix'));
 const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
 const PlatformAnalytics = lazyNamed(() => import('./pages/PlatformAnalytics'), 'PlatformAnalytics');
 const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
@@ -269,6 +270,7 @@ const router = createBrowserRouter([
   { path: "/zh", element: <LanguageRedirect lang="zh" /> },
   { path: "/pricing", element: lazyPage(PricingPage) },
   { path: "/promo/plus", element: lazyPage(PromoPlus) },
+  { path: "/memorix", element: lazyPage(MemorixPage) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/register", element: lazyPage(Register) },
   { path: "/privacy", element: lazyPage(Legal) },
