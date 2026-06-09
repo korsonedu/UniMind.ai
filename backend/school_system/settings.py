@@ -352,10 +352,10 @@ GIPHY_API_KEY = os.getenv("GIPHY_API_KEY", "")
 
 # AI 引擎配置 → ai_engine/config.py（单一来源）
 
-# Email — Resend HTTP API (core/email_service.py)
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
-UNIMIND_LOGO_URL = os.getenv("UNIMIND_LOGO_URL", "https://unimind.ai/logo.png")
+# Email — Feishu SMTP (core/email_service.py)
+FEISHU_NOTIFY_PASSWORD = os.getenv("FEISHU_NOTIFY_PASSWORD", "")
+EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "notification@unimind-ai.com")
+UNIMIND_LOGO_URL = os.getenv("UNIMIND_LOGO_URL", "https://unimind-ai.com/logo.png")
 
 # ── Logging（等保二级：日志持久化 + 轮转） ──
 LOG_DIR = os.path.join(BASE_DIR, "logs")

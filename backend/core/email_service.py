@@ -1,68 +1,58 @@
 import logging
 import secrets
+import smtplib
 import string
 import time
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-import requests
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 VERIFICATION_CODE_LENGTH = 6
 VERIFICATION_CODE_TTL_MINUTES = 10
-RESEND_API_URL = "https://api.resend.com/emails"
+
+# Feishu SMTP
+FEISHU_SMTP_HOST = "smtp.feishu.cn"
+FEISHU_SMTP_PORT = 465
+DEFAULT_FROM_EMAIL = "notification@unimind-ai.com"
+DEFAULT_FROM_NAME = "UniMind"
 
 
-def _resend_api_key():
-    return getattr(settings, "RESEND_API_KEY", "")
+def _smtp_password():
+    return getattr(settings, "FEISHU_NOTIFY_PASSWORD", "")
 
 
 def generate_verification_code() -> str:
     return ''.join(secrets.choice(string.digits) for _ in range(VERIFICATION_CODE_LENGTH))
 
 
-def _send_via_resend(*, to: str, subject: str, html: str, text: str) -> bool:
-    from_email = getattr(settings, "EMAIL_NOREPLY_ADDRESS", "noreply@unimind.ai")
-    api_key = _resend_api_key()
-    if not api_key:
-        logger.error("RESEND_API_KEY not configured")
+def _send_via_smtp(*, to: str, subject: str, html: str, text: str) -> bool:
+    password = _smtp_password()
+    if not password:
+        logger.error("FEISHU_NOTIFY_PASSWORD not configured")
         return False
+
+    msg = MIMEMultipart()
+    msg["From"] = f"{DEFAULT_FROM_NAME} <{DEFAULT_FROM_EMAIL}>"
+    msg["To"] = to
+    msg["Subject"] = subject
+    if html:
+        msg.attach(MIMEText(html, "html", "utf-8"))
+    if text:
+        msg.attach(MIMEText(text, "plain", "utf-8"))
 
     for attempt in range(3):
         try:
-            resp = requests.post(
-                RESEND_API_URL,
-                json={
-                    "from": f"UniMind.ai <{from_email}>",
-                    "to": [to],
-                    "subject": subject,
-                    "html": html,
-                    "text": text,
-                },
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                timeout=15,
-            )
-            if resp.status_code in (200, 201, 202):
-                logger.info("Email sent to %s via Resend", to)
-                return True
-            if resp.status_code >= 500 or resp.status_code == 429:
-                logger.warning("Resend API %s (attempt %s/3), retrying...", resp.status_code, attempt + 1)
-                time.sleep(min(2 ** attempt, 4))
-                continue
-            logger.error("Resend API error %s: %s", resp.status_code, resp.text[:300])
-            return False
-        except requests.Timeout:
-            if attempt < 2:
-                time.sleep(1)
-                continue
-            logger.exception("Resend timeout after 3 attempts to %s", to)
-            return False
+            with smtplib.SMTP_SSL(FEISHU_SMTP_HOST, FEISHU_SMTP_PORT, timeout=15) as server:
+                server.login(DEFAULT_FROM_EMAIL, password)
+                server.sendmail(DEFAULT_FROM_EMAIL, [to], msg.as_bytes())
+            logger.info("Email sent to %s via Feishu SMTP", to)
+            return True
         except Exception as exc:
             if attempt < 2:
-                time.sleep(1)
+                time.sleep(min(2 ** attempt, 4))
                 continue
             logger.exception("Failed to send email to %s after 3 attempts: %s", to, exc)
             return False
@@ -70,7 +60,7 @@ def _send_via_resend(*, to: str, subject: str, html: str, text: str) -> bool:
 
 
 def _verification_email_html(code: str) -> str:
-    logo_url = getattr(settings, "UNIMIND_LOGO_URL", "https://unimind.ai/logo.png")
+    logo_url = getattr(settings, "UNIMIND_LOGO_URL", "https://unimind-ai.com/logo.png")
     minutes = VERIFICATION_CODE_TTL_MINUTES
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -170,12 +160,12 @@ def send_verification_email(email: str, code: str) -> bool:
         f"If you did not request this code, please ignore this email.\n\n"
         f"UniMind.ai"
     )
-    return _send_via_resend(to=email, subject=subject, html=_verification_email_html(code), text=plain)
+    return _send_via_smtp(to=email, subject=subject, html=_verification_email_html(code), text=plain)
 
 
 def send_email(recipient: str, subject: str, body: str) -> bool:
     """Generic email sender — plain text only."""
-    return _send_via_resend(to=recipient, subject=subject, text=body, html="")
+    return _send_via_smtp(to=recipient, subject=subject, text=body, html="")
 
 
 def send_membership_notification(email: str, tier: str, expires_at) -> bool:
@@ -189,4 +179,4 @@ def send_membership_notification(email: str, tier: str, expires_at) -> bool:
         message = f"您的 UniMind.ai {label} 会员已激活，无限期有效。"
     message += "\n\n如有任何问题，请回复此邮件联系我们。\n\n— UniMind.ai 团队"
 
-    return _send_via_resend(to=email, subject=subject, text=message, html="")
+    return _send_via_smtp(to=email, subject=subject, text=message, html="")
