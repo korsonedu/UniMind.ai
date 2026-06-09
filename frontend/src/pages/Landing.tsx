@@ -239,6 +239,21 @@ const Hero: React.FC = () => {
           </Button>
         </div>
 
+        {/* Memorix announcement */}
+        <div className="reveal reveal-delay-2 mt-6">
+          <button
+            onClick={() => navigate('/memorix')}
+            className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-[#5b5fef]/20 hover:border-[#5b5fef]/40 transition-all duration-300 cursor-pointer group"
+            style={{ background: 'rgba(91,95,239,0.06)' }}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#5b5fef] bg-[#5b5fef]/10 px-1.5 py-0.5 rounded">NEW</span>
+            <span className="text-[13px] font-medium text-white/60 group-hover:text-white/80 transition-colors">
+              Memorix-Field — 图扩散记忆调度，遗忘率降低 19.9%
+            </span>
+            <ArrowRight className="h-3 w-3 text-[#5b5fef] group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </div>
+
         {/* Trust markers */}
         <p className="text-[11px] text-white/30 tracking-wide reveal reveal-delay-2">
           {t('hero.footnote')}
@@ -246,35 +261,6 @@ const Hero: React.FC = () => {
       </div>
 
     </section>
-  );
-};
-
-/* ────────────────────────────────────────────
-   Memorix Announcement — thin strip
-   ──────────────────────────────────────────── */
-
-const MemorixBanner: React.FC = () => {
-  const navigate = useNavigate();
-
-  return (
-    <div className="relative z-10 -mt-1" style={{ background: '#000' }}>
-      <div className="border-t border-white/[0.06]">
-        <div className="max-w-5xl mx-auto px-6 py-3.5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#818cf8] bg-[#5b5fef]/10 px-2 py-0.5 rounded-full shrink-0">NEW</span>
-            <span className="text-[13px] font-medium text-white/80 truncate">
-              Introducing <strong className="text-white font-bold">Memorix-Field</strong> — 图扩散记忆调度算法，遗忘率降低 19.9% vs SOTA
-            </span>
-          </div>
-          <button
-            onClick={() => navigate('/memorix')}
-            className="shrink-0 text-[13px] font-medium text-[#818cf8] hover:text-white transition-colors flex items-center gap-1"
-          >
-            了解更多 <ArrowRight className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
-    </div>
   );
 };
 
@@ -673,7 +659,6 @@ export const Landing: React.FC = () => {
     <div className="w-full min-h-screen font-sans text-left overflow-x-hidden antialiased scroll-smooth" style={{ background: DARK }}>
       <Nav token={token} />
       <Hero />
-      <MemorixBanner />
       <StatsBar />            {/* light */}
       <PainPoints />          {/* dark */}
       <Showcase />            {/* light */}

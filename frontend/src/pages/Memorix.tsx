@@ -9,16 +9,15 @@ export default function MemorixPage() {
         <div className="max-w-3xl mx-auto text-center space-y-6">
           <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#818cf8]">Research</p>
           <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold leading-[1.1] tracking-tight">
-            记忆不该有
+            Memorix-Field
             <br />
             <span style={{ background: 'linear-gradient(135deg, #818cf8, #5b5fef)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              遗忘曲线
+              图扩散记忆调度
             </span>
           </h1>
           <p className="text-base md:text-lg text-white/50 max-w-xl mx-auto leading-relaxed">
-            Memorix-Field — 图扩散记忆调度算法。
-            把知识点看作知识图谱上的节点，一次复习激活整个网络。
-            遗忘率降低 19.9% vs FSRS 基线。
+            把知识看作图谱上的节点网络，一次复习激活整个区域。
+            仿真验证遗忘率降低 19.9% vs FSRS 基线。
           </p>
           <div className="flex items-center justify-center gap-3 pt-4">
             <Link
