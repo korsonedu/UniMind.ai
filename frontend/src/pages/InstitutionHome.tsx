@@ -601,15 +601,15 @@ const InstitutionHome: React.FC<{ slug?: string }> = ({ slug: propSlug }) => {
 
       {/* 迁移通知顶栏 */}
       <div className="bg-black text-white text-center py-2.5 px-4 font-sans text-[13px]">
-        学习系统已迁移至{' '}
+        UniMind.ai 已迁移至新网址{' '}
         <a href="https://unimind-ai.com" className="text-[#FF3333] font-bold hover:underline">
-          UniMind.ai
+          unimind-ai.com
         </a>
         ，{' '}
-        <a href="https://unimind-ai.com/login" className="text-[#FF3333] font-bold hover:underline">
+        <a href="https://unimind-ai.com" className="text-[#FF3333] font-bold hover:underline">
           点击此处
         </a>
-        {' '}进入新系统
+        {' '}访问新站
       </div>
 
       {user && (
