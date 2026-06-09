@@ -5,16 +5,14 @@ import { cn } from '@/lib/utils';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
-import { CocoonCanvas } from '@/components/CocoonCanvas';
 import { APP_VERSION, COPYRIGHT_YEAR } from '@/constants/version';
 import { useTranslation } from 'react-i18next';
 
 /* ────────────────────────────────────────────
-   Dark / light palette constants
+   Palette constants — white-first design
    ──────────────────────────────────────────── */
 
-const DARK = '#0a0a14';
-const DARK2 = '#0e0e1a';
+const DARK = '#0e0e1a';  // reserved for FinalCTA anchor
 
 /* ────────────────────────────────────────────
    Scroll reveal
@@ -110,19 +108,18 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
     { label: t('nav.pricing'), href: '/pricing' },
   ];
 
-  // Hero is dark → transparent nav with white text; once scrolled → light bar
+  // Hero is white → transparent nav with dark text; once scrolled → white bar with shadow
   const navBg = scrolled
-    ? 'bg-[#0a0a14]/90 backdrop-blur-xl border-b border-white/[0.06]'
+    ? 'bg-white/90 backdrop-blur-xl border-b border-gray-100 shadow-sm'
     : 'bg-transparent';
-  const txtColor = 'text-white/70 hover:text-white';
-  const logoColor = 'text-white';
+  const txtColor = 'text-gray-500 hover:text-gray-900';
+  const logoColor = 'text-gray-900';
 
   return (
     <nav className={cn('fixed top-0 left-0 right-0 z-[100] transition-all duration-500', navBg)}>
-      <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center gap-2 shrink-0">
-          <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
-          <span className={cn('font-bold text-base tracking-tight', logoColor)}>UniMind</span>
+      <div className="max-w-6xl mx-auto h-20 flex items-center justify-between">
+        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center shrink-0 pl-6">
+          <img src="/Unimind_logo_wide.png" alt="UniMind" className="h-9 object-contain mix-blend-multiply" />
         </button>
 
         {/* Desktop nav links */}
@@ -138,12 +135,12 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
           ))}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 pr-6">
           <LanguageSwitcher variant="full" />
           {token ? (
             <Button
               size="sm"
-              className="text-white border-white/20 bg-white/10 hover:bg-white/20"
+              className="text-[#2d2b6b] border-[#d4d0f5] bg-[#f0efff] hover:bg-[#e4e2ff]"
               onClick={() => navigate('/courses')}
             >
               {t('nav.enterConsole')}
@@ -158,8 +155,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
               </button>
               <Button
                 size="sm"
-                className="text-white border-0 font-semibold"
-                style={{ background: '#5b5fef' }}
+                className="text-white border-0 font-semibold bg-[#2d2b6b] hover:bg-[#232260]"
                 onClick={() => navigate('/register')}
               >
                 {t('nav.freeTrial')}
@@ -174,12 +170,12 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden bg-[#0a0a14]/95 backdrop-blur-xl border-b border-white/[0.06] px-6 pb-5 space-y-1">
+        <div className="md:hidden bg-white/95 backdrop-blur-xl border-b border-gray-100 px-6 pb-5 space-y-1">
           {navItems.map(item => (
             <button
               key={item.href}
               onClick={() => scrollTo(item.href)}
-              className="block w-full text-left py-3 text-base font-medium text-white/70 hover:text-white transition-colors"
+              className="block w-full text-left py-3 text-base font-medium text-gray-500 hover:text-gray-900 transition-colors"
             >
               {item.label}
             </button>
@@ -191,7 +187,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
 };
 
 /* ────────────────────────────────────────────
-   Hero — dark, text only, full viewport
+   Hero — white, full viewport
    ──────────────────────────────────────────── */
 
 const Hero: React.FC = () => {
@@ -199,30 +195,28 @@ const Hero: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="flex flex-col items-center justify-center min-h-screen px-6 relative overflow-hidden" style={{ background: '#000' }}>
-      {/* Canvas as full background */}
-      <CocoonCanvas />
+    <section className="flex flex-col items-center justify-center min-h-screen px-6 relative overflow-hidden" style={{ background: '#fafafa' }}>
 
       <div className="max-w-5xl mx-auto w-full text-center relative z-10 space-y-8 pt-32 pb-32 md:pt-44 md:pb-40">
         <div className="reveal space-y-6">
-          {/* Promo badge */}
+          {/* Memorix-Field announcement — text only, single line */}
           <button
-            onClick={() => navigate('/promo/plus')}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#5b5fef]/30 hover:border-[#5b5fef]/50 transition-all duration-300 cursor-pointer group"
-            style={{ background: 'rgba(91,95,239,0.1)' }}
+            onClick={() => navigate('/memorix')}
+            className="inline-block cursor-pointer group"
           >
-            <span className="text-[11px] font-semibold text-[#818cf8]">首批机构专享 · Growth 方案免费开放</span>
-            <ArrowRight className="h-3 w-3 text-[#818cf8] group-hover:translate-x-0.5 transition-transform" />
+            <span className="text-[18px] text-[#2d2b6b] font-['DM_Sans',sans-serif] group-hover:underline">
+              🎉 <strong>Memorix-Field</strong> 图扩散记忆调度发布 — 遗忘率相比 SOTA 降低 19.9%，现已全面支持 Agent 个性化学习路径 →
+            </span>
           </button>
 
-          <h1 className="text-[36px] md:text-[52px] lg:text-[64px] font-bold leading-[1.1] text-white max-w-4xl mx-auto" style={{ fontFamily: '"Playfair Display", serif', letterSpacing: '-0.03em' }}>
+          <h1 className="text-[36px] md:text-[52px] lg:text-[64px] font-extrabold leading-[1.08] text-gray-900 max-w-4xl mx-auto" style={{ fontFamily: '"DM Sans", sans-serif', letterSpacing: '-0.03em' }}>
             {t('hero.titleLine1')}
             <br />
-            <span style={{ background: 'linear-gradient(135deg, #818cf8, #5b5fef, #38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <span className="text-[#2d2b6b]">
               {t('hero.titleLine2')}
             </span>
           </h1>
-          <p className="text-base md:text-lg text-white/50 max-w-xl mx-auto leading-relaxed">
+          <p className="text-base md:text-lg text-gray-500 max-w-xl mx-auto leading-relaxed">
             {t('hero.subtitle')}
           </p>
         </div>
@@ -230,8 +224,7 @@ const Hero: React.FC = () => {
         <div className="flex items-center justify-center gap-3 pt-2 reveal reveal-delay-2">
           <Button
             size="lg"
-            className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0"
-            style={{ background: '#5b5fef' }}
+            className="h-12 px-8 text-sm font-bold rounded-xl text-white bg-[#2d2b6b] hover:bg-[#232260]"
             onClick={() => navigate('/register')}
           >
             {t('hero.cta')}
@@ -239,23 +232,19 @@ const Hero: React.FC = () => {
           </Button>
         </div>
 
-        {/* Memorix announcement */}
-        <div className="reveal reveal-delay-2 mt-6">
+        {/* Promo badge — capsule below CTA */}
+        <div className="reveal reveal-delay-2">
           <button
-            onClick={() => navigate('/memorix')}
-            className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-[#5b5fef]/20 hover:border-[#5b5fef]/40 transition-all duration-300 cursor-pointer group"
-            style={{ background: 'rgba(91,95,239,0.06)' }}
+            onClick={() => navigate('/promo/plus')}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#d4d0f5] hover:border-[#2d2b6b] transition-all duration-300 cursor-pointer group bg-[#f0efff]"
           >
-            <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#5b5fef] bg-[#5b5fef]/10 px-1.5 py-0.5 rounded">NEW</span>
-            <span className="text-[13px] font-medium text-white/60 group-hover:text-white/80 transition-colors">
-              Memorix-Field — 图扩散记忆调度，遗忘率降低 19.9%
-            </span>
-            <ArrowRight className="h-3 w-3 text-[#5b5fef] group-hover:translate-x-0.5 transition-transform" />
+            <span className="text-[11px] font-semibold text-[#2d2b6b]">首批机构专享 · Growth 方案免费开放</span>
+            <ArrowRight className="h-3 w-3 text-[#2d2b6b] group-hover:translate-x-0.5 transition-transform" />
           </button>
         </div>
 
         {/* Trust markers */}
-        <p className="text-[11px] text-white/30 tracking-wide reveal reveal-delay-2">
+        <p className="text-[11px] text-gray-300 tracking-wide reveal reveal-delay-2">
           {t('hero.footnote')}
         </p>
       </div>
@@ -294,7 +283,7 @@ const StatsBar: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-16">
           {stats.map((item, i) => (
             <div key={item.label} className="text-center space-y-2">
-              <p className="text-5xl md:text-6xl font-bold tracking-tight" style={{ fontFamily: '"DM Mono", monospace', background: 'linear-gradient(135deg, #818cf8, #5b5fef, #38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              <p className="text-5xl md:text-6xl font-bold tracking-tight text-[#2d2b6b]" style={{ fontFamily: '"DM Mono", monospace' }}>
                 {displays[i]}
               </p>
               <p className="text-[12px] font-medium uppercase tracking-[0.2em] text-muted-foreground">{item.label}</p>
@@ -307,7 +296,7 @@ const StatsBar: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   Pain Points — DARK
+   Pain Points
    ──────────────────────────────────────────── */
 
 const PainPoints: React.FC = () => {
@@ -316,12 +305,12 @@ const PainPoints: React.FC = () => {
   const icons = [Clock, Repeat, BarChart3];
 
   return (
-    <section className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: DARK }}>
+    <section className="py-28 md:py-36 px-6 relative overflow-hidden bg-white">
       <div className="max-w-5xl mx-auto">
         <div className="reveal text-center mb-16">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#818cf8] mb-4">{pain.label}</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tighter text-white leading-tight max-w-3xl mx-auto">{pain.title}</h2>
-          <p className="text-sm text-white/40 max-w-lg mx-auto mt-4">{pain.subtitle}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-400 mb-4">{pain.label}</p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tighter text-gray-900 leading-tight max-w-3xl mx-auto">{pain.title}</h2>
+          <p className="text-sm text-gray-500 max-w-lg mx-auto mt-4">{pain.subtitle}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -330,13 +319,13 @@ const PainPoints: React.FC = () => {
             return (
               <div
                 key={item.title}
-                className={cn('reveal p-8 rounded-2xl border border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/[0.12] transition-all duration-300 group', `reveal-delay-${i + 1}`)}
+                className={cn('reveal p-8 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-300 group', `reveal-delay-${i + 1}`)}
               >
-                <div className="h-11 w-11 rounded-xl flex items-center justify-center mb-5" style={{ background: 'rgba(255,59,48,0.12)' }}>
-                  <Icon className="h-5 w-5 text-[#FF453A]" />
+                <div className="h-11 w-11 rounded-xl flex items-center justify-center mb-5" style={{ background: 'rgba(239,68,68,0.08)' }}>
+                  <Icon className="h-5 w-5 text-red-500" />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-3 tracking-tight">{item.title}</h3>
-                <p className="text-sm leading-relaxed text-white/50">{item.desc}</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-3 tracking-tight">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-gray-500">{item.desc}</p>
               </div>
             );
           })}
@@ -367,7 +356,7 @@ const DemoMedia: React.FC<{
           muted
           playsInline
           className="w-full rounded-2xl border border-border"
-          style={{ boxShadow: '0 20px 60px rgba(91,95,239,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
+          style={{ boxShadow: '0 20px 60px rgba(45,43,107,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
           onError={() => setUseVideo(false)}
         />
       ) : (
@@ -375,7 +364,7 @@ const DemoMedia: React.FC<{
           src={imgSrc}
           alt={alt}
           className="w-full rounded-2xl border border-border"
-          style={{ boxShadow: '0 20px 60px rgba(91,95,239,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
+          style={{ boxShadow: '0 20px 60px rgba(45,43,107,0.06), 0 4px 16px rgba(0,0,0,0.04)' }}
         />
       )}
     </div>
@@ -402,7 +391,7 @@ const Showcase: React.FC = () => {
     <section id="features" ref={sectionRef} className="py-28 md:py-36 px-6 relative overflow-hidden bg-background">
       <div className="max-w-6xl mx-auto relative z-10">
         <div className="reveal mb-20 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef] mb-4">{t('features.label')}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b] mb-4">{t('features.label')}</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">{t('features.title')}</h2>
           <p className="text-base md:text-lg text-muted-foreground max-w-xl mx-auto mt-4">{t('features.subtitle')}</p>
         </div>
@@ -418,7 +407,7 @@ const Showcase: React.FC = () => {
             >
               {/* Text */}
               <div className={cn('flex-1 min-w-0', `reveal-delay-${i + 1}`)}>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#5b5fef] mb-3">{item.subtitle}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#2d2b6b] mb-3">{item.subtitle}</p>
                 <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-4">{item.title}</h3>
                 <p className="text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
               </div>
@@ -440,7 +429,7 @@ const Showcase: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   Testimonials — DARK, infinite scroll
+   Testimonials — infinite scroll
    ──────────────────────────────────────────── */
 
 const Testimonials: React.FC = () => {
@@ -449,33 +438,33 @@ const Testimonials: React.FC = () => {
   const doubled = [...items, ...items];
 
   return (
-    <section className="py-28 md:py-36 overflow-hidden" style={{ background: DARK2 }}>
+    <section className="py-28 md:py-36 overflow-hidden bg-white">
       <div className="max-w-5xl mx-auto px-6 mb-14 text-center reveal">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#818cf8] mb-4">{t('testimonials.label')}</p>
-        <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white">{t('testimonials.title')}</h2>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-400 mb-4">{t('testimonials.label')}</p>
+        <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">{t('testimonials.title')}</h2>
       </div>
 
       <div className="relative">
         {/* Fade edges */}
-        <div className="absolute left-0 top-0 bottom-0 w-32 z-10" style={{ background: `linear-gradient(90deg, ${DARK2}, transparent)` }} />
-        <div className="absolute right-0 top-0 bottom-0 w-32 z-10" style={{ background: `linear-gradient(270deg, ${DARK2}, transparent)` }} />
+        <div className="absolute left-0 top-0 bottom-0 w-32 z-10" style={{ background: 'linear-gradient(90deg, #fff, transparent)' }} />
+        <div className="absolute right-0 top-0 bottom-0 w-32 z-10" style={{ background: 'linear-gradient(270deg, #fff, transparent)' }} />
 
         <div className="flex animate-scroll-x" style={{ width: 'max-content' }}>
           {doubled.map((item, i) => (
             <div
               key={`${item.name}-${i}`}
-              className="flex-shrink-0 w-[340px] mx-3 p-7 rounded-2xl border border-white/[0.06] bg-white/[0.03]"
+              className="flex-shrink-0 w-[340px] mx-3 p-7 rounded-2xl border border-gray-100 bg-gray-50"
             >
               {/* Brand-colored opening quote */}
-              <p className="text-3xl font-bold leading-none mb-2" style={{ background: 'linear-gradient(135deg, #818cf8, #5b5fef)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>"</p>
-              <p className="text-sm leading-relaxed text-white/60 mb-5">{item.quote}</p>
+              <p className="text-3xl font-bold leading-none mb-2 text-[#2d2b6b]">"</p>
+              <p className="text-sm leading-relaxed text-gray-600 mb-5">{item.quote}</p>
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white" style={{ background: 'linear-gradient(135deg, #818cf8, #5b5fef)' }}>
+                <div className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white bg-[#2d2b6b]">
                   {item.name[0]}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white">{item.name}</p>
-                  <p className="text-[11px] text-white/30">{item.role}</p>
+                  <p className="text-sm font-semibold text-gray-900">{item.name}</p>
+                  <p className="text-[11px] text-gray-400">{item.role}</p>
                 </div>
               </div>
             </div>
@@ -498,7 +487,7 @@ const HowItWorks: React.FC = () => {
     <section className="py-28 md:py-36 px-6 bg-card">
       <div className="max-w-4xl mx-auto">
         <div className="reveal text-center mb-20">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef] mb-4">{t('how.label')}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b] mb-4">{t('how.label')}</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">{t('how.title')}</h2>
           <p className="text-sm text-muted-foreground max-w-lg mx-auto mt-4">{t('how.subtitle')}</p>
         </div>
@@ -507,8 +496,8 @@ const HowItWorks: React.FC = () => {
           {steps.map((step, i) => (
             <div key={step.title} className={cn('reveal', `reveal-delay-${i + 1}`)}>
               <div className="flex items-start gap-8 py-10">
-                {/* Big gradient number */}
-                <span className="text-6xl md:text-7xl font-bold shrink-0 leading-none select-none" style={{ fontFamily: '"DM Mono", monospace', background: 'linear-gradient(135deg, #818cf8, #5b5fef, #38bdf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                {/* Big number */}
+                <span className="text-6xl md:text-7xl font-bold shrink-0 leading-none select-none text-[#2d2b6b]" style={{ fontFamily: '"DM Mono", monospace' }}>
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <div className="pt-1">
@@ -529,7 +518,7 @@ const HowItWorks: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   Subjects — DARK, tag cloud
+   Subjects — tag cloud
    ──────────────────────────────────────────── */
 
 const Subjects: React.FC = () => {
@@ -538,23 +527,23 @@ const Subjects: React.FC = () => {
   const allTags = categories.flatMap(cat => cat.tags);
 
   return (
-    <section id="subjects" className="py-28 md:py-36 px-6" style={{ background: DARK }}>
+    <section id="subjects" className="py-28 md:py-36 px-6 bg-white">
       <div className="max-w-4xl mx-auto text-center">
         <div className="reveal space-y-6">
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white">{t('subjects.title')}</h2>
-          <p className="text-sm text-white/40 max-w-lg mx-auto">{t('subjects.subtitle')}</p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-gray-900">{t('subjects.title')}</h2>
+          <p className="text-sm text-gray-500 max-w-lg mx-auto">{t('subjects.subtitle')}</p>
         </div>
         <div className="mt-14 flex flex-wrap justify-center gap-2.5 reveal reveal-delay-1">
           {allTags.map((tag) => (
             <span
               key={tag}
-              className="text-[13px] font-medium px-4 py-2 rounded-full border border-white/[0.08] text-white/50 hover:text-[#818cf8] hover:border-[#5b5fef] hover:bg-[#5b5fef]/[0.08] transition-all duration-300 cursor-default"
+              className="text-[13px] font-medium px-4 py-2 rounded-full border border-gray-200 text-gray-500 hover:text-[#2d2b6b] hover:border-[#d4d0f5] hover:bg-[#f0efff] transition-all duration-300 cursor-default"
             >
               {tag}
             </span>
           ))}
         </div>
-        <p className="mt-8 text-xs text-white/20 reveal reveal-delay-2">{t('subjects.footer')}</p>
+        <p className="mt-8 text-xs text-gray-300 reveal reveal-delay-2">{t('subjects.footer')}</p>
       </div>
     </section>
   );
@@ -569,35 +558,33 @@ const FinalCTA: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: DARK2 }}>
+    <section className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: DARK }}>
       {/* Subtle radial accent */}
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(91,95,239,0.05) 0%, transparent 70%)' }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(45,43,107,0.08) 0%, transparent 70%)' }} />
 
       <div className="max-w-3xl mx-auto text-center relative z-10 space-y-8">
         <div className="reveal space-y-5">
-          <h2 className="text-4xl md:text-6xl font-bold leading-[1.08] text-white" style={{ letterSpacing: '-0.03em' }}>
-            {t('cta.title')}
+          <h2 className="text-3xl md:text-5xl font-bold leading-[1.08] text-white" style={{ fontFamily: '"DM Sans", sans-serif', letterSpacing: '-0.02em' }}>
+            准备好，进入智能教育新时代
           </h2>
-          <p className="text-base md:text-lg text-white/40 max-w-lg mx-auto">
-            {t('cta.subtitle')}
+          <p className="text-sm md:text-base text-white/50 max-w-lg mx-auto leading-relaxed" style={{ fontFamily: '"DM Sans", sans-serif' }}>
+            首批机构免费获得 Growth 方案。AI 出题、自适应复习、学情分析——开箱即用。
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 reveal reveal-delay-1">
           <Button
             size="lg"
-            className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0"
-            style={{ background: '#5b5fef' }}
+            className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0 bg-[#2d2b6b] hover:bg-[#232260]"
             onClick={() => navigate('/register')}
           >
             {t('cta.button')}
-            <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
           <button
             className="text-sm font-medium text-white/40 hover:text-white transition-colors"
             onClick={() => navigate('/pricing')}
           >
-            {t('cta.viewPlans')}
+            查看方案对比 →
           </button>
         </div>
 
@@ -648,7 +635,7 @@ const Footer: React.FC = () => {
 };
 
 /* ────────────────────────────────────────────
-   Main — alternating dark / light rhythm
+   Main — white with FinalCTA dark anchor
    ──────────────────────────────────────────── */
 
 export const Landing: React.FC = () => {
@@ -656,17 +643,17 @@ export const Landing: React.FC = () => {
   useScrollReveal();
 
   return (
-    <div className="w-full min-h-screen font-sans text-left overflow-x-hidden antialiased scroll-smooth" style={{ background: DARK }}>
+    <div className="w-full min-h-screen font-sans text-left overflow-x-hidden antialiased scroll-smooth bg-white">
       <Nav token={token} />
       <Hero />
-      <StatsBar />            {/* light */}
-      <PainPoints />          {/* dark */}
-      <Showcase />            {/* light */}
-      <Testimonials />        {/* dark */}
-      <HowItWorks />          {/* light */}
-      <Subjects />            {/* dark */}
-      <FinalCTA />            {/* dark */}
-      <Footer />              {/* light */}
+      <StatsBar />            {/* white */}
+      <PainPoints />          {/* white */}
+      <Showcase />            {/* white */}
+      <Testimonials />        {/* white */}
+      <HowItWorks />          {/* white */}
+      <Subjects />            {/* white */}
+      <FinalCTA />            {/* dark anchor */}
+      <Footer />              {/* white */}
     </div>
   );
 };

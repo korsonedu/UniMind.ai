@@ -132,7 +132,7 @@ const PromoPlus: React.FC = () => {
                   通过邮件申请，入选后免费使用 Growth 方案 6 个月，充分验证 AI 驱动的教学效果。名额有限。
                 </p>
                 <a
-                  href="mailto:korsonedu@gmail.com"
+                  href="mailto:eular@unimind-ai.com"
                   className="text-[13px] font-semibold text-[#5b5fef] hover:underline inline-flex items-center gap-1"
                 >
                   发送邮件申请 <ArrowRight className="h-3 w-3" />
@@ -180,8 +180,8 @@ const PromoPlus: React.FC = () => {
                   <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(91,95,239,0.08)' }}>
                     <Mail className="h-5 w-5 text-[#5b5fef]" />
                   </div>
-                  <a href="mailto:korsonedu@gmail.com" className="text-lg font-bold text-[#5b5fef] hover:underline">
-                    korsonedu@gmail.com
+                  <a href="mailto:eular@unimind-ai.com" className="text-lg font-bold text-[#5b5fef] hover:underline">
+                    eular@unimind-ai.com
                   </a>
                 </div>
 
@@ -227,7 +227,7 @@ const PromoPlus: React.FC = () => {
                 免费注册
               </Button>
               <a
-                href="mailto:korsonedu@gmail.com"
+                href="mailto:eular@unimind-ai.com"
                 className="text-sm font-medium text-[#5a5a7a] hover:text-[#5b5fef] transition-colors"
               >
                 发送邮件申请 →

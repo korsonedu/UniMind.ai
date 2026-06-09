@@ -268,7 +268,7 @@ html {
   transition: box-shadow 0.4s ease;
 }
 .glow-hover:hover {
-  box-shadow: 0 0 40px rgba(91, 95, 239, 0.15), 0 0 80px rgba(91, 95, 239, 0.05);
+  box-shadow: 0 0 40px rgba(45, 43, 107, 0.15), 0 0 80px rgba(45, 43, 107, 0.05);
 }
 
 /* ── Custom Sonner styling ── */

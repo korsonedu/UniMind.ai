@@ -9,7 +9,7 @@ interface ContactAdminModalProps {
   planLabel?: string;
 }
 
-const CONTACT_EMAIL = 'korsonedu@gmail.com';
+const CONTACT_EMAIL = 'eular@unimind-ai.com';
 const CONTACT_WECHAT = 'Korsonedu';
 
 export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdminModalProps) {
