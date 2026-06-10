@@ -227,7 +227,7 @@ class StudentV2:
         el = max(0.0, t - self.last[ki])
         if el <= 0: return 1.0
         k = max(0.05, min(5.0, self.fgt))
-        return float(np.exp(-((el / max(S * 24, 0.01)) ** k)))
+        return float(np.exp(-((el / max(S, 0.01)) ** k)))
 
     def review(self, ki, t, rating):
         Sold = self.S[ki]
@@ -340,6 +340,16 @@ def simulate_student(tree, student, sched, alpha, n_days, budget,
             for li in selected:
                 rating = student.get_rating(li, cur_t)
                 student.review(li, cur_t, rating)
+
+                # push model: field mode 复习时 boost 邻居稳定性
+                if sched == 'field':
+                    for nli, w in nbrs.get(li, []):
+                        if student.S[nli] > 0:
+                            boost_effect = 0.20 * w * student.con
+                            hours_to_sleep = session_end - cur_t
+                            if hours_to_sleep < 2.0:
+                                boost_effect *= 1.3
+                            student.S[nli] *= (1.0 + boost_effect)
 
         cur_t = session_end + sleep_hours
 
