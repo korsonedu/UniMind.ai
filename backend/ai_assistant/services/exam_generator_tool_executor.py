@@ -37,6 +37,16 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
 
         result = {}
 
+        # 始终返回机构学科列表，让 agent 知道当前机构有哪些学科
+        if self.institution:
+            inst_subjects = list(
+                KnowledgePoint.objects.filter(
+                    Q(institution=self.institution) | Q(institution__isnull=True),
+                    level='kp',
+                ).values_list('subject', flat=True).distinct()
+            )
+            result["institution_subjects"] = [s for s in inst_subjects if s]
+
         # mode=kp 或 auto：搜知识点
         if mode in ('kp', 'auto'):
             qs = KnowledgePoint.objects.filter(name__icontains=query, level='kp')
