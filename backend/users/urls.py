@@ -9,6 +9,7 @@ from .views import (
     DiagnosticGenerateView, DiagnosticSubmitView,
     AnalyticsDashboardView, AnalyticsExportView, NPSSubmitView, NPSStatusView,
     AccountDeleteView, DataExportView, FeedbackSubmitView,
+    AvatarProxyView,
 )
 from .views_admin import (
     SuperuserUserListView, UserTagListView, PermissionGroupListView,
@@ -122,4 +123,7 @@ urlpatterns = [
     path('me/delete/', AccountDeleteView.as_view(), name='account-delete'),
     path('me/data-export/', DataExportView.as_view(), name='data-export'),
     path('feedback/', FeedbackSubmitView.as_view(), name='feedback-submit'),
+
+    # Avatar proxy
+    path('avatar/<str:style>/<str:seed>/', AvatarProxyView.as_view(), name='avatar-proxy'),
 ]

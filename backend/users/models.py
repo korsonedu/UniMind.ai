@@ -51,7 +51,7 @@ class User(AbstractUser):
     @property
     def avatar_url(self):
         seed = self.avatar_seed or self.username
-        return f"https://api.dicebear.com/7.x/{self.avatar_style}/svg?seed={seed}"
+        return f"/api/users/avatar/{self.avatar_style}/{seed}/"
 
     def save(self, *args, **kwargs):
         if self.is_superuser:

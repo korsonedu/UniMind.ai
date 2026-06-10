@@ -1291,3 +1291,39 @@ class FeedbackSubmitView(APIView):
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
         )
         return Response({'status': 'ok', 'message': '感谢您的反馈！'})
+
+
+# ──────────────────────────────────────────────
+# 头像代理（DiceBear API）
+# ──────────────────────────────────────────────
+
+class AvatarProxyView(APIView):
+    """代理 DiceBear 头像请求，解决客户端网络不通问题。
+
+    GET /api/users/avatar/<style>/<seed>/
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, style, seed):
+        import httpx
+        from django.http import HttpResponse
+
+        allowed_styles = [
+            'avataaars', 'big-ears', 'big-smile', 'bottts', 'fun-emoji',
+            'icons', 'identicon', 'initials', 'lorelei', 'micah',
+            'miniavs', 'personas', 'pixel-art', 'thumbs',
+        ]
+        if style not in allowed_styles:
+            return Response({'error': 'Invalid style'}, status=400)
+
+        url = f"https://api.dicebear.com/7.x/{style}/svg?seed={seed}"
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                resp = client.get(url)
+                return HttpResponse(
+                    resp.content,
+                    content_type='image/svg+xml',
+                    headers={'Cache-Control': 'public, max-age=86400'},
+                )
+        except Exception:
+            return Response({'error': 'Avatar service unavailable'}, status=502)
