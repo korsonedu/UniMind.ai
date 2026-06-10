@@ -130,7 +130,7 @@ class AIEngine:
         return tool_calls
 
     @staticmethod
-    def _build_body(config, messages, temperature, max_tokens, tools, tool_choice, stream=False):
+    def _build_body(config, messages, temperature, max_tokens, tools, tool_choice, stream=False, _preserve_tool_choice=False):
         """构建 LLM 请求体。处理 DeepSeek thinking mode 对 tool_choice 的限制。"""
         body = {
             "model": config['model'],
@@ -144,8 +144,9 @@ class AIEngine:
             body["tools"] = tools
         if config.get('thinking'):
             body["thinking"] = {"type": "enabled"}
-        # DeepSeek thinking mode 不支持 tool_choice="required"，降级为 auto
-        if 'deepseek' in config.get('model', '').lower() and config.get('thinking') and tool_choice == "required":
+        # DeepSeek 不支持 tool_choice="required"（agent chat 场景），降级为 auto
+        # structured_output 场景通过 _preserve_tool_choice=True 跳过降级
+        if not _preserve_tool_choice and 'deepseek' in config.get('model', '').lower() and tool_choice == "required":
             tool_choice = "auto"
         if tool_choice is not None:
             body["tool_choice"] = tool_choice
@@ -161,6 +162,7 @@ class AIEngine:
         operation='general',
         tools=None,
         tool_choice=None,
+        _preserve_tool_choice=False,
     ):
         """
         通用的 AI 模型调用接口。
@@ -202,7 +204,7 @@ class AIEngine:
 
         for attempt in range(max_retries + 1):
             try:
-                body = cls._build_body(config, messages, temperature, max_tokens, tools, tool_choice)
+                body = cls._build_body(config, messages, temperature, max_tokens, tools, tool_choice, _preserve_tool_choice=_preserve_tool_choice)
 
                 logger.info(
                     "ai.call_ai request: model=%s operation=%s tool_choice=%s thinking=%s",
@@ -480,6 +482,7 @@ class AIEngine:
             max_tokens=max_tokens,
             operation=operation,
             raise_on_error=raise_on_error,
+            _preserve_tool_choice=True,
         )
         if not response:
             return None
