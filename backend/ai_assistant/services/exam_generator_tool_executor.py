@@ -37,23 +37,33 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
 
         result = {}
 
-        # 始终返回机构学科列表，让 agent 知道当前机构有哪些学科
+        # 机构隔离：机构有自己知识树的学科，只返回机构数据；没有的才 fallback 到全局
+        inst_subject_set = set()
         if self.institution:
             inst_subjects = list(
                 KnowledgePoint.objects.filter(
-                    Q(institution=self.institution) | Q(institution__isnull=True),
-                    level='kp',
+                    institution=self.institution, level='kp',
                 ).values_list('subject', flat=True).distinct()
             )
-            result["institution_subjects"] = [s for s in inst_subjects if s]
+            inst_subject_set = {s for s in inst_subjects if s}
+            result["institution_subjects"] = sorted(inst_subject_set)
+
+        def _apply_institution_filter(qs, subj=''):
+            """机构有知识树 → 只看机构数据；没有 → fallback 全局。"""
+            if not self.institution:
+                return qs
+            if inst_subject_set:
+                # 机构有自己的知识树，只搜机构数据
+                return qs.filter(institution=self.institution)
+            # 机构没有知识树，fallback 到全局
+            return qs.filter(institution__isnull=True)
 
         # mode=kp 或 auto：搜知识点
         if mode in ('kp', 'auto'):
             qs = KnowledgePoint.objects.filter(name__icontains=query, level='kp')
             if subject:
                 qs = qs.filter(subject=subject)
-            if self.institution:
-                qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
+            qs = _apply_institution_filter(qs, subject)
 
             kps = list(qs.values('id', 'code', 'name', 'subject', 'description')[:15])
             result = {
@@ -81,8 +91,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             )
             if subject:
                 tree_qs = tree_qs.filter(subject=subject)
-            if self.institution:
-                tree_qs = tree_qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
+            tree_qs = _apply_institution_filter(tree_qs, subject)
 
             tree_nodes = list(tree_qs.select_related('parent').values(
                 'id', 'code', 'name', 'level', 'subject', 'parent__name',
@@ -108,12 +117,18 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                 return result
 
         # 全无结果：提供引导
-        base_qs = KnowledgePoint.objects.filter(level='kp')
-        if self.institution:
-            base_qs = base_qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
-        subjects = list(base_qs.values_list('subject', flat=True).distinct()[:10])
-        result["available_subjects"] = [s for s in subjects if s]
-        sample_kps = list(base_qs.order_by('?').values_list('name', flat=True)[:8])
+        if inst_subject_set:
+            result["available_subjects"] = sorted(inst_subject_set)
+            sample_kps = list(
+                KnowledgePoint.objects.filter(
+                    institution=self.institution, level='kp',
+                ).order_by('?').values_list('name', flat=True)[:8]
+            )
+        else:
+            base_qs = KnowledgePoint.objects.filter(level='kp', institution__isnull=True)
+            subjects = list(base_qs.values_list('subject', flat=True).distinct()[:10])
+            result["available_subjects"] = [s for s in subjects if s]
+            sample_kps = list(base_qs.order_by('?').values_list('name', flat=True)[:8])
         result["sample_keywords"] = sample_kps
         result["hint"] = "搜索无结果。可用学科和知识点示例见上方，换关键词重试。"
         return result
