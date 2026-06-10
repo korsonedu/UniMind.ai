@@ -307,12 +307,13 @@ def simulate_student(tree, student, sched, alpha, n_days, budget,
                 elapsed_h = cur_t - student.last[li] if student.last[li] >= 0 else 999
                 S0 = student.S[li]
 
-                if sched in ('standard', 'field'):
-                    urg = 1.0 - student.R(li, cur_t) if student.last[li] >= 0 else 3.0
-                elif sched == 'rec':
+                if sched == 'rec':
+                    urg = rec_urgency(S0, elapsed_h, k=rec_k, tau_hours=rec_tau) if S0 > 0 else 1.0
+                elif sched == 'field' and rec_tau > 0:
+                    # REC+Field combo: REC urgency with graph diffusion
                     urg = rec_urgency(S0, elapsed_h, k=rec_k, tau_hours=rec_tau) if S0 > 0 else 1.0
                 else:
-                    urg = 0.0
+                    urg = 1.0 - student.R(li, cur_t) if student.last[li] >= 0 else 3.0
 
                 if sched == 'field':
                     fb = sum(w * max(0.0, 1.0 - student.R(nli, cur_t))
@@ -354,111 +355,214 @@ def simulate_student(tree, student, sched, alpha, n_days, budget,
 # 实验运行
 # ═══════════════════════════════════════
 
-def summary(group):
-    arr = np.array([r['final_R'] for r in group])
-    return {'mean': float(np.mean(arr)), 'std': float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0}
+def summary(arr):
+    """返回 mean, std, 95% CI"""
+    a = np.array(arr)
+    n = len(a)
+    m = float(np.mean(a))
+    s = float(np.std(a, ddof=1)) if n > 1 else 0.0
+    ci = 1.96 * s / np.sqrt(n) if n > 1 else 0.0
+    return {'mean': m, 'std': s, 'ci95': ci, 'n': n}
 
 
-def run_experiment(tree, tau_k_grid, students_per=60, n_days=150, budget=6):
-    results = {}
+def paired_test(group_a, group_b):
+    """配对 t 检验 + Cohen's d"""
+    a = np.array(group_a)
+    b = np.array(group_b)
+    n = len(a)
+    diffs = b - a
+    mean_diff = float(np.mean(diffs))
+    se_diff = float(np.std(diffs, ddof=1)) / np.sqrt(n) if n > 1 else 0
+    t = mean_diff / se_diff if se_diff > 0 else 0
+    # Cohen's d
+    pooled_sd = np.sqrt((np.var(a, ddof=1) + np.var(b, ddof=1)) / 2)
+    d = mean_diff / pooled_sd if pooled_sd > 0 else 0
+    # 简易 p 值（正态近似）
+    from math import erfc
+    p = float(erfc(abs(t) / np.sqrt(2)))
+    return {'mean_diff': mean_diff, 't': t, 'p': p, 'cohens_d': d, 'n': n}
+
+
+def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
+    """
+    两轮独立运行，验证可复现性。
+    每轮 400 学生 × 每个 combo，标准+Field 对照。
+    """
+    all_rounds = []
     student_types = list(STUDENT_TYPES.keys())
     coverages = [0.4, 0.6, 0.8]
 
-    # Baseline: standard + field (alpha=0.60, current production)
-    print("Baseline: standard urgency...")
-    std_results = []
-    for i in range(students_per):
-        stype = student_types[i % len(student_types)]
-        cov = coverages[i % len(coverages)]
-        s = StudentV2(i, student_type=stype, coverage=cov)
-        std_results.append(simulate_student(tree, s, 'standard', 0.60, n_days, budget, seed=i))
-    results['standard'] = summary(std_results)
+    for rnd in range(rounds):
+        print(f"\n{'='*50}")
+        print(f"ROUND {rnd+1}/{rounds}")
+        print(f"{'='*50}")
+        results = {}
+        seed_offset = rnd * 100000
 
-    print("Baseline: field (alpha=0.60)...")
-    fld_results = []
-    for i in range(students_per):
-        stype = student_types[i % len(student_types)]
-        cov = coverages[i % len(coverages)]
-        s = StudentV2(i + 10000, student_type=stype, coverage=cov)
-        fld_results.append(simulate_student(tree, s, 'field', 0.60, n_days, budget, seed=i + 10000))
-    results['field_a0.60'] = summary(fld_results)
-
-    # REC grid search
-    total = len(tau_k_grid)
-    for idx, (tau, k) in enumerate(tau_k_grid):
-        key = f"rec_t{tau:.1f}_k{k:.1f}"
-        print(f"[{idx+1}/{total}] {key} ...", end=' ', flush=True)
+        # Baseline
+        print("Baseline: standard ...", end=' ', flush=True)
         t0 = time.time()
-
-        rec_results = []
+        std_r = []
         for i in range(students_per):
-            stype = student_types[i % len(student_types)]
-            cov = coverages[i % len(coverages)]
-            s = StudentV2(idx * 1000 + i, student_type=stype, coverage=cov)
-            rec_results.append(simulate_student(
-                tree, s, 'rec', 0.60, n_days, budget,
-                seed=idx * 1000 + i, rec_tau=tau, rec_k=k))
+            st = student_types[i % len(student_types)]
+            cv = coverages[i % len(coverages)]
+            s = StudentV2(seed_offset + i, student_type=st, coverage=cv)
+            std_r.append(simulate_student(tree, s, 'standard', 0.60, n_days, budget, seed=seed_offset + i))
+        results['standard'] = std_r
+        print(f"R={summary([r['final_R'] for r in std_r])['mean']:.4f} ({time.time()-t0:.0f}s)")
 
-        s = summary(rec_results)
-        results[key] = s
-        dt = time.time() - t0
-        print(f"R={s['mean']:.4f} ± {s['std']:.4f} ({dt:.0f}s)")
+        print("Baseline: field (α=0.60) ...", end=' ', flush=True)
+        t0 = time.time()
+        fld_r = []
+        for i in range(students_per):
+            st = student_types[i % len(student_types)]
+            cv = coverages[i % len(coverages)]
+            s = StudentV2(seed_offset + 50000 + i, student_type=st, coverage=cv)
+            fld_r.append(simulate_student(tree, s, 'field', 0.60, n_days, budget, seed=seed_offset + 50000 + i))
+        results['field_a0.60'] = fld_r
+        print(f"R={summary([r['final_R'] for r in fld_r])['mean']:.4f} ({time.time()-t0:.0f}s)")
 
-    return results
+        # REC grid
+        total = len(tau_k_grid)
+        for idx, (tau, k) in enumerate(tau_k_grid):
+            key = f"rec_t{tau:.1f}_k{k:.1f}"
+            print(f"[{idx+1}/{total}] {key} ...", end=' ', flush=True)
+            t0 = time.time()
+            rec_r = []
+            for i in range(students_per):
+                st = student_types[i % len(student_types)]
+                cv = coverages[i % len(coverages)]
+                s = StudentV2(seed_offset + 200000 + idx*students_per + i, student_type=st, coverage=cv)
+                rec_r.append(simulate_student(
+                    tree, s, 'rec', 0.60, n_days, budget,
+                    seed=seed_offset + 200000 + idx*students_per + i,
+                    rec_tau=tau, rec_k=k))
+            results[key] = rec_r
+            dt = time.time() - t0
+            s = summary([r['final_R'] for r in rec_r])
+            print(f"R={s['mean']:.4f} ± {s['ci95']:.4f} ({dt:.0f}s)")
 
+        all_rounds.append(results)
+
+    # ── 合并两轮，验证稳定性 ──
+    final = {}
+    round1, round2 = all_rounds
+
+    # 标准+Field：合并两轮数据
+    final['standard'] = summary([r['final_R'] for r in round1['standard'] + round2['standard']])
+    final['field_a0.60'] = summary([r['final_R'] for r in round1['field_a0.60'] + round2['field_a0.60']])
+
+    # REC：每个 combo 合并两轮
+    for tau, k in tau_k_grid:
+        key = f"rec_t{tau:.1f}_k{k:.1f}"
+        all_r = round1[key] + round2[key]
+        final[key] = summary([r['final_R'] for r in all_r])
+        # 可复现性：两轮各自 mean 的差异
+        r1m = summary([r['final_R'] for r in round1[key]])['mean']
+        r2m = summary([r['final_R'] for r in round2[key]])['mean']
+        final[f"{key}_round_delta"] = abs(r1m - r2m)
+
+    # 找最优，跑 REC+Field combo
+    rec_only = [(k, v) for k, v in final.items() if k.startswith('rec_t')]
+    rec_only.sort(key=lambda x: -x[1]['mean'])
+    best_key = rec_only[0][0]
+    best_tau = float(best_key.split('_')[1][1:])
+    best_k = float(best_key.split('_')[2][1:])
+
+    print(f"\nBest REC: {best_key} (τ={best_tau}h, k={best_k})")
+    print(f"Running REC+Field combo with best params...")
+    combo_r = []
+    for i in range(students_per):
+        st = student_types[i % len(student_types)]
+        cv = coverages[i % len(coverages)]
+        s = StudentV2(900000 + i, student_type=st, coverage=cv)
+        r = simulate_student(tree, s, 'field', 0.60, n_days, budget,
+                             seed=900000 + i, rec_tau=best_tau, rec_k=best_k)
+        # patch: field with rec urgency
+        combo_r.append(r)
+    final['rec_field_combo'] = summary([r['final_R'] for r in combo_r])
+
+    # ── 统计检验 ──
+    std_vals = [r['final_R'] for r in round1['standard'] + round2['standard']]
+    fld_vals = [r['final_R'] for r in round1['field_a0.60'] + round2['field_a0.60']]
+    final['test_field_vs_std'] = paired_test(std_vals, fld_vals)
+
+    best_vals = [r['final_R'] for r in round1[best_key] + round2[best_key]]
+    final['test_best_rec_vs_std'] = paired_test(std_vals, best_vals)
+
+    return final, tau_values, k_values, best_tau, best_k
+
+
+# ═══════════════════════════════════════
+# Main
+# ═══════════════════════════════════════
 
 def main():
     tree = load_cfa_tree(os.path.join(os.path.dirname(__file__), 'cfa_tree.json'), heavy=True)
     print(f"CFA Tree: {tree['n_kps']} KPs (heavy mode)\n")
 
-    # Grid search: τ ∈ {0.5, 1, 2, 4, 8} hours, k ∈ {0.8, 1.0, 1.2, 1.5, 2.0}
-    # τ=0.5 对应 30min 不应期, τ=8 对应 8h (约等于一天的学习窗口)
+    # τ ∈ {0.5, 1, 2, 4, 8}h, k ∈ {0.8, 1.0, 1.2, 1.5, 2.0}
     tau_values = [0.5, 1.0, 2.0, 4.0, 8.0]
     k_values = [0.8, 1.0, 1.2, 1.5, 2.0]
     tau_k_grid = [(t, k) for t in tau_values for k in k_values]
 
-    students_per = 60
+    students_per = 400   # 匹配 Phase 0 规模
     n_days = 150
     budget = 6
+    rounds = 2
 
-    print(f"Grid: {len(tau_k_grid)} combos × {students_per} students × {n_days}d\n")
+    total_runs = (2 + len(tau_k_grid)) * students_per * rounds
+    print(f"⚡ 规模: {len(tau_k_grid)} combos × {students_per} students × {rounds} rounds")
+    print(f"   总计 {total_runs:,} student-runs ({total_runs * n_days:,} student-days)\n")
 
     t0 = time.time()
-    results = run_experiment(tree, tau_k_grid, students_per, n_days, budget)
+    results, tau_values, k_values, best_tau, best_k = run_experiment(
+        tree, tau_k_grid, students_per, n_days, budget, rounds)
     elapsed = time.time() - t0
 
     # ── Report ──
-    print(f"\n{'='*70}")
-    print(f"Done in {elapsed:.0f}s ({elapsed/60:.1f}min)")
-    print(f"{'='*70}")
-    print(f"{'Scheduler':>20}  {'R_mean':>8}  {'R_std':>8}  vs_standard  vs_field")
-    print("-" * 70)
-
     std_mean = results['standard']['mean']
     fld_mean = results['field_a0.60']['mean']
 
-    for key in ['standard', 'field_a0.60']:
-        r = results[key]
-        d_std = r['mean'] - std_mean
-        d_fld = r['mean'] - fld_mean
-        print(f"{key:>20}  {r['mean']:8.4f}  {r['std']:8.4f}  {d_std:+8.4f}  {d_fld:+8.4f}")
+    print(f"\n{'='*70}")
+    print(f"DONE in {elapsed:.0f}s ({elapsed/60:.1f}min)  |  {total_runs:,} runs")
+    print(f"{'='*70}")
+    print(f"{'Scheduler':>22} {'R_mean':>8} {'95%CI':>8} {'Δstd':>8} {'Δfld':>8}")
+    print("-" * 70)
 
-    # Top REC performers
-    rec_entries = [(k, v) for k, v in results.items() if k.startswith('rec')]
+    baselines = ['standard', 'field_a0.60', 'rec_field_combo']
+    for key in baselines:
+        if key in results:
+            r = results[key]
+            print(f"{key:>22} {r['mean']:8.4f} ±{r['ci95']:.4f} "
+                  f"{r['mean']-std_mean:+8.4f} {r['mean']-fld_mean:+8.4f}")
+
+    # Top REC
+    rec_entries = [(k, v) for k, v in results.items() if k.startswith('rec_t')]
     rec_entries.sort(key=lambda x: -x[1]['mean'])
-
-    print(f"\nTop 5 REC params:")
+    print(f"\nTop 5 REC params (2-round avg, 800 students each):")
     for key, r in rec_entries[:5]:
-        d_std = r['mean'] - std_mean
-        d_fld = r['mean'] - fld_mean
-        print(f"  {key:>20}  R={r['mean']:.4f}  Δstd={d_std:+.4f}  Δfld={d_fld:+.4f}")
+        rd = results.get(f"{key}_round_delta", 0)
+        print(f"  {key:>20}  R={r['mean']:.4f} ±{r['ci95']:.4f}  "
+              f"Δstd={r['mean']-std_mean:+.4f}  rd_delta={rd:.5f}")
+
+    # 统计检验
+    print(f"\n── 统计检验 ──")
+    for test_name in ['test_field_vs_std', 'test_best_rec_vs_std']:
+        t = results.get(test_name, {})
+        if t:
+            sig = '***' if t['p'] < 0.001 else ('**' if t['p'] < 0.01 else ('*' if t['p'] < 0.05 else 'ns'))
+            print(f"  {test_name}: Δ={t['mean_diff']:+.4f}  "
+                  f"t={t['t']:.1f}  p={t['p']:.4f} {sig}  d={t['cohens_d']:.3f}")
 
     os.makedirs('scripts/output', exist_ok=True)
+    # 只存摘要（原始 per-student 数据太大）
+    out = {k: v if isinstance(v, dict) and 'mean' in v else str(v)[:200]
+           for k, v in results.items() if not k.startswith('test_')}
     with open('scripts/output/rec_results.json', 'w') as f:
-        json.dump(results, f, indent=2, default=float)
+        json.dump(out, f, indent=2, default=float)
     print(f"\nSaved to scripts/output/rec_results.json")
 
-    # ── Visualization ──
     _plot_results(results, tau_values, k_values, std_mean, fld_mean)
 
 
