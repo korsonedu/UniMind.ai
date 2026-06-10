@@ -408,7 +408,7 @@ def run_experiment(tree, tau_k_grid, students_per=60, n_days=150, budget=6):
 
 
 def main():
-    tree = load_cfa_tree('scripts/cfa_tree.json', heavy=True)
+    tree = load_cfa_tree(os.path.join(os.path.dirname(__file__), 'cfa_tree.json'), heavy=True)
     print(f"CFA Tree: {tree['n_kps']} KPs (heavy mode)\n")
 
     # Grid search: τ ∈ {0.5, 1, 2, 4, 8} hours, k ∈ {0.8, 1.0, 1.2, 1.5, 2.0}
