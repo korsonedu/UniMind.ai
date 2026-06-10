@@ -580,10 +580,10 @@ def main():
 
 
 def _live_heatmap(results, tau_values, k_values, std_mean, completed_combo=None):
-    """运行中更新热力图——只画已完成的 combo"""
+    """运行中弹窗显示热力图，自动刷新"""
     try:
         import matplotlib
-        matplotlib.use('Agg')
+        matplotlib.use('MacOSX')  # 弹窗模式
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError:
@@ -598,6 +598,7 @@ def _live_heatmap(results, tau_values, k_values, std_mean, completed_combo=None)
             if key in results:
                 heatmap[j, i] = results[key]['mean'] - std_mean
 
+    plt.ion()  # 交互模式
     fig, ax = plt.subplots(figsize=(10, 7))
     cmap = plt.cm.RdYlGn
     cmap.set_bad('#1a1a2e')
@@ -626,10 +627,13 @@ def _live_heatmap(results, tau_values, k_values, std_mean, completed_combo=None)
     cbar.set_label('Δ retention', fontsize=11, fontweight='bold')
 
     plt.tight_layout()
+    fig.canvas.draw_idle()
+    plt.pause(0.1)
+
+    # 同时保存文件
     os.makedirs('scripts/output', exist_ok=True)
-    plt.savefig('scripts/output/rec_live.png', dpi=120, bbox_inches='tight',
+    fig.savefig('scripts/output/rec_live.png', dpi=120, bbox_inches='tight',
                 facecolor='#1a1a2e', edgecolor='none')
-    plt.close()
 
 
 # ═══════════════════════════════════════
@@ -639,8 +643,6 @@ def _live_heatmap(results, tau_values, k_values, std_mean, completed_combo=None)
 def _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, best_k):
     """生成 2×2 论文级图表"""
     try:
-        import matplotlib
-        matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         import matplotlib.ticker as mticker
         import numpy as np
@@ -762,7 +764,7 @@ def _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, b
     plt.tight_layout()
     out_path = 'scripts/output/rec_paper_figure.png'
     plt.savefig(out_path, facecolor='white', edgecolor='none')
-    plt.close()
+    plt.show(block=False)
     print(f"Figure saved to {out_path}")
 
     # ── 单独存 SVGs ──
