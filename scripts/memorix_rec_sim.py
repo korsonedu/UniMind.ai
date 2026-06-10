@@ -407,6 +407,9 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
         print(f"ROUND {rnd+1}/{rounds}")
         print(f"{'='*50}")
         results = {}
+
+        # 立即弹出空仪表盘窗口
+        _live_dashboard(results, tau_values, k_values, rnd+1, 0, len(tau_k_grid))
         seed_offset = rnd * 100000
 
         # Baseline
