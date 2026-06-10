@@ -458,6 +458,80 @@ def main():
         json.dump(results, f, indent=2, default=float)
     print(f"\nSaved to scripts/output/rec_results.json")
 
+    # ── Visualization ──
+    _plot_results(results, tau_values, k_values, std_mean, fld_mean)
+
+
+def _plot_results(results, tau_values, k_values, std_mean, fld_mean):
+    """生成两张图：热力图 + 对比柱状图"""
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except ImportError:
+        print("\n⚠ matplotlib not installed, skip visualization.")
+        print("  pip install matplotlib")
+        return
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+    # ── 左：热力图 (Δ vs standard) ──
+    n_tau, n_k = len(tau_values), len(k_values)
+    heatmap = np.zeros((n_k, n_tau))
+    for i, tau in enumerate(tau_values):
+        for j, k in enumerate(k_values):
+            key = f"rec_t{tau:.1f}_k{k:.1f}"
+            heatmap[j, i] = results[key]['mean'] - std_mean
+
+    im = ax1.imshow(heatmap, cmap='RdYlGn', aspect='auto', vmin=-0.05, vmax=0.05)
+    ax1.set_xticks(range(n_tau))
+    ax1.set_xticklabels([f'{t:.1f}h' for t in tau_values])
+    ax1.set_yticks(range(n_k))
+    ax1.set_yticklabels([f'{k:.1f}' for k in k_values])
+    ax1.set_xlabel('τ (refractory period, hours)')
+    ax1.set_ylabel('k (Weibull shape)')
+    ax1.set_title('REC Δ vs Standard Urgency')
+
+    # 标注数值
+    for i in range(n_tau):
+        for j in range(n_k):
+            val = heatmap[j, i]
+            color = 'white' if abs(val) > 0.03 else 'black'
+            ax1.text(i, j, f'{val:+.3f}', ha='center', va='center',
+                     fontsize=8, color=color, fontweight='bold')
+
+    plt.colorbar(im, ax=ax1, label='Δ retention')
+
+    # ── 右：柱状图对比 ──
+    rec_entries = [(k, v) for k, v in results.items() if k.startswith('rec')]
+    rec_entries.sort(key=lambda x: -x[1]['mean'])
+    best_key, best_r = rec_entries[0]
+
+    labels = ['Standard', 'Field\n(α=0.60)', f'Best REC\n({best_key})']
+    values = [std_mean, fld_mean, best_r['mean']]
+    colors = ['#94a3b8', '#4AE68A', '#5b5fef']
+
+    bars = ax2.bar(labels, values, color=colors, width=0.5)
+    ax2.set_ylabel('150-day Retention')
+    ax2.set_title('Urgency Model Comparison')
+    ax2.set_ylim(0, max(values) * 1.15)
+
+    for bar, val in zip(bars, values):
+        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
+                f'{val:.4f}', ha='center', fontweight='bold', fontsize=11)
+        if val > std_mean:
+            delta = val - std_mean
+            ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height()/2,
+                    f'+{delta:.3f}', ha='center', fontweight='bold',
+                    fontsize=10, color='white')
+
+    plt.tight_layout()
+    out_path = 'scripts/output/rec_visualization.png'
+    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Saved to {out_path}")
+
 
 if __name__ == '__main__':
     main()
