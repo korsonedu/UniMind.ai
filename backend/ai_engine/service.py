@@ -492,7 +492,24 @@ class AIEngine:
             except (json.JSONDecodeError, TypeError, KeyError):
                 pass
 
-        # model did not call the tool — no fallback, return None
+        # fallback: 模型有时把 JSON 放在 content 而非 tool_calls 里
+        content = cls._extract_content(response)
+        if content:
+            try:
+                # 尝试从 content 中提取 JSON
+                result = json.loads(content)
+                return result.get('items', result) if _is_array_schema else result
+            except (json.JSONDecodeError, TypeError, KeyError):
+                # content 可能包含 markdown 包裹的 JSON
+                import re
+                json_match = re.search(r'\[[\s\S]*\]|\{[\s\S]*\}', content)
+                if json_match:
+                    try:
+                        result = json.loads(json_match.group())
+                        return result.get('items', result) if _is_array_schema else result
+                    except (json.JSONDecodeError, TypeError, KeyError):
+                        pass
+
         logger.warning(
             "structured_output: model did not call tool '%s' operation=%s",
             tool_name, operation,
