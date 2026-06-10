@@ -413,7 +413,7 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
         seed_offset = rnd * 100000
 
         # Baseline
-        print("Baseline: standard ...", end=' ', flush=True)
+        print("Baseline: standard ...", flush=True)
         t0 = time.time()
         std_r = []
         for i in range(students_per):
@@ -421,10 +421,12 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
             cv = coverages[i % len(coverages)]
             s = StudentV2(seed_offset + i, student_type=st, coverage=cv)
             std_r.append(simulate_student(tree, s, 'standard', 0.60, n_days, budget, seed=seed_offset + i))
+            if (i+1) % 100 == 0:
+                print(f"  {i+1}/{students_per} students ({time.time()-t0:.0f}s)", flush=True)
         results['standard'] = std_r
-        print(f"R={summary([r['final_R'] for r in std_r])['mean']:.4f} ({time.time()-t0:.0f}s)")
+        print(f"  done: R={summary([r['final_R'] for r in std_r])['mean']:.4f} ({time.time()-t0:.0f}s)")
 
-        print("Baseline: field (α=0.60) ...", end=' ', flush=True)
+        print("Baseline: field (α=0.60) ...", flush=True)
         t0 = time.time()
         fld_r = []
         for i in range(students_per):
@@ -432,8 +434,10 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
             cv = coverages[i % len(coverages)]
             s = StudentV2(seed_offset + 50000 + i, student_type=st, coverage=cv)
             fld_r.append(simulate_student(tree, s, 'field', 0.60, n_days, budget, seed=seed_offset + 50000 + i))
+            if (i+1) % 100 == 0:
+                print(f"  {i+1}/{students_per} students ({time.time()-t0:.0f}s)", flush=True)
         results['field_a0.60'] = fld_r
-        print(f"R={summary([r['final_R'] for r in fld_r])['mean']:.4f} ({time.time()-t0:.0f}s)")
+        print(f"  done: R={summary([r['final_R'] for r in fld_r])['mean']:.4f} ({time.time()-t0:.0f}s)")
 
         # REC grid
         total = len(tau_k_grid)
