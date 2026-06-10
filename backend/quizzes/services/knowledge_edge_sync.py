@@ -10,7 +10,7 @@
 
 生成的边：
     父子 (contains, weight=0.8):  KP ↔ parent，双向
-    兄弟 (similar, weight=0.3):  同 parent 下所有 KP 两两相连，双向
+    注：兄弟边和语义边由 LLM 分析生成，不再从树结构硬编码。
 """
 from django.db import transaction
 from quizzes.models import KnowledgePoint, KnowledgeEdge
@@ -69,24 +69,6 @@ def rebuild_subject_edges(subject: str, institution=None, dry_run: bool = False)
             ),
         ])
 
-    # 兄弟边（双向，similar, 0.3）
-    for siblings in children_of.values():
-        for i in range(len(siblings)):
-            for j in range(i + 1, len(siblings)):
-                a, b = siblings[i], siblings[j]
-                edge_records.extend([
-                    KnowledgeEdge(
-                        source_id=a, target_id=b,
-                        edge_type='similar', weight=0.3,
-                        source_type='tree', institution=institution,
-                    ),
-                    KnowledgeEdge(
-                        source_id=b, target_id=a,
-                        edge_type='similar', weight=0.3,
-                        source_type='tree', institution=institution,
-                    ),
-                ])
-
     new_count = len(edge_records)
 
     if not dry_run and edge_records:
@@ -136,8 +118,7 @@ def sync_kp_neighborhood(kp: KnowledgePoint, old_parent_id: int | None = None) -
 
     1. 删除该 KP 当前所有 tree 边
     2. 与当前 parent 建立双向 contains 边（如有）
-    3. 与当前所有兄弟建立双向 similar 边
-    4. 如果 parent 变了，用旧 parent 的兄弟群也做一次清理
+    3. 如果 parent 变了，清理与旧 parent 的 contains 边
 
     对已经存在的边用 get_or_create，不重复。
     """
@@ -164,70 +145,21 @@ def sync_kp_neighborhood(kp: KnowledgePoint, old_parent_id: int | None = None) -
             )
             if is_new:
                 created += 1
-
-    # 3. 兄弟边（与同 parent 所有其他 KP）
-    if kp.parent_id:
-        siblings = KnowledgePoint.objects.filter(
-            parent_id=kp.parent_id,
-            level='kp',
-            institution=kp.institution,
-        ).exclude(id=kp.id)
-
-        for sib in siblings:
-            for src, tgt in [(kp.id, sib.id), (sib.id, kp.id)]:
-                _, is_new = KnowledgeEdge.objects.get_or_create(
-                    source_id=src, target_id=tgt,
-                    edge_type='similar',
-                    institution=kp.institution,
-                    defaults={'weight': 0.3, 'source_type': 'tree'},
-                )
-                if is_new:
-                    created += 1
-
     result['created'] = created
 
-    # 4. Parent 变更：旧兄弟们少了这个 KP，需要清洗他们的边
+    # 3. Parent 变更：清理与旧 parent 的 contains 边
     if old_parent_id and old_parent_id != kp.parent_id:
-        old_siblings = KnowledgePoint.objects.filter(
-            parent_id=old_parent_id,
-            level='kp',
+        KnowledgeEdge.objects.filter(
+            source_type='tree',
+            edge_type='contains',
             institution=kp.institution,
-        ).exclude(id=kp.id)
-
-        for sib in old_siblings:
-            # 删掉 sib ↔ kp 的 similar 边
-            KnowledgeEdge.objects.filter(
-                source_type='tree',
-                edge_type='similar',
-                institution=kp.institution,
-            ).filter(
-                models.Q(source=kp, target=sib) | models.Q(source=sib, target=kp)
-            ).delete()
-
-            # 重建 sib 之间的边（确保没有遗漏）
-            _rebuild_sibling_edges_for(sib, parent_id=old_parent_id)
-
-        result['old_siblings_cleaned'] = old_siblings.count()
+        ).filter(
+            models.Q(source=kp, target_id=old_parent_id) |
+            models.Q(source_id=old_parent_id, target=kp)
+        ).delete()
+        result['old_parent_cleaned'] = True
 
     return result
-
-
-def _rebuild_sibling_edges_for(kp: KnowledgePoint, parent_id: int):
-    """重建某个 KP 与其所有兄弟的 similar 边（用于父节点变更后修复旧群组）"""
-    siblings = KnowledgePoint.objects.filter(
-        parent_id=parent_id,
-        level='kp',
-        institution=kp.institution,
-    ).exclude(id=kp.id)
-
-    for sib in siblings:
-        for src, tgt in [(kp.id, sib.id), (sib.id, kp.id)]:
-            KnowledgeEdge.objects.get_or_create(
-                source_id=src, target_id=tgt,
-                edge_type='similar',
-                institution=kp.institution,
-                defaults={'weight': 0.3, 'source_type': 'tree'},
-            )
 
 
 # Django models import for filter expressions
