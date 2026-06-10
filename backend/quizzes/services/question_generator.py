@@ -163,7 +163,12 @@ class QuestionGenerator:
             return self.DOMAIN_SIGNALS['edu']
         if s in self.SUBJECT_GROUP_MED:
             return self.DOMAIN_SIGNALS['med']
-        return self.DOMAIN_SIGNALS['math']  # 默认用数学（通用性最强）
+        # 未知学科用通用信号（避免默认偏向数学）
+        return {
+            'structure': ['因为', '所以', '根据', '由此'],
+            'quant': ['%', '约', '比例', '比率'],
+            'formula': [],
+        }
 
     def _estimate_difficulty_level(self, question: Dict[str, Any], subject: str = '') -> str:
         text = str(question.get('question') or '').strip()

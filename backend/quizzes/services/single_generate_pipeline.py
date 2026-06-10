@@ -3,6 +3,7 @@ import re
 from typing import Any, Dict, Iterable, List, Optional
 
 from django.conf import settings
+from django.db.models import Q
 
 from ai_engine.service import AICallError
 from ai_engine.tools import BATCH_REVIEW_SCHEMA
@@ -184,7 +185,10 @@ def run_single_generate_pipeline(
     if not normalized_kp_ids:
         raise AICallError("未提供有效知识点 ID。", status_code=400, retryable=False, error_category="bad_request")
 
-    kps = list(KnowledgePoint.objects.filter(id__in=normalized_kp_ids, level="kp").order_by("id"))
+    kp_qs = KnowledgePoint.objects.filter(id__in=normalized_kp_ids, level="kp")
+    if institution:
+        kp_qs = kp_qs.filter(Q(institution=institution) | Q(institution__isnull=True))
+    kps = list(kp_qs.order_by("id"))
     if not kps:
         raise AICallError("未匹配到有效考点。", status_code=400, retryable=False, error_category="bad_request")
 

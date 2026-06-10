@@ -447,7 +447,7 @@ GET_PRACTICE_QUESTIONS_SCHEMA = {
     "properties": {
         "kp_name": {
             "type": "string",
-            "description": "知识点名称（模糊匹配），如'函数单调性'",
+            "description": "知识点名称（模糊匹配）",
         },
         "subject": {
             "type": "string",
@@ -755,7 +755,7 @@ LAUNCH_ARC_PIPELINE_SCHEMA = {
         },
         "title": {
             "type": "string",
-            "description": "任务标题，如'期中模拟卷 - 微积分'",
+            "description": "任务标题，如'期中模拟卷'",
         },
     },
     "required": ["kp_ids"],

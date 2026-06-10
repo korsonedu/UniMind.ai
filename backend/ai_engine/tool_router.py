@@ -117,7 +117,7 @@ PLANNER_TOOLS_META = [
     ToolMeta(
         name="get_practice_questions",
         description="从题库中抽取相关题目供学生练习",
-        body="从题库中按知识点或学科抽取题目。参数: kp_name(str)=知识点名称(如'函数单调性'), subject(str)=学科(可选), difficulty(str)=难度(可选), limit(int)=题数(默认5)。优先返回做错过的题目。适用于：给学生出题练习、'我想做XX题'、薄弱知识点强化训练。不适用于：查看错题记录（用get_user_wrong_questions）、查看复习任务（用get_due_reviews）。",
+        body="从题库中按知识点或学科抽取题目。参数: kp_name(str)=知识点名称, subject(str)=学科(可选), difficulty(str)=难度(可选), limit(int)=题数(默认5)。优先返回做错过的题目。适用于：给学生出题练习、'我想做XX题'、薄弱知识点强化训练。不适用于：查看错题记录（用get_user_wrong_questions）、查看复习任务（用get_due_reviews）。",
     ),
 ]
 
@@ -246,27 +246,20 @@ PLANNER_INTENT_MAP = {
             "update_plan_task", "render_visual",
         ],
     },
-    "quiz": {
-        "keywords": ["出题", "做题", "练习", "测试", "考试", "刷题", "模拟", "真题"],
-        "tools": [
-            "get_user_wrong_questions", "get_due_reviews",
-            "lookup_question", "search_knowledge_tree",
-            "get_practice_questions", "render_visual",
-        ],
-    },
     "analysis": {
-        "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告"],
+        "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告", "难度"],
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_class_weak_points", "get_class_performance_summary",
-            "get_exam_history", "render_visual",
+            "get_exam_history", "get_knowledge_difficulty_analysis", "render_visual",
         ],
     },
-    "knowledge": {
-        "keywords": ["知识点", "概念", "定义", "解释", "是什么", "有哪些", "搜索"],
+    "quiz": {
+        "keywords": ["出题", "出几道", "做题", "练习", "测试", "考试", "刷题", "模拟", "真题"],
         "tools": [
-            "search_knowledge_tree",
-            "lookup_question", "render_visual",
+            "get_user_wrong_questions", "get_due_reviews",
+            "lookup_question", "search_knowledge_tree",
+            "get_practice_questions", "get_user_weak_points", "render_visual",
         ],
     },
     "resource": {
@@ -288,9 +281,21 @@ PLANNER_INTENT_MAP = {
             "render_visual",
         ],
     },
+    "grading": {
+        "keywords": ["批改", "判分", "评分", "对不对", "我的答案", "帮我改", "帮我批"],
+        "tools": [
+            "grade_student_answer", "lookup_question", "render_visual",
+        ],
+    },
 }
 
 EXAM_GENERATOR_INTENT_MAP = {
+    "weak_points": {
+        "keywords": ["薄弱", "弱项", "薄弱点", "薄弱知识", "针对薄弱", "班级", "学情", "正确率低"],
+        "tools": [
+            "get_class_weak_points", "search_knowledge", "quick_generate",
+        ],
+    },
     "generate": {
         "keywords": ["出题", "生成", "命题", "出一组", "出几道", "给我出", "来几道", "新题", "题目",
                      "再来", "换", "调整", "改", "不同", "其他"],

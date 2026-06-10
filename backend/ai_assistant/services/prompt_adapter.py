@@ -83,21 +83,6 @@ _TEACHING_STYLE_RULES = [
         "label": "difficulty_hard",
         "directive": "该教师偏好高难度题目。出题时控制在 hard/extreme 级别，侧重综合应用和深度分析。",
     },
-    {
-        "keywords": ["金融", "431", "公司理财", "投资学", "货币银行"],
-        "label": "subject_finance",
-        "directive": "该教师专注金融学科。出题时使用金融专业术语，结合实际金融市场案例。",
-    },
-    {
-        "keywords": ["数学", "高数", "线代", "概率", "微积分"],
-        "label": "subject_math",
-        "directive": "该教师专注数学学科。出题时注重公式推导和计算过程，LaTeX 格式化数学表达式。",
-    },
-    {
-        "keywords": ["法学", "法考", "民法", "刑法", "宪法"],
-        "label": "subject_law",
-        "directive": "该教师专注法学科。出题时注重法律条文引用和案例分析，使用法言法语。",
-    },
 ]
 
 

@@ -43,14 +43,13 @@
 }}
 ```
 
-**latex_derivation** — 数学推导过程
+**latex_derivation** — 公式推导过程
 ```json
 {"type": "latex_derivation", "payload": {
-  "title": "二次方程求根公式推导",
+  "title": "公式推导",
   "steps": [
-    {"latex": "ax^2 + bx + c = 0", "note": "标准形式"},
-    {"latex": "x^2 + \\frac{b}{a}x + \\frac{c}{a} = 0", "note": "两边除以a"},
-    {"latex": "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}"}
+    {"latex": "公式初始形式", "note": "定义条件"},
+    {"latex": "变换后的公式", "note": "推导步骤说明"}
   ]
 }}
 ```
@@ -61,11 +60,10 @@
 **step_solution** — 解题步骤
 ```json
 {"type": "step_solution", "payload": {
-  "title": "求解 2x + 5 = 13",
+  "title": "题目标题",
   "steps": [
-    {"text": "移项：将常数移到右边", "latex": "2x = 13 - 5"},
-    {"text": "化简右边", "latex": "2x = 8"},
-    {"text": "两边除以2", "latex": "x = 4"}
+    {"text": "步骤说明", "latex": "中间公式"},
+    {"text": "最终结论", "latex": "结果"}
   ]
 }}
 ```
@@ -73,46 +71,43 @@
 **knowledge_map** — 知识图谱/关系
 ```json
 {"type": "knowledge_map", "payload": {
-  "title": "高中数学 - 函数模块掌握情况",
+  "title": "学科知识模块掌握情况",
   "nodes": [
-    {"id": "func_basic", "label": "函数基础", "mastery": 0.9},
-    {"id": "quadratic", "label": "二次函数", "mastery": 0.6},
-    {"id": "trig", "label": "三角函数", "mastery": 0.3}
+    {"id": "kp_a", "label": "知识点A", "mastery": 0.9},
+    {"id": "kp_b", "label": "知识点B", "mastery": 0.6},
+    {"id": "kp_c", "label": "知识点C", "mastery": 0.3}
   ],
   "edges": [
-    {"from": "func_basic", "to": "quadratic"},
-    {"from": "func_basic", "to": "trig"}
+    {"from": "kp_a", "to": "kp_b"},
+    {"from": "kp_a", "to": "kp_c"}
   ],
-  "highlights": ["quadratic", "trig"]
+  "highlights": ["kp_b", "kp_c"]
 }}
 ```
 
-**function_graph** — 函数图像（交互式图表）
-讲解函数性质、图像变换、方程求解时调用。支持两种模式：
+**function_graph** — 数据关系可视化（交互式图表）
+讲解变量关系、趋势变化、对比分析时调用。支持两种模式：
 模式一（推荐）：传入公式字符串，前端自动采样绘图
 ```json
 {"type": "function_graph", "payload": {
-  "title": "y = x² - 4x + 3",
-  "formula": "x^2 - 4*x + 3",
-  "xRange": [-1, 5],
-  "yRange": [-2, 6],
+  "title": "图表标题",
+  "formula": "公式表达式",
+  "xRange": [最小值, 最大值],
+  "yRange": [最小值, 最大值],
   "points": [
-    {"x": 2, "y": -1, "label": "顶点 (2,-1)", "color": "#ef4444"},
-    {"x": 1, "y": 0, "label": "(1,0)", "color": "#6366f1"},
-    {"x": 3, "y": 0, "label": "(3,0)", "color": "#6366f1"},
-    {"x": 0, "y": 3, "label": "(0,3)", "color": "#10b981"}
+    {"x": 值, "y": 值, "label": "标注", "color": "#ef4444"}
   ]
 }}
 ```
-模式二：传入预计算的点集（多函数对比）
+模式二：传入预计算的点集（多系列对比）
 ```json
 {"type": "function_graph", "payload": {
-  "title": "sin(x) vs cos(x)",
+  "title": "多系列对比",
   "expressions": [
-    {"label": "sin(x)", "color": "#6366f1", "points": [{"x": 0, "y": 0}, ...]},
-    {"label": "cos(x)", "color": "#f43f5e", "points": [{"x": 0, "y": 1}, ...]}
+    {"label": "系列A", "color": "#6366f1", "points": [...]},
+    {"label": "系列B", "color": "#f43f5e", "points": [...]}
   ],
-  "xRange": [-6.28, 6.28]
+  "xRange": [最小值, 最大值]
 }}
 ```
 公式支持：+, -, *, /, ^, sin, cos, tan, sqrt, abs, log, exp, pi
@@ -127,18 +122,18 @@
   "title": "今日学习建议",
   "cards": [
     {
-      "title": "函数单调性薄弱",
-      "description": "正确率 45%，建议先看视频巩固导数应用",
+      "title": "XX 知识点薄弱",
+      "description": "正确率 45%，建议先看视频巩固",
       "priority": "high",
       "icon": "video",
-      "action": {"type": "video", "url": "/course/3?t=120", "label": "观看视频"}
+      "action": {"type": "video", "url": "/course/{id}?t={seconds}", "label": "观看视频"}
     },
     {
-      "title": "巩固函数单调性",
+      "title": "巩固 XX 知识点",
       "description": "已从题库抽取 5 道相关题目，优先练习做错过的题",
       "priority": "high",
       "icon": "quiz",
-      "action": {"type": "quiz", "url": "/tests/session?source=xiaoyu&kp_name=函数单调性", "label": "开始做题"}
+      "action": {"type": "quiz", "url": "/tests/session?source=xiaoyu&kp_name={知识点名}", "label": "开始做题"}
     },
     {
       "title": "12 道复习题待完成",
@@ -152,7 +147,7 @@
 ```
 
 #### 必须渲染的场景（满足任一即调用）
-- **数学公式推导**：讲解涉及公式推导、证明过程、定理演绎 → `latex_derivation`
+- **公式推导**：讲解涉及公式推导、证明过程、定理演绎 → `latex_derivation`
 - **函数图像**：讲解函数性质、图像变换、画出函数图像 → `function_graph`
 - **解题步骤**：讲解题目解法、分步演算 → `step_solution`
 - **数据分析**：对话中获取了学习统计数据并需要展示对比/趋势 → `data_card`
