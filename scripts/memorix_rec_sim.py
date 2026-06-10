@@ -583,11 +583,14 @@ def _live_heatmap(results, tau_values, k_values, std_mean, completed_combo=None)
     """运行中弹窗显示热力图，自动刷新"""
     try:
         import matplotlib
-        matplotlib.use('MacOSX')  # 弹窗模式
+        matplotlib.use('TkAgg')
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError:
         return
+
+    # 关闭之前的窗口
+    plt.close('all')
 
     n_tau, n_k = len(tau_values), len(k_values)
     heatmap = np.full((n_k, n_tau), np.nan)
@@ -598,8 +601,7 @@ def _live_heatmap(results, tau_values, k_values, std_mean, completed_combo=None)
             if key in results:
                 heatmap[j, i] = results[key]['mean'] - std_mean
 
-    plt.ion()  # 交互模式
-    fig, ax = plt.subplots(figsize=(10, 7))
+    fig, ax = plt.subplots(figsize=(10, 7), num='REC Live Heatmap')
     cmap = plt.cm.RdYlGn
     cmap.set_bad('#1a1a2e')
     im = ax.imshow(heatmap, cmap=cmap, aspect='auto', vmin=-0.06, vmax=0.06)
@@ -627,8 +629,9 @@ def _live_heatmap(results, tau_values, k_values, std_mean, completed_combo=None)
     cbar.set_label('Δ retention', fontsize=11, fontweight='bold')
 
     plt.tight_layout()
-    fig.canvas.draw_idle()
-    plt.pause(0.1)
+    fig.canvas.draw()
+    plt.show(block=False)
+    plt.pause(0.5)
 
     # 同时保存文件
     os.makedirs('scripts/output', exist_ok=True)
