@@ -19,9 +19,12 @@ import json, math, time, random, os
 from collections import defaultdict
 import numpy as np
 
-# ═══ 弹窗后端 — 必须在任何 pyplot 导入前设置 ═══
+# ═══ 弹窗 — 必须在任何 pyplot 导入前 ═══
 import matplotlib
 matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+
+plt.ion()  # 交互模式
 
 # ═══════════════════════════════════════
 # P(t) 可塑性模型（小时版，适配仿真）
@@ -577,25 +580,19 @@ def main():
     _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, best_k)
 
 
+# 全局：持久 figure 引用
+_live_fig = None
+_live_axes = None
+
+
 def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, combo_total):
     """
-    运行中弹窗：4 面板实时仪表盘
-      (a) REC Δ vs Standard 热力图（逐格填满）
-      (b) 当前最优 vs baseline 柱状图
-      (c) 进度条 + 核心指标
-      (d) 已完成 combo 的 Top 5 文字
+    运行中弹窗：4 面板实时仪表盘，复用同一个窗口
     """
-    try:
-        import matplotlib.pyplot as plt
-        import numpy as np
-    except ImportError:
-        return
-
-    plt.close('all')
+    global _live_fig, _live_axes
 
     n_tau, n_k = len(tau_values), len(k_values)
 
-    # 提取数据
     std_mean = None
     fld_mean = None
     if 'standard' in round_results:
@@ -603,7 +600,6 @@ def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, co
     if 'field_a0.60' in round_results:
         fld_mean = np.mean([r['final_R'] for r in round_results['field_a0.60']])
 
-    # 热力图数据
     heatmap = np.full((n_k, n_tau), np.nan)
     rec_entries = []
     for i, tau in enumerate(tau_values):
@@ -614,21 +610,30 @@ def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, co
                 m = np.mean(vals)
                 heatmap[j, i] = m - std_mean if std_mean else m
                 rec_entries.append((key, tau, k, m, np.std(vals, ddof=1) if len(vals)>1 else 0))
-
     rec_entries.sort(key=lambda x: -x[3])
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10), num='REC Live Dashboard')
-    fig.suptitle(f'REC Simulation — Round {rnd_num}  [{combo_done}/{combo_total} combos]',
-                 fontsize=14, fontweight='bold', y=0.98)
+    # 首次创建 figure
+    if _live_fig is None:
+        _live_fig, _live_axes = plt.subplots(2, 2, figsize=(14, 10),
+                                              num='REC Live Dashboard',
+                                              facecolor='#f5f5f5')
+        _live_fig.show()
 
-    # ── (0,0) 热力图 ──
+    fig, axes = _live_fig, _live_axes
+    for ax in axes.flat:
+        ax.clear()
+
+    fig.suptitle(f'REC Simulation — Round {rnd_num}  [{combo_done}/{combo_total} combos]',
+                 fontsize=14, fontweight='bold')
+
+    # (0,0) 热力图
     ax = axes[0, 0]
-    cmap = plt.cm.RdYlGn; cmap.set_bad('#1a1a2e')
+    cmap = plt.cm.RdYlGn; cmap.set_bad('#ccc')
     im = ax.imshow(heatmap, cmap=cmap, aspect='auto', vmin=-0.06, vmax=0.06)
-    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}h' for t in tau_values])
+    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values])
     ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values])
     ax.set_xlabel('τ (hours)'); ax.set_ylabel('k')
-    ax.set_title('Δ vs Standard Urgency', fontweight='bold')
+    ax.set_title('Δ vs Standard', fontweight='bold')
     for i in range(n_tau):
         for j in range(n_k):
             v = heatmap[j, i]
@@ -637,65 +642,52 @@ def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, co
                         color='white' if abs(v)>0.03 else 'black', fontweight='bold')
     plt.colorbar(im, ax=ax, shrink=0.8)
 
-    # ── (0,1) 柱状图 ──
+    # (0,1) 柱状图
     ax = axes[0, 1]
     bars_data = []
     if std_mean: bars_data.append(('Standard', std_mean, '#94a3b8'))
-    if fld_mean: bars_data.append(('Field α=0.60', fld_mean, '#4AE68A'))
+    if fld_mean: bars_data.append(('Field', fld_mean, '#4AE68A'))
     if rec_entries:
-        best = rec_entries[0]
-        bars_data.append((f'Best REC\nτ={best[1]:.1f}h k={best[2]:.1f}', best[3], '#5b5fef'))
+        b = rec_entries[0]
+        bars_data.append((f'Best REC\nτ={b[1]:.1f} k={b[2]:.1f}', b[3], '#5b5fef'))
     x = np.arange(len(bars_data))
     vals = [b[1] for b in bars_data]
-    colors = [b[2] for b in bars_data]
-    bars = ax.bar(x, vals, 0.5, color=colors, edgecolor='white')
+    bars = ax.bar(x, vals, 0.5, color=[b[2] for b in bars_data], edgecolor='white')
     ax.set_xticks(x); ax.set_xticklabels([b[0] for b in bars_data], fontsize=9)
     ax.set_title('Model Comparison', fontweight='bold')
     for bar, val in zip(bars, vals):
-        ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.003,
+        ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.002,
                 f'{val:.4f}', ha='center', fontweight='bold', fontsize=10)
     ax.set_ylim(0, max(vals)*1.2 if vals else 1)
 
-    # ── (1,0) 进度 + 指标 ──
-    ax = axes[1, 0]
-    ax.axis('off')
-    pct = combo_done / max(combo_total, 1) * 100
-    lines = [
-        f"Progress: {combo_done}/{combo_total} ({pct:.0f}%)",
-        f"",
-        f"Baselines:",
-    ]
-    if std_mean: lines.append(f"  Standard:     {std_mean:.4f}")
-    if fld_mean: lines.append(f"  Field(α=0.60): {fld_mean:.4f}")
+    # (1,0) 进度 + 指标
+    ax = axes[1, 0]; ax.axis('off')
+    pct = combo_done/max(combo_total, 1)*100
+    lines = [f"Progress: {combo_done}/{combo_total} ({pct:.0f}%)", "",
+             "Baselines:"]
+    if std_mean: lines.append(f"  Standard:   {std_mean:.4f}")
+    if fld_mean: lines.append(f"  Field:      {fld_mean:.4f}")
     if rec_entries:
-        lines.append(f"")
-        lines.append(f"Best REC so far:")
-        lines.append(f"  τ={rec_entries[0][1]:.1f}h  k={rec_entries[0][2]:.1f}")
-        lines.append(f"  R={rec_entries[0][3]:.4f}")
-        if std_mean:
-            lines.append(f"  Δstd={rec_entries[0][3]-std_mean:+.4f}")
-    text = '\n'.join(lines)
-    ax.text(0.05, 0.95, text, transform=ax.transAxes, fontsize=12,
-            fontfamily='monospace', verticalalignment='top')
+        lines += ["", f"Best REC:", f"  τ={rec_entries[0][1]:.1f}h  k={rec_entries[0][2]:.1f}",
+                  f"  R={rec_entries[0][3]:.4f}"]
+        if std_mean: lines.append(f"  Δstd={rec_entries[0][3]-std_mean:+.4f}")
+    ax.text(0.05, 0.95, '\n'.join(lines), transform=ax.transAxes, fontsize=12,
+            fontfamily='monospace', va='top')
 
-    # ── (1,1) Top 5 ──
-    ax = axes[1, 1]
-    ax.axis('off')
-    lines = ["Top 5 REC combos:"]
-    for rank, (key, tau, k, mean, std) in enumerate(rec_entries[:5]):
-        delta = f"{mean-std_mean:+.4f}" if std_mean else "?"
-        lines.append(f"  {rank+1}. τ={tau:.1f}h k={k:.1f}  R={mean:.4f}  Δ={delta}")
-    ax.text(0.05, 0.95, '\n'.join(lines), transform=ax.transAxes, fontsize=11,
-            fontfamily='monospace', verticalalignment='top')
+    # (1,1) Top 5
+    ax = axes[1, 1]; ax.axis('off')
+    lines = ["Top 5:"]
+    for rank, (_, tau, k, mean, _) in enumerate(rec_entries[:5]):
+        d = f"{mean-std_mean:+.4f}" if std_mean else "?"
+        lines.append(f"  {rank+1}. τ={tau:.1f} k={k:.1f}  R={mean:.4f}  Δ={d}")
+    ax.text(0.05, 0.95, '\n'.join(lines), transform=ax.transAxes, fontsize=10,
+            fontfamily='monospace', va='top')
 
-    plt.tight_layout()
     fig.canvas.draw()
-    plt.show(block=False)
-    plt.pause(0.5)
+    fig.canvas.flush_events()
 
     os.makedirs('scripts/output', exist_ok=True)
-    fig.savefig('scripts/output/rec_live.png', dpi=120, bbox_inches='tight',
-                facecolor='#f5f5f5', edgecolor='none')
+    fig.savefig('scripts/output/rec_live.png', dpi=120, facecolor='#f5f5f5')
 
 
 # ═══════════════════════════════════════
