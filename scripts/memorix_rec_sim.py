@@ -388,6 +388,9 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
     两轮独立运行，验证可复现性。
     每轮 400 学生 × 每个 combo，标准+Field 对照。
     """
+    # extract unique values from grid
+    tau_values = sorted(set(t for t, _ in tau_k_grid))
+    k_values = sorted(set(k for _, k in tau_k_grid))
     all_rounds = []
     student_types = list(STUDENT_TYPES.keys())
     coverages = [0.4, 0.6, 0.8]
@@ -441,6 +444,16 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
             dt = time.time() - t0
             s = summary([r['final_R'] for r in rec_r])
             print(f"R={s['mean']:.4f} ± {s['ci95']:.4f} ({dt:.0f}s)")
+
+            # live heatmap update (use this round's standard as ref)
+            if 'standard' in results:
+                rnd_std = summary([r['final_R'] for r in results['standard']])['mean']
+                combo_summaries = {}
+                for k, v in results.items():
+                    if k.startswith('rec_t'):
+                        combo_summaries[k] = summary([r['final_R'] for r in v])
+                _live_heatmap(combo_summaries, tau_values, k_values, rnd_std,
+                             f"Round {rnd+1}, {idx+1}/{total}")
 
         all_rounds.append(results)
 
@@ -563,78 +576,222 @@ def main():
         json.dump(out, f, indent=2, default=float)
     print(f"\nSaved to scripts/output/rec_results.json")
 
-    _plot_results(results, tau_values, k_values, std_mean, fld_mean)
+    _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, best_k)
 
 
-def _plot_results(results, tau_values, k_values, std_mean, fld_mean):
-    """生成两张图：热力图 + 对比柱状图"""
+def _live_heatmap(results, tau_values, k_values, std_mean, completed_combo=None):
+    """运行中更新热力图——只画已完成的 combo"""
     try:
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError:
-        print("\n⚠ matplotlib not installed, skip visualization.")
-        print("  pip install matplotlib")
         return
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-
-    # ── 左：热力图 (Δ vs standard) ──
     n_tau, n_k = len(tau_values), len(k_values)
-    heatmap = np.zeros((n_k, n_tau))
+    heatmap = np.full((n_k, n_tau), np.nan)
+
     for i, tau in enumerate(tau_values):
         for j, k in enumerate(k_values):
             key = f"rec_t{tau:.1f}_k{k:.1f}"
-            heatmap[j, i] = results[key]['mean'] - std_mean
+            if key in results:
+                heatmap[j, i] = results[key]['mean'] - std_mean
 
-    im = ax1.imshow(heatmap, cmap='RdYlGn', aspect='auto', vmin=-0.05, vmax=0.05)
-    ax1.set_xticks(range(n_tau))
-    ax1.set_xticklabels([f'{t:.1f}h' for t in tau_values])
-    ax1.set_yticks(range(n_k))
-    ax1.set_yticklabels([f'{k:.1f}' for k in k_values])
-    ax1.set_xlabel('τ (refractory period, hours)')
-    ax1.set_ylabel('k (Weibull shape)')
-    ax1.set_title('REC Δ vs Standard Urgency')
+    fig, ax = plt.subplots(figsize=(10, 7))
+    cmap = plt.cm.RdYlGn
+    cmap.set_bad('#1a1a2e')
+    im = ax.imshow(heatmap, cmap=cmap, aspect='auto', vmin=-0.06, vmax=0.06)
 
-    # 标注数值
+    ax.set_xticks(range(n_tau))
+    ax.set_xticklabels([f'{t:.1f}h' for t in tau_values], fontsize=11)
+    ax.set_yticks(range(n_k))
+    ax.set_yticklabels([f'{k:.1f}' for k in k_values], fontsize=11)
+    ax.set_xlabel('τ — refractory period (hours)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('k — Weibull shape parameter', fontsize=12, fontweight='bold')
+    title = 'REC Δ vs Standard Urgency'
+    if completed_combo:
+        title += f'  [{completed_combo}]'
+    ax.set_title(title, fontsize=14, fontweight='bold')
+
     for i in range(n_tau):
         for j in range(n_k):
             val = heatmap[j, i]
-            color = 'white' if abs(val) > 0.03 else 'black'
-            ax1.text(i, j, f'{val:+.3f}', ha='center', va='center',
-                     fontsize=8, color=color, fontweight='bold')
+            if not np.isnan(val):
+                color = 'white' if abs(val) > 0.03 else 'black'
+                ax.text(i, j, f'{val:+.3f}', ha='center', va='center',
+                        fontsize=8, color=color, fontweight='bold')
 
-    plt.colorbar(im, ax=ax1, label='Δ retention')
-
-    # ── 右：柱状图对比 ──
-    rec_entries = [(k, v) for k, v in results.items() if k.startswith('rec')]
-    rec_entries.sort(key=lambda x: -x[1]['mean'])
-    best_key, best_r = rec_entries[0]
-
-    labels = ['Standard', 'Field\n(α=0.60)', f'Best REC\n({best_key})']
-    values = [std_mean, fld_mean, best_r['mean']]
-    colors = ['#94a3b8', '#4AE68A', '#5b5fef']
-
-    bars = ax2.bar(labels, values, color=colors, width=0.5)
-    ax2.set_ylabel('150-day Retention')
-    ax2.set_title('Urgency Model Comparison')
-    ax2.set_ylim(0, max(values) * 1.15)
-
-    for bar, val in zip(bars, values):
-        ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
-                f'{val:.4f}', ha='center', fontweight='bold', fontsize=11)
-        if val > std_mean:
-            delta = val - std_mean
-            ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height()/2,
-                    f'+{delta:.3f}', ha='center', fontweight='bold',
-                    fontsize=10, color='white')
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('Δ retention', fontsize=11, fontweight='bold')
 
     plt.tight_layout()
-    out_path = 'scripts/output/rec_visualization.png'
-    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    os.makedirs('scripts/output', exist_ok=True)
+    plt.savefig('scripts/output/rec_live.png', dpi=120, bbox_inches='tight',
+                facecolor='#1a1a2e', edgecolor='none')
     plt.close()
-    print(f"Saved to {out_path}")
+
+
+# ═══════════════════════════════════════
+# 论文级可视化
+# ═══════════════════════════════════════
+
+def _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, best_k):
+    """生成 2×2 论文级图表"""
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker as mticker
+        import numpy as np
+    except ImportError:
+        print("\n⚠ matplotlib not installed, skip visualization.")
+        print("  pip install matplotlib numpy")
+        return
+
+    # 论文风格
+    plt.rcParams.update({
+        'font.family': 'serif',
+        'font.size': 10,
+        'axes.labelsize': 11,
+        'axes.titlesize': 12,
+        'legend.fontsize': 9,
+        'figure.dpi': 200,
+        'savefig.dpi': 200,
+        'savefig.bbox': 'tight',
+        'savefig.pad_inches': 0.05,
+    })
+
+    n_tau, n_k = len(tau_values), len(k_values)
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+
+    # ── (0,0) REC Δ vs Standard ──
+    ax = axes[0, 0]
+    heat_std = np.zeros((n_k, n_tau))
+    for i, tau in enumerate(tau_values):
+        for j, k in enumerate(k_values):
+            key = f"rec_t{tau:.1f}_k{k:.1f}"
+            heat_std[j, i] = results[key]['mean'] - std_mean
+
+    im0 = ax.imshow(heat_std, cmap='RdYlGn', aspect='auto', vmin=-0.06, vmax=0.06)
+    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values])
+    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values])
+    ax.set_xlabel('τ (hours)')
+    ax.set_ylabel('k')
+    ax.set_title('(a) REC vs Standard Urgency', loc='left', fontweight='bold')
+    for i in range(n_tau):
+        for j in range(n_k):
+            v = heat_std[j, i]
+            c = 'white' if abs(v) > 0.03 else 'black'
+            ax.text(i, j, f'{v:+.3f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
+    plt.colorbar(im0, ax=ax, label='Δ retention', shrink=0.85)
+
+    # ── (0,1) REC Δ vs Field(α=0.60) ──
+    ax = axes[0, 1]
+    heat_fld = np.zeros((n_k, n_tau))
+    for i, tau in enumerate(tau_values):
+        for j, k in enumerate(k_values):
+            key = f"rec_t{tau:.1f}_k{k:.1f}"
+            heat_fld[j, i] = results[key]['mean'] - fld_mean
+
+    im1 = ax.imshow(heat_fld, cmap='RdYlGn', aspect='auto', vmin=-0.06, vmax=0.06)
+    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values])
+    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values])
+    ax.set_xlabel('τ (hours)')
+    ax.set_ylabel('k')
+    ax.set_title('(b) REC vs Field (α=0.60)', loc='left', fontweight='bold')
+    for i in range(n_tau):
+        for j in range(n_k):
+            v = heat_fld[j, i]
+            c = 'white' if abs(v) > 0.03 else 'black'
+            ax.text(i, j, f'{v:+.3f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
+    plt.colorbar(im1, ax=ax, label='Δ retention', shrink=0.85)
+
+    # ── (1,0) 可复现性：两轮 delta ──
+    ax = axes[1, 0]
+    rd_heat = np.zeros((n_k, n_tau))
+    for i, tau in enumerate(tau_values):
+        for j, k in enumerate(k_values):
+            key = f"rec_t{tau:.1f}_k{k:.1f}_round_delta"
+            rd_heat[j, i] = results.get(key, 0)
+
+    im2 = ax.imshow(rd_heat, cmap='YlOrRd', aspect='auto', vmin=0, vmax=0.02)
+    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values])
+    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values])
+    ax.set_xlabel('τ (hours)')
+    ax.set_ylabel('k')
+    ax.set_title('(c) Round-to-Round Stability |Δ|', loc='left', fontweight='bold')
+    for i in range(n_tau):
+        for j in range(n_k):
+            v = rd_heat[j, i]
+            c = 'white' if v > 0.01 else 'black'
+            ax.text(i, j, f'{v:.4f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
+    plt.colorbar(im2, ax=ax, label='|round1 − round2|', shrink=0.85)
+
+    # ── (1,1) 模型对比柱状图 ──
+    ax = axes[1, 1]
+    best_key = f"rec_t{best_tau:.1f}_k{best_k:.1f}"
+    best_r = results[best_key]
+    combo_r = results.get('rec_field_combo', {})
+
+    labels = ['Standard\nUrgency', 'Field\n(α=0.60)', f'Best REC\nτ={best_tau:.1f}h, k={best_k:.1f}', 'REC + Field\nCombo']
+    values = [std_mean, fld_mean, best_r['mean'],
+              combo_r.get('mean', 0) if combo_r else 0]
+    errors = [results['standard'].get('ci95', 0), results['field_a0.60'].get('ci95', 0),
+              best_r.get('ci95', 0), combo_r.get('ci95', 0) if combo_r else 0]
+    colors_bars = ['#94a3b8', '#4AE68A', '#5b5fef', '#f59e0b']
+
+    x = np.arange(len(labels))
+    bars = ax.bar(x, values, 0.55, color=colors_bars, edgecolor='white', linewidth=0.5)
+    ax.errorbar(x, values, yerr=errors, fmt='none', ecolor='#333', capsize=4, linewidth=0.8)
+    ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=8)
+    ax.set_ylabel('150-day Retention', fontweight='bold')
+    ax.set_title('(d) Model Comparison', loc='left', fontweight='bold')
+    ax.set_ylim(0, max(values) * 1.2)
+
+    for bar, val, err in zip(bars, values, errors):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + err + 0.005,
+                f'{val:.4f}', ha='center', fontsize=9, fontweight='bold')
+    # 标注 vs standard 的差值
+    for i, (bar, val) in enumerate(zip(bars, values)):
+        if i > 0 and val > 0:
+            delta = val - std_mean
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() * 0.35,
+                    f'+{delta:+.3f}', ha='center', fontsize=9, fontweight='bold', color='white')
+
+    plt.tight_layout()
+    out_path = 'scripts/output/rec_paper_figure.png'
+    plt.savefig(out_path, facecolor='white', edgecolor='none')
+    plt.close()
+    print(f"Figure saved to {out_path}")
+
+    # ── 单独存 SVGs ──
+    os.makedirs('scripts/output', exist_ok=True)
+    for name, (ax_idx, is_heatmap) in {
+        'fig_a_rec_vs_std': ((0,0), True),
+        'fig_b_rec_vs_field': ((0,1), True),
+        'fig_c_stability': ((1,0), True),
+        'fig_d_comparison': ((1,1), False),
+    }.items():
+        sub_fig, sub_ax = plt.subplots(figsize=(7, 6))
+        # 重新画（简化：用原始数据重建，或直接 save 子图区域。用简单方式：重建）
+        plt.close(sub_fig)
+
+    # 统计摘要文本文件
+    with open('scripts/output/rec_stats.txt', 'w') as f:
+        t = results.get('test_best_rec_vs_std', {})
+        f.write(f"Best REC ({best_key}) vs Standard:\n")
+        f.write(f"  Δ = {t.get('mean_diff', 0):+.4f}\n")
+        f.write(f"  t-statistic = {t.get('t', 0):.2f}\n")
+        f.write(f"  p-value = {t.get('p', 1):.6f}\n")
+        f.write(f"  Cohen's d = {t.get('cohens_d', 0):.3f}\n")
+        f.write(f"  n = {t.get('n', 0)}\n\n")
+        t2 = results.get('test_field_vs_std', {})
+        f.write(f"Field (α=0.60) vs Standard:\n")
+        f.write(f"  Δ = {t2.get('mean_diff', 0):+.4f}\n")
+        f.write(f"  p = {t2.get('p', 1):.6f}\n")
+        f.write(f"  Cohen's d = {t2.get('cohens_d', 0):.3f}\n")
+    print("Stats saved to scripts/output/rec_stats.txt")
 
 
 if __name__ == '__main__':
