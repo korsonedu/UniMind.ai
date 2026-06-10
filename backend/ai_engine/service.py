@@ -144,8 +144,8 @@ class AIEngine:
             body["tools"] = tools
         if config.get('thinking'):
             body["thinking"] = {"type": "enabled"}
-        # DeepSeek 模型内置 reasoning，不支持 tool_choice="required"，降级为 auto
-        if 'deepseek' in config.get('model', '').lower() and tool_choice == "required":
+        # DeepSeek thinking mode 不支持 tool_choice="required"，降级为 auto
+        if 'deepseek' in config.get('model', '').lower() and config.get('thinking') and tool_choice == "required":
             tool_choice = "auto"
         if tool_choice is not None:
             body["tool_choice"] = tool_choice
@@ -495,20 +495,25 @@ class AIEngine:
         # fallback: 模型有时把 JSON 放在 content 而非 tool_calls 里
         content = cls._extract_content(response)
         if content:
+            logger.info("structured_output fallback: content_len=%d preview=%r", len(content), content[:200])
             try:
-                # 尝试从 content 中提取 JSON
                 result = json.loads(content)
+                logger.info("structured_output fallback: direct JSON parse succeeded")
                 return result.get('items', result) if _is_array_schema else result
             except (json.JSONDecodeError, TypeError, KeyError):
-                # content 可能包含 markdown 包裹的 JSON
                 import re
                 json_match = re.search(r'\[[\s\S]*\]|\{[\s\S]*\}', content)
                 if json_match:
                     try:
                         result = json.loads(json_match.group())
+                        logger.info("structured_output fallback: regex JSON parse succeeded")
                         return result.get('items', result) if _is_array_schema else result
-                    except (json.JSONDecodeError, TypeError, KeyError):
-                        pass
+                    except (json.JSONDecodeError, TypeError, KeyError) as e:
+                        logger.warning("structured_output fallback: regex JSON parse failed: %s", e)
+                else:
+                    logger.warning("structured_output fallback: no JSON pattern found in content")
+        else:
+            logger.warning("structured_output fallback: content is empty/None")
 
         logger.warning(
             "structured_output: model did not call tool '%s' operation=%s",
