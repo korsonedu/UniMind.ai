@@ -376,9 +376,9 @@ def route_tools(
     recent_messages: List[Dict[str, str]] = None,
     bot_type: str = "planner",
 ) -> List[dict]:
-    """工具路由：embedding 检索 + 关键词 fallback。
+    """工具路由：embedding 检索 + 关键词意图保底。
 
-    路由链：embedding 检索 → 关键词匹配 → 全量工具
+    路由链：embedding 检索 top-k → 合并关键词意图匹配的工具 → 全量工具
     """
     _dbg = logging.getLogger("agent_debug")
     all_names = [t["function"]["name"] for t in all_tools]
@@ -386,21 +386,26 @@ def route_tools(
     # Stage 1: Embedding 检索
     candidates = _retrieve_candidates(user_message, bot_type, top_k=8)
 
+    # Stage 2: 关键词意图匹配（始终执行，作为保底）
+    intent = classify_intent(user_message, recent_messages, bot_type=bot_type)
+    intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
+    intent_tools = set(intent_map.get(intent, {}).get("tools", []))
+
     if candidates:
-        candidate_set = set(candidates)
-        filtered = [t for t in all_tools if t["function"]["name"] in candidate_set]
+        # 合并 embedding 候选 + 意图关键工具
+        merged = set(candidates) | intent_tools
+        filtered = [t for t in all_tools if t["function"]["name"] in merged]
         if filtered:
             filtered_names = [t["function"]["name"] for t in filtered]
             has_rv = "render_visual" in filtered_names
-            _dbg.info("route_tools(embedding): msg=%r tools=%d→%d render_visual=%s candidates=%s",
-                       user_message[:60], len(all_tools), len(filtered), has_rv, candidates)
+            _dbg.info("route_tools(merged): msg=%r intent=%s tools=%d→%d render_visual=%s candidates=%s intent_tools=%s",
+                       user_message[:60], intent, len(all_tools), len(filtered), has_rv, candidates, sorted(intent_tools))
             return filtered
 
-    # Fallback: 关键词匹配
+    # Fallback: 纯关键词匹配
     result = _keyword_fallback(user_message, all_tools, recent_messages, bot_type)
     result_names = [t["function"]["name"] for t in result]
     has_rv = "render_visual" in result_names
-    intent = classify_intent(user_message, recent_messages, bot_type=bot_type)
     _dbg.info("route_tools(keyword): msg=%r intent=%s tools=%d→%d render_visual=%s",
               user_message[:60], intent, len(all_tools), len(result), has_rv)
     return result
