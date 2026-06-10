@@ -52,80 +52,107 @@ class AIEngine:
 
     # DeepSeek DSML 工具调用标记正则
     # 匹配完整块 <龘xxx>...</龘xxx> 或自闭合 <龘xxx/>
-    _DSML_RE = re.compile(r'<龘.*?(?:</龘\w+>|/>)', re.DOTALL)
+    _DSML_RE_1 = re.compile(r'<龘.*?(?:</龘\w+>|/>)', re.DOTALL)
+    # 匹配 <｜｜DSML｜｜xxx>...</｜｜DSML｜｜xxx>
+    _DSML_RE_2 = re.compile(r'<｜｜DSML｜｜\w+.*?(?:</｜｜DSML｜｜\w+>)', re.DOTALL)
 
     @staticmethod
     def _strip_dsml(text: str) -> str:
         """剥离 DeepSeek DSML 工具调用标记，返回干净的用户可见文本。"""
         if not text:
             return text
-        # 循环剥离直到无变化：处理嵌套 DSML（.*? 非贪婪只匹配到内层 </龘xxx>，
-        # 外层的 </龘invoke>/</龘tool_calls> 需要下一轮才被剥离）
+        # 循环剥离直到无变化
         prev = None
         while prev != text:
             prev = text
-            text = AIEngine._DSML_RE.sub('', text)
-        # 剥离残留的孤立闭合标签（</龘xxx>）
+            text = AIEngine._DSML_RE_1.sub('', text)
+            text = AIEngine._DSML_RE_2.sub('', text)
+        # 剥离残留的孤立闭合标签
         text = re.sub(r'</龘\w+>', '', text)
-        # 流式截断场景：如果仍有 <龘 开头（SSE 流在 DSML 中截断），丢弃之后全部内容
-        idx = text.find('<龘')
-        if idx >= 0:
-            text = text[:idx]
+        text = re.sub(r'</｜｜DSML｜｜\w+>', '', text)
+        # 流式截断场景：丢弃未闭合标签之后的全部内容
+        for marker in ['<龘', '<｜｜DSML｜｜']:
+            idx = text.find(marker)
+            if idx >= 0:
+                text = text[:idx]
         return text.strip()
 
     @staticmethod
     def _has_open_dsml(text: str) -> bool:
         """检查文本中是否存在未闭合的 DSML 标记块。"""
         import re as _re
-        if '<龘' not in text:
-            return False
-        # 统计开标签数 vs 闭标签数
-        opens = len(_re.findall(r'<龘\w+[\s>]|<龘\w+/>', text))
-        closes = len(_re.findall(r'</龘\w+>', text))
-        return opens > closes
+        # 格式1: <龘>
+        if '<龘' in text:
+            opens = len(_re.findall(r'<龘\w+[\s>]|<龘\w+/>', text))
+            closes = len(_re.findall(r'</龘\w+>', text))
+            if opens > closes:
+                return True
+        # 格式2: <｜｜DSML｜｜>
+        if '<｜｜DSML｜｜' in text:
+            opens = len(_re.findall(r'<｜｜DSML｜｜\w+', text))
+            closes = len(_re.findall(r'</｜｜DSML｜｜\w+>', text))
+            if opens > closes:
+                return True
+        return False
 
     @staticmethod
     def _parse_dsml_tool_calls(text: str):
-        """从含有 DSML 标记的文本中提取工具调用列表（OpenAI 兼容格式）。"""
+        """从含有 DSML 标记的文本中提取工具调用列表（OpenAI 兼容格式）。
+
+        支持两种 DeepSeek 原生格式：
+        1. <龘invoke name="..."> <龘parameter name="..." string="true|false">VALUE</龘parameter> </龘invoke>
+        2. <｜｜DSML｜｜invoke name="..."> <｜｜DSML｜｜parameter name="...">VALUE</｜｜DSML｜｜parameter> </｜｜DSML｜｜invoke>
+        """
         import re as _re
         tool_calls = []
 
-        # 匹配 <龘invoke name="NAME"> ... </龘invoke>
-        invoke_pattern = _re.compile(
-            r'<龘invoke\s+name="([^"]+)">(.*?)</龘invoke>',
-            _re.DOTALL
-        )
-        # 匹配 <龘parameter name="NAME" string="true|false">VALUE</龘parameter>
-        param_pattern = _re.compile(
-            r'<龘parameter\s+name="([^"]+)"\s+string="([^"]+)">(.*?)</龘parameter>',
-            _re.DOTALL
-        )
+        patterns = [
+            # 格式1: <龘invoke> 带 string="true|false" 属性
+            (
+                _re.compile(r'<龘invoke\s+name="([^"]+)">(.*?)</龘invoke>', _re.DOTALL),
+                _re.compile(r'<龘parameter\s+name="([^"]+)"\s+string="([^"]+)">(.*?)</龘parameter>', _re.DOTALL),
+                True,  # has_string_attr
+            ),
+            # 格式2: <｜｜DSML｜｜invoke> 无 string 属性
+            (
+                _re.compile(r'<｜｜DSML｜｜invoke\s+name="([^"]+)">(.*?)</｜｜DSML｜｜invoke>', _re.DOTALL),
+                _re.compile(r'<｜｜DSML｜｜parameter\s+name="([^"]+)"[^>]*>(.*?)</｜｜DSML｜｜parameter>', _re.DOTALL),
+                False,
+            ),
+        ]
 
-        for idx, invoke_match in enumerate(invoke_pattern.finditer(text)):
-            func_name = invoke_match.group(1)
-            invoke_body = invoke_match.group(2)
+        for invoke_pattern, param_pattern, has_string_attr in patterns:
+            for invoke_match in invoke_pattern.finditer(text):
+                func_name = invoke_match.group(1)
+                invoke_body = invoke_match.group(2)
+                args = {}
+                for p in param_pattern.finditer(invoke_body):
+                    pname = p.group(1)
+                    if has_string_attr:
+                        is_string = p.group(2) == 'true'
+                        pval = p.group(3).strip()
+                        if is_string:
+                            args[pname] = pval
+                        else:
+                            try:
+                                args[pname] = json.loads(pval)
+                            except (json.JSONDecodeError, TypeError):
+                                args[pname] = pval
+                    else:
+                        pval = p.group(2).strip()
+                        try:
+                            args[pname] = json.loads(pval)
+                        except (json.JSONDecodeError, ValueError):
+                            args[pname] = pval
 
-            args = {}
-            for p in param_pattern.finditer(invoke_body):
-                pname = p.group(1)
-                is_string = p.group(2) == 'true'
-                pval = p.group(3).strip()
-                if is_string:
-                    args[pname] = pval
-                else:
-                    try:
-                        args[pname] = json.loads(pval)
-                    except (json.JSONDecodeError, TypeError):
-                        args[pname] = pval
-
-            tool_calls.append({
-                "id": f"dsml_{idx}_{func_name}",
-                "type": "function",
-                "function": {
-                    "name": func_name,
-                    "arguments": json.dumps(args, ensure_ascii=False),
-                },
-            })
+                tool_calls.append({
+                    "id": f"dsml_{len(tool_calls)}_{func_name}",
+                    "type": "function",
+                    "function": {
+                        "name": func_name,
+                        "arguments": json.dumps(args, ensure_ascii=False),
+                    },
+                })
 
         return tool_calls
 
@@ -424,10 +451,23 @@ class AIEngine:
         if not response:
             return []
         try:
-            return response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
+            tool_calls = response.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])
+            if tool_calls:
+                return tool_calls
         except Exception:
             logger.warning("_extract_tool_calls failed: %s", response)
             return []
+
+        # DeepSeek 有时把 tool call 以 DSML 原生格式放在 content 里
+        try:
+            content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
+            if content:
+                parsed = cls._parse_dsml_tool_calls(content)
+                if parsed:
+                    return parsed
+        except Exception:
+            pass
+        return []
 
     @classmethod
     def _extract_content(cls, response):
@@ -758,7 +798,7 @@ class AIEngine:
 
             # DSML fallback: 如果 DeepSeek 把工具调用作为 DSML 文本输出而没有标准 tool_calls，
             # 从 accumulated_text 中解析 DSML 并转为 tool_calls
-            if not tool_calls and '<龘' in accumulated_text:
+            if not tool_calls and ('<龘' in accumulated_text or '<｜｜DSML｜｜' in accumulated_text):
                 dsml_tool_calls = cls._parse_dsml_tool_calls(accumulated_text)
                 if dsml_tool_calls:
                     tool_calls = dsml_tool_calls
