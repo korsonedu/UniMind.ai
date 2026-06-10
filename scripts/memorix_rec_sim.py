@@ -19,6 +19,10 @@ import json, math, time, random, os
 from collections import defaultdict
 import numpy as np
 
+# ═══ 弹窗后端 — 必须在任何 pyplot 导入前设置 ═══
+import matplotlib
+matplotlib.use('TkAgg')
+
 # ═══════════════════════════════════════
 # P(t) 可塑性模型（小时版，适配仿真）
 # ═══════════════════════════════════════
@@ -582,8 +586,6 @@ def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, co
       (d) 已完成 combo 的 Top 5 文字
     """
     try:
-        import matplotlib
-        matplotlib.use('TkAgg')
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError:
