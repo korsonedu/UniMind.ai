@@ -139,11 +139,8 @@ class AssistantChatService:
         tool_executor._allowed_tool_names = {t['function']['name'] for t in tools}
 
         # Force tool usage for agent bots
-        # DeepSeek 不支持 tool_choice="required"，显式降级
-        from ai_engine.config import get_model_for_task
-        model_config = get_model_for_task('assistant.chat')
-        is_deepseek = 'deepseek' in model_config.get('model', '').lower()
-        if profile.force_tool_choice and not is_deepseek:
+        # 意图路由后工具为空时，降级为 auto，让 LLM 自由回复文本
+        if tools and profile.force_tool_choice:
             forced_tool_choice = "required"
         else:
             forced_tool_choice = "auto"
@@ -159,7 +156,7 @@ class AssistantChatService:
                 temperature=0.6,
                 max_tokens=2500,
                 operation='assistant.chat',
-                max_tool_rounds=5,
+                max_tool_rounds=8 if bot_type == 'exam_generator' else 5,
             )
         else:
             return AIEngine.call_ai_with_tools(
@@ -170,5 +167,5 @@ class AssistantChatService:
                 temperature=0.6,
                 max_tokens=2500,
                 operation='assistant.chat',
-                max_tool_rounds=5,
+                max_tool_rounds=8 if bot_type == 'exam_generator' else 5,
             )

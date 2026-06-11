@@ -1,0 +1,118 @@
+<h2>Hero 区域风格</h2>
+<p class="subtitle">Hero 是用户第一眼看到的东西。当前是知识图谱 canvas 背景 + 静态标题。</p>
+
+<div class="cards">
+  <div class="card" data-choice="current-refined" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fafafa;padding:24px;min-height:260px;display:flex;flex-direction:column;justify-content:center;border-bottom:1px solid #eee;position:relative;overflow:hidden">
+      <!-- Refined version of current: graph canvas + cleaner typography -->
+      <div style="position:absolute;inset:0;opacity:0.06">
+        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+          <defs><pattern id="dots" x="0" y="0" width="30" height="30" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#2d2b6b"/></pattern></defs>
+          <rect width="100%" height="100%" fill="url(#dots)"/>
+          <line x1="80" y1="60" x2="200" y2="140" stroke="#2d2b6b" stroke-width="0.5" opacity="0.3"/>
+          <line x1="200" y1="140" x2="340" y2="80" stroke="#2d2b6b" stroke-width="0.5" opacity="0.3"/>
+          <line x1="150" y1="200" x2="300" y2="180" stroke="#2d2b6b" stroke-width="0.5" opacity="0.3"/>
+          <circle cx="80" cy="60" r="4" fill="#2d2b6b" opacity="0.15"/>
+          <circle cx="200" cy="140" r="5" fill="#2d2b6b" opacity="0.2"/>
+          <circle cx="340" cy="80" r="3" fill="#2d2b6b" opacity="0.15"/>
+          <circle cx="150" cy="200" r="4" fill="#2d2b6b" opacity="0.12"/>
+          <circle cx="300" cy="180" r="3.5" fill="#2d2b6b" opacity="0.15"/>
+        </svg>
+      </div>
+      <div style="text-align:center;position:relative;z-index:1">
+        <div style="display:inline-block;padding:4px 14px;border:1px solid #ddd;border-radius:20px;font-size:10px;color:#6b7280;margin-bottom:16px;background:#fff">首批机构专享 · Growth 免费开放</div>
+        <div style="font-size:36px;font-weight:800;color:#111;line-height:1.08;margin-bottom:14px;font-family:Inter,sans-serif;letter-spacing:-0.03em">让每个学生拥有<br><span style="color:#2d2b6b">专属 AI 学习引擎</span></div>
+        <div style="font-size:13px;color:#6b7280;max-width:340px;margin:0 auto 18px">Memorix 记忆调度 × 知识图谱 × 小宇 Agent</div>
+        <div style="display:inline-block;padding:10px 28px;background:#2d2b6b;border-radius:8px;color:#fff;font-size:13px;font-weight:700">免费开始 →</div>
+        <div style="margin-top:14px;display:inline-block;padding:4px 12px;border:1px solid #eee;border-radius:14px;font-size:10px;color:#888;background:#fff">
+          <span style="color:#2d2b6b;font-weight:700;font-size:9px">NEW</span> Memorix-Field — 图扩散记忆调度
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 优化现有</h3>
+      <p>保留知识图谱 canvas 作背景（已有资产），但优化：去渐变标题、统一深靛蓝、收紧排版。改动最小，风险最低。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="product-demo" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fafafa;padding:24px;min-height:260px;display:flex;flex-direction:column;justify-content:center;border-bottom:1px solid #eee">
+      <div style="text-align:center">
+        <div style="font-size:34px;font-weight:800;color:#111;line-height:1.08;margin-bottom:14px;font-family:Inter,sans-serif;letter-spacing:-0.03em">让每个学生拥有<br><span style="color:#2d2b6b">专属 AI 学习引擎</span></div>
+        <div style="font-size:13px;color:#6b7280;max-width:340px;margin:0 auto 18px">个性化记忆调度 × 知识图谱 × Agent 对话</div>
+        <div style="display:inline-block;padding:10px 28px;background:#2d2b6b;border-radius:8px;color:#fff;font-size:13px;font-weight:700">免费开始 →</div>
+      </div>
+      <!-- Product screenshot mockup -->
+      <div style="margin-top:20px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.06)">
+        <div style="display:flex;align-items:center;gap:5px;padding:8px 12px;background:#f9fafb;border-bottom:1px solid #eee">
+          <div style="width:8px;height:8px;border-radius:50%;background:#ef4444"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:#f59e0b"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background:#22c55e"></div>
+          <span style="font-size:9px;color:#9ca3af;margin-left:8px">UniMind — 小宇对话</span>
+        </div>
+        <div style="padding:16px;display:flex;gap:12px">
+          <div style="flex:1">
+            <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px">
+              <div style="width:22px;height:22px;border-radius:50%;background:#2d2b6b;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;flex-shrink:0">宇</div>
+              <div style="background:#f3f4f6;border-radius:8px;padding:8px 10px;font-size:10px;color:#374151;line-height:1.4">我帮你分析了上周的错题，发现你在「导数应用」这块薄弱，建议先复习这 3 个知识点...</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:30px">
+              <div style="padding:4px 10px;background:#f0f0ff;border:1px solid #e0e0f0;border-radius:6px;font-size:9px;color:#2d2b6b">导数几何意义</div>
+              <div style="padding:4px 10px;background:#f0f0ff;border:1px solid #e0e0f0;border-radius:6px;font-size:9px;color:#2d2b6b">极值判定</div>
+              <div style="padding:4px 10px;background:#f0f0ff;border:1px solid #e0e0f0;border-radius:6px;font-size:9px;color:#2d2b6b">最值应用</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 产品截图 Hero</h3>
+      <p>标题下方直接展示产品界面（Cursor/Replit 风格）。用户第一眼就看到产品长什么样，比抽象图形更有说服力。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="split-hero" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fafafa;padding:24px;min-height:260px;display:flex;align-items:center;border-bottom:1px solid #eee">
+      <!-- Split: text left, visual right -->
+      <div style="flex:1;padding-right:20px">
+        <div style="display:inline-block;padding:4px 12px;background:#f0f0ff;border-radius:14px;font-size:9px;color:#2d2b6b;font-weight:600;margin-bottom:12px">Memorix-Field 新发布</div>
+        <div style="font-size:30px;font-weight:800;color:#111;line-height:1.1;margin-bottom:10px;font-family:Inter,sans-serif;letter-spacing:-0.02em">让每个学生拥有<br><span style="color:#2d2b6b">专属 AI 学习引擎</span></div>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:16px;line-height:1.5">个性化记忆调度 × 知识图谱 × 小宇 Agent</div>
+        <div style="display:flex;gap:8px">
+          <div style="padding:8px 20px;background:#2d2b6b;border-radius:8px;color:#fff;font-size:12px;font-weight:700">免费开始 →</div>
+          <div style="padding:8px 20px;border:1px solid #ddd;border-radius:8px;color:#555;font-size:12px">了解更多</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <!-- Knowledge graph visualization mockup -->
+        <div style="width:220px;height:180px;position:relative">
+          <svg width="220" height="180" xmlns="http://www.w3.org/2000/svg">
+            <line x1="40" y1="40" x2="110" y2="90" stroke="#2d2b6b" stroke-width="1" opacity="0.2"/>
+            <line x1="110" y1="90" x2="180" y2="50" stroke="#2d2b6b" stroke-width="1" opacity="0.2"/>
+            <line x1="110" y1="90" x2="60" y2="150" stroke="#2d2b6b" stroke-width="1" opacity="0.2"/>
+            <line x1="110" y1="90" x2="170" y2="140" stroke="#2d2b6b" stroke-width="1" opacity="0.2"/>
+            <line x1="60" y1="150" x2="170" y2="140" stroke="#2d2b6b" stroke-width="0.5" opacity="0.15"/>
+            <circle cx="40" cy="40" r="14" fill="#2d2b6b" opacity="0.12"/>
+            <circle cx="110" cy="90" r="18" fill="#2d2b6b" opacity="0.18"/>
+            <circle cx="180" cy="50" r="12" fill="#2d2b6b" opacity="0.12"/>
+            <circle cx="60" cy="150" r="13" fill="#2d2b6b" opacity="0.1"/>
+            <circle cx="170" cy="140" r="11" fill="#2d2b6b" opacity="0.1"/>
+            <text x="40" y="44" text-anchor="middle" font-size="7" fill="#2d2b6b" font-weight="600">极限</text>
+            <text x="110" y="94" text-anchor="middle" font-size="8" fill="#2d2b6b" font-weight="700">微积分</text>
+            <text x="180" y="54" text-anchor="middle" font-size="7" fill="#2d2b6b" font-weight="600">导数</text>
+            <text x="60" y="154" text-anchor="middle" font-size="7" fill="#2d2b6b" font-weight="600">积分</text>
+            <text x="170" y="144" text-anchor="middle" font-size="7" fill="#2d2b6b" font-weight="600">级数</text>
+          </svg>
+          <!-- Mastery heatmap hint -->
+          <div style="position:absolute;bottom:0;right:0;background:#fff;border:1px solid #eee;border-radius:6px;padding:6px 10px;font-size:8px;color:#6b7280">
+            <span style="color:#22c55e">●</span> 已掌握 &nbsp;<span style="color:#f59e0b">●</span> 薄弱
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 左文右图</h3>
+      <p>左侧标题+CTA，右侧知识图谱可视化。经典 SaaS 布局（Stripe/Linear 风格），信息密度高，首屏即展示核心差异化。</p>
+    </div>
+  </div>
+</div>

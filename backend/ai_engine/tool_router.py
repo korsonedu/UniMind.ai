@@ -216,8 +216,13 @@ def _ensure_embeddings(bot_type: str) -> bool:
         return False
 
 
-def _retrieve_candidates(query: str, bot_type: str, top_k: int = 8) -> List[str]:
-    """Stage 1: 用 embedding 相似度检索 top-k 候选工具名。"""
+def _retrieve_candidates(query: str, bot_type: str, top_k: int = 8,
+                         min_score: float = 0.35) -> List[str]:
+    """Stage 1: 用 embedding 相似度检索 top-k 候选工具名。
+
+    当最高相似度低于 min_score 时返回空列表，避免无意义输入
+    匹配到不相关工具。
+    """
     if not _ensure_embeddings(bot_type):
         return []
 
@@ -229,6 +234,12 @@ def _retrieve_candidates(query: str, bot_type: str, top_k: int = 8) -> List[str]
         scores = [(name, _cosine_similarity(query_emb, emb))
                   for name, emb in zip(tool_names, tool_embs)]
         scores.sort(key=lambda x: x[1], reverse=True)
+
+        if scores[0][1] < min_score:
+            logger.info("route_tools: top score %.3f < %.3f, skipping embedding candidates",
+                        scores[0][1], min_score)
+            return []
+
         return [name for name, _ in scores[:top_k]]
     except Exception:
         logger.exception("Embedding retrieval failed")
@@ -298,9 +309,10 @@ EXAM_GENERATOR_INTENT_MAP = {
     },
     "generate": {
         "keywords": ["出题", "生成", "命题", "出一组", "出几道", "给我出", "来几道", "新题", "题目",
-                     "再来", "换", "调整", "改", "不同", "其他"],
+                     "再来", "换", "调整", "改", "不同", "其他", "再难", "更难", "简单"],
         "tools": [
-            "search_knowledge", "quick_generate",
+            "search_knowledge", "quick_generate", "launch_arc_pipeline",
+            "get_workbench_stats", "get_class_weak_points",
         ],
     },
     "refine": {
@@ -355,13 +367,17 @@ def classify_intent(user_message: str, recent_messages: List[Dict[str, str]] = N
 def _keyword_fallback(user_message: str, all_tools: List[dict],
                       recent_messages: List[dict] = None,
                       bot_type: str = "planner") -> List[dict]:
-    """关键词匹配 fallback：根据意图筛选工具。"""
+    """关键词匹配 fallback：根据意图筛选工具。
+
+    当意图是 general（无关键词命中）时返回空列表，让 LLM 自由决定
+    是否调用工具，而非强制绑定全量工具。
+    """
     intent = classify_intent(user_message, recent_messages, bot_type=bot_type)
     intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
     allowed_names = intent_map.get(intent, {}).get("tools", [])
 
     if not allowed_names:
-        return all_tools
+        return [] if intent == "general" else all_tools
 
     allowed_set = set(allowed_names)
     filtered = [t for t in all_tools if t["function"]["name"] in allowed_set]

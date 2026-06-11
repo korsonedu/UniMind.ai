@@ -486,6 +486,30 @@ GRADE_STUDENT_ANSWER_SCHEMA = {
     "required": ["question_id", "user_answer"],
 }
 
+RUN_DIAGNOSTIC_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "mode": {
+            "type": "string",
+            "enum": ["generate", "submit"],
+            "description": "generate=获取诊断题目，submit=提交诊断答案",
+        },
+        "answers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question_id": {"type": "integer", "description": "题目ID"},
+                    "answer": {"type": "string", "description": "学生答案（选项字母或文本）"},
+                },
+                "required": ["question_id", "answer"],
+            },
+            "description": "submit 模式下必填，学生答案列表",
+        },
+    },
+    "required": ["mode"],
+}
+
 SAVE_STUDY_PLAN_SCHEMA = {
     "type": "object",
     "properties": {
@@ -675,8 +699,10 @@ def get_planner_tools():
             impl_summary="更新 plan_task 表的 status 字段（completed/skipped/pending），同时更新关联 study_plan 的 progress 百分比。需要 task_id。"),
         _make_tool("render_visual", "在 Dashboard 画布上渲染可视化内容。用于展示数学推导过程、解题步骤、知识图谱、数据统计等需要视觉呈现的内容。纯文字问答不需要调用此工具。", RENDER_VISUAL_SCHEMA,
             impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到 Dashboard 画布。"),
-        _make_tool("grade_student_answer", "批改学生对某道题的回答。传入题目ID和学生答案，返回评分、反馈和解析。用于模拟考试和练习批改场景。", GRADE_STUDENT_ANSWER_SCHEMA,
-            impl_summary="查找题目→QuizAITaskService.grade_question 判分→返回 score/feedback/analysis。需要 question_id 和 user_answer。"),
+        _make_tool("grade_student_answer", "批改学生对某道题的回答。传入题目ID和学生答案，返回评分、反馈、解析、变式题推荐和知识点掌握度。用于模拟考试和练习批改场景。", GRADE_STUDENT_ANSWER_SCHEMA,
+            impl_summary="查找题目→GradingEngine.grade 判分→返回 score/feedback/analysis/remediation_questions/kp_breakdown。需要 question_id 和 user_answer。"),
+        _make_tool("run_diagnostic", "启动诊断测试。generate 模式返回题目列表和时间限制；submit 模式提交答案，返回评分结果和学习计划建议。用于新用户首次评估。", RUN_DIAGNOSTIC_SCHEMA,
+            impl_summary="调用 diagnostic_service 的 generate_diagnostic_questions 和 grade_diagnostic_answers。generate 从题库随机抽取客观题；submit 评分后初始化 Memorix 状态并生成学习建议。"),
     ]
     return assistant + planner_only
 

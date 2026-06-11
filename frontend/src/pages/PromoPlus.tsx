@@ -22,7 +22,7 @@ const PromoPlus: React.FC = () => {
           <Button
             size="sm"
             className="text-white border-0 font-semibold"
-            style={{ background: '#5b5fef' }}
+            style={{ background: '#2d2b6b' }}
             onClick={() => navigate('/register')}
           >
             免费注册
@@ -33,9 +33,9 @@ const PromoPlus: React.FC = () => {
       {/* Hero */}
       <section className="pt-20 pb-16 px-6" style={{ background: 'linear-gradient(180deg, #f8f9fb 0%, #ffffff 100%)' }}>
         <div className="max-w-3xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#5b5fef]/20" style={{ background: 'rgba(91,95,239,0.06)' }}>
-            <Sparkles className="h-3.5 w-3.5 text-[#5b5fef]" />
-            <span className="text-[12px] font-semibold text-[#5b5fef]">限时活动</span>
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#2d2b6b]/20" style={{ background: 'rgba(45,43,107,0.06)' }}>
+            <Sparkles className="h-3.5 w-3.5 text-[#2d2b6b]" />
+            <span className="text-[12px] font-semibold text-[#2d2b6b]">限时活动</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-[#1a1a2e] leading-tight">
             首批机构专享<br />Growth 方案免费开放
@@ -60,7 +60,7 @@ const PromoPlus: React.FC = () => {
       <section className="py-20 px-6" style={{ background: '#ffffff' }}>
         <div className="max-w-3xl mx-auto space-y-16">
           <div className="space-y-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef]">What is UniMind</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b]">What is UniMind</p>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">什么是 UniMind？</h2>
             <div className="space-y-4 text-[15px] leading-[1.8] text-[#4a4a6a]">
               <p>
@@ -81,7 +81,7 @@ const PromoPlus: React.FC = () => {
 
           {/* Plus plan highlights */}
           <div className="space-y-8">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef]">Growth Plan Includes</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b]">Growth Plan Includes</p>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">Growth 方案包含</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
@@ -99,7 +99,7 @@ const PromoPlus: React.FC = () => {
                 '多教师协作 · 权限管理',
               ].map((feature) => (
                 <div key={feature} className="flex items-start gap-3 p-4 rounded-xl border border-[#e5e7eb] bg-[#f8f9fb]">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-[#5b5fef] mt-0.5 shrink-0" />
+                  <CheckCircle2 className="h-4.5 w-4.5 text-[#2d2b6b] mt-0.5 shrink-0" />
                   <span className="text-sm text-[#1a1a2e] font-medium">{feature}</span>
                 </div>
               ))}
@@ -108,7 +108,7 @@ const PromoPlus: React.FC = () => {
 
           {/* Two paths */}
           <div className="space-y-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef]">Getting Started</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b]">Getting Started</p>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">两种方式，你选</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-6 rounded-2xl border border-[#e5e7eb] bg-white space-y-3">
@@ -118,22 +118,22 @@ const PromoPlus: React.FC = () => {
                 </p>
                 <button
                   onClick={() => navigate('/register')}
-                  className="text-[13px] font-medium text-[#5a5a7a] hover:text-[#5b5fef] transition-colors inline-flex items-center gap-1"
+                  className="text-[13px] font-medium text-[#5a5a7a] hover:text-[#2d2b6b] transition-colors inline-flex items-center gap-1"
                 >
                   注册体验 <ArrowRight className="h-3 w-3" />
                 </button>
               </div>
-              <div className="p-6 rounded-2xl border border-[#5b5fef]/30 space-y-3" style={{ background: 'rgba(91,95,239,0.04)' }}>
+              <div className="p-6 rounded-2xl border border-[#2d2b6b]/30 space-y-3" style={{ background: 'rgba(45,43,107,0.04)' }}>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-bold text-[#1a1a2e]">申请入选首批机构</p>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: '#5b5fef' }}>推荐</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: '#2d2b6b' }}>推荐</span>
                 </div>
                 <p className="text-[13px] text-[#5a5a7a] leading-relaxed">
                   通过邮件申请，入选后免费使用 Growth 方案 6 个月，充分验证 AI 驱动的教学效果。名额有限。
                 </p>
                 <a
                   href="mailto:eular@unimind-ai.com"
-                  className="text-[13px] font-semibold text-[#5b5fef] hover:underline inline-flex items-center gap-1"
+                  className="text-[13px] font-semibold text-[#2d2b6b] hover:underline inline-flex items-center gap-1"
                 >
                   发送邮件申请 <ArrowRight className="h-3 w-3" />
                 </a>
@@ -143,7 +143,7 @@ const PromoPlus: React.FC = () => {
 
           {/* Eligibility */}
           <div className="space-y-6">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef]">Eligibility</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b]">Eligibility</p>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">参与资格</h2>
             <div className="space-y-4 text-[15px] leading-[1.8] text-[#4a4a6a]">
               <p>我们欢迎以下类型的机构申请：</p>
@@ -155,7 +155,7 @@ const PromoPlus: React.FC = () => {
                   '愿意提供使用反馈，帮助我们迭代产品',
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-3">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#5b5fef] mt-2.5 shrink-0" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#2d2b6b] mt-2.5 shrink-0" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -168,7 +168,7 @@ const PromoPlus: React.FC = () => {
 
           {/* How to join */}
           <div className="space-y-6" id="apply">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#5b5fef]">How to Join</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b]">How to Join</p>
             <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-[#1a1a2e]">如何加入</h2>
             <div className="space-y-6">
               <p className="text-[15px] leading-[1.8] text-[#4a4a6a]">
@@ -177,10 +177,10 @@ const PromoPlus: React.FC = () => {
 
               <div className="p-6 rounded-2xl border border-[#e5e7eb] bg-[#f8f9fb] space-y-5">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(91,95,239,0.08)' }}>
-                    <Mail className="h-5 w-5 text-[#5b5fef]" />
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(45,43,107,0.08)' }}>
+                    <Mail className="h-5 w-5 text-[#2d2b6b]" />
                   </div>
-                  <a href="mailto:eular@unimind-ai.com" className="text-lg font-bold text-[#5b5fef] hover:underline">
+                  <a href="mailto:eular@unimind-ai.com" className="text-lg font-bold text-[#2d2b6b] hover:underline">
                     eular@unimind-ai.com
                   </a>
                 </div>
@@ -221,14 +221,14 @@ const PromoPlus: React.FC = () => {
               <Button
                 size="lg"
                 className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0"
-                style={{ background: '#5b5fef' }}
+                style={{ background: '#2d2b6b' }}
                 onClick={() => navigate('/register')}
               >
                 免费注册
               </Button>
               <a
                 href="mailto:eular@unimind-ai.com"
-                className="text-sm font-medium text-[#5a5a7a] hover:text-[#5b5fef] transition-colors"
+                className="text-sm font-medium text-[#5a5a7a] hover:text-[#2d2b6b] transition-colors"
               >
                 发送邮件申请 →
               </a>

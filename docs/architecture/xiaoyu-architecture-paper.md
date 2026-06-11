@@ -117,7 +117,7 @@ MemorySystem.write.memorix_update(user, qid, r)→ void
 MemorySystem.build_context(user, message)      → MemoryContext
 ```
 
-This is a departure from current production code, where education-loop handlers directly import Django ORM models. Phase 4 of our roadmap migrates to interface-enforced access. Section 7 formalizes why this matters.
+This is a departure from earlier production code, where education-loop handlers directly imported Django ORM models. Phase 4 (completed 2026-06-10) migrated all handlers to interface-enforced access—`tool_executor.py` now has zero direct `quizzes.models` imports. Section 7 formalizes why this matters.
 
 ### 3.3 Layer 3: Education Loop
 
@@ -257,7 +257,7 @@ The grading engine's capability roadmap follows the historical progression of ed
 | Level | Framework | Question Answered | Data Required | Status |
 |-------|-----------|-------------------|---------------|--------|
 | 1 | Classical Test Theory | What score? | Item bank + answer key | Production |
-| 2 | Error Classification | Why incorrect? | LLM analysis of answer text | In development |
+| 2 | Error Classification | Why incorrect? | LLM analysis of answer text | Production |
 | 3 | Item Response Theory | Per-topic mastery? | ~500 responses/item for stable estimates | Planned |
 | 4 | Cognitive Diagnosis | Which cognitive process? | Expert-annotated Q-matrix + response data | Long-term |
 
@@ -267,7 +267,7 @@ The grading engine's capability roadmap follows the historical progression of ed
 
 CTT models observed score $X$ as $X = T + E$, where $T$ is the true ability and $E$ is random measurement error. The grading engine returns `(score, max_score, is_correct, feedback)` based on comparison with a stored answer key and optional LLM-generated feedback text.
 
-### 6.3 Level 2: Error Classification (Phase 1)
+### 6.3 Level 2: Error Classification (Completed)
 
 Error classification decomposes incorrect responses into three categories:
 
@@ -313,13 +313,13 @@ Let the architecture $\mathcal{A}$ consist of layers $\mathcal{L} = \{L_1, L_2, 
 
 ### 7.2 Current State and Roadmap
 
-In the current production code, education-loop handlers directly import Django ORM models (`quizzes.models.UserQuestionStatus`). This violates isolation: changing the storage backend requires modifying every handler, and no mechanism prevents a handler from bypassing Memorix by directly modifying `next_review_at`.
+In earlier production code, education-loop handlers directly imported Django ORM models (`quizzes.models.UserQuestionStatus`). This violated isolation: changing the storage backend required modifying every handler, and no mechanism prevented a handler from bypassing Memorix by directly modifying `next_review_at`.
 
-Phase 4 of our roadmap introduces the `MemorySystem` query interface described in Section 3.2. After migration:
+Phase 4 (completed 2026-06-10) introduced the `MemorySystem` query interface described in Section 3.2. After migration:
 
 - Education-loop handlers call `MemorySystem.query.*` instead of importing models
 - The grading engine calls `MemorySystem.write.*` to persist diagnoses
-- Direct database access from $L_3$ and $L_4$ is enforced by code review policy
+- `tool_executor.py` has zero direct `quizzes.models` imports—enforced at the code level, not just policy
 
 The interface layer serves three purposes: (1) independent layer evolution, (2) algorithmic integrity (Memorix cannot be bypassed), and (3) testability at layer boundaries (mocking MemorySystem suffices to test education-loop logic).
 
@@ -367,7 +367,7 @@ XiaoYu is in production, and we are designing an evaluation framework with two d
 
 **Q-matrix acquisition.** The Level 3→4 transition (IRT to CDM) is blocked by the expert annotation bottleneck described in Section 6.5. We are exploring semi-automated Q-matrix generation using LLMs, which may reduce the annotation burden but introduces validation requirements.
 
-**Cross-layer isolation in practice.** The Phase 4 migration to interface-enforced access is planned but not yet implemented. Until then, the architecture's isolation property exists in specification but not in code—a handler can still bypass Memorix through direct model access.
+**Cross-layer isolation in practice.** Phase 4 (completed 2026-06-10) migrated all handlers to interface-enforced access. `tool_executor.py` now routes all data access through `MemorySystem.query.*` and `MemorySystem.write.*`, with zero direct `quizzes.models` imports. The isolation property is now enforced at the code level.
 
 ---
 

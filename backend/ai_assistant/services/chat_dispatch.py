@@ -12,11 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_tool_choice(profile):
-    """根据 bot profile 和当前模型决定 tool_choice 值。"""
-    from ai_engine.config import get_model_for_task
-    model_config = get_model_for_task('assistant.chat')
-    is_deepseek = 'deepseek' in model_config.get('model', '').lower()
-    if profile.force_tool_choice and not is_deepseek:
+    """根据 bot profile 决定 tool_choice 值。"""
+    if profile.force_tool_choice:
         return "required"
     return "auto"
 

@@ -1,0 +1,76 @@
+<h2>方向 A：主题色调</h2>
+<p class="subtitle">UniMind 当前是纯白底。行业 8/10 用暗色，但 Anthropic 和 Cursor 用亮色也成功。选择什么基调？</p>
+
+<div class="cards">
+  <div class="card" data-choice="dark" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:linear-gradient(135deg,#0a0a14 0%,#111128 50%,#0e0e1a 100%);padding:32px;min-height:280px;display:flex;flex-direction:column;justify-content:center">
+      <!-- Dark theme mockup -->
+      <div style="text-align:center">
+        <div style="font-size:11px;letter-spacing:0.2em;color:#7c3aed;text-transform:uppercase;margin-bottom:16px;font-weight:600">AGENT-NATIVE LEARNING</div>
+        <div style="font-size:42px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:16px;font-family:Inter,sans-serif">AI 驱动的<br>智能学习引擎</div>
+        <div style="font-size:14px;color:#94a3b8;max-width:360px;margin:0 auto 24px">个性化记忆调度 × 知识图谱 × Agent 对话</div>
+        <div style="display:inline-flex;gap:12px">
+          <div style="padding:10px 24px;background:linear-gradient(135deg,#7c3aed,#6366f1);border-radius:10px;color:#fff;font-size:13px;font-weight:700">免费开始 →</div>
+          <div style="padding:10px 24px;border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#94a3b8;font-size:13px">了解更多</div>
+        </div>
+      </div>
+      <!-- Glow effect -->
+      <div style="position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);width:300px;height:120px;background:radial-gradient(ellipse,rgba(124,58,237,0.25),transparent 70%);pointer-events:none"></div>
+    </div>
+    <div class="card-body">
+      <h3>A. 暗色科技</h3>
+      <p><strong>代表：</strong>Replit / v0 / Runway / Suno</p>
+      <p>深色底 + 紫色渐变光晕。AI 行业主流视觉语言，传递"前沿技术"感。知识图谱 canvas 在暗底上效果更突出。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="light" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fafafa;padding:32px;min-height:280px;display:flex;flex-direction:column;justify-content:center;border-bottom:1px solid #eee">
+      <!-- Light theme mockup (current-ish) -->
+      <div style="text-align:center">
+        <div style="font-size:11px;letter-spacing:0.2em;color:#6366f1;text-transform:uppercase;margin-bottom:16px;font-weight:600">AGENT-NATIVE LEARNING</div>
+        <div style="font-size:42px;font-weight:800;color:#111;line-height:1.1;margin-bottom:16px;font-family:'Playfair Display',serif">AI 驱动的<br><span style="background:linear-gradient(135deg,#6366f1,#8b5cf6,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent">智能学习引擎</span></div>
+        <div style="font-size:14px;color:#6b7280;max-width:360px;margin:0 auto 24px">个性化记忆调度 × 知识图谱 × Agent 对话</div>
+        <div style="display:inline-flex;gap:12px">
+          <div style="padding:10px 24px;background:#111;border-radius:10px;color:#fff;font-size:13px;font-weight:700">免费开始 →</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 亮色极简</h3>
+      <p><strong>代表：</strong>Anthropic / Cursor / DeepSeek</p>
+      <p>白底 + 紫色渐变标题。当前风格的延续，干净专业。少数派但有差异化——"我们不是又一个暗色 AI 站"。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="hybrid" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:linear-gradient(180deg,#0a0a14 0%,#0a0a14 55%,#fafafa 55%,#fafafa 100%);padding:32px 32px 0 32px;min-height:280px;display:flex;flex-direction:column;justify-content:flex-start;position:relative;overflow:hidden">
+      <!-- Hybrid: dark hero → light sections -->
+      <div style="text-align:center;padding-top:8px">
+        <div style="font-size:11px;letter-spacing:0.2em;color:#a78bfa;text-transform:uppercase;margin-bottom:12px;font-weight:600">AGENT-NATIVE LEARNING</div>
+        <div style="font-size:38px;font-weight:800;color:#fff;line-height:1.1;margin-bottom:12px;font-family:Inter,sans-serif">AI 驱动的<br>智能学习引擎</div>
+        <div style="font-size:13px;color:#94a3b8;max-width:320px;margin:0 auto 16px">个性化记忆调度 × 知识图谱 × Agent 对话</div>
+        <div style="display:inline-flex;gap:8px">
+          <div style="padding:8px 20px;background:linear-gradient(135deg,#7c3aed,#6366f1);border-radius:8px;color:#fff;font-size:12px;font-weight:700">免费开始 →</div>
+        </div>
+      </div>
+      <!-- Transition glow -->
+      <div style="position:absolute;top:50%;left:0;right:0;height:80px;background:radial-gradient(ellipse 80% 100% at 50% 100%,rgba(124,58,237,0.15),transparent);pointer-events:none"></div>
+      <!-- Light section peek -->
+      <div style="margin-top:auto;background:#fafafa;border-radius:12px 12px 0 0;padding:20px;text-align:center">
+        <div style="font-size:11px;color:#6366f1;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px">FEATURES</div>
+        <div style="font-size:18px;font-weight:700;color:#111">三大核心能力</div>
+        <div style="display:flex;gap:10px;margin-top:12px;justify-content:center">
+          <div style="flex:1;max-width:120px;padding:12px;background:#fff;border:1px solid #eee;border-radius:8px;font-size:10px;color:#6b7280">记忆调度</div>
+          <div style="flex:1;max-width:120px;padding:12px;background:#fff;border:1px solid #eee;border-radius:8px;font-size:10px;color:#6b7280">知识图谱</div>
+          <div style="flex:1;max-width:120px;padding:12px;background:#fff;border:1px solid #eee;border-radius:8px;font-size:10px;color:#6b7280">Agent</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 暗 Hero + 亮内容</h3>
+      <p><strong>代表：</strong>Cursor（Acme Labs 暗段）/ 多数 Awwwards 获奖站</p>
+      <p>Hero 暗色沉浸 → 功能区切回亮色可读。两全其美：科技感 + 教育产品的亲和力。滚动叙事的天然节奏。</p>
+    </div>
+  </div>
+</div>

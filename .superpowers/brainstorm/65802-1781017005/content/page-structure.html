@@ -1,0 +1,105 @@
+<h2>页面结构</h2>
+<p class="subtitle">当前有 9 个 section。选择保留/调整/精简。</p>
+
+<div class="cards">
+  <div class="card" data-choice="keep-refine" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fafafa;padding:20px;min-height:240px;border-bottom:1px solid #eee">
+      <div style="font-size:11px;font-weight:600;color:#2d2b6b;margin-bottom:10px;letter-spacing:0.1em;text-transform:uppercase">当前结构 · 优化</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>Nav</strong> — 透明 → 白底</span>
+          <span style="font-size:9px;color:#9ca3af">不变</span>
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>Hero</strong> — 标题 + CTA + 🎉Memorix</span>
+          <span style="font-size:9px;color:#2d2b6b">改</span>
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>Stats</strong> — 数字展示</span>
+          <span style="font-size:9px;color:#9ca3af">不变</span>
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>PainPoints</strong> — 痛点</span>
+          <span style="font-size:9px;color:#9ca3af">不变</span>
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>Showcase</strong> — 功能 + 视频</span>
+          <span style="font-size:9px;color:#2d2b6b">改</span>
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>Testimonials</strong> — 用户评价</span>
+          <span style="font-size:9px;color:#9ca3af">不变</span>
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>HowItWorks</strong> — 三步</span>
+          <span style="font-size:9px;color:#9ca3af">不变</span>
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>Subjects</strong> — 学科标签</span>
+          <span style="font-size:9px;color:#9ca3af">不变</span>
+        </div>
+        <div style="padding:8px 12px;background:#111;border-radius:6px;font-size:11px;color:#fff;display:flex;justify-content:space-between;align-items:center">
+          <span><strong>FinalCTA</strong> — 深色锚点</span>
+          <span style="font-size:9px;color:#94a3b8">不变</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 保留结构 · 优化视觉</h3>
+      <p>9 个 section 不变，只统一视觉风格：去渐变、统一深靛蓝、DM Sans、Hero 去背景。改动面最小，风险最低。内容逻辑已验证过。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="streamline" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fafafa;padding:20px;min-height:240px;border-bottom:1px solid #eee">
+      <div style="font-size:11px;font-weight:600;color:#2d2b6b;margin-bottom:10px;letter-spacing:0.1em;text-transform:uppercase">精简结构 · 6 section</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151">
+          <strong>Hero</strong> — 标题 + CTA + 🎉Memorix + Stats 内联
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151">
+          <strong>PainPoints</strong> — 痛点（保留，教育用户需要）
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151">
+          <strong>Showcase</strong> — 功能 + 视频 + HowItWorks 合并
+        </div>
+        <div style="padding:8px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151">
+          <strong>Social Proof</strong> — Testimonials + Subjects 合并
+        </div>
+        <div style="padding:8px 12px;background:#111;border-radius:6px;font-size:11px;color:#fff">
+          <strong>FinalCTA</strong> — 深色锚点
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:#9ca3af">删: Stats 独立 section、HowItWorks 独立 section</div>
+    </div>
+    <div class="card-body">
+      <h3>B. 精简到 6 个</h3>
+      <p>合并相似 section，减少页面长度。Stats 移入 Hero 内联，HowItWorks 合入 Showcase。更快到达 CTA，适合注意力稀缺的用户。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="deepseek-minimal" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#fafafa;padding:20px;min-height:240px;border-bottom:1px solid #eee">
+      <div style="font-size:11px;font-weight:600;color:#2d2b6b;margin-bottom:10px;letter-spacing:0.1em;text-transform:uppercase">极简结构 · DeepSeek 风格</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="padding:14px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;text-align:center">
+          <strong>Hero</strong><br>
+          <span style="font-size:10px;color:#6b7280">标题 + 一句话 + 双 CTA</span>
+        </div>
+        <div style="padding:14px 12px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;text-align:center">
+          <strong>Features</strong><br>
+          <span style="font-size:10px;color:#6b7280">3-4 张卡片</span>
+        </div>
+        <div style="padding:14px 12px;background:#111;border-radius:6px;font-size:11px;color:#fff;text-align:center">
+          <strong>CTA</strong><br>
+          <span style="font-size:10px;color:#94a3b8">页尾行动</span>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:#9ca3af">一个首屏即完整，滚动即转化</div>
+    </div>
+    <div class="card-body">
+      <h3>C. 极简单屏</h3>
+      <p>DeepSeek 路线：一个首屏搞定，不需要滚动。适合已有品牌认知的产品。但 UniMind 是新品牌，可能需要更多说服力。</p>
+    </div>
+  </div>
+</div>

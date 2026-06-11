@@ -171,10 +171,14 @@ class AIEngine:
             body["tools"] = tools
         if config.get('thinking'):
             body["thinking"] = {"type": "enabled"}
-        # DeepSeek 不支持 tool_choice="required"（agent chat 场景），降级为 auto
-        # structured_output 场景通过 _preserve_tool_choice=True 跳过降级
-        if not _preserve_tool_choice and 'deepseek' in config.get('model', '').lower() and tool_choice == "required":
-            tool_choice = "auto"
+        elif tool_choice == "required":
+            # 所有 V4 模型：thinking 模式拒绝 tool_choice="required" → 关 thinking
+            # flash 全天候 disabled，pro 只在 required 时 disabled
+            body["thinking"] = {"type": "disabled"}
+        # DeepSeek API 完整支持 tool_choice="required"（2025.06 文档确认）。
+        # 思考模式下 reasoning_content 必须完整回传，我们的代码已在
+        # call_ai_with_tools / call_ai_with_streaming_tools 中正确处理。
+        # _preserve_tool_choice 保留用于 structured_output 的特殊场景。
         if tool_choice is not None:
             body["tool_choice"] = tool_choice
         return body
@@ -904,7 +908,21 @@ class AIEngine:
                 })
 
             accumulated_text = ""
-            if round_i < max_tool_rounds - 2:
+            # quick_generate 连续失败 2 次 → 降级为 auto，让模型能用文字回复
+            # 而不是在 required 模式下被迫继续调工具死循环
+            qg_errors = sum(1 for m in all_messages[-len(tool_calls):]
+                          if m.get('role') == 'tool' and '"error"' in str(m.get('content', '')))
+            if not hasattr(tool_executor, '_qg_fail_count'):
+                tool_executor._qg_fail_count = 0
+            if qg_errors > 0:
+                tool_executor._qg_fail_count += 1
+            else:
+                tool_executor._qg_fail_count = 0
+            if reasoning_content or tool_executor._qg_fail_count >= 2:
+                tool_choice = "auto"
+                if tool_executor._qg_fail_count >= 2:
+                    tool_executor._qg_fail_count = 0
+            elif round_i < max_tool_rounds - 2:
                 tool_choice = "required"
             else:
                 tool_choice = "auto"
@@ -930,9 +948,10 @@ class AIEngine:
             )
             final_text = ""
             if final_resp and isinstance(final_resp, dict):
-                final_text = final_resp.get("content", "") or ""
-                if not final_text and "choices" in final_resp:
-                    final_text = final_resp["choices"][0]["message"]["content"] or ""
+                # 优先读 content，fallback 到 reasoning_content（V4 默认 thinking ON 时回复可能在这里）
+                msg = (final_resp.get('choices', [{}])[0].get('message', {}) 
+                       if 'choices' in final_resp else final_resp)
+                final_text = msg.get('content') or msg.get('reasoning_content') or ""
             if final_text:
                 final_text = cls._strip_dsml(final_text)
                 if on_step:

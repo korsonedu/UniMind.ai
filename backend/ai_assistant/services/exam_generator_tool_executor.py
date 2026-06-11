@@ -174,10 +174,10 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             questions = result.get('questions', [])
         except Exception as e:
             logger.warning("quick_generate 失败: %s", e)
-            return {"error": f"出题失败：{e}。请换一个知识点或减少题量重试。"}
+            return {"error": f"出题失败：{e}。请直接告知用户具体失败原因，不要再尝试生成。"}
 
         if not questions:
-            return {"error": "题目生成失败，请重试或换一个知识点"}
+            return {"error": "题目生成失败。请直接告知用户，不要再尝试重复生成。"}
 
         # 截取到目标数量
         questions = questions[:count]

@@ -5,7 +5,7 @@ PLAN_TOOL_ACCESS = {
         "assistant": ["search_knowledge_tree", "get_user_weak_points"],
         "planner": [
             "get_learning_stats", "get_knowledge_mastery_map",
-            "get_due_reviews", "search_knowledge_tree",
+            "get_due_reviews", "search_knowledge_tree", "run_diagnostic",
         ],
         "exam_generator": [
             "search_knowledge", "quick_generate",
@@ -22,6 +22,7 @@ PLAN_TOOL_ACCESS = {
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_due_reviews", "search_knowledge_tree",
             "get_user_weak_points", "save_study_plan", "get_active_plan",
+            "run_diagnostic",
         ],
         "exam_generator": [
             "search_knowledge", "quick_generate",

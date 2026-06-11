@@ -12,7 +12,6 @@ import { useTranslation } from 'react-i18next';
    Palette constants — white-first design
    ──────────────────────────────────────────── */
 
-const DARK = '#0e0e1a';  // reserved for FinalCTA anchor
 
 /* ────────────────────────────────────────────
    Scroll reveal
@@ -558,17 +557,17 @@ const FinalCTA: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: DARK }}>
+    <section className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: '#0e0e1a' }}>
       {/* Subtle radial accent */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(45,43,107,0.08) 0%, transparent 70%)' }} />
 
       <div className="max-w-3xl mx-auto text-center relative z-10 space-y-8">
         <div className="reveal space-y-5">
           <h2 className="text-3xl md:text-5xl font-bold leading-[1.08] text-white" style={{ fontFamily: '"DM Sans", sans-serif', letterSpacing: '-0.02em' }}>
-            准备好，进入智能教育新时代
+            {t('cta.title')}
           </h2>
           <p className="text-sm md:text-base text-white/50 max-w-lg mx-auto leading-relaxed" style={{ fontFamily: '"DM Sans", sans-serif' }}>
-            首批机构免费获得 Growth 方案。AI 出题、自适应复习、学情分析——开箱即用。
+            {t('cta.subtitle')}
           </p>
         </div>
 
@@ -584,7 +583,7 @@ const FinalCTA: React.FC = () => {
             className="text-sm font-medium text-white/40 hover:text-white transition-colors"
             onClick={() => navigate('/pricing')}
           >
-            查看方案对比 →
+            {t('cta.viewPlans')}
           </button>
         </div>
 

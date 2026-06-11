@@ -6,7 +6,6 @@ Agent 工具执行器。
 
 import json
 import logging
-from datetime import timedelta
 from typing import Any, Dict, List
 from django.db import models
 
@@ -35,6 +34,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'search_knowledge': lambda a: f"搜索知识点「{a.get('query', '')}」",
         'get_practice_questions': lambda a: f"抽取{a.get('kp_name', '')}相关练习题" if a.get('kp_name') else "抽取练习题",
         'grade_student_answer': lambda a: f"批改题目 #{a.get('question_id', '')}",
+        'run_diagnostic': lambda a: "生成诊断题目" if a.get('mode') == 'generate' else "提交诊断答案",
         'quick_generate': lambda a: f"快速生成{a.get('count', 5)}道题",
         'render_visual': lambda a: f"渲染{a.get('type', '可视化')}",
         'launch_arc_pipeline': lambda a: "启动 ARC 精修管线",
@@ -85,8 +85,9 @@ def summarize_tool_result(tool_name: str, result) -> str:
             ' · ' + {'concept_error':'概念错误','calculation_error':'计算失误','careless_mistake':'审题失误'}.get(
                 r.get('error_analysis', {}).get('type', ''), ''
             ) if r.get('error_analysis', {}).get('type') else ''
-        ),
+        ) + (f" · 推荐{len(r.get('remediation_questions', []))}道变式题" if r.get('remediation_questions') else ''),
         'update_plan_task': lambda r: f"任务已更新为 {r.get('new_status', 'unknown')}",
+        'run_diagnostic': lambda r: f"诊断完成，答对 {r.get('total_correct', 0)}/{r.get('total_questions', 0)}" if 'total_correct' in r else f"已生成 {len(r.get('questions', []))} 道诊断题",
     }
 
     fn = summaries.get(tool_name)
@@ -127,66 +128,13 @@ class BaseToolExecutor:
         except Exception as exc:
             return json.dumps({"error": str(exc)}, ensure_ascii=False)
 
-    def _get_user_subjects(self):
-        """Return list of subjects the user has questions for."""
-        from quizzes.models import UserQuestionStatus
-        return list(
-            UserQuestionStatus.objects.filter(user=self.user)
-            .values_list('question__knowledge_point__subject', flat=True)
-            .distinct()
-        )
-
     # ── Tool handlers ──────────────────────────────────────────
 
     def _handle_search_knowledge_tree(self, args: Dict) -> Dict:
-        from django.db.models import Q
-        from quizzes.models import KnowledgePoint
-
+        from ai_assistant.services.memory_system import MemorySystem
         query = (args.get('query') or '').strip()
         subject = (args.get('subject') or '').strip()
-
-        qs = KnowledgePoint.objects.filter(
-            Q(name__icontains=query) | Q(description__icontains=query),
-        )
-        if subject:
-            qs = qs.filter(subject=subject)
-        else:
-            user_subjects = self._get_user_subjects()
-            if user_subjects:
-                qs = qs.filter(Q(subject__in=user_subjects) | Q(subject__isnull=True))
-        if self.institution:
-            qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
-
-        nodes = list(qs.select_related('parent').values(
-            'id', 'code', 'name', 'level', 'subject', 'parent__name',
-        )[:15])
-
-        from django.db.models import Count
-        node_ids = [n['id'] for n in nodes]
-        child_counts = dict(
-            KnowledgePoint.objects.filter(parent_id__in=node_ids)
-            .values_list('parent_id')
-            .annotate(cnt=Count('id'))
-            .values_list('parent_id', 'cnt')
-        )
-        for node in nodes:
-            node['child_count'] = child_counts.get(node['id'], 0)
-
-        return {
-            "found": len(nodes),
-            "results": [
-                {
-                    "id": n['id'],
-                    "code": n['code'] or '',
-                    "name": n['name'],
-                    "level": n['level'],
-                    "subject": n['subject'] or '',
-                    "parent": n['parent__name'] or '',
-                    "child_count": n['child_count'],
-                }
-                for n in nodes
-            ],
-        }
+        return MemorySystem.query_knowledge_tree(query, subject, self.user, self.institution)
 
     def _handle_get_user_weak_points(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
@@ -202,127 +150,27 @@ class BaseToolExecutor:
         if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
             return {"error": "仅教师/机构主可使用班级分析功能"}
 
-        from django.db.models import Sum, Count
-        from quizzes.models import UserQuestionStatus
-
+        from ai_assistant.services.memory_system import MemorySystem
         limit = min(int(args.get('limit', 5)), 10)
-        student_ids = list(
-            self.institution.students.filter(institution_role='student').values_list('id', flat=True)
-        )
-        if not student_ids:
-            return {"weak_points": [], "message": "该机构暂无学生"}
-
-        qs = (
-            UserQuestionStatus.objects
-            .filter(user_id__in=student_ids, question__knowledge_point__isnull=False)
-            .values(
-                'question__knowledge_point__id',
-                'question__knowledge_point__name',
-                'question__knowledge_point__code',
-            )
-            .annotate(
-                total_reps=Sum('reps'),
-                total_lapses=Sum('lapses'),
-                student_count=Count('user_id', distinct=True),
-            )
-        )
-
-        scored = []
-        for row in qs:
-            total = (row['total_reps'] or 0) + (row['total_lapses'] or 0)
-            if total == 0:
-                continue
-            correct_rate = (row['total_reps'] or 0) / total
-            scored.append({
-                'kp_name': row['question__knowledge_point__name'] or '',
-                'kp_code': row['question__knowledge_point__code'] or '',
-                'correct_rate': round(correct_rate * 100, 1),
-                'total_attempts': total,
-                'student_count': row['student_count'] or 0,
-            })
-
-        scored.sort(key=lambda x: x['correct_rate'])
-        return {"weak_points": scored[:limit]}
+        return MemorySystem.query_class_weak_points(self.institution, limit)
 
     def _handle_get_class_performance_summary(self, args: Dict) -> Dict:
         """获取班级整体学习数据概览（仅 teacher/owner 可用）。"""
         if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
             return {"error": "仅教师/机构主可使用班级分析功能"}
 
-        from django.db.models import Sum, Count
-        from quizzes.models import UserQuestionStatus, ReviewLog
-
-        student_ids = list(
-            self.institution.students.filter(institution_role='student').values_list('id', flat=True)
-        )
-        if not student_ids:
-            return {"summary": {}, "message": "该机构暂无学生"}
-
-        from django.utils import timezone
-        week_ago = timezone.now() - timedelta(days=7)
-
-        total_students = len(student_ids)
-        total_statuses = UserQuestionStatus.objects.filter(user_id__in=student_ids)
-        total_questions = total_statuses.count()
-        agg = total_statuses.aggregate(t_reps=Sum('reps'), t_lapses=Sum('lapses'))
-        total_reps = agg['t_reps'] or 0
-        total_lapses = agg['t_lapses'] or 0
-        total_attempts = total_reps + total_lapses
-        overall_rate = round(total_reps / total_attempts * 100, 1) if total_attempts > 0 else 0
-
-        weekly_active = ReviewLog.objects.filter(
-            user_id__in=student_ids, review_time__gte=week_ago,
-        ).values('user_id').distinct().count()
-
-        # KP count with weak performance (correct_rate < 60%)
-        kp_agg = (
-            total_statuses
-            .filter(question__knowledge_point__isnull=False)
-            .values('question__knowledge_point__id')
-            .annotate(t_reps=Sum('reps'), t_lapses=Sum('lapses'))
-        )
-        weak_kp_count = 0
-        for row in kp_agg:
-            t = (row['t_reps'] or 0) + (row['t_lapses'] or 0)
-            if t > 0 and (row['t_reps'] or 0) / t < 0.6:
-                weak_kp_count += 1
-
-        return {
-            "summary": {
-                "total_students": total_students,
-                "weekly_active_students": weekly_active,
-                "total_questions_tracked": total_questions,
-                "total_attempts": total_attempts,
-                "overall_correct_rate": overall_rate,
-                "weak_kp_count": weak_kp_count,
-            }
-        }
+        from ai_assistant.services.memory_system import MemorySystem
+        return MemorySystem.query_class_performance(self.institution)
 
     def _handle_lookup_question(self, args: Dict) -> Dict:
-        from django.db.models import Q
-        from quizzes.models import Question
-
+        from ai_assistant.services.memory_system import MemorySystem
         qid = int(args.get('question_id', 0))
-        qs = Question.objects.select_related('knowledge_point')
-        if self.institution:
-            qs = qs.filter(Q(institution=self.institution) | Q(institution__isnull=True))
-        try:
-            q = qs.get(id=qid)
-        except Question.DoesNotExist:
-            return {"error": f"Question #{qid} not found"}
-
-        return {
-            "id": q.id,
-            "text": q.text or '',
-            "q_type": q.q_type,
-            "subjective_type": q.subjective_type or '',
-            "options": q.options or [],
-            "answer": q.correct_answer or '',
-            "grading_points": q.grading_points or '',
-            "kp_name": q.knowledge_point.name if q.knowledge_point else '',
-            "kp_code": q.knowledge_point.code if q.knowledge_point else '',
-            "difficulty_level": q.difficulty_level,
-        }
+        result = MemorySystem.query_question(qid, self.institution)
+        if "error" in result:
+            return result
+        # 兼容旧字段名
+        result["answer"] = result.get("correct_answer", "")
+        return result
 
 
 class PlannerToolExecutor(BaseToolExecutor):
@@ -346,115 +194,22 @@ class PlannerToolExecutor(BaseToolExecutor):
         return MemorySystem.query_due_reviews(self.user, limit, self.institution)
 
     def _handle_get_practice_questions(self, args: Dict) -> Dict:
-        """根据知识点或薄弱点从题库中抽取题目供学生练习。
-
-        参数:
-            kp_name: 知识点名称（模糊匹配）
-            subject: 学科过滤
-            difficulty: 难度过滤（entry/easy/normal/hard/extreme）
-            limit: 题目数量，默认 5，最大 10
-            exclude_mastered: 是否排除已掌握题目，默认 true
-        """
-        from quizzes.models import Question, UserQuestionStatus
-
-        kp_name = (args.get('kp_name') or '').strip()
-        subject = (args.get('subject') or '').strip()
-        difficulty = (args.get('difficulty') or '').strip()
-        limit = min(int(args.get('limit', 5)), 10)
-        exclude_mastered = args.get('exclude_mastered', True)
-
-        qs = Question.objects.select_related('knowledge_point')
-
-        # 机构隔离
-        if self.institution:
-            qs = qs.filter(
-                models.Q(institution=self.institution) |
-                models.Q(institution__isnull=True)
-            )
-
-        # 知识点过滤
-        if kp_name:
-            qs = qs.filter(knowledge_point__name__icontains=kp_name)
-        if subject:
-            qs = qs.filter(knowledge_point__subject=subject)
-
-        # 难度过滤
-        if difficulty:
-            qs = qs.filter(difficulty_level=difficulty)
-
-        # 排除已掌握的题目
-        if exclude_mastered:
-            mastered_ids = set(
-                UserQuestionStatus.objects.filter(
-                    user=self.user, is_mastered=True
-                ).values_list('question_id', flat=True)
-            )
-            if mastered_ids:
-                qs = qs.exclude(id__in=mastered_ids)
-
-        # 优先选薄弱题目（做错过的），然后补充新题
-        wrong_qids = set(
-            UserQuestionStatus.objects.filter(
-                user=self.user, wrong_count__gt=0
-            ).values_list('question_id', flat=True)
+        """根据知识点或薄弱点从题库中抽取题目供学生练习。"""
+        from ai_assistant.services.memory_system import MemorySystem
+        return MemorySystem.query_practice_questions(
+            user=self.user,
+            kp_name=(args.get('kp_name') or '').strip(),
+            subject=(args.get('subject') or '').strip(),
+            difficulty=(args.get('difficulty') or '').strip(),
+            limit=min(int(args.get('limit', 5)), 10),
+            exclude_mastered=args.get('exclude_mastered', True),
+            institution=self.institution,
         )
 
-        # 先选做错过的题目
-        wrong_qs = qs.filter(id__in=wrong_qids).order_by('?')[:limit]
-        wrong_list = list(wrong_qs)
-
-        remaining = limit - len(wrong_list)
-        new_list = []
-        if remaining > 0:
-            wrong_ids = {q.id for q in wrong_list}
-            new_qs = qs.exclude(id__in=wrong_ids | wrong_qids).order_by('?')[:remaining]
-            new_list = list(new_qs)
-
-        all_questions = wrong_list + new_list
-
-        return {
-            "total_found": qs.count(),
-            "questions": [
-                {
-                    "id": q.id,
-                    "text": (q.text or '')[:500],
-                    "q_type": q.q_type,
-                    "subjective_type": q.subjective_type or '',
-                    "options": q.options or [],
-                    "difficulty_level": q.difficulty_level,
-                    "kp_name": q.knowledge_point.name if q.knowledge_point else '',
-                    "kp_code": q.knowledge_point.code if q.knowledge_point else '',
-                    "is_review": q.id in wrong_qids,
-                }
-                for q in all_questions
-            ],
-            "practice_url": "/quiz/practice",
-            "message": f"已从题库抽取 {len(all_questions)} 道题目" + (
-                f"（{len(wrong_list)} 道错题复习 + {len(new_list)} 道新题）"
-                if wrong_list and new_list else
-                f"（{len(wrong_list)} 道错题复习）" if wrong_list else
-                f"（{len(new_list)} 道新题）"
-            ),
-        }
-
     def _handle_get_exam_history(self, args: Dict) -> Dict:
-        from quizzes.models import QuizExam
-
+        from ai_assistant.services.memory_system import MemorySystem
         limit = min(int(args.get('limit', 10)), 20)
-        exams = QuizExam.objects.filter(user=self.user).order_by('-created_at')[:limit]
-        return {
-            "exams": [
-                {
-                    "id": e.id,
-                    "total_score": e.total_score,
-                    "max_score": e.max_score,
-                    "percentage": round(e.total_score / e.max_score * 100, 1) if e.max_score else 0,
-                    "elo_change": e.elo_change,
-                    "created_at": e.created_at.isoformat(),
-                }
-                for e in exams
-            ],
-        }
+        return MemorySystem.query_exam_history(self.user, limit, self.institution)
 
     def _handle_save_study_plan(self, args: Dict) -> Dict:
         from ai_assistant.models import StudyPlan
@@ -706,10 +461,11 @@ class PlannerToolExecutor(BaseToolExecutor):
         return MemorySystem.query_difficulty_analysis(self.user, args.get('subject'), self.institution)
 
     def _handle_grade_student_answer(self, args: Dict) -> Dict:
-        """批改学生的回答。查找题目→调用判分服务→返回评分反馈。"""
-        from quizzes.models import Question
+        """批改学生的回答。查找题目→调用判分服务→返回评分反馈+变式题+知识点掌握度。"""
+        from ai_assistant.services.memory_system import MemorySystem
         from ai_assistant.services.grading_engine import GradingEngine
         from ai_engine.ai_service import AIService
+        from django.utils import timezone
 
         question_id = int(args.get('question_id', 0))
         user_answer = str(args.get('user_answer', '')).strip()
@@ -720,63 +476,52 @@ class PlannerToolExecutor(BaseToolExecutor):
             return {"error": "请提供学生的回答内容", "score": 0, "max_score": 0,
                     "feedback": "学生未作答", "is_correct": False}
 
-        try:
-            question = Question.objects.select_related('knowledge_point').get(id=question_id)
-        except Question.DoesNotExist:
-            return {"error": f"题目 #{question_id} 不存在"}
+        # 通过 MemorySystem 获取题目
+        question_dict = MemorySystem.query_question(question_id, self.institution)
+        if "error" in question_dict:
+            return question_dict
 
         ai = AIService()
         result = GradingEngine.grade(
             ai=ai,
-            question_text=question.text,
+            question_text=question_dict['text'],
             user_answer=user_answer,
-            correct_answer=question.correct_answer,
-            q_type=question.q_type,
+            correct_answer=question_dict['correct_answer'],
+            q_type=question_dict['q_type'],
             max_score=10.0,
-            grading_points=question.grading_points,
-            options=question.options,
-            subjective_type=question.subjective_type or '主观题',
+            grading_points=question_dict['grading_points'],
+            options=question_dict['options'],
+            subjective_type=question_dict['subjective_type'] or '主观题',
         )
 
         error_analysis = result.get('error_analysis')
         if error_analysis and error_analysis.get('type'):
-            try:
-                from quizzes.models import UserQuestionStatus
-                from django.utils import timezone
-                uqs = UserQuestionStatus.objects.filter(
-                    user=self.user, question_id=question_id
-                ).first()
-                if uqs:
-                    uqs.error_type = error_analysis['type']
-                    uqs.error_metadata = {
-                        'reasoning': error_analysis.get('reasoning', ''),
-                        'suggested_focus': error_analysis.get('suggested_focus', ''),
-                        'graded_at': timezone.now().isoformat(),
-                    }
-                    uqs.save(update_fields=['error_type', 'error_metadata'])
-            except Exception:
-                pass
-
-        # 写入 GradingRecord 历史记录
-        try:
-            from quizzes.models import GradingRecord
-            GradingRecord.objects.create(
-                user=self.user,
-                question_id=question_id,
-                score=result.get('score', 0),
-                max_score=result.get('max_score', 10.0),
-                is_correct=result.get('is_correct', False),
-                error_type=result.get('error_analysis', {}).get('type', ''),
-                error_metadata=result.get('error_analysis', {}),
-                feedback=result.get('feedback', ''),
-                analysis=result.get('analysis', ''),
+            MemorySystem.write_question_status_error(
+                self.user, question_id,
+                error_analysis['type'],
+                {
+                    'reasoning': error_analysis.get('reasoning', ''),
+                    'suggested_focus': error_analysis.get('suggested_focus', ''),
+                    'graded_at': timezone.now().isoformat(),
+                },
             )
-        except Exception:
-            pass
 
-        return {
+        MemorySystem.write_grading_record(
+            user=self.user,
+            question_id=question_id,
+            score=result.get('score', 0),
+            max_score=result.get('max_score', 10.0),
+            is_correct=result.get('is_correct', False),
+            error_type=result.get('error_analysis', {}).get('type', ''),
+            error_metadata=result.get('error_analysis', {}),
+            feedback=result.get('feedback', ''),
+            analysis=result.get('analysis', ''),
+        )
+
+        # 构造返回
+        response = {
             "question_id": question_id,
-            "kp_name": question.knowledge_point.name if question.knowledge_point else '',
+            "kp_name": question_dict.get('kp_name', ''),
             "score": result.get('score', 0),
             "max_score": 10.0,
             "is_correct": result.get('score', 0) >= 10.0 * 0.6,
@@ -784,6 +529,94 @@ class PlannerToolExecutor(BaseToolExecutor):
             "analysis": result.get('analysis', ''),
             "error_analysis": error_analysis,
         }
+
+        # remediation_questions: 同知识点 + 相近难度的变式题
+        kp_id = question_dict.get('knowledge_point_id')
+        if kp_id:
+            similar = MemorySystem.query_similar_questions(
+                kp_id, question_dict.get('difficulty_level', 'normal'), question_id
+            )
+            response['remediation_questions'] = similar.get('questions', [])
+
+            # kp_breakdown: 该知识点的掌握度
+            breakdown = MemorySystem.query_kp_breakdown(self.user, [kp_id])
+            response['kp_breakdown'] = breakdown.get('kp_breakdown', [])
+
+        return response
+
+    def _handle_run_diagnostic(self, args: Dict) -> Dict:
+        """启动诊断测试。generate 模式返回题目，submit 模式评分并初始化 Memorix。"""
+        mode = args.get('mode', 'generate')
+
+        if mode == 'generate':
+            from quizzes.services.diagnostic_service import (
+                generate_diagnostic_questions, DIAGNOSTIC_TIME_LIMIT_SECONDS,
+            )
+            inst = self.institution
+            if not inst:
+                return {"error": "请先加入机构才能进行诊断测试"}
+            questions = generate_diagnostic_questions(inst)
+            if not questions:
+                return {"error": "暂无可用题目，请联系管理员"}
+            return {
+                "questions": questions,
+                "time_limit_seconds": DIAGNOSTIC_TIME_LIMIT_SECONDS,
+                "message": f"已生成 {len(questions)} 道诊断题目，限时 {DIAGNOSTIC_TIME_LIMIT_SECONDS} 秒",
+            }
+
+        elif mode == 'submit':
+            answers = args.get('answers', [])
+            if not answers:
+                return {"error": "请提供答案列表"}
+
+            from quizzes.services.diagnostic_service import (
+                grade_diagnostic_answers, initialize_memorix_from_diagnostic,
+                build_study_plan,
+            )
+            from ai_assistant.services.memory_system import MemorySystem
+            from django.db import transaction
+
+            # 将 tool 参数格式转换为 diagnostic_service 期望的格式
+            formatted_answers = []
+            for item in answers:
+                qid = item.get('question_id')
+                q_dict = MemorySystem.query_question(qid, self.institution)
+                if "error" in q_dict:
+                    continue
+                formatted_answers.append({
+                    'question': {
+                        'question_text': q_dict['text'],
+                        'q_type': q_dict['q_type'],
+                        'answer': q_dict['correct_answer'],
+                        'knowledge_point_id': q_dict['knowledge_point_id'],
+                        '_kp_name': q_dict['kp_name'],
+                    },
+                    'answer': item.get('answer', ''),
+                    'knowledge_point_id': q_dict['knowledge_point_id'],
+                    '_kp_name': q_dict['kp_name'],
+                })
+
+            if not formatted_answers:
+                return {"error": "未找到有效题目"}
+
+            with transaction.atomic():
+                results, kp_scores = grade_diagnostic_answers(self.user, formatted_answers)
+                initialize_memorix_from_diagnostic(self.user, kp_scores)
+                study_plan = build_study_plan(kp_scores)
+
+                self.user.has_completed_initial_assessment = True
+                self.user.save(update_fields=['has_completed_initial_assessment'])
+
+            total_correct = sum(1 for r in results if r['is_correct'])
+            return {
+                "total_correct": total_correct,
+                "total_questions": len(results),
+                "accuracy": round(total_correct / len(results) * 100, 1) if results else 0,
+                "study_plan": study_plan,
+                "message": f"诊断完成！答对 {total_correct}/{len(results)} 题",
+            }
+
+        return {"error": f"未知模式: {mode}，支持 generate 或 submit"}
 
     def _handle_render_visual(self, args: Dict) -> Dict:
         """将可视化数据返回给前端，同时缓存到实例供消息持久化。"""

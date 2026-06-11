@@ -470,6 +470,9 @@ class AIChatStreamView(APIView):
 
                 from ai_assistant.services.chat_dispatch import resolve_tool_choice
                 forced_tool_choice = resolve_tool_choice(profile)
+                # 意图路由后工具为空时，降级为 auto
+                if not tools:
+                    forced_tool_choice = "auto"
 
                 def _run_agent():
                     try:
