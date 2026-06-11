@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Building2, Activity, TrendingUp, RefreshCw, MessageSquare, Download } from 'lucide-react';
+import { Users, Buildings, ChartLine, TrendUp, ArrowsClockwise, Chat, Download } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -114,10 +114,10 @@ export const AnalyticsPanel: React.FC = () => {
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <MetricCard icon={<Users className="h-4 w-4" />} label="总用户" value={data.summary.total_users} color="text-blue-500" />
-        <MetricCard icon={<Building2 className="h-4 w-4" />} label="总机构" value={data.summary.total_institutions} color="text-emerald-500" />
-        <MetricCard icon={<Activity className="h-4 w-4" />} label="DAU" value={data.summary.dau} color="text-amber-500" />
-        <MetricCard icon={<TrendingUp className="h-4 w-4" />} label="MAU" value={data.summary.mau} color="text-indigo-500" />
-        <MetricCard icon={<TrendingUp className="h-4 w-4" />} label="7日留存" value={`${(data.summary.day7_retention * 100).toFixed(1)}%`} color="text-rose-500" />
+        <MetricCard icon={<Buildings className="h-4 w-4" />} label="总机构" value={data.summary.total_institutions} color="text-emerald-500" />
+        <MetricCard icon={<ChartLine className="h-4 w-4" />} label="DAU" value={data.summary.dau} color="text-amber-500" />
+        <MetricCard icon={<TrendUp className="h-4 w-4" />} label="MAU" value={data.summary.mau} color="text-indigo-500" />
+        <MetricCard icon={<TrendUp className="h-4 w-4" />} label="7日留存" value={`${(data.summary.day7_retention * 100).toFixed(1)}%`} color="text-rose-500" />
       </div>
 
       {/* 时间范围 + 导出 */}
@@ -159,7 +159,7 @@ export const AnalyticsPanel: React.FC = () => {
             <Download className="w-3.5 h-3.5" />导出NPS
           </Button>
           <Button variant="ghost" size="icon" onClick={fetchData} className="rounded-full h-8 w-8">
-            <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
+            <ArrowsClockwise className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
           </Button>
         </div>
       </div>
@@ -271,7 +271,7 @@ export const AnalyticsPanel: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="rounded-2xl p-8 bg-white border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)]">
           <div className="flex items-center gap-3 mb-4">
-            <MessageSquare className="h-5 w-5 text-blue-500" />
+            <Chat className="h-5 w-5 text-blue-500" />
             <h3 className="text-lg font-semibold tracking-tight">NPS 净推荐值</h3>
           </div>
           <div className="flex items-baseline gap-2 mb-6">

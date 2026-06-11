@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Target, Video, RefreshCw } from 'lucide-react';
+import { Target, Video, ArrowsClockwise } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
@@ -90,7 +90,7 @@ export const InsightsPanel: React.FC = () => {
               <h3 className="text-lg font-semibold tracking-tight">{t('insights.courseEngagement')}</h3>
             </div>
             <Button variant="ghost" size="icon" onClick={fetchBI} className="rounded-full h-8 w-8 hover:bg-black/[0.04]">
-              <RefreshCw className={cn("w-3.5 h-3.5 text-[#8E8E93]", isLoading && "animate-spin")} />
+              <ArrowsClockwise className={cn("w-3.5 h-3.5 text-[#8E8E93]", isLoading && "animate-spin")} />
             </Button>
           </div>
           <div className="space-y-2">

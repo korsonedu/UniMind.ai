@@ -1,10 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  BookOpen, FileText, Target, Bot, Sparkles, Bell, Tag,
-  BrainCircuit, Layers, Rocket, BarChart3,
-} from 'lucide-react';
+import { BookOpen, FileText, Target, Robot, Sparkle, Bell, Tag, Brain, Stack, Rocket, ChartBar } from '@phosphor-icons/react';
 
 import { CourseSection } from './maintenance/CourseSection';
 import { ArticleSection } from './maintenance/ArticleSection';
@@ -36,13 +33,13 @@ export const Maintenance: React.FC = () => {
               <Target className="w-3.5 h-3.5" />{t('tabs.questionBank')}
             </TabsTrigger>
             <TabsTrigger value="kp" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
-              <BrainCircuit className="w-3.5 h-3.5" />{t('tabs.knowledgeSystem')}
+              <Brain className="w-3.5 h-3.5" />{t('tabs.knowledgeSystem')}
             </TabsTrigger>
             <TabsTrigger value="albums" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
-              <Layers className="w-3.5 h-3.5" />{t('tabs.albumManager')}
+              <Stack className="w-3.5 h-3.5" />{t('tabs.albumManager')}
             </TabsTrigger>
             <TabsTrigger value="bots" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
-              <Bot className="w-3.5 h-3.5" />{t('tabs.aiBot')}
+              <Robot className="w-3.5 h-3.5" />{t('tabs.aiBot')}
             </TabsTrigger>
             <TabsTrigger value="sm" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
               <Rocket className="w-3.5 h-3.5" />{t('tabs.startupMaterials')}
@@ -54,10 +51,10 @@ export const Maintenance: React.FC = () => {
               <Bell className="w-3.5 h-3.5" />{t('tabs.siteBroadcast')}
             </TabsTrigger>
             <TabsTrigger value="insights" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
-              <BarChart3 className="w-3.5 h-3.5" />{t('tabs.insights')}
+              <ChartBar className="w-3.5 h-3.5" />{t('tabs.insights')}
             </TabsTrigger>
             <TabsTrigger value="pipeline" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
-              <Sparkles className="w-3.5 h-3.5" />{t('tabs.aiPipeline')}
+              <Sparkle className="w-3.5 h-3.5" />{t('tabs.aiPipeline')}
             </TabsTrigger>
           </TabsList>
         </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, BrainCircuit, Target, BookOpenCheck, Loader2 } from 'lucide-react';
+import { ArrowLeft, Brain, Target, CheckSquareOffset, Spinner } from '@phosphor-icons/react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -70,7 +70,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
 
         {loading ? (
           <div className="h-56 flex items-center justify-center">
-            <Loader2 className="h-7 w-7 animate-spin text-muted-foreground/60" />
+            <Spinner className="h-7 w-7 animate-spin text-muted-foreground/60" />
           </div>
         ) : (
           <>
@@ -123,7 +123,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-center gap-2 mb-3">
-                  <BrainCircuit className="h-4 w-4 text-indigo-600" />
+                  <Brain className="h-4 w-4 text-indigo-600" />
                   <h3 className="text-base font-black">{t('wrongReview.causeBreakdown')}</h3>
                 </div>
                 <div className="space-y-2">
@@ -144,7 +144,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
 
               <Card className="rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-center gap-2 mb-3">
-                  <BookOpenCheck className="h-4 w-4 text-emerald-600" />
+                  <CheckSquareOffset className="h-4 w-4 text-emerald-600" />
                   <h3 className="text-base font-black">{t('wrongReview.kpBreakdown')}</h3>
                 </div>
                 <div className="space-y-2">

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowRight, Check } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { ContactAdminModal } from './ContactAdminModal';

@@ -77,9 +77,19 @@
   }
 }
 
+/* ── Z-Index Scale ── */
+:root {
+  --z-base: 1;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-tooltip: 400;
+  --z-max: 500;
+}
+
 /* Global Dark Mode Style Fixes */
 .dark body {
-  background-color: #000000;
+  background-color: #08080a;
 }
 
 /* Dark mode semantic overrides */
@@ -93,8 +103,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
     font-feature-settings: "rlig" 1, "calt" 1;
     scrollbar-gutter: stable;
   }

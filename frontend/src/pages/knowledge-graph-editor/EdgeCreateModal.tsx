@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { X, Link2 } from 'lucide-react';
+import { X, Link } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import type { EdgeType } from './types';
 import { EDGE_LABELS, EDGE_COLORS, EDGE_DEFAULTS } from './types';
@@ -41,7 +41,7 @@ export const EdgeCreateModal: React.FC<Props> = ({ sourceName, targetName, onCre
         {/* 头部 */}
         <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50/50">
           <div className="flex items-center gap-2">
-            <Link2 className="w-4 h-4 text-indigo-500" />
+            <Link className="w-4 h-4 text-indigo-500" />
             <span className="font-semibold text-sm">创建知识关联</span>
           </div>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>

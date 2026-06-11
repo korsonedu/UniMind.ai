@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Video, Image as ImageIcon, FileUp, Edit3, Trash2, Plus, Check, X } from 'lucide-react';
+import { BookOpen, Video, Image as ImageIcon, FileArrowUp, PencilSimple, Trash, Plus, Check, X } from '@phosphor-icons/react';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { TagAutocomplete } from '@/components/TagAutocomplete';
 import { QuickCreateKPDialog } from './QuickCreateKPDialog';
@@ -220,10 +220,10 @@ export const CourseSection: React.FC = () => {
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                       <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                        <Edit3 className="w-3.5 h-3.5" />
+                        <PencilSimple className="w-3.5 h-3.5" />
                       </Button>
                       <Button onClick={() => handleDelete(item.id, item.title)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -312,7 +312,7 @@ export const CourseSection: React.FC = () => {
                 <div className="relative">
                   <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 border-black/[0.06] hover:border-[#0071E3]/30 bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] px-4 font-medium text-xs text-[#6E6E73] hover:text-[#1D1D1F] transition-[border-color,background-color,color] justify-between" type="button">
                     <span>{form.courseware ? form.courseware.name : t('course.uploadCourseware')}</span>
-                    <FileUp className="w-4 h-4 opacity-30" />
+                    <FileArrowUp className="w-4 h-4 opacity-30" />
                   </Button>
                   <input type="file" onChange={e => setForm({ ...form, courseware: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" />
                 </div>

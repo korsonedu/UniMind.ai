@@ -10,7 +10,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Play, Pause, Timer, XCircle } from 'lucide-react';
+import { Play, Pause, Timer, XCircle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 
@@ -55,7 +55,7 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-80 rounded-[2.5rem] p-8 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[100]"
+          className="w-80 rounded-[2.5rem] p-8 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[var(--z-dropdown)]"
           side="bottom" align="end"
         >
           <div className="space-y-5 text-center">
@@ -164,7 +164,7 @@ export const MobileFocusTimer: React.FC<{
             <Timer className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[100]">
+        <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[var(--z-dropdown)]">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-muted-foreground">{t('mobile.pomodoro')}</p>
@@ -190,7 +190,7 @@ export const MobileFocusTimer: React.FC<{
 
       {/* Fullscreen focus modal */}
       <div className={cn(
-        "fixed inset-0 z-[120] md:hidden bg-black/95 text-white flex flex-col items-center justify-center gap-6 transition-all duration-300",
+        "fixed inset-0 z-[var(--z-overlay)] md:hidden bg-black/95 text-white flex flex-col items-center justify-center gap-6 transition-all duration-300",
         showFullscreen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
       )}>
         <button onClick={() => setShowFullscreen(false)} className="absolute top-6 right-6 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">

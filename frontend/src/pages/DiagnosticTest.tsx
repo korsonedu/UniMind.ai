@@ -8,7 +8,7 @@ import { Loading } from '@/components/Loading';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import { BrainCircuit, Clock, Hash, ArrowRight, ArrowLeft, CheckCircle2, Home } from 'lucide-react';
+import { Brain, Clock, Hash, ArrowRight, ArrowLeft, CheckCircle, House } from '@phosphor-icons/react';
 
 type Phase = 'welcome' | 'testing' | 'results';
 
@@ -125,7 +125,7 @@ export function DiagnosticTest() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center">
           <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
-            <BrainCircuit className="w-10 h-10 text-primary" />
+            <Brain className="w-10 h-10 text-primary" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-3">{t('welcome.title')}</h1>
           <p className="text-muted-foreground mb-10 leading-relaxed">
@@ -151,7 +151,7 @@ export function DiagnosticTest() {
             <div className="w-px bg-border" />
             <div className="text-center">
               <div className="flex items-center justify-center gap-1.5 text-muted-foreground mb-1">
-                <BrainCircuit className="w-4 h-4" />
+                <Brain className="w-4 h-4" />
               </div>
               <div className="text-2xl font-bold">AI</div>
               <div className="text-xs text-muted-foreground">{t('welcome.aiAnalysis')}</div>
@@ -257,7 +257,7 @@ export function DiagnosticTest() {
       <div className="min-h-screen p-4 max-w-2xl mx-auto">
         <div className="text-center py-8">
           <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 className="w-10 h-10 text-primary" />
+            <CheckCircle className="w-10 h-10 text-primary" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-2">{t('results.title')}</h1>
           <div className="text-5xl font-bold mt-4 mb-2">{accuracy}%</div>
@@ -312,7 +312,7 @@ export function DiagnosticTest() {
 
         <div className="flex gap-3">
           <Button className="flex-1 rounded-full py-6 text-base" size="lg" onClick={() => navigate('/')}>
-            <Home className="w-5 h-5 mr-2" />
+            <House className="w-5 h-5 mr-2" />
             {t('results.goHome')}
           </Button>
           <Button className="flex-1 rounded-full py-6 text-base" size="lg" variant="outline" onClick={() => navigate('/tests')}>

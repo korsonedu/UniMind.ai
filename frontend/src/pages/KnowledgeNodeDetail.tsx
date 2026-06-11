@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Loader2, Maximize2, Target } from 'lucide-react';
+import { ArrowLeft, Spinner, ArrowsOut, Target } from '@phosphor-icons/react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,7 +64,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
 
         {loading ? (
           <Card className="rounded-2xl border border-border/60 bg-card p-8 flex items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/50" />
+            <Spinner className="h-5 w-5 animate-spin text-muted-foreground/50" />
           </Card>
         ) : (
           <>
@@ -100,7 +100,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
                         {processMathContent(q.text)}
                       </ReactMarkdown>
                     </div>
-                    <Maximize2 className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                    <ArrowsOut className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
                   </button>
                 ))}
                 {questions.length === 0 && (

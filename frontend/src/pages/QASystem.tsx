@@ -1,25 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useTranslation } from 'react-i18next';
-import { 
-  MessageCircleQuestion,
-  Search,
-  Paperclip,
-  Send,
-  MoreHorizontal,
-  Star,
-  Trash2,
-  CheckCircle2,
-  Circle,
-  ChevronUp,
-  CornerDownRight,
-  Loader2,
-  MessageCircle,
-  X,
-  Edit,
-  ThumbsUp,
-  Eye
-} from 'lucide-react';
+import { ChatCircleText, MagnifyingGlass, Paperclip, PaperPlaneTilt, DotsThree, Star, Trash, CheckCircle, Circle, CaretUp, ArrowBendDownRight, Spinner, ChatCircle, X, PencilSimple, ThumbsUp, Eye } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -116,15 +98,15 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-5 w-5 opacity-100 transition-opacity">
-                  <MoreHorizontal className="h-3 w-3 text-muted-foreground" />
+                  <DotsThree className="h-3 w-3 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setIsEditing(true)} className="gap-2 text-xs">
-                  <Edit className="h-3 w-3" /> {t('edit')}
+                  <PencilSimple className="h-3 w-3" /> {t('edit')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleDelete} className="gap-2 text-xs text-red-600 focus:text-red-700 focus:bg-red-50">
-                  <Trash2 className="h-3 w-3" /> {t('delete')}
+                  <Trash className="h-3 w-3" /> {t('delete')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -166,7 +148,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
                     aria-label={t('replyToTeacher')}
                     title={t('replyToTeacher')}
                 >
-                    <MessageCircle className="h-3 w-3" />
+                    <ChatCircle className="h-3 w-3" />
                 </button>
                 )}
             </div>
@@ -309,7 +291,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground/50 hover:text-foreground">
-                <MoreHorizontal className="h-4 w-4" />
+                <DotsThree className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-xl">
@@ -325,7 +307,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
                     <Star className="h-3.5 w-3.5" /> {question.is_starred ? t('unstarQuestion') : t('starQuestion')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleAction('toggle_solved')} className="gap-2 text-xs font-bold">
-                    {question.is_solved ? <Circle className="h-3.5 w-3.5"/> : <CheckCircle2 className="h-3.5 w-3.5"/>} 
+                    {question.is_solved ? <Circle className="h-3.5 w-3.5"/> : <CheckCircle className="h-3.5 w-3.5"/>} 
                     {question.is_solved ? t('markUnsolved') : t('markSolved')}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -334,10 +316,10 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               {(isAdmin || user?.username === question.user_detail.username) && (
                 <>
                   <DropdownMenuItem onClick={() => setIsEditing(true)} className="gap-2 text-xs font-bold">
-                    <Edit className="h-3.5 w-3.5" /> {t('editContent')}
+                    <PencilSimple className="h-3.5 w-3.5" /> {t('editContent')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleAction('delete')} className="gap-2 text-xs font-bold text-red-600 focus:text-red-700 focus:bg-red-50">
-                    <Trash2 className="h-3.5 w-3.5" /> {t('deleteQuestion')}
+                    <Trash className="h-3.5 w-3.5" /> {t('deleteQuestion')}
                   </DropdownMenuItem>
                 </>
               )}
@@ -405,7 +387,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
         {/* Admin Reply Trigger Button */}
         {isAdmin && !firstAnswer && !showInput && !isEditing && (
           <Button onClick={() => setShowInput(true)} size="sm" className="mt-4 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold text-xs h-8">
-            <MessageCircle className="w-3.5 h-3.5 mr-2" />
+            <ChatCircle className="w-3.5 h-3.5 mr-2" />
             {t('answerStudent')}
           </Button>
         )}
@@ -435,7 +417,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
             onClick={() => setIsExpanded(!isExpanded)}
             className="h-8 text-[12px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground ml-1 md:ml-4"
           >
-            {isExpanded ? <ChevronUp className="mr-2 h-3 w-3" /> : <CornerDownRight className="mr-2 h-3 w-3" />}
+            {isExpanded ? <CaretUp className="mr-2 h-3 w-3" /> : <ArrowBendDownRight className="mr-2 h-3 w-3" />}
             {isExpanded ? t('collapseReplies') : t('viewReplies', { count: otherAnswers.length })}
           </Button>
         </div>
@@ -474,7 +456,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               aria-label={t('sendReply') || 'Send reply'}
               className="h-10 w-10 rounded-xl bg-primary text-primary-foreground shrink-0 shadow-lg hover:opacity-90 send-button"
             >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4" />}
+              {isSubmitting ? <Spinner className="h-4 w-4 animate-spin"/> : <PaperPlaneTilt className="h-4 w-4" />}
             </Button>
             <Button onClick={() => setShowInput(false)} size="icon" variant="ghost" aria-label={t('cancel') || 'Close'} className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-muted">
               <X className="h-4 w-4" />
@@ -571,7 +553,7 @@ export const QASystem: React.FC = () => {
                 />
               </div>
               <Button onClick={handlePost} disabled={isPosting} className={cn("h-10 rounded-xl bg-primary text-primary-foreground font-bold shadow hover:scale-[1.02] transition-transform text-xs uppercase tracking-widest", isMobile ? "shrink-0 px-5" : "px-8")}>
-                {isPosting ? <Loader2 className="h-4 w-4 animate-spin"/> : t('submitQuestion')}
+                {isPosting ? <Spinner className="h-4 w-4 animate-spin"/> : t('submitQuestion')}
               </Button>
             </div>
           </div>
@@ -604,7 +586,7 @@ export const QASystem: React.FC = () => {
           </div>
           </div>
           <div className="relative w-full md:w-auto">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
+            <MagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
             <Input 
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -617,10 +599,10 @@ export const QASystem: React.FC = () => {
         {/* List */}
         <div className="space-y-4 pb-10">
           {loading ? (
-            <div className="py-20 text-center flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground/20"/></div>
+            <div className="py-20 text-center flex justify-center"><Spinner className="h-8 w-8 animate-spin text-muted-foreground/20"/></div>
           ) : questions.length === 0 ? (
             <div className="py-20 text-center space-y-4">
-              <MessageCircleQuestion className="h-12 w-12 mx-auto text-muted-foreground/20" />
+              <ChatCircleText className="h-12 w-12 mx-auto text-muted-foreground/20" />
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('noResults')}</p>
             </div>
           ) : (

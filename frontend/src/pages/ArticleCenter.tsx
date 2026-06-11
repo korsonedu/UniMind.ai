@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, ChevronRight, ChevronLeft } from 'lucide-react';
+import { FileText, CaretRight, CaretLeft } from '@phosphor-icons/react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Button } from '@/components/ui/button';
-import { Loading } from '@/components/Loading';
+import { Skeleton } from '@/components/ui/skeleton';
 import { InlineError } from '@/components/InlineError';
 import { useFetch } from '@/lib/useFetch';
 import { cn } from '@/lib/utils';
@@ -52,7 +52,26 @@ export const ArticleCenter: React.FC = () => {
     });
   };
 
-  if (loading && articles.length === 0) return <Loading message="Loading articles..." />;
+  if (loading && articles.length === 0) return (
+    <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')}>
+      <div className="flex flex-col border border-border/50 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden">
+        <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-muted/30 text-[11px] font-semibold tracking-wider border-b border-border/50">
+          <div className="col-span-2">{t('articleDate')}</div>
+          <div className="col-span-2">{t('articleAuthor')}</div>
+          <div className="col-span-6">{t('articleTitle')}</div>
+          <div className="col-span-2 text-right pr-4">{t('articleViews')}</div>
+        </div>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="grid grid-cols-12 gap-4 px-8 py-5 items-center border-b border-border/50 last:border-0">
+            <div className="col-span-2"><Skeleton className="h-3 w-16" /></div>
+            <div className="col-span-2"><Skeleton className="h-5 w-20 rounded-full" /></div>
+            <div className="col-span-6"><Skeleton className="h-4 w-3/4" /></div>
+            <div className="col-span-2 flex justify-end"><Skeleton className="h-3 w-10" /></div>
+          </div>
+        ))}
+      </div>
+    </PageWrapper>
+  );
   if (error) return <InlineError message={error} onRetry={refetch} />;
 
   return (
@@ -67,7 +86,7 @@ export const ArticleCenter: React.FC = () => {
             className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 shadow-md border border-border/50 flex items-center justify-center opacity-0 group-hover/tags:opacity-100 transition-opacity disabled:opacity-0"
             aria-label="Scroll left"
           >
-            <ChevronLeft className="w-3.5 h-3.5 text-muted-foreground" />
+            <CaretLeft className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
 
           <div
@@ -112,7 +131,7 @@ export const ArticleCenter: React.FC = () => {
             className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/90 dark:bg-slate-900/90 shadow-md border border-border/50 flex items-center justify-center opacity-0 group-hover/tags:opacity-100 transition-opacity disabled:opacity-0"
             aria-label="Scroll right"
           >
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+            <CaretRight className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
         </div>
 
@@ -162,7 +181,7 @@ export const ArticleCenter: React.FC = () => {
                   </div>
                   <div className="col-span-2 flex justify-end items-center gap-4 text-right">
                     <span className="tabular-nums text-[11px] font-bold text-muted-foreground/60">{article.views || 0}</span>
-                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/20 group-hover:text-primary transition-all group-hover:translate-x-1" />
+                    <CaretRight className="w-3.5 h-3.5 text-muted-foreground/20 group-hover:text-primary transition-all group-hover:translate-x-1" />
                   </div>
                 </div>
               </Link>
@@ -178,7 +197,7 @@ export const ArticleCenter: React.FC = () => {
                 variant="ghost"
                 className="rounded-xl font-bold text-[11px] uppercase tracking-widest gap-2"
               >
-                <ChevronLeft className="w-3 h-3" /> Previous
+                <CaretLeft className="w-3 h-3" /> Previous
               </Button>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-semibold text-muted-foreground">Page</span>
@@ -191,7 +210,7 @@ export const ArticleCenter: React.FC = () => {
                 variant="ghost"
                 className="rounded-xl font-bold text-[11px] uppercase tracking-widest gap-2"
               >
-                Next <ChevronRight className="w-3 h-3" />
+                Next <CaretRight className="w-3 h-3" />
               </Button>
             </div>
           )}

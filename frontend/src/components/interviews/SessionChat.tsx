@@ -4,7 +4,7 @@ import { InterviewRadarChart } from './RadarChart';
 import { toast } from 'sonner';
 import { formatApiErrorToast } from '@/lib/apiError';
 import api from '@/lib/api';
-import { Send, StopCircle } from 'lucide-react';
+import { PaperPlaneTilt, StopCircle } from '@phosphor-icons/react';
 
 interface Turn {
   id: number;
@@ -256,7 +256,7 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
             disabled={sending || !input.trim()}
             onClick={sendTurn}
           >
-            <Send className="h-3.5 w-3.5" />
+            <PaperPlaneTilt className="h-3.5 w-3.5" />
           </button>
         </div>
       )}

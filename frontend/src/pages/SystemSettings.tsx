@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { PageWrapper } from '@/components/PageWrapper';
 import { useSystemStore } from '@/store/useSystemStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { Sun, Moon, Palette, Check, Sparkles } from 'lucide-react';
+import { Sun, Moon, Palette, Check, Sparkle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 const PRESET_COLORS = [
@@ -78,7 +78,7 @@ export const SystemSettings: React.FC = () => {
             </div>
             <div className="space-y-6 text-left">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-muted-foreground/60" />
+                <Sparkle className="h-4 w-4 text-muted-foreground/60" />
                 <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('visual.brandAccent')}</Label>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

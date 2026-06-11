@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, Activity, ChevronDown, Bell, Target, Info, Filter } from 'lucide-react';
+import { ArrowRight, Brain, ChartLine, CaretDown, Bell, Target, Info, Funnel } from '@phosphor-icons/react';
 import { cn, normalizeOptions } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -397,7 +397,7 @@ export const TestLadder: React.FC = () => {
                         <DropdownMenu modal={false}>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="h-11 px-4 rounded-xl bg-card border-border text-foreground font-bold text-sm hover:bg-muted/80 transition-all flex items-center gap-2 shadow-sm">
-                              {isCustomCount ? t('custom') : t('questionsWithCount', { count: qCount })}<ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                              {isCustomCount ? t('custom') : t('questionsWithCount', { count: qCount })}<CaretDown className="h-3.5 w-3.5 opacity-50" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className="w-32 rounded-xl border-border bg-card shadow-lg p-1.5" align="start">
@@ -459,7 +459,7 @@ export const TestLadder: React.FC = () => {
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("rounded-xl bg-card border-border text-foreground font-bold transition-all flex items-center gap-2 shadow-sm h-11 px-4 text-sm")}>
-                        <Filter className="h-4 w-4 shrink-0" />
+                        <Funnel className="h-4 w-4 shrink-0" />
                         <span className="truncate">{selectedSubIds.length > 0 ? t('subjectFilter') : t('allSubjects')}</span>
                         <Badge variant="outline" className={cn("ml-0.5 h-5 min-w-[1.25rem] px-1 rounded-full text-[10px] font-bold", selectedSubIds.length > 0 ? "bg-indigo-600 text-white border-indigo-600" : "bg-muted text-muted-foreground border-border")}>{selectedSubIds.length}</Badge>
                       </Button>
@@ -484,7 +484,7 @@ export const TestLadder: React.FC = () => {
                 {/* ── CTA 按钮行 ── */}
                 <div className={cn("flex flex-wrap items-center gap-3 pt-2 w-full", isMobile && "flex-col")}>
                   <Button onClick={startTest} className={cn("text-white rounded-xl font-bold shadow-lg transition-all active:scale-95 bg-primary hover:opacity-90 border-0 flex-1", isMobile ? "h-12 px-6 text-sm" : "h-14 px-12 text-lg")}>
-                    <BrainCircuit className="mr-2 h-5 w-5" />{t('startTraining')}<ArrowRight className="ml-2 h-5 w-5" />
+                    <Brain className="mr-2 h-5 w-5" />{t('startTraining')}<ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                   <Button variant="outline" onClick={() => navigate('/tests/review')} className={cn("rounded-xl font-bold border-border shadow-sm hover:shadow-md transition-all", isMobile ? "h-10 text-sm flex-1" : "h-14 px-6 text-sm")}>
                     <Target className="mr-2 h-4 w-4" />{t('wrongQuestionReview')}
@@ -502,7 +502,7 @@ export const TestLadder: React.FC = () => {
                   isMobile ? "p-3 rounded-xl border-none shadow-none" : "p-7 border border-border rounded-apple-3xl hover:bg-card hover:shadow-lg"
                 )}>
                   <div className="flex items-center gap-3 mb-2">
-                    <div className={cn("bg-card shadow-sm flex items-center justify-center text-indigo-500", isMobile ? "h-8 w-8 rounded-xl" : "h-9 w-9 rounded-2xl")}><BrainCircuit className="h-4 w-4" /></div>
+                    <div className={cn("bg-card shadow-sm flex items-center justify-center text-indigo-500", isMobile ? "h-8 w-8 rounded-xl" : "h-9 w-9 rounded-2xl")}><Brain className="h-4 w-4" /></div>
                     <p className={cn("font-bold text-muted-foreground uppercase tracking-widest leading-none", isMobile ? "text-[11px]" : "text-[14px]")}>{t('stats.todayReview')}</p>
                   </div>
                   <div className="flex items-baseline gap-1">
@@ -515,7 +515,7 @@ export const TestLadder: React.FC = () => {
                   isMobile ? "p-3 rounded-xl border-none shadow-none" : "p-7 border border-border rounded-apple-3xl hover:bg-card hover:shadow-lg"
                 )}>
                   <div className="flex items-center gap-3 mb-2">
-                    <div className={cn("bg-card shadow-sm flex items-center justify-center text-muted-foreground", isMobile ? "h-8 w-8 rounded-xl" : "h-9 w-9 rounded-2xl")}><Activity className="h-4 w-4" /></div>
+                    <div className={cn("bg-card shadow-sm flex items-center justify-center text-muted-foreground", isMobile ? "h-8 w-8 rounded-xl" : "h-9 w-9 rounded-2xl")}><ChartLine className="h-4 w-4" /></div>
                     <p className={cn("font-bold text-muted-foreground uppercase tracking-widest leading-none", isMobile ? "text-[11px]" : "text-[14px]")}>{t('stats.atRisk')}</p>
                   </div>
                   <div className="flex items-baseline gap-1">

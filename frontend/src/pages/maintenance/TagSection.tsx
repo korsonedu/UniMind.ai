@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Tag, Plus, Trash2, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { Tag, Plus, Trash, CaretDown, CaretRight, Image as ImageIcon } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
@@ -91,9 +91,9 @@ export const TagSection: React.FC = () => {
                     >
                       <div className="flex items-center gap-3">
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-[#AEAEB2] shrink-0" />
+                          <CaretDown className="h-4 w-4 text-[#AEAEB2] shrink-0" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-[#AEAEB2] shrink-0" />
+                          <CaretRight className="h-4 w-4 text-[#AEAEB2] shrink-0" />
                         )}
                         <span className="text-sm font-medium">{tag.name}</span>
                         <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">
@@ -106,7 +106,7 @@ export const TagSection: React.FC = () => {
                         className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-red-50 transition-all"
                         onClick={(e) => { e.stopPropagation(); handleDelete(tag); }}
                       >
-                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        <Trash className="w-3.5 h-3.5 text-red-500" />
                       </Button>
                     </div>
                     {isExpanded && tag.courses && tag.courses.length > 0 && (

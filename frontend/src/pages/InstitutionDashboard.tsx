@@ -4,10 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTranslation } from 'react-i18next';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
-import {
-  Building2, Users, Calendar, Loader2,
-  Check, Minus, GraduationCap, TrendingUp, Sparkles,
-} from 'lucide-react';
+import { Buildings, Users, Calendar, Spinner, Check, Minus, GraduationCap, TrendUp, Sparkle } from '@phosphor-icons/react';
 import ClassPerformancePanel from '@/components/ClassPerformancePanel';
 import { cn } from '@/lib/utils';
 
@@ -64,7 +61,7 @@ export default function InstitutionDashboard() {
   if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -92,7 +89,7 @@ export default function InstitutionDashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 rounded-lg bg-primary/8 flex items-center justify-center">
-                    <Building2 className="h-4 w-4 text-primary" />
+                    <Buildings className="h-4 w-4 text-primary" />
                   </div>
                   <div>
                     <p className="text-sm font-extrabold text-foreground">{inst.name}
@@ -143,11 +140,11 @@ export default function InstitutionDashboard() {
           { label: t('stats.admins'), value: inst.admin_count, icon: GraduationCap,
             color: 'text-unimind-green', bg: 'bg-unimind-green/6' },
           { label: t('stats.weeklyActive'), value: data.stats?.weekly_active_students ?? '—',
-            icon: TrendingUp, color: 'text-primary', bg: 'bg-primary/6' },
+            icon: TrendUp, color: 'text-primary', bg: 'bg-primary/6' },
           { label: t('stats.aiUsage'), value: data.stats?.ai_usage?.limit
             ? `${data.stats.ai_usage.used}/${data.stats.ai_usage.limit}`
             : (data.stats?.ai_usage?.limit === null ? t('common:unlimited') : '—'),
-            icon: Sparkles, color: 'text-amber-500', bg: 'bg-amber-500/6' },
+            icon: Sparkle, color: 'text-amber-500', bg: 'bg-amber-500/6' },
         ].map(s => (
           <Card key={s.label} variant="apple" className="p-4 space-y-1">
             <div className={cn('h-8 w-8 rounded-lg flex items-center justify-center', s.bg)}>

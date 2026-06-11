@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GraduationCap, Briefcase, Wrench, Check, BookOpen, PenLine } from 'lucide-react';
+import { GraduationCap, Briefcase, Wrench, Check, BookOpen, Pen } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 
@@ -82,7 +82,7 @@ export function DirectionSelector({
           )}
         >
           <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
-            <PenLine className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+            <Pen className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
           </div>
           <span>自定义学科</span>
         </button>
@@ -102,7 +102,7 @@ export function DirectionSelector({
                 isCustomActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
               )}
             >
-              <PenLine className="h-3.5 w-3.5" strokeWidth={2.5} />
+              <Pen className="h-3.5 w-3.5" strokeWidth={2.5} />
             </div>
             <span className="text-sm font-extrabold">自定义学科</span>
           </div>

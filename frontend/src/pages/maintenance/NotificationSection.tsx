@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Bell, Plus, Send, Loader2 } from 'lucide-react';
+import { Bell, Plus, PaperPlaneTilt, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -138,7 +138,7 @@ export const NotificationSection: React.FC = () => {
               disabled={isSending}
               className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2"
             >
-              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {isSending ? <Spinner className="h-4 w-4 animate-spin" /> : <PaperPlaneTilt className="h-4 w-4" />}
               {t('notification.sendBroadcast')}
             </Button>
           </div>

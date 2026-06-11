@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import api from '@/lib/api';
-import { Loader2, Copy, Plus, Ticket } from 'lucide-react';
+import { Spinner, Copy, Plus, Ticket } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -155,7 +155,7 @@ export default function InviteCodeAdmin() {
               className="h-10 rounded-xl text-sm" />
           </div>
           <Button variant="apple" onClick={handleGenerate} disabled={generating} className="h-10">
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : '生成'}
+            {generating ? <Spinner className="h-4 w-4 animate-spin" /> : '生成'}
           </Button>
         </div>
         {isTrial && (
@@ -188,7 +188,7 @@ export default function InviteCodeAdmin() {
         </h3>
         {loading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : codes.length === 0 ? (
           <p className="text-xs text-unimind-text-quaternary text-center py-8">暂无邀请码，先生成几条</p>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, X, Send, Bug, Lightbulb, HelpCircle } from 'lucide-react';
+import { Chat, X, PaperPlaneTilt, Bug, Lightbulb, Question } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 const CATEGORIES = [
   { key: 'bug', icon: Bug, label: 'Bug 反馈', color: 'bg-red-50 text-red-600 border-red-100' },
   { key: 'feature', icon: Lightbulb, label: '功能建议', color: 'bg-amber-50 text-amber-600 border-amber-100' },
-  { key: 'other', icon: HelpCircle, label: '其他', color: 'bg-blue-50 text-blue-600 border-blue-100' },
+  { key: 'other', icon: Question, label: '其他', color: 'bg-blue-50 text-blue-600 border-blue-100' },
 ] as const;
 
 export function FeedbackButton() {
@@ -50,7 +50,7 @@ export function FeedbackButton() {
         className="fixed bottom-6 right-6 z-50 h-12 w-12 rounded-full bg-black text-white shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
         aria-label="反馈"
       >
-        <MessageSquare className="h-5 w-5" />
+        <Chat className="h-5 w-5" />
       </button>
     );
   }
@@ -103,7 +103,7 @@ export function FeedbackButton() {
           disabled={sending || !content.trim()}
           className="w-full h-10 bg-black text-white rounded-xl text-xs font-bold"
         >
-          <Send className="mr-2 h-3.5 w-3.5" />
+          <PaperPlaneTilt className="mr-2 h-3.5 w-3.5" />
           {sending ? '提交中...' : '提交反馈'}
         </Button>
       </div>

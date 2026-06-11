@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
-import { CalendarCheck, MessageCircle, BookOpen, FileText, Trophy, BrainCircuit, ArrowRight, CheckCircle2, Clock } from 'lucide-react';
+import { CalendarCheck, ChatCircle, BookOpen, FileText, Trophy, Brain, ArrowRight, CheckCircle, Clock } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -53,7 +53,7 @@ export function StudentHome() {
 
   const quickLinks = [
     { label: '刷题训练', icon: Trophy, path: '/tests', color: 'text-orange-500', bg: 'bg-orange-50' },
-    { label: '知识地图', icon: BrainCircuit, path: '/knowledge-map', color: 'text-purple-500', bg: 'bg-purple-50' },
+    { label: '知识地图', icon: Brain, path: '/knowledge-map', color: 'text-purple-500', bg: 'bg-purple-50' },
     { label: '课程中心', icon: BookOpen, path: '/courses', color: 'text-blue-500', bg: 'bg-blue-50' },
     { label: '模拟考试', icon: FileText, path: '/mock-exam', color: 'text-red-500', bg: 'bg-red-50' },
   ];
@@ -90,7 +90,7 @@ export function StudentHome() {
         >
           <div className="flex items-center gap-4 px-6 py-5 rounded-2xl border bg-card shadow-sm hover:shadow-md transition-all duration-200">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <MessageCircle className="w-5 h-5 text-primary" />
+              <ChatCircle className="w-5 h-5 text-primary" />
             </div>
             <span className="text-muted-foreground text-base flex-1">和小宇聊聊你的学习目标...</span>
             <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
@@ -160,7 +160,7 @@ export function StudentHome() {
             <h3 className="text-lg font-medium mb-2">还没有学习计划</h3>
             <p className="text-muted-foreground text-sm mb-5">去和小宇聊聊，让它为你制定一份个性化学习方案</p>
             <Button onClick={() => navigate('/xiaoyu')} className="rounded-full px-6">
-              <MessageCircle className="w-4 h-4 mr-2" />
+              <ChatCircle className="w-4 h-4 mr-2" />
               和小宇聊聊
             </Button>
           </div>
@@ -170,7 +170,7 @@ export function StudentHome() {
         {activePlan && todayTasks.length === 0 && (
           <div className="text-center py-10">
             <div className="w-16 h-16 rounded-2xl bg-green-50 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+              <CheckCircle className="w-8 h-8 text-green-500" />
             </div>
             <h3 className="text-lg font-medium mb-1">今日任务已完成</h3>
             <p className="text-muted-foreground text-sm">干得漂亮！继续保持</p>

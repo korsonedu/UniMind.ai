@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
-import { ArrowDown, Zap, CheckCircle2, XCircle, Calendar } from 'lucide-react';
+import { ArrowDown, Lightning, CheckCircle, XCircle, Calendar } from '@phosphor-icons/react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -88,8 +88,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                   msg.content.includes('📅') ? "bg-orange-500/10 text-orange-600 border-orange-500/20" :
                   "bg-red-500/10 text-red-600 border-red-500/20"
                 )}>
-                   {msg.content.includes('💪') ? <Zap className="h-3 w-3 fill-emerald-500 text-emerald-500" /> :
-                    msg.content.includes('✅') ? <CheckCircle2 className="h-3 w-3 text-blue-500" /> :
+                   {msg.content.includes('💪') ? <Lightning className="h-3 w-3 fill-emerald-500 text-emerald-500" /> :
+                    msg.content.includes('✅') ? <CheckCircle className="h-3 w-3 text-blue-500" /> :
                     msg.content.includes('📅') ? <Calendar className="h-3 w-3 text-orange-500" /> :
                     <XCircle className="h-3 w-3 text-red-500" />
                    }
@@ -130,7 +130,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                       remarkPlugins={[remarkMath, remarkSoftBreaks]}
                       rehypePlugins={[rehypeKatex]}
                       components={{
-                        img: ({node, ...props}) => <img {...props} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank', 'noopener,noreferrer')}/>,
+                        img: ({node, ...props}) => <img {...props} alt={props.alt || 'image'} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank', 'noopener,noreferrer')}/>,
                         p: ({node, ...props}) => <p {...props} className="m-0 leading-normal w-fit" />,
                         div: ({node, ...props}) => <div {...props} className="w-fit" />,
                         br: () => <br />

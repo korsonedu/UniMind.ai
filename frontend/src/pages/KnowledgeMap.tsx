@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useNavigate } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
-import { GitMerge, Search, List } from 'lucide-react';
+import { GitMerge, MagnifyingGlass, List } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -222,7 +222,7 @@ export const KnowledgeMap: React.FC = () => {
               </Button>
               {!mobileTreeOpen && (
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder={t('mobile.searchPlaceholder')}
                     value={treeSearch}

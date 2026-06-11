@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronRight, ChevronDown, Search, X } from 'lucide-react';
+import { CaretRight, CaretDown, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -119,8 +119,8 @@ export const KnowledgeTreePanel: React.FC<{
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
         >
           {hasChildren ? (
-            isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            isExpanded ? <CaretDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            : <CaretRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           ) : (
             <span className="w-3.5 shrink-0" />
           )}
@@ -170,7 +170,7 @@ export const KnowledgeTreePanel: React.FC<{
     <div className="flex flex-col h-full bg-card rounded-2xl border border-border/50 overflow-hidden">
       <div className="p-3 border-b border-border/30">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder={t('treePanel.searchPlaceholder')}
             value={searchQuery}

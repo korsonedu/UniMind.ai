@@ -1,5 +1,5 @@
 import React from 'react';
-import { Target, Maximize2, FileText, Video, X, Layers } from 'lucide-react';
+import { Target, ArrowsOut, FileText, Video, X, Stack } from '@phosphor-icons/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ export const NodeDetailPanel: React.FC<{
   if (!node) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-card rounded-2xl border border-border/50 p-6">
-        <Layers className="h-8 w-8 mb-3 opacity-20" />
+        <Stack className="h-8 w-8 mb-3 opacity-20" />
         <p className="text-xs font-bold uppercase tracking-widest">{t('detailPanel.selectTitle')}</p>
         <p className="text-[10px] mt-1 opacity-50">{t('detailPanel.selectHint')}</p>
       </div>
@@ -92,7 +92,7 @@ export const NodeDetailPanel: React.FC<{
                           {processMathContent(q.text)}
                         </ReactMarkdown>
                       </span>
-                      <Maximize2 className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-all shrink-0" />
+                      <ArrowsOut className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-all shrink-0" />
                     </button>
                   ))}
                 </div>

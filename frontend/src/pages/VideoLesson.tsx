@@ -4,12 +4,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  ChevronLeft, Play, Pause, Calendar, BookOpen,
-  Share2, Star, FileText, Download,
-  ListVideo, Layers, Sparkles, Maximize, Minimize, ClosedCaption,
-  Volume2, VolumeX,
-} from 'lucide-react';
+import { CaretLeft, Play, Pause, Calendar, BookOpen, ShareNetwork, Star, FileText, Download, Playlist, Stack, Sparkle, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -245,16 +240,16 @@ export const VideoLesson: React.FC = () => {
                     {isPlaying ? <Pause className="h-[18px] w-[18px]" /> : <Play className="h-[18px] w-[18px]" />}
                   </button>
                   <button onClick={toggleMute} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isMuted ? t('unmute') : t('mute')} title={isMuted ? t('unmute') : t('mute')}>
-                    {isMuted ? <VolumeX className="h-[18px] w-[18px]" /> : <Volume2 className="h-[18px] w-[18px]" />}
+                    {isMuted ? <SpeakerX className="h-[18px] w-[18px]" /> : <SpeakerHigh className="h-[18px] w-[18px]" />}
                   </button>
                   <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-colors min-w-[32px] text-center" aria-label={t('playbackSpeed')} title={t('playbackSpeed')}>
                     {playbackRate}x
                   </button>
                   <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-colors ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} aria-label={subtitlesVisible ? t('hideSubtitles') : t('showSubtitles')} title={subtitlesVisible ? t('hideSubtitles') : t('showSubtitles')}>
-                    <ClosedCaption className="h-[18px] w-[18px]" />
+                    <ClosedCaptioning className="h-[18px] w-[18px]" />
                   </button>
                   <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isFullscreen ? t('exitFullscreen') : t('fullscreen')} title={isFullscreen ? t('exitFullscreen') : t('fullscreen')}>
-                    {isFullscreen ? <Minimize className="h-[18px] w-[18px]" /> : <Maximize className="h-[18px] w-[18px]" />}
+                    {isFullscreen ? <ArrowsIn className="h-[18px] w-[18px]" /> : <ArrowsOut className="h-[18px] w-[18px]" />}
                   </button>
                 </div>
               </div>
@@ -271,18 +266,18 @@ export const VideoLesson: React.FC = () => {
         <header className="flex items-center justify-between border-b border-border pb-6">
           <div className="flex items-center gap-6">
             <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl hover:bg-muted shadow-sm border border-border h-12 w-12">
-              <ChevronLeft className="h-6 w-6"/>
+              <CaretLeft className="h-6 w-6"/>
             </Button>
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">{course.title}</h2>
               <div className="flex items-center gap-4 opacity-40 font-bold text-[10px] uppercase tracking-widest leading-none mt-1">
-                 {course.album && <span className="flex items-center gap-1.5 text-foreground"><Layers className="w-3 h-3"/> {course.album.name}</span>}
+                 {course.album && <span className="flex items-center gap-1.5 text-foreground"><Stack className="w-3 h-3"/> {course.album.name}</span>}
                  <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(course.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
               </div>
             </div>
           </div>
           <div className="flex gap-3">
-             <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm"><Share2 className="h-4 w-4 mr-2"/> {t('share')}</Button>
+             <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm"><ShareNetwork className="h-4 w-4 mr-2"/> {t('share')}</Button>
              <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm text-amber-500"><Star className="h-4 w-4 mr-2"/> {t('favorite')}</Button>
           </div>
         </header>
@@ -293,7 +288,7 @@ export const VideoLesson: React.FC = () => {
             {/* AI 智能大纲 */}
             <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
               <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="h-4 w-4 text-indigo-500" />
+                <Sparkle className="h-4 w-4 text-indigo-500" />
                 <h3 className="text-sm font-bold text-foreground">{t('aiOutline')}</h3>
               </div>
               <OutlinePanel courseId={courseId} videoRef={videoRef} />
@@ -336,7 +331,7 @@ export const VideoLesson: React.FC = () => {
 
           {/* Right Side: Album & Related */}
           <div className="lg:col-span-3 space-y-6">
-             <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('sameSeries')}</h4><ListVideo className="w-4 h-4 opacity-40"/></div>
+             <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('sameSeries')}</h4><Playlist className="w-4 h-4 opacity-40"/></div>
              <ScrollArea className="h-[750px] pr-4">
                 <div className="space-y-3">
                    {relatedCourses.map((c, i) => (

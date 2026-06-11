@@ -1,15 +1,15 @@
 import { cn } from '@/lib/utils';
-import { type LucideIcon, PackageOpen } from 'lucide-react';
+import { type Icon, Package } from '@phosphor-icons/react';
 
 type EmptyStateProps = {
-  icon?: LucideIcon;
+  icon?: Icon;
   title: string;
   description?: string;
   className?: string;
 };
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
-  icon: Icon = PackageOpen,
+  icon: Icon = Package,
   title,
   description,
   className,

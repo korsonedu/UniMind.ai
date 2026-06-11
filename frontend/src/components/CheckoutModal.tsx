@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Sparkle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 type PlanKey = 'starter' | 'growth' | 'enterprise';
@@ -57,7 +57,7 @@ export function CheckoutModal({ open, onOpenChange, preselectedPlan }: CheckoutM
         {/* Header */}
         <DialogHeader className="px-7 pt-7 pb-0 text-left space-y-1">
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="h-4 w-4 text-amber-400/60" />
+            <Sparkle className="h-4 w-4 text-amber-400/60" />
             <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-[0.25em]">升级方案</span>
           </div>
           <DialogTitle className="text-xl font-black tracking-tight text-foreground">
@@ -163,7 +163,7 @@ export function CheckoutModal({ open, onOpenChange, preselectedPlan }: CheckoutM
 
           <Button onClick={handlePay}
             className="w-full h-12 rounded-xl text-[13px] font-extrabold bg-gradient-to-r from-[#0071E3] to-[#0077ED] hover:from-[#0071E3]/90 hover:to-[#0077ED]/90 text-white shadow-lg shadow-[#0071E3]/15 gap-2">
-            <Sparkles className="h-4 w-4" />
+            <Sparkle className="h-4 w-4" />
             立即支付
           </Button>
         </div>

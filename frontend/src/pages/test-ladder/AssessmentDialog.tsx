@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, CheckCircle2, Star, Loader2 } from 'lucide-react';
+import { CaretLeft, CaretRight, CheckCircle, Star, Spinner } from '@phosphor-icons/react';
 import { cn, processMathContent } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -68,7 +68,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
     <Dialog open={open} onOpenChange={(open) => { if (!open && !isSubmitting) onOpenChange(false); }}>
       <DialogContent
         onInteractOutside={(e) => e.preventDefault()}
-        className="w-[96vw] max-w-5xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] max-h-[860px] z-[100]"
+        className="w-[96vw] max-w-5xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] max-h-[860px] z-[var(--z-dropdown)]"
       >
         <DialogTitle className="sr-only">{t('assessment.title')}</DialogTitle>
 
@@ -103,7 +103,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
                   : "text-stone-400 hover:text-emerald-600 hover:bg-emerald-50/50"
               )}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
+              <CheckCircle className="h-3.5 w-3.5" />
               {currentQ.is_mastered ? t('assessment.mastered') : t('assessment.notMastered')}
             </Button>
             <Button
@@ -138,7 +138,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
               {/* Mastered banner */}
               {currentQ.is_mastered && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50/70 border border-emerald-100 rounded-lg text-xs font-medium text-emerald-700 mb-5 -mt-3">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <CheckCircle className="w-3.5 h-3.5" />
                   {t('assessment.mastered')}
                 </div>
               )}
@@ -276,13 +276,13 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
             onClick={() => setCurrentIdx(prev => prev - 1)}
             className="h-9 px-4 rounded-xl text-sm font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100 gap-1.5 transition-colors"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <CaretLeft className="h-4 w-4" />
             {t('assessment.prevQuestion')}
           </Button>
 
           {gradingMessage && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-stone-50 rounded-full border border-stone-200">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-stone-400" />
+              <Spinner className="h-3.5 w-3.5 animate-spin text-stone-400" />
               <span className="text-[11px] font-medium text-stone-500">{gradingMessage}</span>
             </div>
           )}
@@ -301,7 +301,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
               className="h-9 px-5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.97] gap-1.5"
             >
               {t('assessment.nextQuestion')}
-              <ChevronRight className="h-4 w-4" />
+              <CaretRight className="h-4 w-4" />
             </Button>
           )}
         </div>

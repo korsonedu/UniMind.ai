@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Loader2, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { Spinner, CaretDown, CaretUp, Sparkle } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
 import { cn, formatDuration } from '@/lib/utils';
@@ -40,7 +40,7 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }
   if (outlineStatus === 'idle' || outlineStatus === 'loading') {
     return (
       <div className="flex items-center gap-2 py-2 text-muted-foreground/60">
-        <Loader2 className="h-3 w-3 animate-spin" />
+        <Spinner className="h-3 w-3 animate-spin" />
         <span className="text-[10px] font-bold uppercase tracking-wider">{t('aiOutlineLoading')}</span>
       </div>
     );
@@ -56,9 +56,9 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
       >
-        <Sparkles className="h-3 w-3 text-indigo-500" />
+        <Sparkle className="h-3 w-3 text-indigo-500" />
         {t('aiOutlineLabel', { count: outlineItems.length })}
-        {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {expanded ? <CaretUp className="h-3 w-3" /> : <CaretDown className="h-3 w-3" />}
       </button>
 
       {expanded && (

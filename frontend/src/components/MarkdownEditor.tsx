@@ -3,11 +3,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import Placeholder from '@tiptap/extension-placeholder'
 import Underline from '@tiptap/extension-underline'
-import { 
-  Bold, Italic, List, ListOrdered, 
-  Heading1, Heading2, Quote, Code, Underline as UnderlineIcon,
-  Undo, Redo
-} from 'lucide-react'
+import { TextB, TextItalic, List, ListNumbers, TextHOne, TextHTwo, Quotes, Code, TextUnderline as UnderlineIcon, ArrowUUpLeft, ArrowClockwise } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
 
 interface MarkdownEditorProps {
@@ -114,14 +110,14 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
           isActive={editor.isActive('bold')}
           label="Bold"
         >
-          <Bold className="w-4 h-4" />
+          <TextB className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
           isActive={editor.isActive('italic')}
           label="Italic"
         >
-          <Italic className="w-4 h-4" />
+          <TextItalic className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
@@ -138,14 +134,14 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
           isActive={editor.isActive('heading', { level: 1 })}
           label="Heading 1"
         >
-          <Heading1 className="w-4 h-4" />
+          <TextHOne className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
           isActive={editor.isActive('heading', { level: 2 })}
           label="Heading 2"
         >
-          <Heading2 className="w-4 h-4" />
+          <TextHTwo className="w-4 h-4" />
         </ToolbarButton>
         
         <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-2" />
@@ -162,14 +158,14 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
           isActive={editor.isActive('orderedList')}
           label="Ordered List"
         >
-          <ListOrdered className="w-4 h-4" />
+          <ListNumbers className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
           isActive={editor.isActive('blockquote')}
           label="Blockquote"
         >
-          <Quote className="w-4 h-4" />
+          <Quotes className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
@@ -182,10 +178,10 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
         <div className="flex-1" />
 
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} label="Undo">
-          <Undo className="w-4 h-4" />
+          <ArrowUUpLeft className="w-4 h-4" />
         </ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().redo().run()} label="Redo">
-          <Redo className="w-4 h-4" />
+          <ArrowClockwise className="w-4 h-4" />
         </ToolbarButton>
       </div>
       

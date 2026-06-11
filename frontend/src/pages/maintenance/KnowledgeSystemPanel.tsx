@@ -11,10 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import {
-  BrainCircuit, Upload, Download, Plus, Pencil, Trash2, Loader2,
-  ChevronRight, ChevronDown, FileUp, RefreshCw, Check, Search, X,
-} from 'lucide-react';
+import { Brain, Upload, Download, Plus, Pencil, Trash, Spinner, CaretRight, CaretDown, FileArrowUp, ArrowsClockwise, Check, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useConfirm } from '@/components/useConfirm';
 
@@ -88,7 +85,7 @@ function TreeNode({
       >
         {hasChildren ? (
           <button onClick={(e) => { e.stopPropagation(); setOpen(!open); }} className="shrink-0" aria-label={open ? 'Collapse' : 'Expand'}>
-            {open ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+            {open ? <CaretDown className="h-3 w-3 text-muted-foreground" /> : <CaretRight className="h-3 w-3 text-muted-foreground" />}
           </button>
         ) : (
           <span className="w-3 shrink-0" />
@@ -106,7 +103,7 @@ function TreeNode({
             <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
           </button>
           <button onClick={(e) => { e.stopPropagation(); onDelete(node); }} className="p-0.5 hover:bg-red-50 rounded" aria-label={`Delete ${node.name}`}>
-            <Trash2 className="h-2.5 w-2.5 text-red-400" />
+            <Trash className="h-2.5 w-2.5 text-red-400" />
           </button>
         </div>
       </div>
@@ -397,11 +394,11 @@ export function KnowledgeSystemPanel() {
       <Card className="p-4 lg:col-span-2 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-            <BrainCircuit className="h-4 w-4 text-indigo-500" /> {t('knowledgeSystem.title')}
+            <Brain className="h-4 w-4 text-indigo-500" /> {t('knowledgeSystem.title')}
           </h3>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={fetchTree}>
-              <RefreshCw className="h-3 w-3 mr-1" /> {t('knowledgeSystem.refresh')}
+              <ArrowsClockwise className="h-3 w-3 mr-1" /> {t('knowledgeSystem.refresh')}
             </Button>
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleExportMD}>
               <Download className="h-3 w-3 mr-1" /> {t('knowledgeSystem.exportMd')}
@@ -413,10 +410,10 @@ export function KnowledgeSystemPanel() {
         </div>
 
         {loading ? (
-          <div className="flex-1 flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          <div className="flex-1 flex items-center justify-center"><Spinner className="h-5 w-5 animate-spin text-muted-foreground" /></div>
         ) : tree.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2">
-            <BrainCircuit className="h-10 w-10 opacity-20" />
+            <Brain className="h-10 w-10 opacity-20" />
             <p className="text-sm font-bold">{t('knowledgeSystem.noTree')}</p>
             <p className="text-xs">{t('knowledgeSystem.noTreeHint')}</p>
           </div>
@@ -528,7 +525,7 @@ export function KnowledgeSystemPanel() {
                           {e.source_type !== 'tree' && (
                             <Button variant="ghost" size="icon" className="h-5 w-5 text-red-300 hover:text-red-500"
                               onClick={() => handleDeleteEdge(e.id)}>
-                              <Trash2 className="w-2.5 h-2.5" />
+                              <Trash className="w-2.5 h-2.5" />
                             </Button>
                           )}
                         </div>
@@ -541,7 +538,7 @@ export function KnowledgeSystemPanel() {
           </Card>
         ) : (
           <Card className="p-4 text-center text-xs text-muted-foreground">
-            <BrainCircuit className="h-6 w-6 mx-auto mb-1 opacity-30" />
+            <Brain className="h-6 w-6 mx-auto mb-1 opacity-30" />
             {t('knowledgeSystem.selectHint')}
           </Card>
         )}
@@ -549,7 +546,7 @@ export function KnowledgeSystemPanel() {
         {/* MD Import */}
         <Card className="p-4 space-y-3">
           <h4 className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-            <FileUp className="h-3.5 w-3.5 text-indigo-500" /> {t('knowledgeSystem.mdImport')}
+            <FileArrowUp className="h-3.5 w-3.5 text-indigo-500" /> {t('knowledgeSystem.mdImport')}
           </h4>
 
           {/* Drag & drop zone */}
@@ -568,9 +565,9 @@ export function KnowledgeSystemPanel() {
           >
             <div className="flex flex-col items-center justify-center py-5 px-4 pointer-events-none">
               {importing ? (
-                <Loader2 className="h-6 w-6 animate-spin text-primary mb-1" />
+                <Spinner className="h-6 w-6 animate-spin text-primary mb-1" />
               ) : dragOver ? (
-                <FileUp className="h-6 w-6 text-primary mb-1" strokeWidth={1.5} />
+                <FileArrowUp className="h-6 w-6 text-primary mb-1" strokeWidth={1.5} />
               ) : (
                 <Upload className="h-5 w-5 text-muted-foreground/50 mb-1" strokeWidth={1.5} />
               )}
@@ -597,7 +594,7 @@ export function KnowledgeSystemPanel() {
             className="w-full h-32 rounded-xl bg-muted/50 border-none p-3 text-xs font-mono resize-none"
           />
           <Button className="w-full h-9 rounded-xl text-xs font-bold" onClick={handleImportMD} disabled={importing}>
-            {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
+            {importing ? <Spinner className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />}
             {t('knowledgeSystem.importMd')}
           </Button>
           <div className="bg-muted/50 rounded-lg p-2 text-[9px] text-muted-foreground leading-relaxed">

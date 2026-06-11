@@ -48,6 +48,7 @@ const DiagnosticTest = lazyNamed(() => import('./pages/DiagnosticTest'), 'Diagno
 const StudyPlan = lazyNamed(() => import('./pages/StudyPlan'), 'StudyPlan');
 const StudentHome = lazyNamed(() => import('./pages/StudentHome'), 'StudentHome');
 const XiaoYu = lazyNamed(() => import('./pages/XiaoYu'), 'XiaoYu');
+const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
 // Default exports — plain lazy() works
 const Workbench = lazy(() => import('./pages/Workbench'));
@@ -239,6 +240,7 @@ const router = createBrowserRouter([
           { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
           { path: "home", element: lazyPage(StudentHome) },
           { path: "xiaoyu", element: lazyPage(XiaoYu) },
+          { path: "xiaoyu/practice/:sessionId", element: lazyPage(PracticeSession) },
           { path: "plan", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}>{lazyPage(StudyPlan)}</FeatureGuard> },
           { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeMap)}</FeatureGuard> },
           { path: "knowledge-map/node/:id", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeNodeDetail)}</FeatureGuard> },

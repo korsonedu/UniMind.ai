@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkle } from '@phosphor-icons/react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -40,7 +40,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
         {botAvatar ? (
           <img src={botAvatar} alt="" className="w-full h-full object-cover" />
         ) : (
-          <Sparkles className="h-3 w-3 text-white" />
+          <Sparkle className="h-3 w-3 text-white" />
         )}
       </div>
     )}

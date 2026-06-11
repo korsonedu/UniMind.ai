@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Spinner, WarningCircle } from '@phosphor-icons/react';
 
 export function Checkout() {
   const [searchParams] = useSearchParams();
@@ -62,7 +62,7 @@ export function Checkout() {
         {error ? (
           <div className="space-y-5">
             <div className="mx-auto w-12 h-12 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-              <AlertCircle className="h-6 w-6 text-red-500" />
+              <WarningCircle className="h-6 w-6 text-red-500" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-foreground">支付启动失败</h2>
@@ -77,7 +77,7 @@ export function Checkout() {
           </div>
         ) : (
           <div className="space-y-4">
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+            <Spinner className="mx-auto h-8 w-8 animate-spin text-primary" />
             <div>
               <h2 className="text-lg font-bold text-foreground">正在创建订单…</h2>
               <p className="mt-1.5 text-sm text-muted-foreground">

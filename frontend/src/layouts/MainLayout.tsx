@@ -1,32 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import {
-  BookOpen,
-  FileText,
-  Trophy,
-  Clock,
-  User as UserIcon,
-  LogOut,
-  ShieldCheck,
-  CreditCard,
-  ChevronLeft,
-  ChevronRight,
-  Sparkles,
-  Settings2,
-  BrainCircuit,
-  BarChart3,
-  LineChart,
-  Building2,
-  MessageCircleQuestion,
-  Wrench,
-  Eye,
-  EyeOff,
-  UserPlus,
-  Users,
-  CalendarCheck,
-  Globe,
-  Bot,
-} from 'lucide-react';
+import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -141,14 +115,19 @@ export const MainLayout: React.FC = () => {
     pathname === '/courses' ||
     pathname.startsWith('/course/') ||
     pathname === '/xiaoyu' ||
+    pathname.startsWith('/xiaoyu/practice') ||
     pathname === '/workbench' ||
     pathname === '/plan' ||
     pathname.startsWith('/institution');
   const isMobileStudyPage = isMobile && location.pathname === '/study';
-  const isMobileImmersivePage = isMobile && location.pathname.startsWith('/tests/session');
+  const isMobileImmersivePage = isMobile && (
+    location.pathname.startsWith('/tests/session') ||
+    location.pathname.startsWith('/xiaoyu/practice')
+  );
   const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/');
   const hideMobileBottomNav = isMobile && (
     location.pathname.startsWith('/tests/session') ||
+    location.pathname.startsWith('/xiaoyu/practice') ||
     location.pathname.startsWith('/course/') ||
     location.pathname === '/study'
   );
@@ -207,18 +186,18 @@ export const MainLayout: React.FC = () => {
   // ── 超级管理员 —— 只看机构管理 + 邀请码 ──
   const navItems: NavItem[] = isSuperAdmin
     ? [
-        { to: '/institution/admin', icon: Building2, label: t('layout:nav.institutionAdmin') },
-        { to: '/invite-codes', icon: Sparkles, label: t('layout:nav.inviteCodes') },
-        { to: '/platform-analytics', icon: LineChart, label: t('layout:nav.platformAnalytics') },
+        { to: '/institution/admin', icon: Buildings, label: t('layout:nav.institutionAdmin') },
+        { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteCodes') },
+        { to: '/platform-analytics', icon: ChartLineUp, label: t('layout:nav.platformAnalytics') },
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
       ]
     : [
-        { to: '/xiaoyu', icon: Bot, label: t('layout:nav.xiaoyu') },
+        { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyu') },
         { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
-        { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeMap') },
+        { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeMap') },
         { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
-        { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qa') },
+        { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
         { to: '/plan', icon: CalendarCheck, label: t('layout:nav.plan') },
         { to: '/study', icon: Clock, label: t('layout:nav.studyRoom') },
 
@@ -228,7 +207,7 @@ export const MainLayout: React.FC = () => {
   // ── 机构管理菜单 ──
   if (!isSuperAdmin && instInfo) {
     if (user?.is_institution_admin) {
-      navItems.unshift({ to: '/workbench', icon: Sparkles, label: t('layout:nav.workbench') });
+      navItems.unshift({ to: '/workbench', icon: Sparkle, label: t('layout:nav.workbench') });
       navItems.push({ to: '/institution/students', icon: Users, label: t('layout:nav.members') });
       navItems.push({ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') });
     }
@@ -238,17 +217,17 @@ export const MainLayout: React.FC = () => {
 
   const mobileNavItems: NavItem[] = isSuperAdmin
     ? [
-        { to: '/institution', icon: Building2, label: t('layout:nav.institutionShort') },
-        { to: '/invite-codes', icon: Sparkles, label: t('layout:nav.inviteShort') },
+        { to: '/institution', icon: Buildings, label: t('layout:nav.institutionShort') },
+        { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteShort') },
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptShort') },
       ]
     : [
-        { to: '/xiaoyu', icon: Bot, label: t('layout:nav.xiaoyuShort', '小宇') },
+        { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort', '小宇') },
         { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.testsShort') },
-        { to: '/knowledge-map', icon: BrainCircuit, label: t('layout:nav.knowledgeShort') },
+        { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeShort') },
         { to: '/articles', icon: FileText, label: t('layout:nav.articlesShort') },
-        { to: '/qa', icon: MessageCircleQuestion, label: t('layout:nav.qaShort') },
+        { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
       ];
 
   const visibleMobileNavItems = mobileNavItems.filter(itemVisible);
@@ -257,7 +236,7 @@ export const MainLayout: React.FC = () => {
     <TooltipProvider delayDuration={0}>
       <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
         <aside className={cn(
-          "relative border-r border-border flex-col p-2 bg-card/70 backdrop-blur-2xl transition-[width] duration-300 ease-in-out z-30 shrink-0 hidden md:flex",
+          "relative border-r border-border flex-col p-2 bg-card/70 backdrop-blur-2xl transition-[width] duration-300 ease-in-out z-[var(--z-sticky)] shrink-0 hidden md:flex",
           collapsed ? "w-16" : "w-48"
         )}>
           {/* Header: logo icon fixed at left, expanded logo slides out from behind */}
@@ -278,7 +257,7 @@ export const MainLayout: React.FC = () => {
                 )}
                 onClick={() => setCollapsed(false)}
               >
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <CaretRight className="h-4 w-4 text-muted-foreground" />
               </div>
               {/* Expanded logo — slides out from behind the icon, clickable to XiaoYu */}
               <Link to={homePath} className={cn(
@@ -297,7 +276,7 @@ export const MainLayout: React.FC = () => {
                   collapsed ? "opacity-0 pointer-events-none" : "opacity-100"
                 )}
               >
-                <ChevronLeft className="h-4 w-4" />
+                <CaretLeft className="h-4 w-4" />
               </Button>
             </div>
           </div>
@@ -348,14 +327,14 @@ export const MainLayout: React.FC = () => {
                   {/* 机构设置：仅机构所有者可见 */}
                   {!isSuperAdmin && instInfo && user?.is_institution_owner && (
                     <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <Settings2 className="h-3.5 w-3.5" />
+                      <Gear className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:userMenu.institutionSettings')}</span>
                     </DropdownMenuItem>
                   )}
                   {/* 机构看板：管理员可见 */}
                   {!isSuperAdmin && instInfo && !isInstStudent && (
                     <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <BarChart3 className="h-3.5 w-3.5" />
+                      <ChartBar className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:userMenu.institutionDashboard')}</span>
                     </DropdownMenuItem>
                   )}
@@ -374,7 +353,7 @@ export const MainLayout: React.FC = () => {
                   )}
                   {user?.role === 'admin' && (
                     <DropdownMenuItem onClick={() => navigate('/system-settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <Settings2 className="h-3.5 w-3.5" />
+                      <Gear className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:userMenu.appearanceSettings')}</span>
                     </DropdownMenuItem>
                   )}
@@ -383,14 +362,14 @@ export const MainLayout: React.FC = () => {
                       onClick={() => window.dispatchEvent(new Event('open-weekly-report'))}
                       className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
                     >
-                      <BarChart3 className="h-3.5 w-3.5" />
+                      <ChartBar className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:nav.weeklyReport')}</span>
                     </DropdownMenuItem>
                   )}
                   {/* 升级方案：非机构学生且未达最高方案 */}
                   {!isInstStudent && myPlanLevel < 3 && (
                     <DropdownMenuItem onClick={() => setShowUpgradeModal(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                      <Sparkle className="h-3.5 w-3.5 text-amber-500" />
                       <span className="font-bold text-xs">{t('layout:upgradePlan')}</span>
                     </DropdownMenuItem>
                   )}
@@ -401,7 +380,7 @@ export const MainLayout: React.FC = () => {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="my-2 bg-border" />
                   <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
-                    <LogOut className="h-3.5 w-3.5" />
+                    <SignOut className="h-3.5 w-3.5" />
                     <span className="font-bold text-xs">{t('layout:userMenu.logout')}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -409,7 +388,7 @@ export const MainLayout: React.FC = () => {
             ) : (
               <Link to="/login">
                 <Button variant="outline" className="w-full gap-2 justify-start overflow-hidden">
-                  <LogOut className="h-4 w-4 shrink-0" />
+                  <SignOut className="h-4 w-4 shrink-0" />
                   <span className={cn("transition-all duration-200 whitespace-nowrap overflow-hidden", collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-[100px]")}>{t('common:login')}</span>
                 </Button>
               </Link>
@@ -418,13 +397,13 @@ export const MainLayout: React.FC = () => {
         </aside>
 
         <main className={cn(
-          "flex-1 h-screen relative z-10 flex flex-col bg-background",
+          "flex-1 h-screen relative z-[var(--z-base)] flex flex-col bg-background",
           (isMobileImmersivePage || isMobileStudyPage)
             ? "overflow-hidden pb-0"
             : "overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"
         )}>
           {!isFullPage && !isMobileImmersivePage && (
-            <header className="sticky top-0 shrink-0 z-20 hidden md:flex pointer-events-none">
+            <header className="sticky top-0 shrink-0 z-[var(--z-sticky)] hidden md:flex pointer-events-none">
                <div className="flex items-center gap-2 ml-auto pr-6 py-3 pointer-events-auto">
                   {user && <EloPopover />}
                   {user && <NotificationBell />}
@@ -432,7 +411,7 @@ export const MainLayout: React.FC = () => {
             </header>
           )}
           {!isFullPage && !isMobileImmersivePage && (
-            <header className="sticky top-0 h-14 shrink-0 border-b border-border bg-background/90 backdrop-blur-xl z-20 px-4 flex items-center justify-between md:hidden">
+            <header className="sticky top-0 h-14 shrink-0 border-b border-border bg-background/90 backdrop-blur-xl z-[var(--z-sticky)] px-4 flex items-center justify-between md:hidden">
               <div className="flex items-center gap-2 min-w-0">
                 <img src={UnimindLogo} alt="Unimind.ai" className="w-20 h-5 object-contain shrink-0 brand-logo-invert" />
                 {pageTitle && <span className="text-xs font-black tracking-tight truncate">{pageTitle}</span>}
@@ -458,14 +437,14 @@ export const MainLayout: React.FC = () => {
                     </DropdownMenuItem>
                     {!isSuperAdmin && instInfo && user?.is_institution_owner && (
                       <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                        <Settings2 className="h-3.5 w-3.5" />
+                        <Gear className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">{t('layout:userMenu.institutionSettings')}</span>
                       </DropdownMenuItem>
                     )}
                     {/* 机构看板：管理员可见 */}
                     {!isSuperAdmin && instInfo && !isInstStudent && (
                       <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                        <BarChart3 className="h-3.5 w-3.5" />
+                        <ChartBar className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">{t('layout:userMenu.institutionDashboard')}</span>
                       </DropdownMenuItem>
                     )}
@@ -486,13 +465,13 @@ export const MainLayout: React.FC = () => {
                         onClick={() => window.dispatchEvent(new Event('open-weekly-report'))}
                         className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
                       >
-                        <BarChart3 className="h-3.5 w-3.5" />
+                        <ChartBar className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">{t('layout:nav.weeklyReport')}</span>
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator className="my-2 bg-border" />
                     <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-2 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
-                      <LogOut className="h-3.5 w-3.5" />
+                      <SignOut className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:userMenu.logout')}</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -519,7 +498,7 @@ export const MainLayout: React.FC = () => {
                 </div>
                 <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 text-xs"
                   onClick={exitPreview}>
-                  <EyeOff className="h-3.5 w-3.5 mr-1" /> {t('layout:exitPreview')}
+                  <EyeSlash className="h-3.5 w-3.5 mr-1" /> {t('layout:exitPreview')}
                 </Button>
               </div>
             )}
@@ -528,7 +507,7 @@ export const MainLayout: React.FC = () => {
         </main>
 
         <nav className={cn(
-          "md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]",
+          "md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]",
           hideMobileBottomNav && "hidden"
         )}>
           <div className="flex items-center justify-around px-1 py-2">

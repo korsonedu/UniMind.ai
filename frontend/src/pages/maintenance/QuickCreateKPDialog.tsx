@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { BrainCircuit } from 'lucide-react';
+import { Brain } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -43,7 +43,7 @@ export const QuickCreateKPDialog: React.FC<Props> = ({ open, onOpenChange, kpLis
       <DialogContent className="sm:max-w-[500px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-            <BrainCircuit className="text-indigo-500 w-5 h-5" /> {t('quickCreate.newKnowledgePoint')}
+            <Brain className="text-indigo-500 w-5 h-5" /> {t('quickCreate.newKnowledgePoint')}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-5 pt-4">

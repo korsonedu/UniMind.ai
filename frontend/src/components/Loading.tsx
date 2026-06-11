@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { Spinner } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 type LoadingProps = {
@@ -24,7 +24,7 @@ export const Loading: React.FC<LoadingProps> = ({
         className
       )}
     >
-      <Loader2 className={cn('animate-spin text-muted-foreground/30', sizeMap[size])} />
+      <Spinner className={cn('animate-spin text-muted-foreground/30', sizeMap[size])} />
       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">{message}</p>
     </div>
   );

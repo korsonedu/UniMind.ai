@@ -6,7 +6,7 @@ import { PageWrapper } from '@/components/PageWrapper';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import { Check, Crown, CreditCard, Loader2, ArrowRight, Sparkles } from 'lucide-react';
+import { Check, Crown, CreditCard, Spinner, ArrowRight, Sparkle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { ContactAdminModal } from '@/components/ContactAdminModal';
 
@@ -99,7 +99,7 @@ export function BillingPage() {
               {currentTier !== 'enterprise' && (
                 <Button variant="apple" className="h-9 px-4 rounded-xl text-[12px] font-extrabold gap-1.5"
                   onClick={() => { setContactPlan('Starter'); setContactOpen(true); }}>
-                  <Sparkles className="h-3.5 w-3.5" /> 升级方案
+                  <Sparkle className="h-3.5 w-3.5" /> 升级方案
                 </Button>
               )}
             </div>
@@ -165,7 +165,7 @@ export function BillingPage() {
 
             {loadingOrders ? (
               <div className="flex items-center justify-center py-14">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/25" />
+                <Spinner className="h-5 w-5 animate-spin text-muted-foreground/25" />
               </div>
             ) : orders.length === 0 ? (
               <div className="py-14 text-center space-y-1">

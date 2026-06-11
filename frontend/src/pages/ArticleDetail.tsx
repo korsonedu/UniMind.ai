@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, Calendar, Loader2 } from 'lucide-react';
+import { CaretLeft, Calendar, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent } from '@/lib/utils';
 import ReactMarkdown from 'react-markdown';
@@ -45,7 +45,7 @@ export const ArticleDetail: React.FC = () => {
 
   if (loading) return (
     <div className="h-screen flex flex-col items-center justify-center gap-4 text-center">
-      <Loader2 className="h-10 w-10 animate-spin text-muted-foreground/40" />
+      <Spinner className="h-10 w-10 animate-spin text-muted-foreground/40" />
       <p className="text-[11px] font-medium text-muted-foreground">Loading...</p>
     </div>
   );
@@ -76,7 +76,7 @@ export const ArticleDetail: React.FC = () => {
         .dark .article-content blockquote { background: rgba(255,255,255,0.05); color: hsl(var(--muted-foreground)); }
       `}</style>
 
-      <div className="fixed top-0 left-0 w-full h-1 z-[110] bg-muted/20">
+      <div className="fixed top-0 left-0 w-full h-1 z-[var(--z-overlay)] bg-muted/20">
         <div 
           className="h-full bg-indigo-500 transition-all duration-150 ease-out"
           style={{ width: `${scrollProgress}%` }}
@@ -85,7 +85,7 @@ export const ArticleDetail: React.FC = () => {
 
       <header className="space-y-5 md:space-y-8 border-b border-border/50 pb-7 md:pb-10 mb-8 md:mb-12">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl hover:bg-muted shadow-sm border border-border h-10 w-10 transition-all">
-          <ChevronLeft className="h-5 w-5"/>
+          <CaretLeft className="h-5 w-5"/>
         </Button>
         <div className="space-y-4">
            <div className="flex items-center gap-3">

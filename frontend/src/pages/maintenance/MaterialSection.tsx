@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Rocket, Upload, Edit3, Trash2, Plus, FileText } from 'lucide-react';
+import { Rocket, Upload, PencilSimple, Trash, Plus, FileText } from '@phosphor-icons/react';
 import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
 import { useUploadStore } from '@/store/useUploadStore';
@@ -163,10 +163,10 @@ export const MaterialSection: React.FC = () => {
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <PencilSimple className="w-3.5 h-3.5" />
                         </Button>
                         <Button onClick={() => handleDelete(item.id)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>

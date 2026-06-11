@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
-import { Check, Loader2, GraduationCap, School } from 'lucide-react';
+import { Check, Spinner, GraduationCap, ChalkboardTeacher } from '@phosphor-icons/react';
 import { DirectionSelector } from '@/components/DirectionSelector';
 
 // Teacher flow: steps 2-6 (role selected at step 1)
@@ -187,7 +187,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
                       onClick={() => handleRoleSelect('teacher')}
                       className="group p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-all text-center space-y-2"
                     >
-                      <School className="h-8 w-8 mx-auto text-muted-foreground group-hover:text-primary transition-colors" />
+                      <ChalkboardTeacher className="h-8 w-8 mx-auto text-muted-foreground group-hover:text-primary transition-colors" />
                       <div className="font-bold text-sm">我是教师 / 机构主</div>
                       <div className="text-xs text-muted-foreground">创建或管理教学机构</div>
                     </button>
@@ -353,7 +353,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
                       跳过
                     </Button>
                     <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleActivateCode} disabled={loading || !activationCode.trim()}>
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : '激活'}
+                      {loading ? <Spinner className="h-4 w-4 animate-spin" /> : '激活'}
                     </Button>
                   </>
                 )}
@@ -373,7 +373,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
                       {t('wizard.skip')}
                     </Button>
                     <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleCreate} disabled={loading}>
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('wizard.finish')}
+                      {loading ? <Spinner className="h-4 w-4 animate-spin" /> : t('wizard.finish')}
                     </Button>
                   </>
                 )}

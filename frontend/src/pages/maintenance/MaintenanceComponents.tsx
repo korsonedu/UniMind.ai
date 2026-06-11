@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { X, ChevronRight, ChevronDown, Edit3, Trash2 } from 'lucide-react';
+import { X, CaretRight, CaretDown, PencilSimple, Trash } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
@@ -48,13 +48,13 @@ export const KPTreeNode = ({ node, allNodes, onDelete, onEdit }: { node: any, al
       <div className="group flex items-center justify-between p-1.5 rounded-lg hover:bg-black/[0.02] transition-all">
         <div className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
           {hasChildren ? (
-            isOpen ? <ChevronDown className="w-3 h-3 opacity-30" /> : <ChevronRight className="w-3 h-3 opacity-30" />
+            isOpen ? <CaretDown className="w-3 h-3 opacity-30" /> : <CaretRight className="w-3 h-3 opacity-30" />
           ) : <div className="w-3" />}
           <p className="text-[11px] font-bold text-foreground truncate text-left">{node.name}</p>
         </div>
         <div className="flex gap-1 opacity-100 transition-opacity shrink-0">
-          <Button onClick={() => onEdit(node)} variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-white shadow-sm text-blue-600"><Edit3 className="w-3 h-3" /></Button>
-          <Button onClick={() => onDelete(node.id)} variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-white shadow-sm text-red-500"><Trash2 className="w-3 h-3" /></Button>
+          <Button onClick={() => onEdit(node)} variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-white shadow-sm text-blue-600"><PencilSimple className="w-3 h-3" /></Button>
+          <Button onClick={() => onDelete(node.id)} variant="ghost" size="icon" className="h-6 w-6 rounded-md hover:bg-white shadow-sm text-red-500"><Trash className="w-3 h-3" /></Button>
         </div>
       </div>
       {isOpen && hasChildren && (

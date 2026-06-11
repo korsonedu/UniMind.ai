@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, MessageCircle, Info, Brain, Send } from 'lucide-react';
+import { Bell, ChatCircle, Info, Brain, PaperPlaneTilt } from '@phosphor-icons/react';
 import { EmptyState } from '@/components/EmptyState';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -76,7 +76,7 @@ export const NotificationBell = () => {
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'qa_reply': return <MessageCircle className="h-3 w-3 text-indigo-500" />;
+      case 'qa_reply': return <ChatCircle className="h-3 w-3 text-indigo-500" />;
       case 'memorix_reminder': return <Brain className="h-3 w-3 text-emerald-500" />;
       default: return <Info className="h-3 w-3 text-blue-500" />;
     }
@@ -94,7 +94,7 @@ export const NotificationBell = () => {
           </Button>
         </div>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg z-[100]">
+      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg z-[var(--z-dropdown)]">
         <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
           <span className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{t('notifications:titleWithCount', { count: unreadCount })}</span>
           <div className="flex gap-1">
@@ -127,7 +127,7 @@ export const NotificationBell = () => {
                 onClick={(e) => { e.stopPropagation(); setIsOpen(false); setShowBroadcast(true); }}
                 className="w-full h-8 rounded-lg text-[11px] font-bold gap-1.5 border-dashed border-muted-foreground/20 text-muted-foreground hover:text-foreground hover:border-foreground/30"
               >
-                <Send className="h-3 w-3" />
+                <PaperPlaneTilt className="h-3 w-3" />
                 {t('notifications:broadcast', { defaultValue: '发布广播' })}
               </Button>
             </div>
@@ -192,7 +192,7 @@ export const NotificationBell = () => {
         <DialogContent className="sm:max-w-[480px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <Send className="h-5 w-5 text-[#6E6E73]" /> {t('notifications:broadcast', { defaultValue: '发布广播' })}
+              <PaperPlaneTilt className="h-5 w-5 text-[#6E6E73]" /> {t('notifications:broadcast', { defaultValue: '发布广播' })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">

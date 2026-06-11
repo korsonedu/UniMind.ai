@@ -4,9 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
-import {
-  RefreshCcw, Save, Camera, CreditCard, ArrowRight
-} from 'lucide-react';
+import { ArrowCounterClockwise, FloppyDisk, Camera, CreditCard, ArrowRight } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { Link } from 'react-router-dom';
 import {
@@ -113,7 +111,7 @@ export const Settings: React.FC = () => {
                           </SelectContent>
                         </Select></div>
                       <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('avatar.seedLabel')}</Label>
-                        <div className="flex gap-3"><Input value={avatar.seed} onChange={e => setAvatar({ ...avatar, seed: e.target.value })} className="bg-slate-50 border-none h-12 rounded-2xl font-bold" /><Button variant="outline" onClick={() => setAvatar({...avatar, seed: Math.random().toString(36).substring(7)})} className="rounded-2xl h-12 w-12 border-black/5"><RefreshCcw className="h-4 w-4" /></Button></div></div>
+                        <div className="flex gap-3"><Input value={avatar.seed} onChange={e => setAvatar({ ...avatar, seed: e.target.value })} className="bg-slate-50 border-none h-12 rounded-2xl font-bold" /><Button variant="outline" onClick={() => setAvatar({...avatar, seed: Math.random().toString(36).substring(7)})} className="rounded-2xl h-12 w-12 border-black/5"><ArrowCounterClockwise className="h-4 w-4" /></Button></div></div>
                     </div>
                   </div>
                 </SheetContent>
@@ -166,7 +164,7 @@ export const Settings: React.FC = () => {
                  <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.bioLabel')}</Label>
                  <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-unimind-bg-secondary border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder={t('profile.bioPlaceholder')} />
                </div>
-               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><Save className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
+               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><FloppyDisk className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
              </div>
           </Card>
 

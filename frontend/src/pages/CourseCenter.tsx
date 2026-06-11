@@ -2,11 +2,11 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, PlayCircle, BookOpen } from 'lucide-react';
+import { PlusCircle, PlayCircle, BookOpen } from '@phosphor-icons/react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useNavigate, Link } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
-import { Loading } from '@/components/Loading';
+import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { InlineError } from '@/components/InlineError';
 import { useFetch } from '@/lib/useFetch';
@@ -43,7 +43,22 @@ export const CourseCenter: React.FC = () => {
     </Button>
   ) : null;
 
-  if (loading) return <Loading message="Synchronizing Catalog..." />;
+  if (loading) return (
+    <PageWrapper title={t('pages:courseCenter.title')} subtitle={t('pages:courseCenter.subtitle')}>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} className="rounded-2xl overflow-hidden bg-card border border-border/50">
+            <Skeleton className="aspect-video w-full rounded-none" />
+            <div className="p-4 space-y-2">
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </PageWrapper>
+  );
   if (error) return <InlineError message={error} onRetry={refetch} />;
   if (!courses?.length) return <EmptyState icon={BookOpen} title={t('noCourses')} description={t('noCoursesHint')} className="h-[60vh]" />;
 

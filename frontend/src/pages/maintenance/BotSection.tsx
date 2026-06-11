@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Bot, Upload, Edit3, Trash2, Plus } from 'lucide-react';
+import { Robot, Upload, PencilSimple, Trash, Plus } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -92,7 +92,7 @@ export const BotSection: React.FC = () => {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Bot className="h-5 w-5 text-[#6E6E73]" />
+          <Robot className="h-5 w-5 text-[#6E6E73]" />
           <h3 className="text-lg font-semibold tracking-tight">{t('tabs.aiBot')}</h3>
           <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{items.length}</Badge>
         </div>
@@ -104,7 +104,7 @@ export const BotSection: React.FC = () => {
 
       {items.length === 0 ? (
         <Card className="p-16 bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] text-center">
-          <Bot className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
+          <Robot className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
           <p className="text-sm text-[#8E8E93] font-medium">{t('sectionList.noBots')}</p>
           <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noBotsHint')}</p>
         </Card>
@@ -136,10 +136,10 @@ export const BotSection: React.FC = () => {
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                       <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                        <Edit3 className="w-3.5 h-3.5" />
+                        <PencilSimple className="w-3.5 h-3.5" />
                       </Button>
                       <Button onClick={() => handleDelete(item.id, item.name)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -155,7 +155,7 @@ export const BotSection: React.FC = () => {
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <Bot className="h-5 w-5 text-[#6E6E73]" /> {t('bot.deployAssistant')}
+              <Robot className="h-5 w-5 text-[#6E6E73]" /> {t('bot.deployAssistant')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">

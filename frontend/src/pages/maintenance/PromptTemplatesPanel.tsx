@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, RefreshCw, RotateCcw, Save } from 'lucide-react';
+import { Spinner, ArrowsClockwise, ArrowCounterClockwise, FloppyDisk } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { toast } from 'sonner';
@@ -184,7 +184,7 @@ export const PromptTemplatesPanel: React.FC = () => {
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">{t('promptTemplates.templateList')}</p>
           <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={fetchTemplates}>
-            {loadingList ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 opacity-50" />}
+            {loadingList ? <Spinner className="w-3.5 h-3.5 animate-spin" /> : <ArrowsClockwise className="w-3.5 h-3.5 opacity-50" />}
           </Button>
         </div>
         <ScrollArea className="h-[520px] pr-2">
@@ -242,7 +242,7 @@ export const PromptTemplatesPanel: React.FC = () => {
             {t('promptTemplates.revertChanges')}
           </Button>
           <Button className="rounded-xl text-xs font-bold bg-black text-white" onClick={handleSave} disabled={!selectedTemplateName || saving || loadingDetail}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+            {saving ? <Spinner className="w-4 h-4 animate-spin mr-2" /> : <FloppyDisk className="w-4 h-4 mr-2" />}
             {t('promptTemplates.saveNewVersion')}
           </Button>
         </div>
@@ -252,7 +252,7 @@ export const PromptTemplatesPanel: React.FC = () => {
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">{t('promptTemplates.versionHistory')}</p>
           <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => selectedTemplateName && fetchTemplateDetail(selectedTemplateName)}>
-            {loadingDetail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 opacity-50" />}
+            {loadingDetail ? <Spinner className="w-3.5 h-3.5 animate-spin" /> : <ArrowsClockwise className="w-3.5 h-3.5 opacity-50" />}
           </Button>
         </div>
         <ScrollArea className="h-[500px] pr-2">
@@ -278,7 +278,7 @@ export const PromptTemplatesPanel: React.FC = () => {
           disabled={!selectedTemplateName || !selectedHistoryId || rolling}
           className="w-full rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white"
         >
-          {rolling ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RotateCcw className="w-4 h-4 mr-2" />}
+          {rolling ? <Spinner className="w-4 h-4 animate-spin mr-2" /> : <ArrowCounterClockwise className="w-4 h-4 mr-2" />}
           {t('promptTemplates.rollbackToSelected')}
         </Button>
       </Card>

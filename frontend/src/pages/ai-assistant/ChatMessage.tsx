@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Bot as BotIcon, Loader2 } from 'lucide-react';
+import { User, Robot as BotIcon, Spinner } from '@phosphor-icons/react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -39,7 +39,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         {isUser ? (
           <User className="w-5 h-5 text-foreground" />
         ) : (
-          avatar ? <img src={avatar} className="w-full h-full rounded-full object-cover" /> : <BotIcon className="w-5 h-5 text-primary-foreground" />
+          avatar ? <img src={avatar} alt="" className="w-full h-full rounded-full object-cover" /> : <BotIcon className="w-5 h-5 text-primary-foreground" />
         )}
       </div>
       <div className={cn("flex flex-col gap-1.5 max-w-[75%]", isUser ? "items-end" : "items-start")}>
@@ -54,7 +54,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         )}>
           {isThinking ? (
             <div className="flex items-center justify-center py-1">
-              <Loader2 className="h-4 w-4 animate-spin opacity-40" />
+              <Spinner className="h-4 w-4 animate-spin opacity-40" />
             </div>
           ) : (
             <div className={cn("prose prose-sm max-w-none text-left prose-headings:font-black prose-headings:tracking-tight prose-p:leading-relaxed", isUser ? "prose-p:text-primary-foreground prose-strong:text-primary-foreground prose-li:text-primary-foreground" : "prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground")}>

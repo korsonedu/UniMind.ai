@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Mail, MessageCircle, Copy } from 'lucide-react';
+import { Envelope, ChatCircle, Copy } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 interface ContactAdminModalProps {
@@ -34,7 +34,7 @@ export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdmi
           {/* Email */}
           <div className="flex items-center gap-4 p-4 rounded-2xl bg-unimind-bg-secondary">
             <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <Mail className="h-5 w-5 text-primary" />
+              <Envelope className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">邮箱</p>
@@ -53,7 +53,7 @@ export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdmi
           {/* WeChat */}
           <div className="flex items-center gap-4 p-4 rounded-2xl bg-unimind-bg-secondary">
             <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-              <MessageCircle className="h-5 w-5 text-emerald-500" />
+              <ChatCircle className="h-5 w-5 text-emerald-500" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">微信</p>

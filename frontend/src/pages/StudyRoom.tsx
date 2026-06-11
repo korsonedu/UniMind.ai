@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { Button } from '@/components/ui/button';
-import {
-  Play, Pause, MessageSquare, MoreHorizontal,
-  XCircle,
-} from 'lucide-react';
+import { Play, Pause, Chat, DotsThree, XCircle } from '@phosphor-icons/react';
 import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuTrigger,
@@ -373,7 +370,7 @@ export const StudyRoom: React.FC = () => {
         )}>
           <div className="flex items-center gap-4">
             <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shadow-lg text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
+              <Chat className="h-4 w-4" />
             </div>
             <h2 className="text-sm font-bold tracking-tight">{t('chatRoomTitle')}</h2>
           </div>
@@ -395,7 +392,7 @@ export const StudyRoom: React.FC = () => {
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-xl h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                  <MoreHorizontal className="h-4 w-4"/>
+                  <DotsThree className="h-4 w-4"/>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64 rounded-2xl p-4 space-y-4 bg-card border-border shadow-lg">
@@ -475,7 +472,7 @@ export const StudyRoom: React.FC = () => {
 
       {/* ── Mobile fullscreen timer ── */}
       <div className={cn(
-        "fixed inset-0 z-[120] md:hidden bg-black/95 text-white flex flex-col items-center justify-center gap-6 transition-all duration-300",
+        "fixed inset-0 z-[var(--z-overlay)] md:hidden bg-black/95 text-white flex flex-col items-center justify-center gap-6 transition-all duration-300",
         showMobileTimerFullscreen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
       )}>
         <button onClick={() => setShowMobileTimerFullscreen(false)} className="absolute top-6 right-6 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">

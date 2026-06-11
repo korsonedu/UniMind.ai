@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Edit3, Trash2, Plus, Eye } from 'lucide-react';
+import { FileText, PencilSimple, Trash, Plus, Eye } from '@phosphor-icons/react';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { TagInput } from './MaintenanceComponents';
 import { QuickCreateKPDialog } from './QuickCreateKPDialog';
@@ -141,10 +141,10 @@ export const ArticleSection: React.FC = () => {
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <Button onClick={() => setEditingItem({ ...item, knowledge_point: item.knowledge_point?.toString() || '0' })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <PencilSimple className="w-3.5 h-3.5" />
                         </Button>
                         <Button onClick={() => handleDelete(item.id, item.title)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>

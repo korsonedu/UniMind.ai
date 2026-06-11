@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Layers, Upload, Edit3, Trash2, Plus, Image as ImageIcon, ChevronDown, ChevronRight } from 'lucide-react';
+import { Stack, Upload, PencilSimple, Trash, Plus, Image as ImageIcon, CaretDown, CaretRight } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
@@ -83,7 +83,7 @@ export const AlbumSection: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Layers className="h-5 w-5 text-[#6E6E73]" />
+          <Stack className="h-5 w-5 text-[#6E6E73]" />
           <h3 className="text-lg font-semibold tracking-tight">{t('tabs.albumManager')}</h3>
           <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{items.length}</Badge>
         </div>
@@ -96,7 +96,7 @@ export const AlbumSection: React.FC = () => {
       {/* List */}
       {items.length === 0 ? (
         <Card className="p-16 bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] text-center">
-          <Layers className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
+          <Stack className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
           <p className="text-sm text-[#8E8E93] font-medium">{t('sectionList.noAlbums')}</p>
           <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noAlbumsHint')}</p>
         </Card>
@@ -114,9 +114,9 @@ export const AlbumSection: React.FC = () => {
                     >
                       <div className="flex items-center gap-4">
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-[#AEAEB2] shrink-0" />
+                          <CaretDown className="h-4 w-4 text-[#AEAEB2] shrink-0" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-[#AEAEB2] shrink-0" />
+                          <CaretRight className="h-4 w-4 text-[#AEAEB2] shrink-0" />
                         )}
                         <div className="h-12 w-12 rounded-xl bg-[#F5F5F7] flex items-center justify-center overflow-hidden shrink-0">
                           {item.cover_image ? (
@@ -139,10 +139,10 @@ export const AlbumSection: React.FC = () => {
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                           <Button onClick={(e) => { e.stopPropagation(); setEditingItem({ ...item }); }} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <PencilSimple className="w-3.5 h-3.5" />
                           </Button>
                           <Button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name); }} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </div>
@@ -183,7 +183,7 @@ export const AlbumSection: React.FC = () => {
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <Layers className="h-5 w-5 text-[#6E6E73]" /> {t('album.newAlbum')}
+              <Stack className="h-5 w-5 text-[#6E6E73]" /> {t('album.newAlbum')}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">

@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 

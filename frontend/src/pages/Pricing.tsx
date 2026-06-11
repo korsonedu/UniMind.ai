@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, Check, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Sparkle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/version';
 import { useTranslation } from 'react-i18next';
@@ -133,7 +133,7 @@ const PricingPage: React.FC = () => {
                       }
                     }}
                   >
-                    {isPopular && <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+                    {isPopular && <Sparkle className="h-3.5 w-3.5 mr-1.5" />}
                     {plan.cta}
                   </Button>
 

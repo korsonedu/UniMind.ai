@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Globe } from 'lucide-react';
+import { Globe } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

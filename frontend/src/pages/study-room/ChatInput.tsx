@@ -6,7 +6,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
-import { Send, Smile, Image as ImageIcon, Camera, Timer } from 'lucide-react';
+import { PaperPlaneTilt, Smiley, Image as ImageIcon, Camera, Timer } from '@phosphor-icons/react';
 import { Slider } from '@/components/ui/slider';
 import { GiphyPicker } from './GiphyPicker';
 
@@ -70,7 +70,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   <Timer className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[100]">
+              <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[var(--z-dropdown)]">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold text-muted-foreground">{t('mobile.pomodoro')}</p>
@@ -96,7 +96,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Emoji">
-                <Smile className="h-4 w-4"/>
+                <Smiley className="h-4 w-4"/>
               </Button>
             </PopoverTrigger>
             <PopoverContent side="top" className="w-64 p-2 rounded-2xl border-border shadow-lg bg-card">
@@ -144,7 +144,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             rows={1}
           />
           <Button onClick={onSendMessage} size="icon" className="rounded-xl h-10 w-10 bg-primary text-primary-foreground shadow shrink-0 hover:opacity-90 active:scale-95 transition-transform">
-            <Send className="h-4 w-4" />
+            <PaperPlaneTilt className="h-4 w-4" />
           </Button>
         </div>
       </div>

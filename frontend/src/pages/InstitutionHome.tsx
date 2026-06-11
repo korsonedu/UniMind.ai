@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ArrowUpRight, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Spinner } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/version';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -545,7 +545,7 @@ const Footer: React.FC<{ institution: InstitutionData }> = ({ institution }) => 
 const LoadingState: React.FC = () => (
   <div className="min-h-screen bg-white flex items-center justify-center">
     <div className="text-center space-y-4">
-      <Loader2 className="h-8 w-8 animate-spin text-[#FF3333] mx-auto" />
+      <Spinner className="h-8 w-8 animate-spin text-[#FF3333] mx-auto" />
       <p className="font-mono text-[14px] font-black text-[#999] uppercase tracking-[0.2em]">Loading...</p>
     </div>
   </div>

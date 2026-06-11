@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { FileQuestion, GraduationCap, Wand2, BookCheck } from 'lucide-react';
+import { FileText, GraduationCap, MagicWand, CheckSquareOffset } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent } from '@/lib/utils';
 import QuestionPanel from './workbench/QuestionPanel';
@@ -22,10 +22,10 @@ interface QuestionData {
 }
 
 const SKILLS = [
-  { icon: FileQuestion, label: '针对薄弱点出题', prompt: '根据班级薄弱知识点出题' },
+  { icon: FileText, label: '针对薄弱点出题', prompt: '根据班级薄弱知识点出题' },
   { icon: GraduationCap, label: '出一套模拟卷', prompt: '出一套期末模拟卷，30题，难度适中' },
-  { icon: Wand2, label: '自定义出题', prompt: '帮我出10道微积分极限的客观题' },
-  { icon: BookCheck, label: '周测出题', prompt: '出一套周测，15题，覆盖最近学的知识点' },
+  { icon: MagicWand, label: '自定义出题', prompt: '帮我出10道微积分极限的客观题' },
+  { icon: CheckSquareOffset, label: '周测出题', prompt: '出一套周测，15题，覆盖最近学的知识点' },
 ];
 
 // ── Right Panel Component ──

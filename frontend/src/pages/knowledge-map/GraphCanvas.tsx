@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
+import { ArrowsOut, MagnifyingGlassPlus, MagnifyingGlassMinus } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import type { KPNode } from './types';
@@ -220,13 +220,13 @@ export const KnowledgeGraph = ({
       />
       <div className="absolute bottom-4 left-4 flex flex-col gap-1.5">
         <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 1.2 }))}>
-          <ZoomIn className="h-3.5 w-3.5" />
+          <MagnifyingGlassPlus className="h-3.5 w-3.5" />
         </Button>
         <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl shadow-lg" onClick={() => setTransform(p => ({ ...p, k: p.k * 0.8 }))}>
-          <ZoomOut className="h-3.5 w-3.5" />
+          <MagnifyingGlassMinus className="h-3.5 w-3.5" />
         </Button>
         <Button variant="secondary" size="icon" className="h-8 w-8 rounded-xl shadow-lg" onClick={() => setTransform({ x: 0, y: 0, k: 1 })}>
-          <Maximize2 className="h-3.5 w-3.5" />
+          <ArrowsOut className="h-3.5 w-3.5" />
         </Button>
       </div>
 

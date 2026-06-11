@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Loader2, Circle } from 'lucide-react';
+import { Check, Spinner, Circle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import type { AgentStep } from '@/hooks/useAgentChat';
 
@@ -26,7 +26,7 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
   const icon = step.status === 'done' ? (
     <Check className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-emerald-500 animate-in zoom-in duration-300")} />
   ) : step.status === 'calling' ? (
-    <Loader2 className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "animate-spin text-primary")} />
+    <Spinner className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "animate-spin text-primary")} />
   ) : (
     <Circle className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-muted-foreground/40")} />
   );

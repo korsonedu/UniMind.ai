@@ -61,7 +61,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         onInteractOutside={(e) => e.preventDefault()}
-        className="w-[96vw] max-w-5xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] max-h-[860px] z-[100]"
+        className="w-[96vw] max-w-5xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] max-h-[860px] z-[var(--z-dropdown)]"
       >
         <DialogTitle className="sr-only">{t('result.title')}</DialogTitle>
 

@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { Loader2, CheckCircle2 } from 'lucide-react';
+import { Spinner, CheckCircle } from '@phosphor-icons/react';
 
 interface StageInfo {
   stage: string;
@@ -63,7 +63,7 @@ export default function PipelineProgress({ progress, currentStage, statusText, s
         </div>
         {statusText && (
           <p className="text-xs text-unimind-text-tertiary mt-1.5">
-            {isRunning && <Loader2 className="h-3 w-3 inline animate-spin mr-1" />}
+            {isRunning && <Spinner className="h-3 w-3 inline animate-spin mr-1" />}
             {statusText}
           </p>
         )}
@@ -82,8 +82,8 @@ export default function PipelineProgress({ progress, currentStage, statusText, s
                 active ? 'bg-primary/10 text-primary' :
                 'bg-muted text-unimind-text-quaternary',
               )}>
-                {done ? <CheckCircle2 className="h-3.5 w-3.5" /> :
-                 active ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> :
+                {done ? <CheckCircle className="h-3.5 w-3.5" /> :
+                 active ? <Spinner className="h-3.5 w-3.5 animate-spin" /> :
                  <span className="h-3.5 w-3.5 rounded-full border-2 border-current" />}
                 {stage.label}
               </div>

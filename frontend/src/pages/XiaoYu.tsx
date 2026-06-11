@@ -1,17 +1,17 @@
 import React from 'react';
-import { Target, CalendarCheck, CheckCircle2, BarChart3, BookOpen, Lightbulb, MessageCircleQuestion, BrainCircuit } from 'lucide-react';
+import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain } from '@phosphor-icons/react';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import type { Bot, ConversationSession } from '@/hooks/useAgentConversation';
 
 const SKILLS = [
   { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
   { icon: CalendarCheck, label: '制定学习计划', prompt: '根据我的现状制定一份学习计划' },
-  { icon: CheckCircle2, label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容' },
-  { icon: BarChart3, label: '学习数据总览', prompt: '帮我分析学习数据，看看整体情况' },
+  { icon: CheckCircle, label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容' },
+  { icon: ChartBar, label: '学习数据总览', prompt: '帮我分析学习数据，看看整体情况' },
   { icon: BookOpen, label: '推荐课程', prompt: '根据我的薄弱点推荐适合的课程' },
   { icon: Lightbulb, label: '解释一个概念', prompt: '请帮我讲解一个知识点' },
-  { icon: MessageCircleQuestion, label: '分析一道题', prompt: '帮我分析这道题的解题思路' },
-  { icon: BrainCircuit, label: '总结知识点', prompt: '帮我总结某个知识点的核心内容' },
+  { icon: ChatCircleText, label: '分析一道题', prompt: '帮我分析这道题的解题思路' },
+  { icon: Brain, label: '总结知识点', prompt: '帮我总结某个知识点的核心内容' },
 ];
 
 export const XiaoYu: React.FC = () => {

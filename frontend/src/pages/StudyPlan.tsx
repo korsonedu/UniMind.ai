@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
-import { CalendarCheck, MessageCircle, Trash2, Clock, ArrowLeft } from 'lucide-react';
+import { CalendarCheck, ChatCircle, Trash, Clock, ArrowLeft } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
@@ -142,11 +142,11 @@ export function StudyPlan() {
             </button>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/xiaoyu')}>
-                <MessageCircle className="w-4 h-4 mr-1" />
+                <ChatCircle className="w-4 h-4 mr-1" />
                 {t('viewInChat')}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => deletePlan(selectedPlan.id)}>
-                <Trash2 className="w-4 h-4" />
+                <Trash className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -253,7 +253,7 @@ export function StudyPlan() {
             <h3 className="text-lg font-medium mb-2">{t('emptyTitle')}</h3>
             <p className="text-muted-foreground text-sm mb-5">{t('emptyDesc')}</p>
             <Button onClick={() => navigate('/xiaoyu')} className="rounded-full px-6">
-              <MessageCircle className="w-4 h-4 mr-2" />
+              <ChatCircle className="w-4 h-4 mr-2" />
               {t('chatWithXiaoyu')}
             </Button>
           </div>

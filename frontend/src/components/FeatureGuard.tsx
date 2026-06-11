@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { Loader2, Lock, Sparkles } from 'lucide-react';
+import { Spinner, Lock, Sparkle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
@@ -31,7 +31,7 @@ export function FeatureGuard({
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function FeatureGuard({
             该功能需要升级方案后使用，请联系机构管理员开通。
           </p>
           <Button onClick={() => setShowUpgrade(true)} className="rounded-full px-6">
-            <Sparkles className="w-4 h-4 mr-2" />
+            <Sparkle className="w-4 h-4 mr-2" />
             升级方案
           </Button>
         </div>

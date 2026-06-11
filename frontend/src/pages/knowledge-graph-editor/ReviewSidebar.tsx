@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { X, Check, EyeOff, ChevronRight } from 'lucide-react';
+import { X, Check, EyeSlash, CaretRight } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import type { KEdge, EdgeType } from './types';
@@ -123,7 +123,7 @@ export const ReviewSidebar: React.FC<Props> = ({ subject, onApprove, onClose }) 
                       </div>
                       <div className="text-sm font-medium leading-snug">
                         <span className="text-indigo-600">{edge.source_name}</span>
-                        <ChevronRight className="inline w-3 h-3 mx-0.5 text-gray-300" />
+                        <CaretRight className="inline w-3 h-3 mx-0.5 text-gray-300" />
                         <span className="text-emerald-600">{edge.target_name}</span>
                       </div>
                     </div>
@@ -144,7 +144,7 @@ export const ReviewSidebar: React.FC<Props> = ({ subject, onApprove, onClose }) 
                       className="h-7 text-xs"
                       onClick={() => handleAction(edge.id, 'reject')}
                     >
-                      <EyeOff className="w-3 h-3 mr-1" />忽略
+                      <EyeSlash className="w-3 h-3 mr-1" />忽略
                     </Button>
                   </div>
                 </div>

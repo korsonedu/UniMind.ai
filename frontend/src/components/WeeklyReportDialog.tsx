@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Award, BrainCircuit, Calendar, Download, TrendingUp } from 'lucide-react';
+import { Medal, Brain, Calendar, Download, TrendUp } from '@phosphor-icons/react';
 import { toPng } from 'html-to-image';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -412,7 +412,7 @@ export const WeeklyReportDialog: React.FC = () => {
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                    <TrendingUp className="h-4 w-4" />
+                    <TrendUp className="h-4 w-4" />
                   </div>
                   <p className="mt-2 text-[10px] font-semibold text-slate-400">正确率</p>
                   <p className="mt-1 text-xl font-black tabular-nums text-slate-900">{report.weekly_accuracy.toFixed(1)}%</p>
@@ -420,7 +420,7 @@ export const WeeklyReportDialog: React.FC = () => {
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
-                    <BrainCircuit className="h-4 w-4" />
+                    <Brain className="h-4 w-4" />
                   </div>
                   <p className="mt-2 text-[10px] font-semibold text-slate-400">做题数</p>
                   <p className="mt-1 text-xl font-black tabular-nums text-slate-900">{report.weekly_question_count}</p>
@@ -438,7 +438,7 @@ export const WeeklyReportDialog: React.FC = () => {
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                    <Award className="h-4 w-4" />
+                    <Medal className="h-4 w-4" />
                   </div>
                   <p className="mt-2 text-[10px] font-semibold text-slate-400">听课时长</p>
                   <p className="mt-1 text-xl font-black tabular-nums text-slate-900">

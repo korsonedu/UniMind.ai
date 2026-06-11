@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
-import { Users, Clock, CheckCircle2 } from 'lucide-react';
+import { Users, Clock, CheckCircle } from '@phosphor-icons/react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import {
   HoverCard,
@@ -76,7 +76,7 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <CheckCircle className="h-3.5 w-3.5" />
                       <span className="label-apple">
                         {t('onlineUsers.todayCompleted', { count: u.today_completed_tasks?.length || 0 })}
                       </span>

@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
-import { Loader2, RefreshCw, RotateCcw, Sparkles, Swords, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
+import { Spinner, ArrowsClockwise, ArrowCounterClockwise, Sparkle, Crosshair, CheckCircle, XCircle, Trash } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
@@ -342,7 +342,7 @@ export const PipelinePanel: React.FC = () => {
   return (
     <div className="space-y-6 text-left">
       <div className="flex items-center gap-3 mb-2">
-        <Sparkles className="h-5 w-5 text-indigo-600" />
+        <Sparkle className="h-5 w-5 text-indigo-600" />
         <h2 className="text-xl font-black tracking-tight">{t('pipeline.title')}</h2>
       </div>
 
@@ -383,7 +383,7 @@ export const PipelinePanel: React.FC = () => {
             </p>
           </div>
           <Button onClick={handleOpenGenerateDialog} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 px-6 text-xs font-bold shrink-0">
-            <Sparkles className="h-4 w-4 mr-2" />{t('pipeline.aiGenerateBtn')}
+            <Sparkle className="h-4 w-4 mr-2" />{t('pipeline.aiGenerateBtn')}
           </Button>
         </div>
       </Card>
@@ -420,7 +420,7 @@ export const PipelinePanel: React.FC = () => {
                           disabled={reviewingMap[task.id]}
                           className="h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-3"
                         >
-                          {reviewingMap[task.id] ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
+                          {reviewingMap[task.id] ? <Spinner className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3 mr-1" />}
                           {t('pipeline.approveImport')}
                       </Button>
                       <Button
@@ -465,13 +465,13 @@ export const PipelinePanel: React.FC = () => {
           </div>
           <div className="lg:col-span-2">
             <Button onClick={() => fetchTasks(1)} variant="outline" className="h-10 rounded-xl text-xs font-bold w-full">
-              <RefreshCw className={loading ? 'h-3.5 w-3.5 animate-spin mr-1' : 'h-3.5 w-3.5 mr-1'} />{t('pipeline.refresh')}
+              <ArrowsClockwise className={loading ? 'h-3.5 w-3.5 animate-spin mr-1' : 'h-3.5 w-3.5 mr-1'} />{t('pipeline.refresh')}
             </Button>
           </div>
         </div>
 
         {loading ? (
-          <div className="py-14 flex justify-center"><Loader2 className="h-7 w-7 animate-spin text-muted-foreground/40" /></div>
+          <div className="py-14 flex justify-center"><Spinner className="h-7 w-7 animate-spin text-muted-foreground/40" /></div>
         ) : tasks.length === 0 ? (
           <EmptyState title={t('pipeline.noTasks')} className="py-6" />
         ) : (
@@ -501,12 +501,12 @@ export const PipelinePanel: React.FC = () => {
                     {(task.status === 'failed' || task.status === 'cancelled') && (
                       <Button onClick={() => handleRetryTask(task.id)} disabled={updatingMap[task.id]}
                         variant="outline" size="sm" className="h-7 rounded-lg text-[10px] font-bold">
-                        {updatingMap[task.id] ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RotateCcw className="h-3 w-3 mr-1" />}{t('pipeline.retry')}
+                        {updatingMap[task.id] ? <Spinner className="h-3 w-3 animate-spin mr-1" /> : <ArrowCounterClockwise className="h-3 w-3 mr-1" />}{t('pipeline.retry')}
                       </Button>
                     )}
                     <Button onClick={() => handleDeleteTask(task.id)} disabled={updatingMap[task.id]}
                       variant="outline" size="sm" className="h-7 rounded-lg text-[10px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200">
-                      {updatingMap[task.id] ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Trash2 className="h-3 w-3 mr-1" />}{t('pipeline.delete')}
+                      {updatingMap[task.id] ? <Spinner className="h-3 w-3 animate-spin mr-1" /> : <Trash className="h-3 w-3 mr-1" />}{t('pipeline.delete')}
                     </Button>
                   </div>
                 </div>
@@ -576,7 +576,7 @@ export const PipelinePanel: React.FC = () => {
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.selectKp')}</Label>
               {loadingKps ? (
-                <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground/40" /></div>
+                <div className="py-8 flex justify-center"><Spinner className="h-5 w-5 animate-spin text-muted-foreground/40" /></div>
               ) : (
                 <ScrollArea className="h-64 rounded-xl border bg-apple-gray-50 p-2">
                   {knowledgePoints.map((kp) => (
@@ -601,7 +601,7 @@ export const PipelinePanel: React.FC = () => {
                 disabled={smartKpIds.length === 0 || smartSubmitting}
                 className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white h-11 px-6 text-xs font-bold"
               >
-                {smartSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Swords className="h-4 w-4 mr-2" />}
+                {smartSubmitting ? <Spinner className="h-4 w-4 mr-2 animate-spin" /> : <Crosshair className="h-4 w-4 mr-2" />}
                 {smartSubmitting ? t('pipeline.submitting') : t('pipeline.submitToQueue')}
               </Button>
             </DialogFooter>
@@ -863,7 +863,7 @@ export const PipelinePanel: React.FC = () => {
               handleReviewAction(previewTask!.id, 'approve', indices.length > 0 ? indices : undefined, edits);
               setPreviewTask(null); setReviewSelectedIds(new Set()); setEditedQuestions({});
             }} disabled={!previewTask || reviewingMap[previewTask.id]} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />{reviewSelectedIds.size > 0 ? t('pipeline.importSelected', { count: reviewSelectedIds.size }) : t('pipeline.approveImport')}
+              <CheckCircle className="h-3.5 w-3.5 mr-1" />{reviewSelectedIds.size > 0 ? t('pipeline.importSelected', { count: reviewSelectedIds.size }) : t('pipeline.approveImport')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,15 +1,15 @@
 import React, { useRef, useEffect } from 'react';
-import { X, Loader2, CheckCircle2, XCircle, Upload, FileWarning } from 'lucide-react';
+import { X, Spinner, CheckCircle, XCircle, Upload, Warning } from '@phosphor-icons/react';
 import { useUploadStore } from '@/store/useUploadStore';
 import { cn } from '@/lib/utils';
 
 const statusIcon = (status: string) => {
   switch (status) {
     case 'uploading': return <Upload className="w-4 h-4 animate-pulse text-blue-400" />;
-    case 'processing': return <Loader2 className="w-4 h-4 animate-spin text-amber-400" />;
-    case 'completed': return <CheckCircle2 className="w-4 h-4 text-green-400" />;
+    case 'processing': return <Spinner className="w-4 h-4 animate-spin text-amber-400" />;
+    case 'completed': return <CheckCircle className="w-4 h-4 text-green-400" />;
     case 'failed': return <XCircle className="w-4 h-4 text-red-400" />;
-    case 'cancelled': return <FileWarning className="w-4 h-4 text-zinc-400" />;
+    case 'cancelled': return <Warning className="w-4 h-4 text-zinc-400" />;
     default: return null;
   }
 };
@@ -39,7 +39,7 @@ export const PersistentUploadToast: React.FC = () => {
   if (tasks.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[9999] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    <div className="fixed bottom-4 right-4 z-[var(--z-max)] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
       {tasks.map((task) => {
         const isDone = task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled';
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Mail, Building2, Target, Sparkles, Clock, Users, CheckCircle2, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Envelope, Buildings, Target, Sparkle, Clock, Users, CheckCircle, ArrowRight } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 
 const PromoPlus: React.FC = () => {
@@ -9,7 +9,7 @@ const PromoPlus: React.FC = () => {
   return (
     <div className="w-full min-h-screen font-sans text-left overflow-x-hidden antialiased scroll-smooth" style={{ background: '#ffffff' }}>
       {/* Nav */}
-      <nav className="sticky top-0 z-[100] bg-white/80 backdrop-blur-xl border-b border-[#e5e7eb]">
+      <nav className="sticky top-0 z-[var(--z-dropdown)] bg-white/80 backdrop-blur-xl border-b border-[#e5e7eb]">
         <div className="max-w-4xl mx-auto px-6 h-14 flex items-center justify-between">
           <button onClick={() => navigate('/')} className="flex items-center gap-2 text-[#5a5a7a] hover:text-[#1a1a2e] transition-colors">
             <ArrowLeft className="h-4 w-4" />
@@ -34,7 +34,7 @@ const PromoPlus: React.FC = () => {
       <section className="pt-20 pb-16 px-6" style={{ background: 'linear-gradient(180deg, #f8f9fb 0%, #ffffff 100%)' }}>
         <div className="max-w-3xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#2d2b6b]/20" style={{ background: 'rgba(45,43,107,0.06)' }}>
-            <Sparkles className="h-3.5 w-3.5 text-[#2d2b6b]" />
+            <Sparkle className="h-3.5 w-3.5 text-[#2d2b6b]" />
             <span className="text-[12px] font-semibold text-[#2d2b6b]">限时活动</span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-[#1a1a2e] leading-tight">
@@ -99,7 +99,7 @@ const PromoPlus: React.FC = () => {
                 '多教师协作 · 权限管理',
               ].map((feature) => (
                 <div key={feature} className="flex items-start gap-3 p-4 rounded-xl border border-[#e5e7eb] bg-[#f8f9fb]">
-                  <CheckCircle2 className="h-4.5 w-4.5 text-[#2d2b6b] mt-0.5 shrink-0" />
+                  <CheckCircle className="h-4.5 w-4.5 text-[#2d2b6b] mt-0.5 shrink-0" />
                   <span className="text-sm text-[#1a1a2e] font-medium">{feature}</span>
                 </div>
               ))}
@@ -178,7 +178,7 @@ const PromoPlus: React.FC = () => {
               <div className="p-6 rounded-2xl border border-[#e5e7eb] bg-[#f8f9fb] space-y-5">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(45,43,107,0.08)' }}>
-                    <Mail className="h-5 w-5 text-[#2d2b6b]" />
+                    <Envelope className="h-5 w-5 text-[#2d2b6b]" />
                   </div>
                   <a href="mailto:eular@unimind-ai.com" className="text-lg font-bold text-[#2d2b6b] hover:underline">
                     eular@unimind-ai.com
@@ -189,7 +189,7 @@ const PromoPlus: React.FC = () => {
                   <p className="text-sm font-semibold text-[#1a1a2e]">邮件请包含以下信息：</p>
                   <div className="space-y-3">
                     {[
-                      { icon: Building2, label: '机构名称', desc: '你的培训机构或工作室名称' },
+                      { icon: Buildings, label: '机构名称', desc: '你的培训机构或工作室名称' },
                       { icon: Users, label: '主要业务', desc: '教授的学科、学员规模、运营模式' },
                       { icon: Target, label: 'AI 驱动的具体成果', desc: '你希望 AI 帮你解决什么问题、达到什么效果' },
                     ].map(({ icon: Icon, label, desc }) => (

@@ -1,9 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  PlayCircle, PenLine, RotateCcw, BookOpen,
-  TrendingUp, Calendar, FileText, ArrowRight, CheckCircle2,
-} from 'lucide-react';
+import { PlayCircle, Pen, ArrowCounterClockwise, BookOpen, TrendUp, Calendar, FileText, ArrowRight, CheckCircle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
@@ -22,10 +19,10 @@ interface ActionCardsPayload {
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   video: PlayCircle,
-  quiz: PenLine,
-  review: RotateCcw,
+  quiz: Pen,
+  review: ArrowCounterClockwise,
   course: BookOpen,
-  chart: TrendingUp,
+  chart: TrendUp,
   plan: Calendar,
   exam: FileText,
 };
@@ -81,12 +78,28 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
     loadCompletionStatus().then(setCompletedMap);
   }, []);
 
-  const handleClick = useCallback((card: ActionCard) => {
+  const handleClick = useCallback(async (card: ActionCard) => {
     const url = card.action.url;
     if (!url) return;
 
     // 记录点击
     trackCardClick(card);
+
+    // 练习卡片：先创建 session，再跳转
+    if (url.startsWith('/xiaoyu/practice/new')) {
+      try {
+        const params = new URLSearchParams(url.split('?')[1] || '');
+        const { data } = await api.post('/ai/practice/start/', {
+          kp_name: params.get('kp_name') || '',
+          subject: params.get('subject') || '',
+          count: parseInt(params.get('count') || '5', 10),
+        });
+        if (data.session_id) {
+          navigate(`/xiaoyu/practice/${data.session_id}`);
+          return;
+        }
+      } catch { /* fall through to direct navigation */ }
+    }
 
     // 跳转
     if (url.startsWith('/')) navigate(url);
@@ -102,7 +115,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
       )}
       <div className="space-y-2">
         {cards.map((card, i) => {
-          const Icon = ICON_MAP[card.icon] || TrendingUp;
+          const Icon = ICON_MAP[card.icon] || TrendUp;
           const isCompleted = completedMap[card.action.url] || false;
 
           return (
@@ -121,7 +134,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                   isCompleted ? 'text-emerald-500/70' : 'text-foreground/30',
                 )} />
                 {isCompleted && (
-                  <CheckCircle2 className="h-3 w-3 text-emerald-500 absolute -top-1 -right-1.5 fill-emerald-500/20" />
+                  <CheckCircle className="h-3 w-3 text-emerald-500 absolute -top-1 -right-1.5 fill-emerald-500/20" />
                 )}
               </div>
               <div className="flex-1 min-w-0 space-y-0.5">

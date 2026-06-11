@@ -11,11 +11,7 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import {
-  Users, UserPlus, Upload, Search, Loader2, Trash2, GraduationCap,
-  Download, RefreshCw, TrendingUp, Save, Plus, Key,
-  Shield,
-} from 'lucide-react';
+import { Users, UserPlus, Upload, MagnifyingGlass, Spinner, Trash, GraduationCap, Download, ArrowsClockwise, TrendUp, FloppyDisk, Plus, Key, Shield } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useConfirm } from '@/components/useConfirm';
 
@@ -137,14 +133,14 @@ function PlatformUserManagement() {
         <div className="lg:col-span-1 space-y-3">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder={t('institution.searchUsers')} className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <Button variant="ghost" size="icon" onClick={fetchAll}><RefreshCw className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={fetchAll}><ArrowsClockwise className="h-4 w-4" /></Button>
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            <div className="flex justify-center py-12"><Spinner className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : (
             <ScrollArea className="h-[520px]">
               <div className="space-y-1 pr-2">
@@ -246,7 +242,7 @@ function PlatformPermissionEditor({
         <h3 className="font-extrabold text-sm">{user.nickname || user.username}</h3>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onCancel}>{t('institution.cancel')}</Button>
-          <Button variant="apple" size="sm" onClick={save} disabled={saving}><Save className="h-3.5 w-3.5 mr-1" />{t('institution.save')}</Button>
+          <Button variant="apple" size="sm" onClick={save} disabled={saving}><FloppyDisk className="h-3.5 w-3.5 mr-1" />{t('institution.save')}</Button>
         </div>
       </div>
 
@@ -453,7 +449,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
         </Card>
         <Card variant="apple" className="p-4 space-y-1">
           <div className="h-8 w-8 rounded-lg flex items-center justify-center bg-unimind-green/6">
-            <TrendingUp className="h-4 w-4 text-unimind-green" />
+            <TrendUp className="h-4 w-4 text-unimind-green" />
           </div>
           <p className="text-2xl font-extrabold text-foreground tracking-tightest tabular-nums">{avgElo}</p>
           <p className="text-[11px] font-bold text-muted-foreground">{t('institution.avgElo')}</p>
@@ -472,7 +468,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
           ))}
         </div>
         <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder={t('institution.searchMembers')} className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)}
@@ -488,12 +484,12 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
           const csv = `${t('institution.nickname')},${t('institution.usernameRequired').replace(' *', '')},${t('institution.emailRequired').replace(' *', '')},${t('institution.role')},ELO\n` + filtered.map(s => `${s.nickname},${s.username},${s.email},${s.institution_role === 'teacher' || s.institution_role === 'owner' ? t('institution.teacher') : t('institution.students')},${s.elo_score}`).join('\n');
           const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = '成员列表.csv'; a.click();
         }} disabled={members.length === 0}><Download className="h-4 w-4" /> {t('institution.export')}</Button>
-        <Button variant="ghost" size="icon" onClick={fetch}><RefreshCw className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" onClick={fetch}><ArrowsClockwise className="h-4 w-4" /></Button>
       </div>
 
       {/* List */}
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        <div className="flex justify-center py-16"><Spinner className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-20" />
@@ -554,7 +550,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
                         await api.delete(`/users/institution/me/students/${s.id}/`);
                         fetch();
                       }}>
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                      <Trash className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
                     </Button>
                   )}
                   {/* Owner can also remove teachers */}
@@ -565,7 +561,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
                         await api.delete(`/users/institution/me/students/${s.id}/`);
                         fetch();
                       }}>
-                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
+                      <Trash className="h-3.5 w-3.5 text-muted-foreground hover:text-red-500" />
                     </Button>
                   )}
                 </div>
@@ -657,7 +653,7 @@ function StudentDetailPanel({ studentId }: { studentId: number }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }

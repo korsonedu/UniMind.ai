@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Loader2, Sparkles, RotateCcw, ChevronRight } from 'lucide-react';
+import { CheckCircle, Spinner, Sparkle, ArrowCounterClockwise, CaretRight } from '@phosphor-icons/react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -113,7 +113,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
     <Dialog open={!!question} onOpenChange={(open) => { if (!open && !isSubmitting) onClose(); }}>
       <DialogContent
         onInteractOutside={(e) => e.preventDefault()}
-        className="max-w-3xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[min(800px,92vh)] max-h-[92vh] z-[100]"
+        className="max-w-3xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[min(800px,92vh)] max-h-[92vh] z-[var(--z-dropdown)]"
       >
         <DialogTitle className="sr-only">{t('training.title')}</DialogTitle>
 
@@ -215,7 +215,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                     "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
                     resultData?.is_correct ? "bg-emerald-500 text-white" : "bg-red-500 text-white"
                   )}>
-                    {resultData?.is_correct ? <CheckCircle2 className="w-5 h-5" /> : <RotateCcw className="w-5 h-5" />}
+                    {resultData?.is_correct ? <CheckCircle className="w-5 h-5" /> : <ArrowCounterClockwise className="w-5 h-5" />}
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60">{t('training.resultLabel')}</p>
@@ -240,7 +240,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                 {/* Rationale */}
                 <div className="space-y-2">
                   <h5 className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3" /> {t('training.rationale')}
+                    <Sparkle className="w-3 h-3" /> {t('training.rationale')}
                   </h5>
                   <div className="p-5 bg-zinc-900 text-stone-200 rounded-xl text-sm leading-relaxed">
                     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
@@ -272,13 +272,13 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Spinner className="w-4 h-4 animate-spin" />
                     {t('training.submitting')}
                   </>
                 ) : (
                   <>
                     {t('training.submit')}
-                    <ChevronRight className="h-4 w-4" />
+                    <CaretRight className="h-4 w-4" />
                   </>
                 )}
               </Button>

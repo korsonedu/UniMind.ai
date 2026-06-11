@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Loader2, Check, XCircle, ArrowRight, Home } from 'lucide-react';
+import { Spinner, Check, XCircle, ArrowRight, House } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
@@ -62,7 +62,7 @@ export function PaymentResult() {
 
           {status === 'checking' && (
             <div className="space-y-5">
-              <Loader2 className="h-8 w-8 animate-spin text-white/[0.10] mx-auto" />
+              <Spinner className="h-8 w-8 animate-spin text-white/[0.10] mx-auto" />
               <div className="space-y-2">
                 <h3 className="text-[15px] font-extrabold text-white/50 tracking-tight">确认支付状态</h3>
                 <p className="text-[12px] text-white/15 font-semibold">正在查询支付结果&hellip;</p>
@@ -108,7 +108,7 @@ export function PaymentResult() {
                 </Button>
                 <Button variant="outline" className="w-full h-10 rounded-xl text-[13px] font-extrabold border-white/[0.06] text-white/30 hover:text-white/60 hover:bg-white/[0.03] gap-2"
                   onClick={() => navigate('/', { replace: true })}>
-                  <Home className="h-3.5 w-3.5" /> 返回首页
+                  <House className="h-3.5 w-3.5" /> 返回首页
                 </Button>
               </div>
             </div>

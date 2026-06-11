@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { ArrowLeft, Bell, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCircle, CaretLeft, CaretRight, Spinner, Star } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -178,7 +178,7 @@ export const TestSessionPage: React.FC = () => {
   if (loading) {
     return (
       <div className="h-full min-h-0 flex items-center justify-center bg-background">
-        <Loader2 className="h-7 w-7 animate-spin text-muted-foreground/50" />
+        <Spinner className="h-7 w-7 animate-spin text-muted-foreground/50" />
       </div>
     );
   }
@@ -288,7 +288,7 @@ export const TestSessionPage: React.FC = () => {
                     : 'text-stone-400 hover:text-emerald-600 hover:bg-emerald-50/50'
                 )}
               >
-                <CheckCircle2 className="h-3.5 w-3.5" />
+                <CheckCircle className="h-3.5 w-3.5" />
                 {currentQ.is_mastered ? t('alreadyMastered') : t('markMastered')}
               </Button>
               <Button
@@ -307,7 +307,7 @@ export const TestSessionPage: React.FC = () => {
             {/* Mastered banner */}
             {currentQ.is_mastered && (
               <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50/70 border border-emerald-100 rounded-lg text-xs font-medium text-emerald-700">
-                <CheckCircle2 className="w-3.5 h-3.5" /> {t('alreadyMastered')}
+                <CheckCircle className="w-3.5 h-3.5" /> {t('alreadyMastered')}
               </div>
             )}
 
@@ -382,7 +382,7 @@ export const TestSessionPage: React.FC = () => {
               disabled={currentIdx === 0}
               className="h-9 rounded-xl px-3 text-xs font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100"
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
+              <CaretLeft className="h-4 w-4 mr-1" />
               {t('previousQ')}
             </Button>
             {currentIdx === questions.length - 1 ? (
@@ -399,7 +399,7 @@ export const TestSessionPage: React.FC = () => {
                 className="h-9 flex-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold"
               >
                 {t('nextQ')}
-                <ChevronRight className="h-4 w-4 ml-1" />
+                <CaretRight className="h-4 w-4 ml-1" />
               </Button>
             )}
           </div>

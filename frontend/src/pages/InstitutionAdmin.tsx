@@ -7,11 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
-import {
-  Building2, Plus, Search, Loader2, Pencil, Power, PowerOff,
-  Users, Calendar, ArrowLeft, Layers, Eye,
-  Upload, ShieldCheck,
-} from 'lucide-react';
+import { Buildings, Plus, MagnifyingGlass, Spinner, Pencil, Power,Users, Calendar, ArrowLeft, Stack, Eye, Upload, ShieldCheck } from '@phosphor-icons/react';
 import { Label } from '@/components/ui/label';
 import { DirectionSelector } from '@/components/DirectionSelector';
 
@@ -124,7 +120,7 @@ export default function InstitutionAdmin() {
             </Button>
             <span className="text-muted-foreground/40">|</span>
             <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-primary" strokeWidth={2.5} />
+              <Stack className="h-4 w-4 text-primary" strokeWidth={2.5} />
               <span className="font-extrabold text-sm text-foreground tracking-tight">机构管理后台</span>
             </div>
           </div>
@@ -149,7 +145,7 @@ export default function InstitutionAdmin() {
         {/* Filters */}
       <div className="flex gap-3">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="搜索机构名称…"
             className="pl-9"
@@ -177,11 +173,11 @@ export default function InstitutionAdmin() {
       {/* List */}
       {loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : institutions.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
-          <Building2 className="h-12 w-12 mx-auto mb-3 opacity-20" />
+          <Buildings className="h-12 w-12 mx-auto mb-3 opacity-20" />
           <p className="text-sm font-medium">暂无机构</p>
           <p className="text-xs mt-1">点击右上角「新建机构」创建第一个购买方</p>
         </div>
@@ -194,7 +190,7 @@ export default function InstitutionAdmin() {
                 <div className="flex items-center gap-4 min-w-0">
                   <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center shrink-0',
                     inst.is_active ? 'bg-primary/8' : 'bg-muted-foreground/10')}>
-                    <Building2 className={cn('h-5 w-5',
+                    <Buildings className={cn('h-5 w-5',
                       inst.is_active ? 'text-primary' : 'text-muted-foreground')} />
                   </div>
                   <div className="min-w-0">
@@ -229,7 +225,7 @@ export default function InstitutionAdmin() {
                   </Button>
                   {inst.is_active ? (
                     <Button variant="ghost" size="sm" className="h-8 text-xs text-amber-600" onClick={() => handleDeactivate(inst.id)}>
-                      <PowerOff className="h-3.5 w-3.5 mr-1" />停用
+                      <Power className="h-3.5 w-3.5 mr-1" />停用
                     </Button>
                   ) : (
                     <Button variant="ghost" size="sm" className="h-8 text-xs text-emerald-600" onClick={() => handleActivate(inst.id)}>
@@ -511,7 +507,7 @@ function InstitutionSelfSettings() {
             </Button>
             <span className="text-muted-foreground/40">|</span>
             <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-primary" />
+              <Buildings className="h-4 w-4 text-primary" />
               <span className="font-extrabold text-sm text-foreground">机构设置</span>
             </div>
           </div>
@@ -616,7 +612,7 @@ function InstitutionSelfSettings() {
           </div>
 
           <Button onClick={handleSave} disabled={saving} className="w-full h-12 rounded-xl bg-black text-white font-bold text-xs uppercase tracking-widest">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+            {saving ? <Spinner className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
             保存机构设置
           </Button>
         </Card>
@@ -717,7 +713,7 @@ function DirectionEditDialog({
             </Button>
             <Button type="button" variant="apple" className="h-10 rounded-xl text-sm"
               onClick={handleConfirmSave} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              {saving ? <Spinner className="h-4 w-4 animate-spin mr-1" /> : null}
               保存方向
             </Button>
           </DialogFooter>

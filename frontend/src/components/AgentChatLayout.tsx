@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Send, Loader2, RotateCcw, Lightbulb, History, Trash2 } from 'lucide-react';
+import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -20,13 +20,13 @@ import {
   RECENT_SESSION_MS,
 } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/hooks/useAgentChat';
-import type { LucideIcon } from 'lucide-react';
+import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 
 // ── Types ──
 
 export interface Skill {
-  icon: LucideIcon;
+  icon: Icon;
   label: string;
   prompt: string;
 }
@@ -242,7 +242,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (!initialized) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/40" />
+        <Spinner className="h-4 w-4 animate-spin text-muted-foreground/40" />
       </div>
     );
   }
@@ -277,7 +277,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   size="icon"
                   className="rounded-lg h-8 w-8 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90"
                 >
-                  {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  {loading ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <PaperPlaneTilt className="h-3.5 w-3.5" />}
                 </Button>
               </div>
             </div>
@@ -296,7 +296,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                   <PopoverTrigger asChild>
                     <button className="text-sm text-muted-foreground/65 hover:text-foreground/70 transition-colors flex items-center gap-1.5">
-                      <History className="h-3.5 w-3.5" />
+                      <ClockCounterClockwise className="h-3.5 w-3.5" />
                       {sessions.length} 个历史对话
                     </button>
                   </PopoverTrigger>
@@ -316,7 +316,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           {onDeleteSession && (
                             <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
                               className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
-                              <Trash2 className="h-2.5 w-2.5" />
+                              <Trash className="h-2.5 w-2.5" />
                             </button>
                           )}
                         </div>
@@ -365,7 +365,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           {onDeleteSession && session.id !== activeSessionId && (
                             <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
                               className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
-                              <Trash2 className="h-2.5 w-2.5" />
+                              <Trash className="h-2.5 w-2.5" />
                             </button>
                           )}
                         </div>
@@ -377,7 +377,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             </div>
             <Button variant="ghost" size="sm" onClick={wrappedReset}
               className="rounded text-muted-foreground/40 hover:text-foreground/60 gap-0.5 px-1.5 h-5">
-              <RotateCcw className="h-2.5 w-2.5" />
+              <ArrowCounterClockwise className="h-2.5 w-2.5" />
               <span className="text-[9px] font-medium">新对话</span>
             </Button>
           </div>
@@ -457,7 +457,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 />
                 <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
                   className="rounded-lg h-9 w-9 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <PaperPlaneTilt className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -522,7 +522,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           {onDeleteSession && session.id !== activeSessionId && (
                             <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
                               className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
-                              <Trash2 className="h-2.5 w-2.5" />
+                              <Trash className="h-2.5 w-2.5" />
                             </button>
                           )}
                         </div>
@@ -534,7 +534,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             </div>
             <Button variant="ghost" size="sm" onClick={wrappedReset}
               className="rounded text-muted-foreground/40 hover:text-foreground/60 gap-0.5 px-1.5 h-5">
-              <RotateCcw className="h-2.5 w-2.5" />
+              <ArrowCounterClockwise className="h-2.5 w-2.5" />
               <span className="text-[9px] font-medium">新对话</span>
             </Button>
           </div>
@@ -595,7 +595,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
               />
               <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
                 className="rounded-md h-7 w-7 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0">
-                <Send className="h-3 w-3" />
+                <PaperPlaneTilt className="h-3 w-3" />
               </Button>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Globe, GraduationCap, Sparkles } from 'lucide-react';
+import { FileText, Globe, GraduationCap, Sparkle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useTranslation } from 'react-i18next';
@@ -104,7 +104,7 @@ export const InterviewLobby: React.FC<Props> = ({ style, onStyleChange, onSessio
     <div className="space-y-4">
       <Card className="p-6 rounded-3xl bg-card border-indigo-200/60">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 text-indigo-700 text-xs font-bold">
-          <Sparkles className="w-4 h-4" /> {t('lobby.badge')}
+          <Sparkle className="w-4 h-4" /> {t('lobby.badge')}
         </div>
         <h2 className="text-2xl font-black mt-3">{t('lobby.heading')}</h2>
         <p className="text-sm text-muted-foreground mt-2">{t('lobby.subtitle')}</p>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Sparkles, Check, BookCheck, Wand2 } from 'lucide-react';
+import { Spinner, Sparkle, Check, CheckSquareOffset, MagicWand } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -166,7 +166,7 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
   if (displayQuestions.length === 0 && !pipelineTaskId) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-unimind-text-quaternary">
-        <Sparkles className="h-10 w-10 mb-3 opacity-20" />
+        <Sparkle className="h-10 w-10 mb-3 opacity-20" />
         <p className="text-sm font-medium">在右侧对话框描述出题需求</p>
         <p className="text-xs mt-1">题目生成后将展示在这里</p>
       </div>
@@ -218,7 +218,7 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
                   onClick={handleArcRefine}
                   disabled={saving}
                 >
-                  <Wand2 className="h-3 w-3" />
+                  <MagicWand className="h-3 w-3" />
                   ARC 精修
                 </Button>
               )}
@@ -228,7 +228,7 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
                 onClick={handleSave}
                 disabled={saving}
               >
-                {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <BookCheck className="h-3 w-3" />}
+                {saving ? <Spinner className="h-3 w-3 animate-spin" /> : <CheckSquareOffset className="h-3 w-3" />}
                 存入题库
               </Button>
             </div>
@@ -305,7 +305,7 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
       {displayQuestions.length === 0 && pipelineTaskId && taskStatus && (
         <div className="flex-1 flex items-center justify-center text-unimind-text-quaternary">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
+            <Spinner className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
             <p className="text-sm">ARC 管线运行中，题目即将生成...</p>
           </div>
         </div>

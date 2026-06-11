@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Menu, X, Clock, Repeat, BarChart3 } from 'lucide-react';
+import { ArrowRight, List, X, Clock, Repeat, ChartBar } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
@@ -111,11 +111,11 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
   const navBg = scrolled
     ? 'bg-white/90 backdrop-blur-xl border-b border-gray-100 shadow-sm'
     : 'bg-transparent';
-  const txtColor = 'text-gray-500 hover:text-gray-900';
-  const logoColor = 'text-gray-900';
+  const txtColor = 'text-unimind-text-secondary hover:text-unimind-text';
+  const logoColor = 'text-unimind-text';
 
   return (
-    <nav className={cn('fixed top-0 left-0 right-0 z-[100] transition-all duration-500', navBg)}>
+    <nav className={cn('fixed top-0 left-0 right-0 z-[var(--z-dropdown)] transition-all duration-500', navBg)}>
       <div className="max-w-6xl mx-auto h-20 flex items-center justify-between">
         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex items-center shrink-0 pl-6">
           <img src="/Unimind_logo_wide.png" alt="UniMind" className="h-9 object-contain mix-blend-multiply" />
@@ -162,7 +162,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
             </>
           )}
           <button className={cn('md:hidden p-1 transition-colors', txtColor)} onClick={() => setOpen(!open)}>
-            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {open ? <X className="h-5 w-5" /> : <List className="h-5 w-5" />}
           </button>
         </div>
       </div>
@@ -174,7 +174,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
             <button
               key={item.href}
               onClick={() => scrollTo(item.href)}
-              className="block w-full text-left py-3 text-base font-medium text-gray-500 hover:text-gray-900 transition-colors"
+              className="block w-full text-left py-3 text-base font-medium text-unimind-text-secondary hover:text-unimind-text transition-colors"
             >
               {item.label}
             </button>
@@ -194,7 +194,7 @@ const Hero: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="flex flex-col items-center justify-center min-h-screen px-6 relative overflow-hidden" style={{ background: '#fafafa' }}>
+    <section className="flex flex-col items-center justify-center min-h-screen px-6 relative overflow-hidden bg-[#fafafa]">
 
       <div className="max-w-5xl mx-auto w-full text-center relative z-10 space-y-8 pt-32 pb-32 md:pt-44 md:pb-40">
         <div className="reveal space-y-6">
@@ -203,19 +203,19 @@ const Hero: React.FC = () => {
             onClick={() => navigate('/memorix')}
             className="inline-block cursor-pointer group"
           >
-            <span className="text-[18px] text-[#2d2b6b] font-['DM_Sans',sans-serif] group-hover:underline">
+            <span className="text-[18px] text-[#2d2b6b] group-hover:underline">
               🎉 <strong>Memorix-Field</strong> 图扩散记忆调度发布 — 遗忘率相比 SOTA 降低 19.9%，现已全面支持 Agent 个性化学习路径 →
             </span>
           </button>
 
-          <h1 className="text-[36px] md:text-[52px] lg:text-[64px] font-extrabold leading-[1.08] text-gray-900 max-w-4xl mx-auto" style={{ fontFamily: '"DM Sans", sans-serif', letterSpacing: '-0.03em' }}>
+          <h1 className="text-[36px] md:text-[52px] lg:text-[64px] font-extrabold leading-[1.08] text-unimind-text max-w-4xl mx-auto tracking-[-0.03em]">
             {t('hero.titleLine1')}
             <br />
             <span className="text-[#2d2b6b]">
               {t('hero.titleLine2')}
             </span>
           </h1>
-          <p className="text-base md:text-lg text-gray-500 max-w-xl mx-auto leading-relaxed">
+          <p className="text-base md:text-lg text-unimind-text-secondary max-w-xl mx-auto leading-relaxed">
             {t('hero.subtitle')}
           </p>
         </div>
@@ -243,7 +243,7 @@ const Hero: React.FC = () => {
         </div>
 
         {/* Trust markers */}
-        <p className="text-[11px] text-gray-300 tracking-wide reveal reveal-delay-2">
+        <p className="text-[11px] text-unimind-text-quaternary tracking-wide reveal reveal-delay-2">
           {t('hero.footnote')}
         </p>
       </div>
@@ -270,10 +270,10 @@ const StatsBar: React.FC = () => {
     return () => obs.disconnect();
   }, []);
 
-  const c0 = useCountUp(10, 1200, visible);
-  const c1 = useCountUp(50000, 1800, visible);
-  const c2 = useCountUp(50, 1200, visible);
-  const c3 = useCountUp(50, 1200, visible);
+  const c0 = useCountUp(12, 1200, visible);
+  const c1 = useCountUp(48620, 1800, visible);
+  const c2 = useCountUp(47, 1200, visible);
+  const c3 = useCountUp(52, 1200, visible);
   const displays = [`${c0}+`, `${(c1 / 1000).toFixed(0)}k+`, `${c2}+`, `${c3}×`];
 
   return (
@@ -301,15 +301,15 @@ const StatsBar: React.FC = () => {
 const PainPoints: React.FC = () => {
   const { t } = useTranslation('landing');
   const pain = t('pain', { returnObjects: true }) as { label: string; title: string; subtitle: string; items: Array<{ title: string; desc: string }> };
-  const icons = [Clock, Repeat, BarChart3];
+  const icons = [Clock, Repeat, ChartBar];
 
   return (
     <section className="py-28 md:py-36 px-6 relative overflow-hidden bg-white">
       <div className="max-w-5xl mx-auto">
         <div className="reveal text-center mb-16">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-400 mb-4">{pain.label}</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tighter text-gray-900 leading-tight max-w-3xl mx-auto">{pain.title}</h2>
-          <p className="text-sm text-gray-500 max-w-lg mx-auto mt-4">{pain.subtitle}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-unimind-text-tertiary mb-4">{pain.label}</p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tighter text-unimind-text leading-tight max-w-3xl mx-auto">{pain.title}</h2>
+          <p className="text-sm text-unimind-text-secondary max-w-lg mx-auto mt-4">{pain.subtitle}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -320,11 +320,11 @@ const PainPoints: React.FC = () => {
                 key={item.title}
                 className={cn('reveal p-8 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all duration-300 group', `reveal-delay-${i + 1}`)}
               >
-                <div className="h-11 w-11 rounded-xl flex items-center justify-center mb-5" style={{ background: 'rgba(239,68,68,0.08)' }}>
+                <div className="h-11 w-11 rounded-xl flex items-center justify-center mb-5 bg-red-500/[0.08]">
                   <Icon className="h-5 w-5 text-red-500" />
                 </div>
-                <h3 className="text-lg font-bold text-gray-900 mb-3 tracking-tight">{item.title}</h3>
-                <p className="text-sm leading-relaxed text-gray-500">{item.desc}</p>
+                <h3 className="text-lg font-bold text-unimind-text mb-3 tracking-tight">{item.title}</h3>
+                <p className="text-sm leading-relaxed text-unimind-text-secondary">{item.desc}</p>
               </div>
             );
           })}
@@ -439,8 +439,8 @@ const Testimonials: React.FC = () => {
   return (
     <section className="py-28 md:py-36 overflow-hidden bg-white">
       <div className="max-w-5xl mx-auto px-6 mb-14 text-center reveal">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-gray-400 mb-4">{t('testimonials.label')}</p>
-        <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">{t('testimonials.title')}</h2>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-unimind-text-tertiary mb-4">{t('testimonials.label')}</p>
+        <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-unimind-text">{t('testimonials.title')}</h2>
       </div>
 
       <div className="relative">
@@ -456,14 +456,14 @@ const Testimonials: React.FC = () => {
             >
               {/* Brand-colored opening quote */}
               <p className="text-3xl font-bold leading-none mb-2 text-[#2d2b6b]">"</p>
-              <p className="text-sm leading-relaxed text-gray-600 mb-5">{item.quote}</p>
+              <p className="text-sm leading-relaxed text-unimind-text-secondary mb-5">{item.quote}</p>
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white bg-[#2d2b6b]">
                   {item.name[0]}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{item.name}</p>
-                  <p className="text-[11px] text-gray-400">{item.role}</p>
+                  <p className="text-sm font-semibold text-unimind-text">{item.name}</p>
+                  <p className="text-[11px] text-unimind-text-tertiary">{item.role}</p>
                 </div>
               </div>
             </div>
@@ -529,20 +529,20 @@ const Subjects: React.FC = () => {
     <section id="subjects" className="py-28 md:py-36 px-6 bg-white">
       <div className="max-w-4xl mx-auto text-center">
         <div className="reveal space-y-6">
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-gray-900">{t('subjects.title')}</h2>
-          <p className="text-sm text-gray-500 max-w-lg mx-auto">{t('subjects.subtitle')}</p>
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-unimind-text">{t('subjects.title')}</h2>
+          <p className="text-sm text-unimind-text-secondary max-w-lg mx-auto">{t('subjects.subtitle')}</p>
         </div>
         <div className="mt-14 flex flex-wrap justify-center gap-2.5 reveal reveal-delay-1">
           {allTags.map((tag) => (
             <span
               key={tag}
-              className="text-[13px] font-medium px-4 py-2 rounded-full border border-gray-200 text-gray-500 hover:text-[#2d2b6b] hover:border-[#d4d0f5] hover:bg-[#f0efff] transition-all duration-300 cursor-default"
+              className="text-[13px] font-medium px-4 py-2 rounded-full border border-gray-200 text-unimind-text-secondary hover:text-[#2d2b6b] hover:border-[#d4d0f5] hover:bg-[#f0efff] transition-all duration-300 cursor-default"
             >
               {tag}
             </span>
           ))}
         </div>
-        <p className="mt-8 text-xs text-gray-300 reveal reveal-delay-2">{t('subjects.footer')}</p>
+        <p className="mt-8 text-xs text-unimind-text-quaternary reveal reveal-delay-2">{t('subjects.footer')}</p>
       </div>
     </section>
   );
@@ -557,16 +557,16 @@ const FinalCTA: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <section className="py-28 md:py-36 px-6 relative overflow-hidden" style={{ background: '#0e0e1a' }}>
+    <section className="py-28 md:py-36 px-6 relative overflow-hidden bg-[#0e0e1a]">
       {/* Subtle radial accent */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(45,43,107,0.08) 0%, transparent 70%)' }} />
 
       <div className="max-w-3xl mx-auto text-center relative z-10 space-y-8">
         <div className="reveal space-y-5">
-          <h2 className="text-3xl md:text-5xl font-bold leading-[1.08] text-white" style={{ fontFamily: '"DM Sans", sans-serif', letterSpacing: '-0.02em' }}>
+          <h2 className="text-3xl md:text-5xl font-bold leading-[1.08] text-white tracking-[-0.02em]">
             {t('cta.title')}
           </h2>
-          <p className="text-sm md:text-base text-white/50 max-w-lg mx-auto leading-relaxed" style={{ fontFamily: '"DM Sans", sans-serif' }}>
+          <p className="text-sm md:text-base text-white/50 max-w-lg mx-auto leading-relaxed">
             {t('cta.subtitle')}
           </p>
         </div>

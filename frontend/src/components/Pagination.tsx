@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 
 interface PaginationProps {
   page: number;
@@ -20,7 +20,7 @@ export const Pagination: React.FC<PaginationProps> = ({ page, totalPages, onPage
         disabled={page <= 1}
         onClick={() => onPageChange(page - 1)}
       >
-        <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+        <CaretLeft className="h-3.5 w-3.5 mr-1" />
         上一页
       </Button>
       <span className="text-xs text-muted-foreground font-medium">
@@ -34,7 +34,7 @@ export const Pagination: React.FC<PaginationProps> = ({ page, totalPages, onPage
         onClick={() => onPageChange(page + 1)}
       >
         下一页
-        <ChevronRight className="h-3.5 w-3.5 ml-1" />
+        <CaretRight className="h-3.5 w-3.5 ml-1" />
       </Button>
     </div>
   );

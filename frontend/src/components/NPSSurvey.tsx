@@ -4,7 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import { X, Star } from 'lucide-react';
+import { X, Star } from '@phosphor-icons/react';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export const NPSSurvey: React.FC = () => {

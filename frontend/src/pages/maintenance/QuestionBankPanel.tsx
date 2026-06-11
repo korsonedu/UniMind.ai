@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, FileUp, RefreshCcw, ChevronDown, ChevronRight, Edit3, Trash2 } from 'lucide-react';
+import { MagnifyingGlass, FileArrowUp, ArrowCounterClockwise, CaretDown, CaretRight, PencilSimple, Trash } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import 'katex/dist/katex.min.css';
@@ -103,13 +103,13 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete, refreshTrigger = 0
           </div>
           <div className="flex gap-2">
             <Button onClick={handleExportCSV} variant="outline" className="h-8 px-3 rounded-xl text-[11px] font-bold border-black/10 gap-1.5">
-              <FileUp className="w-3 h-3" /> {t('questionBank.exportCsv')}
+              <FileArrowUp className="w-3 h-3" /> {t('questionBank.exportCsv')}
             </Button>
           </div>
         </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 opacity-30" />
+            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 opacity-30" />
             <Input value={bankSearch} onChange={e => setBankSearch(e.target.value)} placeholder={t('questionBank.searchPlaceholder')} className="pl-8 h-8 bg-white border-none rounded-xl font-bold text-xs shadow-sm" />
           </div>
           <Select value={bankKP} onValueChange={setBankKP}>
@@ -121,7 +121,7 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete, refreshTrigger = 0
             <SelectContent className="rounded-xl"><SelectItem value="all" className="text-xs">{t('questionBank.allTypes')}</SelectItem><SelectItem value="objective" className="text-xs">{t('questionBank.objective')}</SelectItem><SelectItem value="subjective" className="text-xs">{t('questionBank.subjective')}</SelectItem></SelectContent>
           </Select>
           <Button onClick={() => fetchBank(bankPage)} variant="ghost" size="icon" className="h-8 w-8 rounded-xl shrink-0">
-            <RefreshCcw className={cn('w-3.5 h-3.5 opacity-40', loading && 'animate-spin')} />
+            <ArrowCounterClockwise className={cn('w-3.5 h-3.5 opacity-40', loading && 'animate-spin')} />
           </Button>
         </div>
       </div>
@@ -142,9 +142,9 @@ export const QuestionBankPanel = ({ kpList, onEdit, onDelete, refreshTrigger = 0
                   <p className="text-[11px] font-bold text-black/30 mt-1">{q.knowledge_point_name} · {q.difficulty_level_display} (ELO {q.difficulty})</p>
                 </div>
                 <div className="flex gap-1 shrink-0">
-                  <Button onClick={e => { e.stopPropagation(); onEdit(q); }} variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-white text-blue-600 shadow-sm"><Edit3 className="w-3 h-3" /></Button>
-                  <Button onClick={e => { e.stopPropagation(); onDelete(q.id); fetchBank(bankPage); }} variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-white text-red-500 shadow-sm"><Trash2 className="w-3 h-3" /></Button>
-                  <div className="h-7 w-7 flex items-center justify-center opacity-30">{expanded === q.id ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}</div>
+                  <Button onClick={e => { e.stopPropagation(); onEdit(q); }} variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-white text-blue-600 shadow-sm"><PencilSimple className="w-3 h-3" /></Button>
+                  <Button onClick={e => { e.stopPropagation(); onDelete(q.id); fetchBank(bankPage); }} variant="ghost" size="icon" className="h-7 w-7 rounded-lg hover:bg-white text-red-500 shadow-sm"><Trash className="w-3 h-3" /></Button>
+                  <div className="h-7 w-7 flex items-center justify-center opacity-30">{expanded === q.id ? <CaretDown className="w-3 h-3" /> : <CaretRight className="w-3 h-3" />}</div>
                 </div>
               </div>
               {expanded === q.id && (

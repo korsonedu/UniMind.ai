@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Sparkles, Trophy, Medal, Loader2, Building2 } from 'lucide-react';
+import { Sparkle, Trophy, Medal, Spinner, Buildings } from '@phosphor-icons/react';
 import {
   Popover,
   PopoverContent,
@@ -73,7 +73,7 @@ export const EloPopover: React.FC = () => {
             open && "border-primary/40 bg-muted"
           )}
         >
-          <Sparkles className="h-3.5 w-3.5 text-amber-500 fill-amber-500" aria-hidden="true" />
+          <Sparkle className="h-3.5 w-3.5 text-amber-500 fill-amber-500" aria-hidden="true" />
           <span className="text-xs font-bold text-foreground">{user?.elo_score}</span>
         </button>
       </PopoverTrigger>
@@ -89,7 +89,7 @@ export const EloPopover: React.FC = () => {
               <p className="text-2xl font-black text-foreground tracking-tight">{user?.elo_score}</p>
             </div>
             <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
-              <Sparkles className="h-6 w-6 text-amber-500 fill-amber-500" />
+              <Sparkle className="h-6 w-6 text-amber-500 fill-amber-500" />
             </div>
           </div>
           {currentUserInList && (
@@ -106,13 +106,13 @@ export const EloPopover: React.FC = () => {
 
         <div className="px-1 py-2">
           <div className="flex items-center gap-2 px-4 pb-2">
-            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+            <Buildings className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">{t('institutionRank')}</span>
           </div>
 
           {!hasInstitution && (
             <div className="px-4 py-6 text-center">
-              <Building2 className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+              <Buildings className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
               <p className="text-xs font-bold text-muted-foreground">{t('noInstitution')}</p>
               <p className="text-[10px] text-muted-foreground/60 mt-1">{t('noInstitutionDesc')}</p>
             </div>
@@ -120,7 +120,7 @@ export const EloPopover: React.FC = () => {
 
           {hasInstitution && loading && (
             <div className="flex items-center justify-center py-8" aria-live="polite" aria-busy="true">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           )}
 

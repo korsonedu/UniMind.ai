@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { CheckoutModal } from './CheckoutModal';
-import { X } from 'lucide-react';
+import { X } from '@phosphor-icons/react';
 
 export function TrialBanner() {
   const { user } = useAuthStore();

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Bot, Upload, Edit3, Trash2, Plus, Eye } from 'lucide-react';
+import { Robot, Upload, PencilSimple, Trash, Plus, Eye } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useInstitutionStore, FEATURES } from '@/store/useInstitutionStore';
@@ -160,7 +160,7 @@ export const InstitutionBotSection: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Bot className="h-5 w-5 text-[#6E6E73]" />
+            <Robot className="h-5 w-5 text-[#6E6E73]" />
             <h3 className="text-lg font-semibold tracking-tight">自定义机器人</h3>
             <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73]">{customBots.length}</Badge>
             {customBotQuota && customBotQuota.limit !== null && (
@@ -185,7 +185,7 @@ export const InstitutionBotSection: React.FC = () => {
           </Card>
         ) : customLoading ? null : customBots.length === 0 ? (
           <Card className="p-12 bg-white rounded-2xl border border-black/[0.04] text-center">
-            <Bot className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
+            <Robot className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
             <p className="text-sm text-[#8E8E93] font-medium">还没有自定义机器人</p>
             <p className="text-xs text-[#AEAEB2] mt-1">创建专属你机构的 AI 助教</p>
           </Card>
@@ -211,10 +211,10 @@ export const InstitutionBotSection: React.FC = () => {
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <PencilSimple className="w-3.5 h-3.5" />
                         </Button>
                         <Button onClick={() => handleDelete(item.id, item.name)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -231,7 +231,7 @@ export const InstitutionBotSection: React.FC = () => {
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-2xl bg-white">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <Bot className="h-5 w-5 text-[#6E6E73]" /> 创建自定义机器人
+              <Robot className="h-5 w-5 text-[#6E6E73]" /> 创建自定义机器人
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">

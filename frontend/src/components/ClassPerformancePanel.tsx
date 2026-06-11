@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, TrendingUp, TrendingDown, Minus, Target } from 'lucide-react';
+import { Spinner, TrendUp, TrendDown, Minus, Target } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -28,8 +28,8 @@ interface SuggestedTopic {
 }
 
 const TREND_ICON = {
-  up: TrendingUp,
-  down: TrendingDown,
+  up: TrendUp,
+  down: TrendDown,
   stable: Minus,
 };
 
@@ -67,7 +67,7 @@ export default function ClassPerformancePanel() {
   if (loading) {
     return (
       <div className="flex justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }

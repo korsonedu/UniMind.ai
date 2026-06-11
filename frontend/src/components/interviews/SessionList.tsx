@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, CheckCircle2, Circle } from 'lucide-react';
+import { Clock, CheckCircle, Circle } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 
 interface SessionItem {
@@ -46,7 +46,7 @@ export const SessionList: React.FC<Props> = ({ sessions, activeId, onSelect }) =
             {/* Status icon */}
             <span className="shrink-0">
               {isCompleted ? (
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
               ) : isAnalyzing ? (
                 <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
               ) : (

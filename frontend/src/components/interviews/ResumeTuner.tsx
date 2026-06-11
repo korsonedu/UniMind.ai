@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { formatApiErrorToast } from '@/lib/apiError';
 import api from '@/lib/api';
-import { Upload, FileText, Sparkles, ChevronDown, ChevronUp, Target, Lightbulb, PenLine, X, Loader2 } from 'lucide-react';
+import { Upload, FileText, Sparkle, CaretDown, CaretUp, Target, Lightbulb, Pen, X, Spinner } from '@phosphor-icons/react';
 
 interface ResumeRecord {
   id: number;
@@ -111,7 +111,7 @@ export const ResumeTuner: React.FC = () => {
       {optimizedEntries.length > 0 && (
         <div className="rounded-2xl bg-emerald-50/80 border border-emerald-200/60 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <PenLine className="h-3.5 w-3.5 text-emerald-600" />
+            <Pen className="h-3.5 w-3.5 text-emerald-600" />
             <p className="text-[11px] font-semibold text-emerald-700">{t('resumeTuner.polish')}</p>
           </div>
           <div className="space-y-2">
@@ -151,7 +151,7 @@ export const ResumeTuner: React.FC = () => {
       <Card className="p-5 rounded-2xl border border-border/60 space-y-4">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Sparkles className="h-4 w-4 text-indigo-600" />
+            <Sparkle className="h-4 w-4 text-indigo-600" />
           </div>
           <div>
             <p className="text-sm font-black tracking-tight">{t('resumeTuner.title')}</p>
@@ -242,7 +242,7 @@ export const ResumeTuner: React.FC = () => {
           onClick={handleSubmit}
           disabled={saving || (!text.trim() && !file)}
         >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+          {saving ? <Spinner className="h-4 w-4 animate-spin mr-2" /> : <Sparkle className="h-4 w-4 mr-2" />}
           {saving ? t('resumeTuner.analyzing') : t('resumeTuner.submit')}
         </Button>
       </Card>
@@ -258,7 +258,7 @@ export const ResumeTuner: React.FC = () => {
 
         {loadingRecords ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
         ) : records.length === 0 ? (
           <div className="text-center py-12 space-y-2 px-5">
@@ -299,9 +299,9 @@ export const ResumeTuner: React.FC = () => {
                     </div>
                   </div>
                   {expandedId === r.id ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <CaretUp className="h-4 w-4 text-muted-foreground shrink-0" />
                   ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <CaretDown className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
                 </button>
                 {expandedId === r.id && (

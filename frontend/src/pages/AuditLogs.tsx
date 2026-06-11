@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PageWrapper } from '@/components/PageWrapper';
 import api from '@/lib/api';
-import { Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Shield, CaretLeft, CaretRight } from '@phosphor-icons/react';
 
 interface AuditLog {
   id: number;
@@ -88,7 +88,7 @@ export default function AuditLogs() {
               disabled={page === 1}
               className="rounded-xl"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <CaretLeft className="h-4 w-4" />
             </Button>
             <span className="text-xs text-muted-foreground">
               {page} / {totalPages}
@@ -100,7 +100,7 @@ export default function AuditLogs() {
               disabled={page === totalPages}
               className="rounded-xl"
             >
-              <ChevronRight className="h-4 w-4" />
+              <CaretRight className="h-4 w-4" />
             </Button>
           </div>
         )}
