@@ -23,8 +23,142 @@ import numpy as np
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
 plt.ion()  # 交互模式
+
+# ═══ 配色方案 ═══
+C = {
+    'bg':     '#0d1117',
+    'panel':  '#161b22',
+    'border': '#30363d',
+    'green':  '#3fb950',
+    'blue':   '#58a6ff',
+    'purple': '#a371f7',
+    'orange': '#d2991d',
+    'red':    '#f85149',
+    'text':   '#c9d1d9',
+    'dim':    '#8b949e',
+    'accent': '#7ee787',
+}
+
+# ═══ 全局：持久 figure ═══
+_live_fig = None
+_live_axes = None
+
+
+def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, combo_total):
+    global _live_fig, _live_axes
+
+    n_tau, n_k = len(tau_values), len(k_values)
+
+    std_mean = None
+    fld_mean = None
+    std_arr = round_results.get('standard')
+    fld_arr = round_results.get('field_a0.60')
+    if std_arr:
+        std_mean = np.mean([r['final_R'] for r in std_arr])
+    if fld_arr:
+        fld_mean = np.mean([r['final_R'] for r in fld_arr])
+
+    heatmap = np.full((n_k, n_tau), np.nan)
+    rec_entries = []
+    for i, tau in enumerate(tau_values):
+        for j, k in enumerate(k_values):
+            key = f"rec_t{tau:.1f}_k{k:.1f}"
+            if key in round_results:
+                vals = [r['final_R'] for r in round_results[key]]
+                m = np.mean(vals)
+                heatmap[j, i] = m - std_mean if std_mean else m
+                rec_entries.append((key, tau, k, m))
+    rec_entries.sort(key=lambda x: -x[3])
+
+    if _live_fig is None:
+        _live_fig, _live_axes = plt.subplots(2, 2, figsize=(15, 10),
+                                              num='Memorix REC — Live',
+                                              facecolor=C['bg'])
+        _live_fig.show()
+
+    fig, axes = _live_fig, _live_axes
+    for ax in axes.flat:
+        ax.clear()
+        ax.set_facecolor(C['panel'])
+        for spine in ax.spines.values():
+            spine.set_color(C['border'])
+
+    fig.suptitle(f'Memorix REC — Round {rnd_num}    {combo_done}/{combo_total} combos',
+                 fontsize=13, color=C['accent'], fontfamily='monospace', y=0.98)
+
+    # ═══ (0,0) 热力图 ═══
+    ax = axes[0, 0]
+    im = ax.imshow(heatmap, cmap='RdYlGn', aspect='auto', vmin=-0.06, vmax=0.06)
+    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values], color=C['dim'])
+    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values], color=C['dim'])
+    ax.set_xlabel('τ (hours)', color=C['dim'], fontsize=9)
+    ax.set_ylabel('k', color=C['dim'], fontsize=9)
+    ax.set_title('Δ Retention vs Standard', color=C['text'], fontsize=11)
+    ax.tick_params(colors=C['dim'], labelsize=8)
+    for i in range(n_tau):
+        for j in range(n_k):
+            v = heatmap[j, i]
+            if not np.isnan(v):
+                ax.text(i, j, f'{v:+.3f}', ha='center', va='center', fontsize=7,
+                        color='#000' if v > 0.02 else C['text'], fontweight='bold')
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.ax.yaxis.set_tick_params(color=C['dim'], labelsize=7)
+    cbar.outline.set_edge(C['border'])
+    cbar.set_label('Δ', color=C['dim'], fontsize=8)
+
+    # ═══ (0,1) 柱状图 ═══
+    ax = axes[0, 1]
+    bars_data = []
+    if std_mean: bars_data.append(('Standard', std_mean, C['dim']))
+    if fld_mean: bars_data.append(('Field', fld_mean, C['blue']))
+    if rec_entries:
+        b = rec_entries[0]
+        bars_data.append((f'REC\nτ={b[1]:.1f} k={b[2]:.1f}', b[3], C['purple']))
+    x = np.arange(len(bars_data))
+    vals = [b[1] for b in bars_data]
+    bars = ax.bar(x, vals, 0.45, color=[b[2] for b in bars_data], edgecolor=C['border'], linewidth=0.5)
+    ax.set_xticks(x); ax.set_xticklabels([b[0] for b in bars_data], fontsize=8, color=C['dim'])
+    ax.set_title('Model Comparison', color=C['text'], fontsize=11)
+    ax.tick_params(colors=C['dim'], labelsize=8)
+    for spine in ax.spines.values(): spine.set_visible(False)
+    ax.yaxis.grid(True, alpha=0.08, color=C['border'])
+    for bar, val in zip(bars, vals):
+        ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.003,
+                f'{val:.4f}', ha='center', fontweight='bold', fontsize=10, color=C['text'])
+    if vals:
+        ax.set_ylim(0, max(vals)*1.25)
+
+    # ═══ (1,0) 指标 ═══
+    ax = axes[1, 0]; ax.axis('off')
+    pct = combo_done/max(combo_total, 1)*100
+    lines = [f'Progress  {combo_done}/{combo_total}  ({pct:.0f}%)', '',
+             'Baselines']
+    if std_mean: lines.append(f'  Standard  {std_mean:.4f}')
+    if fld_mean: lines.append(f'  Field     {fld_mean:.4f}')
+    if rec_entries:
+        lines += ['', 'Best REC', f'  τ={rec_entries[0][1]:.1f}h  k={rec_entries[0][2]:.1f}',
+                  f'  R = {rec_entries[0][3]:.4f}']
+        if std_mean: lines.append(f'  Δ = {rec_entries[0][3]-std_mean:+.4f}')
+    ax.text(0.05, 0.95, '\n'.join(lines), transform=ax.transAxes, fontsize=11,
+            fontfamily='monospace', color=C['text'], va='top')
+
+    # ═══ (1,1) Top 5 ═══
+    ax = axes[1, 1]; ax.axis('off')
+    lines = ['Top 5']
+    for rank, (_, tau, k, mean) in enumerate(rec_entries[:5]):
+        d = f'{mean-std_mean:+.4f}' if std_mean else '?'
+        lines.append(f'  {rank+1}.  τ={tau:.1f}  k={k:.1f}  R={mean:.4f}  Δ={d}')
+    ax.text(0.05, 0.95, '\n'.join(lines), transform=ax.transAxes, fontsize=11,
+            fontfamily='monospace', color=C['text'], va='top')
+
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+
+    os.makedirs('scripts/output', exist_ok=True)
+    fig.savefig('scripts/output/rec_live.png', dpi=120, facecolor=C['bg'], edgecolor='none')
 
 # ═══════════════════════════════════════
 # P(t) 可塑性模型（小时版，适配仿真）
@@ -596,272 +730,145 @@ def main():
 
     _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, best_k)
 
-
-# 全局：持久 figure 引用
-_live_fig = None
-_live_axes = None
-
-
-def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, combo_total):
-    """
-    运行中弹窗：4 面板实时仪表盘，复用同一个窗口
-    """
-    global _live_fig, _live_axes
-
-    n_tau, n_k = len(tau_values), len(k_values)
-
-    std_mean = None
-    fld_mean = None
-    if 'standard' in round_results:
-        std_mean = np.mean([r['final_R'] for r in round_results['standard']])
-    if 'field_a0.60' in round_results:
-        fld_mean = np.mean([r['final_R'] for r in round_results['field_a0.60']])
-
-    heatmap = np.full((n_k, n_tau), np.nan)
-    rec_entries = []
-    for i, tau in enumerate(tau_values):
-        for j, k in enumerate(k_values):
-            key = f"rec_t{tau:.1f}_k{k:.1f}"
-            if key in round_results:
-                vals = [r['final_R'] for r in round_results[key]]
-                m = np.mean(vals)
-                heatmap[j, i] = m - std_mean if std_mean else m
-                rec_entries.append((key, tau, k, m, np.std(vals, ddof=1) if len(vals)>1 else 0))
-    rec_entries.sort(key=lambda x: -x[3])
-
-    # 首次创建 figure
-    if _live_fig is None:
-        _live_fig, _live_axes = plt.subplots(2, 2, figsize=(14, 10),
-                                              num='REC Live Dashboard',
-                                              facecolor='#f5f5f5')
-        _live_fig.show()
-
-    fig, axes = _live_fig, _live_axes
-    for ax in axes.flat:
-        ax.clear()
-
-    fig.suptitle(f'REC Simulation — Round {rnd_num}  [{combo_done}/{combo_total} combos]',
-                 fontsize=14, fontweight='bold')
-
-    # (0,0) 热力图
-    ax = axes[0, 0]
-    cmap = plt.cm.RdYlGn; cmap.set_bad('#ccc')
-    im = ax.imshow(heatmap, cmap=cmap, aspect='auto', vmin=-0.06, vmax=0.06)
-    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values])
-    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values])
-    ax.set_xlabel('τ (hours)'); ax.set_ylabel('k')
-    ax.set_title('Δ vs Standard', fontweight='bold')
-    for i in range(n_tau):
-        for j in range(n_k):
-            v = heatmap[j, i]
-            if not np.isnan(v):
-                ax.text(i, j, f'{v:+.3f}', ha='center', va='center', fontsize=7,
-                        color='white' if abs(v)>0.03 else 'black', fontweight='bold')
-    plt.colorbar(im, ax=ax, shrink=0.8)
-
-    # (0,1) 柱状图
-    ax = axes[0, 1]
-    bars_data = []
-    if std_mean: bars_data.append(('Standard', std_mean, '#94a3b8'))
-    if fld_mean: bars_data.append(('Field', fld_mean, '#4AE68A'))
-    if rec_entries:
-        b = rec_entries[0]
-        bars_data.append((f'Best REC\nτ={b[1]:.1f} k={b[2]:.1f}', b[3], '#5b5fef'))
-    x = np.arange(len(bars_data))
-    vals = [b[1] for b in bars_data]
-    bars = ax.bar(x, vals, 0.5, color=[b[2] for b in bars_data], edgecolor='white')
-    ax.set_xticks(x); ax.set_xticklabels([b[0] for b in bars_data], fontsize=9)
-    ax.set_title('Model Comparison', fontweight='bold')
-    for bar, val in zip(bars, vals):
-        ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.002,
-                f'{val:.4f}', ha='center', fontweight='bold', fontsize=10)
-    ax.set_ylim(0, max(vals)*1.2 if vals else 1)
-
-    # (1,0) 进度 + 指标
-    ax = axes[1, 0]; ax.axis('off')
-    pct = combo_done/max(combo_total, 1)*100
-    lines = [f"Progress: {combo_done}/{combo_total} ({pct:.0f}%)", "",
-             "Baselines:"]
-    if std_mean: lines.append(f"  Standard:   {std_mean:.4f}")
-    if fld_mean: lines.append(f"  Field:      {fld_mean:.4f}")
-    if rec_entries:
-        lines += ["", f"Best REC:", f"  τ={rec_entries[0][1]:.1f}h  k={rec_entries[0][2]:.1f}",
-                  f"  R={rec_entries[0][3]:.4f}"]
-        if std_mean: lines.append(f"  Δstd={rec_entries[0][3]-std_mean:+.4f}")
-    ax.text(0.05, 0.95, '\n'.join(lines), transform=ax.transAxes, fontsize=12,
-            fontfamily='monospace', va='top')
-
-    # (1,1) Top 5
-    ax = axes[1, 1]; ax.axis('off')
-    lines = ["Top 5:"]
-    for rank, (_, tau, k, mean, _) in enumerate(rec_entries[:5]):
-        d = f"{mean-std_mean:+.4f}" if std_mean else "?"
-        lines.append(f"  {rank+1}. τ={tau:.1f} k={k:.1f}  R={mean:.4f}  Δ={d}")
-    ax.text(0.05, 0.95, '\n'.join(lines), transform=ax.transAxes, fontsize=10,
-            fontfamily='monospace', va='top')
-
-    fig.canvas.draw()
-    fig.canvas.flush_events()
-
-    os.makedirs('scripts/output', exist_ok=True)
-    fig.savefig('scripts/output/rec_live.png', dpi=120, facecolor='#f5f5f5')
-
-
 # ═══════════════════════════════════════
 # 论文级可视化
 # ═══════════════════════════════════════
 
 def _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, best_k):
-    """生成 2×2 论文级图表"""
-    try:
-        import matplotlib.pyplot as plt
-        import matplotlib.ticker as mticker
-        import numpy as np
-    except ImportError:
-        print("\n⚠ matplotlib not installed, skip visualization.")
-        print("  pip install matplotlib numpy")
-        return
-
-    # 论文风格
-    plt.rcParams.update({
-        'font.family': 'serif',
-        'font.size': 10,
-        'axes.labelsize': 11,
-        'axes.titlesize': 12,
-        'legend.fontsize': 9,
-        'figure.dpi': 200,
-        'savefig.dpi': 200,
-        'savefig.bbox': 'tight',
-        'savefig.pad_inches': 0.05,
-    })
+    """2×2 论文级图表 — 暗色主题"""
+    import numpy as np
 
     n_tau, n_k = len(tau_values), len(k_values)
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    fig, axes = plt.subplots(2, 2, figsize=(15, 11),
+                              facecolor=C['bg'], num='Memorix REC — Paper')
 
-    # ── (0,0) REC Δ vs Standard ──
+    for ax in axes.flat:
+        ax.set_facecolor(C['panel'])
+        for spine in ax.spines.values():
+            spine.set_color(C['border'])
+            spine.set_linewidth(0.5)
+
+    fig.suptitle('Memorix Reconsolidation Window — Parameter Sweep',
+                 fontsize=14, color=C['text'], fontweight='bold', y=0.98)
+
+    # ═══ (a) REC Δ vs Standard ═══
     ax = axes[0, 0]
     heat_std = np.zeros((n_k, n_tau))
     for i, tau in enumerate(tau_values):
         for j, k in enumerate(k_values):
             key = f"rec_t{tau:.1f}_k{k:.1f}"
             heat_std[j, i] = results[key]['mean'] - std_mean
-
     im0 = ax.imshow(heat_std, cmap='RdYlGn', aspect='auto', vmin=-0.06, vmax=0.06)
-    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values])
-    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values])
-    ax.set_xlabel('τ (hours)')
-    ax.set_ylabel('k')
-    ax.set_title('(a) REC vs Standard Urgency', loc='left', fontweight='bold')
+    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values], color=C['dim'])
+    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values], color=C['dim'])
+    ax.set_xlabel('τ (hours)', color=C['dim']); ax.set_ylabel('k', color=C['dim'])
+    ax.set_title('(a)  REC  vs  Standard Urgency', color=C['text'], fontsize=11, loc='left')
+    ax.tick_params(colors=C['dim'], labelsize=8)
     for i in range(n_tau):
         for j in range(n_k):
             v = heat_std[j, i]
-            c = 'white' if abs(v) > 0.03 else 'black'
+            c = '#000' if v > 0.02 else C['text']
             ax.text(i, j, f'{v:+.3f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
-    plt.colorbar(im0, ax=ax, label='Δ retention', shrink=0.85)
+    cbar = plt.colorbar(im0, ax=ax, shrink=0.85)
+    cbar.ax.yaxis.set_tick_params(color=C['dim'], labelsize=7)
+    cbar.outline.set_edge(C['border'])
+    cbar.set_label('Δ retention', color=C['dim'], fontsize=8)
 
-    # ── (0,1) REC Δ vs Field(α=0.60) ──
+    # ═══ (b) REC Δ vs Field ═══
     ax = axes[0, 1]
     heat_fld = np.zeros((n_k, n_tau))
     for i, tau in enumerate(tau_values):
         for j, k in enumerate(k_values):
             key = f"rec_t{tau:.1f}_k{k:.1f}"
             heat_fld[j, i] = results[key]['mean'] - fld_mean
-
     im1 = ax.imshow(heat_fld, cmap='RdYlGn', aspect='auto', vmin=-0.06, vmax=0.06)
-    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values])
-    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values])
-    ax.set_xlabel('τ (hours)')
-    ax.set_ylabel('k')
-    ax.set_title('(b) REC vs Field (α=0.60)', loc='left', fontweight='bold')
+    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values], color=C['dim'])
+    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values], color=C['dim'])
+    ax.set_xlabel('τ (hours)', color=C['dim']); ax.set_ylabel('k', color=C['dim'])
+    ax.set_title('(b)  REC  vs  Field  (α = 0.60)', color=C['text'], fontsize=11, loc='left')
+    ax.tick_params(colors=C['dim'], labelsize=8)
     for i in range(n_tau):
         for j in range(n_k):
             v = heat_fld[j, i]
-            c = 'white' if abs(v) > 0.03 else 'black'
+            c = '#000' if v > 0.02 else C['text']
             ax.text(i, j, f'{v:+.3f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
-    plt.colorbar(im1, ax=ax, label='Δ retention', shrink=0.85)
+    cbar = plt.colorbar(im1, ax=ax, shrink=0.85)
+    cbar.ax.yaxis.set_tick_params(color=C['dim'], labelsize=7)
+    cbar.outline.set_edge(C['border'])
+    cbar.set_label('Δ retention', color=C['dim'], fontsize=8)
 
-    # ── (1,0) 可复现性：两轮 delta ──
+    # ═══ (c) 可复现性 ═══
     ax = axes[1, 0]
     rd_heat = np.zeros((n_k, n_tau))
     for i, tau in enumerate(tau_values):
         for j, k in enumerate(k_values):
             key = f"rec_t{tau:.1f}_k{k:.1f}_round_delta"
             rd_heat[j, i] = results.get(key, 0)
-
-    im2 = ax.imshow(rd_heat, cmap='YlOrRd', aspect='auto', vmin=0, vmax=0.02)
-    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values])
-    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values])
-    ax.set_xlabel('τ (hours)')
-    ax.set_ylabel('k')
-    ax.set_title('(c) Round-to-Round Stability |Δ|', loc='left', fontweight='bold')
+    im2 = ax.imshow(rd_heat, cmap='plasma', aspect='auto', vmin=0, vmax=0.02)
+    ax.set_xticks(range(n_tau)); ax.set_xticklabels([f'{t:.1f}' for t in tau_values], color=C['dim'])
+    ax.set_yticks(range(n_k)); ax.set_yticklabels([f'{k:.1f}' for k in k_values], color=C['dim'])
+    ax.set_xlabel('τ (hours)', color=C['dim']); ax.set_ylabel('k', color=C['dim'])
+    ax.set_title('(c)  Cross-Round Stability  |Δ|', color=C['text'], fontsize=11, loc='left')
+    ax.tick_params(colors=C['dim'], labelsize=8)
     for i in range(n_tau):
         for j in range(n_k):
             v = rd_heat[j, i]
-            c = 'white' if v > 0.01 else 'black'
+            c = C['text'] if v > 0.01 else C['dim']
             ax.text(i, j, f'{v:.4f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
-    plt.colorbar(im2, ax=ax, label='|round1 − round2|', shrink=0.85)
+    cbar = plt.colorbar(im2, ax=ax, shrink=0.85)
+    cbar.ax.yaxis.set_tick_params(color=C['dim'], labelsize=7)
+    cbar.outline.set_edge(C['border'])
+    cbar.set_label('|R1 − R2|', color=C['dim'], fontsize=8)
 
-    # ── (1,1) 模型对比柱状图 ──
+    # ═══ (d) 模型对比 ═══
     ax = axes[1, 1]
     best_key = f"rec_t{best_tau:.1f}_k{best_k:.1f}"
     best_r = results[best_key]
     combo_r = results.get('rec_field_combo', {})
 
-    labels = ['Standard\nUrgency', 'Field\n(α=0.60)', f'Best REC\nτ={best_tau:.1f}h, k={best_k:.1f}', 'REC + Field\nCombo']
-    values = [std_mean, fld_mean, best_r['mean'],
-              combo_r.get('mean', 0) if combo_r else 0]
-    errors = [results['standard'].get('ci95', 0), results['field_a0.60'].get('ci95', 0),
-              best_r.get('ci95', 0), combo_r.get('ci95', 0) if combo_r else 0]
-    colors_bars = ['#94a3b8', '#4AE68A', '#5b5fef', '#f59e0b']
+    labels = ['Standard', 'Field\n(α=0.60)', 'Best REC\n(τ=%.1f, k=%.1f)'%(best_tau,best_k), 'REC+Field']
+    values = [std_mean, fld_mean, best_r['mean'], combo_r.get('mean',0) if combo_r else 0]
+    errors = [results['standard'].get('ci95',0), results['field_a0.60'].get('ci95',0),
+              best_r.get('ci95',0), combo_r.get('ci95',0) if combo_r else 0]
+    colors_bars = [C['dim'], C['blue'], C['purple'], C['orange']]
 
     x = np.arange(len(labels))
-    bars = ax.bar(x, values, 0.55, color=colors_bars, edgecolor='white', linewidth=0.5)
-    ax.errorbar(x, values, yerr=errors, fmt='none', ecolor='#333', capsize=4, linewidth=0.8)
-    ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=8)
-    ax.set_ylabel('150-day Retention', fontweight='bold')
-    ax.set_title('(d) Model Comparison', loc='left', fontweight='bold')
-    ax.set_ylim(0, max(values) * 1.2)
-
+    bars = ax.bar(x, values, 0.5, color=colors_bars, edgecolor=C['border'], linewidth=0.5)
+    ax.errorbar(x, values, yerr=errors, fmt='none', ecolor=C['red'], capsize=3, linewidth=0.8)
+    ax.set_xticks(x); ax.set_xticklabels(labels, fontsize=8, color=C['dim'])
+    ax.set_title('(d)  Model Comparison', color=C['text'], fontsize=11, loc='left')
+    ax.tick_params(colors=C['dim'], labelsize=8)
+    for spine in ax.spines.values(): spine.set_visible(False)
+    ax.yaxis.grid(True, alpha=0.06, color=C['border'])
     for bar, val, err in zip(bars, values, errors):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + err + 0.005,
-                f'{val:.4f}', ha='center', fontsize=9, fontweight='bold')
-    # 标注 vs standard 的差值
+        ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+err+0.005,
+                f'{val:.4f}', ha='center', fontsize=9, fontweight='bold', color=C['text'])
     for i, (bar, val) in enumerate(zip(bars, values)):
         if i > 0 and val > 0:
-            delta = val - std_mean
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() * 0.35,
-                    f'+{delta:+.3f}', ha='center', fontsize=9, fontweight='bold', color='white')
+            d = val - std_mean
+            ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()*0.35,
+                    f'{d:+.3f}', ha='center', fontsize=9, fontweight='bold', color=C['bg'])
+    if values:
+        ax.set_ylim(0, max(values)*1.25)
 
     plt.tight_layout()
     out_path = 'scripts/output/rec_paper_figure.png'
-    plt.savefig(out_path, facecolor='white', edgecolor='none')
+    fig.savefig(out_path, dpi=200, facecolor=C['bg'], edgecolor='none')
     plt.show(block=False)
     print(f"Figure saved to {out_path}")
 
-    # ── 单独存 SVGs ──
-    os.makedirs('scripts/output', exist_ok=True)
-    for name, (ax_idx, is_heatmap) in {
-        'fig_a_rec_vs_std': ((0,0), True),
-        'fig_b_rec_vs_field': ((0,1), True),
-        'fig_c_stability': ((1,0), True),
-        'fig_d_comparison': ((1,1), False),
-    }.items():
-        sub_fig, sub_ax = plt.subplots(figsize=(7, 6))
-        # 重新画（简化：用原始数据重建，或直接 save 子图区域。用简单方式：重建）
-        plt.close(sub_fig)
-
-    # 统计摘要文本文件
+    # 统计摘要
     with open('scripts/output/rec_stats.txt', 'w') as f:
         t = results.get('test_best_rec_vs_std', {})
         f.write(f"Best REC ({best_key}) vs Standard:\n")
-        f.write(f"  Δ = {t.get('mean_diff', 0):+.4f}\n")
-        f.write(f"  t-statistic = {t.get('t', 0):.2f}\n")
-        f.write(f"  p-value = {t.get('p', 1):.6f}\n")
+        f.write(f"  Delta = {t.get('mean_diff', 0):+.4f}\n")
+        f.write(f"  t = {t.get('t', 0):.2f}\n")
+        f.write(f"  p = {t.get('p', 1):.6f}\n")
         f.write(f"  Cohen's d = {t.get('cohens_d', 0):.3f}\n")
         f.write(f"  n = {t.get('n', 0)}\n\n")
         t2 = results.get('test_field_vs_std', {})
-        f.write(f"Field (α=0.60) vs Standard:\n")
-        f.write(f"  Δ = {t2.get('mean_diff', 0):+.4f}\n")
+        f.write(f"Field (alpha=0.60) vs Standard:\n")
+        f.write(f"  Delta = {t2.get('mean_diff', 0):+.4f}\n")
         f.write(f"  p = {t2.get('p', 1):.6f}\n")
         f.write(f"  Cohen's d = {t2.get('cohens_d', 0):.3f}\n")
     print("Stats saved to scripts/output/rec_stats.txt")
