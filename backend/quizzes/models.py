@@ -298,6 +298,61 @@ class StudentExamSubmission(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class Assignment(models.Model):
+    """作业：教师出题后定向布置给班级，替代 TeacherExam（PDF 上传模式保留作为特殊题型）。"""
+    STATUS_CHOICES = (
+        ('draft', '草稿'),
+        ('published', '已发布'),
+        ('closed', '已关闭'),
+    )
+    title = models.CharField(max_length=500, verbose_name="作业标题")
+    description = models.TextField(blank=True, verbose_name="作业说明")
+    institution = models.ForeignKey("users.Institution", on_delete=models.CASCADE, related_name="assignments", verbose_name="所属机构")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="created_assignments", verbose_name="创建人")
+    target_classes = models.ManyToManyField("users.Class", related_name="assignments", verbose_name="目标班级")
+    due_date = models.DateTimeField(null=True, blank=True, verbose_name="截止日期")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name="状态")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        verbose_name = '作业'
+        verbose_name_plural = '作业'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
+
+
+class AssignmentQuestion(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="assignment_questions", verbose_name="所属作业")
+    question = models.ForeignKey("Question", on_delete=models.CASCADE, verbose_name="题目")
+    order = models.IntegerField(default=0, verbose_name="排序")
+    points = models.IntegerField(default=1, verbose_name="分值")
+
+    class Meta:
+        verbose_name = '作业题目'
+        verbose_name_plural = '作业题目'
+        ordering = ['order']
+        unique_together = [('assignment', 'question')]
+
+
+class AssignmentSubmission(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="submissions", verbose_name="所属作业")
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="assignment_submissions", verbose_name="学生")
+    submitted_at = models.DateTimeField(auto_now_add=True, verbose_name="提交时间")
+    answers = models.JSONField(default=dict, verbose_name="答题记录")
+    score = models.FloatField(null=True, blank=True, verbose_name="得分")
+    graded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="graded_submissions", verbose_name="批改人")
+    graded_at = models.DateTimeField(null=True, blank=True, verbose_name="批改时间")
+
+    class Meta:
+        verbose_name = '作业提交'
+        verbose_name_plural = '作业提交'
+        ordering = ['-submitted_at']
+        unique_together = [('assignment', 'student')]
+
+
 class ExamTemplate(models.Model):
     """出题模板：保存常用出题配置，支持系统预设和机构自定义。"""
     DIFFICULTY_LEVELS = (
@@ -347,12 +402,16 @@ class GradingRecord(models.Model):
 
 # ── Phase 6: IRT ItemParameter ──
 class ItemParameter(models.Model):
-    """IRT 项目参数模型 - 存储每道题的三参数 Logistic 模型参数。"""
-    question = models.OneToOneField(
+    """IRT 项目参数模型 - 存储每道题的三参数 Logistic 模型参数。机构隔离：同一道题在不同机构有不同参数。"""
+    question = models.ForeignKey(
         Question,
         on_delete=models.CASCADE,
-        primary_key=True,
         help_text="关联的题目"
+    )
+    institution = models.ForeignKey(
+        'users.Institution',
+        on_delete=models.CASCADE,
+        help_text="所属机构（机构级隔离）"
     )
     discrimination = models.FloatField(
         default=1.0,
@@ -372,16 +431,24 @@ class ItemParameter(models.Model):
     )
     last_estimated_at = models.DateTimeField(null=True)
 
+    class Meta:
+        unique_together = [('question', 'institution')]
+
     def __str__(self):
-        return f"ItemParam(q={self.question_id}, a={self.discrimination:.2f}, b={self.difficulty:.2f})"
+        return f"ItemParam(q={self.question_id}, inst={self.institution_id}, a={self.discrimination:.2f}, b={self.difficulty:.2f})"
 
 
 # ── Phase 6: UserAbility ──
 class UserAbility(models.Model):
-    """IRT 学生能力模型 - 学生对每个知识点的能力 θ 估计。"""
+    """IRT 学生能力模型 - 学生对每个知识点的能力 θ 估计。机构隔离。"""
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE
+    )
+    institution = models.ForeignKey(
+        'users.Institution',
+        on_delete=models.CASCADE,
+        help_text="所属机构（机构级隔离）"
     )
     knowledge_point = models.ForeignKey(
         KnowledgePoint,
@@ -397,7 +464,7 @@ class UserAbility(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('user', 'knowledge_point')
+        unique_together = [('user', 'knowledge_point', 'institution')]
 
     def __str__(self):
         return f"Ability(u={self.user_id}, kp={self.knowledge_point_id}, θ={self.theta:.3f})"
