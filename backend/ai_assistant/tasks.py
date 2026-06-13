@@ -578,6 +578,61 @@ def record_trajectory_async(
 
 
 @shared_task(
+    soft_time_limit=30,
+    time_limit=60,
+    acks_late=True,
+)
+def generate_conversation_title(conversation_id: str, user_id: int, bot_id: int):
+    """用 LLM 总结首轮对话，生成会话标题。"""
+    from .models import Conversation, AIChatMessage as Msg
+
+    try:
+        # 已有标题则跳过
+        if Conversation.objects.filter(conversation_id=conversation_id, title__gt='').exists():
+            return
+
+        # 取首轮 user + assistant 消息
+        msgs = list(
+            Msg.objects
+            .filter(conversation_id=conversation_id, user_id=user_id)
+            .order_by('timestamp')[:4]
+        )
+        user_msg = next((m for m in msgs if m.role == 'user'), None)
+        assistant_msg = next((m for m in msgs if m.role == 'assistant'), None)
+        if not user_msg or not assistant_msg:
+            return
+
+        prompt = (
+            f"用户: {user_msg.content[:300]}\n"
+            f"助手: {assistant_msg.content[:300]}\n\n"
+            "为以上对话生成一个简短标题（≤15个字），直接输出标题，不要引号、不要前缀。"
+        )
+
+        ai = AIService()
+        result = ai.simple_chat_text(
+            system_prompt="你是标题生成器。为对话生成简短标题（≤15字），直接输出标题。",
+            user_prompt=prompt,
+            operation='assistant.chat.title',
+        )
+        title = (result or '').strip()[:120]
+
+        if title:
+            Conversation.objects.update_or_create(
+                conversation_id=conversation_id,
+                defaults={
+                    'user_id': user_id,
+                    'bot_id': bot_id,
+                    'title': title,
+                },
+            )
+            logger.info("Generated title '%s' for conversation %s", title, conversation_id)
+    except Exception:
+        logger.exception("Failed to generate title for conversation %s", conversation_id)
+    finally:
+        connections.close_all()
+
+
+@shared_task(
     soft_time_limit=120,
     time_limit=180,
     acks_late=True,
@@ -736,7 +791,95 @@ def analyze_trajectory_task():
     }
 
     logger.info("analyze_trajectory_task: %s", result)
+
+    # GEPA 优化建议生成（Phase D2 框架 — 数据积累后生效）
+    suggestions = _generate_optimization_suggestions(result)
+    if suggestions:
+        _store_gepa_suggestions(suggestions)
+
     return result
+
+
+def _generate_optimization_suggestions(analysis: dict) -> list[dict]:
+    """基于 Trajectory 分析生成优化建议。不自动应用，仅输出供人工审核。"""
+    suggestions = []
+
+    # 1. 整体成功率偏低 → Memorix 参数可能过激进
+    total = analysis.get('total', 0)
+    if total >= 10:
+        sr = analysis.get('success_rate', 1)
+        if sr < 0.6:
+            suggestions.append({
+                'target': 'memorix',
+                'param': 'alpha',
+                'direction': 'decrease',
+                'current': 0.60,
+                'suggested': max(0.3, 0.60 - (0.6 - sr)),
+                'reason': f'Trajectory 成功率 {sr:.0%} < 60%，Memorix α 偏高可能导致题目推送节奏过快',
+                'confidence': round(0.6 + (0.6 - sr), 2),
+            })
+
+        # 2. 工具调用失败率高 → prompt 需要调整
+        outcome_dist = analysis.get('outcome_distribution', {})
+        partial = outcome_dist.get('partial', 0)
+        failure = outcome_dist.get('failure', 0)
+        problem_rate = (partial + failure) / total
+        if problem_rate > 0.3:
+            suggestions.append({
+                'target': 'prompt',
+                'param': 'tool_guide',
+                'direction': 'improve',
+                'current': 'current',
+                'suggested': '增强工具使用指南，明确 failure mode 和 fallback 策略',
+                'reason': f'工具调用问题率 {problem_rate:.0%} > 30%（partial={partial}, failure={failure}）',
+                'confidence': round(min(0.9, problem_rate + 0.1), 2),
+            })
+
+        # 3. 某个 bot 表现显著差于其他
+        bot_breakdown = analysis.get('bot_breakdown', [])
+        if len(bot_breakdown) >= 2:
+            for bot in bot_breakdown:
+                bot['success_rate'] = bot.get('success_rate', 1)
+            worst = min(bot_breakdown, key=lambda b: b.get('success_rate', 1))
+            best = max(bot_breakdown, key=lambda b: b.get('success_rate', 1))
+            if best.get('success_rate', 0) - worst.get('success_rate', 0) > 0.2:
+                suggestions.append({
+                    'target': 'bot',
+                    'param': 'system_prompt',
+                    'direction': 'review',
+                    'current': worst.get('bot__name', 'unknown'),
+                    'suggested': f"审查 {worst.get('bot__name', '')} 的 system prompt，"
+                                 f"成功率 {worst.get('success_rate', 0):.0%} "
+                                 f"vs {best.get('bot__name', '')} {best.get('success_rate', 0):.0%}",
+                    'reason': 'bot 间成功率差异 > 20%，可能有 prompt 或 tools 配置问题',
+                    'confidence': 0.7,
+                })
+
+    return suggestions
+
+
+def _store_gepa_suggestions(suggestions: list[dict]):
+    """将建议存入 Redis（GEPA 建议缓存），供后续人工审核或 API 读取。"""
+    try:
+        from django_redis import get_redis_connection
+        redis_conn = get_redis_connection("default")
+    except Exception:
+        logger.warning("_store_gepa_suggestions: Redis unavailable")
+        return
+
+    import json
+    from django.utils import timezone
+
+    key = "gepa:suggestions"
+    entry = {
+        'generated_at': timezone.now().isoformat(),
+        'suggestions': suggestions,
+    }
+    redis_conn.lpush(key, json.dumps(entry, ensure_ascii=False))
+    redis_conn.ltrim(key, 0, 49)  # 保留最近 50 条
+    redis_conn.expire(key, 86400 * 30)  # TTL 30 天
+
+    logger.info("_store_gepa_suggestions: stored %d suggestions", len(suggestions))
 
 
 @shared_task(
@@ -751,3 +894,62 @@ def optimize_prompt_task():
     当前为数据收集阶段，后续 Phase 实现完整自进化闭环。
     """
     pass  # 数据收集阶段，Phase 7 后续实现
+
+
+@shared_task(
+    soft_time_limit=60,
+    time_limit=90,
+    acks_late=True,
+)
+def pre_grade_single_question(session_id: str, question_id: int, user_answer: str, user_id: int):
+    """异步预批改：单题批改后写 Redis 缓存，供 practice_submit_view 聚合。
+
+    Redis key: practice:grade:{session_id}:{question_id}
+    TTL: 30min（远超 session 的 24h TTL，足够提交窗口）
+    """
+    from django.core.cache import cache
+    from django.contrib.auth import get_user_model
+    from ai_service import AIService
+    from ai_assistant.services.grading_engine import GradingEngine
+    from ai_assistant.services.memory_system import MemorySystem
+    from quizzes.models import Question
+
+    User = get_user_model()
+    cache_key = f'practice:grade:{session_id}:{question_id}'
+
+    try:
+        user = User.objects.get(id=user_id)
+        question = Question.objects.get(id=question_id)
+        ai = AIService()
+
+        result = GradingEngine.grade(
+            ai=ai,
+            question_text=question.text or '',
+            user_answer=user_answer,
+            correct_answer=question.correct_answer or '',
+            q_type=question.q_type or 'objective',
+            max_score=question.get_max_score(),
+            grading_points=question.grading_points,
+            options=question.options,
+            subjective_type=question.subjective_type or '主观题',
+            user=user,
+        )
+
+        cached = {
+            'score': result.get('score', 0),
+            'max_score': question.get_max_score(),
+            'is_correct': result.get('is_correct', False),
+            'feedback': result.get('feedback', ''),
+            'analysis': result.get('analysis', ''),
+            'memorix_rating': result.get('memorix_rating', 2),
+            'error_analysis': result.get('error_analysis'),
+            'kp_name': question.knowledge_point.name if question.knowledge_point else '',
+            'kp_id': question.knowledge_point_id,
+        }
+        cache.set(cache_key, cached, timeout=1800)  # 30min
+        logger.info("pre_grade: session=%s qid=%d cached", session_id, question_id)
+
+    except Exception as exc:
+        logger.warning("pre_grade failed session=%s qid=%d: %s", session_id, question_id, exc)
+        # 缓存错误标记，submit 时 fallback 到同步批改
+        cache.set(cache_key, {'_error': str(exc)}, timeout=300)
