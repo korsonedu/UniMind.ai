@@ -1,6 +1,6 @@
 # UniMind.ai — Agent 驱动的新一代智能教育基础设施
 
-从教师出题、学生刷题、评分批改到知识追踪，全链路 Agent 化。基于 Django 6.0 + React 19 构建，两个自治 AI Agent（小宇学习教练、命题官教研助手）共享统一运行时。底层是自研的 Memorix 自进化记忆调度算法和 4-Agent ARC 对抗出题管线。对话即学习，Agent 即基建。
+从教师出题、学生刷题、评分批改到知识追踪，全链路 Agent 化。基于 Django 6.0 + React 19 构建。底层是四层算法架构：Memorix 自进化记忆调度（图扩散 + 再巩固窗口）、IRT 机构级认知诊断、变式题匹配、GEPA 自进化管线。12 学科 11,908 知识点知识图谱。B2B 机构基础设施。
 
 ## 项目结构
 
@@ -71,15 +71,17 @@ UniMindCode/
 
 **Agent 统一运行时**：新增一个 Agent 只需在 BotRegistry 注册 + 写 ToolExecutor 子类 + 系统提示词，不需要重建对话系统或 API。工具权限按机构方案自动过滤（free/starter/growth/enterprise），机构可配置 Agent 教学人格。
 
-### 2. 认知引擎层 — 自进化记忆调度 + 四层个性化
+### 2. 算法引擎层 — 四层自适应学习架构
 
-**Memorix 自进化算法**：不是静态间隔重复。Weibull 遗忘模型替代幂律近似，在线 SGD 替代离线批量训练——你每做一道题，你的个人记忆参数就更新一次。比 FSRS v4.5 预测 RMSE 降低 13.7%，用户留存率提升 9.2%。**Memorix↔Agent 联动**：get_due_reviews 返回记忆难度/稳定性/遗忘次数，get_knowledge_difficulty_analysis 识别薄弱知识点。
+**Memorix 自进化记忆调度**：不是静态间隔重复。基于 Weibull 遗忘模型的在线 SGD 参数更新，每道题实时更新个人记忆参数（stability / difficulty）。**图扩散（Memorix-Field）**：知识图谱结构信息融入调度，跨知识点传播难度，α=0.60 权重融合。**再巩固窗口（REC）**：在记忆不稳定期的精确时间窗口切入复习，替代固定间隔。**错因感知**：三种错因类型（概念错误/计算失误/粗心）采用不同调度策略。
 
-**四层个性化模型**：L1 诊断测试（冷启动，10 道题初始化知识掌握） → L2 Memorix（行为建模，精准预测遗忘临界点） → L3 Agent Memory（深度个性化，从对话中自动提取偏好和习惯） → L4 自适应指令（LLM 驱动的教学策略，根据学习风格和认知状态动态调整）。四层叠加，每个学生有独一无二的学习模型。
+**IRT 机构级认知诊断**：3PL 三参数 Logistic 模型。机构级参数隔离——同一道题在不同机构（重点中学 vs 普通中学）有独立的区分度/难度/猜测参数。MML-EM 参数估计 + θ 能力估计。Fallback CTT 评分保证新题目冷启动。
 
-**ELO 学术段位**：每次答题影响竞技积分，全站实时排名。
-**AI 自动评分**：主观题由 AI 精准判分，秒级出分。
-**错题归因引擎**：自动分类错误原因，生成针对性复习建议。
+**变式题匹配**：学生做错后自动检索同知识点、相近难度的变式题加入下次复习队列。基于 `query_similar_questions` 按知识点 + 难度区间随机匹配。
+
+**GEPA 自进化管线**：Trajectory 数据收集 → 周度分析（工具调用成功率 / 对话完成度 / prompt_variant 对比）→ 自动生成优化建议（Memorix α 调整 / prompt 改进 / bot 审查）→ Redis 存储供人工审核。不自动应用。
+
+**调度执行器**：Celery beat 每 6 小时轮询 `due_count`，超机构阈值时邮件/飞书推送复习提醒。机构可自定义启用/渠道/阈值。
 
 ### 3. 4-Agent ARC 对抗出题管线
 
@@ -713,6 +715,21 @@ USE_X_FORWARDED_PROTO=true
 # AI_MODEL_PRO=                # 重量任务分级覆盖
 LLM_REQUEST_TIMEOUT_SECONDS=120
 LLM_REQUEST_MAX_RETRIES=1
+```
+
+### 算法 Feature Flags
+
+```bash
+# Memorix 调度
+MEMORIX_FIELD_ENABLED=true         # 图扩散（知识图谱结构融入调度）
+MEMORIX_REC_ENABLED=false          # 再巩固窗口（记忆不稳定期精确切入）
+MEMORIX_FIELD_ALPHA=0.60           # 图扩散权重融合系数
+
+# IRT 认知诊断
+IRT_MIN_RESPONSES=50               # 题目参数估计最少答题数
+
+# Agent 语义记忆
+USE_MEM0=true                      # mem0 语义记忆（需 pgvector 扩展）
 ```
 
 > **模型路由已收敛至 `ai_engine/config.py`**，顶部 `FALLBACK_FAST` / `FALLBACK_PRO` 两个常量是唯一默认值来源。
