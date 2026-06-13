@@ -9,12 +9,13 @@ DEFAULT_BASE_URL = 'https://api.deepseek.com/v1/chat/completions'
 # Per-task model routing table.
 # Each task → (per_task_env_key, tier) where tier ∈ {'fast', 'pro'}.
 _TASK_MODEL_MAP = {
-    # ── Chat / interview (fast response) ──
-    'chat':     ('AI_MODEL_CHAT',              'fast'),
+    # ── Chat / interview ──
+    # 前缀匹配规则：'assistant.chat.planner' 精确匹配小宇，其他 agent 操作 fallback 到默认 flash
+    'assistant.chat.planner': ('AI_MODEL_CHAT', 'pro'),
     'interviews': ('AI_MODEL_CHAT',            'fast'),
     # ── Question generation pipeline ──
     'pipeline.author':    ('AI_MODEL_GENERATE_AUTHOR',    'fast'),
-    'quizzes.bulk_generate': ('AI_MODEL_GENERATE_AUTHOR', 'pro'),
+    'quizzes.bulk_generate': ('AI_MODEL_GENERATE_AUTHOR', 'fast'),
     'pipeline.reviewer':  ('AI_MODEL_GENERATE_REVIEWER',  'pro'),
     'pipeline.author_revise': ('AI_MODEL_GENERATE_AUTHOR', 'fast'),
     'pipeline.classifier':('AI_MODEL_GENERATE_CLASSIFIER', 'fast'),
@@ -41,6 +42,7 @@ EMBEDDING_BASE_URL = os.getenv('AI_EMBEDDING_BASE_URL', DEFAULT_BASE_URL.replace
 # When thinking is enabled with tool calls, reasoning_content MUST be
 # passed back in subsequent requests (see service.py call_ai_with_tools).
 _TASK_THINKING = {
+    'assistant.chat.planner':  'high',
     'pipeline.reviewer':       'high',
 }
 

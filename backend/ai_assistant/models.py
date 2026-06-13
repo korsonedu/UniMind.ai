@@ -9,10 +9,26 @@ class AIChatMessage(models.Model):
     bot = models.ForeignKey('Bot', on_delete=models.CASCADE, null=True, blank=True)
     conversation_id = models.UUIDField(default=uuid.uuid4, db_index=True, help_text="会话 ID，用于区分不同对话")
     metadata = models.JSONField(default=dict, blank=True, help_text="工具返回的结构化数据（如生成的题目、管线 task_id）")
+    feedback = models.BooleanField(null=True, blank=True, default=None, help_text="用户反馈：True=赞，False=踩，null=未评价")
     timestamp = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['timestamp']
+
+
+class Conversation(models.Model):
+    """会话元数据：LLM 生成的标题等。"""
+    conversation_id = models.UUIDField(unique=True, db_index=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    bot = models.ForeignKey('Bot', on_delete=models.CASCADE)
+    title = models.CharField(max_length=120, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        unique_together = [('user', 'conversation_id')]
+
 
 class Bot(models.Model):
     BOT_TYPE_CHOICES = (

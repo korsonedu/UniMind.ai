@@ -34,8 +34,86 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         logger.info("WS accepted: user=%s, bot=%s (%s)", self.user, bot.name, bot.bot_type)
         await self.accept()
 
+        # 主动推送：连接建立后检查是否有值得推送的事件
+        if bot.bot_type == 'exam_generator' and self.institution:
+            asyncio.create_task(self._push_agent_analysis())
+
     async def disconnect(self, code):
         pass
+
+    async def _push_agent_analysis(self):
+        """连接建立后异步检查推送条件，通过 agent_push 事件推送到前端。"""
+        try:
+            loop = asyncio.get_event_loop()
+            push_data = await loop.run_in_executor(None, self._collect_push_data)
+
+            if push_data:
+                for event in push_data:
+                    await self.send(text_data=json.dumps(event, ensure_ascii=False))
+        except Exception:
+            logger.warning("agent_push failed", exc_info=True)
+
+    def _collect_push_data(self):
+        """同步查询 DB，收集推送事件。"""
+        events = []
+        try:
+            from django.utils import timezone
+            from datetime import timedelta
+            from quizzes.models import AssignmentSubmission, Assignment
+
+            inst = self.institution
+            if not inst:
+                return events
+
+            now = timezone.now()
+
+            # 1. 待批改作业提交
+            pending_grading = AssignmentSubmission.objects.filter(
+                assignment__institution=inst,
+                score__isnull=True,
+            ).count()
+            if pending_grading > 0:
+                events.append({
+                    "type": "agent_push",
+                    "push_type": "pending_grading",
+                    "title": f"{pending_grading} 份作业待批改",
+                    "summary": f"学生已提交 {pending_grading} 份作业，建议尽快批改",
+                    "action_label": "查看作业",
+                    "action_route": "/questions",
+                })
+
+            # 2. 最近 24h 新提交
+            recent = AssignmentSubmission.objects.filter(
+                assignment__institution=inst,
+                submitted_at__gte=now - timedelta(hours=24),
+            ).count()
+            if recent > 0:
+                events.append({
+                    "type": "agent_push",
+                    "push_type": "recent_activity",
+                    "title": f"最近 24 小时 {recent} 次提交",
+                    "summary": f"学生近一天活跃度正常，共提交 {recent} 次作业",
+                })
+
+            # 3. 即将到期/刚发布的作业
+            active_assignments = Assignment.objects.filter(
+                institution=inst,
+                status='published',
+            ).count()
+            if active_assignments > 0:
+                events.append({
+                    "type": "agent_push",
+                    "push_type": "active_assignments",
+                    "title": f"{active_assignments} 个作业进行中",
+                    "summary": "当前有进行中的作业，可查看学生完成进度",
+                    "action_label": "查看进度",
+                    "action_route": "/institution/students",
+                })
+
+        except Exception:
+            logger.warning("collect_push_data failed", exc_info=True)
+
+        return events
 
     async def receive(self, text_data):
         try:

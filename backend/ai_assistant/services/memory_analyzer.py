@@ -191,9 +191,9 @@ def analyze_user_profile(
                         'confidence': profile.confidence,
                     }, timeout=86400)
 
-                    # 持久化写入 UserProfile
-                    from ai_assistant.models import UserProfile
-                    UserProfile.objects.update_or_create(
+                    # 持久化写入 UserProfile model
+                    from ai_assistant.models import UserProfile as UserProfileModel
+                    UserProfileModel.objects.update_or_create(
                         user_id=user_id,
                         defaults={
                             'learning_style': profile.learning_style,

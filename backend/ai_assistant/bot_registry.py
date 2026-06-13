@@ -36,7 +36,7 @@ class BotProfile:
     tools_factory: Callable            # get_planner_tools, etc.
     prompt_dir: str                    # prompts 文件目录名
     is_exclusive: bool = False         # 是否注入学生学术数据
-    force_tool_choice: bool = False    # 是否强制 tool_choice="required"
+    force_tool_choice: bool = False    # 是否走工具路由筛选（当前统一用 auto）
     use_intent_router: bool = False    # 是否启用意图预筛选路由
     restore_state: Optional[Callable] = field(default=None, repr=False)  # 状态恢复钩子
 

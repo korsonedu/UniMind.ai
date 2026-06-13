@@ -329,7 +329,6 @@ class VideoProgressUpdateView(APIView):
         except Course.DoesNotExist:
             return Response({'error': 'Course not found'}, status=404)
 
-@_upload_rl
 class StartupMaterialListCreateView(generics.ListCreateAPIView):
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
@@ -370,7 +369,6 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return apply_institution_filter(StartupMaterial.objects.all(), self.request.user, self.request)
 
-@_upload_rl
 class AlbumListCreateView(generics.ListCreateAPIView):
     serializer_class = AlbumSerializer
     def get_queryset(self):
@@ -409,7 +407,6 @@ class AlbumCoursesView(APIView):
         courses = album.courses.all().order_by('sort_order', '-created_at')
         return Response(CourseSerializer(courses, many=True).data)
 
-@_upload_rl
 class CourseListCreateView(generics.ListCreateAPIView):
     serializer_class = CourseSerializer
     quota_resource = 'course'

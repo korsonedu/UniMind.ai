@@ -1,6 +1,10 @@
 {
   "permissions": {
     "allow": [
+        "Bash(find /Users/eular/Desktop/UniMind/UniMindCode/**)",
+        "Bash(cat /Users/eular/Desktop/UniMind/UniMindCode/**)",
+        "Bash(ls /Users/eular/Desktop/UniMind/UniMindCode/**)",
+        "Read(/Users/eular/Desktop/UniMind/UniMindCode/**)",
       "Bash(python3 *)",
       "mcp__plugin_claude-mem_mcp-search__search",
       "Bash(pkill -f \"claude-mem\")",

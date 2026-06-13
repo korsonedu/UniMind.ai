@@ -13,7 +13,6 @@ from core.utils import apply_institution_filter
 
 _upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
 
-@_upload_rl
 class ArticleListCreateView(generics.ListCreateAPIView):
     serializer_class = ArticleSerializer
     permission_classes = [IsAdminWriteMemberRead]

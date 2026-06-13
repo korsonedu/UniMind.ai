@@ -16,13 +16,17 @@ export interface Message {
   toolStep?: AgentStep;
   visible?: boolean;
   _id?: string;
+  id?: number;            // DB 主键，用于反馈等操作
+  feedback?: boolean | null;  // 用户反馈：true=赞 false=踩 null=未评价
   conversation_id?: string;
+  conversation_title?: string;
   metadata?: Record<string, unknown>;
 }
 
 export interface ConversationSession {
   id: number;
   label: string;
+  title?: string;
   messages: Message[];
   lastTime: string;
   conversationId?: string;
@@ -48,6 +52,8 @@ interface UseAgentConversationOptions {
   onStepDone?: (step: AgentStep, prev: Message[]) => Message[] | null;
   /** Side effect after step done (runs outside setMessages updater) */
   onStepDoneEffect?: (step: AgentStep) => void;
+  /** Called when a step carries question data (quick_generate) */
+  onStepQuestions?: (questions: NonNullable<AgentStep['questions']>) => void;
   /** Called after done event when all_visuals metadata is present */
   onAllVisuals?: (visuals: unknown[]) => void;
   /** Success message for handleReset */
@@ -66,6 +72,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   onStepDoneRef.current = options.onStepDone;
   const onStepDoneEffectRef = useRef(options.onStepDoneEffect);
   onStepDoneEffectRef.current = options.onStepDoneEffect;
+  const onStepQuestionsRef = useRef(options.onStepQuestions);
+  onStepQuestionsRef.current = options.onStepQuestions;
   const onAllVisualsRef = useRef(options.onAllVisuals);
   onAllVisualsRef.current = options.onAllVisuals;
   const getExtraPayloadRef = useRef(options.getExtraPayload);
@@ -146,10 +154,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       groups[groups.length - 1].push(msg);
     }
     return groups.map((msgs, i) => {
+      const title = msgs.find(m => m.conversation_title)?.conversation_title || '';
       const firstUser = msgs.find(m => m.role === 'user');
-      const label = firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : '对话';
+      const label = title || (firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : '对话');
       const lastMsg = msgs[msgs.length - 1];
-      return { id: i, label, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id };
+      return { id: i, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id };
     });
   }, []);
 
@@ -319,6 +328,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                   ));
                 }
                 onStepDoneEffectRef.current?.(step);
+                if (step.questions?.length) {
+                  onStepQuestionsRef.current?.(step.questions);
+                }
               }
             } else if (payload.type === 'text_delta') {
               // Ignore streaming text, wait for final done event
@@ -331,6 +343,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               } else if (finalContent || payload.has_intermediate) {
                 setMessages(prev => [...prev, {
                   _id: nextId(),
+                  id: payload.message_id,
                   role: 'assistant' as const,
                   content: finalContent,
                   metadata: payload.metadata || undefined,

@@ -147,6 +147,41 @@ EXAM_GENERATOR_TOOLS_META = [
         description="获取题库统计数据",
         body="获取题库统计。参数: scope(str)=数据范围(summary/recent/insights,默认summary)。summary返回总题数和分布；recent返回最近20道题；insights返回教师出题偏好。适用于：了解题库情况、查看出题统计。不适用于：出题、搜索。",
     ),
+    ToolMeta(
+        name="get_student_detail",
+        description="获取指定学生的详细学习数据（仅教师/机构主）",
+        body="查询学生答题统计、薄弱知识点、ELO、周活跃度。参数: student_name(str)=学生姓名模糊匹配, student_id(int)=学生ID精确匹配。需要teacher/owner角色。适用于：教师问'某某学得怎么样'、查看学生个人数据。不适用于：查看全班数据（用get_class_weak_points）。",
+    ),
+    ToolMeta(
+        name="get_assignment_progress",
+        description="查询指定作业的提交和批改进度（仅教师/机构主）",
+        body="查询作业提交状态。参数: assignment_id(int)=作业ID。返回：提交数/总人数、已批改数、待批改数、作业标题和截止日期。需要teacher/owner角色。适用于：教师问'作业交了没''还有谁没交'。不适用于：批改作业。",
+    ),
+    ToolMeta(
+        name="assign_practice",
+        description="创建作业并布置给学生（仅教师/机构主）",
+        body="创建作业记录并发布给学生。参数: title(str)=作业标题, question_ids(list)=题目ID列表, class_names(list)=目标班级名, due_date(str)=截止日期(ISO), points_per_question(int)=每题分值。需要teacher/owner角色。适用于：教师说'布置给X班''把这些题发下去'。不适用于：出题（先用quick_generate）。",
+    ),
+    ToolMeta(
+        name="send_notification",
+        description="向指定学生发送学习提醒通知（仅教师/机构主）",
+        body="发送站内通知。参数: student_name(str)或student_id(int)=目标学生, title(str)=通知标题, content(str)=通知正文。需要teacher/owner角色。适用于：教师说'提醒一下某某''通知学生'。不适用于：群发通知。",
+    ),
+    ToolMeta(
+        name="list_courses",
+        description="浏览机构课程库",
+        body="查询本机构课程。参数: subject(str)=学科筛选(可选), query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：课程标题、学科、难度、时长。适用于：教师说'看看我的课程''有哪些视频课'。不适用于：搜索知识点。",
+    ),
+    ToolMeta(
+        name="list_questions",
+        description="浏览机构题库",
+        body="查询本机构题目。参数: kp_name(str)=知识点搜索(可选), subject(str)=学科筛选(可选), q_type(str)=题型筛选(可选), difficulty(str)=难度筛选(可选), limit(int)=数量上限(默认20)。返回：题干摘要、题型、难度、知识点。适用于：教师说'看看题库''有没有关于X的题'。不适用于：出题（用quick_generate）。",
+    ),
+    ToolMeta(
+        name="list_articles",
+        description="浏览机构文章库",
+        body="查询本机构文章。参数: query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：标题、摘要、发布日期。适用于：教师说'看看文章''有没有关于X的文章'。不适用于：搜索知识点。",
+    ),
 ]
 
 # bot_type → 工具元数据列表
@@ -197,6 +232,11 @@ def _call_embedding_api(texts: List[str]) -> List[List[float]]:
 
 def _ensure_embeddings(bot_type: str) -> bool:
     """预计算并缓存工具 body embeddings。返回是否成功。"""
+    # DeepSeek 不支持 /v1/embeddings 端点，暂禁用 embedding 路由，
+    # 所有工具路由走关键词匹配 fallback。
+    # 后续切换到支持 embedding 的 provider 时移除此行即可。
+    return False
+
     if bot_type in _embedding_cache:
         return True
 
@@ -307,6 +347,12 @@ EXAM_GENERATOR_INTENT_MAP = {
             "get_class_weak_points", "search_knowledge", "quick_generate",
         ],
     },
+    "refine": {
+        "keywords": ["精修", "arc", "润色", "改进", "提升", "高质量", "对抗", "审核", "题目质量"],
+        "tools": [
+            "launch_arc_pipeline", "check_pipeline_status",
+        ],
+    },
     "generate": {
         "keywords": ["出题", "生成", "命题", "出一组", "出几道", "给我出", "来几道", "新题", "题目",
                      "再来", "换", "调整", "改", "不同", "其他", "再难", "更难", "简单"],
@@ -315,14 +361,8 @@ EXAM_GENERATOR_INTENT_MAP = {
             "get_workbench_stats", "get_class_weak_points",
         ],
     },
-    "refine": {
-        "keywords": ["精修", "arc", "润色", "改进", "提升质量", "高质量", "对抗", "审核"],
-        "tools": [
-            "launch_arc_pipeline", "check_pipeline_status",
-        ],
-    },
     "status": {
-        "keywords": ["进度", "跑完没", "状态", "结果", "完成没", "好了吗"],
+        "keywords": ["进度", "跑完没", "跑完了", "管线", "状态", "结果", "完成没", "好了吗"],
         "tools": [
             "check_pipeline_status",
         ],
@@ -331,6 +371,27 @@ EXAM_GENERATOR_INTENT_MAP = {
         "keywords": ["统计", "题库", "多少题", "出题情况", "分布", "面板"],
         "tools": [
             "get_workbench_stats",
+        ],
+    },
+    "student_lookup": {
+        "keywords": ["学生", "学员", "学得怎么样", "学习情况", "成绩", "表现", "看看谁",
+                     "看一下", "查一下", "某某", "错误多", "没交"],
+        "tools": [
+            "get_student_detail", "send_notification", "get_class_weak_points",
+        ],
+    },
+    "assignment": {
+        "keywords": ["作业", "提交", "进度", "交了没", "批改", "交作业", "布置", "发布",
+                     "分配", "下发", "发下去", "布置给", "安排练习"],
+        "tools": [
+            "get_assignment_progress", "assign_practice",
+        ],
+    },
+    "browse": {
+        "keywords": ["课程", "视频", "看看课程", "有什么课", "文章", "看看文章",
+                     "看看题库", "有什么题", "搜索题", "浏览", "资产", "有没有", "有哪些"],
+        "tools": [
+            "list_courses", "list_questions", "list_articles",
         ],
     },
 }

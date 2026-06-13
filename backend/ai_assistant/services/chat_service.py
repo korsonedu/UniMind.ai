@@ -140,8 +140,10 @@ class AssistantChatService:
 
         # Force tool usage for agent bots
         # 意图路由后工具为空时，降级为 auto，让 LLM 自由回复文本
+        # 全部用 auto 而非 required：prompt 规定边界比硬约束更灵活，
+        # required 会导致任务完成后模型无法停止（如命题官无限循环出题）
         if tools and profile.force_tool_choice:
-            forced_tool_choice = "required"
+            forced_tool_choice = "auto"
         else:
             forced_tool_choice = "auto"
 
@@ -155,8 +157,8 @@ class AssistantChatService:
                 tool_choice=forced_tool_choice,
                 temperature=0.6,
                 max_tokens=2500,
-                operation='assistant.chat',
-                max_tool_rounds=8 if bot_type == 'exam_generator' else 5,
+                operation=f'assistant.chat.{bot_type}',
+                max_tool_rounds=8 if bot_type == 'exam_generator' else 12,
             )
         else:
             return AIEngine.call_ai_with_tools(
@@ -166,6 +168,6 @@ class AssistantChatService:
                 tool_choice=forced_tool_choice,
                 temperature=0.6,
                 max_tokens=2500,
-                operation='assistant.chat',
-                max_tool_rounds=8 if bot_type == 'exam_generator' else 5,
+                operation=f'assistant.chat.{bot_type}',
+                max_tool_rounds=8 if bot_type == 'exam_generator' else 12,
             )

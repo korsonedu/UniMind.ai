@@ -172,13 +172,25 @@ class AIEngine:
         if config.get('thinking'):
             body["thinking"] = {"type": "enabled"}
         elif tool_choice == "required":
-            # 所有 V4 模型：thinking 模式拒绝 tool_choice="required" → 关 thinking
-            # flash 全天候 disabled，pro 只在 required 时 disabled
+            # thinking 模式不支持 required → 关 thinking
+            # xiaoyu 用 auto 不受影响，命题官 required 走此分支
+            body["thinking"] = {"type": "disabled"}
+        else:
+            # 显式设 disabled，防止 DeepSeek 默认启用 thinking，
+            # 导致 reasoning_content 进入消息历史后与后续请求不一致
             body["thinking"] = {"type": "disabled"}
         # DeepSeek API 完整支持 tool_choice="required"（2025.06 文档确认）。
         # 思考模式下 reasoning_content 必须完整回传，我们的代码已在
         # call_ai_with_tools / call_ai_with_streaming_tools 中正确处理。
         # _preserve_tool_choice 保留用于 structured_output 的特殊场景。
+        #
+        # 防御：thinking=disabled 时，剥离消息历史中残留的 reasoning_content，
+        # 防止 DeepSeek API 因 thinking 状态与消息内容不一致而报 400
+        if body.get("thinking", {}).get("type") == "disabled":
+            body["messages"] = [
+                {k: v for k, v in m.items() if k != "reasoning_content"}
+                for m in messages
+            ]
         if tool_choice is not None:
             body["tool_choice"] = tool_choice
         return body
@@ -662,6 +674,7 @@ class AIEngine:
         all_messages = list(messages)
         accumulated_text = ""
         all_rounds_text = []  # 收集所有轮次的中间文本，避免耗尽 rounds 时丢失
+        orig_tc = tool_choice  # 保存初始 tool_choice，thinking 模式下可能为 auto
 
         for round_i in range(max_tool_rounds):
             config = get_model_for_task(operation)
@@ -898,6 +911,23 @@ class AIEngine:
                             except (json.JSONDecodeError, TypeError):
                                 pv['payload'] = {}
                         step_event["visual"] = pv
+                # quick_generate: attach full question data for frontend QuestionPanel
+                if name == "quick_generate" and '"error"' not in str(result):
+                    try:
+                        import json as _json
+                        # 优先用 _last_generated（完整字段），fallback 到工具结果
+                        if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
+                            step_event["questions"] = tool_executor._last_generated
+                            logger.info("[step] quick_generate attached %d questions from _last_generated",
+                                       len(tool_executor._last_generated))
+                        else:
+                            _parsed = _json.loads(result) if isinstance(result, str) else result
+                            if isinstance(_parsed, dict) and _parsed.get('questions'):
+                                step_event["questions"] = _parsed['questions']
+                                logger.info("[step] quick_generate attached %d questions from result",
+                                           len(_parsed['questions']))
+                    except Exception:
+                        logger.exception("[step] quick_generate failed to attach questions")
                 if on_step:
                     on_step(step_event)
 
@@ -906,6 +936,13 @@ class AIEngine:
                     "content": str(result),
                     "tool_call_id": call_id,
                 })
+
+                # 题目生成成功后，注入提示——面板已展示题目，无需在文字中重复
+                if name in ('quick_generate', 'bulk_generate_questions') and '"error"' not in str(result):
+                    all_messages.append({
+                        "role": "system",
+                        "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
+                    })
 
             accumulated_text = ""
             # quick_generate 连续失败 2 次 → 降级为 auto，让模型能用文字回复
@@ -922,7 +959,7 @@ class AIEngine:
                 tool_choice = "auto"
                 if tool_executor._qg_fail_count >= 2:
                     tool_executor._qg_fail_count = 0
-            elif round_i < max_tool_rounds - 2:
+            elif round_i < max_tool_rounds - 2 and orig_tc == "required":
                 tool_choice = "required"
             else:
                 tool_choice = "auto"

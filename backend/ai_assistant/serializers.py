@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, StudyPlan
+from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation, StudyPlan
 from .prompt_sync import get_bot_prompt_path, get_bot_prompt_template_name
 
 
@@ -50,9 +50,15 @@ class BotSerializer(serializers.ModelSerializer):
 
 
 class AIChatMessageSerializer(serializers.ModelSerializer):
+    conversation_title = serializers.SerializerMethodField()
+
     class Meta:
         model = AIChatMessage
-        fields = ('role', 'content', 'timestamp', 'bot', 'metadata', 'conversation_id')
+        fields = ('id', 'role', 'content', 'timestamp', 'bot', 'metadata', 'feedback', 'conversation_id', 'conversation_title')
+
+    def get_conversation_title(self, obj):
+        title = getattr(obj, '_conversation_title', None)
+        return title or ''
 
 
 class StudyPlanSerializer(serializers.ModelSerializer):

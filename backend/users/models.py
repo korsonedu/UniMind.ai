@@ -229,6 +229,25 @@ class Institution(models.Model):
         return self.name
 
 
+class Class(models.Model):
+    """机构下的班级，支持将学生分组管理。"""
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='classes', verbose_name="所属机构")
+    name = models.CharField(max_length=200, verbose_name="班级名称")
+    students = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='classes', blank=True, verbose_name="学员")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        verbose_name = '班级'
+        verbose_name_plural = '班级'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['institution', 'name'], name='unique_class_name_per_institution'),
+        ]
+
+    def __str__(self):
+        return f"{self.institution.name} - {self.name}"
+
+
 # ── Plan features utility ──
 DEFAULT_DURATION_DAYS = 30
 DURATION_PERMANENT = 0

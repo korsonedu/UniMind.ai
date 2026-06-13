@@ -117,6 +117,21 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
             extract_memories_with_mem0(user, full_history)
         except Exception:
             logger.warning("Memory extraction failed (polling)", exc_info=True)
+
+        # 新会话首次对话时，异步生成标题
+        if conversation_id:
+            try:
+                chat_count = AIChatMessage.objects.filter(
+                    conversation_id=conversation_id, role='user'
+                ).count()
+                if chat_count <= 1:
+                    from ai_assistant.tasks import generate_conversation_title
+                    generate_conversation_title.delay(
+                        str(conversation_id), user.id, bot.id if bot else 0
+                    )
+            except Exception:
+                logger.debug("Title generation skipped", exc_info=True)
+
         close_old_connections()
 
 
@@ -325,6 +340,9 @@ class AIChatListView(generics.ListAPIView):
     serializer_class = AIChatMessageSerializer
     permission_classes = [IsMember]
     def get_queryset(self):
+        from django.db.models import OuterRef, Subquery
+        from .models import Conversation
+
         bot_id = self.request.query_params.get('bot_id')
         conversation_id = self.request.query_params.get('conversation_id')
         qs = AIChatMessage.objects.filter(user=self.request.user)
@@ -332,6 +350,12 @@ class AIChatListView(generics.ListAPIView):
             qs = qs.filter(bot_id=bot_id)
         if conversation_id:
             qs = qs.filter(conversation_id=conversation_id)
+
+        # 注解 conversation_title
+        title_subquery = Conversation.objects.filter(
+            conversation_id=OuterRef('conversation_id'),
+        ).values('title')[:1]
+        qs = qs.annotate(_conversation_title=Subquery(title_subquery))
         return qs
 
 
@@ -469,7 +493,7 @@ class AIChatStreamView(APIView):
                 tool_executor.on_step = on_step
 
                 from ai_assistant.services.chat_dispatch import resolve_tool_choice
-                forced_tool_choice = resolve_tool_choice(profile)
+                forced_tool_choice = resolve_tool_choice(profile, bot.bot_type)
                 # 意图路由后工具为空时，降级为 auto
                 if not tools:
                     forced_tool_choice = "auto"
@@ -486,8 +510,8 @@ class AIChatStreamView(APIView):
                                 tool_choice=forced_tool_choice,
                                 temperature=0.6,
                                 max_tokens=2500,
-                                operation='assistant.chat',
-                                max_tool_rounds=5,
+                                operation=f'assistant.chat.{bot.bot_type}',
+                                max_tool_rounds=8 if bot.bot_type == 'exam_generator' else 12,
                             )
                     except Exception as e:
                         logger.exception("Agent thread error: %s", e)
@@ -575,7 +599,7 @@ class AIChatStreamView(APIView):
                     # Delete pending message if not saving
                     await sync_to_async(pending_msg.delete)()
 
-                done_payload = {'done': True, 'full_content': ai_content, 'is_error': is_error, 'has_intermediate': _sent_any_message}
+                done_payload = {'done': True, 'full_content': ai_content, 'is_error': is_error, 'has_intermediate': _sent_any_message, 'message_id': pending_msg.id}
                 if metadata:
                     done_payload['metadata'] = metadata
                 yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
@@ -595,6 +619,16 @@ class AIChatStreamView(APIView):
                     await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     logger.warning("Memory extraction failed (SSE)", exc_info=True)
+
+                # 同步生成会话标题（首轮对话后，快速 LLM 调用 ~1-2s）
+                try:
+                    from ai_assistant.services.title_generator import sync_generate_title
+                    await sync_to_async(sync_generate_title)(
+                        str(conversation_id), request.user.id, bot.id
+                    )
+                except Exception:
+                    logger.warning("Title generation failed", exc_info=True)
+
                 await sync_to_async(close_old_connections)()
 
         response = StreamingHttpResponse(

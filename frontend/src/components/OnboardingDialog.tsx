@@ -62,7 +62,8 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
   const PLAN_DIRECTION_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 999999 };
 
   // Don't show if: no user / has institution / platform admin
-  if (!user || user.institution || user.institution_id || institution) return null;
+  // Exception: show success screen (done=true) even after institution is created
+  if (!done && (!user || user.institution || user.institution_id || institution)) return null;
   if (!mandatory && dismissed) return null;
   if (user.is_admin) return null;
 
@@ -141,7 +142,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
   const showTeacherProgress = role === 'teacher' && currentStep >= 2;
   const teacherCurrentStep = currentStep - 1; // map step 2-6 to 1-5 for dots
 
-  const shouldShow = user && !user.institution && !user.institution_id && !institution && !user.is_admin;
+  const shouldShow = done || (user && !user.institution && !user.institution_id && !institution && !user.is_admin);
 
   return (
     <Dialog open={shouldShow} onOpenChange={mandatory ? undefined : (open: boolean) => { if (!open) setDismissed(true); }}>
@@ -341,7 +342,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
             {/* Navigation buttons */}
             {role === 'teacher' && currentStep >= 2 && (
               <div className="flex gap-2">
-                {currentStep > 2 && currentStep < 6 && (
+                {currentStep > 2 && (
                   <Button variant="outline" className="flex-1 h-11 rounded-xl"
                     onClick={() => goToStep(currentStep - 1)}>
                     {t('wizard.back')}

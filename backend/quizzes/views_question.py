@@ -68,14 +68,12 @@ class QuestionListView(generics.ListCreateAPIView):
             if not is_platform_admin(user):
                 qs = qs.filter(institution__isnull=True)
             else:
-                qs = qs.filter(
-                    Q(institution_id=preview_inst_id) | Q(institution__isnull=True)
-                )
+                qs = qs.filter(institution_id=preview_inst_id)
         elif not is_platform_admin(user):
             # 机构数据隔离：机构成员可见本机构题库 + 全局题库；独立用户仅见全局题库
             inst = getattr(user, 'institution', None)
             if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+                qs = qs.filter(institution=inst)
             else:
                 qs = qs.filter(institution__isnull=True)
 
@@ -209,7 +207,7 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not is_platform_admin(user):
             inst = getattr(user, 'institution', None)
             if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+                qs = qs.filter(institution=inst)
             else:
                 qs = qs.filter(institution__isnull=True)
         return qs
@@ -229,7 +227,7 @@ class AdminQuestionListView(APIView):
         if not is_platform_admin(request.user):
             inst = getattr(request.user, 'institution', None)
             if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+                qs = qs.filter(institution=inst)
             else:
                 qs = qs.filter(institution__isnull=True)
 
@@ -294,7 +292,7 @@ class ExportStructuredQuestionsView(APIView):
         if not is_platform_admin(request.user):
             inst = getattr(request.user, 'institution', None)
             if inst:
-                qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+                qs = qs.filter(institution=inst)
             else:
                 qs = qs.filter(institution__isnull=True)
         if kp_id and kp_id != '0':

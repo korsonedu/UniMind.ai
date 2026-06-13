@@ -9,6 +9,14 @@ export interface AgentStep {
   args_summary?: string;
   result_summary?: string;
   visual?: { type: string; payload: any };
+  questions?: Array<{
+    index: number;
+    question: string;
+    q_type: string;
+    difficulty_level: string;
+    kp_name: string;
+    answer_preview: string;
+  }>;
 }
 
 type AgentEvent =

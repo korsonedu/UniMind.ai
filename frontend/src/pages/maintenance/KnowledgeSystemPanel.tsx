@@ -120,14 +120,22 @@ function TreeNode({
 
 /* ── Edit Dialog ── */
 function KPEditDialog({
-  open, node, onClose, onSaved, parentOptions,
+  open, node, onClose, onSaved, parentOptions, allNodes, onCreateEdge,
 }: {
   open: boolean; node: KPNode | null; onClose: () => void; onSaved: () => void;
   parentOptions: KPNode[];
+  allNodes: KPNode[];
+  onCreateEdge: (sourceId: number, targetId: number, edgeType: EdgeType, weight: number) => Promise<void>;
 }) {
   const { t } = useTranslation('maintenance');
   const [form, setForm] = useState({ name: '', code: '', level: 'kp', description: '', parent: '0' });
   const [saving, setSaving] = useState(false);
+  // Edge creation within dialog
+  const [edgeTargetId, setEdgeTargetId] = useState<number | null>(null);
+  const [edgeType, setEdgeType] = useState<EdgeType>('similar');
+  const [edgeWeight, setEdgeWeight] = useState(0.3);
+  const [edgeSearch, setEdgeSearch] = useState('');
+  const [addingEdge, setAddingEdge] = useState(false);
 
   useEffect(() => {
     if (node) {
@@ -141,6 +149,8 @@ function KPEditDialog({
     } else {
       setForm({ name: '', code: '', level: 'kp', description: '', parent: '0' });
     }
+    setEdgeTargetId(null);
+    setEdgeSearch('');
   }, [node, open]);
 
   const handleSave = async () => {
@@ -154,18 +164,40 @@ function KPEditDialog({
         description: form.description.trim(),
         parent: form.parent === '0' ? null : parseInt(form.parent),
       };
+      let savedId: number | null = null;
       if (node) {
         await api.put(`/quizzes/knowledge-points/${node.id}/`, payload);
         toast.success(t('knowledgeSystem.updated'));
+        savedId = node.id;
       } else {
-        await api.post('/quizzes/knowledge-points/', payload);
+        const res = await api.post('/quizzes/knowledge-points/', payload);
         toast.success(t('knowledgeSystem.created'));
+        savedId = res.data?.id || null;
+      }
+      // Create edge if selected (for both create and edit)
+      if (savedId && edgeTargetId) {
+        try {
+          await onCreateEdge(savedId, edgeTargetId, edgeType, edgeWeight);
+          toast.success('关联已创建');
+        } catch { /* edge creation failed, KP saved successfully */ }
       }
       onSaved();
       onClose();
     } catch (e: any) { toast.error(e.response?.data?.error || t('knowledgeSystem.saveFailed')); }
     setSaving(false);
   };
+
+  const handleAddEdgeFromDialog = async () => {
+    if (!node || !edgeTargetId) { toast.error('请选择目标知识点'); return; }
+    setAddingEdge(true);
+    try {
+      await onCreateEdge(node.id, edgeTargetId, edgeType, edgeWeight);
+      setEdgeTargetId(null);
+    } catch { /* error handled in parent */ }
+    setAddingEdge(false);
+  };
+
+  const leafNodes = allNodes.filter(n => n.id !== node?.id);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -210,6 +242,57 @@ function KPEditDialog({
             <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('knowledgeSystem.description')}</Label>
             <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="h-9 rounded-xl bg-muted/50 border-none text-xs" />
           </div>
+
+          {/* 关联知识点 */}
+          <div className="space-y-2 pt-2 border-t border-border/40">
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">
+              {node ? '关联知识点' : '关联知识点（保存后自动设置）'}
+            </Label>
+              <Select value={String(edgeTargetId || '')} onValueChange={v => setEdgeTargetId(Number(v))}>
+                <SelectTrigger className="h-9 rounded-xl bg-muted/50 border-none text-xs">
+                  <SelectValue placeholder="选择关联知识点..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-48">
+                  <div className="sticky top-0 bg-white px-2 py-1 border-b z-10">
+                    <div className="flex items-center gap-1">
+                      <MagnifyingGlass className="h-3 w-3 text-muted-foreground" />
+                      <input className="flex-1 text-xs border-none outline-none py-1 bg-transparent" placeholder="搜索..."
+                        value={edgeSearch} onChange={e => setEdgeSearch(e.target.value)} />
+                    </div>
+                  </div>
+                  {leafNodes
+                    .filter(n => !edgeSearch || n.name.includes(edgeSearch))
+                    .slice(0, 30)
+                    .map(n => (
+                      <SelectItem key={n.id} value={String(n.id)} className="text-xs">{n.name}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {edgeTargetId && (
+                <div className="flex items-center gap-1.5">
+                  <Select value={edgeType} onValueChange={v => { setEdgeType(v as EdgeType); setEdgeWeight(EDGE_DEFAULTS[v] || 0.3); }}>
+                    <SelectTrigger className="h-8 rounded-lg bg-muted/50 border-none text-[10px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EDGE_TYPES.map(t => (
+                        <SelectItem key={t} value={t} className="text-xs">
+                          <span className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle" style={{ backgroundColor: EDGE_COLORS[t] }} />
+                          {EDGE_LABELS[t]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" min={0.05} max={1} step={0.05} value={edgeWeight}
+                    onChange={e => setEdgeWeight(Number(e.target.value))}
+                    className="h-8 w-14 rounded-lg bg-muted/50 border-none text-[9px] text-center" />
+                  <Button size="sm" className="h-8 text-[10px] rounded-lg" onClick={handleAddEdgeFromDialog} disabled={addingEdge}>
+                    {addingEdge ? <Spinner className="h-3 w-3 animate-spin" /> : '添加'}
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEdgeTargetId(null)}><X className="w-3 h-3" /></Button>
+                </div>
+              )}
+            </div>
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>{t('knowledgeSystem.cancel')}</Button>
@@ -611,6 +694,14 @@ export function KnowledgeSystemPanel() {
         onClose={() => { setShowCreate(false); setEditNode(null); }}
         onSaved={fetchTree}
         parentOptions={allNodes}
+        allNodes={allNodes}
+        onCreateEdge={async (sourceId, targetId, edgeType, weight) => {
+          await api.post('/quizzes/knowledge-edges/bulk/', {
+            edges: [{ source: sourceId, target: targetId, edge_type: edgeType, weight }],
+          });
+          toast.success('关联已创建');
+          if (selectedId) fetchEdges(selectedId);
+        }}
       />
       {ConfirmDialog}
     </div>

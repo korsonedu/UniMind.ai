@@ -14,7 +14,6 @@ from users.quota import check_and_add_storage_usage
 
 _upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
 
-@_upload_rl
 class QuestionListCreateView(generics.ListCreateAPIView):
     serializer_class = QuestionSerializer
     permission_classes = [IsMember]

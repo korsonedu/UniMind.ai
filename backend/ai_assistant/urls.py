@@ -8,7 +8,11 @@ from .views import (
     ActionCardInteractionView,
 )
 from .views_dashboard import XiaoYuDashboardView, ExamWorkbenchDashboardView
-from .views_api import grade_view, profile_view, due_view, stats_view
+from .views_api import (
+    grade_view, profile_view, due_view, stats_view,
+    practice_start_view, practice_pre_grade_view, practice_submit_view,
+    feedback_view,
+)
 
 urlpatterns = [
     path('dashboard/', XiaoYuDashboardView.as_view(), name='xiaoyu-dashboard'),
@@ -36,4 +40,12 @@ urlpatterns = [
     path('memory/profile/', profile_view, name='memory-profile'),
     path('memory/due/', due_view, name='memory-due'),
     path('memory/stats/', stats_view, name='memory-stats'),
+
+    # Practice session
+    path('practice/start/', practice_start_view, name='practice-start'),
+    path('practice/pre-grade/', practice_pre_grade_view, name='practice-pre-grade'),
+    path('practice/submit/', practice_submit_view, name='practice-submit'),
+
+    # Feedback
+    path('feedback/', feedback_view, name='ai-feedback'),
 ]

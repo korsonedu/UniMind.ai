@@ -192,3 +192,17 @@ def learn_edge_weights_from_reviews():
     logger.info("learn_edge_weights: %d edges → Redis, %d stable → DB",
                 len(dynamic_edges), stable_count)
     return {"edges_created": len(dynamic_edges), "stable_synced": stable_count}
+
+
+@shared_task(
+    soft_time_limit=900,
+    time_limit=960,
+    acks_late=True,
+)
+def estimate_irt_params_task():
+    """每日 IRT 3PL 参数估计：对满足最小答题数的题目估计 a/b/c，对学生估计 θ。"""
+    from quizzes.services.irt_estimator import IRTEstimator
+
+    result = IRTEstimator.run_batch_estimation()
+    logger.info("estimate_irt_params_task: %s", result)
+    return result

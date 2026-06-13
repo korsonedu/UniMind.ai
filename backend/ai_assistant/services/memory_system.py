@@ -18,6 +18,84 @@ logger = logging.getLogger(__name__)
 class MemorySystem:
     """记忆系统查询入口 — 所有方法都是静态方法，直接传 user。"""
 
+    # 商业化分层：每个功能对应的会员等级
+    TIER_FEATURES = {
+        'memorix_adaptive': ['starter', 'growth', 'enterprise'],
+        'error_analysis': ['starter', 'growth', 'enterprise'],
+    }
+
+    # 固定间隔（免费用户）：第 N 次复习的间隔天数
+    FIXED_INTERVALS = [1, 3, 7, 14, 30]
+
+    @staticmethod
+    def _has_feature(user, feature: str) -> bool:
+        """检查用户是否具备某个付费功能。user 为 None 或 free 用户不具备付费功能。"""
+        if user is None:
+            return False
+        tier = getattr(user, 'membership_tier', 'free') or 'free'
+        return tier in MemorySystem.TIER_FEATURES.get(feature, [])
+
+    @staticmethod
+    def _due_reviews_fixed(user, limit: int = 20, institution=None):
+        """固定间隔调度：根据 last_review + 固定间隔 计算到期题目。"""
+        from quizzes.models import UserQuestionStatus
+
+        limit = min(int(limit), 50)
+        now = timezone.now()
+
+        # 收集所有有 review 记录的题目，在 Python 层计算固定间隔是否到期
+        all_statuses = UserQuestionStatus.objects.filter(
+            user=user, is_active=True
+        ).select_related('question__knowledge_point').order_by('last_review')
+
+        due_list = []
+        for d in all_statuses:
+            if d.last_review is None:
+                # 从未复习过 → 视为到期
+                due_list.append(d)
+                continue
+            interval_idx = min(d.reps, len(MemorySystem.FIXED_INTERVALS) - 1)
+            interval_days = MemorySystem.FIXED_INTERVALS[interval_idx]
+            next_due = d.last_review + timedelta(days=interval_days)
+            if next_due <= now:
+                due_list.append(d)
+
+        # 按最 overdue 排序
+        due_list.sort(key=lambda d: d.last_review or now)
+        due_count = len(due_list)
+        due_list = due_list[:limit]
+
+        def _priority(d):
+            if d.lapses >= 3:
+                return "critical"
+            if d.difficulty >= 7:
+                return "high"
+            if d.reps == 0:
+                return "high"
+            return "medium" if d.wrong_count > 0 else "low"
+
+        return {
+            "due_count": due_count,
+            "interval_policy": "fixed",
+            "reviews": [
+                {
+                    "question_id": d.question_id,
+                    "question_text": (d.question.text or '')[:200],
+                    "kp_name": d.question.knowledge_point.name if d.question.knowledge_point else '',
+                    "wrong_count": d.wrong_count,
+                    "stability": round(d.stability, 2),
+                    "difficulty": round(d.difficulty, 1),
+                    "reps": d.reps,
+                    "lapses": d.lapses,
+                    "error_type": d.error_type or '',
+                    "error_metadata": d.error_metadata or {},
+                    "priority": _priority(d),
+                    "next_review_at": d.next_review_at.isoformat() if d.next_review_at else None,
+                }
+                for d in due_list
+            ],
+        }
+
     @staticmethod
     def query_learning_stats(user, institution=None) -> Dict:
         """查询用户学习统计数据。"""
@@ -130,7 +208,10 @@ class MemorySystem:
 
     @staticmethod
     def query_due_reviews(user, limit: int = 20, institution=None) -> Dict:
-        """查询到期待复习的题目。"""
+        """查询到期待复习的题目。免费用户走固定间隔，付费用户走 Memorix 自适应。"""
+        if not MemorySystem._has_feature(user, 'memorix_adaptive'):
+            return MemorySystem._due_reviews_fixed(user, limit, institution)
+
         from quizzes.models import UserQuestionStatus
 
         limit = min(int(limit), 50)
@@ -158,6 +239,7 @@ class MemorySystem:
 
         return {
             "due_count": due_count,
+            "interval_policy": "memorix",
             "reviews": [
                 {
                     "question_id": d.question_id,
@@ -468,7 +550,7 @@ class MemorySystem:
 
         qs = Question.objects.select_related('knowledge_point')
         if institution:
-            qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
+            qs = qs.filter(institution=institution)
         try:
             q = qs.get(id=question_id)
         except Question.DoesNotExist:
@@ -501,10 +583,7 @@ class MemorySystem:
         qs = Question.objects.select_related('knowledge_point')
 
         if institution:
-            qs = qs.filter(
-                models.Q(institution=institution) |
-                models.Q(institution__isnull=True)
-            )
+            qs = qs.filter(institution=institution)
 
         if kp_name:
             qs = qs.filter(knowledge_point__name__icontains=kp_name)

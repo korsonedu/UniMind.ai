@@ -6,6 +6,7 @@ import os
 
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.sessions import SessionMiddlewareStack
 from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "school_system.settings")
@@ -20,7 +21,9 @@ websocket_urlpatterns = interviews_ws + notifications_ws + ai_assistant_ws
 
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
-    "websocket": AuthMiddlewareStack(
-        URLRouter(websocket_urlpatterns)
+    "websocket": SessionMiddlewareStack(
+        AuthMiddlewareStack(
+            URLRouter(websocket_urlpatterns)
+        )
     ),
 })

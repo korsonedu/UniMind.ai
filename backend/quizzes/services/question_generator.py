@@ -90,8 +90,26 @@ class QuestionGenerator:
             operation='quizzes.bulk_generate',
         )
 
+        # 重试一次：降 temperature、提 max_tokens
         if not isinstance(data, list):
-            logger.warning("_request_bulk_generate_once structured_output failed")
+            logger.info(
+                "_request_bulk_generate_once retrying: kp_count=%s count_per_kp=%s",
+                len(kps_data), count_per_kp,
+            )
+            data = self.ai_service.structured_output(
+                system_prompt="",
+                user_prompt=prompt,
+                schema=QUESTION_LIST_SCHEMA,
+                tool_name="submit_questions",
+                tool_description="提交生成的题目列表",
+                temperature=0.15,
+                max_tokens=8192,
+                raise_on_error=False,
+                operation='quizzes.bulk_generate',
+            )
+
+        if not isinstance(data, list):
+            logger.warning("_request_bulk_generate_once failed after retry")
             raise AICallError(
                 "AI 命题结果格式异常，请重试。",
                 status_code=502,
@@ -496,7 +514,7 @@ class QuestionGenerator:
         completed_jobs = 0
         job_results: Dict[Tuple[int, int], List[Dict[str, Any]]] = {}
         if jobs:
-            first_error: Optional[BaseException] = None
+            failed_kp_ids: set[int] = set()
             with ThreadPoolExecutor(max_workers=min(max_concurrency, len(jobs))) as executor:
                 future_map = {}
                 for kp, batch_index, batch_count in jobs:
@@ -524,36 +542,36 @@ class QuestionGenerator:
                         completed_jobs += 1
                         if on_progress:
                             on_progress(completed_jobs, total_jobs, len(result))
-                    except Exception as exc:
-                        first_error = exc
-                        for pending in future_map:
-                            if not pending.done():
-                                pending.cancel()
-                        break
                     except KeyboardInterrupt:
                         for pending in future_map:
                             if not pending.done():
                                 pending.cancel()
                         raise
+                    except Exception as exc:
+                        failed_kp_ids.add(kp_id)
+                        logger.warning(
+                            "ai.bulk_generate job failed: kp_id=%s batch=%s err=%s",
+                            kp_id, batch_index, exc,
+                        )
 
-            if first_error:
-                logger.error(
-                    "AI 命题原始异常: type=%s err=%s",
-                    type(first_error).__name__,
-                    first_error,
-                )
-                # 触发业务降级：从本地题库抽取现有题目
-                fallback_questions = self._fallback_fetch_local_questions(
-                    kps, total_per_kp, normalized_target_types, normalized_target_difficulty,
+            # 部分失败降级：只对失败的 KP 从本地题库抽题
+            if failed_kp_ids:
+                failed_kps = [kp for kp in kps if kp.id in failed_kp_ids]
+                fallback_qs = self._fallback_fetch_local_questions(
+                    failed_kps, total_per_kp, normalized_target_types,
+                    normalized_target_difficulty,
                     institution=institution,
                 )
-                if fallback_questions:
-                    logger.info("AI 命题服务异常，已成功降级为本地题库抽题。")
-                    return fallback_questions
-
-                if isinstance(first_error, AICallError):
-                    raise first_error
-                raise AICallError('AI 命题服务异常，请稍后重试。', status_code=500, retryable=False) from first_error
+                if fallback_qs:
+                    for fq in fallback_qs:
+                        key = (fq['kp_id'], 0)
+                        if key not in job_results:
+                            job_results[key] = []
+                        job_results[key].append(fq)
+                    logger.info(
+                        "AI 命题部分成功: %s/%s KPs LLM生成, %s KPs 降级本地题库",
+                        len(kps) - len(failed_kps), len(kps), len(failed_kps),
+                    )
 
         for kp, batch_index, _ in jobs:
             data_batch = job_results.get((kp.id, batch_index), [])

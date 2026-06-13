@@ -11,10 +11,12 @@ from ai_assistant.bot_registry import get_bot_profile
 logger = logging.getLogger(__name__)
 
 
-def resolve_tool_choice(profile):
-    """根据 bot profile 决定 tool_choice 值。"""
-    if profile.force_tool_choice:
-        return "required"
+def resolve_tool_choice(profile, bot_type=None):
+    """根据 bot profile 决定 tool_choice 值。
+    
+    全部用 auto：prompt 规定边界比硬约束更灵活，
+    required 会导致任务完成后模型无法停止（如命题官无限循环出题）。
+    """
     return "auto"
 
 

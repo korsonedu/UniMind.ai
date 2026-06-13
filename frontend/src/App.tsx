@@ -52,6 +52,9 @@ const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
 // Default exports — plain lazy() works
 const Workbench = lazy(() => import('./pages/Workbench'));
+const TeacherQuestions = lazy(() => import('./pages/TeacherQuestions'));
+const AssetHub = lazy(() => import('./pages/AssetHub'));
+const TeacherKnowledgeTree = lazy(() => import('./pages/TeacherKnowledgeTree'));
 const InstitutionDashboard = lazy(() => import('./pages/InstitutionDashboard'));
 const InstitutionStudents = lazy(() => import('./pages/InstitutionStudents'));
 const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
@@ -253,6 +256,9 @@ const router = createBrowserRouter([
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
 
           { path: "workbench", element: <RequireInstitution>{lazyPage(Workbench)}</RequireInstitution> },
+          { path: "assets", element: <RequireInstitution>{lazyPage(AssetHub)}</RequireInstitution> },
+          { path: "knowledge-tree", element: <RequireInstitution>{lazyPage(TeacherKnowledgeTree)}</RequireInstitution> },
+          { path: "questions", element: <RequireInstitution>{lazyPage(TeacherQuestions)}</RequireInstitution> },
           { path: "institution", element: <RequireInstitution>{lazyPage(InstitutionDashboard)}</RequireInstitution> },
           { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },

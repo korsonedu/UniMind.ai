@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "docx": "^9.7.1",
     "html-to-image": "^1.11.13"
   }
