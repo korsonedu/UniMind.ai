@@ -76,3 +76,33 @@ class InstitutionPaymentConfig(models.Model):
 
     def __str__(self):
         return f'{self.institution.name} 收款配置'
+
+
+class InstitutionNotificationConfig(models.Model):
+    """机构通知配置 — 到期复习提醒的渠道和频率设置"""
+    institution = models.OneToOneField(
+        'Institution', on_delete=models.CASCADE, related_name='notification_config',
+        verbose_name='所属机构',
+    )
+    enabled = models.BooleanField(default=False, verbose_name='启用到期提醒')
+    channel = models.CharField(
+        max_length=20,
+        choices=[('email', '邮件'), ('feishu', '飞书')],
+        default='email',
+        verbose_name='通知渠道',
+    )
+    due_threshold = models.IntegerField(
+        default=5,
+        verbose_name='触发阈值',
+        help_text='学生到期题目超过此数量时发送通知',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '机构通知配置'
+        verbose_name_plural = '机构通知配置'
+
+    def __str__(self):
+        status = "开" if self.enabled else "关"
+        return f'{self.institution.name} 通知配置 ({status})'

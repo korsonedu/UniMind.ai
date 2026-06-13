@@ -330,9 +330,9 @@ CELERY_BEAT_SCHEDULE = {
         "task": "ai_assistant.tasks.reflect_teacher_patterns",
         "schedule": 86400.0,
     },
-    "cleanup-stale-memories-weekly": {
-        "task": "ai_assistant.tasks.cleanup_stale_memories",
-        "schedule": 604800.0,  # weekly
+    "send-due-review-reminders": {
+        "task": "notifications.tasks_reminder.send_due_review_reminders",
+        "schedule": 21600.0,  # 每6小时
     },
     "aggregate-platform-stats-daily": {
         "task": "core.tasks.aggregate_daily_platform_stats",
@@ -345,6 +345,10 @@ CELERY_BEAT_SCHEDULE = {
     "learn-memorix-edge-weights-daily": {
         "task": "quizzes.learn_edge_weights_from_reviews",
         "schedule": 86400.0,  # 每天一次
+    },
+    "estimate-irt-params-daily": {
+        "task": "quizzes.tasks.estimate_irt_params_task",
+        "schedule": crontab(minute=0, hour=3),  # 每天凌晨 3:00
     },
 }
 CELERY_BROKER_TRANSPORT_OPTIONS = {

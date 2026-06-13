@@ -1253,3 +1253,62 @@ class InstitutionAuditLogView(APIView):
                 for log in items
             ],
         })
+
+
+class InstitutionNotificationConfigView(APIView):
+    """机构通知配置 CRUD.
+
+    GET  /api/users/institution/me/notification-config/
+    PUT  /api/users/institution/me/notification-config/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        inst = request.user.institution
+        if not inst:
+            return Response({'error': '未加入机构'}, status=400)
+        if request.user.institution_role not in ('owner', 'teacher'):
+            return Response({'error': '无权限'}, status=403)
+
+        from users.models_commercial import InstitutionNotificationConfig
+        config, _ = InstitutionNotificationConfig.objects.get_or_create(
+            institution=inst,
+            defaults={'enabled': False, 'channel': 'email', 'due_threshold': 5},
+        )
+        return Response({
+            'enabled': config.enabled,
+            'channel': config.channel,
+            'due_threshold': config.due_threshold,
+        })
+
+    def put(self, request):
+        inst = request.user.institution
+        if not inst:
+            return Response({'error': '未加入机构'}, status=400)
+        if request.user.institution_role not in ('owner', 'teacher'):
+            return Response({'error': '无权限'}, status=403)
+
+        from users.models_commercial import InstitutionNotificationConfig
+        config, _ = InstitutionNotificationConfig.objects.get_or_create(
+            institution=inst,
+        )
+
+        if 'enabled' in request.data:
+            config.enabled = bool(request.data['enabled'])
+        if 'channel' in request.data:
+            channel = request.data['channel']
+            if channel in ('email', 'feishu'):
+                config.channel = channel
+        if 'due_threshold' in request.data:
+            try:
+                threshold = int(request.data['due_threshold'])
+                config.due_threshold = max(1, min(threshold, 100))
+            except (ValueError, TypeError):
+                pass
+
+        config.save()
+        return Response({
+            'enabled': config.enabled,
+            'channel': config.channel,
+            'due_threshold': config.due_threshold,
+        })
