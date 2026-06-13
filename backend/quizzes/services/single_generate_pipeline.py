@@ -235,7 +235,9 @@ def run_single_generate_pipeline(
         local_issues.extend(_check_objective_integrity(item))
 
         if not item.get("kp_id") and not _normalize_text(item.get("related_knowledge_id")):
+            rejected_count += 1
             local_issues.append("syllabus_unmapped_kp")
+            continue  # 拒绝：无知识点关联的题目不入库
 
         model_info = model_review.get(idx) or {}
         model_issues = [str(x) for x in (model_info.get("issues") or []) if str(x).strip()]

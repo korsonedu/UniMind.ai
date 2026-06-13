@@ -67,6 +67,11 @@ class QuestionSerializer(serializers.ModelSerializer):
     is_favorite = serializers.SerializerMethodField()
     is_mastered = serializers.SerializerMethodField()
     difficulty_level_display = serializers.CharField(source='get_difficulty_level_display', read_only=True)
+    knowledge_point = serializers.PrimaryKeyRelatedField(
+        queryset=KnowledgePoint.objects.filter(level='kp'),
+        required=True,
+        help_text='知识点ID（必填）',
+    )
 
     class Meta:
         model = Question
