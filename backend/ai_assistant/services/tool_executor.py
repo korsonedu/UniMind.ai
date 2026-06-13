@@ -40,6 +40,13 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'launch_arc_pipeline': lambda a: "启动 ARC 精修管线",
         'check_pipeline_status': lambda a: "检查管线执行进度",
         'get_workbench_stats': lambda a: "获取题库统计",
+        'get_student_detail': lambda a: f"查看「{a.get('student_name', a.get('student_id', '学生'))}」学习数据",
+        'get_assignment_progress': lambda a: f"查询作业 #{a.get('assignment_id', '')} 进度",
+        'assign_practice': lambda a: f"布置作业「{a.get('title', '课后练习')}」",
+        'send_notification': lambda a: f"发送提醒给「{a.get('student_name', a.get('student_id', '学生'))}」",
+        'list_courses': lambda a: "浏览课程库" + (f"（{a.get('subject', '')}）" if a.get('subject') else ""),
+        'list_questions': lambda a: "浏览题库" + (f"（{a.get('kp_name', '')}）" if a.get('kp_name') else ""),
+        'list_articles': lambda a: "浏览文章库" + (f"（搜索: {a.get('query', '')}）" if a.get('query') else ""),
     }
     generator = labels.get(tool_name)
     if generator:
@@ -88,6 +95,15 @@ def summarize_tool_result(tool_name: str, result) -> str:
         ) + (f" · 推荐{len(r.get('remediation_questions', []))}道变式题" if r.get('remediation_questions') else ''),
         'update_plan_task': lambda r: f"任务已更新为 {r.get('new_status', 'unknown')}",
         'run_diagnostic': lambda r: f"诊断完成，答对 {r.get('total_correct', 0)}/{r.get('total_questions', 0)}" if 'total_correct' in r else f"已生成 {len(r.get('questions', []))} 道诊断题",
+        'get_student_detail': lambda r: f"{r.get('name', '')} 正确率 {r.get('accuracy', 0)}%" + (
+            f"，{len(r.get('weak_points', []))} 个薄弱点" if r.get('weak_points') else ""),
+        'get_assignment_progress': lambda r: f"「{r.get('title', '')}」提交 {r.get('submitted', 0)}/{r.get('total_students', 0)}" + (
+            f"，{r.get('pending_grade', 0)} 份待批改" if r.get('pending_grade', 0) else "，全部已批改"),
+        'assign_practice': lambda r: f"已发布「{r.get('title', '')}」{r.get('question_count', 0)} 题给 {r.get('class_count', 0)} 个班",
+        'send_notification': lambda r: f"已发送提醒给 {r.get('count', 0)} 人",
+        'list_courses': lambda r: f"共 {r.get('total', 0)} 门课程",
+        'list_questions': lambda r: f"共 {r.get('total', 0)} 道题",
+        'list_articles': lambda r: f"共 {r.get('total', 0)} 篇文章",
     }
 
     fn = summaries.get(tool_name)
@@ -112,6 +128,7 @@ class BaseToolExecutor:
         self._allowed_tool_names = None
         self.institution = institution or getattr(user, 'institution', None)
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
+        self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
 
     def __call__(self, tool_name: str, args: Dict[str, Any]) -> str:
         # 工具白名单校验：防止 LLM 被注入后调用非预期工具
@@ -492,6 +509,7 @@ class PlannerToolExecutor(BaseToolExecutor):
             grading_points=question_dict['grading_points'],
             options=question_dict['options'],
             subjective_type=question_dict['subjective_type'] or '主观题',
+            user=self.user,
         )
 
         error_analysis = result.get('error_analysis')
@@ -541,6 +559,35 @@ class PlannerToolExecutor(BaseToolExecutor):
             # kp_breakdown: 该知识点的掌握度
             breakdown = MemorySystem.query_kp_breakdown(self.user, [kp_id])
             response['kp_breakdown'] = breakdown.get('kp_breakdown', [])
+
+        # IRT 参数（如已估计，机构隔离）
+        try:
+            from quizzes.models import ItemParameter, UserAbility
+            item_param = ItemParameter.objects.filter(
+                question_id=question_id,
+                institution=self.institution,
+            ).first()
+            if item_param and item_param.responses_count >= 50:
+                response['irt_item'] = {
+                    'discrimination': item_param.discrimination,
+                    'difficulty': item_param.difficulty,
+                    'guessing': item_param.guessing,
+                }
+                if kp_id:
+                    ability = UserAbility.objects.filter(
+                        user=self.user, knowledge_point_id=kp_id,
+                        institution=self.institution,
+                    ).first()
+                    if ability:
+                        p = item_param.guessing + (1 - item_param.guessing) / (
+                            1 + 2.71828 ** (-item_param.discrimination * (ability.theta - item_param.difficulty))
+                        )
+                        response['irt_ability'] = {
+                            'theta': ability.theta,
+                            'p_correct': round(p, 3),
+                        }
+        except Exception:
+            pass  # IRT 参数可选，失败不影响判分
 
         return response
 
