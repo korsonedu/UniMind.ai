@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('users', '0050_add_institution_notification_config'),
-        ('quizzes', '0041_assignment_assignmentquestion_assignmentsubmission'),
+        ('quizzes', '0040_add_knowledge_edge'),
     ]
 
     operations = [
