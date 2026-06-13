@@ -223,6 +223,7 @@ class QuizAITaskService:
             'feedback': str(parsed.get('feedback', '已评阅')).strip(),
             'analysis': str(parsed.get('analysis', '')).strip() or str(correct_answer or ''),
             'memorix_rating': memorix_rating,
+            'error_analysis': parsed.get('error_analysis'),
         }
 
     @classmethod

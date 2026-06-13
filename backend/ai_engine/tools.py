@@ -238,6 +238,19 @@ GRADING_RESULT_SCHEMA = {
             "type": "integer", "minimum": 1, "maximum": 4,
             "description": "Memorix 记忆评级: 1=完全不会, 2=困难回忆, 3=犹豫正确, 4=熟练正确",
         },
+        "error_analysis": {
+            "type": "object",
+            "description": "错因分析。仅当 score < max_score * 0.6 时填写；否则设为 null",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["concept_error", "calculation_error", "careless_mistake"],
+                    "description": "错因类型",
+                },
+                "reasoning": {"type": "string", "description": "错因详细分析"},
+                "suggested_focus": {"type": "string", "description": "针对性强化建议"},
+            },
+        },
     },
     "required": ["score", "feedback", "analysis", "memorix_rating"],
 }
@@ -751,6 +764,11 @@ QUICK_GENERATE_SCHEMA = {
             "maximum": 20,
             "description": "总题数，默认 5",
         },
+        "difficulty": {
+            "type": "string",
+            "enum": ["entry", "easy", "normal", "hard", "extreme"],
+            "description": "题目难度。用户说「简单/基础」→ easy，「适中/中等」→ normal，「困难/难题」→ hard，「极难」→ extreme。默认 normal。",
+        },
     },
     "required": ["kp_ids"],
 }
@@ -809,9 +827,76 @@ GET_WORKBENCH_STATS_SCHEMA = {
     },
 }
 
+GET_STUDENT_DETAIL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "student_name": {"type": "string", "description": "学生姓名/昵称（模糊匹配）"},
+        "student_id": {"type": "integer", "description": "学生 ID（精确匹配，优先级高于 name）"},
+    },
+}
+
+GET_ASSIGNMENT_PROGRESS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "assignment_id": {"type": "integer", "description": "作业 ID"},
+    },
+    "required": ["assignment_id"],
+}
+
+ASSIGN_PRACTICE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string", "description": "作业标题"},
+        "question_ids": {"type": "array", "items": {"type": "integer"}, "description": "题目 ID 列表"},
+        "class_names": {"type": "array", "items": {"type": "string"}, "description": "目标班级名称列表"},
+        "due_date": {"type": "string", "description": "截止日期（ISO 格式，如 2026-06-20）"},
+        "points_per_question": {"type": "integer", "description": "每题分值，默认 1"},
+    },
+    "required": ["title", "question_ids"],
+}
+
+SEND_NOTIFICATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "student_name": {"type": "string", "description": "学生姓名（模糊匹配）"},
+        "student_id": {"type": "integer", "description": "学生 ID（精确匹配，优先级高于 name）"},
+        "title": {"type": "string", "description": "通知标题"},
+        "content": {"type": "string", "description": "通知正文内容"},
+    },
+    "required": ["content"],
+}
+
+LIST_COURSES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "subject": {"type": "string", "description": "按学科筛选"},
+        "query": {"type": "string", "description": "按标题/描述搜索关键词"},
+        "limit": {"type": "integer", "description": "返回数量上限，默认 10"},
+    },
+}
+
+LIST_QUESTIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "kp_name": {"type": "string", "description": "按知识点名称搜索"},
+        "subject": {"type": "string", "description": "按学科筛选"},
+        "q_type": {"type": "string", "description": "题型筛选：objective/subjective/calculation/short/essay"},
+        "difficulty": {"type": "string", "description": "难度筛选：entry/easy/normal/hard/extreme"},
+        "limit": {"type": "integer", "description": "返回数量上限，默认 20"},
+    },
+}
+
+LIST_ARTICLES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "query": {"type": "string", "description": "按标题/内容搜索关键词"},
+        "limit": {"type": "integer", "description": "返回数量上限，默认 10"},
+    },
+}
+
 
 def get_exam_generator_tools():
-    """出题 Agent 工具集（5 个工具）。"""
+    """教师 Agent 工具集（14 个工具）。"""
     return [
         _make_tool("search_knowledge", "搜索知识点或知识树结构。出题前先用此工具确认知识点存在并获取 ID。", SEARCH_KNOWLEDGE_SCHEMA,
             impl_summary="合并搜索：mode=kp 时模糊匹配 knowledge_point 表的 name 和 code；mode=tree 时搜索知识树结构（sub/ch/sec 层级）；mode=auto 时先搜 kp，无结果则自动搜 tree。支持 subject 过滤。返回知识点 ID 和名称。"),
@@ -825,6 +910,23 @@ def get_exam_generator_tools():
             impl_summary="scope=summary 返回总题数和按学科/难度/题型分布；scope=recent 返回最近 20 道题；scope=insights 返回教师出题偏好分析。所有数据按机构隔离。"),
         _make_tool("get_class_weak_points", "获取班级最薄弱的知识点（按正确率排序）。仅教师/机构主可用。教师说'针对薄弱点出题'时先调用此工具获取实际薄弱知识点，再用 search_knowledge 确认知识点 ID，最后 quick_generate。", GET_CLASS_WEAK_POINTS_SCHEMA,
             impl_summary="查询 UserQuestionStatus 表，按 knowledge_point 聚合学生正确率，返回最低的前 N 个知识点（含正确率、尝试次数、涉及学生数）。数据按机构隔离。"),
+        # ── 新增数据类 ──
+        _make_tool("get_student_detail", "获取指定学生的详细学习数据：正确率、薄弱知识点、ELO、周活跃度。教师提到学生名字或问'某某学得怎么样'时使用。", GET_STUDENT_DETAIL_SCHEMA,
+            impl_summary="通过学生姓名或 ID 查找学生，汇总 UserQuestionStatus 中的答题正确率，聚合按知识点的错误计数，返回 ELO、周活跃度、Top 5 薄弱点。"),
+        _make_tool("get_assignment_progress", "查询指定作业的提交和批改进度。教师问'作业交了没''还有谁没交'时使用。", GET_ASSIGNMENT_PROGRESS_SCHEMA,
+            impl_summary="查询 Assignment 及其 target_classes 的学生总数，对比 AssignmentSubmission 的提交数和已批改数，返回 submitted/unsubmitted/graded/pending_grade 四维统计。"),
+        # ── 新增行动类 ──
+        _make_tool("assign_practice", "创建作业并发布给学生。教师出题后说'布置给X班'时使用，会同时在学生端刷题套件中展示。", ASSIGN_PRACTICE_SCHEMA,
+            impl_summary="创建 Assignment 记录（status=published），关联指定题目和目标班级，可选设置截止日期。成功后学生端刷题套件的推题区域立即可见。"),
+        _make_tool("send_notification", "向指定学生发送学习提醒通知。教师说'提醒一下某某'时使用。", SEND_NOTIFICATION_SCHEMA,
+            impl_summary="查找目标学生（按姓名或 ID），创建 Notification 记录（n_type=system），推送至学生端通知中心。"),
+        # ── 新增内容浏览类 ──
+        _make_tool("list_courses", "浏览机构课程库。教师说'看看我的课程'或'有哪些视频课'时使用。", LIST_COURSES_SCHEMA,
+            impl_summary="查询 Course 表（按机构隔离），支持 subject 筛选和 title/description 搜索，返回课程 ID、标题、简介、学科和链接。"),
+        _make_tool("list_questions", "浏览机构题库。教师说'看看题库'或'有没有关于X的题'时使用。", LIST_QUESTIONS_SCHEMA,
+            impl_summary="查询 Question 表（按机构隔离），支持 kp_name/subject/q_type/difficulty 多维度筛选，返回题目 ID、文本预览、题型、难度和知识点。"),
+        _make_tool("list_articles", "浏览机构文章库。教师说'看看文章'时使用。", LIST_ARTICLES_SCHEMA,
+            impl_summary="查询 Article 表（按机构隔离），支持标题/内容搜索，返回文章 ID、标题、作者、标签和链接。"),
     ]
 
 # ── 小宇可视化工具 Schema ──────────────────────────────────────
