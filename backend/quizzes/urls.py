@@ -23,7 +23,7 @@ from .views_knowledge import (
 )
 from .views_ai import (
     AIPreviewParseView,
-    AdversarialPipelineView, PipelineReviewListView, PipelineReviewActionView,
+    AdversarialPipelineView, BulkPipelineView, PipelineReviewListView, PipelineReviewActionView,
     WorkbenchTaskListView, WorkbenchTaskStatusView,
     WorkbenchSaveQuestionsView, WorkbenchLaunchArcView,
 )
@@ -90,6 +90,7 @@ urlpatterns = [
     path('admin/pipeline-review/', PipelineReviewListView.as_view(), name='admin-pipeline-review-list'),
     path('admin/pipeline-review/<int:pk>/', PipelineReviewActionView.as_view(), name='admin-pipeline-review-action'),
     path('admin/adversarial-pipeline/', AdversarialPipelineView.as_view(), name='admin-adversarial-pipeline'),
+    path('admin/bulk-pipeline/', BulkPipelineView.as_view(), name='admin-bulk-pipeline'),
     # 工作台
     path('workbench/tasks/', WorkbenchTaskListView.as_view(), name='workbench-task-list'),
     path('workbench/tasks/<int:pk>/status/', WorkbenchTaskStatusView.as_view(), name='workbench-task-status'),
