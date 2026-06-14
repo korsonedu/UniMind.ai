@@ -33,10 +33,11 @@ SYSTEM_PROMPT = """你是教育领域的知识图谱专家。
 - co_occur: 考试中经常一起出现
 - derivation: B 从 A 推导而来
 
-返回 JSON 数组，每项格式：
+调用 submit_edges 工具提交结果。每项格式：
 {"source_name": "给定KP名", "target_name": "相关KP名", "relation": "关系类型", "confidence": 0.0-1.0}
 
-只返回 JSON 数组，不要其他文字。没有关系的 KP 不出现在数组中。"""
+source_name 和 target_name 必须与给定列表中的名称**逐字一致**。
+没有关系的 KP 不提交。confidence < 0.6 的关系也不提交。"""
 
 
 class Command(BaseCommand):
@@ -163,44 +164,54 @@ class Command(BaseCommand):
         self.stdout.write(f"⏱ 总耗时: {elapsed:.1f}s")
 
     def _call_llm(self, system_msg, user_msg):
-        """调用 LLM"""
-        import os
-        import httpx
+        """调用 LLM，使用 structured_output 保证 JSON 合法性"""
+        from ai_engine.service import AIEngine
 
-        from django.conf import settings as django_settings
-
-        api_key = os.getenv('LLM_API_KEY', '')
-        base_url = os.getenv('LLM_BASE_URL',
-                             'https://api.deepseek.com/v1/chat/completions')
-        model = getattr(django_settings, 'LLM_MODEL', 'deepseek-v4-flash') or 'deepseek-v4-flash'
-
-        try:
-            resp = httpx.post(
-                base_url,
-                json={
-                    'model': model,
-                    'messages': [
-                        {'role': 'system', 'content': system_msg},
-                        {'role': 'user', 'content': user_msg},
-                    ],
-                    'temperature': 0.2,
-                    'max_tokens': 8192,
+        schema = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "source_name": {
+                        "type": "string",
+                        "description": "当前 SEC 中的知识点名称，与给定的列表精确一致",
+                    },
+                    "target_name": {
+                        "type": "string",
+                        "description": "全局摘要中相关知识点的名称，与摘要中的名称精确一致",
+                    },
+                    "relation": {
+                        "type": "string",
+                        "enum": RELATION_TYPES,
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                    },
                 },
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                },
-                timeout=90,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            content = data['choices'][0]['message']['content'].strip()
-        except Exception as e:
-            self.stderr.write(f" ❌ {e}")
+                "required": ["source_name", "target_name", "relation", "confidence"],
+            },
+        }
+
+        messages = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": user_msg},
+        ]
+
+        result = AIEngine.structured_output(
+            messages=messages,
+            schema=schema,
+            tool_name="submit_edges",
+            tool_description="提交语义边列表",
+            temperature=0.2,
+            max_tokens=8192,
+            operation='knowledge_edge_analyze',
+        )
+        if not result:
+            self.stderr.write(" ⚠️ structured_output 返回空")
             return []
-
-        # 解析 JSON，支持截断修复
-        return self._parse_json_response(content)
+        return result
 
     def _find_id(self, name, summary_lines):
         """在全局摘要中按名字找 KP ID"""

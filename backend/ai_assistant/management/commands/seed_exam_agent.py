@@ -11,7 +11,7 @@ class Command(BaseCommand):
         bot, created = Bot.objects.update_or_create(
             bot_type='exam_generator',
             defaults={
-                'name': '命题官',
+                'name': '工作台',
                 'system_prompt': '',  # 由 sync_bot_prompt 从文件填充
                 'is_exclusive': False,
                 'is_active': True,

@@ -80,8 +80,7 @@ class XiaoYuDashboardView(APIView):
         uqs = UserQuestionStatus.objects.filter(user=user)
         if institution:
             uqs = uqs.filter(
-                models.Q(question__institution=institution) |
-                models.Q(question__institution__isnull=True)
+                models.Q(question__institution=institution)
             )
         total = uqs.count()
         correct = uqs.filter(last_correct=True).count()
@@ -151,15 +150,13 @@ class XiaoYuDashboardView(APIView):
         due_qs = UserQuestionStatus.objects.filter(user=user, next_review_at__lte=now)
         if institution:
             due_qs = due_qs.filter(
-                models.Q(question__institution=institution) |
-                models.Q(question__institution__isnull=True)
+                models.Q(question__institution=institution)
             )
         due_qs = due_qs.select_related('question__knowledge_point').order_by('next_review_at')[:20]
         base_qs = UserQuestionStatus.objects.filter(user=user, next_review_at__lte=now)
         if institution:
             base_qs = base_qs.filter(
-                models.Q(question__institution=institution) |
-                models.Q(question__institution__isnull=True)
+                models.Q(question__institution=institution)
             )
         return {
             'due_count': base_qs.count(),

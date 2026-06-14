@@ -264,14 +264,17 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (!hasConversation) {
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full flex flex-col items-center px-4 animate-in fade-in duration-500 pt-[10vh]">
-          <div className="w-full max-w-xl">
-            <div className="space-y-3 mb-8">
-              <h1 className="text-4xl font-bold tracking-tight text-foreground/90">{landingTitle}</h1>
-              <p className="text-sm text-foreground/65">{landingDescription}</p>
+        <div className="h-full flex flex-col items-center justify-center px-4 animate-in fade-in duration-500">
+          <div className="w-full max-w-2xl">
+            <div className="space-y-2 mb-6">
+              <div className="flex items-center gap-2.5">
+                <img src="/unimind_logo_small.png" alt="UniMind" className="h-7 w-7 rounded-lg shrink-0" />
+                <h1 className="text-3xl font-extrabold tracking-tight text-foreground/90">{landingTitle}</h1>
+              </div>
+              <p className="text-xs text-foreground/60">{landingDescription}</p>
             </div>
 
-            <div className="bg-card rounded-xl border border-border/60 overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+            <div className="bg-card rounded-2xl border border-border/50 shadow-lg overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
               <textarea
                 value={input}
                 onChange={e => setInput(e.target.value)}
@@ -279,10 +282,33 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 onCompositionEnd={() => setIsComposition(false)}
                 placeholder={placeholder}
                 autoComplete="off"
-                className="w-full bg-transparent border-none resize-none text-sm px-3 py-3.5 placeholder:text-muted-foreground/60 focus:outline-none min-h-[120px]"
+                className="w-full bg-transparent border-none resize-none text-sm px-4 py-3 placeholder:text-muted-foreground/55 focus:outline-none min-h-[64px]"
                 disabled={loading}
               />
-              <div className="flex items-center justify-end px-2.5 py-2 border-t border-border/40">
+              <div className="flex items-center justify-end gap-1.5 px-3 py-2">
+                <Popover open={skillOpen} onOpenChange={setSkillOpen}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <button className={cn("p-1 rounded-md transition-colors", skillOpen ? "text-primary/60 bg-muted" : "text-muted-foreground/55 hover:text-foreground/65 hover:bg-muted/50")}>
+                          <Lightbulb className="h-3.5 w-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-[10px]">{skillTooltip}</TooltipContent>
+                  </Tooltip>
+                  <PopoverContent align="end" side="top" className="w-48 p-1 rounded-xl border-border/60 shadow-lg">
+                    <div className="space-y-0.5">
+                      {skills.map(skill => (
+                        <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
+                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left">
+                          <skill.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                          <span className="text-[12px] font-medium">{skill.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
                 <Button
                   onClick={() => doSend(input)}
                   disabled={loading || !input.trim()}
@@ -292,15 +318,6 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   {loading ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <PaperPlaneTilt className="h-3.5 w-3.5" />}
                 </Button>
               </div>
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-1.5 mt-4">
-              {skills.map(skill => (
-                <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
-                  className="inline-flex items-center px-2.5 py-1 rounded-full border border-border text-[11px] text-foreground/70 hover:text-foreground/90 hover:bg-muted/40 transition-colors">
-                  {skill.label}
-                </button>
-              ))}
             </div>
 
             {sessions.length > 0 && (
@@ -365,7 +382,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             {sessions.length > 1 && (
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                 <PopoverTrigger asChild>
-                  <button className="text-[9px] text-muted-foreground/40 hover:text-foreground/60 transition-colors shrink-0">
+                  <button className="text-[10px] text-muted-foreground/55 hover:text-foreground/65 transition-colors shrink-0">
                     {sessions.length} 个对话
                   </button>
                 </PopoverTrigger>
@@ -377,7 +394,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                         <button onClick={() => { wrappedLoadSession(session); }}
                           className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
                           <span className="text-[11px] font-medium truncate">{session.label}</span>
-                          <span className="text-[9px] text-muted-foreground/50">
+                          <span className="text-[10px] text-muted-foreground/55">
                             {session.messages.length} 条消息
                             {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                           </span>
@@ -403,7 +420,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
           {/* Messages — 内联视觉卡片 */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
-            <div className="max-w-3xl mx-auto p-4 space-y-3">
+            <div className="max-w-3xl mx-auto p-4 space-y-4">
               {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
                 // render_visual → 内联 VisualCard
                 const stepVisual = msg.toolStep?.visual;
@@ -440,9 +457,9 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           </div>
 
           {/* Input */}
-          <div className="shrink-0 px-4 pb-6 pt-2">
+          <div className="shrink-0 px-4 pb-4 pt-2">
             <div className="max-w-3xl mx-auto">
-              <div className="rounded-2xl border border-border/60 bg-background shadow-sm overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+              <div className="rounded-2xl border border-border/50 bg-background shadow-sm overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                 <textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
@@ -451,15 +468,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !isComposing) { e.preventDefault(); doSend(input); } }}
                   placeholder={chatPlaceholder}
                   autoComplete="off"
-                  className="w-full bg-transparent border-none resize-none text-sm px-4 py-3 placeholder:text-muted-foreground/45 focus:outline-none h-[30px]"
+                  className="w-full bg-transparent border-none resize-none text-sm px-4 py-2 placeholder:text-muted-foreground/55 focus:outline-none min-h-[36px]"
                   disabled={loading}
                 />
-                <div className="flex items-center gap-1.5 px-3 py-2 border-t border-border/30">
+                <div className="flex items-center justify-end gap-1.5 px-2.5 py-1.5">
                   <Popover open={skillOpen} onOpenChange={setSkillOpen}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button className={cn("p-1.5 rounded-lg transition-colors", skillOpen ? "text-primary/60" : "text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted")}>
+                          <button className={cn("p-1.5 rounded-lg transition-colors", skillOpen ? "text-primary/60" : "text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted")}>
                             <Lightbulb className="h-3.5 w-3.5" />
                           </button>
                         </PopoverTrigger>
@@ -535,7 +552,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             {sessions.length > 1 && (
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                 <PopoverTrigger asChild>
-                  <button className="text-[9px] text-muted-foreground/40 hover:text-foreground/60 transition-colors shrink-0">
+                  <button className="text-[10px] text-muted-foreground/55 hover:text-foreground/65 transition-colors shrink-0">
                     {sessions.length} 个对话
                   </button>
                 </PopoverTrigger>
@@ -547,7 +564,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                         <button onClick={() => { wrappedLoadSession(session); }}
                           className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
                           <span className="text-[11px] font-medium truncate">{session.label}</span>
-                          <span className="text-[9px] text-muted-foreground/50">
+                          <span className="text-[10px] text-muted-foreground/55">
                             {session.messages.length} 条消息
                             {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
                           </span>
@@ -572,7 +589,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           </div>
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
-            <div className="p-2.5 space-y-2">
+            <div className="p-2.5 space-y-3">
               {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => (
                 msg.toolStep ? (
                   <ToolStepMessage key={msg._id || i} step={msg.toolStep} index={i} />

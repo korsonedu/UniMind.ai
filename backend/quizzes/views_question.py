@@ -398,3 +398,223 @@ class ImportCSVQuestionsView(APIView):
 
         except Exception as e:
             return Response({'error': f'CSV解析失败: {str(e)}'}, status=400)
+
+
+# ── Assignment API ──────────────────────────────────────────────────
+
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from quizzes.models import Assignment, AssignmentQuestion
+from users.models import Class as ClassModel
+
+
+class AssignmentCreateView(APIView):
+    """POST /api/quizzes/assignments/create/ — 教师创建作业并发布给学生。"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        institution = getattr(user, 'institution', None)
+        if not institution:
+            return Response({'error': '无机构归属'}, status=403)
+
+        role = getattr(user, 'institution_role', '')
+        if role not in ('teacher', 'owner'):
+            return Response({'error': '仅教师/机构主可创建作业'}, status=403)
+
+        title = (request.data.get('title') or '').strip()
+        question_ids = request.data.get('question_ids', [])
+        class_ids = request.data.get('class_ids', [])
+        due_date = request.data.get('due_date') or None
+        points_per_q = int(request.data.get('points_per_question', 1))
+
+        if not title:
+            return Response({'error': '作业标题不能为空'}, status=400)
+        if not question_ids:
+            return Response({'error': '请选择至少一道题'}, status=400)
+
+        try:
+            assignment = Assignment.objects.create(
+                title=title,
+                institution=institution,
+                created_by=user,
+                due_date=due_date,
+                status='published',
+            )
+
+            # 关联题目
+            for i, qid in enumerate(question_ids):
+                AssignmentQuestion.objects.create(
+                    assignment=assignment,
+                    question_id=int(qid),
+                    order=i,
+                    points=points_per_q,
+                )
+
+            # 关联班级
+            if class_ids:
+                classes = ClassModel.objects.filter(
+                    id__in=class_ids, institution=institution
+                )
+                assignment.target_classes.set(classes)
+
+            return Response({
+                'id': assignment.id,
+                'title': assignment.title,
+                'question_count': len(question_ids),
+                'class_count': assignment.target_classes.count(),
+                'status': assignment.status,
+                'due_date': assignment.due_date.isoformat() if assignment.due_date else None,
+            })
+        except Exception as e:
+            logger.exception("Assignment creation failed")
+            return Response({'error': f'创建失败: {str(e)}'}, status=500)
+
+
+class ClassListView(APIView):
+    """GET /api/quizzes/classes/ — 获取当前机构的班级列表。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        institution = getattr(request.user, 'institution', None)
+        if not institution:
+            return Response([], safe=False)
+
+        classes = ClassModel.objects.filter(institution=institution).values('id', 'name')
+        return Response(list(classes))
+
+
+class StudentAssignmentListView(APIView):
+    """GET /api/quizzes/assignments/my/ — 学生端：我的作业列表。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        institution = getattr(user, 'institution', None)
+        if not institution:
+            return Response([], safe=False)
+
+        assignments = Assignment.objects.filter(
+            institution=institution, status='published'
+        ).order_by('-created_at')
+
+        result = []
+        for a in assignments:
+            # Check if student has submitted
+            try:
+                sub = AssignmentSubmission.objects.get(assignment=a, student=user)
+                submitted = True
+                score = sub.score
+            except AssignmentSubmission.DoesNotExist:
+                submitted = False
+                score = None
+
+            result.append({
+                'id': a.id,
+                'title': a.title,
+                'due_date': a.due_date.isoformat() if a.due_date else None,
+                'question_count': a.assignment_questions.count(),
+                'submitted': submitted,
+                'score': score,
+                'created_at': a.created_at.isoformat(),
+            })
+
+        return Response(result)
+
+
+class StudentAssignmentDetailView(APIView):
+    """GET /api/quizzes/assignments/<id>/questions/ — 学生端：获取作业题目（不含答案）。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = request.user
+        institution = getattr(user, 'institution', None)
+
+        try:
+            assignment = Assignment.objects.get(id=pk, institution=institution, status='published')
+        except Assignment.DoesNotExist:
+            return Response({'error': '作业不存在'}, status=404)
+
+        questions = []
+        for aq in assignment.assignment_questions.select_related('question').order_by('order'):
+            q = aq.question
+            questions.append({
+                'id': q.id,
+                'text': q.text,
+                'q_type': q.q_type,
+                'options': q.options if q.q_type == 'objective' else None,
+                'difficulty_level': q.difficulty_level,
+                'kp_name': q.knowledge_point.name if q.knowledge_point else '',
+                'points': aq.points,
+                'order': aq.order,
+            })
+
+        # Check existing submission
+        sub = AssignmentSubmission.objects.filter(assignment=assignment, student=user).first()
+
+        return Response({
+            'id': assignment.id,
+            'title': assignment.title,
+            'due_date': assignment.due_date.isoformat() if assignment.due_date else None,
+            'questions': questions,
+            'submitted': sub is not None,
+            'previous_answers': sub.answers if sub else {},
+            'score': sub.score if sub else None,
+        })
+
+
+class StudentAssignmentSubmitView(APIView):
+    """POST /api/quizzes/assignments/submit/ — 学生提交作业。"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        assignment_id = request.data.get('assignment_id')
+        answers = request.data.get('answers', {})
+
+        if not assignment_id:
+            return Response({'error': '缺少作业 ID'}, status=400)
+        if not answers:
+            return Response({'error': '请回答至少一题'}, status=400)
+
+        institution = getattr(user, 'institution', None)
+        try:
+            assignment = Assignment.objects.get(id=int(assignment_id), institution=institution, status='published')
+        except Assignment.DoesNotExist:
+            return Response({'error': '作业不存在'}, status=404)
+
+        # Check due date
+        if assignment.due_date and timezone.now() > assignment.due_date:
+            return Response({'error': '作业已截止'}, status=400)
+
+        # Auto-grade objective questions
+        total_score = 0
+        max_score = 0
+        graded_count = 0
+        for aq in assignment.assignment_questions.all():
+            q = aq.question
+            max_score += aq.points
+            user_answer = str(answers.get(str(q.id), '')).strip()
+            if q.q_type == 'objective' and q.answer:
+                if user_answer == q.answer.strip():
+                    total_score += aq.points
+                    graded_count += 1
+                elif user_answer:
+                    graded_count += 1
+
+        sub, created = AssignmentSubmission.objects.update_or_create(
+            assignment=assignment, student=user,
+            defaults={
+                'answers': answers,
+                'score': round(total_score / max_score * 100, 1) if max_score > 0 else None,
+            },
+        )
+
+        return Response({
+            'id': sub.id,
+            'submitted': True,
+            'graded_count': graded_count,
+            'total_questions': assignment.assignment_questions.count(),
+            'score': sub.score,
+            'message': f'已提交，客观题自动批改 {graded_count} 题',
+        })

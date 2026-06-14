@@ -864,11 +864,12 @@ class AIEngine:
                     args = {}
 
                 try:
-                    from ai_assistant.services.tool_executor import generate_step_label, summarize_tool_result
+                    from ai_assistant.services.tool_executor import generate_step_label, summarize_tool_result, extract_step_actions
                     label = generate_step_label(name, args)
                 except ImportError:
                     label = f"执行 {name}"
                     summarize_tool_result = None
+                    extract_step_actions = None
 
                 if on_step:
                     on_step({
@@ -899,6 +900,11 @@ class AIEngine:
                     "label": label,
                     "result_summary": summarize_tool_result(name, result) if summarize_tool_result else str(result)[:200],
                 }
+                # 提取操作链接（如 assign_practice 返回的 _actions）
+                if extract_step_actions:
+                    actions = extract_step_actions(result)
+                    if actions:
+                        step_event["actions"] = actions
                 # render_visual: attach full payload for frontend rendering
                 if name == "render_visual" and hasattr(tool_executor, 'pending_visuals'):
                     logger.info("[step] render_visual pending_visuals count=%d", len(tool_executor.pending_visuals))

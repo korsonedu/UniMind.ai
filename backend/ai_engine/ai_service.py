@@ -313,7 +313,8 @@ class AIService:
     def chat_with_assistant_agent(cls, bot, history_messages, user_message,
                                    tool_executor, student_context='',
                                    memory_context='', on_step=None,
-                                   on_message=None, adaptive_directives=''):
+                                   on_message=None, adaptive_directives='',
+                                   variant_suffix=''):
         from ai_assistant.services.chat_service import AssistantChatService
         return AssistantChatService.chat_with_assistant_agent(
             bot=bot, history_messages=history_messages,
@@ -321,6 +322,7 @@ class AIService:
             student_context=student_context, memory_context=memory_context,
             on_step=on_step, on_message=on_message,
             adaptive_directives=adaptive_directives,
+            variant_suffix=variant_suffix,
         )
 
     # ── Legacy private methods (delegated to QuestionGenerator) ──

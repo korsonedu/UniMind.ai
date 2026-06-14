@@ -185,8 +185,7 @@ class MemorySystem:
         qs = UserQuestionStatus.objects.filter(user=user, wrong_count__gt=0)
         if institution:
             qs = qs.filter(
-                models.Q(question__institution=institution) |
-                models.Q(question__institution__isnull=True)
+                models.Q(question__institution=institution)
             )
 
         aggregated = (
@@ -219,8 +218,7 @@ class MemorySystem:
         due_qs = UserQuestionStatus.objects.filter(user=user, next_review_at__lte=now)
         if institution:
             due_qs = due_qs.filter(
-                models.Q(question__institution=institution) |
-                models.Q(question__institution__isnull=True)
+                models.Q(question__institution=institution)
             )
         due_qs = due_qs.select_related('question__knowledge_point').order_by('next_review_at')
         due_count = due_qs.count()
@@ -286,8 +284,7 @@ class MemorySystem:
 
         if institution:
             qs = qs.filter(
-                models.Q(question__institution=institution) |
-                models.Q(question__institution__isnull=True)
+                models.Q(question__institution=institution)
             )
 
         if subject:
@@ -366,8 +363,7 @@ class MemorySystem:
         qs = UserQuestionStatus.objects.filter(user=user, wrong_count__gt=0)
         if institution:
             qs = qs.filter(
-                models.Q(question__institution=institution) |
-                models.Q(question__institution__isnull=True)
+                models.Q(question__institution=institution)
             )
         wrong_qs = qs.select_related('question__knowledge_point').order_by('-wrong_count')[:limit]
 
@@ -724,9 +720,7 @@ class MemorySystem:
             difficulty_level__in=adjacent,
         ).exclude(id=exclude_id)
         if institution:
-            qs = qs.filter(
-                models.Q(institution=institution) | models.Q(institution__isnull=True)
-            )
+            qs = qs.filter(institution=institution)
 
         questions = list(qs.select_related('knowledge_point').order_by('?')[:limit])
         return {

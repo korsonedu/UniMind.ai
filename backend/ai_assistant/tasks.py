@@ -554,9 +554,9 @@ def record_trajectory_async(
     tool_outputs: list,
     prompt_variant: str = 'baseline'
 ):
-    """异步记录对话轨迹到数据库。"""
+    """异步记录对话轨迹到数据库，并自动评估 outcome。"""
     from .models import AITrajectory
-    
+
     try:
         trajectory = AITrajectory.objects.create(
             user_id=user_id,
@@ -571,6 +571,13 @@ def record_trajectory_async(
             "Async recorded trajectory %d for user %d, conversation %s",
             trajectory.id, user_id, conversation_id
         )
+        # 启发式自动评估
+        from .services.trajectory_recorder import _auto_evaluate_trajectory
+        _auto_evaluate_trajectory(trajectory)
+
+        # 提取可复用规律（仅限成功/部分成功的轨迹）
+        if trajectory.outcome in ('success', 'partial'):
+            experience_extract_task.delay(trajectory.id)
     except Exception:
         logger.exception("Failed to async record trajectory for user %d", user_id)
     finally:
@@ -704,6 +711,220 @@ def precompute_user_profile(user_id: int):
         logger.exception("Failed to precompute user profile for user %d", user_id)
     finally:
         connections.close_all()
+
+
+# ──────────────────────────────────────────────
+#  经验路由器（Phase 1）：规律提取
+# ──────────────────────────────────────────────
+
+@shared_task(
+    soft_time_limit=120,
+    time_limit=180,
+    acks_late=True,
+)
+def experience_extract_task(trajectory_id: int):
+    """
+    从一条对话轨迹中提取可复用规律，经过路由验证后写入 Experience 表。
+
+    Phase 1 管线：extract → validate → dedup → save
+    """
+    from .models import AITrajectory
+    from .services.experience_extractor import extract_experiences, save_experiences
+    from .services.experience_router import validate_routing, find_duplicates, merge_experiences
+
+    try:
+        trajectory = AITrajectory.objects.select_related('user', 'bot').get(id=trajectory_id)
+    except AITrajectory.DoesNotExist:
+        logger.warning("experience_extract_task: trajectory %d not found", trajectory_id)
+        return
+
+    # 1. 提取
+    experiences = extract_experiences(trajectory)
+    if not experiences:
+        logger.info("experience_extract_task: no experiences extracted from trajectory %d", trajectory_id)
+        return
+
+    # 2. 保存
+    saved = save_experiences(trajectory, experiences)
+    if not saved:
+        return
+
+    # 3. 验证路由 + 去重
+    for exp in saved:
+        if not validate_routing(exp):
+            exp.status = 'retired'
+            exp.save(update_fields=['status'])
+            continue
+
+        duplicates = find_duplicates(exp)
+        if duplicates:
+            merge_experiences(duplicates[0], exp)
+        else:
+            logger.info(
+                "experience_extract_task: new experience %d '%s' (dim=%s, scope=%s)",
+                exp.id, exp.title, exp.dimension, exp.scope_type,
+            )
+
+    logger.info(
+        "experience_extract_task: processed trajectory %d → %d experiences (%d saved)",
+        trajectory_id, len(experiences),
+        len([e for e in saved if e.status == 'active']),
+    )
+
+
+@shared_task(
+    soft_time_limit=60,
+    time_limit=90,
+    acks_late=True,
+)
+def apply_experience_decay_task():
+    """定期执行经验权重衰减。（建议每天执行）"""
+    from .services.experience_router import apply_decay
+    affected = apply_decay()
+    logger.info("apply_experience_decay_task: affected %d experiences", affected)
+    return affected
+
+
+@shared_task(
+    soft_time_limit=30,
+    time_limit=60,
+    acks_late=True,
+)
+def experience_verify_on_answer(user_id: int, kp_id: int, score: float, max_score: float):
+    """
+    学生做题后触发：检查是否有经验规律的适用范围覆盖了当前 KP，
+    记录验证数据用于后续反事实对比。
+
+    触发时机：学生提交任意题目答案后。
+    当前阶段：只记录数据，不自动更新经验置信度（数据积累后开启）。
+    """
+    from quizzes.services.knowledge_graph_traversal import get_downstream_kps
+    from .models import Experience, ExperienceVerification
+
+    # 1. 找到 scope 匹配当前 KP 的经验
+    #    两种匹配方式：
+    #    a. 经验 scope=kp_chain，scope_value.kp_id 是当前 KP 的上游
+    #    b. 经验 scope=student，scope_value.student_id == user_id
+    candidates = Experience.objects.filter(
+        status='active',
+        confidence__in=['low', 'medium'],
+    )
+
+    verified = 0
+    for exp in candidates:
+        match = False
+
+        if exp.scope_type == 'kp_chain':
+            # 检查当前 KP 是否在该经验的 kp_chain 下游
+            upstream_id = (exp.scope_value or {}).get('kp_id')
+            if upstream_id:
+                downstream = get_downstream_kps(upstream_id)
+                downstream_ids = {d['kp_id'] for d in downstream}
+                if kp_id in downstream_ids:
+                    match = True
+
+        elif exp.scope_type == 'student':
+            if (exp.scope_value or {}).get('student_id') == user_id:
+                match = True
+
+        if not match:
+            continue
+
+        # 2. 记录验证数据
+        ExperienceVerification.objects.create(
+            experience=exp,
+            user_id=user_id,
+            kp_id=kp_id,
+            score=score,
+            max_score=max_score,
+            score_ratio=round(score / max_score, 4) if max_score > 0 else 0,
+        )
+        verified += 1
+
+    if verified:
+        logger.info(
+            "experience_verify_on_answer: user=%d, kp=%d, score=%.1f/%.1f, matched %d experiences",
+            user_id, kp_id, score, max_score, verified,
+        )
+    return verified
+
+
+@shared_task(
+    soft_time_limit=120,
+    time_limit=180,
+    acks_late=True,
+)
+def experience_aggregate_verifications():
+    """
+    周期分析 ExperienceVerification 数据，自动升级经验置信度。
+
+    策略（Phase 3 MVP）：
+    - 对每条有足够验证数据（≥10条）的经验
+    - 计算平均得分率
+    - 得分率 > 0.7 → low→medium
+    - 得分率 > 0.8 且 ≥30条 → medium→high
+    - 得分率 < 0.4 → 降权/退役
+
+    触发：建议每天执行一次（配 Celery Beat）。
+    """
+    from django.db.models import Avg, Count
+    from .models import Experience, ExperienceVerification
+
+    candidates = Experience.objects.filter(
+        status='active',
+        confidence__in=['low', 'medium'],
+        dimension__in=['prompt', 'memory', 'workflow'],
+    )
+
+    upgraded = 0
+    downgraded = 0
+    retired = 0
+
+    for exp in candidates:
+        stats = ExperienceVerification.objects.filter(
+            experience=exp,
+        ).aggregate(
+            count=Count('id'),
+            avg_score=Avg('score_ratio'),
+        )
+        count = stats['count'] or 0
+        avg = stats['avg_score'] or 0
+
+        if count < 5:
+            continue
+
+        if avg > 0.8 and count >= 30 and exp.confidence == 'medium':
+            exp.confidence = 'high'
+            exp.weight = float(count) * avg
+            exp.save(update_fields=['confidence', 'weight'])
+            logger.info("experience_aggregate: exp %d '%s' → high (n=%d, avg=%.2f)", exp.id, exp.title, count, avg)
+            upgraded += 1
+
+        elif avg > 0.7 and exp.confidence == 'low':
+            exp.confidence = 'medium'
+            exp.weight = float(count) * avg
+            exp.save(update_fields=['confidence', 'weight'])
+            logger.info("experience_aggregate: exp %d '%s' → medium (n=%d, avg=%.2f)", exp.id, exp.title, count, avg)
+            upgraded += 1
+
+        elif avg < 0.4 and count >= 10:
+            exp.weight *= 0.5
+            exp.verify_fail_count += 1
+            exp.save(update_fields=['weight', 'verify_fail_count'])
+            logger.info("experience_aggregate: exp %d '%s' downgraded (n=%d, avg=%.2f)", exp.id, exp.title, count, avg)
+            downgraded += 1
+
+            if exp.verify_fail_count >= 3:
+                exp.status = 'retired'
+                exp.save(update_fields=['status'])
+                logger.info("experience_aggregate: exp %d '%s' retired (3 failures)", exp.id, exp.title)
+                retired += 1
+
+    logger.info(
+        "experience_aggregate: %d upgraded, %d downgraded, %d retired",
+        upgraded, downgraded, retired,
+    )
+    return {'upgraded': upgraded, 'downgraded': downgraded, 'retired': retired}
 
 
 # ──────────────────────────────────────────────
@@ -890,10 +1111,91 @@ def _store_gepa_suggestions(suggestions: list[dict]):
 def optimize_prompt_task():
     """GEPA: Generate → Evaluate → Polish → Adapt（Phase 7 骨架）
 
-    对 low-success-rate 场景自动生成 prompt 变体。
-    当前为数据收集阶段，后续 Phase 实现完整自进化闭环。
+    从 Redis gepa:suggestions 读取分析建议，分派到对应 handler 执行优化。
+    当前为框架阶段：只做分派 + 日志，不自动修改 prompt。
+    后续 Phase 实现 LLM 驱动的 prompt 变体自动生成。
     """
-    pass  # 数据收集阶段，Phase 7 后续实现
+    suggestions = _read_gepa_suggestions()
+    if not suggestions:
+        logger.info("optimize_prompt_task: no suggestions to process")
+        return
+
+    logger.info("optimize_prompt_task: processing %d suggestion batches", len(suggestions))
+
+    for batch in suggestions:
+        for s in batch.get('suggestions', []):
+            target = s.get('target', '')
+            try:
+                if target == 'memorix':
+                    _handle_memorix_suggestion(s)
+                elif target == 'prompt':
+                    _handle_prompt_suggestion(s)
+                elif target == 'bot':
+                    _handle_bot_suggestion(s)
+                else:
+                    logger.warning("Unknown suggestion target: %s", target)
+            except Exception:
+                logger.exception("Failed to handle suggestion: %s", s.get('reason', ''))
+
+
+def _read_gepa_suggestions() -> list[dict]:
+    """从 Redis 读取最新的 GEPA 建议批次（最近 5 条）。"""
+    try:
+        from django_redis import get_redis_connection
+        redis_conn = get_redis_connection("default")
+    except Exception:
+        logger.warning("_read_gepa_suggestions: Redis unavailable")
+        return []
+
+    import json
+    key = "gepa:suggestions"
+    raw = redis_conn.lrange(key, 0, 4)  # 最近 5 条
+    result = []
+    for item in raw:
+        try:
+            result.append(json.loads(item))
+        except json.JSONDecodeError:
+            continue
+    return result
+
+
+# ── Suggestion handlers（框架，待后续填充 LLM 驱动逻辑）──
+
+def _handle_memorix_suggestion(s: dict):
+    """处理 Memorix alpha 参数调整建议。
+
+    未来：自动调用 Memorix API 调整 alpha。
+    当前：仅 log，需人工确认后手动调整。
+    """
+    logger.info(
+        "[GEPA] Memorix suggestion: alpha %s → %s (reason: %s, confidence=%.2f)",
+        s.get('current'), s.get('suggested'), s.get('reason'), s.get('confidence', 0)
+    )
+
+
+def _handle_prompt_suggestion(s: dict):
+    """处理 prompt/tool_guide 改进建议 → 创建实验 variant。
+
+    未来：调 LLM 生成具体措辞 variant，调用 gepa_variants.create_variant()。
+    当前：仅 log + 标记为 needs_review。
+    """
+    param = s.get('param', 'unknown')
+    logger.info(
+        "[GEPA] Prompt suggestion: improve %s (reason: %s, confidence=%.2f)",
+        param, s.get('reason'), s.get('confidence', 0)
+    )
+
+
+def _handle_bot_suggestion(s: dict):
+    """处理 bot system_prompt 审查建议。
+
+    未来：调 LLM 诊断 bot prompt 问题并生成改进 variant。
+    当前：仅 log，需人工审查后手动调整。
+    """
+    logger.info(
+        "[GEPA] Bot suggestion: review %s (reason: %s, confidence=%.2f)",
+        s.get('current'), s.get('reason'), s.get('confidence', 0)
+    )
 
 
 @shared_task(

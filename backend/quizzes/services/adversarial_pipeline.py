@@ -467,8 +467,7 @@ def _get_reviewer_tool_executor(institution=None):
                     knowledge_point__code=kp_code,
                 )
                 if institution:
-                    from django.db.models import Q
-                    qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
+                    qs = qs.filter(institution=institution)
                 questions = [
                     {"id": q['id'], "text": (q['text'] or '')[:300],
                      "q_type": q['q_type'], "answer": (q['correct_answer'] or '')[:200]}

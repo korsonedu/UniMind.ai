@@ -79,6 +79,16 @@ def grade_answer_for_user(user: User, question: Question, user_answer: Any, set_
         review_time=timezone.now() if set_last_review else None,
     )
 
+    # 经验路由器 Phase 3：触发验证
+    if question.knowledge_point_id:
+        from ai_assistant.tasks import experience_verify_on_answer
+        experience_verify_on_answer.delay(
+            user_id=user.id,
+            kp_id=question.knowledge_point_id,
+            score=score_val,
+            max_score=max_score,
+        )
+
     return {
         'score': score_val,
         'max_score': max_score,

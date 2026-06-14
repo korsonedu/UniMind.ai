@@ -145,7 +145,7 @@ def initialize_memorix_from_diagnostic(user, kp_scores):
         qs = Question.objects.filter(knowledge_point_id=kp_id)
         inst = getattr(user, 'institution', None)
         if inst:
-            qs = qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+            qs = qs.filter(institution=inst)
         questions = qs[:5]
 
         for q in questions:

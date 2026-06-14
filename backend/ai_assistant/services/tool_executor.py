@@ -57,6 +57,21 @@ def generate_step_label(tool_name: str, args: dict) -> str:
     return f"执行 {tool_name}"
 
 
+def extract_step_actions(result) -> list | None:
+    """从工具结果 JSON 中提取 _actions 数组，用于前端渲染操作链接。"""
+    import json as _json
+    if isinstance(result, str):
+        try:
+            result = _json.loads(result)
+        except Exception:
+            return None
+    if isinstance(result, dict):
+        actions = result.get('_actions')
+        if isinstance(actions, list) and len(actions) > 0:
+            return actions
+    return None
+
+
 def summarize_tool_result(tool_name: str, result) -> str:
     """将工具结果转为人类可读摘要（用于前端步骤卡片展示）。"""
     import json as _json
@@ -129,6 +144,8 @@ class BaseToolExecutor:
         self.institution = institution or getattr(user, 'institution', None)
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
+        self.tool_call_log: list = []     # GEPA 轨迹：工具调用序列
+        self.tool_output_log: list = []   # GEPA 轨迹：工具返回结果
 
     def __call__(self, tool_name: str, args: Dict[str, Any]) -> str:
         # 工具白名单校验：防止 LLM 被注入后调用非预期工具
@@ -141,9 +158,14 @@ class BaseToolExecutor:
             return json.dumps({"error": f"Unknown tool: {tool_name}"}, ensure_ascii=False)
         try:
             result = handler(args)
-            return json.dumps(result, ensure_ascii=False, default=str)
+            output = json.dumps(result, ensure_ascii=False, default=str)
         except Exception as exc:
-            return json.dumps({"error": str(exc)}, ensure_ascii=False)
+            output = json.dumps({"error": str(exc)}, ensure_ascii=False)
+
+        # 记录轨迹日志
+        self.tool_call_log.append({"name": tool_name, "args": args})
+        self.tool_output_log.append(output)
+        return output
 
     # ── Tool handlers ──────────────────────────────────────────
 

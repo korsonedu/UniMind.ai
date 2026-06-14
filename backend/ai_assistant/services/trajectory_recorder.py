@@ -53,7 +53,7 @@ def record_trajectory(
         )
         logger.info("Queued trajectory recording for user %d, conversation %s", user_id, conversation_id)
         return None
-    
+
     # 同步记录
     try:
         trajectory = AITrajectory.objects.create(
@@ -65,16 +65,87 @@ def record_trajectory(
             tool_outputs=tool_outputs,
             prompt_variant=prompt_variant,
         )
-        
+
         logger.info(
             "Recorded trajectory %d for user %d, conversation %s",
             trajectory.id, user_id, conversation_id
         )
+        # 同步模式下也做自动评估
+        _auto_evaluate_trajectory(trajectory)
         return trajectory
-    
+
     except Exception as e:
         logger.exception("Failed to record trajectory: %s", e)
         return None
+
+
+def _auto_evaluate_trajectory(trajectory: AITrajectory) -> None:
+    """
+    启发式自动评估轨迹 outcome。
+
+    规则（优先级从高到低）：
+    1. AI 返回了明确的错误消息 → failure
+    2. 所有工具调用都成功 / 无工具调用 → success
+    3. 部分工具失败 → partial
+    4. 无法判断 → unknown（等待用户反馈覆盖）
+    """
+    import json as _json
+
+    tool_outputs = trajectory.tool_outputs or []
+    messages = trajectory.messages or []
+    error_count = 0
+
+    # 统计工具错误
+    for output in tool_outputs:
+        try:
+            parsed = _json.loads(output) if isinstance(output, str) else output
+            if isinstance(parsed, dict) and parsed.get('error'):
+                error_count += 1
+        except (_json.JSONDecodeError, TypeError):
+            pass
+
+    tool_error_rate = error_count / len(tool_outputs) if tool_outputs else 0.0
+
+    # 检查 AI 是否返回了错误消息
+    ai_messages = [m for m in messages if m.get('role') == 'assistant']
+    last_ai = ai_messages[-1].get('content', '') if ai_messages else ''
+    error_patterns = (
+        'AI 服务暂时不可用', 'AI 暂时无法响应', 'LLM_API_KEY',
+        '服务暂时不可用', '连接中断', '请稍后再试',
+        '暂时无法响应', '请稍候重试',
+    )
+    is_error_response = any(p in last_ai for p in error_patterns)
+
+    if is_error_response:
+        outcome = 'failure'
+        confidence = 0.95
+    elif not tool_outputs:
+        # 无工具调用 — 纯文本回复，默认成功
+        outcome = 'success'
+        confidence = 0.6
+    elif tool_error_rate == 0:
+        outcome = 'success'
+        confidence = 0.75  # 工具全成功但可能答案质量差
+    elif tool_error_rate >= 0.5:
+        outcome = 'failure'
+        confidence = 0.7
+    else:
+        outcome = 'partial'
+        confidence = 0.65
+
+    try:
+        trajectory.outcome = outcome
+        trajectory.outcome_metrics = {
+            **trajectory.outcome_metrics,
+            'auto_evaluated': True,
+            'auto_confidence': confidence,
+            'tool_error_rate': tool_error_rate,
+        }
+        trajectory.evaluated_at = timezone.now()
+        trajectory.save(update_fields=['outcome', 'outcome_metrics', 'evaluated_at'])
+        logger.info("Auto-evaluated trajectory %d: %s (confidence=%.2f)", trajectory.id, outcome, confidence)
+    except Exception:
+        logger.warning("Auto-evaluation failed for trajectory %d", trajectory.id, exc_info=True)
 
 
 def evaluate_trajectory(

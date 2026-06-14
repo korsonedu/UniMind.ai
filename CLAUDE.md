@@ -8,11 +8,11 @@ Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepS
 
 | Agent | bot_type | 工具数 | 意图路由 | 职责 |
 |-------|----------|--------|---------|------|
-| 小宇 | `planner` | 17 | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 可视化渲染 + 教练式对话 |
-| 命题官 | `exam_generator` | 5 专用 | ✅ 5类意图 | 教研出题：快速出题(Author单步) + ARC精修(异步管线) + 题库统计 |
+| 小宇 | `planner` | 21 | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 可视化渲染 + 教练式对话 |
+| 工作台 | `exam_generator` | 13 | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 作业管理 + 资产浏览 + 通知 |
 
 运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
-意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。**自进化优化**：LLM 驱动的用户画像分析（缓存预计算 + Celery 异步）、Memorix↔Agent 联动、Trajectory 数据收集（为 GEPA 自进化准备）。
+意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。**自进化优化**：LLM 驱动的用户画像分析（缓存预计算 + Celery 异步）、Memorix↔Agent 联动、GEPA 自进化全链路（采集→评估→分析→建议→变体路由，Trajectory 自动记录 + 用户反馈闭环）。
 新增 Agent 只需：① 写 prompt 文件到 `prompts/ai_assistant/bots/{name}/` ② 在 `bot_registry.py` 的 `BOT_REGISTRY` 加一行 ③ （可选）写 ToolExecutor 子类。
 
 ## 硬边界
@@ -26,6 +26,7 @@ Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepS
 - **Serializer 字段必须显式声明**：禁止 `fields = '__all__'`，所有字段显式列出，防止未来新增 model 字段被自动暴露。
 - **敏感字段加密**：支付密钥等用 `core.fields.EncryptedCharField` / `EncryptedTextField`（Fernet AES），加密密钥通过 `ENCRYPTION_KEY` 环境变量设置（默认从 SECRET_KEY 派生）。
 - **Cookie 认证为主**：REST API 用 `core.authentication.CookieTokenAuthentication`（先读 httpOnly cookie，fallback Authorization header），前端 `api.ts` 设 `withCredentials:true`。WebSocket 仅 Cookie 认证（connect 时校验，未认证直接 close 4001），前端不存 token 到 localStorage。
+- **题目机构隔离**：所有 Question 查询必须按机构过滤。机构成员只能看到本机构题目（`qs.filter(institution=inst)`），禁止将全局题目（`institution__isnull=True`）作为机构成员的 fallback 数据源。独立用户（无机构）仅见全局题目。
 - **只做被要求的事**：严格按指令执行，不擅自追加额外改动。如果认为某件额外的事确实有用，先询问，不得自行决定。
 
 ## 项目结构速查
@@ -58,7 +59,7 @@ UniMindCode/                  ← git 仓库根目录
 │       ├── quizzes/  ai_assistant/  courses/  pipeline/  grading/  interviews/
 │       └── ai_assistant/bots/  # Bot prompt（每个 bot 一个目录：system_prompt.txt + tool_guide.txt + personality.txt + intent_guide.txt）
 │           ├── xiaoyu/           #   小宇学习教练
-│           └── exam_generator/   #   命题官教研助手
+│           └── exam_generator/   #   工作台教研助手
 ├── frontend/
 │   ├── src/pages/              # 37 页面组件
 │   ├── src/components/         # 通用组件 + shadcn/ui
@@ -81,7 +82,7 @@ UniMindCode/                  ← git 仓库根目录
 | `/` | Landing（未登录）/ HomeRedirect（已登录：学生未诊断→/diagnostic, 老师/机构主→/workbench, 其他→/courses） |
 | `/login` `/register` | 邮箱验证码登录注册 |
 | `/diagnostic` | 学生诊断测试（首次登录强制） |
-| `/workbench` | 命题官 — 对话式 Agent 出题（老师/机构主） |
+| `/workbench` | 工作台 — 教师 AI 助手：出题 + 查数据 + 管资产（老师/机构主） |
 | `/xiaoyu` | 小宇 — 学生 AI 教练对话页 |
 | `/intro/:slug` | 机构公开首页（无需登录，公开访问） |
 | `/management` | 管理后台（需管理员） |
@@ -89,9 +90,9 @@ UniMindCode/                  ← git 仓库根目录
 | `/join/:invite_slug` | 邀请链接落地页（未登录→注册/登录，已登录裸号→自动绑定机构） |
 | `/pricing` | 定价页（公开访问） |
 | `/api/ai/chat/` | POST Agent 对话（非流式 polling） |
-| `/api/ai/chat/stream/` | POST Agent 对话（SSE 流式，小宇/命题官共用） |
+| `/api/ai/chat/stream/` | POST Agent 对话（SSE 流式，小宇/工作台共用） |
 | `/api/ai/dashboard/` | GET 小宇 Dashboard 数据聚合 |
-| `/api/ai/workbench/dashboard/` | GET 命题官 Dashboard 聚合接口（仅机构管理员） |
+| `/api/ai/workbench/dashboard/` | GET 工作台 Dashboard 聚合接口（仅机构管理员） |
 | `/api/ai/history/` | GET 对话历史 |
 | `/api/ai/reset/` | POST 重置对话 |
 | `/api/ai/memories/` | GET/POST Agent 记忆 CRUD（结构化） |
@@ -118,7 +119,7 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/notifications/` | 站内通知 API |
 | `/api/payments/` | 支付 API（订单/支付配置） |
 | `/health` | GET 健康检查 |
-| `/ws/ai/chat/<bot_id>/` | WS Agent 对话（命题官/小宇，多步可见） |
+| `/ws/ai/chat/<bot_id>/` | WS Agent 对话（工作台/小宇，多步可见） |
 
 ## 环境变量速查
 
@@ -189,7 +190,7 @@ python manage.py generate_knowledge_tree --subject=高中数学
 for f in backend/knowledge_trees/*.md; do subject=$(basename "$f" .md); python manage.py import_knowledge_tree "$f" --global --subject="$subject" --force; done
 
 # Bot 种子
-python manage.py seed_exam_agent                # 创建/更新命题官 Bot
+python manage.py seed_exam_agent                # 创建/更新工作台 Bot
 python manage.py seed_xiaoyu                    # 创建/更新小宇学习规划 Bot
 
 # 机构管理
@@ -251,5 +252,7 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/PROMPT_MANAGEMENT_SYSTEM.md` | Prompt 管理系统（文件系统+数据库版本历史+回滚） |
 | `docs/tech/features/RBAC_USER_MANAGEMENT.md` | RBAC 用户管理（角色/权限组/机构隔离） |
 | `docs/tech/features/WOW_MOMENT_TECH_FLOWS.md` | 6 个核心功能技术流程图（数据流/消息协议/架构图） |
+| `docs/tech/features/GEPA_TRAJECTORY.md` | GEPA 自进化：轨迹采集→自动评估→用户反馈→变体路由→优化执行 |
+| `docs/tech/features/ADAPTIVE_PROMPT_LLM.md` | LLM 驱动的自适应指令（用户画像→prompt 指令注入） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |

@@ -8,18 +8,23 @@ Memorix 再巩固窗口 (Reconsolidation Window)。
 数学定义：
   P(t) = S(t) × (1 - R(t))
   其中：
-    S(t) = S₀ × [1 - exp(-t/τ)]    — 稳定性（含不应期修正）
-    R(t) = exp(-(t/λ)^k)             — Weibull 检索概率
+    S(t) = S₀ × [1 - exp(-t/τ)] × exp(-t/S₀)    — 稳定性（不应期恢复 + 缓慢衰减）
+    R(t) = exp(-(t/λ)^k)                          — Weibull 检索概率
     S₀: 渐近稳定性（复习后最终能达到的稳定值）
     τ:  不应期时间常数（默认 1 小时，约 0.042 天）
     λ:  Weibull 尺度参数（≈ S₀，时间尺度）
     k:  Weibull 形状参数（默认 1.2）
 
-不应期修正：
+不应期修正 + 缓慢衰减：
   若微发现：如果 S(t) = S₀ 是常数，则 P(t) = S₀·(1-R(t)) 单调递增——
-  越晚复习 P 越大，和直觉矛盾。实际上刚复习后存在不应期，
-  稳定性需要时间恢复。S(t) = S₀ × [1-exp(-t/τ)] 修复了这个问题。
-  P(t) 在中间存在唯一的 argmax——这就是最优复习时机。
+  越晚复习 P 越大，和直觉矛盾。S(t) = S₀ × [1-exp(-t/τ)] 修复了前期问题，
+  但 P(t) 仍在大 t 时趋近 S₀，无内部峰值。
+  
+  加上稳定性衰减项 e^(-t/S₀)（T_stab = S₀）：稳定性在大时间
+  尺度上缓慢衰减。此时 P(t) 在 t≈k×S₀ 处出现真实内部峰值，
+  R(t_opt) ≈ exp(-k^k) ≈ 0.29（k=1.2 时）。
+  ——这就是最优复习时机：记忆刚好足够不稳定可以改进，
+  但又有足够的残余可以重建。
 """
 
 import math
@@ -29,22 +34,25 @@ def plasticity(t: float, stability_s0: float, lambda_: float,
                k: float = 1.2, tau: float = 0.042) -> float:
     """
     计算时刻 t 的可塑性值 P(t)。
-    
+
+    P(t) = S₀ × [1-e^(-t/τ)] × e^(-t/S₀) × [1-e^(-(t/S₀)^k)]
+
     Args:
         t: 距上次复习的天数
         stability_s0: 渐近稳定性（天）
         lambda_: Weibull 尺度参数（天，通常 ≈ S₀）
         k: Weibull 形状参数
         tau: 不应期时间常数（天，默认 1 小时 ≈ 0.042 天）
-    
+
     Returns:
         P(t) ∈ [0, S₀]
     """
     if t <= 0:
         return 0.0
 
-    # S(t): 稳定性恢复，不应期修正
+    # S(t): 不应期恢复 + 缓慢衰减
     S_t = stability_s0 * (1.0 - math.exp(-t / tau))
+    S_t *= math.exp(-t / stability_s0) if stability_s0 > 0 else 0.0
     # R(t): Weibull 检索概率
     if lambda_ <= 0:
         return 0.0

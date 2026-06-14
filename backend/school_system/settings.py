@@ -342,6 +342,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "ai_assistant.tasks.analyze_trajectory_task",
         "schedule": crontab(minute=0, hour=2, day_of_week=0),  # 每周日凌晨 2:00
     },
+    "optimize-prompt-weekly": {
+        "task": "ai_assistant.tasks.optimize_prompt_task",
+        "schedule": crontab(minute=0, hour=3, day_of_week=1),  # 每周一凌晨 3:00（跟在 analyze 后）
+    },
     "learn-memorix-edge-weights-daily": {
         "task": "quizzes.learn_edge_weights_from_reviews",
         "schedule": 86400.0,  # 每天一次
@@ -349,6 +353,14 @@ CELERY_BEAT_SCHEDULE = {
     "estimate-irt-params-daily": {
         "task": "quizzes.tasks.estimate_irt_params_task",
         "schedule": crontab(minute=0, hour=3),  # 每天凌晨 3:00
+    },
+    "apply-experience-decay-daily": {
+        "task": "ai_assistant.tasks.apply_experience_decay_task",
+        "schedule": crontab(minute=0, hour=4),  # 每天凌晨 4:00
+    },
+    "experience-aggregate-verifications-daily": {
+        "task": "ai_assistant.tasks.experience_aggregate_verifications",
+        "schedule": crontab(minute=0, hour=5),  # 每天凌晨 5:00
     },
 }
 CELERY_BROKER_TRANSPORT_OPTIONS = {

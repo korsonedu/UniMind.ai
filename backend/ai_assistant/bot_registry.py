@@ -81,7 +81,7 @@ BOT_REGISTRY: dict[str, BotProfile] = {
         use_intent_router=True,
     ),
     'exam_generator': BotProfile(
-        name='命题官',
+        name='工作台',
         bot_type='exam_generator',
         executor_class=None,
         tools_factory=None,

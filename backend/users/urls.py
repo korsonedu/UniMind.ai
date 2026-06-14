@@ -33,6 +33,7 @@ from .views_institution import (
     InstitutionMemberListView, InstitutionMemberRoleView,
     InstitutionClassPerformanceView, InstitutionSuggestedTopicsView,
     InstitutionAuditLogView, InstitutionNotificationConfigView,
+    ClassListCreateView, ClassDetailView, ClassStudentView,
 )
 
 urlpatterns = [
@@ -110,6 +111,9 @@ urlpatterns = [
 
     # Institution — notification config
     path('institution/me/notification-config/', InstitutionNotificationConfigView.as_view(), name='institution-notification-config'),
+    path('institution/me/classes/', ClassListCreateView.as_view(), name='institution-class-list'),
+    path('institution/me/classes/<int:pk>/', ClassDetailView.as_view(), name='institution-class-detail'),
+    path('institution/me/classes/<int:pk>/students/', ClassStudentView.as_view(), name='institution-class-students'),
 
     # Institution — payment config (Pro)
     path('institution/me/payment-config/', InstitutionPaymentConfigView.as_view(), name='institution-payment-config'),

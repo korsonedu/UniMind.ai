@@ -64,6 +64,7 @@ const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
 const PlatformAnalytics = lazyNamed(() => import('./pages/PlatformAnalytics'), 'PlatformAnalytics');
 const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
 const NotFound = lazy(() => import('./pages/NotFound'));
+const MyAssignments = lazy(() => import('./pages/MyAssignments'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const Legal = lazy(() => import('./pages/Legal'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
@@ -253,6 +254,7 @@ const router = createBrowserRouter([
           { path: "management", element: <RequireAdmin>{lazyPage(Maintenance)}</RequireAdmin> },
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(VideoLesson)}</FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
+          { path: "my-assignments", element: lazyPage(MyAssignments) },
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
 
           { path: "workbench", element: <RequireInstitution>{lazyPage(Workbench)}</RequireInstitution> },

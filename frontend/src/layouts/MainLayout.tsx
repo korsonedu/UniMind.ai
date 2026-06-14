@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot } from '@phosphor-icons/react';
+import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Package, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -197,8 +197,9 @@ export const MainLayout: React.FC = () => {
   // ── 教师端 6 套件 ──
   const teacherNavItems: NavItem[] = [
     { to: '/workbench', icon: Robot, label: '工作台' },
-    { to: '/assets', icon: Gear, label: '资产管理' },
-    { to: '/knowledge-tree', icon: ChartBar, label: '知识树' },
+    { to: '/assets', icon: Package, label: '资产管理' },
+    { to: '/questions', icon: Brain, label: '题库' },
+    { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
     { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
     { to: '/institution/students', icon: Users, label: t('layout:nav.members') },
     { to: '/management', icon: Wrench, label: t('layout:nav.maintenance') },
@@ -207,6 +208,7 @@ export const MainLayout: React.FC = () => {
   // ── 学生端 9 套件 ──
   const studentNavItems: NavItem[] = [
     { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyu') },
+    { to: '/my-assignments', icon: CalendarCheck, label: '我的作业' },
     { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
     { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
     { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeMap') },
@@ -231,6 +233,7 @@ export const MainLayout: React.FC = () => {
       ]
     : effectiveIsInstStudent ? [
         { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort', '小宇') },
+        { to: '/my-assignments', icon: CalendarCheck, label: '作业' },
         { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.testsShort') },
         { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeShort') },
@@ -239,8 +242,9 @@ export const MainLayout: React.FC = () => {
       ]
     : [
         { to: '/workbench', icon: Robot, label: '工作台' },
-        { to: '/assets', icon: Gear, label: '资产' },
-        { to: '/knowledge-tree', icon: ChartBar, label: '知识树' },
+        { to: '/assets', icon: Package, label: '资产' },
+        { to: '/questions', icon: Brain, label: '题库' },
+        { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
         { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
         { to: '/institution', icon: Users, label: '学员' },
       ];

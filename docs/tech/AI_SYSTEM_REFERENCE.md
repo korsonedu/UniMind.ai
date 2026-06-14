@@ -377,7 +377,87 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 
 ---
 
-## 三、Prompt 模板目录
+## 三、GEPA 自进化
+
+GEPA（Generate→Evaluate→Polish→Adapt）是 Prompt 层的自进化引擎，通过用户反馈和工具执行信号驱动 AI 回答质量的持续优化。
+
+### 架构位置
+
+```
+UniMind AI
+├── 用户接口: Chat UI (SSE/WS/Polling)
+├── 调度层: chat_dispatch → Bot → ToolExecutor
+├── Prompt层: prompt_sync (文件↔DB)
+├── GEPA 自进化层
+│   ├── 采集: Trajectory Recorder
+│   ├── 评估: Auto-eval + User Feedback
+│   ├── 分析: analyze_trajectory_task
+│   ├── 建议: Redis gepa:suggestions
+│   ├── 变体: gepa_variants (文件驱动)
+│   └── 优化: optimize_prompt_task
+├── 记忆层: mem0 + AgentMemory + Memorix
+└── 模型层: AI Engine
+```
+
+### 数据模型
+
+| 模型 | 文件 | 用途 |
+|------|------|------|
+| `AITrajectory` | `ai_assistant/models.py:185` | 对话轨迹：messages, tool_calls, tool_outputs, outcome, prompt_variant |
+| `AIChatMessage.feedback` | `ai_assistant/models.py:12` | 单条消息用户反馈：true=赞, false=踩, null=未评价 |
+
+### 核心组件
+
+| 组件 | 文件 | 职责 |
+|------|------|------|
+| `record_trajectory` | `ai_assistant/services/trajectory_recorder.py:17` | 记录对话轨迹（默认异步 Celery） |
+| `_auto_evaluate_trajectory` | `ai_assistant/services/trajectory_recorder.py:82` | 启发式自动评估 outcome（AI 报错/failure，工具成功/success） |
+| `evaluate_trajectory` | `ai_assistant/services/trajectory_recorder.py:155` | 外部评估入口（反馈/LLM 评估调用） |
+| `get_variant_for_request` | `ai_assistant/services/gepa_variants.py` | 按 traffic_split 加权选择 variant |
+| `apply_variant_prompt` | `ai_assistant/services/gepa_variants.py` | 将 variant suffix 追加到 system_prompt |
+| `create_variant / retire_variant` | `ai_assistant/services/gepa_variants.py` | Variant 生命周期管理（JSON 文件） |
+| `analyze_trajectory_task` | `ai_assistant/tasks.py:718` | 每周日 2am 聚合轨迹，生成优化建议 |
+| `optimize_prompt_task` | `ai_assistant/tasks.py:888` | 每周一 3am 读取建议，分派 handler（框架已就绪） |
+
+### Variant 路由机制
+
+Variant 存储在 `backend/prompts/ai_assistant/variants/{bot_type}.json`，JSON 格式：
+
+```json
+{"variants": [{"name": "v1", "status": "active", "traffic_split": 0.1, "overrides": {"suffix": "..."}}]}
+```
+
+- `traffic_split=0.0` → 不生效（默认）
+- `traffic_split=1.0` → 100% 流量
+- 多个 active variant 按累计概率随机选择
+- 所有 variant 初始 `traffic_split=0.0`，手动调高后生效
+- Variant 只做 prompt 后缀追加，不改原文件
+
+### Outcome 评估来源（优先级）
+
+1. **用户反馈** — 点击赞/踩覆盖 outcome（`feedback_source: user`），最高置信度
+2. **启发式评估** — AI 报错→failure(0.95), 工具全成功→success(0.75), 部分失败→partial(0.65)
+3. **未知** — 默认 unknown，等待信号
+
+### 数据流
+
+```
+用户发消息 → Agent 执行（tool_call_log 累积）
+  → 对话结束 → record_trajectory_async → AITrajectory + auto_evaluate
+  → 用户 hover 赞/踩 → AIChatMessage.feedback + 覆盖 AITrajectory.outcome
+  → 每周日 analyze_trajectory_task → Redis gepa:suggestions
+  → 每周一 optimize_prompt_task → 分派 handler（框架阶段仅 log）
+```
+
+### 相关文档
+
+- `docs/tech/features/GEPA_TRAJECTORY.md` — 轨迹数据收集详解
+- `docs/architecture/all-phases-plan.md` — Phase 7 路线图
+- `docs/tech/reference/SOFT_EVOLUTION_GUIDE.md` — 理论基础（7 篇论文映射）
+
+---
+
+## 四、Prompt 模板目录
 
 所有模板在 `backend/prompts/`。
 
@@ -419,7 +499,7 @@ prompts/
 
 ---
 
-## 四、模型路由
+## 五、模型路由
 
 文件：`backend/ai_engine/config.py`
 
@@ -463,7 +543,7 @@ def get_model_for_task(operation: str):
 
 ---
 
-## 五、如何修改
+## 六、如何修改
 
 ### 改 Prompt 模板
 
@@ -551,7 +631,7 @@ def get_model_for_task(operation: str):
 
 ---
 
-## 六、如何查找
+## 七、如何查找
 
 **我想改判分的 Prompt** → `prompts/quizzes/grading_prompt.txt`
 

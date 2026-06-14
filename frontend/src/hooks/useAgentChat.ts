@@ -8,6 +8,7 @@ export interface AgentStep {
   label: string;
   args_summary?: string;
   result_summary?: string;
+  actions?: Array<{ label: string; route: string }>;
   visual?: { type: string; payload: any };
   questions?: Array<{
     index: number;

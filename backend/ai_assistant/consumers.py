@@ -223,6 +223,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 _AI_CHAT_SEMAPHORE.release()
             result = dispatch_result['result']
             tool_executor = dispatch_result['tool_executor']
+            ws_variant_name = dispatch_result.get('prompt_variant', 'baseline')
 
             if isinstance(result, dict) and 'content' in result:
                 ai_content = result['content']
@@ -259,6 +260,25 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 extract_memories_with_mem0(self.user, full_history)
             except Exception:
                 logger.warning("Memory extraction failed (WS)", exc_info=True)
+
+            # GEPA 轨迹记录（异步，不阻塞响应）
+            try:
+                from .services.trajectory_recorder import record_trajectory
+                all_msgs = history_msgs + [
+                    {'role': 'user', 'content': message},
+                    {'role': 'assistant', 'content': ai_content},
+                ]
+                record_trajectory(
+                    user_id=self.user.id,
+                    bot_id=self.bot.id,
+                    conversation_id=str(conversation_id) if conversation_id else '',
+                    messages=all_msgs,
+                    tool_calls=getattr(tool_executor, 'tool_call_log', []),
+                    tool_outputs=getattr(tool_executor, 'tool_output_log', []),
+                    prompt_variant=ws_variant_name,
+                )
+            except Exception:
+                logger.warning("Trajectory recording failed (WS)", exc_info=True)
 
         except Exception as e:
             logger.exception("Agent execution error: %s", e)

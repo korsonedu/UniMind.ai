@@ -216,7 +216,7 @@ def get_memorix_session_plan(user, minutes: int = 25, preferred_limit: Optional[
     inst = getattr(user, 'institution', None)
     if inst:
         from django.db.models import Q
-        new_qs = new_qs.filter(Q(institution=inst) | Q(institution__isnull=True))
+        new_qs = new_qs.filter(institution=inst)
     new_questions_count = new_qs.count()
 
     if preferred_limit is not None:

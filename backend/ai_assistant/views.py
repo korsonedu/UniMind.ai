@@ -60,6 +60,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
             )
             res = dispatch_result['result']
             tool_executor = dispatch_result['tool_executor']
+            poll_variant_name = dispatch_result.get('prompt_variant', 'baseline')
 
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
 
@@ -117,6 +118,25 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
             extract_memories_with_mem0(user, full_history)
         except Exception:
             logger.warning("Memory extraction failed (polling)", exc_info=True)
+
+        # GEPA 轨迹记录（异步，不阻塞响应）
+        try:
+            from ai_assistant.services.trajectory_recorder import record_trajectory
+            all_msgs = history_msgs + [
+                {'role': 'user', 'content': user_message},
+                {'role': 'assistant', 'content': ai_content if 'ai_content' in dir() else ''},
+            ]
+            record_trajectory(
+                user_id=user.id,
+                bot_id=bot.id if bot else 0,
+                conversation_id=str(conversation_id) if conversation_id else '',
+                messages=all_msgs,
+                tool_calls=getattr(tool_executor, 'tool_call_log', []),
+                tool_outputs=getattr(tool_executor, 'tool_output_log', []),
+                prompt_variant=poll_variant_name,
+            )
+        except Exception:
+            logger.warning("Trajectory recording failed (polling)", exc_info=True)
 
         # 新会话首次对话时，异步生成标题
         if conversation_id:
@@ -450,7 +470,7 @@ class AIChatStreamView(APIView):
 
             from ai_assistant.services.chat_dispatch import dispatch_bot_chat_sync
 
-            messages, tools, tool_executor, profile = dispatch_bot_chat_sync(
+            messages, tools, tool_executor, profile, variant_name = dispatch_bot_chat_sync(
                 bot=bot,
                 user=request.user,
                 message=user_message,
@@ -469,12 +489,12 @@ class AIChatStreamView(APIView):
             # 工具白名单（防止 prompt injection 调用非预期工具）
             tool_executor._allowed_tool_names = {t['function']['name'] for t in tools}
 
-            return history_msgs, messages, tools, tool_executor, profile
+            return history_msgs, messages, tools, tool_executor, profile, variant_name
 
         async def generate():
             history_msgs = []
             try:
-                history_msgs, messages, tools, tool_executor, profile = await sync_to_async(_sync_setup)()
+                history_msgs, messages, tools, tool_executor, profile, sse_variant_name = await sync_to_async(_sync_setup)()
 
                 step_queue: asyncio.Queue = asyncio.Queue()
                 _SENTINEL = object()
@@ -619,6 +639,25 @@ class AIChatStreamView(APIView):
                     await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     logger.warning("Memory extraction failed (SSE)", exc_info=True)
+
+                # GEPA 轨迹记录（异步，不阻塞响应）
+                try:
+                    from ai_assistant.services.trajectory_recorder import record_trajectory
+                    all_msgs = history_msgs + [
+                        {'role': 'user', 'content': user_message},
+                        {'role': 'assistant', 'content': ai_content},
+                    ]
+                    record_trajectory(
+                        user_id=request.user.id,
+                        bot_id=bot.id,
+                        conversation_id=str(conversation_id),
+                        messages=all_msgs,
+                        tool_calls=getattr(tool_executor, 'tool_call_log', []),
+                        tool_outputs=getattr(tool_executor, 'tool_output_log', []),
+                        prompt_variant=sse_variant_name,
+                    )
+                except Exception:
+                    logger.warning("Trajectory recording failed (SSE)", exc_info=True)
 
                 # 同步生成会话标题（首轮对话后，快速 LLM 调用 ~1-2s）
                 try:

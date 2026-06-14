@@ -494,6 +494,21 @@ class InstitutionDashboardView(APIView):
                 key=lambda x: x['weak_count'], reverse=True,
             )[:5]
 
+        # 待批改作业 + 进行中作业（Workbench 操作卡片数据）
+        pending_grading = 0
+        active_assignments = 0
+        try:
+            from quizzes.models import Assignment, AssignmentSubmission
+            assignment_ids = Assignment.objects.filter(
+                institution=inst, status='published'
+            ).values_list('id', flat=True)
+            active_assignments = len(assignment_ids)
+            pending_grading = AssignmentSubmission.objects.filter(
+                assignment__institution=inst, score__isnull=True
+            ).count()
+        except Exception:
+            pass
+
         return Response({
             'mode': 'institution_admin',
             'institution': {
@@ -511,6 +526,8 @@ class InstitutionDashboardView(APIView):
                 'ai_usage': {'used': quota_info.get('ai_question', {}).get('used', 0), 'limit': quota_info.get('ai_question', {}).get('limit', 0)},
                 'quota': quota_info,
                 'top_weak_points': top_weak,
+                'pending_grading': pending_grading,
+                'active_assignments': active_assignments,
             },
             'features': get_plan_features(inst.plan),
             'plan_matrix': {p: get_plan_features(p) for p in ['free', 'starter', 'growth', 'enterprise']},
@@ -1311,4 +1328,103 @@ class InstitutionNotificationConfigView(APIView):
             'enabled': config.enabled,
             'channel': config.channel,
             'due_threshold': config.due_threshold,
+        })
+
+
+# ── Class Management API ──────────────────────────────────────────
+
+from rest_framework import generics, status
+from users.models import Class as ClassModel
+from django.db import IntegrityError
+
+
+class ClassListCreateView(APIView):
+    """GET /api/users/institution/me/classes/ — 班级列表 + 创建。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        classes = ClassModel.objects.filter(institution=inst).order_by('-created_at')
+        data = []
+        for c in classes:
+            data.append({
+                'id': c.id,
+                'name': c.name,
+                'student_count': c.students.count(),
+                'students': [{'id': s.id, 'name': s.nickname or s.username}
+                           for s in c.students.all()[:50]],
+                'created_at': c.created_at.isoformat(),
+            })
+        return Response(data)
+
+    def post(self, request):
+        inst = request.user.institution
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response({'error': '班级名称不能为空'}, status=400)
+        try:
+            c = ClassModel.objects.create(institution=inst, name=name)
+            return Response({'id': c.id, 'name': c.name, 'student_count': 0}, status=201)
+        except IntegrityError:
+            return Response({'error': f'班级「{name}」已存在'}, status=409)
+
+
+class ClassDetailView(APIView):
+    """PUT/DELETE /api/users/institution/me/classes/<id>/ — 编辑/删除班级。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def put(self, request, pk):
+        inst = request.user.institution
+        try:
+            c = ClassModel.objects.get(id=pk, institution=inst)
+        except ClassModel.DoesNotExist:
+            return Response({'error': '班级不存在'}, status=404)
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response({'error': '班级名称不能为空'}, status=400)
+        c.name = name
+        try:
+            c.save()
+        except IntegrityError:
+            return Response({'error': f'班级「{name}」已存在'}, status=409)
+        return Response({'id': c.id, 'name': c.name})
+
+    def delete(self, request, pk):
+        inst = request.user.institution
+        try:
+            c = ClassModel.objects.get(id=pk, institution=inst)
+        except ClassModel.DoesNotExist:
+            return Response({'error': '班级不存在'}, status=404)
+        c.delete()
+        return Response({'ok': True})
+
+
+class ClassStudentView(APIView):
+    """POST /api/users/institution/me/classes/<id>/students/ — 添加/移除学生。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def post(self, request, pk):
+        inst = request.user.institution
+        try:
+            c = ClassModel.objects.get(id=pk, institution=inst)
+        except ClassModel.DoesNotExist:
+            return Response({'error': '班级不存在'}, status=404)
+
+        action = request.data.get('action', 'add')
+        student_ids = request.data.get('student_ids', [])
+
+        if action == 'add':
+            for sid in student_ids:
+                student = User.objects.filter(id=sid, institution=inst).first()
+                if student:
+                    c.students.add(student)
+        elif action == 'remove':
+            for sid in student_ids:
+                c.students.remove(sid)
+
+        return Response({
+            'id': c.id,
+            'student_count': c.students.count(),
+            'students': [{'id': s.id, 'name': s.nickname or s.username}
+                       for s in c.students.all()[:50]],
         })

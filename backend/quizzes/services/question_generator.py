@@ -431,7 +431,7 @@ class QuestionGenerator:
         for kp in kps:
             qs = Question.objects.filter(knowledge_point=kp)
             if institution:
-                qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
+                qs = qs.filter(institution=institution)
             if target_difficulty and target_difficulty != 'mixed':
                 qs = qs.filter(difficulty_level=target_difficulty)
 

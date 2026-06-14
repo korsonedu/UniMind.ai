@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { FileText, GraduationCap, MagicWand, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, Lightning } from '@phosphor-icons/react';
+import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, Lightning } from '@phosphor-icons/react';
 import api from '@/lib/api';
-import { processMathContent } from '@/lib/utils';
+import { processMathContent, cn } from '@/lib/utils';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import QuestionPanel from '@/pages/workbench/QuestionPanel';
 import type { Bot, Message, ConversationSession } from '@/hooks/useAgentConversation';
@@ -10,6 +10,8 @@ import type { AgentStep } from '@/hooks/useAgentChat';
 interface InstitutionStats {
   weekly_active_students: number;
   top_weak_points: { label: string; weak_count: number }[];
+  pending_grading?: number;
+  active_assignments?: number;
 }
 
 interface InstitutionInfo {
@@ -35,13 +37,13 @@ interface QuestionData {
 }
 
 const SKILLS = [
-  { icon: FileText, label: '针对薄弱点出题', prompt: '根据班级薄弱知识点出题' },
-  { icon: GraduationCap, label: '出一套模拟卷', prompt: '出一套期末模拟卷，30题，难度适中' },
-  { icon: MagicWand, label: '自定义出题', prompt: '帮我出10道微积分极限的客观题' },
-  { icon: CheckSquareOffset, label: '周测出题', prompt: '出一套周测，15题，覆盖最近学的知识点' },
+  { icon: FileText, label: '出题', prompt: '帮我出5道题' },
+  { icon: ChartBar, label: '查薄弱点', prompt: '班级薄弱知识点有哪些' },
+  { icon: Users, label: '查学生', prompt: '帮我看看学生的学习情况' },
+  { icon: CheckSquareOffset, label: '查作业', prompt: '作业提交情况' },
 ];
 
-type ViewMode = 'overview' | 'questions';
+type ViewMode = 'overview' | 'questions' | 'landing';
 
 // ── localStorage persistence ──
 
@@ -84,6 +86,12 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
       <div className="flex items-center gap-2">
         <Brain className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-black tracking-tight">Copilot</h2>
+        <button
+          onClick={() => onSend('帮我分析当前机构学习情况，给出洞察和建议')}
+          className="ml-2 text-[10px] font-bold text-primary/60 hover:text-primary transition-colors bg-primary/5 hover:bg-primary/10 px-2 py-0.5 rounded-md"
+        >
+          Agent 分析
+        </button>
         <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider ml-auto">
           {institution.plan_label} · {institution.student_count}/{institution.max_students} 学员
         </span>
@@ -104,7 +112,7 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl bg-muted/30 p-4">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold uppercase tracking-wider mb-2">
             <Users className="h-3.5 w-3.5" />
             本周活跃
@@ -115,7 +123,7 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
           </div>
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4">
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-bold uppercase tracking-wider mb-2">
             <ChartBar className="h-3.5 w-3.5" />
             薄弱知识点
@@ -143,10 +151,27 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
             <Brain className="h-3.5 w-3.5" />
             Agent
           </div>
-          <div className="text-sm font-bold">随时待命</div>
-          <div className="text-xs text-muted-foreground mt-0.5 flex-1">
-            对话中直接告诉我需求
-          </div>
+          {stats.pending_grading ? (
+            <>
+              <div className="text-sm font-bold text-amber-500">{stats.pending_grading} 份待批改</div>
+              <button
+                onClick={() => onSend(`帮我看看待批改的作业`)}
+                className="mt-2 text-xs font-bold text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5"
+              >
+                <Lightning className="h-3 w-3" /> 查看详情
+              </button>
+            </>
+          ) : stats.active_assignments ? (
+            <>
+              <div className="text-sm font-bold">{stats.active_assignments} 个作业进行中</div>
+              <div className="text-xs text-muted-foreground mt-0.5 flex-1">学生正在完成中</div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm font-bold">随时待命</div>
+              <div className="text-xs text-muted-foreground mt-0.5 flex-1">对话中直接告诉我需求</div>
+            </>
+          )}
         </div>
       </div>
 
@@ -161,7 +186,7 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
                 <span className="text-muted-foreground text-xs shrink-0">{kp.weak_count} 人薄弱</span>
                 <button
                   onClick={() => onSend(`针对${kp.label}出${Math.min(kp.weak_count * 2, 5)}道题`)}
-                  className="text-xs font-bold text-primary/60 hover:text-primary transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+                  className="text-xs font-bold text-primary/60 hover:text-primary transition-colors shrink-0"
                 >
                   <Lightning className="h-3 w-3 inline" /> 出题
                 </button>
@@ -190,9 +215,8 @@ export default function Workbench() {
     persisted?.savedIndices?.length ? new Set(persisted.savedIndices) : new Set()
   );
   const [pipelineTaskId, setPipelineTaskId] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(
-    persisted?.questions?.length ? 'overview' : 'overview'
-  );
+  const [viewMode, setViewMode] = useState<ViewMode>('overview');
+  const [wasResetManually, setWasResetManually] = useState(false);
 
   const doSendRef = useRef<((text: string) => void) | null>(null);
 
@@ -267,8 +291,22 @@ export default function Workbench() {
   return (
     <div className="flex h-full min-h-0">
       {/* Left: QuestionPanel or Copilot Overview */}
-      <div className="flex-1 min-w-0 overflow-y-auto">
-        {viewMode === 'questions' && generatedQuestions.length > 0 ? (
+      {viewMode !== 'questions' || generatedQuestions.length === 0 ? (
+        !wasResetManually && instInfo && stats && (
+          <div className="flex-1 min-w-0 overflow-y-auto">
+            <div className="p-4 md:p-6">
+              <CopilotOverview
+                institution={instInfo}
+                stats={stats}
+                questionCount={remainingCount}
+                onEnterQuestions={() => setViewMode('questions')}
+                onSend={handleSystemMessage}
+              />
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="flex-1 min-w-0 overflow-y-auto">
           <div className="h-full flex flex-col">
             <div className="shrink-0 px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -302,40 +340,37 @@ export default function Workbench() {
               />
             </div>
           </div>
-        ) : (
-          <div className="p-4 md:p-6">
-            {instInfo && stats && (
-              <CopilotOverview
-                institution={instInfo}
-                stats={stats}
-                questionCount={remainingCount}
-                onEnterQuestions={() => setViewMode('questions')}
-                onSend={handleSystemMessage}
-              />
-            )}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Right: Agent Chat Sidebar */}
-      <div className="w-80 shrink-0 border-l border-border/40 hidden md:flex flex-col">
+      {/* Right: Agent Chat */}
+      <div className={cn(
+        "border-l border-border/40 hidden md:flex flex-col",
+        (wasResetManually || (viewMode !== 'questions' && !instInfo)) ? "flex-1 min-w-0" : "w-80 shrink-0"
+      )}>
         <AgentChatLayout
           layout="inline"
           findBot={(bots) => bots.find((b: Bot) => b.bot_type === 'exam_generator')}
           skills={SKILLS}
-          typewriterWords={['出题需求...', '根据薄弱知识点出题', '出一套模拟卷']}
-          chatPlaceholder="和命题官对话..."
+          typewriterWords={['出题、查学生、管作业...', '根据薄弱知识点出题', '看看学员学习情况']}
+          chatPlaceholder="告诉 Agent 你要做什么..."
           resetMessage="已开始新对话"
-          landingTitle="命题官"
-          landingDescription="告诉我需要什么题"
-          botDisplayName="命题官"
+          landingTitle="UniMind 让你的教学更高效"
+          landingDescription="出题 · 查学生数据 · 管作业资产"
+          botDisplayName="工作台"
           processContent={processMathContent}
           onQuestionsGenerated={handleQuestionsGenerated}
+          onLoadSession={(session, defaultHandler) => {
+            setWasResetManually(false);
+            setViewMode('overview');
+            defaultHandler(session);
+          }}
           onReset={(defaultHandler) => {
             setGeneratedQuestions([]);
             setSavedIndices(new Set());
             setPipelineTaskId(null);
             setViewMode('overview');
+            setWasResetManually(true);
             clearState();
             defaultHandler();
           }}

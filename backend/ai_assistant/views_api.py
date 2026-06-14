@@ -494,7 +494,7 @@ def feedback_view(request):
     """
     POST /api/ai/feedback/
     Body: { message_id: int, feedback: bool }
-    静默记录用户对 AI 回复的反馈（赞/踩）。
+    静默记录用户对 AI 回复的反馈（赞/踩），同步更新 GEPA 轨迹 outcome。
     """
     message_id = request.data.get('message_id')
     feedback = request.data.get('feedback')
@@ -512,4 +512,24 @@ def feedback_view(request):
 
     msg.feedback = feedback
     msg.save(update_fields=['feedback'])
+
+    # 同步更新 GEPA 轨迹 outcome（同一 conversation 内最新反馈覆盖）
+    try:
+        from .models import AITrajectory
+        from django.utils import timezone
+        trajectory = AITrajectory.objects.filter(
+            conversation_id=msg.conversation_id,
+        ).order_by('-created_at').first()
+        if trajectory:
+            trajectory.outcome = 'success' if feedback else 'failure'
+            trajectory.outcome_metrics = {
+                **trajectory.outcome_metrics,
+                'feedback_source': 'user',
+                'feedback_message_id': msg.id,
+            }
+            trajectory.evaluated_at = timezone.now()
+            trajectory.save(update_fields=['outcome', 'outcome_metrics', 'evaluated_at'])
+    except Exception:
+        logger.warning("Trajectory outcome update failed for msg %s", msg.id, exc_info=True)
+
     return Response({'status': 'ok'})

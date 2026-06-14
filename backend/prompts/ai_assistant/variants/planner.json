@@ -1,0 +1,26 @@
+{
+  "variants": [
+    {
+      "name": "test_v1",
+      "status": "retired",
+      "traffic_split": 0.0,
+      "overrides": {
+        "suffix": "## Test\nBe concise."
+      },
+      "created_at": "2026-06-13T13:54:09.333205+00:00",
+      "source_suggestion_id": null,
+      "retired_at": "2026-06-13T13:54:48.538285+00:00"
+    },
+    {
+      "name": "_doc_test",
+      "status": "retired",
+      "traffic_split": 0.0,
+      "overrides": {
+        "suffix": "Be concise."
+      },
+      "created_at": "2026-06-13T15:36:02.630913+00:00",
+      "source_suggestion_id": null,
+      "retired_at": "2026-06-13T15:36:02.631613+00:00"
+    }
+  ]
+}

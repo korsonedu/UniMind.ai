@@ -2,6 +2,8 @@ from django.urls import path
 from .views_question import (
     QuestionListView, QuestionDetailView,
     AdminQuestionListView, ExportStructuredQuestionsView, ImportCSVQuestionsView,
+    AssignmentCreateView, ClassListView,
+    StudentAssignmentListView, StudentAssignmentDetailView, StudentAssignmentSubmitView,
 )
 from .views_exam import (
     TeacherExamListView, TeacherExamCreateView, TeacherExamDeleteView,
@@ -73,6 +75,11 @@ urlpatterns = [
     # 智能出题工作流
     path('ai-parse-raw-text/', AIPreviewParseView.as_view(), name='ai-parse-raw-text'),
     path('import-csv/', ImportCSVQuestionsView.as_view(), name='import-csv'),
+    path('assignments/create/', AssignmentCreateView.as_view(), name='assignment-create'),
+    path('assignments/my/', StudentAssignmentListView.as_view(), name='student-assignment-list'),
+    path('assignments/<int:pk>/questions/', StudentAssignmentDetailView.as_view(), name='student-assignment-detail'),
+    path('assignments/submit/', StudentAssignmentSubmitView.as_view(), name='student-assignment-submit'),
+    path('classes/', ClassListView.as_view(), name='class-list'),
     path('admin/questions/', AdminQuestionListView.as_view(), name='admin-question-list'),
     path('admin/export-structured/', ExportStructuredQuestionsView.as_view(), name='export-structured'),
     # 教研任务中心

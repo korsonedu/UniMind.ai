@@ -226,6 +226,119 @@ class AITrajectory(models.Model):
         return f"{self.user} - {self.bot.name} - {self.conversation_id}"
 
 
+class Experience(models.Model):
+    """经验路由器：从 Agent 对话轨迹中提取的可复用规律。
+
+    一条经验 = 从成功/失败轨迹中提取的规律 + 路由目标维度 + 触发条件 + 验证状态。
+    """
+
+    DIMENSION_CHOICES = (
+        ('prompt', 'Prompt 策略'),
+        ('memory', '个体记忆'),
+        ('tool', '工具配置'),
+        ('workflow', '工作流模式'),
+    )
+
+    SCOPE_CHOICES = (
+        ('global', '全局生效'),
+        ('student', '指定学生'),
+        ('kp_chain', '知识依赖链'),
+        ('institution', '指定机构'),
+    )
+
+    CONFIDENCE_CHOICES = (
+        ('low', '建议（临时注入，不持久化）'),
+        ('medium', '验证中（小流量 A/B）'),
+        ('high', '持久化（已通过反事实验证）'),
+    )
+
+    STATUS_CHOICES = (
+        ('active', '活跃'),
+        ('dormant', '休眠（60天未触发）'),
+        ('archived', '归档（90天未触发）'),
+        ('retired', '淘汰（验证失败）'),
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='experiences',
+        help_text='规律发现者（全局规律可为 null）',
+    )
+    trajectory = models.ForeignKey(
+        'AITrajectory', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='experiences',
+        help_text='来源轨迹',
+    )
+
+    # 路由
+    dimension = models.CharField(max_length=20, choices=DIMENSION_CHOICES)
+    scope_type = models.CharField(max_length=20, choices=SCOPE_CHOICES, default='global')
+    scope_value = models.JSONField(default=dict, help_text='作用范围实体，如 {"student_id": 123, "kp_id": 45}')
+
+    # 内容
+    title = models.CharField(max_length=200, help_text='规律一句话摘要')
+    trigger = models.JSONField(default=dict, help_text='触发条件表达式')
+    effect = models.JSONField(default=dict, help_text='规律内容与参数')
+
+    # 生命周期
+    confidence = models.CharField(max_length=10, choices=CONFIDENCE_CHOICES, default='low')
+    weight = models.FloatField(default=1.0, help_text='权重 = 验证次数 × 最近 Δmastery')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    verify_count = models.PositiveIntegerField(default=0, help_text='验证通过次数')
+    verify_fail_count = models.PositiveIntegerField(default=0, help_text='验证失败次数')
+    last_triggered_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-weight', '-created_at']
+        indexes = [
+            models.Index(fields=['dimension', 'status', 'confidence']),
+            models.Index(fields=['scope_type', 'scope_value']),
+            models.Index(fields=['status', 'last_triggered_at']),
+        ]
+        verbose_name = '经验规律'
+        verbose_name_plural = '经验规律'
+
+    def __str__(self):
+        return f"[{self.get_dimension_display()}] {self.title} ({self.get_confidence_display()})"
+
+
+class ExperienceVerification(models.Model):
+    """经验验证记录：学生做题后触发，记录与经验相关的成绩数据。
+
+    积累足够数据后用于反事实对比：实验组（经验触发过）vs 对照组。
+    """
+
+    experience = models.ForeignKey(
+        'Experience', on_delete=models.CASCADE,
+        related_name='verifications',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name='experience_verifications',
+    )
+    kp_id = models.PositiveIntegerField(help_text='触发验证的知识点 ID')
+    score = models.FloatField(help_text='得分')
+    max_score = models.FloatField(help_text='满分')
+    score_ratio = models.FloatField(help_text='得分率 score/max_score')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['experience', 'user']),
+            models.Index(fields=['experience', 'created_at']),
+        ]
+        verbose_name = '经验验证记录'
+        verbose_name_plural = '经验验证记录'
+
+    def __str__(self):
+        return f"Verification({self.experience_id}, user={self.user_id}, kp={self.kp_id}, {self.score_ratio:.0%})"
+
+
 class UserProfile(models.Model):
     """用户 6 维画像持久化存储，替代纯 Redis 缓存。
 

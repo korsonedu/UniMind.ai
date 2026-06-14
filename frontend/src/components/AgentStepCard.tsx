@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Spinner, Circle } from '@phosphor-icons/react';
+import { Check, Spinner, Circle, ArrowRight } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import type { AgentStep } from '@/hooks/useAgentChat';
 
@@ -22,6 +23,7 @@ function useElapsed(status: string) {
 
 export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = React.memo(({ step, compact = false }) => {
   const elapsed = useElapsed(step.status);
+  const navigate = useNavigate();
 
   const icon = step.status === 'done' ? (
     <Check className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-emerald-500 animate-in zoom-in duration-300")} />
@@ -53,11 +55,25 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
           </span>
         )}
         {step.status === 'done' && step.result_summary && (
-          <span className="text-[10px] text-muted-foreground/50 font-normal truncate max-w-[120px]">
+          <span className="text-[10px] text-muted-foreground/55 font-normal truncate max-w-[120px]">
             {step.result_summary}
           </span>
         )}
       </div>
+      {step.status === 'done' && step.actions && step.actions.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-3 pb-2">
+          {step.actions.map((a, i) => (
+            <button
+              key={i}
+              onClick={() => navigate(a.route)}
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-primary/70 hover:text-primary transition-colors px-2 py-0.5 rounded-md hover:bg-primary/10"
+            >
+              {a.label}
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 });

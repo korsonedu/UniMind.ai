@@ -395,8 +395,11 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             "total_questions_attempted": total_attempted,
             "accuracy": accuracy,
             "weak_points": [{"kp": kp, "errors": cnt} for kp, cnt in weak_kps],
-            "weekly_active_days": min(7, weekly_active),  # simplified
+            "weekly_active_days": min(7, weekly_active),
             "weekly_exams": weekly_exams,
+            "_actions": [
+                {"label": "查看学员详情", "route": f"/institution/students?student={student.id}"},
+            ],
         }
 
     def _handle_get_assignment_progress(self, args: Dict) -> Dict:
@@ -516,6 +519,9 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             "due_date": due_date.isoformat() if due_date else None,
             "notified_students": notified,
             "message": f"已发布作业「{title}」（{len(questions)} 题），已通知 {notified} 名学生。",
+            "_actions": [
+                {"label": "查看作业进度", "route": f"/institution/students"},
+            ],
         }
 
     def _handle_send_notification(self, args: Dict) -> Dict:
@@ -600,6 +606,9 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                  "url": f"/course/{c.id}"}
                 for c in courses
             ],
+            "_actions": [
+                {"label": f"查看全部 {qs.count()} 门课程", "route": "/courses"},
+            ],
         }
 
     def _handle_list_questions(self, args: Dict) -> Dict:
@@ -635,6 +644,9 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                  "kp_name": q.knowledge_point.name if q.knowledge_point else '',
                  "subject": q.knowledge_point.subject if q.knowledge_point else ''}
                 for q in questions
+            ],
+            "_actions": [
+                {"label": f"查看全部 {qs.count()} 道题", "route": "/questions"},
             ],
         }
 

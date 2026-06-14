@@ -21,11 +21,13 @@ import numpy as np
 
 # ═══ 弹窗 — 必须在任何 pyplot 导入前 ═══
 import matplotlib
-matplotlib.use('TkAgg')
+import os as _os
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
-plt.ion()  # 交互模式
+_HEADLESS = True
+plt.ion() if not _HEADLESS else None  # 交互模式（仅 GUI）
 
 # ═══ 配色方案 ═══
 C = {
@@ -77,7 +79,8 @@ def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, co
         _live_fig, _live_axes = plt.subplots(2, 2, figsize=(15, 10),
                                               num='Memorix REC — Live',
                                               facecolor=C['bg'])
-        _live_fig.show()
+        if not _HEADLESS:
+            _live_fig.show()
 
     fig, axes = _live_fig, _live_axes
     for ax in axes.flat:
@@ -106,7 +109,7 @@ def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, co
                         color='#000' if v > 0.02 else C['text'], fontweight='bold')
     cbar = plt.colorbar(im, ax=ax, shrink=0.8)
     cbar.ax.yaxis.set_tick_params(color=C['dim'], labelsize=7)
-    cbar.outline.set_edge(C['border'])
+    cbar.outline.set_edgecolor(C['border'])
     cbar.set_label('Δ', color=C['dim'], fontsize=8)
 
     # ═══ (0,1) 柱状图 ═══
@@ -154,8 +157,9 @@ def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, co
     ax.text(0.05, 0.95, '\n'.join(lines), transform=ax.transAxes, fontsize=11,
             fontfamily='monospace', color=C['text'], va='top')
 
-    fig.canvas.draw()
-    fig.canvas.flush_events()
+    if not _HEADLESS:
+        fig.canvas.draw()
+        fig.canvas.flush_events()
 
     os.makedirs('scripts/output', exist_ok=True)
     fig.savefig('scripts/output/rec_live.png', dpi=120, facecolor=C['bg'], edgecolor='none')
@@ -163,20 +167,46 @@ def _live_dashboard(round_results, tau_values, k_values, rnd_num, combo_done, co
 # ═══════════════════════════════════════
 # P(t) 可塑性模型（小时版，适配仿真）
 # ═══════════════════════════════════════
+#
+# 与生产 reconsolidation.py 行为对齐：
+#   - 黄金分割 50 迭代（匹配生产）
+#   - 已遗忘 R<0.1 → urgency=1.0（需重学）
+#   - S0≤0 → urgency=1.0（新知识点尽快复习）
+#   + 分桶缓存加速：S0 离散化到 0.1 天，(bucket,k,tau) 三元组缓存 t_opt
+
+_OPT_CACHE = {}  # (S0_bucket: float, k: float, tau: float) → (t_opt_hours, P_max)
 
 def plasticity_hours(t_hours, S0_days, lambda_days, k=1.2, tau_hours=1.0):
-    """P(t) in hours. t_hours: 距上次复习的小时数."""
+    """P(t) in hours. t_hours: 距上次复习的小时数。
+    
+    P(t) = S₀ × [1-e^(-t/τ)] × e^(-t/T_stab) × [1-e^(-(t/S₀)^k)]
+           └──不应期恢复──┘  └──稳定性衰减──┘  └──遗忘驱动──────┘
+    
+    T_stab = S₀：稳定性衰减时间常数 = 当前稳定性本身。
+    e^(-t/T_stab) 让 P(t) 在 t≈k×S₀ 处产生真实内部峰值，而非单调递增。
+    """
     if t_hours <= 0 or S0_days <= 0:
         return 0.0
     t_days = t_hours / 24.0
     tau_days = tau_hours / 24.0
+    # 不应期恢复
     S_t = S0_days * (1.0 - math.exp(-t_days / tau_days))
+    # 稳定性缓慢衰减（T_stab = S0_days）
+    S_t *= math.exp(-t_days / S0_days)
+    # 遗忘驱动
     R_t = math.exp(-((t_days / max(lambda_days, 0.01)) ** k))
     return S_t * (1.0 - R_t)
 
 
 def find_optimal_t_hours(S0_days, lambda_days, k=1.2, tau_hours=1.0):
-    """黄金分割搜索 P(t) 最大值，返回 (t_opt_hours, P_max)"""
+    """黄金分割搜索 P(t) 最大值，返回 (t_opt_hours, P_max)。
+    50 次迭代，匹配生产 reconsolidation.py。结果缓存。"""
+    bucket = round(S0_days * 10) / 10  # 0.1 天精度
+    cache_key = (bucket, k, tau_hours)
+    cached = _OPT_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     lo = max(tau_hours, 0.01)
     hi = 10.0 * lambda_days * 24.0  # 10×λ 天→小时
     phi = (math.sqrt(5) - 1) / 2
@@ -186,7 +216,7 @@ def find_optimal_t_hours(S0_days, lambda_days, k=1.2, tau_hours=1.0):
     p1 = plasticity_hours(m1, S0_days, lambda_days, k, tau_hours)
     p2 = plasticity_hours(m2, S0_days, lambda_days, k, tau_hours)
 
-    for _ in range(40):
+    for _ in range(50):
         if p1 >= p2:
             hi = m2; m2 = m1; p2 = p1
             m1 = hi - phi * (hi - lo)
@@ -198,21 +228,35 @@ def find_optimal_t_hours(S0_days, lambda_days, k=1.2, tau_hours=1.0):
 
     t_opt = (lo + hi) / 2.0
     p_max = plasticity_hours(t_opt, S0_days, lambda_days, k, tau_hours)
+    _OPT_CACHE[cache_key] = (t_opt, p_max)
     return t_opt, p_max
 
 
 def rec_urgency(S0_days, elapsed_hours, k=1.2, tau_hours=1.0):
-    """REC urgency = P(t_now) / P(t_opt)，归一化到 [0,1]"""
-    if S0_days <= 0 or elapsed_hours < tau_hours:
-        return 0.0  # 新题或不应期
+    """REC urgency = P(t_now) / P(t_opt)，归一化到 [0,1]。
+    与生产 compute_urgency 行为对齐。"""
+    # 新知识点：尽快第一次复习
+    if S0_days <= 0:
+        return 1.0
+
+    # 不应期内
+    if elapsed_hours < tau_hours:
+        return 0.0
+
+    # 极高稳定性 → 退化为标准 Weibull urgency
     if S0_days > 365:
         R = math.exp(-((elapsed_hours / 24.0 / S0_days) ** k))
-        return 1.0 - R  # 极稳→退化为标准
+        return 1.0 - R
 
+    # 已遗忘 → 该重学了
+    R = math.exp(-((elapsed_hours / 24.0 / S0_days) ** k))
+    if R < 0.1:
+        return 1.0
+
+    # 正常路径：P(t_elapsed) / P(t_opt)
     t_opt, p_max = find_optimal_t_hours(S0_days, S0_days, k, tau_hours)
     if p_max <= 0:
-        R = math.exp(-((elapsed_hours / 24.0 / S0_days) ** k))
-        return 1.0 - R
+        return 1.0 - R  # fallback
 
     p_now = plasticity_hours(elapsed_hours, S0_days, S0_days, k, tau_hours)
     return max(0.0, min(1.0, p_now / p_max))
@@ -222,7 +266,14 @@ def rec_urgency(S0_days, elapsed_hours, k=1.2, tau_hours=1.0):
 # 知识树加载（复用 Phase 0）
 # ═══════════════════════════════════════
 
-def load_cfa_tree(path, heavy=False):
+def load_cfa_tree(path, heavy=False, llm_edges_path=None):
+    """
+    加载 CFA 知识树，构建邻接表。
+
+    Args:
+        heavy: 启用交叉边（使用 llm_edges_path 或随机边）
+        llm_edges_path: LLM 生成的边 JSON 文件路径。提供则用它替代随机交叉边。
+    """
     with open(path) as f:
         data = json.load(f)
     nodes = data['nodes']
@@ -243,11 +294,13 @@ def load_cfa_tree(path, heavy=False):
             kp_code_order[nd['id']] = num
 
     adj = defaultdict(list)
+    # 树结构边：parent-child（双向 w=0.8）
     for nd in nodes:
         if nd.get('parent_id') and nd['parent_id'] in id2i:
             adj[nd['id']].append((nd['parent_id'], 0.8))
             adj[nd['parent_id']].append((nd['id'], 0.8))
 
+    # 兄弟边（同一 parent 下的 KP 之间，w=0.3）
     cbp = defaultdict(list)
     for nd in nodes:
         if nd.get('parent_id'):
@@ -259,15 +312,30 @@ def load_cfa_tree(path, heavy=False):
                 adj[ch[j]].append((ch[i], 0.3))
 
     if heavy:
-        n_cross = min(120, len(kps) // 2)
-        for _ in range(n_cross):
-            a = random.choice(kps)
-            b = random.choice(kps)
-            if a['id'] == b['id']: continue
-            if kp_parents.get(a['id']) != kp_parents.get(b['id']):
-                w = random.uniform(0.12, 0.25)
-                adj[a['id']].append((b['id'], w))
-                adj[b['id']].append((a['id'], w))
+        if llm_edges_path and os.path.exists(llm_edges_path):
+            # 加载 LLM 语义边
+            with open(llm_edges_path) as f:
+                llm_edges = json.load(f)
+            added = 0
+            for e in llm_edges:
+                src_id = e['source_id']
+                tgt_id = e['target_id']
+                if src_id in id2i and tgt_id in id2i:
+                    w = float(e.get('weight', 0.5))
+                    adj[src_id].append((tgt_id, w))
+                    added += 1
+            print(f'  [LLM edges] loaded {added} edges from {llm_edges_path}')
+        else:
+            # fallback: 随机交叉边
+            n_cross = min(120, len(kps) // 2)
+            for _ in range(n_cross):
+                a = random.choice(kps)
+                b = random.choice(kps)
+                if a['id'] == b['id']: continue
+                if kp_parents.get(a['id']) != kp_parents.get(b['id']):
+                    w = random.uniform(0.12, 0.25)
+                    adj[a['id']].append((b['id'], w))
+                    adj[b['id']].append((a['id'], w))
 
     sec_kps = defaultdict(list)
     for nd in kps:
@@ -409,7 +477,16 @@ class StudentV2:
 # ═══════════════════════════════════════
 
 def simulate_student(tree, student, sched, alpha, n_days, budget,
-                     study_hours=8, seed=0, rec_tau=1.0, rec_k=1.2):
+                     study_hours=8, seed=0, use_rec=False, rec_tau=1.0, rec_k=1.2):
+    """
+    仿真单个学生的完整学习轨迹。
+
+    Args:
+        sched: 'standard' | 'rec' | 'field' | 'field_rec'
+        use_rec: True 时 urgency = P(t)/P(t_opt)，否则 urgency = 1-R(t)
+        rec_tau: 不应期时间常数（小时），仅 use_rec=True 时生效
+        rec_k: Weibull 形状参数，仅 use_rec=True 时生效
+    """
     np.random.seed((seed + student.sid) % (2**31))
     random.seed((seed + student.sid) % (2**31))
 
@@ -419,8 +496,10 @@ def simulate_student(tree, student, sched, alpha, n_days, budget,
     sec_groups = tree['sec_groups']
 
     student.init(n_kps, prereq, sec_groups, seed + student.sid)
-    all_kps = list(range(n_kps))
     history = []
+
+    # 预构建可复习 KP 索引（排除永远不会 unlock 的，动态更新）
+    all_kps_list = list(range(n_kps))
 
     actual_study_hours = max(4, study_hours + random.uniform(-2, 2))
     sleep_hours = 24 - actual_study_hours
@@ -438,35 +517,44 @@ def simulate_student(tree, student, sched, alpha, n_days, budget,
         while cur_t < session_end:
             gap = random.uniform(min_gap, max_gap)
             cur_t += gap
-            if cur_t >= session_end: break
+            if cur_t >= session_end:
+                break
+
+            # 只遍历可复习的 KP（unlocked 或 mastered）
+            eligible = [li for li in all_kps_list
+                        if li in student.unlocked or li in student.mastered]
+            if not eligible:
+                break
 
             scored = []
-            for li in all_kps:
-                if li not in student.unlocked and li not in student.mastered:
-                    continue
-
+            for li in eligible:
                 elapsed_h = cur_t - student.last[li] if student.last[li] >= 0 else 999
                 S0 = student.S[li]
 
-                if sched == 'rec':
-                    urg = rec_urgency(S0, elapsed_h, k=rec_k, tau_hours=rec_tau) if S0 > 0 else 1.0
-                elif sched == 'field' and rec_tau > 0:
-                    # REC+Field combo: REC urgency with graph diffusion
-                    urg = rec_urgency(S0, elapsed_h, k=rec_k, tau_hours=rec_tau) if S0 > 0 else 1.0
+                # ── urgency 计算 ──
+                if use_rec:
+                    urg = rec_urgency(S0, elapsed_h, k=rec_k, tau_hours=rec_tau)
                 else:
+                    # 标准 Weibull：新 KP urgency=3.0（高优先级首次接触）
                     urg = 1.0 - student.R(li, cur_t) if student.last[li] >= 0 else 3.0
 
-                if sched == 'field':
+                # ── field_benefit（仅 field / field_rec 模式）──
+                if sched in ('field', 'field_rec'):
                     fb = sum(w * max(0.0, 1.0 - student.R(nli, cur_t))
                              for nli, w in nbrs.get(li, []))
                     urg = alpha * urg + (1 - alpha) * fb
 
                 scored.append((li, urg))
 
+            # 候选不够 → 用 unlocked 的未评分 KP 补齐
             if len(scored) < budget:
-                for li in all_kps:
-                    if li in student.unlocked and li not in [s[0] for s in scored]:
+                scored_ids = {s[0] for s in scored}
+                for li in student.unlocked:
+                    if li not in scored_ids:
                         scored.append((li, 2.0))
+                        scored_ids.add(li)
+                        if len(scored) >= budget:
+                            break
 
             scored.sort(key=lambda x: -x[1])
             selected = [li for li, _ in scored[:budget]]
@@ -475,15 +563,8 @@ def simulate_student(tree, student, sched, alpha, n_days, budget,
                 rating = student.get_rating(li, cur_t)
                 student.review(li, cur_t, rating)
 
-                # push model: field mode 复习时 boost 邻居稳定性
-                if sched == 'field':
-                    for nli, w in nbrs.get(li, []):
-                        if student.S[nli] > 0:
-                            boost_effect = 0.20 * w * student.con
-                            hours_to_sleep = session_end - cur_t
-                            if hours_to_sleep < 2.0:
-                                boost_effect *= 1.3
-                            student.S[nli] *= (1.0 + boost_effect)
+                # ═══ 生产 pull 模型：调度时重排，复习时不改邻居 ═══
+                # 原 push boost 已移除——与生产 _field_rerank 行为对齐
 
         cur_t = session_end + sleep_hours
 
@@ -553,7 +634,7 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
         results = {}
 
         # 立即弹出空仪表盘窗口
-        _live_dashboard(results, tau_values, k_values, rnd+1, 0, len(tau_k_grid))
+        # (headless: skip live dashboard)
         seed_offset = rnd * 100000
 
         # Baseline
@@ -597,16 +678,13 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
                 rec_r.append(simulate_student(
                     tree, s, 'rec', 0.60, n_days, budget,
                     seed=seed_offset + 200000 + idx*students_per + i,
-                    rec_tau=tau, rec_k=k))
+                    use_rec=True, rec_tau=tau, rec_k=k))
             results[key] = rec_r
             dt = time.time() - t0
             s = summary([r['final_R'] for r in rec_r])
             print(f"R={s['mean']:.4f} ± {s['ci95']:.4f} ({dt:.0f}s)")
 
-            # live dashboard update
-            _live_dashboard(results, tau_values, k_values,
-                           rnd+1, idx+1, total)
-
+            # round done, accumulate
         all_rounds.append(results)
 
     # ── 合并两轮，验证稳定性 ──
@@ -628,7 +706,8 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
         final[f"{key}_round_delta"] = abs(r1m - r2m)
 
     # 找最优，跑 REC+Field combo
-    rec_only = [(k, v) for k, v in final.items() if k.startswith('rec_t')]
+    rec_only = [(k, v) for k, v in final.items()
+                if k.startswith('rec_t') and not k.endswith('_round_delta')]
     rec_only.sort(key=lambda x: -x[1]['mean'])
     best_key = rec_only[0][0]
     best_tau = float(best_key.split('_')[1][1:])
@@ -641,9 +720,9 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
         st = student_types[i % len(student_types)]
         cv = coverages[i % len(coverages)]
         s = StudentV2(900000 + i, student_type=st, coverage=cv)
-        r = simulate_student(tree, s, 'field', 0.60, n_days, budget,
-                             seed=900000 + i, rec_tau=best_tau, rec_k=best_k)
-        # patch: field with rec urgency
+        r = simulate_student(tree, s, 'field_rec', 0.60, n_days, budget,
+                             seed=900000 + i, use_rec=True,
+                             rec_tau=best_tau, rec_k=best_k)
         combo_r.append(r)
     final['rec_field_combo'] = summary([r['final_R'] for r in combo_r])
 
@@ -663,8 +742,11 @@ def run_experiment(tree, tau_k_grid, students_per, n_days, budget, rounds=2):
 # ═══════════════════════════════════════
 
 def main():
-    tree = load_cfa_tree(os.path.join(os.path.dirname(__file__), 'cfa_tree.json'), heavy=True)
-    print(f"CFA Tree: {tree['n_kps']} KPs (heavy mode)\n")
+    script_dir = os.path.dirname(__file__)
+    tree_path = os.path.join(script_dir, 'cfa_tree.json')
+    llm_path = os.path.join(script_dir, 'cfa_llm_edges.json')
+    tree = load_cfa_tree(tree_path, heavy=True, llm_edges_path=llm_path)
+    print(f"CFA Tree: {tree['n_kps']} KPs (heavy mode + LLM edges)\n")
 
     # τ ∈ {0.5, 1, 2, 4, 8}h, k ∈ {0.8, 1.0, 1.2, 1.5, 2.0}
     tau_values = [0.5, 1.0, 2.0, 4.0, 8.0]
@@ -771,7 +853,7 @@ def _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, b
             ax.text(i, j, f'{v:+.3f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
     cbar = plt.colorbar(im0, ax=ax, shrink=0.85)
     cbar.ax.yaxis.set_tick_params(color=C['dim'], labelsize=7)
-    cbar.outline.set_edge(C['border'])
+    cbar.outline.set_edgecolor(C['border'])
     cbar.set_label('Δ retention', color=C['dim'], fontsize=8)
 
     # ═══ (b) REC Δ vs Field ═══
@@ -794,7 +876,7 @@ def _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, b
             ax.text(i, j, f'{v:+.3f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
     cbar = plt.colorbar(im1, ax=ax, shrink=0.85)
     cbar.ax.yaxis.set_tick_params(color=C['dim'], labelsize=7)
-    cbar.outline.set_edge(C['border'])
+    cbar.outline.set_edgecolor(C['border'])
     cbar.set_label('Δ retention', color=C['dim'], fontsize=8)
 
     # ═══ (c) 可复现性 ═══
@@ -817,7 +899,7 @@ def _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, b
             ax.text(i, j, f'{v:.4f}', ha='center', va='center', fontsize=7, color=c, fontweight='bold')
     cbar = plt.colorbar(im2, ax=ax, shrink=0.85)
     cbar.ax.yaxis.set_tick_params(color=C['dim'], labelsize=7)
-    cbar.outline.set_edge(C['border'])
+    cbar.outline.set_edgecolor(C['border'])
     cbar.set_label('|R1 − R2|', color=C['dim'], fontsize=8)
 
     # ═══ (d) 模型对比 ═══
@@ -854,7 +936,8 @@ def _plot_results(results, tau_values, k_values, std_mean, fld_mean, best_tau, b
     plt.tight_layout()
     out_path = 'scripts/output/rec_paper_figure.png'
     fig.savefig(out_path, dpi=200, facecolor=C['bg'], edgecolor='none')
-    plt.show(block=False)
+    if not _HEADLESS:
+        plt.show(block=False)
     print(f"Figure saved to {out_path}")
 
     # 统计摘要

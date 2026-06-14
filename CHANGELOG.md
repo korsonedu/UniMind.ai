@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.5.1 — GEPA 自进化闭环 + 用户反馈 (2026-06-13)
+
+### 架构
+- **GEPA 自进化全链路打通**：采集→评估→分析→建议→变体路由→优化执行
+- **Trajectory 记录激活**：SSE/Polling/WS 三条路径对话结束时自动调用 `record_trajectory`
+- **Prompt Variant 框架**：文件驱动的变体管理（`gepa_variants.py`），按流量比例 A/B 路由
+- **用户反馈体系**：AI 回复 hover 赞/踩 → `AIChatMessage.feedback` → `AITrajectory.outcome`
+
+### 新功能
+- **AI 回复反馈**（👍👎）：hover 显示，静默记录，再次点击取消，失败回滚
+- **轨迹自动评估**（`_auto_evaluate_trajectory`）：启发式评估 outcome（无反馈时也能用）
+  - AI 错误消息 → failure(0.95) | 工具全成功 → success(0.75) | 部分失败 → partial(0.65)
+- **反馈→轨迹联动**：用户赞/踩同步覆盖 `AITrajectory.outcome`，标记 `feedback_source: user`
+- **变体路由**：`get_variant_for_request(bot)` 按 `traffic_split` 加权随机选择 variant
+- **变体 CRUD**：`create_variant / retire_variant / update_traffic`，JSON 文件存储，零 migration
+- **`optimize_prompt_task`** 从 `pass` → 完整框架（读建议→分派 3 类 handler）
+- Celery beat 新增 `optimize-prompt-weekly`（每周一 3am，跟在 analyze 之后）
+
+### 修复
+- ChatBubble 反馈按钮折叠导致 layout shift → 固定 `h-5` 占位 + `opacity` 切换
+- 对话间距增大（`space-y-3`/`space-y-4`），hover 不再挤动下方内容
+
+### Migration
+- `ai_assistant/0018_add_feedback_to_message.py` — `AIChatMessage.feedback` (BooleanField, nullable)
+
 ## v0.5.0 — 闭环 MVP + 测评引擎升级 (2026-06-06)
 
 ### 架构

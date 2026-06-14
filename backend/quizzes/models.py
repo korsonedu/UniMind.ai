@@ -298,6 +298,52 @@ class StudentExamSubmission(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class Assignment(models.Model):
+    """作业：教师选题后定向布置给班级。"""
+    STATUS_CHOICES = (
+        ('draft', '草稿'),
+        ('published', '已发布'),
+        ('closed', '已关闭'),
+    )
+    title = models.CharField(max_length=500)
+    description = models.TextField(blank=True)
+    institution = models.ForeignKey("users.Institution", on_delete=models.CASCADE, related_name="assignments")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="created_assignments")
+    target_classes = models.ManyToManyField("users.Class", related_name="assignments")
+    due_date = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class AssignmentQuestion(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="assignment_questions")
+    question = models.ForeignKey("Question", on_delete=models.CASCADE)
+    order = models.IntegerField(default=0)
+    points = models.IntegerField(default=1)
+
+    class Meta:
+        ordering = ['order']
+        unique_together = [('assignment', 'question')]
+
+
+class AssignmentSubmission(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="submissions")
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="assignment_submissions")
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    answers = models.JSONField(default=dict)
+    score = models.FloatField(null=True, blank=True)
+    graded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="graded_submissions")
+    graded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+        unique_together = [('assignment', 'student')]
+
+
 class ExamTemplate(models.Model):
     """出题模板：保存常用出题配置，支持系统预设和机构自定义。"""
     DIFFICULTY_LEVELS = (

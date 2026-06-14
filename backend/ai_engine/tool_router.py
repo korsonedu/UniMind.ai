@@ -368,7 +368,7 @@ EXAM_GENERATOR_INTENT_MAP = {
         ],
     },
     "stats": {
-        "keywords": ["统计", "题库", "多少题", "出题情况", "分布", "面板"],
+        "keywords": ["统计", "多少题", "出题情况", "分布", "面板", "题库统计", "出题统计"],
         "tools": [
             "get_workbench_stats",
         ],
