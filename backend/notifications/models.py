@@ -7,6 +7,7 @@ class Notification(models.Model):
         ('system', '系统通知'),
         ('memorix_reminder', '复习提醒'),
         ('performance_alert', '绩效告警'),
+        ('bulk_init', '初始化题库'),
     )
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)

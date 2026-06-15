@@ -12,6 +12,35 @@ from django.db import models
 logger = logging.getLogger(__name__)
 
 
+def _inject_kp_chain_experiences(kp_ids: list, user, institution=None) -> list[str]:
+    """
+    搜索知识树后，检查是否有 kp_chain 经验匹配这些 KP，
+    返回经验指引文本列表供追加到工具结果中。
+
+    用于 Phase 3 kp_chain 二次注入：初次对话时还没确定 KP，
+    等到搜索知识树返回 KP 后再检查经验。
+    """
+    from .experience_applicator import get_applicable_experiences, record_trigger
+
+    hints = []
+    for kp_id in kp_ids:
+        context = {
+            'event': '讲解',
+            'kp_id': kp_id,
+            'student_id': user.id if user else None,
+            'institution_id': institution.id if institution else None,
+        }
+        applicable = get_applicable_experiences(context, limit=3)
+        if applicable:
+            for exp in applicable:
+                if exp.dimension in ('prompt', 'workflow'):
+                    instruction = (exp.effect or {}).get('instruction', exp.title)
+                    hints.append(f'[{exp.get_dimension_display()}] {instruction}')
+            record_trigger(applicable)
+
+    return hints
+
+
 def generate_step_label(tool_name: str, args: dict) -> str:
     """根据 tool name 和 args 动态生成中文步骤描述。"""
     labels = {
@@ -144,8 +173,8 @@ class BaseToolExecutor:
         self.institution = institution or getattr(user, 'institution', None)
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
-        self.tool_call_log: list = []     # GEPA 轨迹：工具调用序列
-        self.tool_output_log: list = []   # GEPA 轨迹：工具返回结果
+        self.tool_call_log: list = []     # MUTAR 轨迹：工具调用序列
+        self.tool_output_log: list = []   # MUTAR 轨迹：工具返回结果
 
     def __call__(self, tool_name: str, args: Dict[str, Any]) -> str:
         # 工具白名单校验：防止 LLM 被注入后调用非预期工具
@@ -173,7 +202,22 @@ class BaseToolExecutor:
         from ai_assistant.services.memory_system import MemorySystem
         query = (args.get('query') or '').strip()
         subject = (args.get('subject') or '').strip()
-        return MemorySystem.query_knowledge_tree(query, subject, self.user, self.institution)
+        result = MemorySystem.query_knowledge_tree(query, subject, self.user, self.institution)
+
+        # 经验路由器 Phase 3：kp_chain 二次注入
+        # 搜索到 KP 后，检查是否有针对这些 KP 的 kp_chain 经验
+        results = result.get('results', [])
+        if results:
+            kp_ids = [r['id'] for r in results if r.get('id')]
+            if kp_ids:
+                kp_hints = _inject_kp_chain_experiences(kp_ids, self.user, self.institution)
+                if kp_hints:
+                    hint_text = '\n'.join(f'  • {h}' for h in kp_hints)
+                    result['_experience_guidance'] = (
+                        f'\n\n📋 教学经验指引（针对找到的知识点）：\n{hint_text}'
+                    )
+
+        return result
 
     def _handle_get_user_weak_points(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem

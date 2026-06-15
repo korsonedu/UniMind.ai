@@ -618,3 +618,97 @@ class StudentAssignmentSubmitView(APIView):
             'score': sub.score,
             'message': f'已提交，客观题自动批改 {graded_count} 题',
         })
+
+
+class AssignmentSubmissionListView(APIView):
+    """GET /api/quizzes/assignments/<id>/submissions/ — 教师查看作业提交列表。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = request.user
+        institution = getattr(user, 'institution', None)
+        if not institution:
+            return Response({'error': '无机构归属'}, status=403)
+
+        try:
+            assignment = Assignment.objects.get(id=pk, institution=institution)
+        except Assignment.DoesNotExist:
+            return Response({'error': '作业不存在'}, status=404)
+
+        submissions = AssignmentSubmission.objects.filter(
+            assignment=assignment
+        ).select_related('student').order_by('-submitted_at')
+
+        data = []
+        for sub in submissions:
+            student = sub.student
+            data.append({
+                'id': sub.id,
+                'student_id': student.id,
+                'student_name': student.nickname or student.username,
+                'submitted_at': sub.submitted_at.isoformat(),
+                'answers': sub.answers,
+                'score': sub.score,
+                'graded': sub.score is not None,
+            })
+
+        # Also list students who haven't submitted
+        submitted_ids = {s.student_id for s in submissions}
+        all_student_ids = set()
+        for cls in assignment.target_classes.all():
+            all_student_ids.update(cls.students.values_list('id', flat=True))
+
+        unsubmitted = []
+        if all_student_ids:
+            missing_ids = all_student_ids - submitted_ids
+            from users.models import User
+            for u in User.objects.filter(id__in=missing_ids).values('id', 'nickname', 'username'):
+                unsubmitted.append({
+                    'student_id': u['id'],
+                    'student_name': u['nickname'] or u['username'],
+                    'submitted': False,
+                })
+
+        return Response({
+            'assignment_id': assignment.id,
+            'title': assignment.title,
+            'total_questions': assignment.assignment_questions.count(),
+            'submissions': data,
+            'unsubmitted': unsubmitted,
+        })
+
+
+class AssignmentGradeView(APIView):
+    """POST /api/quizzes/assignments/submissions/<id>/grade/ — 教师批改/评分。"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+        institution = getattr(user, 'institution', None)
+        if not institution:
+            return Response({'error': '无机构归属'}, status=403)
+
+        role = getattr(user, 'institution_role', '')
+        if role not in ('teacher', 'owner'):
+            return Response({'error': '仅教师/机构主可批改'}, status=403)
+
+        try:
+            sub = AssignmentSubmission.objects.select_related('assignment').get(
+                id=pk, assignment__institution=institution
+            )
+        except AssignmentSubmission.DoesNotExist:
+            return Response({'error': '提交不存在'}, status=404)
+
+        score = request.data.get('score')
+        if score is not None:
+            sub.score = float(score)
+        sub.graded_by = user
+        sub.graded_at = timezone.now()
+        sub.save()
+
+        return Response({
+            'id': sub.id,
+            'score': sub.score,
+            'graded_at': sub.graded_at.isoformat(),
+            'message': f'已评分 {sub.score} 分',
+        })

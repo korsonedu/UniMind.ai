@@ -12,7 +12,7 @@ Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepS
 | 工作台 | `exam_generator` | 13 | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 作业管理 + 资产浏览 + 通知 |
 
 运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
-意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。**自进化优化**：LLM 驱动的用户画像分析（缓存预计算 + Celery 异步）、Memorix↔Agent 联动、GEPA 自进化全链路（采集→评估→分析→建议→变体路由，Trajectory 自动记录 + 用户反馈闭环）。
+意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。**自进化优化**：LLM 驱动的用户画像分析（缓存预计算 + Celery 异步）、Memorix↔Agent 联动、MUTAR 自进化全链路（Measure→Umpire→Think→Adapt→Refine：采集→评估→分析→变体→精炼，Trajectory 自动记录 + 用户反馈闭环）。
 新增 Agent 只需：① 写 prompt 文件到 `prompts/ai_assistant/bots/{name}/` ② 在 `bot_registry.py` 的 `BOT_REGISTRY` 加一行 ③ （可选）写 ToolExecutor 子类。
 
 ## 硬边界
@@ -252,7 +252,7 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/PROMPT_MANAGEMENT_SYSTEM.md` | Prompt 管理系统（文件系统+数据库版本历史+回滚） |
 | `docs/tech/features/RBAC_USER_MANAGEMENT.md` | RBAC 用户管理（角色/权限组/机构隔离） |
 | `docs/tech/features/WOW_MOMENT_TECH_FLOWS.md` | 6 个核心功能技术流程图（数据流/消息协议/架构图） |
-| `docs/tech/features/GEPA_TRAJECTORY.md` | GEPA 自进化：轨迹采集→自动评估→用户反馈→变体路由→优化执行 |
+| `docs/tech/features/MUTAR_ENGINE.md` | MUTAR 自进化：轨迹采集→自动评估→用户反馈→变体路由→优化执行 |
 | `docs/tech/features/ADAPTIVE_PROMPT_LLM.md` | LLM 驱动的自适应指令（用户画像→prompt 指令注入） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |

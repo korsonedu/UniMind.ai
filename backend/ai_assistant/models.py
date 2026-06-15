@@ -183,7 +183,7 @@ class ActionCardInteraction(models.Model):
 
 
 class AITrajectory(models.Model):
-    """Agent 对话轨迹，用于后续 GEPA 自进化优化。"""
+    """Agent 对话轨迹，用于后续 MUTAR 自进化优化。"""
     
     OUTCOME_CHOICES = (
         ('success', '成功'),

@@ -140,11 +140,11 @@ html {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.18);
+  background: hsl(var(--muted-foreground) / 0.10);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.32);
+  background: hsl(var(--muted-foreground) / 0.25);
 }
 
 /* ── Brand text selection ── */

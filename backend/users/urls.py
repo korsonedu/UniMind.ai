@@ -34,6 +34,7 @@ from .views_institution import (
     InstitutionClassPerformanceView, InstitutionSuggestedTopicsView,
     InstitutionAuditLogView, InstitutionNotificationConfigView,
     ClassListCreateView, ClassDetailView, ClassStudentView,
+    InstitutionBulkInitView,
 )
 
 urlpatterns = [
@@ -86,6 +87,7 @@ urlpatterns = [
     path('institution/me/directions/', UpdateDirectionsView.as_view(), name='institution-directions-update'),
     path('institution/me/features/', InstitutionFeatureView.as_view(), name='institution-features'),
     path('institution/me/regenerate-invite-slug/', RegenerateInviteSlugView.as_view(), name='regenerate-invite-slug'),
+    path('institution/me/bulk-init/', InstitutionBulkInitView.as_view(), name='institution-bulk-init'),
     path('institution/join-by-slug/', InstitutionJoinBySlugView.as_view(), name='institution-join-by-slug'),
     path('institution/join-by-invite-slug/', InstitutionJoinByInviteSlugView.as_view(), name='institution-join-by-invite-slug'),
     path('public/institution/<str:slug>/', PublicInstitutionView.as_view(), name='public-institution'),

@@ -65,6 +65,8 @@ const PlatformAnalytics = lazyNamed(() => import('./pages/PlatformAnalytics'), '
 const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
 const NotFound = lazy(() => import('./pages/NotFound'));
 const MyAssignments = lazy(() => import('./pages/MyAssignments'));
+const CourseManage = lazy(() => import('./pages/CourseManage'));
+const ArticleManage = lazy(() => import('./pages/ArticleManage'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const Legal = lazy(() => import('./pages/Legal'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
@@ -80,13 +82,11 @@ const LanguageRedirect = ({ lang }: { lang: string }) => {
   return <Navigate to="/" replace />;
 };
 
-// Auth Guard with Persistence
+// Auth Guard — RootRedirect already handles auth validation; here we just gate.
 const RequireAuth = ({ children }: { children: ReactNode }) => {
-  const { user, setAuth } = useAuthStore();
+  const { user } = useAuthStore();
   const { theme, setTheme } = useSystemStore();
-  const [loading, setLoading] = useState(!user);
 
-  // Theme policy: dark mode beta is only for admins.
   useEffect(() => {
     if (user?.role === 'admin') {
       if (theme === 'dark') setTheme('dark');
@@ -94,23 +94,6 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
       setTheme('light');
     }
   }, [user?.role, user, theme, setTheme]);
-
-  // Fetch user on mount if not in memory (session cookie handles auth)
-  useEffect(() => {
-    if (!user) {
-      api.get('/users/me/')
-        .then(res => setAuth(res.data, null))
-        .catch(() => {
-          // Session invalid — redirect to root, let RootRedirect show landing
-          window.location.href = '/';
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, [user, setAuth]);
-
-  if (loading) return <Loading message="Synchronizing Secure Session…" fullScreen size="lg" />;
 
   if (!user) return <Navigate to="/login" replace />;
   return children;
@@ -236,7 +219,9 @@ const router = createBrowserRouter([
         element: <RequireAuth><MainLayout /></RequireAuth>,
         children: [
           { path: "courses", element: lazyPage(CourseCenter) },
+          { path: "courses/manage", element: <RequireInstitution>{lazyPage(CourseManage)}</RequireInstitution> },
           { path: "articles", element: lazyPage(ArticleCenter) },
+          { path: "articles/manage", element: <RequireInstitution>{lazyPage(ArticleManage)}</RequireInstitution> },
           { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QASystem)}</FeatureGuard> },
           { path: "article/:id", element: lazyPage(ArticleDetail) },
           { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },

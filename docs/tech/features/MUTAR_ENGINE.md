@@ -1,8 +1,8 @@
-# GEPA Trajectory 数据收集与自进化
+# MUTAR 自进化引擎 数据收集与自进化
 
 ## 概述
 
-GEPA（Generate→Evaluate→Polish→Adapt）是 UniMind Prompt 层的自进化引擎。通过采集对话轨迹、用户反馈、工具执行信号，驱动 AI 回答质量的持续优化。
+MUTAR（Measure→Umpire→Think→Adapt→Refine）是 UniMind Prompt 层的自进化引擎。通过采集对话轨迹、用户反馈、工具执行信号，驱动 AI 回答质量的持续优化。
 
 **当前状态（2026-06-13）：** 数据采集→评估→分析→建议→变体路由 全链路已打通。优化执行层框架就绪，等待 trajectory 数据积累后开启 LLM 驱动的自动 prompt 优化。
 
@@ -37,7 +37,7 @@ AITrajectory 表
     ↓
 每周日 2am: analyze_trajectory_task
     ↓
-Redis gepa:suggestions
+Redis mutar:suggestions
     ↓
 每周一 3am: optimize_prompt_task（框架阶段仅 log）
 ```
@@ -79,7 +79,7 @@ Redis gepa:suggestions
 | `get_trajectory_stats(user_id, days)` | 用户轨迹统计（成功率、平均工具调用数、variant 分布） |
 | `get_successful_trajectories(bot_type, min_mastery_delta, limit)` | 查询成功轨迹用于 prompt 优化 |
 
-### 变体管理（`gepa_variants.py`）
+### 变体管理（`mutar_variants.py`）
 
 | 函数 | 说明 |
 |------|------|
@@ -114,7 +114,7 @@ Variant 存储在 `backend/prompts/ai_assistant/variants/{bot_type}.json`，JSON
 | `analyze_trajectory_task` | 每周日 2am | 聚合过去 7 天轨迹，生成优化建议写入 Redis |
 | `optimize_prompt_task` | 每周一 3am | 读取建议，分派到 memorix/prompt/bot handler（框架阶段仅 log） |
 
-`gepa:suggestions` Redis 格式：
+`mutar:suggestions` Redis 格式：
 
 ```json
 {
@@ -167,7 +167,7 @@ stats = get_trajectory_stats(user_id=123, days=30)
 ### 创建实验 variant
 
 ```python
-from ai_assistant.services.gepa_variants import create_variant, update_traffic
+from ai_assistant.services.mutar_variants import create_variant, update_traffic
 create_variant('planner', 'v1_conciseness', {'suffix': '## 实验指令\n回复简洁，每段不超过3句。'})
 update_traffic('planner', 'v1_conciseness', 0.1)  # 10% 流量
 ```
@@ -190,7 +190,7 @@ GROUP BY prompt_variant, outcome;
 
 ## 相关文档
 
-- `docs/tech/AI_SYSTEM_REFERENCE.md` — AI 系统完整参考（含 GEPA 章节）
+- `docs/tech/AI_SYSTEM_REFERENCE.md` — AI 系统完整参考（含 MUTAR 章节）
 - `docs/architecture/all-phases-plan.md` — Phase 7 路线图
 - `docs/tech/reference/SOFT_EVOLUTION_GUIDE.md` — 理论基础（7 篇论文映射）
 - `docs/tech/features/ADAPTIVE_PROMPT_LLM.md` — LLM 驱动的自适应指令

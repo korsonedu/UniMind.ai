@@ -32,7 +32,7 @@ GEPA 论文（arxiv 2507.19457，ICLR 2026 Oral）的设计前提非常明确：
 
 ### 1.3 GEPA 适合 UniMind 的部分
 
-公平地说，GEPA 的数据采集管线（Generate→Evaluate→Polish→Adapt）与 UniMind 已经对齐——UniMind 的 GEPA 管线已打通数据采集+评估+变体路由。GEPA 适合用于：
+公平地说，GEPA 的数据采集管线（Generate→Evaluate→Polish→Adapt）与 UniMind 已经对齐——UniMind 的 MUTAR 管线已打通数据采集+评估+变体路由。GEPA 适合用于：
 - 单 Agent 的 system_prompt 微调（如小宇的教学风格、工作台的出题策略）
 - Pareto frontier 保留多样化策略的 A/B 测试
 
@@ -148,7 +148,7 @@ UniMind 的"小宇+工作台"双 Agent 架构与此高度相似：
 
 | 进化维度 | 方法举例 | UniMind 现状 |
 |---------|---------|-------------|
-| **Prompt 进化** | GEPA, DSPy, TextGrad, SPO, APE, ProTeGi | GEPA 管线已建（采集+评估），优化执行层待激活 |
+| **Prompt 进化** | GEPA, DSPy, TextGrad, SPO, APE, ProTeGi | MUTAR 管线已建（采集+评估），优化执行层待激活 |
 | **Memory 进化** | Mem0, Expel, Agent Workflow Memory, SAGE | mem0 语义记忆 + AgentMemory 结构化记忆，缺少反思生成 |
 | **Tool 进化** | Voyager, CREATOR, ToolGen, MetaAgent | 工具预定义，无自动生成/优化 |
 | **Workflow 进化** | AFlow, EvoAgentX, GPTSwarm, ADAS | 静态 2 Agent 拓扑，无自动拓扑演化 |
@@ -161,7 +161,7 @@ UniMind 的"小宇+工作台"双 Agent 架构与此高度相似：
 - **输入层**：学生问题 + 知识树 + 长期画像
 - **Agent 系统**：小宇（21工具）+ 工作台（13工具）+ mem0 + Memorix
 - **环境层**：对话完成后的自动评估 + 用户赞踩 + LLM-as-Judge
-- **优化器层**：目前只有 GEPA 数据采集，缺少真正的多组件优化器
+- **优化器层**：目前只有 MUTAR 数据采集，缺少真正的多组件优化器
 
 **核心差距：优化器层只能做单 prompt 优化，无法覆盖 Memory、Tool、Workflow 三个维度的协同进化。**
 
@@ -228,7 +228,7 @@ UniMind 的"小宇+工作台"双 Agent 架构与此高度相似：
 - 自博弈可以自动发现最优的 Agent 协作风格（而非人工猜测）
 
 **落地难度**：中等偏低
-- UniMind 已有 variant 分流机制（`gepa_variants.py`），只需扩展到组合分流
+- UniMind 已有 variant 分流机制（`mutar_variants.py`），只需扩展到组合分流
 - 两个 Agent 各自只需维护 3-5 个风格变体，组合空间可控（≤25种）
 - 评估信号已有（工具调用成功率、赞踩、对话完成率）
 

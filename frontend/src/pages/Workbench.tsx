@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, Lightning } from '@phosphor-icons/react';
+import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, Lightning, Hourglass, Database, ClipboardText, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import QuestionPanel from '@/pages/workbench/QuestionPanel';
+import { BulkInitCard } from '@/pages/workbench/BulkInitCard';
+import { QuickStartPanel } from '@/pages/workbench/QuickStartPanel';
 import type { Bot, Message, ConversationSession } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/hooks/useAgentChat';
 
@@ -38,9 +40,14 @@ interface QuestionData {
 
 const SKILLS = [
   { icon: FileText, label: '出题', prompt: '帮我出5道题' },
+  { icon: Lightning, label: '精修出题', prompt: '对刚才的题目启动 ARC 精修' },
   { icon: ChartBar, label: '查薄弱点', prompt: '班级薄弱知识点有哪些' },
   { icon: Users, label: '查学生', prompt: '帮我看看学生的学习情况' },
   { icon: CheckSquareOffset, label: '查作业', prompt: '作业提交情况' },
+  { icon: Hourglass, label: '管线进度', prompt: '检查出题任务进度' },
+  { icon: Database, label: '题库统计', prompt: '帮我看看题库统计情况' },
+  { icon: Files, label: '浏览题目', prompt: '帮我看看题库里有什么题目' },
+  { icon: ClipboardText, label: '布置作业', prompt: '帮我把题目布置给学生' },
 ];
 
 type ViewMode = 'overview' | 'questions' | 'landing';
@@ -83,19 +90,33 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
 }) {
   return (
     <div className="space-y-6">
+      <QuickStartPanel studentCount={institution.student_count} />
+
       <div className="flex items-center gap-2">
         <Brain className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-black tracking-tight">Copilot</h2>
-        <button
-          onClick={() => onSend('帮我分析当前机构学习情况，给出洞察和建议')}
-          className="ml-2 text-[10px] font-bold text-primary/60 hover:text-primary transition-colors bg-primary/5 hover:bg-primary/10 px-2 py-0.5 rounded-md"
-        >
-          Agent 分析
-        </button>
         <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider ml-auto">
           {institution.plan_label} · {institution.student_count}/{institution.max_students} 学员
         </span>
       </div>
+
+      {stats.pending_grading ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-50/50 p-4 flex items-center gap-3">
+          <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+          <div className="flex-1 min-w-0">
+            <span className="text-sm font-bold text-amber-700">{stats.pending_grading} 份作业待批改</span>
+            <span className="text-xs text-amber-600/70 ml-2">学生正在等待反馈</span>
+          </div>
+          <button
+            onClick={() => onSend('帮我看看待批改的作业')}
+            className="text-xs font-bold text-amber-700 hover:text-amber-900 transition-colors shrink-0"
+          >
+            查看 →
+          </button>
+        </div>
+      ) : null}
+
+      <BulkInitCard />
 
       {questionCount > 0 && (
         <button
@@ -217,6 +238,7 @@ export default function Workbench() {
   const [pipelineTaskId, setPipelineTaskId] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('overview');
   const [wasResetManually, setWasResetManually] = useState(false);
+  const [hasConversation, setHasConversation] = useState<boolean | null>(null);
 
   const doSendRef = useRef<((text: string) => void) | null>(null);
 
@@ -238,9 +260,22 @@ export default function Workbench() {
     api.get('/ai/bots/')
       .then(res => {
         const found = (res.data as Bot[]).find(b => b.bot_type === 'exam_generator');
-        if (found) setBot(found);
+        if (found) {
+          setBot(found);
+          // 预加载对话历史，避免 landing→面板 的闪光
+          return api.get('/ai/history/', { params: { bot_id: found.id } });
+        }
+        setHasConversation(false);
+        return null;
       })
-      .catch(() => {});
+      .then(hRes => {
+        if (hRes) {
+          setHasConversation(hRes.data.length > 0);
+        }
+      })
+      .catch(() => {
+        setHasConversation(false);
+      });
   }, []);
 
   const handleQuestionsGenerated = useCallback((questions: AgentStep['questions']) => {
@@ -285,15 +320,41 @@ export default function Workbench() {
     clearState();
   }, []);
 
+  // 侧栏可拖动宽度
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [dragging, setDragging] = useState(false);
+
+  const handleSidebarDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    const onMove = (ev: MouseEvent) => {
+      setSidebarWidth(Math.max(280, Math.min(600, startWidth + startX - ev.clientX)));
+    };
+    const onUp = () => { setDragging(false); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [sidebarWidth]);
+
   // 未处理的题目数
   const remainingCount = generatedQuestions.length - savedIndices.size;
 
+  // 加载中：等待 hasConversation 预检完成，避免 landing→面板 的闪光
+  if (hasConversation === null) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Spinner className="h-4 w-4 animate-spin text-muted-foreground/40" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0">
-      {/* Left: QuestionPanel or Copilot Overview */}
-      {viewMode !== 'questions' || generatedQuestions.length === 0 ? (
+      {/* Left: QuestionPanel or Copilot Overview — 仅对话时显示，landing 隐藏 */}
+      {hasConversation && (viewMode !== 'questions' || generatedQuestions.length === 0 ? (
         !wasResetManually && instInfo && stats && (
-          <div className="flex-1 min-w-0 overflow-y-auto">
+          <div className="flex-1 min-w-0 overflow-y-auto bg-muted/50">
             <div className="p-4 md:p-6">
               <CopilotOverview
                 institution={instInfo}
@@ -306,7 +367,7 @@ export default function Workbench() {
           </div>
         )
       ) : (
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="flex-1 min-w-0 overflow-y-auto bg-muted/50">
           <div className="h-full flex flex-col">
             <div className="shrink-0 px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -341,13 +402,21 @@ export default function Workbench() {
             </div>
           </div>
         </div>
-      )}
+      ))}
 
-      {/* Right: Agent Chat */}
+      {/* Right: Agent Chat — landing 时全宽居中，对话时侧栏宽度 */}
       <div className={cn(
-        "border-l border-border/40 hidden md:flex flex-col",
-        (wasResetManually || (viewMode !== 'questions' && !instInfo)) ? "flex-1 min-w-0" : "w-80 shrink-0"
-      )}>
+        "hidden md:flex flex-col relative",
+        !hasConversation ? "flex-1 min-w-0" : "border-l border-border/30 shrink-0",
+        dragging && "select-none"
+      )} style={!hasConversation ? undefined : { width: sidebarWidth }}>
+        {/* 拖拽手柄 — 仅对话时显示 */}
+        {hasConversation && (viewMode === 'questions' && instInfo) && (
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10"
+            onMouseDown={handleSidebarDragStart}
+          />
+        )}
         <AgentChatLayout
           layout="inline"
           findBot={(bots) => bots.find((b: Bot) => b.bot_type === 'exam_generator')}
@@ -359,6 +428,14 @@ export default function Workbench() {
           landingDescription="出题 · 查学生数据 · 管作业资产"
           botDisplayName="工作台"
           processContent={processMathContent}
+          onHasConversation={setHasConversation}
+          onSendReady={(fn) => { doSendRef.current = fn; }}
+          toolbarAction={{
+            icon: Brain,
+            label: '智能分析',
+            tooltip: 'Agent 智能分析',
+            onClick: () => doSendRef.current?.('帮我分析当前机构学习情况，给出洞察和建议'),
+          }}
           onQuestionsGenerated={handleQuestionsGenerated}
           onLoadSession={(session, defaultHandler) => {
             setWasResetManually(false);
@@ -372,9 +449,11 @@ export default function Workbench() {
             setViewMode('overview');
             setWasResetManually(true);
             clearState();
+            setHasConversation(false);
             defaultHandler();
           }}
           onDone={(refreshSessions) => {
+            setWasResetManually(false);
             refreshSessions();
           }}
         />

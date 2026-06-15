@@ -36,6 +36,43 @@ def run_adversarial_pipeline_task(task_id: int, kp_ids: list, questions_per_kp: 
         task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
 
 
+@shared_task(name='quizzes.run_bulk_pipeline_task')
+def run_bulk_pipeline_task(
+    task_id: int,
+    subject: str,
+    total_target: int = 500,
+    difficulty_dist: dict = None,
+    type_dist: dict = None,
+    kp_code: str = None,
+    institution_id: int = None,
+    institution_only: bool = False,
+):
+    from quizzes.models import ContentPipelineTask
+    from quizzes.services.bulk_pipeline import _execute_bulk_pipeline
+    from users.models import Institution
+
+    task = ContentPipelineTask.objects.get(id=task_id)
+    institution = Institution.objects.get(id=institution_id) if institution_id else None
+    try:
+        _execute_bulk_pipeline(
+            task=task,
+            subject=subject,
+            total_target=total_target,
+            difficulty_dist=difficulty_dist or {},
+            type_dist=type_dist or {},
+            kp_code=kp_code,
+            institution=institution,
+            institution_only=institution_only,
+        )
+    except Exception as e:
+        logger.exception("Bulk pipeline task failed: task_id=%s", task_id)
+        task.status = 'failed'
+        task.error_message = str(e)[:500]
+        from django.utils import timezone
+        task.finished_at = timezone.now()
+        task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
+
+
 @shared_task(name='quizzes.generate_personalized_pdf_mock_exam')
 def generate_personalized_pdf_mock_exam(record_id: int):
     from quizzes.models import PersonalizedMockExam

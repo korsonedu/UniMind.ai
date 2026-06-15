@@ -354,7 +354,7 @@ EXAM_GENERATOR_INTENT_MAP = {
         ],
     },
     "generate": {
-        "keywords": ["出题", "生成", "命题", "出一组", "出几道", "给我出", "来几道", "新题", "题目",
+        "keywords": ["出题", "生成", "命题", "出一组", "出几道", "给我出", "来几道", "新题",
                      "再来", "换", "调整", "改", "不同", "其他", "再难", "更难", "简单"],
         "tools": [
             "search_knowledge", "quick_generate", "launch_arc_pipeline",
@@ -402,9 +402,64 @@ BOT_INTENT_MAP: Dict[str, Dict] = {
 }
 
 
+def _classify_intent_llm(user_message: str, bot_type: str = "planner") -> str | None:
+    """使用 fast model 分类意图。返回 None 表示需要 fallback 到关键词。
+
+    一次轻量调用，temperature=0，max_tokens=20，约 5-10ms。
+    """
+    from ai_engine.service import AIEngine
+
+    intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
+    labels = list(intent_map.keys()) + ["general"]
+
+    # 为每个 label 准备简短提示
+    label_hints = []
+    for label in labels:
+        config = intent_map.get(label, {})
+        hints = config.get("keywords", [])
+        hint_text = ", ".join(hints[:3]) if hints else "anything not matching other intents"
+        label_hints.append(f"- {label}: {hint_text}")
+
+    system = (
+        "Classify the user message into one intent label. "
+        "Reply ONLY the label, nothing else.\n"
+        "If the message is meaningless, ambiguous, or does not clearly match any intent, reply 'general'.\n\n"
+        + "\n".join(label_hints)
+    )
+
+    try:
+        result = AIEngine.call_ai(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.0,
+            max_tokens=20,
+            operation="intent_classify",
+        )
+        if result and "choices" in result:
+            raw = result["choices"][0]["message"]["content"]
+            content = (raw or "").strip().lower()
+            # 提取第一个词/行
+            label = content.split("\n")[0].split()[0].strip(" .,;:")
+            if label in labels:
+                return label
+            logger.warning("LLM intent classification returned unexpected label %r", raw)
+    except Exception:
+        logger.exception("LLM intent classification failed, falling back to keywords")
+
+    return None
+
+
 def classify_intent(user_message: str, recent_messages: List[Dict[str, str]] = None,
                     bot_type: str = "planner") -> str:
-    """关键词匹配 fallback：分类用户意图。"""
+    """分类用户意图：LLM 优先，关键词匹配保底。"""
+    # LLM 优先
+    result = _classify_intent_llm(user_message, bot_type)
+    if result:
+        return result
+
+    # 关键词保底
     intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
     text = user_message.lower()
 

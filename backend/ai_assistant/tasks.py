@@ -928,7 +928,7 @@ def experience_aggregate_verifications():
 
 
 # ──────────────────────────────────────────────
-#  GEPA 自进化骨架（Phase 7）
+#  MUTAR 自进化骨架（Phase 7）
 # ──────────────────────────────────────────────
 
 @shared_task(
@@ -1013,10 +1013,10 @@ def analyze_trajectory_task():
 
     logger.info("analyze_trajectory_task: %s", result)
 
-    # GEPA 优化建议生成（Phase D2 框架 — 数据积累后生效）
+    # MUTAR 优化建议生成（Phase D2 框架 — 数据积累后生效）
     suggestions = _generate_optimization_suggestions(result)
     if suggestions:
-        _store_gepa_suggestions(suggestions)
+        _store_mutar_suggestions(suggestions)
 
     return result
 
@@ -1079,19 +1079,19 @@ def _generate_optimization_suggestions(analysis: dict) -> list[dict]:
     return suggestions
 
 
-def _store_gepa_suggestions(suggestions: list[dict]):
-    """将建议存入 Redis（GEPA 建议缓存），供后续人工审核或 API 读取。"""
+def _store_mutar_suggestions(suggestions: list[dict]):
+    """将建议存入 Redis（MUTAR 建议缓存），供后续人工审核或 API 读取。"""
     try:
         from django_redis import get_redis_connection
         redis_conn = get_redis_connection("default")
     except Exception:
-        logger.warning("_store_gepa_suggestions: Redis unavailable")
+        logger.warning("_store_mutar_suggestions: Redis unavailable")
         return
 
     import json
     from django.utils import timezone
 
-    key = "gepa:suggestions"
+    key = "mutar:suggestions"
     entry = {
         'generated_at': timezone.now().isoformat(),
         'suggestions': suggestions,
@@ -1100,7 +1100,7 @@ def _store_gepa_suggestions(suggestions: list[dict]):
     redis_conn.ltrim(key, 0, 49)  # 保留最近 50 条
     redis_conn.expire(key, 86400 * 30)  # TTL 30 天
 
-    logger.info("_store_gepa_suggestions: stored %d suggestions", len(suggestions))
+    logger.info("_store_mutar_suggestions: stored %d suggestions", len(suggestions))
 
 
 @shared_task(
@@ -1109,13 +1109,13 @@ def _store_gepa_suggestions(suggestions: list[dict]):
     acks_late=True,
 )
 def optimize_prompt_task():
-    """GEPA: Generate → Evaluate → Polish → Adapt（Phase 7 骨架）
+    """MUTAR: Measure → Umpire → Think → Adapt → Refine（Phase 7 骨架）
 
-    从 Redis gepa:suggestions 读取分析建议，分派到对应 handler 执行优化。
+    从 Redis mutar:suggestions 读取分析建议，分派到对应 handler 执行优化。
     当前为框架阶段：只做分派 + 日志，不自动修改 prompt。
     后续 Phase 实现 LLM 驱动的 prompt 变体自动生成。
     """
-    suggestions = _read_gepa_suggestions()
+    suggestions = _read_mutar_suggestions()
     if not suggestions:
         logger.info("optimize_prompt_task: no suggestions to process")
         return
@@ -1138,17 +1138,17 @@ def optimize_prompt_task():
                 logger.exception("Failed to handle suggestion: %s", s.get('reason', ''))
 
 
-def _read_gepa_suggestions() -> list[dict]:
-    """从 Redis 读取最新的 GEPA 建议批次（最近 5 条）。"""
+def _read_mutar_suggestions() -> list[dict]:
+    """从 Redis 读取最新的 MUTAR 建议批次（最近 5 条）。"""
     try:
         from django_redis import get_redis_connection
         redis_conn = get_redis_connection("default")
     except Exception:
-        logger.warning("_read_gepa_suggestions: Redis unavailable")
+        logger.warning("_read_mutar_suggestions: Redis unavailable")
         return []
 
     import json
-    key = "gepa:suggestions"
+    key = "mutar:suggestions"
     raw = redis_conn.lrange(key, 0, 4)  # 最近 5 条
     result = []
     for item in raw:
@@ -1168,7 +1168,7 @@ def _handle_memorix_suggestion(s: dict):
     当前：仅 log，需人工确认后手动调整。
     """
     logger.info(
-        "[GEPA] Memorix suggestion: alpha %s → %s (reason: %s, confidence=%.2f)",
+        "[MUTAR] Memorix suggestion: alpha %s → %s (reason: %s, confidence=%.2f)",
         s.get('current'), s.get('suggested'), s.get('reason'), s.get('confidence', 0)
     )
 
@@ -1176,12 +1176,12 @@ def _handle_memorix_suggestion(s: dict):
 def _handle_prompt_suggestion(s: dict):
     """处理 prompt/tool_guide 改进建议 → 创建实验 variant。
 
-    未来：调 LLM 生成具体措辞 variant，调用 gepa_variants.create_variant()。
+    未来：调 LLM 生成具体措辞 variant，调用 mutar_variants.create_variant()。
     当前：仅 log + 标记为 needs_review。
     """
     param = s.get('param', 'unknown')
     logger.info(
-        "[GEPA] Prompt suggestion: improve %s (reason: %s, confidence=%.2f)",
+        "[MUTAR] Prompt suggestion: improve %s (reason: %s, confidence=%.2f)",
         param, s.get('reason'), s.get('confidence', 0)
     )
 
@@ -1193,7 +1193,7 @@ def _handle_bot_suggestion(s: dict):
     当前：仅 log，需人工审查后手动调整。
     """
     logger.info(
-        "[GEPA] Bot suggestion: review %s (reason: %s, confidence=%.2f)",
+        "[MUTAR] Bot suggestion: review %s (reason: %s, confidence=%.2f)",
         s.get('current'), s.get('reason'), s.get('confidence', 0)
     )
 

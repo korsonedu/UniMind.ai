@@ -73,8 +73,8 @@ def dispatch_bot_chat(
     if profile.restore_state:
         profile.restore_state(tool_executor, user, bot)
 
-    # GEPA variant：按流量比例选择实验 variant
-    from ai_assistant.services.gepa_variants import get_variant_for_request
+    # MUTAR variant：按流量比例选择实验 variant
+    from ai_assistant.services.mutar_variants import get_variant_for_request
     variant_name = 'baseline'
     variant_suffix = ''
     variant_sel = get_variant_for_request(bot)
@@ -138,8 +138,8 @@ def dispatch_bot_chat_sync(
 
     system_prompt = build_system_prompt(bot, user, student_context, memory_context, institution, adaptive_directives)
 
-    # GEPA variant：按流量比例选择实验 variant，追加到 system_prompt
-    from ai_assistant.services.gepa_variants import get_variant_for_request, apply_variant_prompt
+    # MUTAR variant：按流量比例选择实验 variant，追加到 system_prompt
+    from ai_assistant.services.mutar_variants import get_variant_for_request, apply_variant_prompt
     variant_name = 'baseline'
     variant_sel = get_variant_for_request(bot)
     if variant_sel:

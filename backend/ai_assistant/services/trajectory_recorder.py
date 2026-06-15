@@ -1,8 +1,8 @@
 """
-Trajectory recorder: capture agent conversations for GEPA self-evolution.
+Trajectory recorder: capture agent conversations for MUTAR self-evolution.
 
 Part of xiaoyu self-evolution optimization.
-Records conversation trajectories for future GEPA (Genetic-Pareto) optimization.
+Records conversation trajectories for future MUTAR optimization.
 Uses Celery for async recording to avoid blocking the main thread.
 """
 

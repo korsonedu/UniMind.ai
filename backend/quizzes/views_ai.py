@@ -161,6 +161,55 @@ class AdversarialPipelineView(APIView):
             return Response({'error': str(exc)}, status=500)
 
 
+class BulkPipelineView(APIView):
+    """批量出题管线（Author → Classifier，跳过 Reviewer 以提速）。"""
+    permission_classes = [IsAdmin, HasPlanFeature, HasQuota]
+    required_feature = 'ai.generate'
+    quota_resource = 'ai_question'
+
+    def post(self, request):
+        subject = str(request.data.get('subject', '')).strip()
+        if not subject:
+            return Response({'error': '请提供学科名称（subject）'}, status=400)
+
+        total_target = int(request.data.get('total_target', 500))
+        difficulty_dist = request.data.get('difficulty_dist')
+        type_dist = request.data.get('type_dist')
+        kp_code = request.data.get('kp_code')
+
+        # 机构一次性额度检查
+        institution = getattr(request.user, 'institution', None)
+        if institution and institution.has_used_bulk_init:
+            return Response({
+                'error': '该机构已使用过批量初始化出题，如需新增题目请使用 ARC 精修管线或手动出题。',
+                'code': 'bulk_init_already_used',
+            }, status=403)
+
+        try:
+            from quizzes.services.bulk_pipeline import run_bulk_pipeline
+            task_id = run_bulk_pipeline(
+                subject=subject,
+                total_target=total_target,
+                difficulty_dist=difficulty_dist,
+                type_dist=type_dist,
+                kp_code=kp_code,
+                institution=institution,
+                created_by=request.user,
+                institution_only=bool(institution),  # 机构用户仅限自有 KP
+            )
+
+            # 标记机构已使用
+            if institution and not institution.has_used_bulk_init:
+                institution.has_used_bulk_init = True
+                institution.save(update_fields=['has_used_bulk_init'])
+
+            increment_ai_quota(request.user.institution)
+            return Response({'task_id': task_id, 'status': 'running'}, status=201)
+        except Exception as exc:
+            logger.exception("Bulk pipeline launch failed")
+            return Response({'error': str(exc)}, status=500)
+
+
 class PipelineReviewListView(APIView):
     """列出待审核的管线任务。"""
     permission_classes = [HasPlanFeature, HasQuota]

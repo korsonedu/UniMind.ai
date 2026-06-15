@@ -69,6 +69,17 @@ export interface AgentChatLayoutProps {
   /** Called after SSE 'done'. Receives refreshSessions; defaults to calling it. */
   onDone?: (refreshSessions: () => void) => void;
 
+  /** Called when doSend is ready, exposing it for external message injection */
+  onSendReady?: (doSend: (text: string) => void) => void;
+
+  /** Optional extra button in the input toolbar, next to skills */
+  toolbarAction?: {
+    icon: Icon;
+    label: string;
+    tooltip: string;
+    onClick: () => void;
+  };
+
   // Visual step handling — called internally by the layout for every render_visual step
   /** Return a visual object from a step, or null if not a visual step */
   extractVisualFromStep?: (step: AgentStep) => VisualData | null;
@@ -86,6 +97,9 @@ export interface AgentChatLayoutProps {
 
   // Right panel（仅 split 模式使用）
   renderRightPanel?: (props: RightPanelProps) => React.ReactNode;
+
+  /** 当 hasConversation 状态变化时回调，用于父组件同步布局 */
+  onHasConversation?: (hasConversation: boolean) => void;
 }
 
 // ── Component ──
@@ -96,12 +110,14 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     landingTitle, landingDescription, skillTooltip = '技能',
     botDisplayName,
     processContent,
-    getExtraPayload, onStepDone, onDone,
+    getExtraPayload, onStepDone, onDone, onSendReady,
     extractVisualFromStep,
     onQuestionsGenerated,
     onLoadSession, onReset, onDeleteSession,
     renderRightPanel,
+    toolbarAction,
     layout = 'split',
+    onHasConversation,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -133,12 +149,22 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     resetMessage,
   });
 
+  // Expose doSend to parent
+  useEffect(() => {
+    if (onSendReady && doSend) onSendReady(doSend);
+  }, [onSendReady, doSend]);
+
   // 从 messages 或当前 session 中提取标题
   const conversationTitle = React.useMemo(() => {
+    // 优先从消息中取
     const fromMsg = messages.find(m => m.conversation_title)?.conversation_title;
     if (fromMsg) return fromMsg;
+    // 从当前 session 取
     const activeSession = sessions.find(s => s.id === activeSessionId);
-    return activeSession?.title || '';
+    if (activeSession?.title) return activeSession.title;
+    // 从最近一条 session 取（refresh 后 id 可能变化）
+    const lastSession = sessions[sessions.length - 1];
+    return lastSession?.title || '';
   }, [messages, sessions, activeSessionId]);
 
   // Apply pending visuals after messages state updates
@@ -230,6 +256,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     }
   }, [initialized]);
 
+  // 通知父组件 hasConversation 变化（用于控制外层容器宽度）
+  useEffect(() => {
+    onHasConversation?.(hasConversation);
+  }, [hasConversation, onHasConversation]);
+
   // ── Session load/reset wrappers ──
 
   const wrappedLoadSession = (session: ConversationSession) => {
@@ -309,6 +340,17 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </div>
                   </PopoverContent>
                 </Popover>
+                {toolbarAction && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button onClick={toolbarAction.onClick}
+                        className="p-1 rounded-md text-muted-foreground/55 hover:text-foreground/65 hover:bg-muted/50 transition-colors">
+                        <toolbarAction.icon className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-[10px]">{toolbarAction.tooltip}</TooltipContent>
+                  </Tooltip>
+                )}
                 <Button
                   onClick={() => doSend(input)}
                   disabled={loading || !input.trim()}
@@ -366,18 +408,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full flex flex-col animate-in fade-in duration-300">
+        <div className="h-full flex flex-col bg-white animate-in fade-in duration-300">
           {/* Header */}
           <div className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2.5 border-b border-border/30">
             {conversationTitle ? (
-              <span className="text-sm font-bold text-foreground/90 flex-1 truncate">{conversationTitle}</span>
+              <span className="text-xs text-black/70 flex-1 truncate">{conversationTitle}</span>
             ) : (
-              <>
-                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
-                  <Sparkle className="h-3.5 w-3.5 text-primary-foreground" />
-                </div>
-                <span className="text-sm font-bold text-foreground/90 flex-1">{botDisplayName}</span>
-              </>
+              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
+                <Sparkle className="h-3.5 w-3.5 text-primary-foreground" />
+              </div>
             )}
             {sessions.length > 1 && (
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
@@ -459,7 +498,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           {/* Input */}
           <div className="shrink-0 px-4 pb-4 pt-2">
             <div className="max-w-3xl mx-auto">
-              <div className="rounded-2xl border border-border/50 bg-background shadow-sm overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+              <div className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                 <textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
@@ -495,6 +534,17 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       </div>
                     </PopoverContent>
                   </Popover>
+                  {toolbarAction && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button onClick={toolbarAction.onClick}
+                          className="p-1.5 rounded-lg text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted transition-colors">
+                          <toolbarAction.icon className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-[10px]">{toolbarAction.tooltip}</TooltipContent>
+                    </Tooltip>
+                  )}
                   <div className="flex-1" />
                   <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
                     className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
@@ -540,14 +590,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
           <div className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2.5 border-b border-border/30">
             {conversationTitle ? (
-              <span className="text-sm font-bold text-foreground/90 flex-1 truncate">{conversationTitle}</span>
+              <span className="text-xs text-black/70 flex-1 truncate">{conversationTitle}</span>
             ) : (
-              <>
-                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
-                  <Sparkle className="h-3.5 w-3.5 text-primary-foreground" />
-                </div>
-                <span className="text-sm font-bold text-foreground/90 flex-1">{botDisplayName}</span>
-              </>
+              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
+                <Sparkle className="h-3.5 w-3.5 text-primary-foreground" />
+              </div>
             )}
             {sessions.length > 1 && (
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
@@ -604,7 +651,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           </div>
 
           <div className="shrink-0 px-3 pb-3 pt-2">
-            <div className="rounded-2xl border border-border/60 bg-background shadow-sm overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+            <div className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
               <textarea
                 value={input}
                 onChange={e => setInput(e.target.value)}
@@ -640,6 +687,17 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </div>
                   </PopoverContent>
                 </Popover>
+                {toolbarAction && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button onClick={toolbarAction.onClick}
+                        className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted transition-colors">
+                        <toolbarAction.icon className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-[10px]">{toolbarAction.tooltip}</TooltipContent>
+                  </Tooltip>
+                )}
                 <div className="flex-1" />
                 <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
                   className="rounded-xl h-9 w-9 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">

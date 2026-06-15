@@ -119,7 +119,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
         except Exception:
             logger.warning("Memory extraction failed (polling)", exc_info=True)
 
-        # GEPA 轨迹记录（异步，不阻塞响应）
+        # MUTAR 轨迹记录（异步，不阻塞响应）
         try:
             from ai_assistant.services.trajectory_recorder import record_trajectory
             all_msgs = history_msgs + [
@@ -619,9 +619,21 @@ class AIChatStreamView(APIView):
                     # Delete pending message if not saving
                     await sync_to_async(pending_msg.delete)()
 
+                # 先同步生成标题，再 yield done（确保前端刷新时 title 已入库）
+                conv_title = None
+                try:
+                    from ai_assistant.services.title_generator import sync_generate_title
+                    conv_title = await sync_to_async(sync_generate_title)(
+                        str(conversation_id), request.user.id, bot.id
+                    )
+                except Exception:
+                    logger.warning("Title generation failed before done", exc_info=True)
+
                 done_payload = {'done': True, 'full_content': ai_content, 'is_error': is_error, 'has_intermediate': _sent_any_message, 'message_id': pending_msg.id}
                 if metadata:
                     done_payload['metadata'] = metadata
+                if conv_title:
+                    done_payload['conversation_title'] = conv_title
                 yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
             except Exception as e:
@@ -640,7 +652,7 @@ class AIChatStreamView(APIView):
                 except Exception:
                     logger.warning("Memory extraction failed (SSE)", exc_info=True)
 
-                # GEPA 轨迹记录（异步，不阻塞响应）
+                # MUTAR 轨迹记录（异步，不阻塞响应）
                 try:
                     from ai_assistant.services.trajectory_recorder import record_trajectory
                     all_msgs = history_msgs + [
@@ -658,15 +670,6 @@ class AIChatStreamView(APIView):
                     )
                 except Exception:
                     logger.warning("Trajectory recording failed (SSE)", exc_info=True)
-
-                # 同步生成会话标题（首轮对话后，快速 LLM 调用 ~1-2s）
-                try:
-                    from ai_assistant.services.title_generator import sync_generate_title
-                    await sync_to_async(sync_generate_title)(
-                        str(conversation_id), request.user.id, bot.id
-                    )
-                except Exception:
-                    logger.warning("Title generation failed", exc_info=True)
 
                 await sync_to_async(close_old_connections)()
 

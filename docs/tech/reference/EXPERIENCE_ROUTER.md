@@ -199,7 +199,7 @@ LLM 评分是主观的、有噪声的、可能与真实学习效果无关的。
 
 ---
 
-## 六、与现有 GEPA 管线的对接
+## 六、与现有 MUTAR 管线的对接
 
 ### 6.1 现有管线（保留）
 
@@ -207,7 +207,7 @@ LLM 评分是主观的、有噪声的、可能与真实学习效果无关的。
 对话结束 → record_trajectory_async → AITrajectory 表
     → _auto_evaluate_trajectory（启发式评估）
     → 用户反馈覆盖
-    → 每周 analyze_trajectory_task → Redis gepa:suggestions
+    → 每周 analyze_trajectory_task → Redis mutar:suggestions
 ```
 
 ### 6.2 新增层（经验路由器插在中间）
@@ -222,7 +222,7 @@ LLM 评分是主观的、有噪声的、可能与真实学习效果无关的。
     → 判断规律性质（对谁有效 / 生命周期 / 本质维度）
     → 路由写入：
         ├─ memory: AgentMemory + mem0
-        ├─ prompt: gepa_variants.py（生成新 variant）
+        ├─ prompt: mutar_variants.py（生成新 variant）
         ├─ tool: 参数调整 或 生成能力缺口报告
         └─ workflow: workflow 配置表
     ↓
@@ -239,7 +239,7 @@ LLM 评分是主观的、有噪声的、可能与真实学习效果无关的。
 |---------|---------|
 | `record_trajectory_async` | 轨迹采集不变 |
 | `AITrajectory` 表 | 新增字段 tracking experience_id |
-| `gepa_variants.py` | variant 分流 → 规律触发的 prompt 变体 |
+| `mutar_variants.py` | variant 分流 → 规律触发的 prompt 变体 |
 | `AgentMemory` + `mem0` | memory 维度的写入目标 |
 | Memorix α 调整 | tool 维度的参数级调整示例 |
 | `analyze_trajectory_task` | 保留，增加规律效果统计 |

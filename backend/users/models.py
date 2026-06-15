@@ -184,6 +184,7 @@ class Institution(models.Model):
     description = models.TextField(blank=True, verbose_name="机构简介")
     notes = models.TextField(blank=True, verbose_name="管理员备注")
     storage_used_bytes = models.BigIntegerField(default=0, verbose_name="已用存储(字节)")
+    has_used_bulk_init = models.BooleanField(default=False, verbose_name="已使用批量初始化出题")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_institutions', verbose_name="创建人")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")

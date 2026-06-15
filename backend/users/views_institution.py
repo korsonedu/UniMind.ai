@@ -919,6 +919,17 @@ class InstitutionCreateView(APIView):
         user.membership_tier = user.institution.plan if user.institution else 'free'
         user.save(update_fields=['institution', 'institution_role', 'role', 'is_member', 'membership_tier'])
 
+        # 创建「初始化题库」通知
+        if imported_count > 0:
+            from notifications.models import Notification
+            Notification.objects.create(
+                recipient=user,
+                ntype='bulk_init',
+                title='初始化题库',
+                content=f'你的机构「{inst.name}」已导入 {imported_count} 个知识点。可以现在用 AI 批量生成题目。',
+                link='/workbench',
+            )
+
         return Response({
             'status': 'ok',
             'institution': {
@@ -1427,4 +1438,35 @@ class ClassStudentView(APIView):
             'student_count': c.students.count(),
             'students': [{'id': s.id, 'name': s.nickname or s.username}
                        for s in c.students.all()[:50]],
+        })
+
+
+# ── Bulk Init ──
+
+class InstitutionBulkInitView(APIView):
+    """机构批量初始化出题资格查询。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        inst = getattr(request.user, 'institution', None)
+        if not inst:
+            return Response({'eligible': False, 'reason': '无机构'})
+
+        # 只统计机构专属知识点（不含全局）
+        from quizzes.models import KnowledgePoint
+        kps = KnowledgePoint.objects.filter(
+            institution=inst,
+            level='kp',
+        )
+        kp_count = kps.count()
+        subjects = sorted(set(
+            s for s in kps.values_list('subject', flat=True) if s
+        ))
+
+        return Response({
+            'eligible': not inst.has_used_bulk_init,
+            'has_used': inst.has_used_bulk_init,
+            'kp_count': kp_count,
+            'max_questions': 500,
+            'available_subjects': subjects[:20],  # 最多 20 个学科
         })

@@ -4,6 +4,7 @@ from .views_question import (
     AdminQuestionListView, ExportStructuredQuestionsView, ImportCSVQuestionsView,
     AssignmentCreateView, ClassListView,
     StudentAssignmentListView, StudentAssignmentDetailView, StudentAssignmentSubmitView,
+    AssignmentSubmissionListView, AssignmentGradeView,
 )
 from .views_exam import (
     TeacherExamListView, TeacherExamCreateView, TeacherExamDeleteView,
@@ -79,6 +80,8 @@ urlpatterns = [
     path('assignments/my/', StudentAssignmentListView.as_view(), name='student-assignment-list'),
     path('assignments/<int:pk>/questions/', StudentAssignmentDetailView.as_view(), name='student-assignment-detail'),
     path('assignments/submit/', StudentAssignmentSubmitView.as_view(), name='student-assignment-submit'),
+    path('assignments/<int:pk>/submissions/', AssignmentSubmissionListView.as_view(), name='assignment-submissions'),
+    path('assignments/submissions/<int:pk>/grade/', AssignmentGradeView.as_view(), name='assignment-grade'),
     path('classes/', ClassListView.as_view(), name='class-list'),
     path('admin/questions/', AdminQuestionListView.as_view(), name='admin-question-list'),
     path('admin/export-structured/', ExportStructuredQuestionsView.as_view(), name='export-structured'),

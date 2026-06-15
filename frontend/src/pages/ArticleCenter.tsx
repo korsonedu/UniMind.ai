@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, CaretRight, CaretLeft } from '@phosphor-icons/react';
+import { FileText, CaretRight, CaretLeft, PlusCircle } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,8 +10,12 @@ import { useFetch } from '@/lib/useFetch';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/store/useAuthStore';
 
 export const ArticleCenter: React.FC = () => {
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const isManager = user?.role === 'admin' || user?.is_institution_admin;
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -52,8 +57,14 @@ export const ArticleCenter: React.FC = () => {
     });
   };
 
+  const actionBtn = isManager ? (
+    <Button onClick={() => navigate('/articles/manage')} className="rounded-2xl px-6 h-11 font-bold">
+      <PlusCircle className="mr-2 h-4 w-4" />发布文章
+    </Button>
+  ) : undefined;
+
   if (loading && articles.length === 0) return (
-    <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')}>
+    <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')} action={actionBtn}>
       <div className="flex flex-col border border-border/50 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden">
         <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-muted/30 text-[11px] font-semibold tracking-wider border-b border-border/50">
           <div className="col-span-2">{t('articleDate')}</div>
@@ -75,7 +86,7 @@ export const ArticleCenter: React.FC = () => {
   if (error) return <InlineError message={error} onRetry={refetch} />;
 
   return (
-    <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')}>
+    <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')} action={actionBtn}>
       <div className="flex flex-col gap-5 md:gap-8 w-full text-left">
         
         {/* Tag Pills — horizontal scroll */}

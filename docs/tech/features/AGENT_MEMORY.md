@@ -121,7 +121,7 @@ Memorix 记忆调度算法与小宇 Agent 深度集成。
 
 ### Trajectory 数据收集
 
-为 GEPA（Genetic-Pareto）自进化优化做数据储备。
+为 MUTAR自进化优化做数据储备。
 
 | 组件 | 文件 | 说明 |
 |------|------|------|

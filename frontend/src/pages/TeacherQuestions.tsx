@@ -3,7 +3,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MagnifyingGlass, Plus, MagicWand, PaperPlaneTilt, Image } from '@phosphor-icons/react';
+import { MagnifyingGlass, MagicWand, PaperPlaneTilt } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,14 +34,8 @@ const DIFFICULTY_LABELS: Record<string, string> = {
   entry: '入门', easy: '简单', normal: '中等', hard: '困难', extreme: '极限',
 };
 
-const TABS = [
-  { key: 'questions', label: '题目管理' },
-  { key: 'image', label: '图文题' },
-] as const;
-
 export default function TeacherQuestions() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<string>('questions');
   const [search, setSearch] = useState('');
   const [qType, setQType] = useState('all');
   const [difficulty, setDifficulty] = useState('all');
@@ -124,25 +118,7 @@ export default function TeacherQuestions() {
     <div className="flex flex-col h-full p-4 md:p-6 space-y-4 max-w-5xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-bold">题目管理</h1>
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-            {TABS.map(t => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={cn(
-                  'px-3 py-1 text-xs font-bold rounded-md transition-colors',
-                  tab === t.key
-                    ? 'bg-card text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <h1 className="text-lg font-bold">题目管理</h1>
         <div className="flex items-center gap-2">
           {selected.size > 0 && (
             <Button size="sm" onClick={openAssignDialog}>
@@ -156,9 +132,7 @@ export default function TeacherQuestions() {
       </div>
 
       {/* Tab 内容 */}
-      {tab === 'questions' ? (
-        <>
-          <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
             <div className="relative flex-1 max-w-sm">
               <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -234,16 +208,6 @@ export default function TeacherQuestions() {
               </Button>
             </div>
           )}
-        </>
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3">
-          <Image className="h-12 w-12 text-muted-foreground/50" />
-          <div>
-            <p className="text-sm font-bold text-muted-foreground">图文题功能开发中</p>
-            <p className="text-xs text-muted-foreground mt-1">支持题目中包含图片、图表等富媒体内容</p>
-          </div>
-        </div>
-      )}
 
       {/* ── 布置作业 Dialog ── */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>

@@ -494,7 +494,7 @@ def feedback_view(request):
     """
     POST /api/ai/feedback/
     Body: { message_id: int, feedback: bool }
-    静默记录用户对 AI 回复的反馈（赞/踩），同步更新 GEPA 轨迹 outcome。
+    静默记录用户对 AI 回复的反馈（赞/踩），同步更新 MUTAR 轨迹 outcome。
     """
     message_id = request.data.get('message_id')
     feedback = request.data.get('feedback')
@@ -513,7 +513,7 @@ def feedback_view(request):
     msg.feedback = feedback
     msg.save(update_fields=['feedback'])
 
-    # 同步更新 GEPA 轨迹 outcome（同一 conversation 内最新反馈覆盖）
+    # 同步更新 MUTAR 轨迹 outcome（同一 conversation 内最新反馈覆盖）
     try:
         from .models import AITrajectory
         from django.utils import timezone

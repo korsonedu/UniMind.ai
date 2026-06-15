@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Package, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure } from '@phosphor-icons/react';
+import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
+import { InvitePopover } from '@/pages/workbench/InvitePopover';
 
 import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -95,6 +96,8 @@ export const MainLayout: React.FC = () => {
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const isMobile = useIsMobile();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [invitePopoverOpen, setInvitePopoverOpen] = useState(false);
+  const avatarRef = useRef<HTMLButtonElement>(null);
 
   const { t, i18n } = useTranslation(['layout', 'common']);
   const { institution: instFromStore, fetchFeatures, hasFeature, loading: featuresLoading, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
@@ -197,8 +200,9 @@ export const MainLayout: React.FC = () => {
   // ── 教师端 6 套件 ──
   const teacherNavItems: NavItem[] = [
     { to: '/workbench', icon: Robot, label: '工作台' },
-    { to: '/assets', icon: Package, label: '资产管理' },
     { to: '/questions', icon: Brain, label: '题库' },
+    { to: '/courses', icon: BookOpen, label: '课程' },
+    { to: '/articles', icon: FileText, label: '文章' },
     { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
     { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
     { to: '/institution/students', icon: Users, label: t('layout:nav.members') },
@@ -242,10 +246,10 @@ export const MainLayout: React.FC = () => {
       ]
     : [
         { to: '/workbench', icon: Robot, label: '工作台' },
-        { to: '/assets', icon: Package, label: '资产' },
         { to: '/questions', icon: Brain, label: '题库' },
+        { to: '/courses', icon: BookOpen, label: '课程' },
+        { to: '/articles', icon: FileText, label: '文章' },
         { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
-        { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
         { to: '/institution', icon: Users, label: '学员' },
       ];
 
@@ -315,7 +319,7 @@ export const MainLayout: React.FC = () => {
               {/* 头像下拉 */}
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <button className="rounded-full border border-border p-0.5 bg-card hover:scale-105 transition-transform">
+                  <button ref={avatarRef} id="avatar-btn" className="rounded-full border border-border p-0.5 bg-card hover:scale-105 transition-transform">
                     <Avatar className="h-7 w-7">
                       <AvatarImage src={user?.avatar_url} />
                       <AvatarFallback className="text-[10px] font-bold">{user?.username?.[0]}</AvatarFallback>
@@ -342,10 +346,7 @@ export const MainLayout: React.FC = () => {
                     </DropdownMenuItem>
                   )}
                   {!isSuperAdmin && instInfo && user?.is_institution_admin && (
-                    <DropdownMenuItem onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
-                      toast.success(t('layout:invite.copied'));
-                    }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                    <DropdownMenuItem id="invite-menu-item" onClick={() => setInvitePopoverOpen(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <UserPlus className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:invite.trigger')}</span>
                     </DropdownMenuItem>
@@ -434,10 +435,7 @@ export const MainLayout: React.FC = () => {
                     )}
                     {!isSuperAdmin && instInfo && user?.is_institution_admin && (
                       <DropdownMenuItem
-                        onClick={() => {
-                          navigator.clipboard.writeText(`${window.location.origin}/api/users/join/${instInfo.invite_slug}/`);
-                          toast.success(t('layout:invite.copied'));
-                        }}
+                        onClick={() => setInvitePopoverOpen(true)}
                         className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
                       >
                         <UserPlus className="h-3.5 w-3.5" />
@@ -545,6 +543,20 @@ export const MainLayout: React.FC = () => {
         </AlertDialog>
 
         <PersistentUploadToast />
+        {invitePopoverOpen && instInfo?.invite_slug && (
+          <div className="fixed z-50" style={{
+            top: (avatarRef.current?.getBoundingClientRect().bottom ?? 60) + 8,
+            right: window.innerWidth - (avatarRef.current?.getBoundingClientRect().right ?? window.innerWidth - 200),
+          }}>
+            <InvitePopover
+              inviteSlug={instInfo.invite_slug}
+              onClose={() => setInvitePopoverOpen(false)}
+            />
+          </div>
+        )}
+        {invitePopoverOpen && (
+          <div className="fixed inset-0 z-40" onClick={() => setInvitePopoverOpen(false)} />
+        )}
       </div>
     </TooltipProvider>
   );

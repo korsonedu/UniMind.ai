@@ -261,7 +261,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             except Exception:
                 logger.warning("Memory extraction failed (WS)", exc_info=True)
 
-            # GEPA 轨迹记录（异步，不阻塞响应）
+            # MUTAR 轨迹记录（异步，不阻塞响应）
             try:
                 from .services.trajectory_recorder import record_trajectory
                 all_msgs = history_msgs + [

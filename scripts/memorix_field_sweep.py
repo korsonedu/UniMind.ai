@@ -354,7 +354,7 @@ def sweep(graphs_dict, students_per=100):
     return results
 
 
-def analyze(results):
+def analyze(results, graphs_dict):
     """找出跨图结构稳定的最优参数"""
     print(f"\n{'='*70}")
     print(f"ANALYSIS: {len(results)} combinations across graphs")
@@ -455,7 +455,7 @@ def main():
     print(f"Variants: {list(variants.keys())}")
 
     results = sweep(variants, N_STUDENTS)
-    analyze(results)
+    analyze(results, variants)
 
     # 保存
     out_path = os.path.join(script_dir, 'output', 'field_sweep.json')
@@ -465,5 +465,4 @@ def main():
 
 
 if __name__ == '__main__':
-    graphs_dict = {}  # injected by main
     main()

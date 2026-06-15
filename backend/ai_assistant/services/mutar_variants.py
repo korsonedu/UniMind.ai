@@ -1,5 +1,5 @@
 """
-GEPA Variant Manager — Prompt 变体的选择、应用、生命周期管理。
+MUTAR Variant Manager — Prompt 变体的选择、应用、生命周期管理。
 
 Variant 存储在文件系统中（非 DB），每个 bot_type 一个 JSON 文件：
     backend/prompts/ai_assistant/variants/{bot_type}.json

@@ -158,7 +158,34 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
               <h2 className="text-xl font-black">{t('done.title')}</h2>
               <p className="font-medium text-muted-foreground">{t('done.subtitle')}</p>
             </div>
-            <Button onClick={handleDone} variant="apple" className="w-full">
+            {/* Bulk init prompt */}
+            <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 text-left space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🧠</span>
+                <span className="text-sm font-bold">初始化题库</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                已导入知识点，AI 可以现在批量生成题目。之后你可以手动出题或使用 ARC 精修。
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => { handleDone(); }}
+                  size="sm"
+                  className="flex-1"
+                >
+                  开始生成
+                </Button>
+                <Button
+                  onClick={handleDone}
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                >
+                  稍后再说
+                </Button>
+              </div>
+            </div>
+            <Button onClick={handleDone} variant="ghost" className="w-full text-xs text-muted-foreground">
               {t('done.enter')}
             </Button>
           </div>

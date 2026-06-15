@@ -111,7 +111,7 @@
 
 ---
 
-## Phase 7：GEPA 自进化
+## Phase 7：MUTAR 自进化
 
 **目标：** 利用 Trajectory 数据自动优化 prompt 模板和 Memorix 参数。
 
@@ -137,7 +137,7 @@ Phase 3  📋  mem0 默认 + 画像持久化
 Phase 4  📋  MemorySystem 接口层（重构所有 handler）
 Phase 5  📋  API 化（Grading + Memory 对外输出）
 Phase 6  📋  IRT 参数估计 + Q-matrix
-Phase 7  📋  GEPA 自进化
+Phase 7  📋  MUTAR 自进化
 ```
 
 **依赖关系：**

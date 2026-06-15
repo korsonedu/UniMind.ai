@@ -139,7 +139,7 @@ GEPA           → 更新 prompt population P（演化）
 | Generative Agents（行为状态） | `mem0` 语义检索 | 缺 recency/importance 加权，缺少 reflection 层 |
 | Voyager（技能库） | `BotRegistry` + `ToolExecutor` | 工具是预定义的，不是从经验中自动生成 |
 | ACE（context playbook） | `prompt_adapter` 自适应 | 简单模式检测，非结构化增量更新 |
-| GEPA（prompt 演化） | 静态 prompt 文件 | 完全缺失 |
+| GEPA（prompt 演化，论文） | 静态 prompt 文件 | 完全缺失 |
 
 ## 一句话总结
 

@@ -177,7 +177,7 @@ build_context(user, message) → {
 
 ### 自进化（Phase 7）
 
-Trajectory 记录每轮对话的工具调用序列、用户反馈和任务完成度，Celery 异步写入 `AITrajectory` 表。GEPA 自进化管线（Generate → Evaluate → Polish → Adapt）目前处于数据收集阶段，目标是通过分析 Trajectory 数据自动优化 prompt 模板和 Memorix 参数。Phase 7 前标记为数据收集。
+Trajectory 记录每轮对话的工具调用序列、用户反馈和任务完成度，Celery 异步写入 `AITrajectory` 表。MUTAR 自进化管线（Generate → Evaluate → Polish → Adapt）目前处于数据收集阶段，目标是通过分析 Trajectory 数据自动优化 prompt 模板和 Memorix 参数。Phase 7 前标记为数据收集。
 
 ### 教师端闭环（命题官）
 
@@ -266,7 +266,7 @@ Celery 异步任务编排贯穿四层，处理非实时计算：
 |------|--------|---------|------|
 | 记忆提取 | 记忆系统 | 对话结束后 | `_extract_memories_worker`（后台线程 + LLM） |
 | 用户画像预计算 | 记忆系统 | 记忆更新后 | `precompute_user_profile`（Celery task） |
-| Trajectory 记录 | 记忆系统 | 每次对话完成 | `record_trajectory_async`（Celery task，为 GEPA 自进化准备数据） |
+| Trajectory 记录 | 记忆系统 | 每次对话完成 | `record_trajectory_async`（Celery task，为 MUTAR 自进化准备数据） |
 | ARC 出题管线 | 教育闭环(教师端) | 教师确认后 | `launch_arc_pipeline` → 多模型互审 → 校准 → 差分（多步 Celery chain） |
 | Phase 1 错题预批改 | 测评引擎 | 每道题完成后 | Celery task 异步批改，结果写 Redis，提交时聚合 |
 

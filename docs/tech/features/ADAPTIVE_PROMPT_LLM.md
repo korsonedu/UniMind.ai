@@ -70,6 +70,6 @@ LLM 驱动的记忆分析服务，替代原有的规则匹配。
 
 ## 后续优化
 
-- GEPA 自进化：收集 trajectory 数据，自动优化分析 prompt
+- MUTAR 自进化：收集 trajectory 数据，自动优化分析 prompt
 - 画像更新触发器：对话结束、记忆更新时自动触发重新计算
 - A/B 测试：对比 LLM 分析 vs 规则匹配的效果

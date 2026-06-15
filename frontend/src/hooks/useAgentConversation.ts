@@ -346,6 +346,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                   id: payload.message_id,
                   role: 'assistant' as const,
                   content: finalContent,
+                  conversation_title: payload.conversation_title || undefined,
                   metadata: payload.metadata || undefined,
                   visible: true,
                   timestamp: new Date().toISOString(),

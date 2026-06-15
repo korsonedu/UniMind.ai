@@ -93,8 +93,11 @@ export const ArticleSection: React.FC = () => {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <a href="/articles" className="p-1 -ml-1 rounded-lg hover:bg-[#F5F5F7] transition-colors text-[#6E6E73] hover:text-[#1D1D1F]" title="返回文章列表">
+            <svg width="16" height="16" viewBox="0 0 256 256" fill="currentColor"><path d="M224 128a8 8 0 0 1-8 8H59.31l58.35 58.34a8 8 0 0 1-11.32 11.32l-72-72a8 8 0 0 1 0-11.32l72-72a8 8 0 0 1 11.32 11.32L59.31 120H216a8 8 0 0 1 8 8Z"/></svg>
+          </a>
           <FileText className="h-5 w-5 text-[#6E6E73]" />
-          <h3 className="text-lg font-semibold tracking-tight">{t('tabs.publishArticle')}</h3>
+          <h3 className="text-lg font-semibold tracking-tight">文章管理</h3>
           <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{total}</Badge>
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
@@ -139,7 +142,7 @@ export const ArticleSection: React.FC = () => {
                           {item.updated_at && item.updated_at !== item.created_at ? ` · 更新 ${new Date(item.updated_at).toLocaleDateString()}` : ''}
                         </p>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <div className="flex gap-1  shrink-0">
                         <Button onClick={() => setEditingItem({ ...item, knowledge_point: item.knowledge_point?.toString() || '0' })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
                           <PencilSimple className="w-3.5 h-3.5" />
                         </Button>

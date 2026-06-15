@@ -34,9 +34,10 @@ export const CourseCenter: React.FC = () => {
     fetchKey
   );
 
-  const ActionBtn = user?.role === 'admin' ? (
+  const isManager = user?.role === 'admin' || user?.is_institution_admin;
+  const ActionBtn = isManager ? (
     <Button
-      onClick={() => navigate('/management')}
+      onClick={() => navigate('/courses/manage')}
       className="bg-primary text-primary-foreground hover:opacity-90 rounded-2xl px-6 h-11 font-bold shadow-lg transition-all hover:scale-[1.02]"
     >
       <PlusCircle className="mr-2 h-4 w-4" /> {t('publishCourse')}

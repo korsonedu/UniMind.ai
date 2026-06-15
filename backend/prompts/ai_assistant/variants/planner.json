@@ -21,6 +21,17 @@
       "created_at": "2026-06-13T15:36:02.630913+00:00",
       "source_suggestion_id": null,
       "retired_at": "2026-06-13T15:36:02.631613+00:00"
+    },
+    {
+      "name": "_rename_test",
+      "status": "retired",
+      "traffic_split": 0.0,
+      "overrides": {
+        "suffix": "test"
+      },
+      "created_at": "2026-06-14T12:02:22.800527+00:00",
+      "source_suggestion_id": null,
+      "retired_at": "2026-06-14T12:02:22.801485+00:00"
     }
   ]
 }

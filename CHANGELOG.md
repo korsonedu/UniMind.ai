@@ -1,11 +1,11 @@
 # Changelog
 
-## v0.5.1 — GEPA 自进化闭环 + 用户反馈 (2026-06-13)
+## v0.5.1 — MUTAR 自进化闭环 + 用户反馈 (2026-06-13)
 
 ### 架构
-- **GEPA 自进化全链路打通**：采集→评估→分析→建议→变体路由→优化执行
+- **MUTAR 全链路打通**：采集→评估→分析→建议→变体路由→优化执行
 - **Trajectory 记录激活**：SSE/Polling/WS 三条路径对话结束时自动调用 `record_trajectory`
-- **Prompt Variant 框架**：文件驱动的变体管理（`gepa_variants.py`），按流量比例 A/B 路由
+- **Prompt Variant 框架**：文件驱动的变体管理（`mutar_variants.py`），按流量比例 A/B 路由
 - **用户反馈体系**：AI 回复 hover 赞/踩 → `AIChatMessage.feedback` → `AITrajectory.outcome`
 
 ### 新功能
@@ -41,7 +41,7 @@
 - **UserProfile**：6 维用户画像持久化
 - **IRT 模型**：ItemParameter / UserAbility / QMatrixEntry 数据模型就位
 - **API 化**：4 个 API 端点（grade / profile / due / stats）
-- **GEPA 自进化**：Trajectory 分析骨架 + Celery beat schedule
+- **MUTAR 自进化**：Trajectory 分析骨架 + Celery beat schedule
 - **HomeRedirect**：学生默认进 /xiaoyu（Agent 为入口）
 
 ### 修复

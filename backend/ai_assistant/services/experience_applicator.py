@@ -218,24 +218,43 @@ def record_trigger(experiences: list) -> int:
 
 def apply_tool_experiences(experiences: list) -> dict:
     """
-    应用 tool 维度的经验：调整工具参数。
+    应用 tool 维度的经验：调整工具参数 或 记录能力缺口。
 
-    当前支持的参数：
-    - memorix.alpha: 遗忘曲线 α 值
-    - knowledge_tree.topK: 知识树检索上限
-    - 未知参数: 记录建议日志，待配置接口完善后生效
+    参数级：调已知参数（memorix.alpha, knowledge_tree.topK 等）
+    能力级：标记为能力缺口，供人工审核后开发
 
     Returns:
-        {'applied': int, 'pending': int, 'changes': [dict]}
+        {'applied': int, 'pending': int, 'gaps': int, 'changes': [dict]}
     """
     changes = []
     applied = 0
     pending = 0
+    gaps = 0
 
     for exp in experiences:
         if exp.dimension != 'tool':
             continue
 
+        gap_type = (exp.effect or {}).get('gap_type', 'parameter')
+
+        if gap_type == 'capability':
+            # 能力缺口：不调参数，记录报告
+            instruction = (exp.effect or {}).get('instruction', exp.title)
+            logger.warning(
+                "experience_applicator: CAPABILITY GAP '%s' (exp %s) — 需要人工审核后开发",
+                instruction, exp.id,
+            )
+            change = {
+                'exp_id': exp.id,
+                'type': 'capability_gap',
+                'instruction': instruction,
+                'status': 'reported',
+            }
+            changes.append(change)
+            gaps += 1
+            continue
+
+        # 参数级：尝试调参
         params = (exp.effect or {}).get('params', {})
         if not params:
             continue
@@ -248,7 +267,7 @@ def apply_tool_experiences(experiences: list) -> dict:
             else:
                 pending += 1
 
-    return {'applied': applied, 'pending': pending, 'changes': changes}
+    return {'applied': applied, 'pending': pending, 'gaps': gaps, 'changes': changes}
 
 
 def _apply_tool_param(experience, param_name: str, param_value) -> dict:

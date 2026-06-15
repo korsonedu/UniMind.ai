@@ -37,6 +37,7 @@ def sync_generate_title(conversation_id, user_id, bot_id):
         result = ai.simple_chat_text(
             system_prompt="你是标题生成器。为对话生成简短标题（≤15字），直接输出标题。",
             user_prompt=prompt,
+            operation='assistant.chat.title',
         )
         title = result.strip()[:120] if result else ''
 
