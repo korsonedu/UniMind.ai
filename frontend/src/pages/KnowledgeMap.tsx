@@ -352,7 +352,7 @@ export const KnowledgeMap: React.FC = () => {
                             className={cn(
                               'flex items-center gap-2 bg-card border hover:shadow-md px-3 py-2 rounded-xl transition-all active:scale-95 text-left',
                               selectedNode?.id === node.id
-                                ? 'border-amber-300 bg-amber-50'
+                                ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30'
                                 : 'border-border/50 hover:border-indigo-500/30',
                             )}
                           >

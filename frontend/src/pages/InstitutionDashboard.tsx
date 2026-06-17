@@ -77,7 +77,7 @@ export default function InstitutionDashboard() {
   // Platform admin: show institution overview list
   if (data.mode === 'platform_admin' && data.institutions) {
     return (
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-extrabold text-foreground tracking-tight">{t('overviewTitle')}</h1>
           <p className="text-sm text-unimind-text-tertiary mt-1">{t('totalInstitutions', { count: data.institutions.length })}</p>
@@ -122,7 +122,7 @@ export default function InstitutionDashboard() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-extrabold text-foreground tracking-tight">{inst.name}</h1>

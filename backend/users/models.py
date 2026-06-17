@@ -268,6 +268,71 @@ class ClassCourse(models.Model):
         return f"{self.class_obj.name} ← {self.course.title}"
 
 
+class DailyCheckIn(models.Model):
+    """每日签到，记录连续打卡天数。"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='check_ins', verbose_name="用户")
+    date = models.DateField(verbose_name="签到日期")
+    streak = models.PositiveIntegerField(default=1, verbose_name="连续天数")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="签到时间")
+
+    class Meta:
+        verbose_name = '每日签到'
+        verbose_name_plural = '每日签到'
+        ordering = ['-date']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'date'], name='unique_daily_check_in'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} {self.date} (连续{self.streak}天)"
+
+
+class Achievement(models.Model):
+    """预置成就定义。"""
+    ACHIEVEMENT_TYPES = [
+        ('streak', '连续打卡'),
+        ('diagnostic', '首次诊断'),
+        ('question', '刷题里程碑'),
+        ('mastery', '掌握知识点'),
+        ('exam', '考试成绩'),
+        ('social', '社交互动'),
+    ]
+    key = models.CharField(max_length=64, unique=True, verbose_name="成就标识")
+    name = models.CharField(max_length=100, verbose_name="成就名称")
+    description = models.CharField(max_length=200, verbose_name="成就描述")
+    icon = models.CharField(max_length=20, default='🏆', verbose_name="图标")
+    category = models.CharField(max_length=20, choices=ACHIEVEMENT_TYPES, default='streak', verbose_name="分类")
+    threshold = models.PositiveIntegerField(default=1, verbose_name="触发阈值")
+    is_active = models.BooleanField(default=True, verbose_name="是否启用")
+
+    class Meta:
+        verbose_name = '成就定义'
+        verbose_name_plural = '成就定义'
+        ordering = ['category', 'threshold']
+
+    def __str__(self):
+        return self.name
+
+
+class UserAchievement(models.Model):
+    """用户解锁的成就记录。"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='achievements', verbose_name="用户")
+    achievement = models.ForeignKey(Achievement, on_delete=models.CASCADE, verbose_name="成就")
+    unlocked_at = models.DateTimeField(auto_now_add=True, verbose_name="解锁时间")
+    progress = models.PositiveIntegerField(default=0, verbose_name="当前进度")
+
+    class Meta:
+        verbose_name = '用户成就'
+        verbose_name_plural = '用户成就'
+        ordering = ['-unlocked_at']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'achievement'], name='unique_user_achievement'),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.achievement.name}"
+
+
 # ── Plan features utility ──
 DEFAULT_DURATION_DAYS = 30
 DURATION_PERMANENT = 0

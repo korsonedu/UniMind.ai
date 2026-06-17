@@ -82,7 +82,7 @@ export function BillingPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="font-extrabold text-[16px] text-foreground">{currentMeta.label} 方案</h3>
                     {isTrial && (
-                      <Badge variant="outline" className="text-[10px] font-extrabold border-amber-200 text-amber-600 bg-amber-50">
+                      <Badge variant="outline" className="text-[10px] font-extrabold border-amber-200 dark:border-amber-800/40 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
                         试用中
                       </Badge>
                     )}
@@ -188,7 +188,7 @@ export function BillingPage() {
                       <p className="text-[14px] font-extrabold text-foreground tabular-nums">¥{(o.amount_cents / 100).toFixed(0)}</p>
                       <Badge variant={o.status === 'paid' ? 'default' : 'secondary'}
                         className={cn('text-[9px] font-extrabold mt-0.5',
-                          o.status === 'paid' && 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                          o.status === 'paid' && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40',
                         )}>
                         {STATUS_LABEL[o.status] || o.status}
                       </Badge>

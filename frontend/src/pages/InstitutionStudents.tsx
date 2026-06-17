@@ -267,7 +267,7 @@ function PlatformPermissionEditor({
             <div className="flex flex-wrap gap-1.5">
               {tags.map(t => (
                 <button key={t.id} onClick={() => toggle(setE, 'tag_ids', t.id)}
-                  className={cn('text-[11px] font-bold px-2.5 py-1 rounded-lg border', e.tag_ids.includes(t.id) ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-white border-border text-muted-foreground/60')}>{t.name}</button>
+                  className={cn('text-[11px] font-bold px-2.5 py-1 rounded-lg border', e.tag_ids.includes(t.id) ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-card border-border text-muted-foreground/60')}>{t.name}</button>
               ))}
             </div>
             <div className="flex gap-1.5 mt-1.5">
@@ -282,7 +282,7 @@ function PlatformPermissionEditor({
             <div className="flex flex-wrap gap-1.5">
               {groups.map(g => (
                 <button key={g.id} onClick={() => toggle(setE, 'group_ids', g.id)}
-                  className={cn('text-[11px] font-bold px-2.5 py-1 rounded-lg border', e.group_ids.includes(g.id) ? 'bg-indigo-100 border-indigo-300 text-indigo-800' : 'bg-white border-border text-muted-foreground/60')}>{g.name}</button>
+                  className={cn('text-[11px] font-bold px-2.5 py-1 rounded-lg border', e.group_ids.includes(g.id) ? 'bg-indigo-100 border-indigo-300 text-indigo-800' : 'bg-card border-border text-muted-foreground/60')}>{g.name}</button>
               ))}
             </div>
             <div className="flex gap-1.5 mt-1.5">
@@ -297,7 +297,7 @@ function PlatformPermissionEditor({
             <div className="flex flex-wrap gap-1">
               {ALL_CAPS.map(c => (
                 <button key={c} onClick={() => toggle(setE, 'extra', c)}
-                  className={cn('text-[10px] font-mono font-bold px-2 py-0.5 rounded border', e.extra.includes(c) ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white border-border text-muted-foreground/40 hover:border-muted-foreground/40')}>{c}</button>
+                  className={cn('text-[10px] font-mono font-bold px-2 py-0.5 rounded border', e.extra.includes(c) ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-card border-border text-muted-foreground/40 hover:border-muted-foreground/40')}>{c}</button>
               ))}
             </div>
           </Section>
@@ -307,7 +307,7 @@ function PlatformPermissionEditor({
             <div className="flex flex-wrap gap-1">
               {ALL_CAPS.map(c => (
                 <button key={c} onClick={() => toggle(setE, 'blocked', c)}
-                  className={cn('text-[10px] font-mono font-bold px-2 py-0.5 rounded border', e.blocked.includes(c) ? 'bg-red-100 border-red-300 text-red-800' : 'bg-white border-border text-muted-foreground/40 hover:border-muted-foreground/40')}>{c}</button>
+                  className={cn('text-[10px] font-mono font-bold px-2 py-0.5 rounded border', e.blocked.includes(c) ? 'bg-red-100 border-red-300 text-red-800' : 'bg-card border-border text-muted-foreground/40 hover:border-muted-foreground/40')}>{c}</button>
               ))}
             </div>
           </Section>
@@ -387,7 +387,7 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
   };
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto">
       <h1 className="text-2xl font-extrabold text-foreground tracking-tight mb-1">{t('institution.memberManagement')}</h1>
       <p className="text-sm text-muted-foreground/60 mb-6">
         {institution.name} · {institution.plan_label} · {t('institution.members')} {studentCount + teacherCount}/{institution.max_students}
@@ -782,7 +782,7 @@ function BatchImportDialog({ onImported }: { onImported: () => void }) {
             <textarea className="w-full h-40 rounded-xl border p-3 text-sm font-mono resize-none"
               placeholder={t('institution.importPlaceholder')} value={text} onChange={e => setText(e.target.value)} />
             {result && (
-              <div className={cn('p-3 rounded-xl text-xs space-y-1', result.fail > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-emerald-50 border border-emerald-200')}>
+              <div className={cn('p-3 rounded-xl text-xs space-y-1', result.fail > 0 ? 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40' : 'bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40')}>
                 <p className="font-bold">{t('institution.success')} {result.ok}，{t('institution.failed')} {result.fail}</p>
                 {result.errors.slice(0, 5).map((e, i) => <p key={i} className="text-red-500">{e}</p>)}
               </div>

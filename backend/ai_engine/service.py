@@ -1004,9 +1004,12 @@ class AIEngine:
             logger.exception("Final text reply failed: %s", e)
 
         # 合并所有轮次的中间文本，避免丢失
+        # 注意：all_rounds_text 中的内容已通过 on_message 逐轮发送给前端，
+        # 不应再作为 final_content 重复发送。仅保留最后一轮的 accumulated_text。
         combined = accumulated_text or ""
         if not combined and all_rounds_text:
-            combined = "\n\n".join(all_rounds_text)
+            # 中间文本已全部在前端可见，返回空让前端依靠已展示的中间消息
+            combined = ""
         return {"content": cls._strip_dsml(combined)}
 
     @classmethod

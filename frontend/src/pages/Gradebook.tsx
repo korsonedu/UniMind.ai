@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Spinner, Users, ClipboardText, ChartBar, GraduationCap } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { PageWrapper } from '@/components/PageWrapper';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -99,7 +100,8 @@ export function Gradebook() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6">
+    <PageWrapper title="成绩册" subtitle="">
+      <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">成绩册</h1>
         <Select value={selectedClassId} onValueChange={setSelectedClassId}>
@@ -264,6 +266,7 @@ export function Gradebook() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </PageWrapper>
   );
 }

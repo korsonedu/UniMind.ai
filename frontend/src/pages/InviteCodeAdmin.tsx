@@ -173,7 +173,7 @@ export default function InviteCodeAdmin() {
             </div>
             <div className="flex flex-wrap gap-1.5">
               {generated.map(c => (
-                <code key={c} className="font-mono text-xs font-bold bg-white px-2.5 py-1 rounded-lg border cursor-pointer hover:bg-unimind-bg-secondary"
+                <code key={c} className="font-mono text-xs font-bold bg-card px-2.5 py-1 rounded-lg border cursor-pointer hover:bg-unimind-bg-secondary"
                   onClick={() => copyCode(c)}>{c}</code>
               ))}
             </div>

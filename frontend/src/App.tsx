@@ -41,6 +41,7 @@ const PromptTemplatesAdmin = lazyNamed(() => import('./pages/PromptTemplatesAdmi
 
 const PdfMockExam = lazyNamed(() => import('./pages/PdfMockExam'), 'PdfMockExam');
 const WrongQuestionReviewPage = lazyNamed(() => import('./pages/WrongQuestionReviewPage'), 'WrongQuestionReviewPage');
+const ReportCard = lazyNamed(() => import('./pages/ReportCard'), 'ReportCard');
 const BillingPage = lazyNamed(() => import('./pages/Billing'), 'BillingPage');
 const PaymentResult = lazyNamed(() => import('./pages/PaymentResult'), 'PaymentResult');
 const Checkout = lazyNamed(() => import('./pages/Checkout'), 'Checkout');
@@ -243,6 +244,7 @@ const router = createBrowserRouter([
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(VideoLesson)}</FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "my-assignments", element: lazyPage(MyAssignments) },
+          { path: "report-card", element: lazyPage(ReportCard) },
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
           { path: "exam/:examId", element: lazyPage(OnlineExam) },
 

@@ -276,7 +276,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               {question.user_detail.nickname || question.user_detail.username}
               {question.is_starred && <Star className="h-3 w-3 text-orange-500 fill-orange-500" />}
               {question.is_solved ? (
-                <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-emerald-50 text-emerald-600 border-emerald-200">{t('resolved')}</Badge>
+                <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40">{t('resolved')}</Badge>
               ) : (
                 <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-muted text-muted-foreground border-border">{t('pending')}</Badge>
               )}

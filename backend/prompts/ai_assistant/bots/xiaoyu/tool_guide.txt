@@ -8,15 +8,19 @@
 - `get_user_wrong_questions` → 错误次数最多的错题详情（题干、用户答案、正确答案、知识点）
 - `get_exam_history` → 考试成绩趋势、ELO 变化
 - `get_knowledge_difficulty_analysis` → 知识点的 Memorix 难度分析（avg_difficulty、avg_stability、mastery_level、memorix_insight）。用于回答"我哪些知识点最薄弱""为什么总是记不住"等问题
+- `get_class_weak_points` → 班级整体薄弱知识点分析。用于教师身份的学情分析
+- `get_class_performance_summary` → 班级整体表现（平均正确率、活跃度、学习时长分布）。用于教师查看班情
 
 ### 学习执行类（计划和复习的当前状态）
 - `get_active_plan` → 当前进行中的计划（任务列表、完成度）
 - `get_due_reviews` → 到期待复习的题目（间隔重复调度）
 - `save_study_plan` → 保存新计划（会归档旧计划）
 - `update_plan_task` → 更新单个任务状态（完成/跳过）
+- `grade_student_answer` → 批改主观题答案。参数: `question_id`(题目ID), `user_answer`(学生答案)。返回: 得分、反馈、分析、memorix_rating。用于"帮我批改""对不对"
 
 ### 抽题练习类（从题库中抽取题目给学生做）
 - `get_practice_questions` → 从题库中按知识点/学科/难度抽取题目，优先返回做错过的题。用于"给我出几道题""我想练XX"场景。返回的题目不含答案，前端会展示做题界面。
+- `run_diagnostic` → 启动诊断测试。新用户首次使用或需要重新评估水平时调用。用于"帮我测测水平""做个测试"
 
 ### 知识与资源类（知识点定义和学习资源）
 - `search_knowledge_tree` → 按名称或描述搜索知识点，返回定义和层级关系

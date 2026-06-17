@@ -1723,3 +1723,16 @@ class InstitutionDataExportView(APIView):
             })
 
         return Response({'error': f'不支持的导出类型: {export_type}'}, status=400)
+
+
+class InstitutionStudentReportCardView(APIView):
+    """GET /api/users/institution/me/students/<pk>/report-card/ — 教师查看学生报告。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request, pk):
+        from users.views import _build_report_data
+        inst = request.user.institution
+        student = get_object_or_404(
+            User, id=pk, institution=inst, institution_role='student',
+        )
+        return Response(_build_report_data(student))

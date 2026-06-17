@@ -112,7 +112,7 @@ export default function MyAssignments() {
   const fetchList = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/quizzes/assignments/my/');
+      const res = await api.get('/assignments/my/');
       setAssignments(res.data || []);
     } catch { toast.error('加载作业列表失败'); }
     setLoading(false);
@@ -123,7 +123,7 @@ export default function MyAssignments() {
   const openDetail = async (id: number) => {
     setDetailLoading(true); setView('detail');
     try {
-      const res = await api.get(`/quizzes/assignments/${id}/questions/`);
+      const res = await api.get(`/assignments/${id}/questions/`);
       setDetail(res.data); setAnswers(res.data.previous_answers || {});
     } catch { toast.error('加载作业详情失败'); }
     setDetailLoading(false);
@@ -133,7 +133,7 @@ export default function MyAssignments() {
     if (!detail) return;
     setSubmitting(true);
     try {
-      const res = await api.post('/quizzes/assignments/submit/', { assignment_id: detail.id, answers });
+      const res = await api.post('/assignments/submit/', { assignment_id: detail.id, answers });
       toast.success(res.data.message);
       setDetail({ ...detail, submitted: true, score: res.data.score, previous_answers: answers });
       fetchList();

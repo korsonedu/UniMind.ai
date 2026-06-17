@@ -236,6 +236,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
     const userMsg: Message = { _id: nextId(), role: 'user', content: text, timestamp: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
+    setInput('');
 
     try {
       const res = await fetch('/api/ai/chat/stream/', {
@@ -340,17 +341,28 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               const finalContent = payload.full_content || '';
               if (payload.is_error) {
                 toast.error(finalContent || 'AI 调用失败');
-              } else if (finalContent || payload.has_intermediate) {
+              } else if (finalContent) {
+                // 最终消息也通过 scheduleShow 排队，确保出现在中间消息和 tool steps 之后
+                const id = nextId();
                 setMessages(prev => [...prev, {
-                  _id: nextId(),
+                  _id: id,
                   id: payload.message_id,
                   role: 'assistant' as const,
                   content: finalContent,
                   conversation_title: payload.conversation_title || undefined,
                   metadata: payload.metadata || undefined,
-                  visible: true,
+                  visible: false,
                   timestamp: new Date().toISOString(),
                 }]);
+                requestAnimationFrame(() => {
+                  setMessages(prev => {
+                    const pos = prev.findIndex(m => m._id === id);
+                    if (pos >= 0) scheduleShow(id, pos);
+                    return prev;
+                  });
+                });
+              } else if (payload.has_intermediate) {
+                // 中间消息已展示全部内容，不需空最终气泡
               }
               // Notify parent about visuals from done event metadata
               const doneVisuals = payload.metadata?.all_visuals || (payload.metadata?.visual ? [payload.metadata.visual] : []);

@@ -65,7 +65,7 @@ export const ArticleCenter: React.FC = () => {
 
   if (loading && articles.length === 0) return (
     <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')} action={actionBtn}>
-      <div className="flex flex-col border border-border/50 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden">
+      <div className="max-w-4xl mx-auto flex flex-col border border-border/50 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden">
         <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-muted/30 text-[11px] font-semibold tracking-wider border-b border-border/50">
           <div className="col-span-2">{t('articleDate')}</div>
           <div className="col-span-2">{t('articleAuthor')}</div>
@@ -87,7 +87,7 @@ export const ArticleCenter: React.FC = () => {
 
   return (
     <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')} action={actionBtn}>
-      <div className="flex flex-col gap-5 md:gap-8 w-full text-left">
+      <div className="max-w-4xl mx-auto flex flex-col gap-5 md:gap-8 w-full text-left">
         
         {/* Tag Pills — horizontal scroll */}
         <div className="relative group/tags">

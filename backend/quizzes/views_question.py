@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from quizzes.models import Question, UserQuestionStatus, KnowledgePoint
+from quizzes.models import Question, UserQuestionStatus, KnowledgePoint, Assignment, AssignmentSubmission
 from quizzes.serializers import QuestionSerializer, QuestionListSerializer
 from users.models import User
 from users.views import IsMember
@@ -745,7 +745,8 @@ class TeacherAssignmentListView(APIView):
                 'question_count': a.assignment_questions.count(),
                 'submitted_count': submitted,
                 'graded_count': graded,
-                'class_count': a.target_classes.count(),
+                'class_names': [c.name for c in a.target_classes.all()],
+                'total_students': sum(c.students.count() for c in a.target_classes.all()),
                 'created_at': a.created_at.isoformat(),
             })
 

@@ -119,6 +119,21 @@ PLANNER_TOOLS_META = [
         description="从题库中抽取相关题目供学生练习",
         body="从题库中按知识点或学科抽取题目。参数: kp_name(str)=知识点名称, subject(str)=学科(可选), difficulty(str)=难度(可选), limit(int)=题数(默认5)。优先返回做错过的题目。适用于：给学生出题练习、'我想做XX题'、薄弱知识点强化训练。不适用于：查看错题记录（用get_user_wrong_questions）、查看复习任务（用get_due_reviews）。",
     ),
+    ToolMeta(
+        name="get_knowledge_difficulty_analysis",
+        description="获取知识点的Memorix难度分析",
+        body="获取指定知识点的Memorix遗忘曲线分析数据。参数: kp_name(str)=知识点名称, user_id(int)=用户ID。返回: avg_difficulty、avg_stability、mastery_level、memorix_insight。适用于：学生问'为什么记不住''我哪些知识点最薄弱'。不适用于：查看整体统计数据。",
+    ),
+    ToolMeta(
+        name="grade_student_answer",
+        description="批改学生对主观题的回答",
+        body="批改学生提交的主观题答案。参数: question_id(int)=题目ID, user_answer(str)=学生答案。返回: score、max_score、feedback、analysis、memorix_rating。适用于：学生说'帮我批改''对不对'、提交主观题答案。不适用于：客观题自动批改、批量批改。",
+    ),
+    ToolMeta(
+        name="run_diagnostic",
+        description="为学生运行诊断测试",
+        body="为新用户或需要重新评估的学生启动诊断测试。参数: user_id(int)=用户ID, subject(str)=学科(可选)。返回: 诊断题目列表。适用于：新用户首次使用、需要重新评估学习水平。不适用于：日常练习（用get_practice_questions）。",
+    ),
 ]
 
 EXAM_GENERATOR_TOOLS_META = [
@@ -181,6 +196,11 @@ EXAM_GENERATOR_TOOLS_META = [
         name="list_articles",
         description="浏览机构文章库",
         body="查询本机构文章。参数: query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：标题、摘要、发布日期。适用于：教师说'看看文章''有没有关于X的文章'。不适用于：搜索知识点。",
+    ),
+    ToolMeta(
+        name="get_class_weak_points",
+        description="获取班级知识点薄弱分析",
+        body="分析班级整体知识点掌握情况。参数: institution_id(int)=机构ID, class_name(str)=班级名(可选)。返回：班级各知识点正确率、最薄弱知识点。需要teacher/owner角色。适用于：教师说'哪些知识点薄弱''班级学情分析'。不适用于：查看单个学生详情（用get_student_detail）。",
     ),
     ToolMeta(
         name="list_classes",

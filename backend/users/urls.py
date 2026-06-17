@@ -10,6 +10,9 @@ from .views import (
     AnalyticsDashboardView, AnalyticsExportView, NPSSubmitView, NPSStatusView,
     AccountDeleteView, DataExportView, FeedbackSubmitView,
     AvatarProxyView,
+    UserCheckInView, AchievementListView, UserAchievementView,
+    UserClassListView,
+    StudentReportCardView, StudentReportCardPDFView,
 )
 from .views_admin import (
     SuperuserUserListView, UserTagListView, PermissionGroupListView,
@@ -37,6 +40,7 @@ from .views_institution import (
     InstitutionBulkInitView,
     ClassCourseManageView, StudentClassCourseView, ClassGradebookView,
     InstitutionBusinessDashboardView, InstitutionDataExportView,
+    InstitutionStudentReportCardView,
 )
 
 urlpatterns = [
@@ -101,6 +105,7 @@ urlpatterns = [
     path('institution/me/students/<int:pk>/', InstitutionStudentDetailView.as_view(), name='institution-student-detail'),
     path('institution/me/students/<int:pk>/stats/', InstitutionStudentStatsView.as_view(), name='institution-student-stats'),
     path('institution/me/students/<int:pk>/reset-password/', InstitutionStudentResetPasswordView.as_view(), name='institution-student-reset-password'),
+    path('institution/me/students/<int:pk>/report-card/', InstitutionStudentReportCardView.as_view(), name='institution-student-report-card'),
 
     # Institution — members (owner + teacher management)
     path('institution/me/members/', InstitutionMemberListView.as_view(), name='institution-member-list'),
@@ -143,4 +148,14 @@ urlpatterns = [
 
     # Avatar proxy
     path('avatar/<str:style>/<str:seed>/', AvatarProxyView.as_view(), name='avatar-proxy'),
+
+    # Check-in & achievements
+    path('me/checkin/', UserCheckInView.as_view(), name='user-checkin'),
+    path('achievements/', AchievementListView.as_view(), name='achievement-list'),
+    path('me/achievements/', UserAchievementView.as_view(), name='user-achievements'),
+    path('me/classes/', UserClassListView.as_view(), name='user-classes'),
+
+    # Report card
+    path('me/report-card/', StudentReportCardView.as_view(), name='student-report-card'),
+    path('me/report-card/pdf/', StudentReportCardPDFView.as_view(), name='student-report-card-pdf'),
 ]

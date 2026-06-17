@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, DailyPlan
+from .models import User, DailyPlan, DailyCheckIn, Achievement, UserAchievement
 
 class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.ReadOnlyField()
@@ -72,3 +72,24 @@ class RegisterSerializer(serializers.ModelSerializer):
                 role="student"
             )
         return user
+
+
+class DailyCheckInSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DailyCheckIn
+        fields = ('id', 'date', 'streak', 'created_at')
+        read_only_fields = ('id', 'date', 'streak', 'created_at')
+
+
+class AchievementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Achievement
+        fields = ('id', 'key', 'name', 'description', 'icon', 'category', 'threshold')
+
+
+class UserAchievementSerializer(serializers.ModelSerializer):
+    achievement = AchievementSerializer(read_only=True)
+
+    class Meta:
+        model = UserAchievement
+        fields = ('id', 'achievement', 'unlocked_at', 'progress')

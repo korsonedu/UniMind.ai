@@ -274,7 +274,7 @@ export function DiagnosticTest() {
                 <h3 className="text-sm font-semibold text-green-600 mb-3">{t('results.strongKPs')}</h3>
                 <div className="flex flex-wrap gap-2">
                   {result.study_plan.strong_kps.map(kp => (
-                    <Badge key={kp.kp_id} variant="outline" className="border-green-200 text-green-700 rounded-full">
+                    <Badge key={kp.kp_id} variant="outline" className="border-green-200 dark:border-green-800/40 text-green-700 dark:text-green-400 rounded-full">
                       {kp.kp_name} ({kp.accuracy}%)
                     </Badge>
                   ))}
@@ -290,7 +290,7 @@ export function DiagnosticTest() {
                 <h3 className="text-sm font-semibold text-red-600 mb-3">{t('results.weakKPs')}</h3>
                 <div className="flex flex-wrap gap-2">
                   {result.study_plan.weak_kps.map(kp => (
-                    <Badge key={kp.kp_id} variant="outline" className="border-red-200 text-red-700 rounded-full">
+                    <Badge key={kp.kp_id} variant="outline" className="border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-400 rounded-full">
                       {kp.kp_name} ({kp.accuracy}%)
                     </Badge>
                   ))}

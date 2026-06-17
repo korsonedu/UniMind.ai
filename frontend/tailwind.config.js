@@ -63,6 +63,15 @@ export default {
   				'text-quaternary': 'hsl(var(--unimind-text-quaternary))',
   				border: 'hsl(var(--unimind-border))',
   				'bg-secondary': 'hsl(var(--unimind-bg-secondary))',
+  			},
+  			xiaoyu: {
+  				'50': 'hsl(var(--xiaoyu-50))',
+  				'100': 'hsl(var(--xiaoyu-100))',
+  				'200': 'hsl(var(--xiaoyu-200))',
+  				'300': 'hsl(var(--xiaoyu-300))',
+  				'400': 'hsl(var(--xiaoyu-400))',
+  				'500': 'hsl(var(--xiaoyu-500))',
+  				'600': 'hsl(var(--xiaoyu-600))',
   			}
   		}
   	}

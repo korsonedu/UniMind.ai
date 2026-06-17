@@ -329,7 +329,7 @@ export const TestLadder: React.FC = () => {
         <>{(
           <Card className={cn(
             "bg-card overflow-hidden relative transition-all",
-            isMobile ? "border-none shadow-none rounded-none p-0" : "border border-border rounded-apple-4xl p-12 shadow-sm hover:shadow-md"
+            isMobile ? "border-none shadow-none rounded-none p-0" : "border border-border rounded-2xl p-12 shadow-sm hover:shadow-md"
           )}>
             <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/5 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
             <div className={cn(
@@ -499,7 +499,7 @@ export const TestLadder: React.FC = () => {
               )}>
                 <div className={cn(
                   "bg-muted transition-all flex flex-col justify-center",
-                  isMobile ? "p-3 rounded-xl border-none shadow-none" : "p-7 border border-border rounded-apple-3xl hover:bg-card hover:shadow-lg"
+                  isMobile ? "p-3 rounded-xl border-none shadow-none" : "p-7 border border-border rounded-xl hover:bg-card hover:shadow-lg"
                 )}>
                   <div className="flex items-center gap-3 mb-2">
                     <div className={cn("bg-card shadow-sm flex items-center justify-center text-indigo-500", isMobile ? "h-8 w-8 rounded-xl" : "h-9 w-9 rounded-2xl")}><Brain className="h-4 w-4" /></div>
@@ -512,7 +512,7 @@ export const TestLadder: React.FC = () => {
                 </div>
                 <div className={cn(
                   "bg-muted transition-all flex flex-col justify-center",
-                  isMobile ? "p-3 rounded-xl border-none shadow-none" : "p-7 border border-border rounded-apple-3xl hover:bg-card hover:shadow-lg"
+                  isMobile ? "p-3 rounded-xl border-none shadow-none" : "p-7 border border-border rounded-xl hover:bg-card hover:shadow-lg"
                 )}>
                   <div className="flex items-center gap-3 mb-2">
                     <div className={cn("bg-card shadow-sm flex items-center justify-center text-muted-foreground", isMobile ? "h-8 w-8 rounded-xl" : "h-9 w-9 rounded-2xl")}><ChartLine className="h-4 w-4" /></div>
@@ -531,7 +531,7 @@ export const TestLadder: React.FC = () => {
         {(
           <Card className={cn(
             "bg-card overflow-hidden transition-all",
-            isMobile ? "border border-border rounded-2xl p-4" : "border border-border rounded-apple-2xl p-6 shadow-sm"
+            isMobile ? "border border-border rounded-2xl p-4" : "border border-border rounded-xl p-6 shadow-sm"
           )}>
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
@@ -547,23 +547,23 @@ export const TestLadder: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.sampleCount')}</p>
-                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.review_count ?? 0}</p>
+                    <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.review_count ?? 0}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.predictionAccuracy')}</p>
-                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.rmse ?? '--'}</p>
+                    <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.rmse ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.avgError')}</p>
-                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.mae ?? '--'}</p>
+                    <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.mae ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.predictedMastery')}</p>
-                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.avg_predicted ?? '--'}</p>
+                    <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.avg_predicted ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.actualMastery')}</p>
-                    <p className="text-sm font-black text-foreground">{memorixCurve?.metrics?.avg_actual ?? '--'}</p>
+                    <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.avg_actual ?? '--'}</p>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-border bg-muted/30 p-3">

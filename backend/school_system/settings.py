@@ -62,6 +62,13 @@ ALLOWED_HOSTS = _get_list(
 if IS_PROD and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("ALLOWED_HOSTS must be configured in production.")
 
+# ── 模块开关 ──
+# 企业版可裁剪不需要的模块。留空表示全部启用。
+# 例: ENABLED_APPS=users,courses,quizzes,ai_assistant,core
+# 可选模块: payments,study_room,faq_system,notifications,interviews,articles
+_ENABLED_RAW = os.getenv('ENABLED_APPS', '')
+ENABLED_APPS = [a.strip() for a in _ENABLED_RAW.split(',') if a.strip()] if _ENABLED_RAW else None
+
 INSTALLED_APPS = [
     "daphne",
     "django.contrib.admin",
@@ -87,6 +94,16 @@ INSTALLED_APPS = [
     "core",
     "payments",
 ]
+# 企业版裁剪：ENABLED_APPS 非空时只保留列出的模块（django/channels/rest 等基础 app 始终保留）
+if ENABLED_APPS is not None:
+    _PRESERVED = {'daphne', 'django.contrib.admin', 'django.contrib.auth',
+                  'django.contrib.contenttypes', 'django.contrib.sessions',
+                  'django.contrib.messages', 'django.contrib.staticfiles',
+                  'rest_framework', 'rest_framework.authtoken', 'drf_spectacular',
+                  'corsheaders', 'channels'}
+    INSTALLED_APPS = [a for a in INSTALLED_APPS
+                      if a in _PRESERVED or a in ENABLED_APPS]
+
 
 MIDDLEWARE = [
     "school_system.middleware.RequestIDMiddleware",

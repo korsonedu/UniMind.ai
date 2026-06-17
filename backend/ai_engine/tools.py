@@ -928,7 +928,7 @@ GRADE_SUBMISSIONS_SCHEMA = {
 
 
 def get_exam_generator_tools():
-    """教师 Agent 工具集（18 个工具）。"""
+    """教师 Agent 工具集（17 个工具）。"""
     return [
         _make_tool("search_knowledge", "搜索知识点或知识树结构。出题前先用此工具确认知识点存在并获取 ID。", SEARCH_KNOWLEDGE_SCHEMA,
             impl_summary="合并搜索：mode=kp 时模糊匹配 knowledge_point 表的 name 和 code；mode=tree 时搜索知识树结构（sub/ch/sec 层级）；mode=auto 时先搜 kp，无结果则自动搜 tree。支持 subject 过滤。返回知识点 ID 和名称。"),

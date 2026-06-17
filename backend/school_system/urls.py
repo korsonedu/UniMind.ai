@@ -91,23 +91,39 @@ def health_check(request):
     }, status=status)
 
 
+_ENABLED = settings.ENABLED_APPS
+_APP_ON = lambda name: _ENABLED is None or name in _ENABLED
+
 urlpatterns = [
     path("health/", health_check, name='health-check'),
     path("admin/", admin.site.urls),
     path("api/schema/", SpectacularAPIView.as_view(), name='schema'),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path("api/redoc/", SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
-    path("api/users/", include("users.urls")),
-    path("api/quizzes/", include("quizzes.urls")),
-    path("api/study/", include("study_room.urls")),
-    path("api/courses/", include("courses.urls")),
-    path("api/articles/", include("articles.urls")),
-    path("api/ai/", include("ai_assistant.urls")),
-    path("api/qa/", include("faq_system.urls")),
-    path("api/notifications/", include("notifications.urls")),
-    path("api/interviews/", include("interviews.urls")),
-    path("api/payments/", include("payments.urls")),
-    path("api/", include("core.urls")),
+]
+if _APP_ON('users'):
+    urlpatterns.append(path("api/users/", include("users.urls")))
+if _APP_ON('quizzes'):
+    urlpatterns.append(path("api/quizzes/", include("quizzes.urls")))
+    urlpatterns.append(path("api/assignments/", include("quizzes.urls_assignments")))
+if _APP_ON('study_room'):
+    urlpatterns.append(path("api/study/", include("study_room.urls")))
+if _APP_ON('courses'):
+    urlpatterns.append(path("api/courses/", include("courses.urls")))
+if _APP_ON('articles'):
+    urlpatterns.append(path("api/articles/", include("articles.urls")))
+if _APP_ON('ai_assistant'):
+    urlpatterns.append(path("api/ai/", include("ai_assistant.urls")))
+if _APP_ON('faq_system'):
+    urlpatterns.append(path("api/qa/", include("faq_system.urls")))
+if _APP_ON('notifications'):
+    urlpatterns.append(path("api/notifications/", include("notifications.urls")))
+if _APP_ON('interviews'):
+    urlpatterns.append(path("api/interviews/", include("interviews.urls")))
+if _APP_ON('payments'):
+    urlpatterns.append(path("api/payments/", include("payments.urls")))
+urlpatterns.append(path("api/", include("core.urls")))
+urlpatterns += [
     re_path(r'^media/(?P<path>.*)$', media_serve, name='media-serve'),
     re_path(r'^(?!api/|admin/|media/|static/).*$', serve_spa, name='spa-catchall'),
 ] + static(settings.STATIC_URL, document_root=settings.BASE_DIR / 'static')

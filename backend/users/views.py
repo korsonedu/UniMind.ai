@@ -6,6 +6,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from django.utils.decorators import method_decorator
 from django.contrib.auth import authenticate
+from django.http import HttpResponse
+from django.template.loader import render_to_string
 from .serializers import (
     UserSerializer,
     RegisterSerializer,
@@ -22,7 +24,9 @@ from core.utils import apply_institution_filter
 from quizzes.utils import safe_int as _safe_int
 import datetime
 import logging
+import os
 import re
+import tempfile
 
 
 logger = logging.getLogger(__name__)
@@ -1327,3 +1331,225 @@ class AvatarProxyView(APIView):
                 )
         except Exception:
             return Response({'error': 'Avatar service unavailable'}, status=502)
+
+
+# ── 签到 & 成就 ──────────────────────────────────────────────
+
+class UserCheckInView(APIView):
+    """POST /api/users/me/checkin/ — 每日签到；GET 返回签到历史+当前 streak。"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .models import DailyCheckIn
+        from .serializers import DailyCheckInSerializer
+        records = DailyCheckIn.objects.filter(user=request.user).order_by('-date')[:90]
+        today = timezone.now().date()
+        today_record = DailyCheckIn.objects.filter(user=request.user, date=today).first()
+        return Response({
+            'today_checked_in': today_record is not None,
+            'current_streak': today_record.streak if today_record else 0,
+            'history': DailyCheckInSerializer(records, many=True).data,
+        })
+
+    def post(self, request):
+        from .models import DailyCheckIn
+        from .serializers import DailyCheckInSerializer
+        from users.services.achievements import check_and_unlock
+
+        today = timezone.now().date()
+        existing = DailyCheckIn.objects.filter(user=request.user, date=today).first()
+        if existing:
+            return Response({
+                'message': '今日已签到',
+                'record': DailyCheckInSerializer(existing).data,
+            })
+
+        yesterday = today - datetime.timedelta(days=1)
+        prev = DailyCheckIn.objects.filter(user=request.user, date=yesterday).first()
+        streak = (prev.streak + 1) if prev else 1
+
+        record = DailyCheckIn.objects.create(user=request.user, date=today, streak=streak)
+        record_event(request.user, 'checkin', metadata={'streak': streak})
+
+        check_and_unlock(request.user)
+
+        return Response({
+            'message': f'签到成功！连续 {streak} 天',
+            'record': DailyCheckInSerializer(record).data,
+        })
+
+
+class AchievementListView(APIView):
+    """GET /api/users/achievements/ — 所有预置成就列表。"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .models import Achievement
+        from .serializers import AchievementSerializer
+        from .models import UserAchievement
+        unlocked = set(
+            UserAchievement.objects.filter(user=request.user)
+            .values_list('achievement__key', flat=True)
+        )
+        all_achievements = Achievement.objects.filter(is_active=True).order_by('category', 'threshold')
+        data = []
+        for a in all_achievements:
+            entry = AchievementSerializer(a).data
+            entry['is_unlocked'] = a.key in unlocked
+            data.append(entry)
+        return Response(data)
+
+
+class UserAchievementView(APIView):
+    """GET /api/users/me/achievements/ — 当前用户已解锁成就。"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .models import UserAchievement
+        from .serializers import UserAchievementSerializer
+        qs = UserAchievement.objects.filter(user=request.user).select_related('achievement').order_by('-unlocked_at')
+        return Response(UserAchievementSerializer(qs, many=True).data)
+
+
+class UserClassListView(APIView):
+    """GET /api/users/me/classes/ — 当前用户所在班级列表。"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = request.user.classes.all()
+        return Response([
+            {'id': c.id, 'name': c.name}
+            for c in qs
+        ])
+
+
+# ── 成绩报告卡 ──────────────────────────────────────────────
+
+def _build_report_data(user):
+    """聚合学生报告卡全部数据。供 self-report 和 teacher-view 复用。"""
+    from django.db.models import Sum, Count, Avg, Q
+    from quizzes.models import UserKnowledgeState, UserQuestionStatus, ReviewLog, QuizExam, KnowledgePoint
+    from .models import DailyCheckIn, UserAchievement
+
+    now = timezone.now()
+    total_attempted = UserQuestionStatus.objects.filter(user=user).aggregate(Sum('reps'))['reps__sum'] or 0
+    total_qs = UserQuestionStatus.objects.filter(user=user)
+    correct_count = total_qs.filter(last_correct=True).count()
+    wrong_count = total_qs.filter(wrong_count__gt=0).count()
+    mastered_count = total_qs.filter(is_mastered=True).count()
+    total_distinct = total_qs.count()
+
+    # 知识点雷达 — 按 subject 聚合 mastery 平均分
+    mastery_qs = (
+        UserKnowledgeState.objects.filter(user=user)
+        .select_related('knowledge_point')
+        .values('knowledge_point__subject')
+        .annotate(avg_score=Avg('mastery_score'), kp_count=Count('id'))
+        .order_by('knowledge_point__subject')
+    )
+    radar = [
+        {
+            'subject': m['knowledge_point__subject'] or '未分类',
+            'avg_mastery': round(m['avg_score'], 1),
+            'kp_count': m['kp_count'],
+        }
+        for m in mastery_qs
+    ]
+
+    # 近 7 天每日活动
+    daily = []
+    for i in range(6, -1, -1):
+        d = now.date() - datetime.timedelta(days=i)
+        cnt = ReviewLog.objects.filter(user=user, review_time__date=d).count()
+        daily.append({'date': d.isoformat(), 'count': cnt})
+
+    # 连续学习天数
+    review_days = (
+        ReviewLog.objects.filter(user=user, review_time__gte=now - datetime.timedelta(days=30))
+        .values_list('review_time__date', flat=True).distinct()
+    )
+    study_streak = 0
+    check_date = now.date()
+    for d in sorted(set(review_days), reverse=True):
+        if d == check_date:
+            study_streak += 1
+            check_date -= datetime.timedelta(days=1)
+        elif d < check_date:
+            break
+
+    # 签到 streak
+    today_checkin = DailyCheckIn.objects.filter(user=user, date=now.date()).first()
+    checkin_streak = today_checkin.streak if today_checkin else 0
+
+    # 最近 10 次考试
+    exams = QuizExam.objects.filter(user=user).order_by('-created_at')[:10]
+    exam_list = [
+        {
+            'id': e.id, 'total_score': e.total_score, 'max_score': e.max_score,
+            'percentage': round(e.total_score / e.max_score * 100, 1) if e.max_score else 0,
+            'elo_change': e.elo_change, 'created_at': e.created_at.isoformat(),
+        }
+        for e in exams
+    ]
+
+    # 成就
+    ua_qs = UserAchievement.objects.filter(user=user).select_related('achievement').order_by('-unlocked_at')
+    achievements_list = [
+        {
+            'key': ua.achievement.key, 'name': ua.achievement.name,
+            'description': ua.achievement.description, 'icon': ua.achievement.icon,
+            'category': ua.achievement.category, 'unlocked_at': ua.unlocked_at.isoformat(),
+        }
+        for ua in ua_qs
+    ]
+
+    return {
+        'student': {
+            'id': user.id, 'nickname': user.nickname, 'elo_score': user.elo_score,
+            'date_joined': user.date_joined.isoformat() if user.date_joined else None,
+        },
+        'stats': {
+            'total_attempted': total_attempted, 'total_distinct': total_distinct,
+            'correct_count': correct_count, 'wrong_count': wrong_count,
+            'mastered_count': mastered_count,
+            'accuracy': round(correct_count / total_distinct * 100, 1) if total_distinct else 0,
+            'study_streak': study_streak, 'checkin_streak': checkin_streak,
+        },
+        'radar': radar,
+        'daily_activity': daily,
+        'exams': exam_list,
+        'achievements': achievements_list,
+    }
+
+
+class StudentReportCardView(APIView):
+    """GET /api/users/me/report-card/ — 学生自己的成绩报告卡。"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response(_build_report_data(request.user))
+
+
+class StudentReportCardPDFView(APIView):
+    """GET /api/users/me/report-card/pdf/ — 成绩报告卡 PDF。"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        data = _build_report_data(request.user)
+        html = render_to_string('report_card_pdf.html', {'data': data})
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
+            output_path = f.name
+        try:
+            from quizzes.services.pdf_generator import _html_to_pdf
+            _html_to_pdf(html, output_path)
+            with open(output_path, 'rb') as f:
+                pdf_bytes = f.read()
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            nickname = data['student']['nickname'] or 'student'
+            response['Content-Disposition'] = f'attachment; filename="report_{nickname}.pdf"'
+            return response
+        finally:
+            try:
+                os.unlink(output_path)
+            except OSError:
+                pass

@@ -743,7 +743,7 @@ class PlannerToolExecutor(BaseToolExecutor):
             except (json.JSONDecodeError, TypeError):
                 payload = {}
 
-        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards'}
+        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards', 'function_graph'}
         if visual_type not in valid_types:
             visual_type = 'data_card'
 

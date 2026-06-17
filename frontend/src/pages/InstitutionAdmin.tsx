@@ -112,8 +112,8 @@ export default function InstitutionAdmin() {
   return (
     <div className="min-h-screen bg-muted">
       {/* Standalone admin header — no MainLayout dependency */}
-      <header className="bg-white border-b border-border/60">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <header className="bg-card border-b border-border/60">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate('/')}>
               <ArrowLeft className="h-4 w-4 mr-1" /> 返回 UniMind
@@ -128,7 +128,7 @@ export default function InstitutionAdmin() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         {/* Page header */}
         <div className="flex items-center justify-between">
           <div>
@@ -200,10 +200,10 @@ export default function InstitutionAdmin() {
                         {inst.plan_label}
                       </Badge>
                       {!inst.is_active && (
-                        <Badge variant="outline" className="text-[10px] text-red-500 border-red-200">已停用</Badge>
+                        <Badge variant="outline" className="text-[10px] text-red-500 dark:text-red-400 border-red-200 dark:border-red-800/40">已停用</Badge>
                       )}
                       {inst.is_active && !inst.is_plan_active && (
-                        <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-200">已到期</Badge>
+                        <Badge variant="outline" className="text-[10px] text-amber-500 dark:text-amber-400 border-amber-200 dark:border-amber-800/40">已到期</Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
@@ -499,7 +499,7 @@ function InstitutionSelfSettings() {
 
   return (
     <div className="min-h-screen bg-muted">
-      <header className="bg-white border-b border-border/60">
+      <header className="bg-card border-b border-border/60">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate('/')}>
@@ -518,7 +518,7 @@ function InstitutionSelfSettings() {
       </header>
 
       <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        <Card className="p-6 rounded-2xl border-none shadow-sm bg-white">
+        <Card className="p-6 rounded-2xl border-none shadow-sm bg-card">
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-[10px] font-bold uppercase text-muted-foreground">当前方案</p>
@@ -535,7 +535,7 @@ function InstitutionSelfSettings() {
           </div>
         </Card>
 
-        <Card className="p-8 rounded-2xl border-none shadow-sm bg-white space-y-6">
+        <Card className="p-8 rounded-2xl border-none shadow-sm bg-card space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构名称</Label>

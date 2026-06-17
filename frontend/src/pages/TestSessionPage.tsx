@@ -200,11 +200,11 @@ export const TestSessionPage: React.FC = () => {
   }
 
   return (
-    <div className="h-full min-h-0 bg-white text-stone-800 flex flex-col overflow-hidden">
+    <div className="h-full min-h-0 bg-background text-foreground flex flex-col overflow-hidden">
       {/* ── Header ── */}
-      <header className="h-11 shrink-0 border-b border-stone-100 px-3 flex items-center justify-between bg-white">
+      <header className="h-11 shrink-0 border-b border-border px-3 flex items-center justify-between bg-card">
         <Link to="/tests">
-          <Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100">
+          <Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">
             <ArrowLeft className="h-4 w-4 mr-1" />
             {t('back')}
           </Button>
@@ -213,13 +213,13 @@ export const TestSessionPage: React.FC = () => {
           {isMobile && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-stone-400 hover:text-stone-600">
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground/60 hover:text-muted-foreground">
                   <Bell className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent side="bottom" align="end" className="w-64 rounded-2xl p-4 bg-white border-stone-200">
+              <PopoverContent side="bottom" align="end" className="w-64 rounded-2xl p-4 bg-card border-border">
                 <div className="space-y-3 text-left">
-                  <p className="text-[11px] font-semibold text-stone-400">{t('reminderSettings')}</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground/60">{t('reminderSettings')}</p>
                   <div className="flex items-center justify-between">
                     <Label className="text-xs font-medium">{t('questionTypeReminder')}</Label>
                     <Switch
@@ -242,7 +242,7 @@ export const TestSessionPage: React.FC = () => {
               </PopoverContent>
             </Popover>
           )}
-          <div className="px-2.5 py-1 rounded-md bg-stone-100 text-stone-600 font-medium text-xs tabular-nums">
+          <div className="px-2.5 py-1 rounded-md bg-muted text-muted-foreground font-medium text-xs tabular-nums">
             {currentIdx + 1} / {questions.length}
           </div>
         </div>
@@ -251,10 +251,10 @@ export const TestSessionPage: React.FC = () => {
       {/* ── Body ── */}
       <div className="flex-1 min-h-0 flex flex-col">
         <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
-          <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-4">
+          <div className="bg-card border border-border rounded-xl p-4 space-y-4">
             {/* Metadata row */}
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className="rounded-md px-2 py-0 h-5 text-[10px] font-semibold bg-stone-100 text-stone-600 border-none hover:bg-stone-100">
+              <Badge className="rounded-md px-2 py-0 h-5 text-[10px] font-semibold bg-muted text-muted-foreground border-none hover:bg-muted">
                 {currentQ.q_type === 'objective'
                   ? t('typeObjective')
                   : currentQ.subjective_type === 'calculate'
@@ -263,13 +263,13 @@ export const TestSessionPage: React.FC = () => {
                       ? t('typeNoun')
                       : t('typeEssay')}
               </Badge>
-              <span className="text-[10px] font-medium text-stone-500">
+              <span className="text-[10px] font-medium text-muted-foreground">
                 {currentQ.difficulty_level_display || t('difficultyFallback')} · ELO {currentQ.difficulty || 1200}
               </span>
             </div>
 
             {/* Question text */}
-            <div className="text-sm font-medium text-stone-800 leading-relaxed">
+            <div className="text-sm font-medium text-foreground leading-relaxed">
               <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                 {processMathContent(currentQ.text)}
               </ReactMarkdown>
@@ -285,7 +285,7 @@ export const TestSessionPage: React.FC = () => {
                   'h-7.5 px-2.5 rounded-lg text-[11px] font-medium gap-1.5 transition-colors',
                   currentQ.is_mastered
                     ? 'text-emerald-600 bg-emerald-50'
-                    : 'text-stone-400 hover:text-emerald-600 hover:bg-emerald-50/50'
+                    : 'text-muted-foreground/60 hover:text-emerald-600 hover:bg-emerald-50/50'
                 )}
               >
                 <CheckCircle className="h-3.5 w-3.5" />
@@ -297,7 +297,7 @@ export const TestSessionPage: React.FC = () => {
                 onClick={() => toggleFavorite(currentQ.id)}
                 className={cn(
                   'h-7.5 w-7.5 rounded-lg transition-colors',
-                  currentQ.is_favorite ? 'text-amber-500 bg-amber-50' : 'text-stone-400 hover:text-amber-500 hover:bg-amber-50/50'
+                  currentQ.is_favorite ? 'text-amber-500 bg-amber-50' : 'text-muted-foreground/60 hover:text-amber-500 hover:bg-amber-50/50'
                 )}
               >
                 <Star className={cn('h-3.5 w-3.5', currentQ.is_favorite && 'fill-current')} />
@@ -306,7 +306,7 @@ export const TestSessionPage: React.FC = () => {
 
             {/* Mastered banner */}
             {currentQ.is_mastered && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50/70 border border-emerald-100 rounded-lg text-xs font-medium text-emerald-700">
+              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 rounded-lg text-xs font-medium text-emerald-700 dark:text-emerald-400">
                 <CheckCircle className="w-3.5 h-3.5" /> {t('alreadyMastered')}
               </div>
             )}
@@ -325,18 +325,18 @@ export const TestSessionPage: React.FC = () => {
                         className={cn(
                           'w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.995]',
                           selected
-                            ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm'
-                            : 'bg-white border-stone-200 hover:border-stone-400 active:bg-stone-50',
+                            ? 'bg-primary border-primary text-primary-foreground shadow-sm'
+                            : 'bg-card border-border hover:border-primary/40 active:bg-muted/50',
                           currentQ.is_mastered && 'opacity-50'
                         )}
                       >
                         <span className={cn(
                           'font-display text-base font-bold italic w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors',
-                          selected ? 'bg-white/10 text-white' : 'bg-stone-100 text-stone-500'
+                          selected ? 'bg-primary-foreground/10 text-primary-foreground' : 'bg-muted text-muted-foreground'
                         )}>
                           {String.fromCharCode(65 + i)}
                         </span>
-                        <span className={cn('text-[13px] leading-snug', selected ? 'text-white' : 'text-stone-700')}>
+                        <span className={cn('text-[13px] leading-snug', selected ? 'text-white' : 'text-foreground/80')}>
                           <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                             {processMathContent(opt)}
                           </ReactMarkdown>
@@ -351,9 +351,9 @@ export const TestSessionPage: React.FC = () => {
                   disabled={currentQ.is_mastered}
                   onChange={(e) => setAnswers((prev) => ({ ...prev, [currentQ.id]: e.target.value }))}
                   className={cn(
-                    'w-full bg-stone-50 border border-stone-200 rounded-xl p-4 min-h-[180px] text-sm font-medium leading-relaxed',
-                    'focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-stone-400',
-                    'placeholder:text-stone-400 resize-none transition-all text-stone-800',
+                    'w-full bg-muted/50 border border-border rounded-xl p-4 min-h-[180px] text-sm font-medium leading-relaxed',
+                    'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-border',
+                    'placeholder:text-muted-foreground/60 resize-none transition-all text-foreground',
                     currentQ.is_mastered && 'opacity-50'
                   )}
                   placeholder={currentQ.is_mastered ? t('masteredPlaceholder') : t('inputPlaceholder')}
@@ -364,14 +364,14 @@ export const TestSessionPage: React.FC = () => {
         </div>
 
         {/* ── Footer ── */}
-        <footer className="shrink-0 border-t border-stone-100 bg-white px-3 pt-2.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] space-y-2.5">
+        <footer className="shrink-0 border-t border-border bg-card px-3 pt-2.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] space-y-2.5">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] font-medium text-stone-400">{t('answeredProgress')}</span>
-            <span className="text-[11px] font-semibold text-stone-700 tabular-nums">{answeredCount} / {totalNeedAnswer}</span>
+            <span className="text-[10px] font-medium text-muted-foreground/60">{t('answeredProgress')}</span>
+            <span className="text-[11px] font-semibold text-foreground/80 tabular-nums">{answeredCount} / {totalNeedAnswer}</span>
           </div>
-          <div className="h-1 w-full bg-stone-200 rounded-full overflow-hidden">
+          <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-zinc-800 rounded-full transition-all duration-300"
+              className="h-full bg-primary rounded-full transition-all duration-300"
               style={{ width: `${totalNeedAnswer ? (answeredCount / totalNeedAnswer) * 100 : 100}%` }}
             />
           </div>
@@ -380,7 +380,7 @@ export const TestSessionPage: React.FC = () => {
               variant="ghost"
               onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))}
               disabled={currentIdx === 0}
-              className="h-9 rounded-xl px-3 text-xs font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100"
+              className="h-9 rounded-xl px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               <CaretLeft className="h-4 w-4 mr-1" />
               {t('previousQ')}
@@ -389,14 +389,14 @@ export const TestSessionPage: React.FC = () => {
               <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="h-9 flex-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold"
+                className="h-9 flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold"
               >
                 {isSubmitting ? t('submitting') : t('submitScore')}
               </Button>
             ) : (
               <Button
                 onClick={() => setCurrentIdx((prev) => Math.min(questions.length - 1, prev + 1))}
-                className="h-9 flex-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold"
+                className="h-9 flex-1 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold"
               >
                 {t('nextQ')}
                 <CaretRight className="h-4 w-4 ml-1" />

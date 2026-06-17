@@ -90,7 +90,7 @@ export const Settings: React.FC = () => {
     <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 text-left animate-in fade-in duration-700">
         <div className="lg:col-span-4 space-y-6">
-          <Card className="border-none shadow-sm rounded-3xl bg-white p-8 flex flex-col items-center text-center border border-black/[0.03]">
+          <Card className="border-none shadow-sm rounded-3xl bg-card p-8 flex flex-col items-center text-center border border-border/30">
             <div className="relative group">
               <Avatar className="h-32 w-32 border-4 border-white shadow-lg ring-1 ring-black/5">
                 <AvatarImage src={previewUrl} />
@@ -99,7 +99,7 @@ export const Settings: React.FC = () => {
               <Sheet>
                 <SheetTrigger asChild><button aria-label="Change avatar" className="absolute bottom-0 right-0 bg-black text-white p-2.5 rounded-full shadow-sm border-4 border-white transition-transform hover:scale-110"><Camera className="h-4 w-4" /></button></SheetTrigger>
                 <SheetContent side="right" className="rounded-l-[2.5rem] border-none bg-white/95 backdrop-blur-2xl shadow-2xl w-[450px]">
-                  <SheetHeader className="p-8 border-b border-black/[0.03]"><SheetTitle className="text-2xl font-bold text-left">{t('avatar.lab')}</SheetTitle></SheetHeader>
+                  <SheetHeader className="p-8 border-b border-border/30"><SheetTitle className="text-2xl font-bold text-left">{t('avatar.lab')}</SheetTitle></SheetHeader>
                   <div className="p-8 space-y-10">
                     <div className="flex justify-center py-10 bg-muted rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-white shadow-lg"><AvatarImage src={previewUrl} /></Avatar></div>
                     <div className="space-y-6 text-left">
@@ -121,7 +121,7 @@ export const Settings: React.FC = () => {
             <p className="text-xs text-muted-foreground font-bold mt-1 uppercase tracking-widest leading-none text-emerald-600">{t('profile.eloRank', { score: user?.elo_score })}</p>
           </Card>
 
-          <Card className="border-none shadow-sm rounded-3xl bg-white p-8 space-y-6 border border-black/[0.03]">
+          <Card className="border-none shadow-sm rounded-3xl bg-card p-8 space-y-6 border border-border/30">
              <div className="space-y-6 text-left">
                 <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('security.title')}</h4>
                 <div className="space-y-4">
@@ -132,7 +132,7 @@ export const Settings: React.FC = () => {
           </Card>
 
           <Link to="/billing" className="block">
-            <Card className="border-none shadow-sm rounded-3xl bg-white p-8 border border-black/[0.03] text-left cursor-pointer hover:shadow-md motion-safe:transition-shadow">
+            <Card className="border-none shadow-sm rounded-3xl bg-card p-8 border border-border/30 text-left cursor-pointer hover:shadow-md motion-safe:transition-shadow">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center">
@@ -153,7 +153,7 @@ export const Settings: React.FC = () => {
         </div>
 
         <div className="lg:col-span-8 space-y-8">
-          <Card className="border-none shadow-sm rounded-3xl bg-white overflow-hidden p-10 border border-black/[0.03]">
+          <Card className="border-none shadow-sm rounded-3xl bg-card overflow-hidden p-10 border border-border/30">
              <div className="space-y-8 text-left">
                <div className="space-y-3">
                  <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.nicknameLabel')}</Label>
@@ -169,7 +169,7 @@ export const Settings: React.FC = () => {
           </Card>
 
           {/* 数据导出 */}
-          <Card className="border-none shadow-sm rounded-3xl bg-white p-8 border border-black/[0.03]">
+          <Card className="border-none shadow-sm rounded-3xl bg-card p-8 border border-border/30">
             <div className="text-left space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">数据导出</h4>
               <p className="text-xs text-muted-foreground ml-1">导出您的所有个人数据（JSON 格式），包括学习记录、答题历史等。</p>
@@ -195,7 +195,7 @@ export const Settings: React.FC = () => {
           </Card>
 
           {/* 账户注销 */}
-          <Card className="border-none shadow-sm rounded-3xl bg-white p-8 border border-red-100">
+          <Card className="border-none shadow-sm rounded-3xl bg-card p-8 border border-red-200 dark:border-red-800/40">
             <div className="text-left space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-widest text-red-500 ml-1">危险区域</h4>
               <p className="text-xs text-muted-foreground ml-1">注销账户将永久删除您的所有数据，此操作不可撤销。</p>

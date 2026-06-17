@@ -3,7 +3,7 @@ import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, CaretDown } from '@phosphor-icons/react';
+import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -213,12 +213,30 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   content: processContent ? processContent(m.content as string) : (m.content as string),
                   visible: true,
                 } as Message;
-                // 恢复 metadata 中的 visual 到 toolStep（历史加载时 SSE 的 visual 存在 metadata 中）
+                // 恢复 metadata 中的 visual 到 toolStep（历史加载时 visual 存储在 metadata 中）
                 const meta = (m as any).metadata;
                 const visuals = meta?.all_visuals || (meta?.visual ? [meta.visual] : null);
-                if (visuals && msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual) {
-                  msg.toolStep = { ...msg.toolStep, visual: visuals[0] as { type: string; payload: any } };
-                  // 清理 metadata 避免渲染时重复
+                if (visuals && visuals.length > 0) {
+                  const v = visuals[0];
+                  if (msg.toolStep) {
+                    // Case 1: toolStep 已存在（从内存恢复的情况），只补 visual
+                    if (msg.toolStep.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual) {
+                      msg.toolStep = { ...msg.toolStep, visual: v };
+                    }
+                  } else {
+                    // Case 2: 从 API 加载 → 无 toolStep，从 metadata 构造
+                    msg.toolStep = {
+                      call_id: `hist-${m.id || 0}`,
+                      step: 0,
+                      name: 'render_visual',
+                      status: 'done',
+                      label: (v.payload as any)?.title || '可视化',
+                      visual: v,
+                      args_summary: '',
+                      result_summary: '',
+                    };
+                  }
+                  // 清理 metadata 避免渲染时走 hasMetadataVisual 分母重复
                   if ((msg as any).metadata) {
                     delete (msg as any).metadata.visual;
                     delete (msg as any).metadata.all_visuals;
@@ -405,25 +423,12 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 </div>
               )}
 
-              {/* 向下滚动引导 */}
-              {landingBanner && (
-                <div className="flex justify-center mt-6">
-                  <button
-                    onClick={() => dashboardRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                    className="flex flex-col items-center gap-1 text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors group"
-                  >
-                    <span className="text-[10px] font-medium">学习概览</span>
-                    <CaretDown className="w-3.5 h-3.5 animate-bounce group-hover:animate-none" />
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
           {/* 卡片区：在内层外面，不受居中逻辑影响 */}
           {landingBanner && (
             <div ref={dashboardRef} className="w-full max-w-2xl mx-auto px-4 py-6 min-h-full flex flex-col justify-center" style={{ scrollSnapAlign: 'start' }}>
-              <p className="text-[11px] font-bold text-muted-foreground/50 mb-4">学习概览</p>
               {landingBanner}
             </div>
           )}
@@ -440,13 +445,12 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
         <div className="h-full flex flex-col bg-white animate-in fade-in duration-300">
           {/* Header */}
           <div className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2.5 border-b border-border/30">
-            {conversationTitle ? (
-              <span className="text-xs text-black/70 flex-1 truncate">{conversationTitle}</span>
-            ) : (
-              <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
-                <Sparkle className="h-3.5 w-3.5 text-primary-foreground" />
-              </div>
-            )}
+            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
+              <Sparkle className="h-3.5 w-3.5 text-primary-foreground" />
+            </div>
+            <span className="text-sm font-bold text-foreground flex-1 truncate">
+              {conversationTitle || botDisplayName}
+            </span>
             {sessions.length > 1 && (
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                 <PopoverTrigger asChild>

@@ -36,6 +36,15 @@
     --unimind-border: 240 4% 90%;         /* #E5E5EA */
     --unimind-bg-secondary: 240 7% 97%;   /* #F5F5F7 */
 
+    /* ── XiaoYu Brand Tokens ── */
+    --xiaoyu-50: 248 100% 97%;           /* #f0efff */
+    --xiaoyu-100: 248 67% 89%;           /* #d4d0f5 */
+    --xiaoyu-200: 248 62% 82%;           /* #b8b2ee */
+    --xiaoyu-300: 248 58% 72%;           /* #a99ef0 */
+    --xiaoyu-400: 248 55% 65%;           /* #8b82e0 */
+    --xiaoyu-500: 248 57% 29%;           /* #2d2b6b */
+    --xiaoyu-600: 248 57% 25%;           /* #232260 */
+
     /* Map primary to UniMind blue */
     --primary: var(--unimind-blue);
   }
@@ -71,6 +80,15 @@
     --unimind-text-quaternary: 240 2% 68%;
     --unimind-border: 240 4% 20%;
     --unimind-bg-secondary: 240 4% 12%;
+
+    /* ── XiaoYu Brand Tokens (dark) ── */
+    --xiaoyu-50: 248 57% 15%;
+    --xiaoyu-100: 248 57% 22%;
+    --xiaoyu-200: 248 50% 35%;
+    --xiaoyu-300: 248 55% 65%;
+    --xiaoyu-400: 248 58% 72%;
+    --xiaoyu-500: 248 67% 80%;
+    --xiaoyu-600: 248 67% 89%;
 
     /* Map primary to UniMind blue */
     --primary: var(--unimind-blue);

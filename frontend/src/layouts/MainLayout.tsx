@@ -197,9 +197,10 @@ export const MainLayout: React.FC = () => {
     { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
   ];
 
-  // ── 教师端 6 套件 ──
+  // ── 教师端 ──
   const teacherNavItems: NavItem[] = [
     { to: '/workbench', icon: Robot, label: '工作台' },
+    { to: '/teacher-assignments', icon: CalendarCheck, label: '作业' },
     { to: '/questions', icon: Brain, label: '题库' },
     { to: '/courses', icon: BookOpen, label: '课程' },
     { to: '/articles', icon: FileText, label: '文章' },
@@ -213,6 +214,7 @@ export const MainLayout: React.FC = () => {
   const studentNavItems: NavItem[] = [
     { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyu') },
     { to: '/my-assignments', icon: CalendarCheck, label: '我的作业' },
+    { to: '/report-card', icon: FileText, label: '成绩报告' },
     { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
     { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
     { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeMap') },
@@ -246,6 +248,7 @@ export const MainLayout: React.FC = () => {
       ]
     : [
         { to: '/workbench', icon: Robot, label: '工作台' },
+        { to: '/teacher-assignments', icon: CalendarCheck, label: '作业' },
         { to: '/questions', icon: Brain, label: '题库' },
         { to: '/courses', icon: BookOpen, label: '课程' },
         { to: '/articles', icon: FileText, label: '文章' },

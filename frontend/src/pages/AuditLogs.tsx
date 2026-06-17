@@ -46,7 +46,7 @@ export default function AuditLogs() {
 
   return (
     <PageWrapper title="操作日志" subtitle="机构操作审计记录">
-      <div className="space-y-4">
+      <div className="max-w-4xl mx-auto space-y-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Shield className="h-4 w-4" />
           <span>共 {total} 条记录</span>
@@ -59,7 +59,7 @@ export default function AuditLogs() {
         ) : (
           <div className="space-y-2">
             {logs.map(log => (
-              <Card key={log.id} className="border-none shadow-sm rounded-2xl bg-white p-4 border border-black/[0.03]">
+              <Card key={log.id} className="border-none shadow-sm rounded-2xl bg-card p-4 border border-border/30">
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">

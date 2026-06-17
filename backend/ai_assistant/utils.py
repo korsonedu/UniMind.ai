@@ -51,11 +51,17 @@ def get_student_academic_context(user):
     
     strong_points = [item['question__knowledge_point__name'] for item in strong_points_data if item['question__knowledge_point__name']]
 
-    # 6. 组装成 AI 提示词
-    context_segments = [
-        f"当前学生用户: {username}。",
-        f"学术天梯积分 (ELO): {elo_score}。",
-    ]
+    # 6. 机构与学科上下文
+    institution = getattr(user, 'institution', None)
+    institution_name = institution.name if institution else ''
+    institution_subject = institution.business_type if institution else ''
+
+    # 7. 组装成 AI 提示词
+    context_segments = []
+    if institution_name:
+        context_segments.append(f"所属机构：{institution_name}。本机构专注学科领域：{institution_subject or '通用'}。制定学习计划、推荐内容、分析薄弱点时，必须以本机构的学科范围为准，不得跨越到无关考试或学科。")
+    context_segments.append(f"当前学生用户: {username}。")
+    context_segments.append(f"学术天梯积分 (ELO): {elo_score}。")
     
     if weak_points:
         context_segments.append(f"薄弱知识点: {', '.join(weak_points)}。")

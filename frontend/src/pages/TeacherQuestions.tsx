@@ -98,7 +98,7 @@ export default function TeacherQuestions() {
     if (!assignTitle.trim()) { toast.error('请输入作业标题'); return; }
     setAssignSubmitting(true);
     try {
-      await api.post('/quizzes/assignments/create/', {
+      await api.post('/assignments/create/', {
         title: assignTitle.trim(),
         question_ids: Array.from(selected),
         class_ids: assignClassIds,
@@ -115,7 +115,7 @@ export default function TeacherQuestions() {
   };
 
   return (
-    <div className="flex flex-col h-full p-4 md:p-6 space-y-4 max-w-5xl mx-auto w-full">
+    <div className="flex flex-col h-full p-4 md:p-6 space-y-4 md:space-y-6 max-w-6xl mx-auto w-full">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">题目管理</h1>

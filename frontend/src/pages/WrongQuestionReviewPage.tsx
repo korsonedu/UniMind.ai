@@ -92,7 +92,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
             <Card className="rounded-2xl border border-border bg-card p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <Target className="h-4 w-4 text-indigo-600" />
-                <h3 className="text-base font-black">{t('wrongReview.drillTraining')}</h3>
+                <h3 className="text-base font-bold">{t('wrongReview.drillTraining')}</h3>
               </div>
               {!drills.length ? (
                 <p className="text-sm text-muted-foreground">{t('wrongReview.noDrillsAvailable')}</p>
@@ -124,7 +124,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
               <Card className="rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <Brain className="h-4 w-4 text-indigo-600" />
-                  <h3 className="text-base font-black">{t('wrongReview.causeBreakdown')}</h3>
+                  <h3 className="text-base font-bold">{t('wrongReview.causeBreakdown')}</h3>
                 </div>
                 <div className="space-y-2">
                   {causeBreakdown.length === 0 && <p className="text-sm text-muted-foreground">{t('wrongReview.noCauseData')}</p>}
@@ -145,7 +145,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
               <Card className="rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <CheckSquareOffset className="h-4 w-4 text-emerald-600" />
-                  <h3 className="text-base font-black">{t('wrongReview.kpBreakdown')}</h3>
+                  <h3 className="text-base font-bold">{t('wrongReview.kpBreakdown')}</h3>
                 </div>
                 <div className="space-y-2">
                   {kpBreakdown.length === 0 && <p className="text-sm text-muted-foreground">{t('wrongReview.noKpData')}</p>}

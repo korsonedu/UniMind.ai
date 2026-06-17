@@ -411,7 +411,7 @@ export default function Workbench() {
         dragging && "select-none"
       )} style={!hasConversation ? undefined : { width: sidebarWidth }}>
         {/* 拖拽手柄 — 仅对话时显示 */}
-        {hasConversation && (viewMode === 'questions' && instInfo) && (
+        {hasConversation && (
           <div
             className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10"
             onMouseDown={handleSidebarDragStart}

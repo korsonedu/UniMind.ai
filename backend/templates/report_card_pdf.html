@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>成绩报告 - {{ data.student.nickname }}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #1a1a2e; line-height: 1.6; padding: 32px; }
+  h1 { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 24px; }
+  .card { border: 1px solid #e5e5e5; border-radius: 12px; padding: 16px; margin-bottom: 16px; page-break-inside: avoid; }
+  .card h2 { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #2d2b6b; }
+  .grid-3 { display: flex; gap: 12px; margin-bottom: 16px; }
+  .stat { flex: 1; text-align: center; padding: 12px; background: #f8f8ff; border-radius: 8px; }
+  .stat .value { font-size: 28px; font-weight: 800; color: #2d2b6b; }
+  .stat .label { font-size: 11px; color: #888; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 6px 8px; border-bottom: 2px solid #e5e5e5; font-weight: 700; color: #555; }
+  td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
+  .achievement { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #f8f8ff; border-radius: 8px; margin: 4px; font-size: 12px; }
+  .footer { text-align: center; font-size: 11px; color: #aaa; margin-top: 32px; padding-top: 16px; border-top: 1px solid #eee; }
+</style>
+</head>
+<body>
+
+<h1>📊 学习成绩报告</h1>
+<p class="subtitle">{{ data.student.nickname }} · ELO {{ data.student.elo_score }} · 加入于 {{ data.student.date_joined|slice:":10" }}</p>
+
+<!-- 统计卡 -->
+<div class="grid-3">
+  <div class="stat">
+    <div class="value">{{ data.stats.total_attempted }}</div>
+    <div class="label">累计答题</div>
+  </div>
+  <div class="stat">
+    <div class="value">{{ data.stats.accuracy }}%</div>
+    <div class="label">正确率</div>
+  </div>
+  <div class="stat">
+    <div class="value">{{ data.stats.study_streak }} 天</div>
+    <div class="label">连续学习</div>
+  </div>
+</div>
+
+<div class="grid-3">
+  <div class="stat">
+    <div class="value">{{ data.stats.mastered_count }}</div>
+    <div class="label">已掌握题目</div>
+  </div>
+  <div class="stat">
+    <div class="value">{{ data.stats.checkin_streak }}</div>
+    <div class="label">连续签到</div>
+  </div>
+  <div class="stat">
+    <div class="value">{{ data.achievements|length }}</div>
+    <div class="label">已解锁成就</div>
+  </div>
+</div>
+
+<!-- 知识点掌握 -->
+{% if data.radar %}
+<div class="card">
+  <h2>📚 知识点掌握度</h2>
+  <table>
+    <tr><th>学科</th><th>平均掌握度</th><th>知识点数</th></tr>
+    {% for r in data.radar %}
+    <tr>
+      <td>{{ r.subject }}</td>
+      <td>{{ r.avg_mastery }}%</td>
+      <td>{{ r.kp_count }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<!-- 考试成绩 -->
+{% if data.exams %}
+<div class="card">
+  <h2>📝 最近考试成绩</h2>
+  <table>
+    <tr><th>日期</th><th>得分</th><th>百分比</th><th>ELO 变化</th></tr>
+    {% for e in data.exams|slice:":10" %}
+    <tr>
+      <td>{{ e.created_at|slice:":10" }}</td>
+      <td>{{ e.total_score }}/{{ e.max_score }}</td>
+      <td>{{ e.percentage }}%</td>
+      <td>{% if e.elo_change >= 0 %}+{% endif %}{{ e.elo_change }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<!-- 成就 -->
+{% if data.achievements %}
+<div class="card">
+  <h2>🏆 已解锁成就</h2>
+  {% for a in data.achievements %}
+  <span class="achievement">{{ a.icon }} {{ a.name }}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="footer">由 UniMind.ai 自动生成 · {{ data.student.nickname }} · 成绩报告</div>
+
+</body>
+</html>

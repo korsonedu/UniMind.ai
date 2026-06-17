@@ -20,14 +20,20 @@ export const CourseCenter: React.FC = () => {
   const navigate = useNavigate();
   const [allTags, setAllTags] = useState<any[]>([]);
   const [activeTags, setActiveTags] = useState<string[]>([]);
+  const [classes, setClasses] = useState<{ id: number; name: string }[]>([]);
+  const [classId, setClassId] = useState<number | null>(null);
 
   useEffect(() => {
     api.get('/courses/tags/').then(r => setAllTags(r.data || [])).catch(() => {});
+    api.get('/users/me/classes/').then(r => setClasses(r.data || [])).catch(() => {});
   }, []);
 
   const { t } = useTranslation('common');
-  const tagQuery = activeTags.length > 0 ? '?' + activeTags.map(t => `tag=${encodeURIComponent(t)}`).join('&') : '';
-  const fetchKey = 'courses' + activeTags.join(',');
+  const queryParams: string[] = [];
+  if (activeTags.length > 0) activeTags.forEach(t => queryParams.push(`tag=${encodeURIComponent(t)}`));
+  if (classId) queryParams.push(`class_id=${classId}`);
+  const tagQuery = queryParams.length > 0 ? '?' + queryParams.join('&') : '';
+  const fetchKey = `courses-${activeTags.join(',')}-${classId || 'all'}`;
 
   const { data: courses, loading, error, refetch } = useFetch<any[]>(
     (signal) => api.get(`/courses/${tagQuery}`, { signal }).then(r => r.data.items ?? r.data),
@@ -46,7 +52,7 @@ export const CourseCenter: React.FC = () => {
 
   if (loading) return (
     <PageWrapper title={t('pages:courseCenter.title')} subtitle={t('pages:courseCenter.subtitle')}>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {Array.from({ length: 10 }).map((_, i) => (
           <div key={i} className="rounded-2xl overflow-hidden bg-card border border-border/50">
             <Skeleton className="aspect-video w-full rounded-none" />
@@ -69,6 +75,32 @@ export const CourseCenter: React.FC = () => {
       subtitle={t('pages:courseCenter.subtitle')}
       action={ActionBtn}
     >
+      <div className="max-w-4xl mx-auto">
+      {classes.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-none">
+          <Badge
+            className={cn(
+              "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
+              !classId ? "bg-black text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            )}
+            onClick={() => setClassId(null)}
+          >
+            全部班级
+          </Badge>
+          {classes.map((c) => (
+            <Badge
+              key={c.id}
+              className={cn(
+                "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
+                classId === c.id ? "bg-black text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              )}
+              onClick={() => setClassId(c.id)}
+            >
+              {c.name}
+            </Badge>
+          ))}
+        </div>
+      )}
       {allTags.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-2 mb-2 scrollbar-none">
           {activeTags.length > 0 && (
@@ -139,6 +171,7 @@ export const CourseCenter: React.FC = () => {
              </Link>
            ))}
         </div>
+      </div>
     </PageWrapper>
   );
 };

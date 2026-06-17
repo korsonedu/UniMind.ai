@@ -108,6 +108,46 @@ class XiaoYuDashboardView(APIView):
             .count()
         )
 
+        # Daily check-in status
+        from users.models import DailyCheckIn
+        today_checkin = DailyCheckIn.objects.filter(user=user, date=now.date()).first()
+        checkin_streak = today_checkin.streak if today_checkin else 0
+
+        # Weekly activity heatmap (last 28 days)
+        heatmap_days = []
+        for i in range(27, -1, -1):
+            d = now.date() - timedelta(days=i)
+            count = ReviewLog.objects.filter(
+                user=user, review_time__date=d,
+            ).count()
+            heatmap_days.append({'date': d.isoformat(), 'count': count})
+
+        # 7-day check-in history
+        checkin_history = []
+        for i in range(6, -1, -1):
+            d = now.date() - timedelta(days=i)
+            record = DailyCheckIn.objects.filter(user=user, date=d).first()
+            checkin_history.append({
+                'date': d.isoformat(),
+                'checked_in': record is not None,
+            })
+
+        # Next achievements
+        from users.models import Achievement, UserAchievement
+        unlocked_keys = set(
+            UserAchievement.objects.filter(user=user)
+            .values_list('achievement__key', flat=True)
+        )
+        next_achievements = []
+        for a in Achievement.objects.filter(is_active=True).order_by('category', 'threshold'):
+            if a.key not in unlocked_keys:
+                next_achievements.append({
+                    'key': a.key, 'name': a.name, 'description': a.description,
+                    'icon': a.icon, 'category': a.category,
+                })
+                if len(next_achievements) >= 3:
+                    break
+
         return {
             'total_attempted': total,
             'correct_count': correct,
@@ -116,6 +156,12 @@ class XiaoYuDashboardView(APIView):
             'streak_days': streak,
             'weekly_activity': weekly_questions,
             'is_new_user': total == 0,
+            'today_checked_in': today_checkin is not None,
+            'checkin_streak': checkin_streak,
+            'checkin_history': checkin_history,
+            'heatmap_days': heatmap_days,
+            'unlocked_achievement_count': len(unlocked_keys),
+            'next_achievements': next_achievements,
         }
 
     # ── Mastery ───────────────────────────────────────────
