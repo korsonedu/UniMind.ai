@@ -64,6 +64,9 @@ const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
 const PlatformAnalytics = lazyNamed(() => import('./pages/PlatformAnalytics'), 'PlatformAnalytics');
 const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
 const NotFound = lazy(() => import('./pages/NotFound'));
+const OnlineExam = lazyNamed(() => import('./pages/OnlineExam'), 'OnlineExam');
+const Gradebook = lazyNamed(() => import('./pages/Gradebook'), 'Gradebook');
+const TeacherAssignments = lazyNamed(() => import('./pages/TeacherAssignments'), 'TeacherAssignments');
 const MyAssignments = lazy(() => import('./pages/MyAssignments'));
 const CourseManage = lazy(() => import('./pages/CourseManage'));
 const ArticleManage = lazy(() => import('./pages/ArticleManage'));
@@ -241,6 +244,7 @@ const router = createBrowserRouter([
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "my-assignments", element: lazyPage(MyAssignments) },
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
+          { path: "exam/:examId", element: lazyPage(OnlineExam) },
 
           { path: "workbench", element: <RequireInstitution>{lazyPage(Workbench)}</RequireInstitution> },
           { path: "assets", element: <RequireInstitution>{lazyPage(AssetHub)}</RequireInstitution> },
@@ -248,6 +252,8 @@ const router = createBrowserRouter([
           { path: "questions", element: <RequireInstitution>{lazyPage(TeacherQuestions)}</RequireInstitution> },
           { path: "institution", element: <RequireInstitution>{lazyPage(InstitutionDashboard)}</RequireInstitution> },
           { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
+          { path: "gradebook", element: <RequireInstitution>{lazyPage(Gradebook)}</RequireInstitution> },
+          { path: "teacher-assignments", element: <RequireInstitution>{lazyPage(TeacherAssignments)}</RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },
           { path: "institution/audit-logs", element: <RequireAdmin>{lazyPage(AuditLogs)}</RequireAdmin> },
           { path: "invite-codes", element: <RequirePlatformAdmin>{lazyPage(InviteCodeAdmin)}</RequirePlatformAdmin> },

@@ -432,6 +432,16 @@ class CourseListCreateView(generics.ListCreateAPIView):
                 tag__institution=self.request.user.institution,
             ).values('course_id').annotate(n=Count('id')).filter(n=len(tag))
             qs = qs.filter(id__in=[m['course_id'] for m in matching_qs])
+        class_id = self.request.query_params.get('class_id')
+        if class_id:
+            try:
+                from users.models import ClassCourse
+                course_ids = ClassCourse.objects.filter(
+                    class_obj_id=int(class_id)
+                ).values_list('course_id', flat=True)
+                qs = qs.filter(id__in=course_ids)
+            except (ValueError, TypeError):
+                pass
         return qs
 
     def list(self, request, *args, **kwargs):

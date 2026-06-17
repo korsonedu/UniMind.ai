@@ -182,6 +182,26 @@ EXAM_GENERATOR_TOOLS_META = [
         description="浏览机构文章库",
         body="查询本机构文章。参数: query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：标题、摘要、发布日期。适用于：教师说'看看文章''有没有关于X的文章'。不适用于：搜索知识点。",
     ),
+    ToolMeta(
+        name="list_classes",
+        description="获取机构下的所有班级列表",
+        body="查询当前机构的所有班级。参数: 无。返回：班级ID、名称、学生数。适用于：教师说'有哪些班''班级列表'。不适用于：查看班级成绩（用get_class_gradebook）。",
+    ),
+    ToolMeta(
+        name="assign_class_course",
+        description="将课程分配给指定班级",
+        body="创建班级与课程的关联。参数: class_id(int)=班级ID, course_id(int)=课程ID。返回：分配结果。适用于：教师说'把XX课程分配给X班''给X班加XX课'。不适用于：查看班级课程列表。",
+    ),
+    ToolMeta(
+        name="get_class_gradebook",
+        description="获取班级成绩册（学生×作业矩阵）",
+        body="查询班级内所有学生的作业成绩。参数: class_id(int)=班级ID。返回：学生列表、作业列表、每个学生在每项作业的得分。适用于：教师说'看看X班成绩''成绩册''X班学得怎么样'。不适用于：查看单个学生详情（用get_student_detail）。",
+    ),
+    ToolMeta(
+        name="grade_submissions",
+        description="批改学生作业提交",
+        body="为学生的作业提交打分。参数: submission_id(int)=提交ID, score(number)=评分, feedback(str)=评语(可选)。返回：更新后的提交信息。适用于：教师说'给XX分''批改这份作业'。不适用于：查看作业进度（用get_assignment_progress）。",
+    ),
 ]
 
 # bot_type → 工具元数据列表
@@ -345,6 +365,7 @@ EXAM_GENERATOR_INTENT_MAP = {
         "keywords": ["薄弱", "弱项", "薄弱点", "薄弱知识", "针对薄弱", "班级", "学情", "正确率低"],
         "tools": [
             "get_class_weak_points", "search_knowledge", "quick_generate",
+            "get_class_gradebook",
         ],
     },
     "refine": {
@@ -385,6 +406,7 @@ EXAM_GENERATOR_INTENT_MAP = {
                      "分配", "下发", "发下去", "布置给", "安排练习"],
         "tools": [
             "get_assignment_progress", "assign_practice",
+            "assign_class_course", "grade_submissions",
         ],
     },
     "browse": {
@@ -392,6 +414,7 @@ EXAM_GENERATOR_INTENT_MAP = {
                      "看看题库", "有什么题", "搜索题", "浏览", "资产", "有没有", "有哪些"],
         "tools": [
             "list_courses", "list_questions", "list_articles",
+            "list_classes",
         ],
     },
 }

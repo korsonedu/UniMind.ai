@@ -282,7 +282,21 @@ class PersonalizedMockExam(models.Model):
 class TeacherExam(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    exam_pdf = models.FileField(upload_to="teacher_exams/")
+    exam_pdf = models.FileField(upload_to="teacher_exams/", blank=True, null=True, help_text="PDF 模式试卷文件，online 模式可空")
+    # ── 在线考试字段 ──
+    EXAM_TYPES = (
+        ('pdf', 'PDF试卷'),
+        ('online', '在线考试'),
+    )
+    exam_type = models.CharField(max_length=10, choices=EXAM_TYPES, default='pdf', verbose_name='考试类型')
+    duration_minutes = models.PositiveIntegerField(null=True, blank=True, verbose_name='考试时长(分钟)')
+    start_time = models.DateTimeField(null=True, blank=True, verbose_name='开考时间')
+    end_time = models.DateTimeField(null=True, blank=True, verbose_name='截止时间')
+    shuffle_questions = models.BooleanField(default=True, verbose_name='题目乱序')
+    shuffle_options = models.BooleanField(default=True, verbose_name='选项乱序')
+    max_attempts = models.PositiveIntegerField(default=1, verbose_name='最大尝试次数')
+    passing_score = models.FloatField(null=True, blank=True, verbose_name='及格分数')
+    # ── 原有字段 ──
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="teacher_exams")
     institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="teacher_exams", verbose_name="所属机构")
@@ -342,6 +356,42 @@ class AssignmentSubmission(models.Model):
     class Meta:
         ordering = ['-submitted_at']
         unique_together = [('assignment', 'student')]
+
+
+class ExamQuestion(models.Model):
+    """在线考试的题目关联（带排序和分值）"""
+    exam = models.ForeignKey('TeacherExam', on_delete=models.CASCADE, related_name='exam_questions')
+    question = models.ForeignKey('Question', on_delete=models.CASCADE)
+    order = models.PositiveIntegerField(default=0)
+    points = models.FloatField(default=1.0, verbose_name='本题分值')
+
+    class Meta:
+        ordering = ['order']
+        unique_together = [('exam', 'question')]
+
+
+class OnlineExamAttempt(models.Model):
+    """学生在线考试作答记录"""
+    STATUS_CHOICES = (
+        ('in_progress', '作答中'),
+        ('submitted', '已提交'),
+        ('graded', '已批改'),
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='online_exam_attempts')
+    exam = models.ForeignKey('TeacherExam', on_delete=models.CASCADE, related_name='attempts')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in_progress')
+    started_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    answers = models.JSONField(default=dict, help_text='{question_id: user_answer}')
+    question_order = models.JSONField(default=list, help_text='该学生看到的题目顺序 [question_id, ...]')
+    score = models.FloatField(null=True, blank=True)
+    max_score = models.FloatField(null=True, blank=True)
+    # 逐题结果（判分后填充）
+    question_results = models.JSONField(default=list, blank=True, help_text='[{question_id, score, max_score, is_correct, feedback}]')
+
+    class Meta:
+        ordering = ['-started_at']
+        unique_together = [('user', 'exam')]
 
 
 class ExamTemplate(models.Model):

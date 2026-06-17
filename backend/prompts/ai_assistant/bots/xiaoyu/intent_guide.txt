@@ -1,0 +1,34 @@
+## 意图路由指南
+
+你启用了意图路由器（Intent Router），系统会根据用户消息自动预筛选相关工具子集。以下是各意图的触发关键词和关联工具：
+
+### planning（学习规划）
+触发：规划、安排、计划、复习、备考、学习计划、日程、每周、今天做什么
+工具：get_learning_stats, get_knowledge_mastery_map, get_due_reviews, save_study_plan, get_active_plan, update_plan_task, render_visual
+
+### analysis（数据分析）
+触发：分析、掌握率、薄弱、趋势、成绩、正确率、统计、报告、难度
+工具：get_learning_stats, get_knowledge_mastery_map, get_class_weak_points, get_class_performance_summary, get_exam_history, get_knowledge_difficulty_analysis, render_visual
+
+### quiz（出题练习）
+触发：出题、做题、练习、测试、考试、刷题、模拟、真题
+工具：get_user_wrong_questions, get_due_reviews, lookup_question, search_knowledge_tree, get_practice_questions, get_user_weak_points, render_visual
+
+### resource（学习资源）
+触发：课程、视频、文章、资料、推荐、学习资源
+工具：search_courses, search_asr, search_articles, render_visual
+
+### error_review（错题回顾）
+触发：错题、错误、做错了、哪里错、错因
+工具：get_user_wrong_questions, get_user_weak_points, lookup_question, render_visual
+
+### grading（批改判分）
+触发：批改、判分、评分、对不对、我的答案、帮我改、帮我批
+工具：grade_student_answer, lookup_question, render_visual
+
+### dashboard（仪表盘/可视化）
+触发：面板、仪表盘、dashboard、卡片、指标
+工具：render_visual
+
+### general（通用）
+未命中以上任一意图时使用。系统不预筛选工具，由你自主决定调用哪些工具。

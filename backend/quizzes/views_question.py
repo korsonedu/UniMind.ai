@@ -712,3 +712,41 @@ class AssignmentGradeView(APIView):
             'graded_at': sub.graded_at.isoformat(),
             'message': f'已评分 {sub.score} 分',
         })
+
+
+class TeacherAssignmentListView(APIView):
+    """GET /api/quizzes/teacher-assignments/ — 教师查看自己创建的作业列表。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        institution = getattr(user, 'institution', None)
+        if not institution:
+            return Response({'error': '无机构归属'}, status=403)
+
+        role = getattr(user, 'institution_role', '')
+        if role not in ('teacher', 'owner'):
+            return Response({'error': '仅教师/机构主可查看'}, status=403)
+
+        assignments = Assignment.objects.filter(
+            institution=institution, created_by=user
+        ).order_by('-created_at')
+
+        data = []
+        for a in assignments:
+            submissions = AssignmentSubmission.objects.filter(assignment=a)
+            submitted = submissions.count()
+            graded = submissions.filter(score__isnull=False).count()
+            data.append({
+                'id': a.id,
+                'title': a.title,
+                'status': a.status,
+                'due_date': a.due_date.isoformat() if a.due_date else None,
+                'question_count': a.assignment_questions.count(),
+                'submitted_count': submitted,
+                'graded_count': graded,
+                'class_count': a.target_classes.count(),
+                'created_at': a.created_at.isoformat(),
+            })
+
+        return Response(data)

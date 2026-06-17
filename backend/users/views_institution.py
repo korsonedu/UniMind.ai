@@ -1,5 +1,7 @@
+import csv
 import logging
 from django.db import transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.views import APIView
@@ -13,7 +15,7 @@ from datetime import timedelta
 logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
-from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS
+from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS, ClassCourse
 
 User = get_user_model()
 from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionOwner, IsInstitutionActive, IsInstitutionMember, is_platform_admin
@@ -1470,3 +1472,254 @@ class InstitutionBulkInitView(APIView):
             'max_questions': 500,
             'available_subjects': subjects[:20],  # 最多 20 个学科
         })
+
+
+# ── Class Course Management ──
+
+class ClassCourseManageView(APIView):
+    """POST/GET /api/users/institution/me/class-courses/ — 管理班级课程分配。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        qs = ClassCourse.objects.filter(institution=inst).select_related('class_obj', 'course').order_by('-created_at')
+        data = []
+        for cc in qs:
+            data.append({
+                'id': cc.id,
+                'class_id': cc.class_obj_id,
+                'class_name': cc.class_obj.name,
+                'course_id': cc.course_id,
+                'course_title': cc.course.title,
+                'created_at': cc.created_at.isoformat(),
+            })
+        return Response(data)
+
+    def post(self, request):
+        inst = request.user.institution
+        class_id = request.data.get('class_id')
+        course_id = request.data.get('course_id')
+        if not class_id or not course_id:
+            return Response({'error': '缺少 class_id 或 course_id'}, status=400)
+
+        try:
+            class_obj = ClassModel.objects.get(id=int(class_id), institution=inst)
+        except (ClassModel.DoesNotExist, ValueError, TypeError):
+            return Response({'error': '班级不存在'}, status=404)
+
+        from courses.models import Course
+        if not Course.objects.filter(id=int(course_id), institution=inst).exists():
+            return Response({'error': '课程不存在或不属于本机构'}, status=404)
+
+        try:
+            cc = ClassCourse.objects.create(
+                class_obj=class_obj, course_id=int(course_id), institution=inst,
+            )
+            return Response({
+                'id': cc.id,
+                'class_id': cc.class_obj_id,
+                'class_name': cc.class_obj.name,
+                'course_id': cc.course_id,
+                'course_title': cc.course.title,
+                'created_at': cc.created_at.isoformat(),
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': f'创建失败: {str(e)}'}, status=400)
+
+    def delete(self, request, pk=None):
+        inst = request.user.institution
+        cc_id = pk if pk else request.data.get('class_course_id')
+        if not cc_id:
+            return Response({'error': '缺少 class_course_id'}, status=400)
+        try:
+            cc = ClassCourse.objects.get(id=int(cc_id), institution=inst)
+            cc.delete()
+            return Response({'status': 'deleted'})
+        except (ClassCourse.DoesNotExist, ValueError, TypeError):
+            return Response({'error': '分配不存在'}, status=404)
+
+
+class StudentClassCourseView(APIView):
+    """GET /api/users/me/class-courses/ — 学生查看自己班级分配的课程。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        class_ids = user.classes.values_list('id', flat=True)
+        if not class_ids:
+            return Response([])
+
+        qs = ClassCourse.objects.filter(
+            class_obj_id__in=class_ids,
+        ).select_related('class_obj', 'course').order_by('-created_at')
+
+        data = []
+        seen = set()
+        for cc in qs:
+            if cc.course_id in seen:
+                continue
+            seen.add(cc.course_id)
+            data.append({
+                'class_id': cc.class_obj_id,
+                'class_name': cc.class_obj.name,
+                'course_id': cc.course_id,
+                'course_title': cc.course.title,
+                'created_at': cc.created_at.isoformat(),
+            })
+        return Response(data)
+
+
+class ClassGradebookView(APIView):
+    """GET /api/users/institution/me/gradebook/?class_id=X — 班级成绩册（学生 × 作业矩阵）。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        class_id = request.query_params.get('class_id')
+        if not class_id:
+            return Response({'error': '缺少 class_id 参数'}, status=400)
+
+        try:
+            class_obj = ClassModel.objects.get(id=int(class_id), institution=inst)
+        except (ClassModel.DoesNotExist, ValueError, TypeError):
+            return Response({'error': '班级不存在'}, status=404)
+
+        from quizzes.models import Assignment, AssignmentSubmission
+
+        assignments = Assignment.objects.filter(
+            target_classes=class_obj, institution=inst,
+        ).order_by('-created_at')
+
+        assignment_list = []
+        for a in assignments:
+            assignment_list.append({
+                'id': a.id,
+                'title': a.title,
+                'due_date': a.due_date.isoformat() if a.due_date else None,
+            })
+
+        students = class_obj.students.all().order_by('id')
+        student_list = []
+        for student in students:
+            submissions = AssignmentSubmission.objects.filter(
+                student=student, assignment__in=assignments,
+            ).select_related('assignment')
+            sub_map = {s.assignment_id: s for s in submissions}
+
+            scores = []
+            for a in assignments:
+                sub = sub_map.get(a.id)
+                max_score = sum(aq.points for aq in a.assignment_questions.all())
+                scores.append({
+                    'assignment_id': a.id,
+                    'assignment_title': a.title,
+                    'score': sub.score if sub else None,
+                    'submitted': sub is not None,
+                    'max_score': max_score if max_score > 0 else None,
+                })
+
+            student_list.append({
+                'id': student.id,
+                'name': student.nickname or student.username,
+                'scores': scores,
+            })
+
+        return Response({
+            'class_name': class_obj.name,
+            'students': student_list,
+            'assignments': assignment_list,
+        })
+
+
+class InstitutionBusinessDashboardView(APIView):
+    """GET /api/users/institution/me/business-dashboard/ — 机构商业指标仪表盘。"""
+    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        now = timezone.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        student_count = inst.students.filter(institution_role='student').count()
+
+        from quizzes.models import ReviewLog
+        active_student_ids = ReviewLog.objects.filter(
+            user__institution=inst,
+            user__institution_role='student',
+            review_time__gte=month_start,
+        ).values('user_id').distinct()
+        active_this_month = active_student_ids.count()
+
+        from quizzes.models import Assignment
+        total_assignments = Assignment.objects.filter(institution=inst).count()
+
+        from courses.models import Course
+        total_courses = Course.objects.filter(institution=inst).count()
+
+        retention_rate = 0.0
+        if student_count > 0:
+            retention_rate = round(active_this_month / student_count * 100, 1)
+
+        return Response({
+            'student_count': student_count,
+            'active_students_this_month': active_this_month,
+            'total_assignments': total_assignments,
+            'total_courses': total_courses,
+            'revenue': 0,
+            'retention_rate': retention_rate,
+        })
+
+
+class InstitutionDataExportView(APIView):
+    """GET /api/users/institution/me/data-export/ — 导出机构数据为 CSV/JSON。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        export_type = request.query_params.get('type', 'students')
+
+        if export_type == 'students':
+            students = inst.students.filter(institution_role='student').order_by('-date_joined')
+            response = HttpResponse(content_type='text/csv; charset=utf-8')
+            response['Content-Disposition'] = 'attachment; filename="students.csv"'
+            response.write('﻿')  # BOM for Excel UTF-8 compatibility
+            writer = csv.writer(response)
+            writer.writerow(['姓名', '邮箱', 'ELO', '加入日期'])
+            for s in students:
+                writer.writerow([
+                    s.nickname or s.username,
+                    s.email,
+                    s.elo_score,
+                    s.date_joined.strftime('%Y-%m-%d') if s.date_joined else '',
+                ])
+            return response
+
+        elif export_type == 'assignments':
+            from quizzes.models import Assignment, AssignmentSubmission
+            from django.db.models import Count, Avg
+            assignments = Assignment.objects.filter(institution=inst).order_by('-created_at')
+            response = HttpResponse(content_type='text/csv; charset=utf-8')
+            response['Content-Disposition'] = 'attachment; filename="assignments.csv"'
+            response.write('﻿')
+            writer = csv.writer(response)
+            writer.writerow(['作业标题', '提交数', '平均分'])
+            for a in assignments:
+                subs = AssignmentSubmission.objects.filter(assignment=a)
+                submitted = subs.count()
+                avg_score = subs.aggregate(avg=Avg('score'))['avg']
+                writer.writerow([
+                    a.title,
+                    submitted,
+                    round(avg_score, 1) if avg_score else '',
+                ])
+            return response
+
+        elif export_type == 'usage':
+            return Response({
+                'export_type': 'usage',
+                'message': '使用数据导出暂不可用',
+                'student_count': inst.students.filter(institution_role='student').count(),
+                'teacher_count': inst.students.filter(institution_role='teacher').count(),
+            })
+
+        return Response({'error': f'不支持的导出类型: {export_type}'}, status=400)

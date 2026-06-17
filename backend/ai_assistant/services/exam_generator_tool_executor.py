@@ -678,3 +678,169 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                 for a in articles
             ],
         }
+
+    # ── 班级/课程管理工具 ───────────────────────────────────────
+
+    def _handle_list_classes(self, args: Dict) -> Dict:
+        """获取机构下的所有班级列表。"""
+        from users.models import Class as ClassModel
+
+        if not self.institution:
+            return {"error": "仅机构成员可使用此功能"}
+
+        classes = ClassModel.objects.filter(institution=self.institution)
+        result = []
+        for cls in classes:
+            result.append({
+                "id": cls.id,
+                "name": cls.name,
+                "student_count": cls.students.count(),
+            })
+        return {
+            "classes": result,
+            "total": len(result),
+        }
+
+    def _handle_assign_class_course(self, args: Dict) -> Dict:
+        """将课程分配给班级（仅教师/机构主可用）。"""
+        from users.models import Class as ClassModel, ClassCourse
+        from courses.models import Course
+
+        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+            return {"error": "仅教师/机构主可使用此功能"}
+
+        class_id = args.get('class_id')
+        course_id = args.get('course_id')
+        if not class_id or not course_id:
+            return {"error": "请提供 class_id 和 course_id"}
+
+        try:
+            class_obj = ClassModel.objects.get(id=int(class_id), institution=self.institution)
+        except ClassModel.DoesNotExist:
+            return {"error": f"班级 #{class_id} 不存在"}
+
+        try:
+            course = Course.objects.get(id=int(course_id), institution=self.institution)
+        except Course.DoesNotExist:
+            return {"error": f"课程 #{course_id} 不存在"}
+
+        try:
+            cc = ClassCourse.objects.create(
+                class_obj=class_obj,
+                course=course,
+                institution=self.institution,
+            )
+        except Exception:
+            return {"error": f"课程「{course.title}」已分配给班级「{class_obj.name}」"}
+
+        return {
+            "id": cc.id,
+            "class_id": class_obj.id,
+            "class_name": class_obj.name,
+            "course_id": course.id,
+            "course_title": course.title,
+            "message": f"已将课程「{course.title}」分配给班级「{class_obj.name}」",
+        }
+
+    def _handle_get_class_gradebook(self, args: Dict) -> Dict:
+        """获取班级成绩册（仅教师/机构主可用）。"""
+        from users.models import Class as ClassModel
+        from quizzes.models import Assignment, AssignmentSubmission
+
+        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+            return {"error": "仅教师/机构主可使用此功能"}
+
+        class_id = args.get('class_id')
+        if not class_id:
+            return {"error": "请提供 class_id"}
+
+        try:
+            class_obj = ClassModel.objects.get(id=int(class_id), institution=self.institution)
+        except ClassModel.DoesNotExist:
+            return {"error": f"班级 #{class_id} 不存在"}
+
+        students = class_obj.students.all()
+        assignments = Assignment.objects.filter(
+            target_classes=class_obj, institution=self.institution,
+        ).order_by('-created_at')
+
+        students_data = []
+        for student in students:
+            student_scores = []
+            for assignment in assignments:
+                max_score = sum(
+                    assignment.assignment_questions.values_list('points', flat=True)
+                ) or assignment.assignment_questions.count()
+                try:
+                    sub = AssignmentSubmission.objects.get(
+                        assignment=assignment, student=student,
+                    )
+                    student_scores.append({
+                        "assignment_id": assignment.id,
+                        "assignment_title": assignment.title,
+                        "score": sub.score,
+                        "max_score": max_score,
+                        "submitted": True,
+                        "graded": sub.score is not None,
+                    })
+                except AssignmentSubmission.DoesNotExist:
+                    student_scores.append({
+                        "assignment_id": assignment.id,
+                        "assignment_title": assignment.title,
+                        "score": None,
+                        "max_score": max_score,
+                        "submitted": False,
+                        "graded": False,
+                    })
+            students_data.append({
+                "id": student.id,
+                "name": student.nickname or student.username,
+                "scores": student_scores,
+            })
+
+        return {
+            "class_name": class_obj.name,
+            "student_count": len(students_data),
+            "assignment_count": assignments.count(),
+            "students": students_data,
+        }
+
+    def _handle_grade_submissions(self, args: Dict) -> Dict:
+        """批改学生作业提交（仅教师/机构主可用）。"""
+        from quizzes.models import AssignmentSubmission
+        from django.utils import timezone
+
+        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+            return {"error": "仅教师/机构主可使用此功能"}
+
+        submission_id = args.get('submission_id')
+        score = args.get('score')
+        feedback = (args.get('feedback') or '').strip()
+
+        if not submission_id or score is None:
+            return {"error": "请提供 submission_id 和 score"}
+
+        try:
+            submission = AssignmentSubmission.objects.select_related(
+                'assignment__institution', 'student',
+            ).get(id=int(submission_id))
+        except AssignmentSubmission.DoesNotExist:
+            return {"error": f"提交 #{submission_id} 不存在"}
+
+        if submission.assignment.institution_id != self.institution.id:
+            return {"error": "无权批改此提交"}
+
+        submission.score = float(score)
+        submission.graded_by = self.user
+        submission.graded_at = timezone.now()
+        submission.save(update_fields=['score', 'graded_by', 'graded_at'])
+
+        return {
+            "submission_id": submission.id,
+            "assignment_id": submission.assignment_id,
+            "student_name": submission.student.nickname or submission.student.username,
+            "score": submission.score,
+            "feedback": feedback or None,
+            "graded_by": self.user.nickname or self.user.username,
+            "graded_at": submission.graded_at.isoformat(),
+        }

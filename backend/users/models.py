@@ -249,6 +249,25 @@ class Class(models.Model):
         return f"{self.institution.name} - {self.name}"
 
 
+class ClassCourse(models.Model):
+    """班级与课程的关联，支持按班级分发课程。"""
+    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='class_courses', verbose_name="班级")
+    course = models.ForeignKey('courses.Course', on_delete=models.CASCADE, related_name='class_courses', verbose_name="课程")
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='class_courses', verbose_name="所属机构")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        verbose_name = '班级课程'
+        verbose_name_plural = '班级课程'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(fields=['class_obj', 'course'], name='unique_class_course'),
+        ]
+
+    def __str__(self):
+        return f"{self.class_obj.name} ← {self.course.title}"
+
+
 # ── Plan features utility ──
 DEFAULT_DURATION_DAYS = 30
 DURATION_PERMANENT = 0

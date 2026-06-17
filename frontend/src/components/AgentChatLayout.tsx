@@ -3,7 +3,7 @@ import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle } from '@phosphor-icons/react';
+import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, CaretDown } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -100,6 +100,9 @@ export interface AgentChatLayoutProps {
 
   /** 当 hasConversation 状态变化时回调，用于父组件同步布局 */
   onHasConversation?: (hasConversation: boolean) => void;
+
+  /** Landing 页面标题下方额外内容（如数据卡片） */
+  landingBanner?: React.ReactNode;
 }
 
 // ── Component ──
@@ -118,11 +121,13 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     toolbarAction,
     layout = 'split',
     onHasConversation,
+    landingBanner,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
   const [visual, setVisual] = useState<VisualData | VisualData[] | null>(null);
   const pendingVisualsRef = useRef<VisualData[]>([]);
+  const dashboardRef = useRef<HTMLDivElement>(null);
 
   const {
     bot, messages, input, loading, isComposing, initialized, skillOpen,
@@ -295,109 +300,133 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (!hasConversation) {
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full flex flex-col items-center justify-center px-4 animate-in fade-in duration-500">
-          <div className="w-full max-w-2xl">
-            <div className="space-y-2 mb-6">
-              <div className="flex items-center gap-2.5">
-                <img src="/unimind_logo_small.png" alt="UniMind" className="h-7 w-7 rounded-lg shrink-0" />
-                <h1 className="text-3xl font-extrabold tracking-tight text-foreground/90">{landingTitle}</h1>
+        <div className="h-full overflow-y-scroll animate-in fade-in duration-500" style={{ scrollSnapType: 'y mandatory' }}>
+          {/* 内层：恰好一屏高度，flex 居中输入框 */}
+          <div className="h-full flex flex-col items-center justify-center px-4" style={{ scrollSnapAlign: 'start' }}>
+            <div className="w-full max-w-2xl">
+              <div className="space-y-2 mb-6">
+                <div className="flex items-center gap-2.5">
+                  <img src="/unimind_logo_small.png" alt="UniMind" className="h-7 w-7 rounded-lg shrink-0" />
+                  <h1 className="text-3xl font-extrabold tracking-tight text-foreground/90">{landingTitle}</h1>
+                </div>
+                <p className="text-xs text-foreground/60">{landingDescription}</p>
               </div>
-              <p className="text-xs text-foreground/60">{landingDescription}</p>
-            </div>
 
-            <div className="bg-card rounded-2xl border border-border/50 shadow-lg overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
-              <textarea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onCompositionStart={() => setIsComposition(true)}
-                onCompositionEnd={() => setIsComposition(false)}
-                placeholder={placeholder}
-                autoComplete="off"
-                className="w-full bg-transparent border-none resize-none text-sm px-4 py-3 placeholder:text-muted-foreground/55 focus:outline-none min-h-[64px]"
-                disabled={loading}
-              />
-              <div className="flex items-center justify-end gap-1.5 px-3 py-2">
-                <Popover open={skillOpen} onOpenChange={setSkillOpen}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <PopoverTrigger asChild>
-                        <button className={cn("p-1 rounded-md transition-colors", skillOpen ? "text-primary/60 bg-muted" : "text-muted-foreground/55 hover:text-foreground/65 hover:bg-muted/50")}>
-                          <Lightbulb className="h-3.5 w-3.5" />
-                        </button>
-                      </PopoverTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-[10px]">{skillTooltip}</TooltipContent>
-                  </Tooltip>
-                  <PopoverContent align="end" side="top" className="w-48 p-1 rounded-xl border-border/60 shadow-lg">
-                    <div className="space-y-0.5">
-                      {skills.map(skill => (
-                        <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
-                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left">
-                          <skill.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-                          <span className="text-[12px] font-medium">{skill.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                {toolbarAction && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button onClick={toolbarAction.onClick}
-                        className="p-1 rounded-md text-muted-foreground/55 hover:text-foreground/65 hover:bg-muted/50 transition-colors">
-                        <toolbarAction.icon className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-[10px]">{toolbarAction.tooltip}</TooltipContent>
-                  </Tooltip>
-                )}
-                <Button
-                  onClick={() => doSend(input)}
-                  disabled={loading || !input.trim()}
-                  size="icon"
-                  className="rounded-lg h-8 w-8 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90"
-                >
-                  {loading ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <PaperPlaneTilt className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
-            </div>
-
-            {sessions.length > 0 && (
-              <div className="flex justify-center mt-6">
-                <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
-                  <PopoverTrigger asChild>
-                    <button className="text-sm text-muted-foreground/65 hover:text-foreground/70 transition-colors flex items-center gap-1.5">
-                      <ClockCounterClockwise className="h-3.5 w-3.5" />
-                      {sessions.length} 个历史对话
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" side="top" className="w-72 p-1.5 rounded-lg border-border/60 shadow-lg max-h-64 overflow-y-auto">
-                    <div className="space-y-0.5">
-                      {[...sessions].reverse().map(session => (
-                        <div key={session.id}
-                          className="w-full flex items-start gap-1.5 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors group">
-                          <button onClick={() => wrappedLoadSession(session)}
-                            className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
-                            <span className="text-[12px] font-medium truncate">{session.label}</span>
-                            <span className="text-[10px] text-muted-foreground/50">
-                              {session.messages.length} 条消息
-                              {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
-                            </span>
+              <div className="bg-card rounded-2xl border border-border/50 shadow-lg overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+                <textarea
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onCompositionStart={() => setIsComposition(true)}
+                  onCompositionEnd={() => setIsComposition(false)}
+                  placeholder={placeholder}
+                  autoComplete="off"
+                  className="w-full bg-transparent border-none resize-none text-sm px-4 py-3 placeholder:text-muted-foreground/55 focus:outline-none min-h-[64px]"
+                  disabled={loading}
+                />
+                <div className="flex items-center justify-end gap-1.5 px-3 py-2">
+                  <Popover open={skillOpen} onOpenChange={setSkillOpen}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <PopoverTrigger asChild>
+                          <button className={cn("p-1 rounded-md transition-colors", skillOpen ? "text-primary/60 bg-muted" : "text-muted-foreground/55 hover:text-foreground/65 hover:bg-muted/50")}>
+                            <Lightbulb className="h-3.5 w-3.5" />
                           </button>
-                          {onDeleteSession && (
-                            <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
-                              className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
-                              <Trash className="h-2.5 w-2.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                        </PopoverTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-[10px]">{skillTooltip}</TooltipContent>
+                    </Tooltip>
+                    <PopoverContent align="end" side="top" className="w-48 p-1 rounded-xl border-border/60 shadow-lg">
+                      <div className="space-y-0.5">
+                        {skills.map(skill => (
+                          <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
+                            className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left">
+                            <skill.icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                            <span className="text-[12px] font-medium">{skill.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  {toolbarAction && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button onClick={toolbarAction.onClick}
+                          className="p-1 rounded-md text-muted-foreground/55 hover:text-foreground/65 hover:bg-muted/50 transition-colors">
+                          <toolbarAction.icon className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-[10px]">{toolbarAction.tooltip}</TooltipContent>
+                    </Tooltip>
+                  )}
+                  <Button
+                    onClick={() => doSend(input)}
+                    disabled={loading || !input.trim()}
+                    size="icon"
+                    className="rounded-lg h-8 w-8 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90"
+                  >
+                    {loading ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <PaperPlaneTilt className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
               </div>
-            )}
+
+              {sessions.length > 0 && (
+                <div className="flex justify-center mt-6">
+                  <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
+                    <PopoverTrigger asChild>
+                      <button className="text-sm text-muted-foreground/65 hover:text-foreground/70 transition-colors flex items-center gap-1.5">
+                        <ClockCounterClockwise className="h-3.5 w-3.5" />
+                        {sessions.length} 个历史对话
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" side="top" className="w-72 p-1.5 rounded-lg border-border/60 shadow-lg max-h-64 overflow-y-auto">
+                      <div className="space-y-0.5">
+                        {[...sessions].reverse().map(session => (
+                          <div key={session.id}
+                            className="w-full flex items-start gap-1.5 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors group">
+                            <button onClick={() => wrappedLoadSession(session)}
+                              className="flex-1 flex flex-col gap-0.5 text-left min-w-0">
+                              <span className="text-[12px] font-medium truncate">{session.label}</span>
+                              <span className="text-[10px] text-muted-foreground/50">
+                                {session.messages.length} 条消息
+                                {session.lastTime && ` · ${new Date(session.lastTime).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
+                              </span>
+                            </button>
+                            {onDeleteSession && (
+                              <button onClick={(e) => { e.stopPropagation(); onDeleteSession(session); }}
+                                className="shrink-0 mt-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground/40 hover:text-destructive transition-all">
+                                <Trash className="h-2.5 w-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+
+              {/* 向下滚动引导 */}
+              {landingBanner && (
+                <div className="flex justify-center mt-6">
+                  <button
+                    onClick={() => dashboardRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                    className="flex flex-col items-center gap-1 text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors group"
+                  >
+                    <span className="text-[10px] font-medium">学习概览</span>
+                    <CaretDown className="w-3.5 h-3.5 animate-bounce group-hover:animate-none" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* 卡片区：在内层外面，不受居中逻辑影响 */}
+          {landingBanner && (
+            <div ref={dashboardRef} className="w-full max-w-2xl mx-auto px-4 py-6 min-h-full flex flex-col justify-center" style={{ scrollSnapAlign: 'start' }}>
+              <p className="text-[11px] font-bold text-muted-foreground/50 mb-4">学习概览</p>
+              {landingBanner}
+            </div>
+          )}
         </div>
       </TooltipProvider>
     );

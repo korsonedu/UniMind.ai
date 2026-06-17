@@ -4,7 +4,7 @@ from .views_question import (
     AdminQuestionListView, ExportStructuredQuestionsView, ImportCSVQuestionsView,
     AssignmentCreateView, ClassListView,
     StudentAssignmentListView, StudentAssignmentDetailView, StudentAssignmentSubmitView,
-    AssignmentSubmissionListView, AssignmentGradeView,
+    AssignmentSubmissionListView, AssignmentGradeView, TeacherAssignmentListView,
 )
 from .views_exam import (
     TeacherExamListView, TeacherExamCreateView, TeacherExamDeleteView,
@@ -39,6 +39,10 @@ from .views_knowledge_edge import (
     KnowledgeEdgeBulkCreateView, KnowledgeEdgeLLMAnalyzeView,
     KnowledgeEdgeReviewListView, KnowledgeEdgeReviewActionView,
 )
+from .views_online_exam import (
+    OnlineExamCreateView, OnlineExamStartView, OnlineExamSubmitView,
+    OnlineExamResultView, OnlineExamTeacherResultsView, OnlineExamQuestionListView,
+)
 
 urlpatterns = [
     path('questions/', QuestionListView.as_view(), name='question-list'),
@@ -51,6 +55,14 @@ urlpatterns = [
     path('teacher-exams/<int:pk>/submit/', StudentExamSubmissionView.as_view(), name='teacher-exam-submit'),
     path('teacher-exams/<int:pk>/submissions/', TeacherExamSubmissionsView.as_view(), name='teacher-exam-submissions'),
     path('teacher-exams/submissions/<int:pk>/grade/', TeacherGradeSubmissionView.as_view(), name='teacher-exam-grade'),
+    # 在线考试
+    path('online-exams/create/', OnlineExamCreateView.as_view(), name='online-exam-create'),
+    path('online-exams/<int:pk>/update/', OnlineExamCreateView.as_view(), name='online-exam-update'),
+    path('online-exams/<int:pk>/questions/', OnlineExamQuestionListView.as_view(), name='online-exam-questions'),
+    path('online-exams/<int:pk>/start/', OnlineExamStartView.as_view(), name='online-exam-start'),
+    path('online-exams/<int:pk>/submit/', OnlineExamSubmitView.as_view(), name='online-exam-submit'),
+    path('online-exams/<int:pk>/result/', OnlineExamResultView.as_view(), name='online-exam-result'),
+    path('online-exams/<int:pk>/results/', OnlineExamTeacherResultsView.as_view(), name='online-exam-teacher-results'),
     path('stats/', QuizStatsView.as_view(), name='quiz-stats'),
     path('memorix/curve/', MemorixCurveView.as_view(), name='memorix-curve'),
     path('memorix/optimization-history/', MemorixOptimizationHistoryView.as_view(), name='memorix-optimization-history'),
@@ -82,6 +94,7 @@ urlpatterns = [
     path('assignments/submit/', StudentAssignmentSubmitView.as_view(), name='student-assignment-submit'),
     path('assignments/<int:pk>/submissions/', AssignmentSubmissionListView.as_view(), name='assignment-submissions'),
     path('assignments/submissions/<int:pk>/grade/', AssignmentGradeView.as_view(), name='assignment-grade'),
+    path('teacher-assignments/', TeacherAssignmentListView.as_view(), name='teacher-assignment-list'),
     path('classes/', ClassListView.as_view(), name='class-list'),
     path('admin/questions/', AdminQuestionListView.as_view(), name='admin-question-list'),
     path('admin/export-structured/', ExportStructuredQuestionsView.as_view(), name='export-structured'),

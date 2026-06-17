@@ -101,17 +101,17 @@ export const Settings: React.FC = () => {
                 <SheetContent side="right" className="rounded-l-[2.5rem] border-none bg-white/95 backdrop-blur-2xl shadow-2xl w-[450px]">
                   <SheetHeader className="p-8 border-b border-black/[0.03]"><SheetTitle className="text-2xl font-bold text-left">{t('avatar.lab')}</SheetTitle></SheetHeader>
                   <div className="p-8 space-y-10">
-                    <div className="flex justify-center py-10 bg-slate-50 rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-white shadow-lg"><AvatarImage src={previewUrl} /></Avatar></div>
+                    <div className="flex justify-center py-10 bg-muted rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-white shadow-lg"><AvatarImage src={previewUrl} /></Avatar></div>
                     <div className="space-y-6 text-left">
                       <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('avatar.styleLabel')}</Label>
                         <Select value={avatar.style} onValueChange={(v) => setAvatar({...avatar, style: v})}>
-                          <SelectTrigger className="h-12 rounded-2xl bg-slate-50 border-none font-bold"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-12 rounded-2xl bg-muted border-none font-bold"><SelectValue /></SelectTrigger>
                           <SelectContent className="rounded-2xl border-none shadow-lg">
                             {AVATAR_STYLE_IDS.map(id => <SelectItem key={id} value={id} className="rounded-xl py-3 px-4"><div className="flex items-center gap-3 font-bold">{t(`avatar.styles.${id}` as any)}</div></SelectItem>)}
                           </SelectContent>
                         </Select></div>
                       <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('avatar.seedLabel')}</Label>
-                        <div className="flex gap-3"><Input value={avatar.seed} onChange={e => setAvatar({ ...avatar, seed: e.target.value })} className="bg-slate-50 border-none h-12 rounded-2xl font-bold" /><Button variant="outline" onClick={() => setAvatar({...avatar, seed: Math.random().toString(36).substring(7)})} className="rounded-2xl h-12 w-12 border-black/5"><ArrowCounterClockwise className="h-4 w-4" /></Button></div></div>
+                        <div className="flex gap-3"><Input value={avatar.seed} onChange={e => setAvatar({ ...avatar, seed: e.target.value })} className="bg-muted border-none h-12 rounded-2xl font-bold" /><Button variant="outline" onClick={() => setAvatar({...avatar, seed: Math.random().toString(36).substring(7)})} className="rounded-2xl h-12 w-12 border-black/5"><ArrowCounterClockwise className="h-4 w-4" /></Button></div></div>
                     </div>
                   </div>
                 </SheetContent>
@@ -125,8 +125,8 @@ export const Settings: React.FC = () => {
              <div className="space-y-6 text-left">
                 <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('security.title')}</h4>
                 <div className="space-y-4">
-                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.emailLabel')}</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder={t('security.emailPlaceholder')} autoComplete="email" spellCheck={false} className="bg-unimind-bg-secondary border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.emailUpdate')}</Button></div></div>
-                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.passwordLabel')}</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder={t('security.oldPassword')} autoComplete="current-password" spellCheck={false} className="bg-unimind-bg-secondary border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder={t('security.newPassword')} autoComplete="new-password" spellCheck={false} className="bg-unimind-bg-secondary border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.passwordReset')}</Button></div></div>
+                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.emailLabel')}</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder={t('security.emailPlaceholder')} autoComplete="email" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.emailUpdate')}</Button></div></div>
+                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.passwordLabel')}</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder={t('security.oldPassword')} autoComplete="current-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder={t('security.newPassword')} autoComplete="new-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.passwordReset')}</Button></div></div>
                 </div>
              </div>
           </Card>
@@ -157,12 +157,12 @@ export const Settings: React.FC = () => {
              <div className="space-y-8 text-left">
                <div className="space-y-3">
                  <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.nicknameLabel')}</Label>
-                 <Input value={profile.nickname} onChange={e => setProfile({...profile, nickname: e.target.value})} className="bg-unimind-bg-secondary border-none h-12 rounded-2xl font-bold px-5" />
+                 <Input value={profile.nickname} onChange={e => setProfile({...profile, nickname: e.target.value})} className="bg-muted border-none h-12 rounded-2xl font-bold px-5" />
                  <p className="text-[10px] text-muted-foreground font-bold ml-1 uppercase">{t('profile.usernameNote', { username: user?.username })}</p>
                </div>
                <div className="space-y-3">
                  <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.bioLabel')}</Label>
-                 <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-unimind-bg-secondary border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder={t('profile.bioPlaceholder')} />
+                 <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-muted border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder={t('profile.bioPlaceholder')} />
                </div>
                <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><FloppyDisk className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
              </div>

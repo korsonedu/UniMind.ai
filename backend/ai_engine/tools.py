@@ -894,9 +894,41 @@ LIST_ARTICLES_SCHEMA = {
     },
 }
 
+LIST_CLASSES_SCHEMA = {
+    "type": "object",
+    "properties": {},
+}
+
+ASSIGN_CLASS_COURSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "class_id": {"type": "integer", "description": "班级 ID"},
+        "course_id": {"type": "integer", "description": "课程 ID"},
+    },
+    "required": ["class_id", "course_id"],
+}
+
+GET_CLASS_GRADEBOOK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "class_id": {"type": "integer", "description": "班级 ID"},
+    },
+    "required": ["class_id"],
+}
+
+GRADE_SUBMISSIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "submission_id": {"type": "integer", "description": "提交 ID"},
+        "score": {"type": "number", "description": "评分"},
+        "feedback": {"type": "string", "description": "评语（可选）"},
+    },
+    "required": ["submission_id", "score"],
+}
+
 
 def get_exam_generator_tools():
-    """教师 Agent 工具集（14 个工具）。"""
+    """教师 Agent 工具集（18 个工具）。"""
     return [
         _make_tool("search_knowledge", "搜索知识点或知识树结构。出题前先用此工具确认知识点存在并获取 ID。", SEARCH_KNOWLEDGE_SCHEMA,
             impl_summary="合并搜索：mode=kp 时模糊匹配 knowledge_point 表的 name 和 code；mode=tree 时搜索知识树结构（sub/ch/sec 层级）；mode=auto 时先搜 kp，无结果则自动搜 tree。支持 subject 过滤。返回知识点 ID 和名称。"),
@@ -927,6 +959,14 @@ def get_exam_generator_tools():
             impl_summary="查询 Question 表（按机构隔离），支持 kp_name/subject/q_type/difficulty 多维度筛选，返回题目 ID、文本预览、题型、难度和知识点。"),
         _make_tool("list_articles", "浏览机构文章库。教师说'看看文章'时使用。", LIST_ARTICLES_SCHEMA,
             impl_summary="查询 Article 表（按机构隔离），支持标题/内容搜索，返回文章 ID、标题、作者、标签和链接。"),
+        _make_tool("list_classes", "获取机构下的所有班级列表。教师说'有哪些班''班级列表'时使用。", LIST_CLASSES_SCHEMA,
+            impl_summary="查询 Class 表（按机构隔离），返回班级 ID、名称、学生数。"),
+        _make_tool("assign_class_course", "将课程分配给班级。教师说'把XX课程分配给X班'时使用。", ASSIGN_CLASS_COURSE_SCHEMA,
+            impl_summary="创建 ClassCourse 记录关联班级和课程，返回分配结果。"),
+        _make_tool("get_class_gradebook", "获取班级成绩册：每个学生在每次作业中的得分。教师说'看看X班成绩''成绩册'时使用。", GET_CLASS_GRADEBOOK_SCHEMA,
+            impl_summary="查询 Assignment 和 AssignmentSubmission 表，按学生汇总作业得分，返回成绩矩阵。"),
+        _make_tool("grade_submissions", "批改学生作业提交。教师说'给XX分''批改'时使用。", GRADE_SUBMISSIONS_SCHEMA,
+            impl_summary="更新 AssignmentSubmission 的 score、graded_by、graded_at 字段，返回更新后的提交信息。"),
     ]
 
 # ── 小宇可视化工具 Schema ──────────────────────────────────────
