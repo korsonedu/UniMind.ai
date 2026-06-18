@@ -202,6 +202,50 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             ],
         }
 
+    def _handle_save_questions_to_bank(self, args: Dict) -> Dict:
+        """将最近生成的题目存入题库并返回 ID 列表。"""
+        from quizzes.models import Question
+
+        if not self._last_generated:
+            return {"error": "没有待入库的题目，请先生成题目"}
+
+        saved = []
+        for q in self._last_generated:
+            kp_id = q.get('kp_id')
+            try:
+                obj = Question.objects.create(
+                    text=q.get('question', ''),
+                    q_type=q.get('q_type', 'objective'),
+                    subjective_type=q.get('subjective_type') or None,
+                    difficulty_level=q.get('difficulty_level', 'normal'),
+                    correct_answer=q.get('answer', ''),
+                    grading_points=q.get('grading_points') or None,
+                    options=q.get('options') or None,
+                    rubric=q.get('rubric') or None,
+                    knowledge_point_id=kp_id,
+                    institution=self.institution,
+                )
+                saved.append({
+                    'id': obj.id,
+                    'question': obj.text[:200],
+                    'q_type': obj.q_type,
+                    'kp_name': q.get('kp_name', ''),
+                })
+            except Exception as e:
+                logger.warning("save_questions_to_bank: 保存题目失败: %s", e)
+
+        if not saved:
+            return {"error": "题目入库失败，请重试"}
+
+        # 清空 _last_generated 防止重复入库
+        self._last_generated = []
+
+        return {
+            "saved_count": len(saved),
+            "question_ids": [s['id'] for s in saved],
+            "questions": saved,
+        }
+
     # ── ARC 管线 ────────────────────────────────────────────
 
     def _handle_launch_arc_pipeline(self, args: Dict) -> Dict:
@@ -682,13 +726,16 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
     # ── 班级/课程管理工具 ───────────────────────────────────────
 
     def _handle_list_classes(self, args: Dict) -> Dict:
-        """获取机构下的所有班级列表。"""
+        """获取机构下的所有班级列表。可按名称筛选。"""
         from users.models import Class as ClassModel
 
         if not self.institution:
             return {"error": "仅机构成员可使用此功能"}
 
         classes = ClassModel.objects.filter(institution=self.institution)
+        name_filter = (args.get('name') or '').strip()
+        if name_filter:
+            classes = classes.filter(name__icontains=name_filter)
         result = []
         for cls in classes:
             result.append({

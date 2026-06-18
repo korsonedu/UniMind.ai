@@ -79,6 +79,13 @@ def send_due_review_reminders():
                 if config.channel == 'email':
                     send_email(student.email, subject, body)
                     sent += 1
+                # PWA push as parallel channel
+                from notifications.push import send_push_notification
+                push_sent = send_push_notification(
+                    student, title=subject, body=body, link='/xiaoyu',
+                )
+                if push_sent > 0:
+                    sent += 1
             except Exception:
                 pass
 
@@ -97,3 +104,30 @@ def send_due_review_reminders():
                 pass
 
     return f'Sent {sent} due review reminders'
+
+
+@shared_task
+def send_notification_email(notification_id: int):
+    """为新创建的站内通知发送邮件（收件人开启了 email_notifications）。"""
+    from notifications.models import Notification
+    from core.email_service import send_email
+
+    try:
+        notif = Notification.objects.select_related('recipient').get(id=notification_id)
+    except Notification.DoesNotExist:
+        return f'Notification {notification_id} not found'
+
+    user = notif.recipient
+    if not user.email or not getattr(user, 'email_notifications', True):
+        return f'User {user.id} email notifications disabled or no email'
+
+    subject = f'UniMind — {notif.title}'
+    body = f'{notif.content}\n\n— UniMind 通知'
+    if notif.link:
+        body += f'\n查看详情：{notif.link}'
+
+    try:
+        send_email(user.email, subject, body)
+        return f'Email sent to {user.email} for notification {notification_id}'
+    except Exception as e:
+        return f'Failed to send email: {e}'

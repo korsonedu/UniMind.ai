@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
@@ -480,16 +481,22 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
         </select>
         <AddStudentDialog onAdded={fetch} disabled={studentCount >= institution.max_students} />
         <BatchImportDialog onImported={fetch} />
-        <Button variant="outline" size="sm" onClick={() => {
-          const csv = `${t('institution.nickname')},${t('institution.usernameRequired').replace(' *', '')},${t('institution.emailRequired').replace(' *', '')},${t('institution.role')},ELO\n` + filtered.map(s => `${s.nickname},${s.username},${s.email},${s.institution_role === 'teacher' || s.institution_role === 'owner' ? t('institution.teacher') : t('institution.students')},${s.elo_score}`).join('\n');
-          const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv])); a.download = '成员列表.csv'; a.click();
+        <Button variant="outline" size="sm" onClick={async () => {
+          try {
+            const res = await api.get('/users/institution/me/data-export/', { params: { type: 'students' }, responseType: 'blob' });
+            const url = URL.createObjectURL(res.data);
+            const a = document.createElement('a'); a.href = url; a.download = '成员列表.csv'; a.click();
+            URL.revokeObjectURL(url);
+          } catch { toast.error('导出失败'); }
         }} disabled={members.length === 0}><Download className="h-4 w-4" /> {t('institution.export')}</Button>
         <Button variant="ghost" size="icon" onClick={fetch}><ArrowsClockwise className="h-4 w-4" /></Button>
       </div>
 
       {/* List */}
       {loading ? (
-        <div className="flex justify-center py-16"><Spinner className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        <div className="space-y-2">
+          {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-16 rounded-xl" />)}
+        </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-20" />

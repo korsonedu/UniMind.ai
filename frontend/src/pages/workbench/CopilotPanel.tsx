@@ -8,6 +8,11 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { AgentStepCard } from '@/components/AgentStepCard';
+import { InlineVisualCard } from '@/components/InlineVisualCard';
+import { AgentReplyContext } from '@/pages/xiaoyu/visuals/ActionCardsRenderer';
+import type { AgentStep } from '@/hooks/useAgentChat';
+import type { VisualData } from '@/pages/xiaoyu/visuals';
 import api from '@/lib/api';
 
 interface ChatMessage {
@@ -20,8 +25,19 @@ export function CopilotPanel() {
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
+  const [steps, setSteps] = useState<AgentStep[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const upsertStep = useCallback((prev: AgentStep[], event: AgentStep): AgentStep[] => {
+    const idx = prev.findIndex(s => s.call_id === event.call_id);
+    if (idx >= 0) {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], ...event };
+      return updated;
+    }
+    return [...prev, event];
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
@@ -35,8 +51,8 @@ export function CopilotPanel() {
     scrollToBottom();
   }, [messages, streamingText, scrollToBottom]);
 
-  const handleSend = async () => {
-    const trimmed = input.trim();
+  const doSend = useCallback(async (text: string) => {
+    const trimmed = text.trim();
     if (!trimmed || streaming) return;
 
     const userMsg: ChatMessage = { role: 'user', content: trimmed };
@@ -44,6 +60,7 @@ export function CopilotPanel() {
     setInput('');
     setStreaming(true);
     setStreamingText('');
+    setSteps([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -92,6 +109,8 @@ export function CopilotPanel() {
               if (parsed.type === 'text_delta' && parsed.delta) {
                 fullContent += parsed.delta;
                 setStreamingText(fullContent);
+              } else if (parsed.type === 'step') {
+                setSteps(prev => upsertStep(prev, parsed as AgentStep));
               } else if (parsed.type === 'message' && parsed.content) {
                 fullContent = parsed.content;
                 setStreamingText(fullContent);
@@ -145,7 +164,13 @@ export function CopilotPanel() {
       setStreaming(false);
       abortRef.current = null;
     }
-  };
+  }, [streaming, streamingText]);
+
+  const handleSend = () => doSend(input);
+
+  const onReply = useCallback((value: string) => {
+    doSend(value);
+  }, [doSend]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -197,6 +222,29 @@ export function CopilotPanel() {
             )}
           </div>
         ))}
+
+        {/* Tool call steps */}
+        <AgentReplyContext.Provider value={{ onReply }}>
+          {steps.length > 0 && (
+            <div className="flex flex-col items-start gap-1.5 px-1">
+              {steps.map((step, i) => (
+                <div key={step.call_id} className="flex flex-col gap-1.5 w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                  <div className="flex gap-3 w-full">
+                    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
+                      <Brain className="h-3.5 w-3.5 text-primary" />
+                    </div>
+                    <div className="max-w-[80%]">
+                      <AgentStepCard step={step} compact />
+                    </div>
+                  </div>
+                  {step.status === 'done' && step.visual && (
+                    <InlineVisualCard visual={step.visual as VisualData} index={i} />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </AgentReplyContext.Provider>
 
         {/* Streaming message */}
         {streaming && streamingText && (

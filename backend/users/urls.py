@@ -13,6 +13,7 @@ from .views import (
     UserCheckInView, AchievementListView, UserAchievementView,
     UserClassListView,
     StudentReportCardView, StudentReportCardPDFView,
+    PushSubscribeView,
 )
 from .views_admin import (
     SuperuserUserListView, UserTagListView, PermissionGroupListView,
@@ -158,4 +159,7 @@ urlpatterns = [
     # Report card
     path('me/report-card/', StudentReportCardView.as_view(), name='student-report-card'),
     path('me/report-card/pdf/', StudentReportCardPDFView.as_view(), name='student-report-card-pdf'),
+
+    # Push notifications
+    path('me/push-subscribe/', PushSubscribeView.as_view(), name='push-subscribe'),
 ]

@@ -38,7 +38,6 @@ export const JoinPage: React.FC = () => {
     api.post('/users/institution/join-by-invite-slug/', { invite_slug })
       .then(async (res) => {
         setInstName(res.data.institution?.name || '');
-        // 刷新用户信息
         const meRes = await api.get('/users/me/');
         updateUser(meRes.data);
         setStatus('success');

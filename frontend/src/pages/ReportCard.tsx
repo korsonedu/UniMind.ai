@@ -159,7 +159,7 @@ export const ReportCard: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="created_at" tickFormatter={(v: string) => v.slice(5, 10)} tick={{ fontSize: 10, fill: '#a3a3a3' }} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#a3a3a3' }} />
-                    <Tooltip formatter={(val: number) => [`${val}%`, '得分率']} labelFormatter={(l: string) => `考试 ${l}`} />
+                    <Tooltip formatter={(val: any) => [`${val}%`, '得分率']} labelFormatter={(l: any) => `考试 ${l}`} />
                     <Bar dataKey="percentage" fill="#2d2b6b" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

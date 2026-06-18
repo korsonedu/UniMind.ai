@@ -3,6 +3,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageWrapper } from '@/components/PageWrapper';
 import { MagnifyingGlass, MagicWand, PaperPlaneTilt } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -115,11 +116,11 @@ export default function TeacherQuestions() {
   };
 
   return (
-    <div className="flex flex-col h-full p-4 md:p-6 space-y-4 md:space-y-6 max-w-6xl mx-auto w-full">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">题目管理</h1>
-        <div className="flex items-center gap-2">
+    <PageWrapper title="题目管理" subtitle="">
+      <div className="flex flex-col h-full max-w-6xl mx-auto w-full space-y-4 md:space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-end">
+          <div className="flex items-center gap-2">
           {selected.size > 0 && (
             <Button size="sm" onClick={openAssignDialog}>
               <PaperPlaneTilt className="h-4 w-4 mr-1" /> 布置作业 ({selected.size})
@@ -280,6 +281,7 @@ export default function TeacherQuestions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </PageWrapper>
   );
 }

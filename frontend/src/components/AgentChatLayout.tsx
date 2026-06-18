@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -21,6 +21,7 @@ import {
 import type { AgentStep } from '@/hooks/useAgentChat';
 import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
+import { AgentReplyContext } from '@/pages/xiaoyu/visuals/ActionCardsRenderer';
 
 // ── Types ──
 
@@ -159,6 +160,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     if (onSendReady && doSend) onSendReady(doSend);
   }, [onSendReady, doSend]);
 
+  // Action card reply → send as chat message
+  const onActionReply = useCallback((value: string) => {
+    doSend(value);
+  }, [doSend]);
+
   // 从 messages 或当前 session 中提取标题
   const conversationTitle = React.useMemo(() => {
     // 优先从消息中取
@@ -280,7 +286,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   }, [initialized]);
 
   // 通知父组件 hasConversation 变化（用于控制外层容器宽度）
-  useEffect(() => {
+  // useLayoutEffect 确保在浏览器绘制前同步更新父组件，避免 landing→面板 的闪烁
+  useLayoutEffect(() => {
     onHasConversation?.(hasConversation);
   }, [hasConversation, onHasConversation]);
 
@@ -491,42 +498,43 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           </div>
 
           {/* Messages — 内联视觉卡片 */}
-          <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
-            <div className="max-w-3xl mx-auto p-4 space-y-4">
-              {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
-                // render_visual → 内联 VisualCard
-                const stepVisual = msg.toolStep?.visual;
-                const metaVisual = (msg as any).metadata?.visual;
-                const metaVisuals = (msg as any).metadata?.all_visuals;
-                const isRenderStep = msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done';
-                const hasMetadataVisual = !!(metaVisual || metaVisuals?.length);
-                const visual = stepVisual || metaVisual || (metaVisuals?.[0]);
-                if ((isRenderStep || hasMetadataVisual) && visual) {
-                  return (
-                    <InlineVisualCard
-                      key={msg._id || i}
-                      visual={visual as VisualData}
-                      index={i}
-                    />
-                  );
-                }
-                // 其他工具步骤 → ToolStepMessage
-                // quick_generate/bulk_generate 完成后不再展示步骤卡片，
-                // 因为后续文字气泡已经说明了结果，避免两个气泡说同一件事
-                if (msg.toolStep) {
-                  const step = msg.toolStep;
-                  const isGenDone = (step.name === 'quick_generate' || step.name === 'bulk_generate_questions') && step.status === 'done';
-                  if (isGenDone) return null;
-                  return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
-                }
-                // 普通消息 → ChatBubble
-                return <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} />;
-              })}
-              {loading && (
-                <ChatBubble msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
-              )}
+          <AgentReplyContext.Provider value={{ onReply: onActionReply }}>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+              <div className="max-w-3xl mx-auto p-4 space-y-4">
+                {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
+                  // render_visual → 内联 VisualCard
+                  // 只用 toolStep.visual 渲染，避免与 done 消息的 metadata visual 重复渲染。
+                  // metadata visual 仅用于填充 visual state（split 模式右面板），不在 inline 流中二次展示。
+                  // 历史消息已在 init 时将 metadata visual 转换为 toolStep，所以历史也能正常渲染。
+                  const stepVisual = msg.toolStep?.visual;
+                  const isRenderStep = msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done';
+                  if (isRenderStep && stepVisual) {
+                    return (
+                      <InlineVisualCard
+                        key={msg._id || i}
+                        visual={stepVisual as VisualData}
+                        index={i}
+                      />
+                    );
+                  }
+                  // 其他工具步骤 → ToolStepMessage
+                  // quick_generate/bulk_generate 完成后不再展示步骤卡片，
+                  // 因为后续文字气泡已经说明了结果，避免两个气泡说同一件事
+                  if (msg.toolStep) {
+                    const step = msg.toolStep;
+                    const isGenDone = (step.name === 'quick_generate' || step.name === 'bulk_generate_questions') && step.status === 'done';
+                    if (isGenDone) return null;
+                    return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
+                  }
+                  // 普通消息 → ChatBubble
+                  return <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} />;
+                })}
+                {loading && (
+                  <ChatBubble msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
+                )}
+              </div>
             </div>
-          </div>
+          </AgentReplyContext.Provider>
 
           {/* Input */}
           <div className="shrink-0 px-4 pb-4 pt-2">

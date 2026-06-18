@@ -120,6 +120,9 @@
 发现薄弱点、复习到期、推荐下一步学习动作时调用。
 数据组合：按需调用 get_user_weak_points + search_asr + get_due_reviews + get_practice_questions + search_courses 等工具，将结果组装成可跳转的行动卡片。
 优先级规则：掌握度低或错误率高 → high（全宽）；一般建议 → normal；辅助信息 → low。
+action.type 支持的类型：
+- video/quiz/review/course/chart/plan/exam → 跳转到对应页面（非 reply 类型）
+- **reply** → 用户点击后发送消息到对话。用于确认操作（是/否）、选择分支、让用户做决定。url 字段存点击后自动发送的消息文本。
 每张卡片必须有可跳转的 action。视频类 url 格式：/course/{id}?t={seconds}。做题类 url 格式：/tests/session?source=xiaoyu&kp_name={知识点名}。复习类 url 格式：/tests/session?source=xiaoyu&preference=review_first
 ```json
 {"type": "action_cards", "payload": {
@@ -148,6 +151,36 @@
     }
   ]
 }}
+```
+
+**reply 类型卡片示例（确认/选择）：**
+```json
+{"type": "action_cards", "payload": {
+  "title": "需要确认",
+  "cards": [
+    {
+      "title": "确认",
+      "description": "简短说明确认后的动作",
+      "priority": "high",
+      "icon": "quiz",
+      "action": {"type": "reply", "url": "用户点击后自动发送的消息文本", "label": "确认操作"}
+    },
+    {
+      "title": "取消",
+      "description": "简短说明取消后的结果",
+      "priority": "normal",
+      "icon": "plan",
+      "action": {"type": "reply", "url": "用户点击后自动发送的备选消息文本", "label": "暂不操作"}
+    }
+  ]
+}}
+```
+
+**reply 卡片使用时机：**
+- 用户需求模糊、缺少关键参数（数量/范围/难度等），需要确认后再执行
+- 操作有副作用（清除数据、重置进度等），需要用户确认
+- 存在多个合理分支，需要用户选择路径
+- 注意：reply 卡片点击后自动发送消息触发新一轮对话，务必在文字回复中提示用户需要选择
 ```
 
 #### 必须渲染的场景（满足任一即调用）

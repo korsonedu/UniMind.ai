@@ -967,6 +967,8 @@ def get_exam_generator_tools():
             impl_summary="查询 Assignment 和 AssignmentSubmission 表，按学生汇总作业得分，返回成绩矩阵。"),
         _make_tool("grade_submissions", "批改学生作业提交。教师说'给XX分''批改'时使用。", GRADE_SUBMISSIONS_SCHEMA,
             impl_summary="更新 AssignmentSubmission 的 score、graded_by、graded_at 字段，返回更新后的提交信息。"),
+        _make_tool("render_visual", "在对话中渲染可视化卡片。用于向教师展示确认操作（布置作业/发送通知等）、选项选择、数据摘要等需要视觉呈现的内容。纯文字问答不需要调用。", RENDER_VISUAL_SCHEMA,
+            impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到对话流中。常用 type=action_cards 用于让教师确认操作或选择选项。"),
     ]
 
 # ── 小宇可视化工具 Schema ──────────────────────────────────────
@@ -987,7 +989,8 @@ RENDER_VISUAL_SCHEMA = {
                 "• latex_derivation: {title: string, steps: [{latex: string, note?: string}]}\n"
                 "• step_solution: {title: string, steps: [{text: string, latex?: string}]}\n"
                 "• knowledge_map: {title?: string, nodes: [{id: string, label: string, mastery?: 0-1}], edges: [{from: string, to: string}], highlights?: [string]}\n"
-                "• action_cards: {title?: string, cards: [{title, description, icon(video/quiz/review/course/chart/plan/exam), action: {type, url, label}, priority?(high/normal/low)}]}"
+                "• action_cards: {title?: string, cards: [{title, description, icon(video/quiz/review/course/chart/plan/exam), action: {type, url, label}, priority?(high/normal/low)}]}\n"
+                "  其中 action.type 支持：video(跳转视频)/quiz(跳转做题)/review(跳转复习)/course(跳转课程)/chart(跳转数据)/plan(跳转计划)/exam(跳转考试)/reply(发送消息)——reply 类型用于让用户确认操作或选择选项，url 字段存用户选择后发送的消息文本。"
             ),
         },
         "priority": {

@@ -297,9 +297,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               });
             } else if (payload.type === 'step') {
               const step = payload as AgentStep;
-              if (step.name === 'render_visual') {
-                // render_visual step
-              }
+              // render_visual 的 visual 数据由下方 step.status 块统一处理：
+              //   calling → 创建带 toolStep 的消息，scheduleShow 淡入
+              //   done    → 更新 toolStep（含 visual），AgentChatLayout 根据 toolStep.visual 渲染 InlineVisualCard
               if (step.status === 'calling') {
                 setMessages(prev => {
                   // 同一 call_id 已存在则更新（进度事件），否则新建
@@ -385,8 +385,10 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       toast.error(msg.includes('HTTP') ? '服务暂时不可用，请稍后再试' : '发送失败，请重试');
       setInput(text);
     } finally {
+      // 清除未触发的 scheduleShow 定时器，同时让所有消息立即可见
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
+      setMessages(prev => prev.map(m => m.visible === false ? { ...m, visible: true } : m));
       // Only clear loading if no newer request has started
       if (currentSend === sendCountRef.current) {
         setLoading(false);

@@ -121,6 +121,9 @@ export const MainLayout: React.FC = () => {
     pathname.startsWith('/course/') ||
     pathname === '/xiaoyu' ||
     pathname.startsWith('/xiaoyu/practice') ||
+    pathname === '/achievements' ||
+    pathname === '/my-assignments' ||
+    pathname === '/report-card' ||
     pathname === '/workbench' ||
     pathname === '/plan' ||
     pathname.startsWith('/institution');
@@ -134,6 +137,7 @@ export const MainLayout: React.FC = () => {
     location.pathname.startsWith('/tests/session') ||
     location.pathname.startsWith('/xiaoyu/practice') ||
     location.pathname.startsWith('/course/') ||
+    location.pathname.startsWith('/exam/') ||
     location.pathname === '/study'
   );
 
@@ -214,6 +218,7 @@ export const MainLayout: React.FC = () => {
   const studentNavItems: NavItem[] = [
     { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyu') },
     { to: '/my-assignments', icon: CalendarCheck, label: '我的作业' },
+    { to: '/achievements', icon: Trophy, label: '成就' },
     { to: '/report-card', icon: FileText, label: '成绩报告' },
     { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
     { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
@@ -240,6 +245,7 @@ export const MainLayout: React.FC = () => {
     : effectiveIsInstStudent ? [
         { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort', '小宇') },
         { to: '/my-assignments', icon: CalendarCheck, label: '作业' },
+        { to: '/achievements', icon: Trophy, label: '成就' },
         { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.testsShort') },
         { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeShort') },

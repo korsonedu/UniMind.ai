@@ -143,12 +143,8 @@ export function TeacherAssignments() {
   return (
     <PageWrapper title="作业管理" subtitle="">
       <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CalendarCheck className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-black tracking-tight">作业管理</h2>
-        </div>
-        <Button size="sm" className="gap-1.5" onClick={openCreate}>
+        <div className="flex items-center justify-end">
+          <Button size="sm" className="gap-1.5" onClick={openCreate}>
           <Plus className="h-3.5 w-3.5" />
           布置作业
         </Button>

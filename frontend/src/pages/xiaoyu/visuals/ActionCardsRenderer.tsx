@@ -1,8 +1,12 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlayCircle, Pen, ArrowCounterClockwise, BookOpen, TrendUp, Calendar, FileText, ArrowRight, CheckCircle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+
+/** Context for reply-type action cards to trigger a chat message send */
+export const AgentReplyContext = createContext<{ onReply?: (value: string) => void }>({});
+export const useAgentReply = () => useContext(AgentReplyContext);
 
 interface ActionCard {
   title: string;
@@ -71,8 +75,10 @@ async function loadCompletionStatus(): Promise<Record<string, boolean>> {
 
 export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({ payload }) => {
   const navigate = useNavigate();
+  const { onReply } = useAgentReply();
   const cards = payload.cards || [];
   const [completedMap, setCompletedMap] = useState<Record<string, boolean>>({});
+  const [repliedMap, setRepliedMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadCompletionStatus().then(setCompletedMap);
@@ -81,6 +87,15 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
   const handleClick = useCallback(async (card: ActionCard) => {
     const url = card.action.url;
     if (!url) return;
+
+    // reply 类型：发送消息到对话
+    if (card.action.type === 'reply') {
+      if (onReply && !repliedMap[url]) {
+        setRepliedMap(prev => ({ ...prev, [url]: true }));
+        onReply(url);
+      }
+      return;
+    }
 
     // 记录点击
     trackCardClick(card);
@@ -104,7 +119,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
     // 跳转
     if (url.startsWith('/')) navigate(url);
     else if (url.startsWith('http')) window.open(url, '_blank', 'noopener,noreferrer');
-  }, [navigate]);
+  }, [navigate, onReply, repliedMap]);
 
   if (!cards.length) return null;
 
@@ -113,11 +128,46 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
       {payload.title && (
         <h3 className="text-[15px] font-semibold tracking-tight text-foreground">{payload.title}</h3>
       )}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {cards.map((card, i) => {
           const Icon = ICON_MAP[card.icon] || TrendUp;
           const isCompleted = completedMap[card.action.url] || false;
+          const isReply = card.action.type === 'reply';
+          const isReplied = repliedMap[card.action.url] || false;
 
+          // reply 类型：选择题样式
+          if (isReply) {
+            const replyIndex = cards.slice(0, i).filter(c => c.action.type === 'reply').length;
+            const letter = String.fromCharCode(65 + (replyIndex % 26));
+            return (
+              <button
+                key={i}
+                onClick={() => handleClick(card)}
+                disabled={isReplied}
+                className={cn(
+                  'w-full flex items-start gap-2 px-3 py-2 rounded-lg text-left',
+                  'border border-border/60 hover:border-primary/40 hover:bg-primary/[0.02]',
+                  'transition-colors duration-150',
+                  isReplied && 'opacity-50 pointer-events-none border-emerald-500/40 bg-emerald-50',
+                )}
+              >
+                <span className={cn(
+                  'text-sm font-bold shrink-0 mt-px',
+                  isReplied ? 'text-emerald-600' : 'text-foreground/50',
+                )}>
+                  {letter}.
+                </span>
+                <span className={cn(
+                  'text-sm font-bold flex-1',
+                  isReplied ? 'text-emerald-700' : 'text-foreground/85',
+                )}>
+                  {card.title}
+                </span>
+              </button>
+            );
+          }
+
+          // 导航类型：保持现有样式
           return (
             <button
               key={i}

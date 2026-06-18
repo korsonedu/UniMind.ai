@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, Chat, DotsThree, XCircle } from '@phosphor-icons/react';
+import { Play, Pause, Chat, DotsThree, XCircle, CaretLeft } from '@phosphor-icons/react';
 import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuTrigger,
@@ -65,6 +66,7 @@ export const StudyRoom: React.FC = () => {
   // ── UI state ──
   const [showStopAlert, setShowStopAlert] = useState(false);
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [showMobileTimerSetup, setShowMobileTimerSetup] = useState(false);
   const [showMobileTimerFullscreen, setShowMobileTimerFullscreen] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -369,6 +371,11 @@ export const StudyRoom: React.FC = () => {
           isMobile ? "px-3 py-2.5" : "px-8 py-3"
         )}>
           <div className="flex items-center gap-4">
+            {isMobile && (
+              <Button variant="ghost" size="icon" className="h-8 w-8 -ml-1 rounded-lg" onClick={() => navigate(-1)}>
+                <CaretLeft className="h-4 w-4" />
+              </Button>
+            )}
             <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shadow-lg text-primary-foreground">
               <Chat className="h-4 w-4" />
             </div>

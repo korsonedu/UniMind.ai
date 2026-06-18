@@ -31,6 +31,7 @@ class User(AbstractUser):
     bio = models.TextField(blank=True, null=True)
     is_member = models.BooleanField(default=False, verbose_name="是否会员")
     email_verified = models.BooleanField(default=False, verbose_name="邮箱已验证")
+    email_notifications = models.BooleanField(default=True, verbose_name="接收邮件通知")
     membership_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="会员到期时间")
     membership_tier = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="会员等级")
     trial_ends_at = models.DateTimeField(null=True, blank=True, verbose_name="试用到期时间（已废弃，保留兼容）")
@@ -266,6 +267,23 @@ class ClassCourse(models.Model):
 
     def __str__(self):
         return f"{self.class_obj.name} ← {self.course.title}"
+
+
+class PushSubscription(models.Model):
+    """PWA 推送订阅 — 浏览器 push subscription endpoint + keys。"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='push_subscriptions', verbose_name="用户")
+    endpoint = models.TextField(verbose_name="Push Endpoint")
+    p256dh = models.TextField(verbose_name="p256dh Key")
+    auth = models.TextField(verbose_name="Auth Secret")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="订阅时间")
+
+    class Meta:
+        verbose_name = '推送订阅'
+        verbose_name_plural = '推送订阅'
+        unique_together = ('user', 'endpoint')
+
+    def __str__(self):
+        return f"{self.user.username} push subscription"
 
 
 class DailyCheckIn(models.Model):

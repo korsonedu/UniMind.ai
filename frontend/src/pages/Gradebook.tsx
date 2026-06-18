@@ -101,9 +101,10 @@ export function Gradebook() {
 
   return (
     <PageWrapper title="成绩册" subtitle="">
-      <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">成绩册</h1>
+      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
+        <div className="flex items-center justify-between">
+          <div />
+          <div className="flex items-center gap-2">
         <Select value={selectedClassId} onValueChange={setSelectedClassId}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="选择班级" />
@@ -115,7 +116,8 @@ export function Gradebook() {
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>
+          </Select>
+        </div>
       </div>
 
       {!selectedClassId && (

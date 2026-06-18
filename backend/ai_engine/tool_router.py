@@ -204,8 +204,8 @@ EXAM_GENERATOR_TOOLS_META = [
     ),
     ToolMeta(
         name="list_classes",
-        description="获取机构下的所有班级列表",
-        body="查询当前机构的所有班级。参数: 无。返回：班级ID、名称、学生数。适用于：教师说'有哪些班''班级列表'。不适用于：查看班级成绩（用get_class_gradebook）。",
+        description="获取机构下的所有班级列表，可按名称筛选",
+        body="查询当前机构的所有班级。参数: name(str)=班级名称筛选(可选，模糊匹配)。返回：班级ID、名称、学生数。适用于：教师说'有哪些班''班级列表''找XX班'。不适用于：查看班级成绩（用get_class_gradebook）。",
     ),
     ToolMeta(
         name="assign_class_course",
@@ -221,6 +221,16 @@ EXAM_GENERATOR_TOOLS_META = [
         name="grade_submissions",
         description="批改学生作业提交",
         body="为学生的作业提交打分。参数: submission_id(int)=提交ID, score(number)=评分, feedback(str)=评语(可选)。返回：更新后的提交信息。适用于：教师说'给XX分''批改这份作业'。不适用于：查看作业进度（用get_assignment_progress）。",
+    ),
+    ToolMeta(
+        name="render_visual",
+        description="在对话中渲染可视化卡片（确认操作、选项选择、数据摘要）",
+        body="渲染交互式卡片到对话中。参数: type(str)=可视化类型, payload(dict)=卡片数据。action_cards 类型支持两种 action：导航卡片点击跳转页面，reply 卡片点击发送消息到对话。适用于：需要教师确认操作、选择分支、展示数据摘要时。最常用 type='action_cards'。",
+    ),
+    ToolMeta(
+        name="save_questions_to_bank",
+        description="将最近生成的题目存入题库并返回题目ID",
+        body="将 quick_generate 生成的题目正式存入题库。参数: 无（自动使用最近一次生成的题目）。返回：入库数量、题目ID列表。适用于：教师确认要保留生成的题目后入库。调用前应先通过 render_visual(action_cards) 让教师确认。不适用于：直接出题（用 quick_generate）。",
     ),
 ]
 
@@ -400,6 +410,7 @@ EXAM_GENERATOR_INTENT_MAP = {
         "tools": [
             "search_knowledge", "quick_generate", "launch_arc_pipeline",
             "get_workbench_stats", "get_class_weak_points",
+            "render_visual", "save_questions_to_bank",
         ],
     },
     "status": {
@@ -423,10 +434,12 @@ EXAM_GENERATOR_INTENT_MAP = {
     },
     "assignment": {
         "keywords": ["作业", "提交", "进度", "交了没", "批改", "交作业", "布置", "发布",
-                     "分配", "下发", "发下去", "布置给", "安排练习"],
+                     "分配", "下发", "发下去", "布置给", "安排练习", "选", "选题"],
         "tools": [
             "get_assignment_progress", "assign_practice",
             "assign_class_course", "grade_submissions",
+            "list_questions", "list_classes",
+            "render_visual", "save_questions_to_bank",
         ],
     },
     "browse": {

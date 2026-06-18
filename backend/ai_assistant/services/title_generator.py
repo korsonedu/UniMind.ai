@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def sync_generate_title(conversation_id, user_id, bot_id):
     """Synchronously generate a conversation title from the first exchange."""
-    from .models import Conversation, AIChatMessage as Msg
+    from ..models import Conversation, AIChatMessage as Msg
 
     try:
         if Conversation.objects.filter(conversation_id=conversation_id, title__gt='').exists():

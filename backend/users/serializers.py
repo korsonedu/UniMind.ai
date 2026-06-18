@@ -82,9 +82,20 @@ class DailyCheckInSerializer(serializers.ModelSerializer):
 
 
 class AchievementSerializer(serializers.ModelSerializer):
+    category_label = serializers.SerializerMethodField()
+
     class Meta:
         model = Achievement
-        fields = ('id', 'key', 'name', 'description', 'icon', 'category', 'threshold')
+        fields = ('id', 'key', 'name', 'description', 'icon', 'category',
+                  'category_label', 'threshold')
+
+    def get_category_label(self, obj):
+        labels = {
+            'streak': '连续打卡', 'diagnostic': '首次诊断',
+            'question': '刷题里程碑', 'mastery': '掌握知识点',
+            'exam': '考试成绩', 'social': '社交互动',
+        }
+        return labels.get(obj.category, obj.category)
 
 
 class UserAchievementSerializer(serializers.ModelSerializer):

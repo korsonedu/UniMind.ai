@@ -175,6 +175,7 @@ class BaseToolExecutor:
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
         self.tool_call_log: list = []     # MUTAR 轨迹：工具调用序列
         self.tool_output_log: list = []   # MUTAR 轨迹：工具返回结果
+        self.pending_visuals: list = []   # render_visual 输出收集，供 SSE done 事件持久化
 
     def __call__(self, tool_name: str, args: Dict[str, Any]) -> str:
         # 工具白名单校验：防止 LLM 被注入后调用非预期工具
@@ -197,6 +198,26 @@ class BaseToolExecutor:
         return output
 
     # ── Tool handlers ──────────────────────────────────────────
+
+    def _handle_render_visual(self, args: Dict) -> Dict:
+        """将可视化数据返回给前端，同时缓存到实例供消息持久化。"""
+        visual_type = args.get('type', '')
+        payload = args.get('payload', {})
+        priority = args.get('priority', 'normal')
+        # DeepSeek 有时把 payload 作为 JSON 字符串传入
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except (json.JSONDecodeError, TypeError):
+                payload = {}
+
+        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards', 'function_graph'}
+        if visual_type not in valid_types:
+            visual_type = 'data_card'
+
+        visual = {"type": visual_type, "payload": payload, "priority": priority}
+        self.pending_visuals.append(visual)
+        return visual
 
     def _handle_search_knowledge_tree(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
@@ -261,7 +282,6 @@ class PlannerToolExecutor(BaseToolExecutor):
 
     def __init__(self, user, institution=None):
         super().__init__(user, institution)
-        self.pending_visuals = []  # Collect all render_visual outputs
 
     def _handle_get_learning_stats(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
@@ -731,22 +751,3 @@ class PlannerToolExecutor(BaseToolExecutor):
 
         return {"error": f"未知模式: {mode}，支持 generate 或 submit"}
 
-    def _handle_render_visual(self, args: Dict) -> Dict:
-        """将可视化数据返回给前端，同时缓存到实例供消息持久化。"""
-        visual_type = args.get('type', '')
-        payload = args.get('payload', {})
-        priority = args.get('priority', 'normal')
-        # DeepSeek 有时把 payload 作为 JSON 字符串传入
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except (json.JSONDecodeError, TypeError):
-                payload = {}
-
-        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards', 'function_graph'}
-        if visual_type not in valid_types:
-            visual_type = 'data_card'
-
-        visual = {"type": visual_type, "payload": payload, "priority": priority}
-        self.pending_visuals.append(visual)
-        return visual

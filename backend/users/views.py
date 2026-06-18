@@ -1380,22 +1380,62 @@ class UserCheckInView(APIView):
 
 
 class AchievementListView(APIView):
-    """GET /api/users/achievements/ — 所有预置成就列表。"""
+    """GET /api/users/achievements/ — 所有预置成就列表（含解锁状态+进度）。"""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        from .models import Achievement
+        from .models import Achievement, UserAchievement, DailyCheckIn
         from .serializers import AchievementSerializer
-        from .models import UserAchievement
-        unlocked = set(
-            UserAchievement.objects.filter(user=request.user)
-            .values_list('achievement__key', flat=True)
+        from quizzes.models import QuizAttempt, UserQuestionStatus, QuizExam
+        from django.utils import timezone
+
+        user = request.user
+        # 已解锁成就映射：key → unlocked_at
+        ua_qs = UserAchievement.objects.filter(user=user).select_related('achievement')
+        unlocked_map = {ua.achievement.key: ua.unlocked_at for ua in ua_qs}
+        unlocked_keys = set(unlocked_map.keys())
+
+        # ── 各维度当前进度（一次查询） ──
+        today = timezone.now().date()
+        checkin = DailyCheckIn.objects.filter(user=user, date=today).first()
+        streak_val = checkin.streak if checkin else 0
+
+        question_count = QuizAttempt.objects.filter(user=user).count()
+
+        has_diagnostic = 1 if user.has_completed_initial_assessment else 0
+
+        mastered_kps = (
+            UserQuestionStatus.objects
+            .filter(user=user, is_mastered=True)
+            .values('question__qmatrixentry__knowledge_point')
+            .distinct().count()
         )
+
+        best_exam = QuizExam.objects.filter(user=user).order_by('-total_score').first()
+        best_exam_pct = 0
+        if best_exam and best_exam.max_score:
+            best_exam_pct = round(best_exam.total_score / best_exam.max_score * 100)
+
+        # ── 组装响应 ──
         all_achievements = Achievement.objects.filter(is_active=True).order_by('category', 'threshold')
         data = []
         for a in all_achievements:
             entry = AchievementSerializer(a).data
-            entry['is_unlocked'] = a.key in unlocked
+            entry['is_unlocked'] = a.key in unlocked_keys
+            entry['unlocked_at'] = unlocked_map[a.key].isoformat() if a.key in unlocked_map else None
+
+            if a.category == 'streak':
+                entry['progress'] = min(streak_val, a.threshold)
+            elif a.category == 'question':
+                entry['progress'] = min(question_count, a.threshold)
+            elif a.category == 'diagnostic':
+                entry['progress'] = has_diagnostic
+            elif a.category == 'mastery':
+                entry['progress'] = min(mastered_kps, a.threshold)
+            elif a.category == 'exam':
+                entry['progress'] = min(best_exam_pct, a.threshold)
+            else:
+                entry['progress'] = 0
             data.append(entry)
         return Response(data)
 
@@ -1421,6 +1461,37 @@ class UserClassListView(APIView):
             {'id': c.id, 'name': c.name}
             for c in qs
         ])
+
+
+# ── PWA Push 订阅 ──────────────────────────────────────────
+
+class PushSubscribeView(APIView):
+    """POST /api/users/me/push-subscribe/ — 保存浏览器推送订阅。"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from .models import PushSubscription
+        endpoint = (request.data.get('endpoint') or '').strip()
+        keys = request.data.get('keys', {})
+        p256dh = (keys.get('p256dh') or '').strip()
+        auth = (keys.get('auth') or '').strip()
+        if not endpoint or not p256dh or not auth:
+            return Response({'error': '缺少 subscription 信息'}, status=400)
+
+        PushSubscription.objects.update_or_create(
+            user=request.user, endpoint=endpoint,
+            defaults={'p256dh': p256dh, 'auth': auth},
+        )
+        return Response({'status': 'ok'})
+
+    def delete(self, request):
+        from .models import PushSubscription
+        endpoint = (request.data.get('endpoint') or '').strip()
+        if endpoint:
+            PushSubscription.objects.filter(user=request.user, endpoint=endpoint).delete()
+        else:
+            PushSubscription.objects.filter(user=request.user).delete()
+        return Response({'status': 'unsubscribed'})
 
 
 # ── 成绩报告卡 ──────────────────────────────────────────────
