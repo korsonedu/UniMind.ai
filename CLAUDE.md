@@ -9,7 +9,7 @@ Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepS
 | Agent | bot_type | 工具数 | 意图路由 | 职责 |
 |-------|----------|--------|---------|------|
 | 小宇 | `planner` | 21 | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 可视化渲染 + 教练式对话 |
-| 工作台 | `exam_generator` | 13 | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 作业管理 + 资产浏览 + 通知 |
+| 工作台 | `exam_generator` | 15 | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 作业管理 + 资产浏览 + 通知 + 邀请管理 |
 
 运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
 意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。**自进化优化**：LLM 驱动的用户画像分析（缓存预计算 + Celery 异步）、Memorix↔Agent 联动、MUTAR 自进化全链路（Measure→Umpire→Think→Adapt→Refine：采集→评估→分析→变体→精炼，Trajectory 自动记录 + 用户反馈闭环）。
@@ -87,7 +87,8 @@ UniMindCode/                  ← git 仓库根目录
 | `/intro/:slug` | 机构公开首页（无需登录，公开访问） |
 | `/management` | 管理后台（需管理员） |
 | `/platform-analytics` | 平台数据分析（仅超管） |
-| `/join/:invite_slug` | 邀请链接落地页（未登录→注册/登录，已登录裸号→自动绑定机构） |
+| `/join/:invite_slug` | 邀请链接落地页（未登录→注册/登录，已登录裸号→审批/自动加入机构） |
+| `/achievements` | 学生成就勋章墙（10 预置成就，类别筛选，进度展示） |
 | `/pricing` | 定价页（公开访问） |
 | `/api/ai/chat/` | POST Agent 对话（非流式 polling） |
 | `/api/ai/chat/stream/` | POST Agent 对话（SSE 流式，小宇/工作台共用） |
@@ -102,6 +103,11 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/users/` | 用户/会员/ELO API（52 条路由） |
 | `/api/users/me/diagnostic/generate/` | POST 生成诊断题目 |
 | `/api/users/me/diagnostic/submit/` | POST 提交诊断答案 |
+| `/api/users/me/achievements/` | GET 已解锁成就列表 + GET/POST /api/users/achievements/ 全部成就（含进度） |
+| `/api/users/me/checkin/` | POST 每日签到；GET 签到历史+streak |
+| `/api/users/me/push-subscribe/` | POST/DELETE PWA 推送订阅 |
+| `/api/users/institution/me/invites/` | GET/POST 邀请链接管理（支持审批流+角色分配） |
+| `/api/users/institution/me/join-requests/` | GET 加入申请列表 + PATCH 审批（通过/拒绝） |
 | `/api/users/institution/me/analytics/class-performance/` | GET 班级 KP 正确率分析 |
 | `/api/users/institution/me/analytics/suggested-topics/` | GET Top 5 薄弱知识点建议 |
 | `/api/users/admin/analytics/dashboard/` | GET 平台数据分析 Dashboard（仅超管） |

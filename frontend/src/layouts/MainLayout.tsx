@@ -12,6 +12,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
+import { AchievementPill } from '@/components/AchievementPill';
 import { InvitePopover } from '@/pages/workbench/InvitePopover';
 
 import { useTranslation } from 'react-i18next';
@@ -338,6 +339,7 @@ export const MainLayout: React.FC = () => {
                 </div>
               )}
               <EloPopover />
+              <AchievementPill />
               <NotificationBell />
               {/* 头像下拉 */}
               <DropdownMenu modal={false}>
