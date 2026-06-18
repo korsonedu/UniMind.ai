@@ -6,7 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
-type Status = 'loading' | 'joining' | 'success' | 'conflict' | 'unauthenticated';
+type Status = 'loading' | 'joining' | 'success' | 'conflict' | 'unauthenticated' | 'pending_approval';
 
 export const JoinPage: React.FC = () => {
   const { invite_slug } = useParams<{ invite_slug: string }>();
@@ -37,11 +37,16 @@ export const JoinPage: React.FC = () => {
     setStatus('joining');
     api.post('/users/institution/join-by-invite-slug/', { invite_slug })
       .then(async (res) => {
-        setInstName(res.data.institution?.name || '');
-        const meRes = await api.get('/users/me/');
-        updateUser(meRes.data);
-        setStatus('success');
-        toast.success('已成功加入机构');
+        const data = res.data;
+        setInstName(data.institution?.name || '');
+        if (data.status === 'pending_approval') {
+          setStatus('pending_approval');
+        } else {
+          const meRes = await api.get('/users/me/');
+          updateUser(meRes.data);
+          setStatus('success');
+          toast.success('已成功加入机构');
+        }
       })
       .catch((err) => {
         const msg = err.response?.data?.error || '加入失败';
@@ -100,6 +105,28 @@ export const JoinPage: React.FC = () => {
             <CardTitle>正在加入机构...</CardTitle>
             <CardDescription>请稍候</CardDescription>
           </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  // 等待审批
+  if (status === 'pending_approval') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>申请已提交</CardTitle>
+            <CardDescription>
+              你的加入申请已提交至{instName ? `「${instName}」` : '机构'}，
+              等待机构管理员审批。审批通过后你将自动加入机构。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" onClick={() => navigate('/')}>
+              返回首页
+            </Button>
+          </CardContent>
         </Card>
       </div>
     );

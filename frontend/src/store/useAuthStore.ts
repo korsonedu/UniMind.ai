@@ -39,6 +39,7 @@ interface User {
   is_admin?: boolean;
   is_institution_admin?: boolean;
   is_institution_owner?: boolean;
+  is_institution_teacher?: boolean;
 }
 
 interface AuthState {

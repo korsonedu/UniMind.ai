@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Institution, User
+from .models import Institution, InstitutionInvite, JoinRequest, User
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -56,3 +56,31 @@ class InstitutionFeatureSerializer(serializers.Serializer):
     institution = serializers.DictField(allow_null=True)
     features = serializers.ListField(child=serializers.CharField())
     usage = serializers.DictField(allow_null=True, required=False)
+
+
+class InstitutionInviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InstitutionInvite
+        fields = ['id', 'slug', 'assigned_role', 'max_uses', 'used_count',
+                  'expires_at', 'requires_approval', 'is_active',
+                  'created_by', 'created_at']
+        read_only_fields = ['id', 'slug', 'used_count', 'created_by', 'created_at']
+
+
+class CreateInstitutionInviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InstitutionInvite
+        fields = ['assigned_role', 'max_uses', 'expires_at', 'requires_approval']
+
+
+class JoinRequestSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    user_nickname = serializers.CharField(source='user.nickname', read_only=True)
+    invite_slug_used = serializers.CharField(source='invite.slug', read_only=True, allow_null=True)
+
+    class Meta:
+        model = JoinRequest
+        fields = ['id', 'user', 'user_name', 'user_nickname', 'invite',
+                  'invite_slug_used', 'status', 'message', 'reviewed_by',
+                  'created_at', 'reviewed_at']
+        read_only_fields = ['id', 'user', 'invite', 'reviewed_by', 'created_at', 'reviewed_at']

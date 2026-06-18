@@ -42,6 +42,8 @@ from .views_institution import (
     ClassCourseManageView, StudentClassCourseView, ClassGradebookView,
     InstitutionBusinessDashboardView, InstitutionDataExportView,
     InstitutionStudentReportCardView,
+    InstitutionInviteListView, InstitutionInviteDetailView,
+    InstitutionJoinRequestListView, InstitutionJoinRequestReviewView,
 )
 
 urlpatterns = [
@@ -130,6 +132,12 @@ urlpatterns = [
     path('institution/me/gradebook/', ClassGradebookView.as_view(), name='institution-gradebook'),
     path('institution/me/business-dashboard/', InstitutionBusinessDashboardView.as_view(), name='institution-business-dashboard'),
     path('institution/me/data-export/', InstitutionDataExportView.as_view(), name='institution-data-export'),
+
+    # Institution invites + join requests
+    path('institution/me/invites/', InstitutionInviteListView.as_view(), name='institution-invite-list'),
+    path('institution/me/invites/<int:pk>/', InstitutionInviteDetailView.as_view(), name='institution-invite-detail'),
+    path('institution/me/join-requests/', InstitutionJoinRequestListView.as_view(), name='institution-join-request-list'),
+    path('institution/me/join-requests/<int:pk>/review/', InstitutionJoinRequestReviewView.as_view(), name='institution-join-request-review'),
 
     # Institution — payment config (Pro)
     path('institution/me/payment-config/', InstitutionPaymentConfigView.as_view(), name='institution-payment-config'),

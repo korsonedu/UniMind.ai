@@ -36,12 +36,12 @@ def is_platform_admin(user) -> bool:
 
 
 def is_institution_admin(user) -> bool:
-    """机构管理员：owner 或 teacher。"""
+    """机构管理员：owner、teacher 或 registrar。"""
     return bool(
         user
         and user.is_authenticated
         and user.institution is not None
-        and user.institution_role in ('owner', 'teacher')
+        and user.institution_role in ('owner', 'teacher', 'registrar')
     )
 
 
@@ -155,7 +155,7 @@ class IsAdminWriteMemberRead(permissions.BasePermission):
 
 
 class IsInstitutionAdmin(permissions.BasePermission):
-    """机构管理员权限（owner 或 teacher）"""
+    """机构管理员权限（owner、teacher、registrar）"""
     message = "需要机构管理员权限。"
 
     def has_permission(self, request, view):
@@ -163,6 +163,20 @@ class IsInstitutionAdmin(permissions.BasePermission):
         if not (user and user.is_authenticated):
             return False
         # 平台管理员预览模式：直接放行
+        if request.query_params.get('preview_institution') and is_platform_admin(user):
+            return True
+        return (user.institution is not None
+                and user.institution_role in ('owner', 'teacher', 'registrar'))
+
+
+class IsInstitutionTeacher(permissions.BasePermission):
+    """机构教师权限（owner 或 teacher，不含 registrar）"""
+    message = "需要机构教师权限。"
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
         if request.query_params.get('preview_institution') and is_platform_admin(user):
             return True
         return (user.institution is not None

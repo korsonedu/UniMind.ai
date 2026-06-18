@@ -166,6 +166,7 @@ export const MainLayout: React.FC = () => {
   // ── 身份与方案层级 ──
   const isSuperAdmin = user?.role === 'admin' && !instInfo;
   const isInstStudent = Boolean(instInfo) && user?.institution_role === 'student';
+  const isInstRegistrar = Boolean(instInfo) && user?.institution_role === 'registrar';
   const effectiveIsInstStudent = studentPreview || isInstStudent;
   const homePath = effectiveIsInstStudent ? '/xiaoyu' : '/workbench';
   const instPlan = instInfo?.plan || 'free';
@@ -230,9 +231,17 @@ export const MainLayout: React.FC = () => {
     { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams') },
   ];
 
+  const registrarNavItems: NavItem[] = [
+    { to: '/workbench', icon: Robot, label: '工作台' },
+    { to: '/institution/students', icon: Users, label: t('layout:nav.members') },
+    { to: '/management', icon: Wrench, label: t('layout:nav.maintenance') },
+  ];
+
   const navItems: NavItem[] = isSuperAdmin
     ? superAdminNavItems
-    : (effectiveIsInstStudent ? studentNavItems : teacherNavItems);
+    : isInstRegistrar
+      ? registrarNavItems
+      : (effectiveIsInstStudent ? studentNavItems : teacherNavItems);
 
   const visibleNavItems = navItems.filter(itemVisible);
 
@@ -241,6 +250,11 @@ export const MainLayout: React.FC = () => {
         { to: '/institution', icon: Buildings, label: t('layout:nav.institutionShort') },
         { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteShort') },
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptShort') },
+      ]
+    : isInstRegistrar ? [
+        { to: '/workbench', icon: Robot, label: '工作台' },
+        { to: '/institution/students', icon: Users, label: '学员' },
+        { to: '/management', icon: Wrench, label: '维护' },
       ]
     : effectiveIsInstStudent ? [
         { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort', '小宇') },

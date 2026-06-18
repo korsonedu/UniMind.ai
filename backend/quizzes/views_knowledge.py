@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import KnowledgePoint, KnowledgePointAnnotation
 from quizzes.serializers import KnowledgePointSerializer
-from users.permissions import IsAdminWriteMemberRead, IsAdmin, IsInstitutionAdmin, HasQuota, is_platform_admin
+from users.permissions import IsAdminWriteMemberRead, IsAdmin, IsInstitutionTeacher, IsInstitutionTeacher, HasQuota, is_platform_admin
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +256,7 @@ def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix='', instit
 
 class KnowledgePointImportMDView(APIView):
     """从 Markdown 文件导入知识体系。平台管理员或机构管理员可操作。"""
-    permission_classes = [IsAdmin | IsInstitutionAdmin, HasQuota]
+    permission_classes = [IsAdmin | IsInstitutionTeacher, HasQuota]
     quota_resource = 'knowledge_point'
 
     @transaction.atomic
@@ -296,7 +296,7 @@ class KnowledgePointImportMDView(APIView):
 
 class KnowledgePointExportMDView(APIView):
     """导出知识体系为 Markdown。平台管理员或机构管理员可操作。"""
-    permission_classes = [IsAdmin | IsInstitutionAdmin]
+    permission_classes = [IsAdmin | IsInstitutionTeacher]
 
     def get(self, request):
         user = request.user

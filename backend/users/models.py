@@ -13,6 +13,7 @@ class User(AbstractUser):
     INSTITUTION_ROLE_CHOICES = (
         ('owner', '机构所有者'),
         ('teacher', '教师'),
+        ('registrar', '教务主管'),
         ('student', '学员'),
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
@@ -267,6 +268,59 @@ class ClassCourse(models.Model):
 
     def __str__(self):
         return f"{self.class_obj.name} ← {self.course.title}"
+
+
+class InstitutionInvite(models.Model):
+    """机构邀请链接 — 替代 Institution.invite_slug，支持角色分配、审批、过期。"""
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='invites', verbose_name="所属机构")
+    slug = models.CharField(max_length=40, unique=True, verbose_name="邀请标识")
+    assigned_role = models.CharField(max_length=20, choices=User.INSTITUTION_ROLE_CHOICES, default='student', verbose_name="分配角色")
+    max_uses = models.PositiveIntegerField(null=True, blank=True, verbose_name="最大使用次数")
+    used_count = models.PositiveIntegerField(default=0, verbose_name="已使用次数")
+    expires_at = models.DateTimeField(null=True, blank=True, verbose_name="过期时间")
+    requires_approval = models.BooleanField(default=True, verbose_name="需要审批")
+    is_active = models.BooleanField(default=True, verbose_name="启用")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_invites', verbose_name="创建者")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+
+    class Meta:
+        verbose_name = '机构邀请链接'
+        verbose_name_plural = '机构邀请链接'
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            import secrets
+            self.slug = secrets.token_urlsafe(12)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.institution.name} → {self.assigned_role} ({self.slug[:8]}…)"
+
+
+class JoinRequest(models.Model):
+    """机构加入申请 — 需要审批的加入流程。"""
+    STATUS_CHOICES = (
+        ('pending', '待审批'),
+        ('approved', '已通过'),
+        ('rejected', '已拒绝'),
+    )
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='join_requests', verbose_name="目标机构")
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='join_request', verbose_name="申请人")
+    invite = models.ForeignKey(InstitutionInvite, on_delete=models.SET_NULL, null=True, related_name='join_requests', verbose_name="通过邀请链接")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending', verbose_name="状态")
+    message = models.TextField(blank=True, verbose_name="申请留言")
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='reviewed_join_requests', verbose_name="审批人")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="申请时间")
+    reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name="审批时间")
+
+    class Meta:
+        verbose_name = '加入申请'
+        verbose_name_plural = '加入申请'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} → {self.institution.name} ({self.get_status_display()})"
 
 
 class PushSubscription(models.Model):

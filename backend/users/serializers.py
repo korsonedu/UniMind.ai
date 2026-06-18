@@ -7,20 +7,24 @@ class UserSerializer(serializers.ModelSerializer):
     is_admin = serializers.SerializerMethodField()
     is_institution_admin = serializers.SerializerMethodField()
     is_institution_owner = serializers.SerializerMethodField()
+    is_institution_teacher = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'is_member', 'membership_tier', 'membership_expires_at', 'membership_source', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'institution', 'institution_role', 'institution_id')
-        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'membership_tier', 'membership_expires_at', 'membership_source', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'institution_role', 'institution_id')
+        fields = ('id', 'username', 'nickname', 'role', 'elo_score', 'avatar_url', 'avatar_style', 'avatar_seed', 'bio', 'current_task', 'current_timer_end', 'today_focused_minutes', 'today_completed_tasks', 'allow_broadcast', 'show_others_broadcast', 'has_completed_initial_assessment', 'is_member', 'membership_tier', 'membership_expires_at', 'membership_source', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'is_institution_teacher', 'institution', 'institution_role', 'institution_id')
+        read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'membership_tier', 'membership_expires_at', 'membership_source', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'is_institution_teacher', 'institution_role', 'institution_id')
 
     def get_is_admin(self, obj):
         return obj.is_superuser and obj.institution_id is None
 
     def get_is_institution_admin(self, obj):
-        return obj.institution is not None and obj.institution_role in ('owner', 'teacher')
+        return obj.institution is not None and obj.institution_role in ('owner', 'teacher', 'registrar')
 
     def get_is_institution_owner(self, obj):
         return obj.institution is not None and obj.institution_role == 'owner'
+
+    def get_is_institution_teacher(self, obj):
+        return obj.institution is not None and obj.institution_role in ('owner', 'teacher')
 
     def get_institution(self, obj):
         inst = obj.institution

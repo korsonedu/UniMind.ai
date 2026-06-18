@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Robot, Sparkle, Bell, Tag, Stack, Rocket, ChartBar, Users } from '@phosphor-icons/react';
+import { Robot, Sparkle, Bell, Tag, Stack, Rocket, ChartBar, Users, Link } from '@phosphor-icons/react';
 
 import { AlbumSection } from './maintenance/AlbumSection';
 import { BotSection } from './maintenance/BotSection';
@@ -12,6 +12,8 @@ import { InsightsPanel } from './maintenance/InsightsPanel';
 import { PipelinePanel } from './maintenance/PipelinePanel';
 import { NotificationConfigSection } from './maintenance/NotificationConfigSection';
 import { ClassSection } from './maintenance/ClassSection';
+import { InstitutionInviteSection } from './maintenance/InstitutionInviteSection';
+import { JoinRequestSection } from './maintenance/JoinRequestSection';
 
 export const Maintenance: React.FC = () => {
   const { t } = useTranslation('maintenance');
@@ -48,6 +50,12 @@ export const Maintenance: React.FC = () => {
             <TabsTrigger value="pipeline" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
               <Sparkle className="w-3.5 h-3.5" />{t('tabs.aiPipeline')}
             </TabsTrigger>
+            <TabsTrigger value="invites" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
+              <Link className="w-3.5 h-3.5" />邀请链接
+            </TabsTrigger>
+            <TabsTrigger value="join-requests" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
+              <Users className="w-3.5 h-3.5" />加入审批
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -60,6 +68,8 @@ export const Maintenance: React.FC = () => {
         <TabsContent value="notify-config"><NotificationConfigSection /></TabsContent>
         <TabsContent value="insights"><InsightsPanel /></TabsContent>
         <TabsContent value="pipeline"><PipelinePanel /></TabsContent>
+        <TabsContent value="invites"><InstitutionInviteSection /></TabsContent>
+        <TabsContent value="join-requests"><JoinRequestSection /></TabsContent>
       </Tabs>
     </div>
   );
