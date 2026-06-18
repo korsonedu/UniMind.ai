@@ -162,7 +162,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   // Action card reply → send as chat message
   const onActionReply = useCallback((value: string) => {
-    doSend(value);
+    doSend(value, true);
   }, [doSend]);
 
   // 从 messages 或当前 session 中提取标题

@@ -122,7 +122,7 @@
 优先级规则：掌握度低或错误率高 → high（全宽）；一般建议 → normal；辅助信息 → low。
 action.type 支持的类型：
 - video/quiz/review/course/chart/plan/exam → 跳转到对应页面（非 reply 类型）
-- **reply** → 用户点击后发送消息到对话。用于确认操作（是/否）、选择分支、让用户做决定。url 字段存点击后自动发送的消息文本。
+- **reply** → 用户交互卡片。通过 `reply_mode` 字段控制交互形态，不设时默认 `single`。
 每张卡片必须有可跳转的 action。视频类 url 格式：/course/{id}?t={seconds}。做题类 url 格式：/tests/session?source=xiaoyu&kp_name={知识点名}。复习类 url 格式：/tests/session?source=xiaoyu&preference=review_first
 ```json
 {"type": "action_cards", "payload": {
@@ -153,34 +153,58 @@ action.type 支持的类型：
 }}
 ```
 
-**reply 类型卡片示例（确认/选择）：**
+**reply 卡片 — 5 种交互模式（reply_mode）：**
+
+① **single**（默认，可不设 reply_mode）— 单选。点一个全锁，url 字段为点击后自动发送的消息文本。
+适用：确认/取消、分支选择、模糊参数补全。
 ```json
-{"type": "action_cards", "payload": {
-  "title": "需要确认",
-  "cards": [
-    {
-      "title": "确认",
-      "description": "简短说明确认后的动作",
-      "priority": "high",
-      "icon": "quiz",
-      "action": {"type": "reply", "url": "用户点击后自动发送的消息文本", "label": "确认操作"}
-    },
-    {
-      "title": "取消",
-      "description": "简短说明取消后的结果",
-      "priority": "normal",
-      "icon": "plan",
-      "action": {"type": "reply", "url": "用户点击后自动发送的备选消息文本", "label": "暂不操作"}
-    }
-  ]
-}}
+{"type": "action_cards", "payload": {"title": "需要确认", "cards": [
+  {"title": "确认", "icon": "quiz", "action": {"type": "reply", "url": "确认开始学习计划", "label": "确认操作"}},
+  {"title": "取消", "icon": "plan", "action": {"type": "reply", "url": "暂不执行", "label": "暂不操作"}}
+]}}
+```
+
+② **multi** — 多选。用户可勾选多个选项，底部出现"确认 (N)"按钮，点击后拼接所有选中 url 发送。
+适用：选多个知识点复习、选多道题练习。payload 可选 `multi_separator`（拼接分隔符，默认'、'）。
+```json
+{"type": "action_cards", "payload": {"title": "选择要复习的知识点", "multi_separator": "、", "cards": [
+  {"title": "二次函数", "icon": "quiz", "action": {"type": "reply", "reply_mode": "multi", "url": "复习二次函数", "label": "知识点"}},
+  {"title": "三角函数", "icon": "quiz", "action": {"type": "reply", "reply_mode": "multi", "url": "复习三角函数", "label": "知识点"}},
+  {"title": "概率统计", "icon": "quiz", "action": {"type": "reply", "reply_mode": "multi", "url": "复习概率统计", "label": "知识点"}}
+]}}
+```
+
+③ **acknowledge** — 纯确认。用户点击后仅标记已读（按钮变灰+对勾），不发消息、不触发新对话。
+适用：告知类（"好的""知道了"）、无后续操作的通知确认。
+```json
+{"type": "action_cards", "payload": {"title": "学习计划已就绪", "cards": [
+  {"title": "好的，知道了", "icon": "plan", "action": {"type": "reply", "reply_mode": "acknowledge", "url": "ack", "label": "已读"}}
+]}}
+```
+
+④ **input** — 自定义输入。显示输入框+发送按钮，用户自由输入后发送到对话。
+适用：预设选项不够用时的"其他：____"，或需要学生表达具体想法。
+```json
+{"type": "action_cards", "payload": {"title": "你想重点复习什么？", "cards": [
+  {"title": "自定义知识点", "icon": "quiz", "action": {"type": "reply", "reply_mode": "input", "url": "", "label": "输入知识点名称..."}}
+]}}
+```
+
+⑤ **rating** — 评分。显示 1-5 数字按钮，点击后自动发送。url 中用 `{rating}` 占位符，前端替换为实际分值。
+适用：题目难度评分、学习体验满意度。
+```json
+{"type": "action_cards", "payload": {"title": "这组题难度如何？", "cards": [
+  {"title": "评分", "icon": "chart", "action": {"type": "reply", "reply_mode": "rating", "url": "难度评分：{rating}星", "label": "1-5评分"}}
+]}}
 ```
 
 **reply 卡片使用时机：**
-- 用户需求模糊、缺少关键参数（数量/范围/难度等），需要确认后再执行
-- 操作有副作用（清除数据、重置进度等），需要用户确认
-- 存在多个合理分支，需要用户选择路径
-- 注意：reply 卡片点击后自动发送消息触发新一轮对话，务必在文字回复中提示用户需要选择
+- 用户需求模糊、缺少关键参数（数量/范围/难度等），需要确认后再执行 → single 或 input
+- 操作有副作用（清除数据、重置进度等），需要用户确认 → single
+- 存在多个合理分支，需要用户选择路径 → single 或 multi
+- 纯告知无需用户反馈 → acknowledge
+- 需要用户主观评价 → rating
+- 注意：除 acknowledge 外，reply 卡片点击后自动发送消息触发新一轮对话，务必在文字回复中提示用户需要选择
 ```
 
 #### 必须渲染的场景（满足任一即调用）

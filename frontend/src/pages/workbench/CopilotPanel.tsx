@@ -51,12 +51,14 @@ export function CopilotPanel() {
     scrollToBottom();
   }, [messages, streamingText, scrollToBottom]);
 
-  const doSend = useCallback(async (text: string) => {
+  const doSend = useCallback(async (text: string, silent: boolean = false) => {
     const trimmed = text.trim();
     if (!trimmed || streaming) return;
 
-    const userMsg: ChatMessage = { role: 'user', content: trimmed };
-    setMessages((prev) => [...prev, userMsg]);
+    if (!silent) {
+      const userMsg: ChatMessage = { role: 'user', content: trimmed };
+      setMessages((prev) => [...prev, userMsg]);
+    }
     setInput('');
     setStreaming(true);
     setStreamingText('');
@@ -169,7 +171,7 @@ export function CopilotPanel() {
   const handleSend = () => doSend(input);
 
   const onReply = useCallback((value: string) => {
-    doSend(value);
+    doSend(value, true);
   }, [doSend]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

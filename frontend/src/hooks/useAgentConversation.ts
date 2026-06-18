@@ -217,7 +217,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // ── SSE streaming ──
 
-  const doSend = useCallback(async (text: string) => {
+  const doSend = useCallback(async (text: string, silent: boolean = false) => {
     if (!bot) return;
 
     // Abort any in-flight request
@@ -234,8 +234,10 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     let msgId = 0;
     const nextId = () => `msg_${++msgId}_${Date.now()}`;
 
-    const userMsg: Message = { _id: nextId(), role: 'user', content: text, timestamp: new Date().toISOString() };
-    setMessages(prev => [...prev, userMsg]);
+    if (!silent) {
+      const userMsg: Message = { _id: nextId(), role: 'user', content: text, timestamp: new Date().toISOString() };
+      setMessages(prev => [...prev, userMsg]);
+    }
     setInput('');
 
     try {
