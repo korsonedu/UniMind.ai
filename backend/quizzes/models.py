@@ -350,6 +350,7 @@ class AssignmentSubmission(models.Model):
     submitted_at = models.DateTimeField(auto_now_add=True)
     answers = models.JSONField(default=dict)
     score = models.FloatField(null=True, blank=True)
+    question_results = models.JSONField(null=True, blank=True)
     graded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="graded_submissions")
     graded_at = models.DateTimeField(null=True, blank=True)
 

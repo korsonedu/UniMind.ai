@@ -82,3 +82,41 @@ class CourseTagSerializer(serializers.ModelSerializer):
         course_ids = obj.course_relations.values_list('course_id', flat=True)
         courses = Course.objects.filter(id__in=course_ids).only('id', 'title', 'cover_image')
         return AlbumCourseBriefSerializer(courses, many=True).data
+
+
+# ── Teaching Plan & Lesson Plan ──
+
+from courses.models import TeachingPlan, LessonPlan
+
+
+class LessonPlanSerializer(serializers.ModelSerializer):
+    knowledge_point_names = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LessonPlan
+        fields = [
+            'id', 'teaching_plan', 'title', 'objectives', 'knowledge_points',
+            'knowledge_point_names', 'activities', 'materials', 'ai_generated',
+            'duration_minutes', 'week_number', 'order', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'institution', 'created_by']
+
+    def get_knowledge_point_names(self, obj):
+        return list(obj.knowledge_points.values_list('name', flat=True))
+
+
+class TeachingPlanSerializer(serializers.ModelSerializer):
+    lesson_plans = LessonPlanSerializer(many=True, read_only=True)
+    class_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TeachingPlan
+        fields = [
+            'id', 'institution', 'class_obj', 'class_name', 'title', 'description',
+            'subject', 'semester', 'week_count', 'weekly_plans', 'lesson_plans',
+            'created_by', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'institution', 'created_by']
+
+    def get_class_name(self, obj):
+        return obj.class_obj.name

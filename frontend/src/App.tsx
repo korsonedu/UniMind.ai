@@ -69,6 +69,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const OnlineExam = lazyNamed(() => import('./pages/OnlineExam'), 'OnlineExam');
 const Gradebook = lazyNamed(() => import('./pages/Gradebook'), 'Gradebook');
 const TeacherAssignments = lazyNamed(() => import('./pages/TeacherAssignments'), 'TeacherAssignments');
+const CampusManagement = lazyNamed(() => import('./pages/CampusManagement'), 'CampusManagement');
 const MyAssignments = lazy(() => import('./pages/MyAssignments'));
 const CourseManage = lazy(() => import('./pages/CourseManage'));
 const ArticleManage = lazy(() => import('./pages/ArticleManage'));
@@ -76,6 +77,7 @@ const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const Legal = lazy(() => import('./pages/Legal'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
 const PromoPlus = lazy(() => import('./pages/PromoPlus'));
+const LessonPlans = lazy(() => import('./pages/LessonPlans'));
 
 const PageLoader = () => <Loading fullScreen size="lg" />;
 
@@ -265,6 +267,8 @@ const router = createBrowserRouter([
           { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
           { path: "gradebook", element: <RequireInstitution>{lazyPage(Gradebook)}</RequireInstitution> },
           { path: "teacher-assignments", element: <RequireInstitution>{lazyPage(TeacherAssignments)}</RequireInstitution> },
+          { path: "lesson-plans", element: <RequireInstitution>{lazyPage(LessonPlans)}</RequireInstitution> },
+          { path: "institution/campuses", element: <RequireInstitution>{lazyPage(CampusManagement)}</RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },
           { path: "institution/audit-logs", element: <RequireAdmin>{lazyPage(AuditLogs)}</RequireAdmin> },
           { path: "invite-codes", element: <RequirePlatformAdmin>{lazyPage(InviteCodeAdmin)}</RequirePlatformAdmin> },

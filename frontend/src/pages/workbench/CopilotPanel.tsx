@@ -230,7 +230,7 @@ export function CopilotPanel() {
           {steps.length > 0 && (
             <div className="flex flex-col items-start gap-1.5 px-1">
               {steps.map((step, i) => (
-                <div key={step.call_id} className="flex flex-col gap-1.5 w-full animate-in fade-in slide-in-from-bottom-1 duration-300">
+                <div key={step.call_id} className="flex flex-col gap-1.5 w-full">
                   <div className="flex gap-3 w-full">
                     <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
                       <Brain className="h-3.5 w-3.5 text-primary" />

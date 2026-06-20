@@ -7,6 +7,9 @@ class InstitutionSerializer(serializers.ModelSerializer):
     max_students = serializers.IntegerField(read_only=True)
     is_plan_active = serializers.BooleanField(read_only=True)
     features = serializers.ListField(child=serializers.CharField(), read_only=True)
+    parent_id = serializers.IntegerField(read_only=True, allow_null=True)
+    children_count = serializers.SerializerMethodField()
+    inherit_plan = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Institution
@@ -16,10 +19,15 @@ class InstitutionSerializer(serializers.ModelSerializer):
             'plan', 'plan_expires_at', 'is_active', 'is_plan_active',
             'max_students', 'student_count', 'features',
             'custom_domain', 'logo', 'business_type', 'student_scale', 'description', 'notes',
+            'parent_id', 'children_count', 'inherit_plan',
             'created_by', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at',
-                            'student_count', 'max_students', 'is_plan_active', 'features']
+                            'student_count', 'max_students', 'is_plan_active', 'features',
+                            'parent_id', 'children_count', 'inherit_plan']
+
+    def get_children_count(self, obj):
+        return obj.children.count()
 
 
 class CreateInstitutionSerializer(serializers.ModelSerializer):
@@ -84,3 +92,17 @@ class JoinRequestSerializer(serializers.ModelSerializer):
                   'invite_slug_used', 'status', 'message', 'reviewed_by',
                   'created_at', 'reviewed_at']
         read_only_fields = ['id', 'user', 'invite', 'reviewed_by', 'created_at', 'reviewed_at']
+
+
+class InstitutionChildSerializer(serializers.ModelSerializer):
+    """子校区列表用轻量序列化器。"""
+    student_count = serializers.IntegerField(read_only=True)
+    staff_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Institution
+        fields = ['id', 'name', 'slug', 'plan', 'inherit_plan', 'is_active',
+                  'student_count', 'staff_count', 'created_at']
+
+    def get_staff_count(self, obj):
+        return obj.students.filter(institution_role__in=('owner', 'teacher', 'registrar')).count()

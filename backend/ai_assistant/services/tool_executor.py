@@ -128,7 +128,10 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'search_courses': lambda r: f"找到 {len(r.get('courses', []))} 门课程",
         'search_articles': lambda r: f"找到 {len(r.get('articles', []))} 篇文章",
         'quick_generate': lambda r: f"生成 {r.get('count', len(r.get('questions', [])))} 道题",
-        'render_visual': lambda r: f"渲染可视化: {r.get('type', '')}",
+        'render_visual': lambda r: (
+            f"渲染失败: {r.get('error', '')}" if r.get('error')
+            else f"渲染可视化: {(r.get('visual', {}) if isinstance(r.get('visual'), dict) else {}).get('type', r.get('type', ''))}"
+        ),
         'get_user_wrong_questions': lambda r: f"找到 {r.get('total_found', 0)} 道错题",
         'search_asr': lambda r: f"找到 {r.get('total_found', 0)} 个视频片段",
         'get_practice_questions': lambda r: f"抽取 {len(r.get('questions', []))} 道练习题",
@@ -167,6 +170,11 @@ def summarize_tool_result(tool_name: str, result) -> str:
 class BaseToolExecutor:
     """基础工具执行器。将 tool_name 映射到实际数据库查询，捕获 user 和 institution 上下文。"""
 
+    # 工具名别名：LLM 跨 bot 误调用时自动纠正
+    TOOL_ALIASES: Dict[str, str] = {
+        "search_knowledge": "search_knowledge_tree",
+    }
+
     def __init__(self, user, institution=None):
         self.user = user
         self._allowed_tool_names = None
@@ -178,10 +186,30 @@ class BaseToolExecutor:
         self.pending_visuals: list = []   # render_visual 输出收集，供 SSE done 事件持久化
 
     def __call__(self, tool_name: str, args: Dict[str, Any]) -> str:
-        # 工具白名单校验：防止 LLM 被注入后调用非预期工具
+        # 别名修正：LLM 可能跨 bot 误调用不同命名规范的工具
+        original_name = tool_name
+        tool_name = self.TOOL_ALIASES.get(tool_name, tool_name)
+        if tool_name != original_name:
+            logger.info("Tool alias: %s → %s", original_name, tool_name)
+
+        # 软白名单：路由预测的工具集是引导而非硬限制。
+        # LLM 在多轮工具调用中意图会漂移——路由时没预测到的工具，
+        # 只要本 bot 确实有 handler，就自动放行并加入白名单。
         allowed = getattr(self, '_allowed_tool_names', None)
         if allowed is not None and tool_name not in allowed:
-            return json.dumps({"error": f"Tool not allowed: {tool_name}"}, ensure_ascii=False)
+            handler = getattr(self, f'_handle_{tool_name}', None)
+            if handler is not None:
+                # 合法工具，仅路由时未预选 → 自愈放行
+                allowed.add(tool_name)
+                logger.info(
+                    "Tool '%s' not in initial route, auto-allowed (handler exists)",
+                    tool_name,
+                )
+            else:
+                return json.dumps(
+                    {"error": f"Tool not allowed: {tool_name}"},
+                    ensure_ascii=False,
+                )
 
         handler = getattr(self, f'_handle_{tool_name}', None)
         if handler is None:
@@ -200,24 +228,59 @@ class BaseToolExecutor:
     # ── Tool handlers ──────────────────────────────────────────
 
     def _handle_render_visual(self, args: Dict) -> Dict:
-        """将可视化数据返回给前端，同时缓存到实例供消息持久化。"""
-        visual_type = args.get('type', '')
+        """将可视化数据返回给前端，同时缓存到实例供消息持久化。
+
+        对 DeepSeek 常见小偏差做宽容修正（缺 title 用 description 补等），
+        但不可恢复的输入错误必须返回 error——返回 ok 会导致 LLM 自激循环。
+        """
+        visual_type = (args.get('type') or '').strip()
         payload = args.get('payload', {})
         priority = args.get('priority', 'normal')
+
+        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards', 'function_graph'}
+        if visual_type not in valid_types:
+            valid_list = ', '.join(sorted(valid_types))
+            return {"error": f"可视化类型无效: '{visual_type}'。支持: {valid_list}"}
+
         # DeepSeek 有时把 payload 作为 JSON 字符串传入
         if isinstance(payload, str):
             try:
                 payload = json.loads(payload)
             except (json.JSONDecodeError, TypeError):
-                payload = {}
+                return {"error": "payload 必须是 JSON 对象，收到无法解析的字符串"}
 
-        valid_types = {'data_card', 'latex_derivation', 'step_solution', 'knowledge_map', 'action_cards', 'function_graph'}
-        if visual_type not in valid_types:
-            visual_type = 'data_card'
+        if not isinstance(payload, dict):
+            return {"error": "payload 必须是 JSON 对象"}
+
+        # action_cards：修正小偏差，但全无效时返回 error 而非空卡片
+        if visual_type == 'action_cards':
+            raw_cards = payload.get('cards', [])
+            if not isinstance(raw_cards, list):
+                return {"error": "action_cards 的 cards 字段必须是数组"}
+            fixed_cards = []
+            for c in raw_cards:
+                if not isinstance(c, dict):
+                    continue
+                if not c.get('title'):
+                    fallback = (
+                        c.get('description') or
+                        (c.get('action', {}).get('label') if isinstance(c.get('action'), dict) else None) or
+                        ''
+                    )
+                    if fallback:
+                        c = {**c, 'title': fallback}
+                    else:
+                        continue
+                if 'action' not in c or not isinstance(c.get('action'), dict):
+                    c = {**c, 'action': {'type': 'reply', 'url': c.get('title', ''), 'label': c.get('title', '')}}
+                fixed_cards.append(c)
+            if not fixed_cards:
+                return {"error": "action_cards 必须包含至少一张有效卡片（每张需要 title 或 description）"}
+            payload = {**payload, 'cards': fixed_cards}
 
         visual = {"type": visual_type, "payload": payload, "priority": priority}
         self.pending_visuals.append(visual)
-        return visual
+        return {"status": "ok", "visual": visual}
 
     def _handle_search_knowledge_tree(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem

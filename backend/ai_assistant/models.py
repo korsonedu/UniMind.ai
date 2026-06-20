@@ -152,6 +152,7 @@ class ActionCardInteraction(models.Model):
     ACTION_TYPES = (
         ('video', '视频'), ('quiz', '做题'), ('review', '复习'),
         ('course', '课程'), ('chart', '图表'), ('plan', '计划'), ('exam', '考试'),
+        ('reply', '回复'),
     )
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='card_interactions')

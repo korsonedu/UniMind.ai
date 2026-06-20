@@ -29,6 +29,13 @@ from .serializers_institution import (
 DIRECTION_LIMITS = {'starter': 1, 'growth': 3, 'enterprise': 999999}
 
 
+def _get_institution_ids_for_query(inst, include_children: bool = False) -> list[int]:
+    """返回查询范围：若 include_children 且为根机构，则包含所有子孙校区 ID。"""
+    if include_children and inst and inst.is_root():
+        return [inst.pk] + inst.get_descendant_ids()
+    return [inst.pk] if inst else []
+
+
 def _clone_knowledge_tree(subject_name, institution):
     """Clone all global KnowledgePoints for a subject into an institution scope."""
     from quizzes.models import KnowledgePoint
@@ -174,7 +181,9 @@ class InstitutionStudentListView(APIView):
 
     def get(self, request):
         inst = request.user.institution
-        qs = inst.students.filter(institution_role='student').order_by('-date_joined')
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
+        qs = User.objects.filter(institution_id__in=inst_ids, institution_role='student').order_by('-date_joined')
         try:
             page = int(request.query_params.get('page', 1))
             page_size = int(request.query_params.get('page_size', 20))
@@ -189,6 +198,7 @@ class InstitutionStudentListView(APIView):
             'total': total,
             'page': page,
             'total_pages': (total + page_size - 1) // page_size,
+            'aggregated': include_children,
         })
 
     def post(self, request):
@@ -374,7 +384,9 @@ class InstitutionStudentRankingView(APIView):
 
     def get(self, request):
         inst = request.user.institution
-        qs = inst.students.order_by('-elo_score')[:50]
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
+        qs = User.objects.filter(institution_id__in=inst_ids).order_by('-elo_score')[:50]
         serializer = InstitutionStudentSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -405,9 +417,11 @@ class InstitutionFeatureView(APIView):
 
         inst_data = None
         if inst:
+            effective_plan = inst.get_effective_plan()
+            plan_label = dict(Institution.PLAN_CHOICES).get(effective_plan, effective_plan)
             inst_data = {
                 'id': inst.id, 'name': inst.name, 'slug': inst.slug,
-                'plan': inst.plan, 'plan_label': inst.get_plan_display(),
+                'plan': effective_plan, 'plan_label': plan_label,
                 'plan_expires_at': inst.plan_expires_at,
                 'is_active': inst.is_active,
                 'is_plan_active': inst.is_plan_active,
@@ -422,7 +436,7 @@ class InstitutionFeatureView(APIView):
         if is_platform_admin(user) and inst is None:
             features = get_plan_features('enterprise')
         elif inst:
-            features = get_plan_features(inst.plan)
+            features = get_plan_features(inst.get_effective_plan())
         else:
             features = []
 
@@ -450,13 +464,17 @@ class InstitutionDashboardView(APIView):
     def get(self, request):
         user = request.user
         inst = user.institution
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
 
         # 7-day active student count
         from django.utils import timezone
         from datetime import timedelta
         from django.db.models import Count, Q
         week_ago = timezone.now() - timedelta(days=7)
-        student_ids = inst.students.filter(institution_role='student').values_list('id', flat=True)
+        student_ids = User.objects.filter(
+            institution_id__in=inst_ids, institution_role='student'
+        ).values_list('id', flat=True)
         weekly_active = 0
         if student_ids:
             from quizzes.models import ReviewLog
@@ -464,9 +482,10 @@ class InstitutionDashboardView(APIView):
                 user_id__in=student_ids, review_time__gte=week_ago
             ).values('user_id').distinct().count()
 
-        # 配额用量
+        # 配额用量（始终基于根机构）
         from users.quota import get_all_quota_info
-        quota_info = get_all_quota_info(inst) if inst else {}
+        root_inst = inst.get_root() if inst else None
+        quota_info = get_all_quota_info(root_inst) if root_inst else {}
 
         # 薄弱知识点排行
         top_weak = []
@@ -504,11 +523,11 @@ class InstitutionDashboardView(APIView):
         try:
             from quizzes.models import Assignment, AssignmentSubmission
             assignment_ids = Assignment.objects.filter(
-                institution=inst, status='published'
+                institution_id__in=inst_ids, status='published'
             ).values_list('id', flat=True)
             active_assignments = len(assignment_ids)
             pending_grading = AssignmentSubmission.objects.filter(
-                assignment__institution=inst, score__isnull=True
+                assignment__institution_id__in=inst_ids, score__isnull=True
             ).count()
         except Exception:
             pass
@@ -516,14 +535,14 @@ class InstitutionDashboardView(APIView):
         return Response({
             'mode': 'institution_admin',
             'institution': {
-                'id': inst.id, 'name': inst.name, 'plan': inst.plan,
-                'plan_label': inst.get_plan_display(),
+                'id': inst.id, 'name': inst.name, 'plan': inst.get_effective_plan(),
+                'plan_label': dict(Institution.PLAN_CHOICES).get(inst.get_effective_plan(), inst.get_effective_plan()),
                 'plan_expires_at': inst.plan_expires_at,
                 'is_active': inst.is_active,
                 'is_plan_active': inst.is_plan_active,
                 'max_students': inst.max_students,
-                'student_count': inst.student_count,
-                'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher', 'registrar')).count(),
+                'student_count': User.objects.filter(institution_id__in=inst_ids, institution_role='student').count(),
+                'staff_count': User.objects.filter(institution_id__in=inst_ids, institution_role__in=('owner', 'teacher', 'registrar')).count(),
             },
             'stats': {
                 'weekly_active_students': weekly_active,
@@ -615,6 +634,8 @@ class InstitutionSelfUpdateView(APIView):
 
     def get(self, request):
         inst = request.user.institution
+        effective_plan = inst.get_effective_plan()
+        plan_label = dict(Institution.PLAN_CHOICES).get(effective_plan, effective_plan)
         return Response({
             'id': inst.id,
             'name': inst.name,
@@ -622,8 +643,8 @@ class InstitutionSelfUpdateView(APIView):
             'contact_name': inst.contact_name,
             'contact_email': inst.contact_email,
             'contact_phone': inst.contact_phone,
-            'plan': inst.plan,
-            'plan_label': inst.get_plan_display(),
+            'plan': effective_plan,
+            'plan_label': plan_label,
             'plan_expires_at': inst.plan_expires_at,
             'is_plan_active': inst.is_plan_active,
             'max_students': inst.max_students,
@@ -720,7 +741,9 @@ class InstitutionMemberListView(APIView):
 
     def get(self, request):
         inst = request.user.institution
-        qs = inst.students.exclude(institution_role='owner').order_by('institution_role', '-date_joined')
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
+        qs = User.objects.filter(institution_id__in=inst_ids).exclude(institution_role='owner').order_by('institution_role', '-date_joined')
         serializer = InstitutionStudentSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -797,7 +820,7 @@ class InstitutionJoinBySlugView(APIView):
         user.institution = inst
         user.institution_role = role
         user.is_member = True
-        user.membership_tier = inst.plan
+        user.membership_tier = inst.get_effective_plan()
         user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
 
         return Response({
@@ -875,7 +898,7 @@ class InstitutionJoinByInviteSlugView(APIView):
         user.institution = inst
         user.institution_role = assigned_role
         user.is_member = True
-        user.membership_tier = inst.plan
+        user.membership_tier = inst.get_effective_plan()
         user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
 
         if invite:
@@ -966,7 +989,7 @@ class InstitutionJoinRequestReviewView(APIView):
             user.institution = inst
             user.institution_role = join_req.invite.assigned_role if join_req.invite else 'student'
             user.is_member = True
-            user.membership_tier = inst.plan
+            user.membership_tier = inst.get_effective_plan()
             user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
             if join_req.invite:
                 InstitutionInvite.objects.filter(pk=join_req.invite_id).update(
@@ -1054,7 +1077,7 @@ class InstitutionCreateView(APIView):
         user.institution_role = 'owner'
         user.role = 'admin'
         user.is_member = True
-        user.membership_tier = user.institution.plan if user.institution else 'free'
+        user.membership_tier = user.institution.get_effective_plan() if user.institution else 'free'
         user.save(update_fields=['institution', 'institution_role', 'role', 'is_member', 'membership_tier'])
 
         # 创建「初始化题库」通知
@@ -1157,8 +1180,10 @@ class InstitutionClassPerformanceView(APIView):
         from quizzes.models import UserQuestionStatus, Question
 
         inst = request.user.institution
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
         student_ids = list(
-            inst.students.filter(institution_role='student').values_list('id', flat=True)
+            User.objects.filter(institution_id__in=inst_ids, institution_role='student').values_list('id', flat=True)
         )
         if not student_ids:
             return Response({'results': []})
@@ -1260,8 +1285,10 @@ class InstitutionSuggestedTopicsView(APIView):
         from quizzes.models import UserQuestionStatus
 
         inst = request.user.institution
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
         student_ids = list(
-            inst.students.filter(institution_role='student').values_list('id', flat=True)
+            User.objects.filter(institution_id__in=inst_ids, institution_role='student').values_list('id', flat=True)
         )
         if not student_ids:
             return Response({'suggested_topics': []})
@@ -1360,7 +1387,7 @@ class InstitutionPaymentConfigView(APIView):
 
     def put(self, request):
         inst = request.user.institution
-        if inst.plan != 'enterprise':
+        if inst.get_effective_plan() != 'enterprise':
             return Response({'error': '仅 Enterprise 方案支持自有收款配置'}, status=403)
 
         from users.models_commercial import InstitutionPaymentConfig
@@ -1493,12 +1520,16 @@ class ClassListCreateView(APIView):
 
     def get(self, request):
         inst = request.user.institution
-        classes = ClassModel.objects.filter(institution=inst).order_by('-created_at')
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
+        classes = ClassModel.objects.filter(institution_id__in=inst_ids).order_by('-created_at')
         data = []
         for c in classes:
             data.append({
                 'id': c.id,
                 'name': c.name,
+                'institution_name': c.institution.name,
+                'institution_id': c.institution_id,
                 'student_count': c.students.count(),
                 'students': [{'id': s.id, 'name': s.nickname or s.username}
                            for s in c.students.all()[:50]],
@@ -1711,19 +1742,21 @@ class ClassGradebookView(APIView):
 
     def get(self, request):
         inst = request.user.institution
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
         class_id = request.query_params.get('class_id')
         if not class_id:
             return Response({'error': '缺少 class_id 参数'}, status=400)
 
         try:
-            class_obj = ClassModel.objects.get(id=int(class_id), institution=inst)
+            class_obj = ClassModel.objects.get(id=int(class_id), institution_id__in=inst_ids)
         except (ClassModel.DoesNotExist, ValueError, TypeError):
             return Response({'error': '班级不存在'}, status=404)
 
         from quizzes.models import Assignment, AssignmentSubmission
 
         assignments = Assignment.objects.filter(
-            target_classes=class_obj, institution=inst,
+            target_classes=class_obj, institution_id__in=inst_ids,
         ).order_by('-created_at')
 
         assignment_list = []
@@ -1796,13 +1829,60 @@ class InstitutionBusinessDashboardView(APIView):
         if student_count > 0:
             retention_rate = round(active_this_month / student_count * 100, 1)
 
+        # 营收指标：从 Order 表聚合
+        from payments.models import Order
+        paid_orders = Order.objects.filter(institution=inst, status='paid')
+        total_revenue = paid_orders.aggregate(total=models.Sum('amount_cents'))['total'] or 0
+        revenue_this_month = paid_orders.filter(paid_at__gte=month_start).aggregate(
+            total=models.Sum('amount_cents')
+        )['total'] or 0
+
+        # ARPU：有付费订单的用户人均消费
+        paying_user_ids = paid_orders.values('user_id').distinct()
+        paying_count = paying_user_ids.count()
+        arpu = round(total_revenue / paying_count / 100, 2) if paying_count > 0 else 0
+
+        # 续费率：有 ≥2 笔付费订单的用户占比
+        from django.db.models import Count
+        renewing = paid_orders.values('user_id').annotate(
+            order_count=Count('id')
+        ).filter(order_count__gte=2).count()
+        renewal_rate = round(renewing / paying_count * 100, 1) if paying_count > 0 else 0
+
+        # MRR / ARR：从活跃订阅计算
+        from payments.models import Subscription
+        PLAN_MONTHLY_PRICE = {
+            ('starter', 'monthly'): 9900, ('starter', 'annual'): 9900,   # annual 折算月均
+            ('growth', 'monthly'): 29900, ('growth', 'annual'): 24917,
+            ('enterprise', 'monthly'): 99900, ('enterprise', 'annual'): 83250,
+        }
+        active_subs = Subscription.objects.filter(
+            institution=inst, status__in=('active', 'trialing', 'past_due')
+        )
+        mrr = 0
+        subs_by_plan: dict[str, int] = {}
+        for sub in active_subs:
+            price = PLAN_MONTHLY_PRICE.get((sub.plan, sub.billing_cycle), 0)
+            mrr += price
+            subs_by_plan[sub.plan] = subs_by_plan.get(sub.plan, 0) + 1
+        mrr_yuan = round(mrr / 100, 2)
+        arr_yuan = round(mrr * 12 / 100, 2)
+
         return Response({
             'student_count': student_count,
             'active_students_this_month': active_this_month,
             'total_assignments': total_assignments,
             'total_courses': total_courses,
-            'revenue': 0,
+            'revenue': round(total_revenue / 100, 2),
+            'revenue_this_month': round(revenue_this_month / 100, 2),
+            'mrr': mrr_yuan,
+            'arr': arr_yuan,
+            'active_subscriptions': active_subs.count(),
+            'subscriptions_by_plan': subs_by_plan,
             'retention_rate': retention_rate,
+            'arpu': arpu,
+            'renewal_rate': renewal_rate,
+            'paying_users': paying_count,
         })
 
 
@@ -1812,28 +1892,37 @@ class InstitutionDataExportView(APIView):
 
     def get(self, request):
         inst = request.user.institution
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
         export_type = request.query_params.get('type', 'students')
 
         if export_type == 'students':
-            students = inst.students.filter(institution_role='student').order_by('-date_joined')
+            students = User.objects.filter(
+                institution_id__in=inst_ids, institution_role='student'
+            ).order_by('-date_joined')
+            # 聚合模式下加校区列
+            header = ['姓名', '邮箱', '校区', 'ELO', '加入日期'] if include_children else ['姓名', '邮箱', 'ELO', '加入日期']
             response = HttpResponse(content_type='text/csv; charset=utf-8')
             response['Content-Disposition'] = 'attachment; filename="students.csv"'
             response.write('﻿')  # BOM for Excel UTF-8 compatibility
             writer = csv.writer(response)
-            writer.writerow(['姓名', '邮箱', 'ELO', '加入日期'])
+            writer.writerow(header)
             for s in students:
-                writer.writerow([
+                row = [
                     s.nickname or s.username,
                     s.email,
                     s.elo_score,
                     s.date_joined.strftime('%Y-%m-%d') if s.date_joined else '',
-                ])
+                ]
+                if include_children:
+                    row.insert(2, s.institution.name if s.institution else '')
+                writer.writerow(row)
             return response
 
         elif export_type == 'assignments':
             from quizzes.models import Assignment, AssignmentSubmission
             from django.db.models import Count, Avg
-            assignments = Assignment.objects.filter(institution=inst).order_by('-created_at')
+            assignments = Assignment.objects.filter(institution_id__in=inst_ids).order_by('-created_at')
             response = HttpResponse(content_type='text/csv; charset=utf-8')
             response['Content-Disposition'] = 'attachment; filename="assignments.csv"'
             response.write('﻿')
@@ -1854,8 +1943,8 @@ class InstitutionDataExportView(APIView):
             return Response({
                 'export_type': 'usage',
                 'message': '使用数据导出暂不可用',
-                'student_count': inst.students.filter(institution_role='student').count(),
-                'teacher_count': inst.students.filter(institution_role='teacher').count(),
+                'student_count': User.objects.filter(institution_id__in=inst_ids, institution_role='student').count(),
+                'teacher_count': User.objects.filter(institution_id__in=inst_ids, institution_role='teacher').count(),
             })
 
         return Response({'error': f'不支持的导出类型: {export_type}'}, status=400)
@@ -1872,3 +1961,192 @@ class InstitutionStudentReportCardView(APIView):
             User, id=pk, institution=inst, institution_role='student',
         )
         return Response(_build_report_data(student))
+
+
+# ═══════════════════════════════════════════════════════════════
+# 子机构/校区管理
+# ═══════════════════════════════════════════════════════════════
+
+class InstitutionChildListView(APIView):
+    """GET /api/users/institution/me/children/ — 列出子校区 + 创建。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        children = inst.children.all().order_by('-created_at')
+        data = []
+        for child in children:
+            data.append({
+                'id': child.id,
+                'name': child.name,
+                'slug': child.slug,
+                'plan': child.get_effective_plan(),
+                'inherit_plan': child.inherit_plan,
+                'is_active': child.is_active,
+                'is_plan_active': child.is_plan_active,
+                'student_count': child.student_count,
+                'staff_count': child.students.filter(
+                    institution_role__in=('owner', 'teacher', 'registrar')
+                ).count(),
+                'business_type': child.business_type,
+                'created_at': child.created_at.isoformat(),
+            })
+        return Response(data)
+
+    def post(self, request):
+        inst = request.user.institution
+        if not inst.is_root():
+            return Response({'error': '仅总校可创建子校区'}, status=403)
+        if request.user.institution_role != 'owner':
+            return Response({'error': '仅机构所有者可创建子校区'}, status=403)
+
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response({'error': '校区名称不能为空'}, status=400)
+
+        slug = (request.data.get('slug') or '').strip()
+        if slug and Institution.objects.filter(slug=slug).exists():
+            return Response({'error': f'标识 {slug} 已被使用'}, status=409)
+
+        import secrets
+        if not slug:
+            slug = secrets.token_urlsafe(8).lower()
+
+        inherit_plan = request.data.get('inherit_plan', True)
+        if isinstance(inherit_plan, str):
+            inherit_plan = inherit_plan.lower() != 'false'
+
+        child = Institution.objects.create(
+            parent=inst,
+            name=name,
+            slug=slug,
+            contact_name=request.data.get('contact_name', inst.contact_name),
+            contact_email=request.data.get('contact_email', inst.contact_email),
+            contact_phone=request.data.get('contact_phone', inst.contact_phone),
+            plan=inst.plan if inherit_plan else request.data.get('plan', 'free'),
+            inherit_plan=inherit_plan,
+            business_type=inst.business_type,
+            created_by=request.user,
+        )
+        return Response({
+            'id': child.id,
+            'name': child.name,
+            'slug': child.slug,
+            'inherit_plan': child.inherit_plan,
+            'plan': child.get_effective_plan(),
+        }, status=201)
+
+
+class InstitutionChildDetailView(APIView):
+    """GET/PUT/DELETE /api/users/institution/me/children/<pk>/ — 单个子校区管理。"""
+    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
+
+    def get(self, request, pk):
+        inst = request.user.institution
+        child = get_object_or_404(Institution, id=pk, parent=inst)
+        return Response({
+            'id': child.id,
+            'name': child.name,
+            'slug': child.slug,
+            'plan': child.get_effective_plan(),
+            'own_plan': child.plan,
+            'inherit_plan': child.inherit_plan,
+            'is_active': child.is_active,
+            'is_plan_active': child.is_plan_active,
+            'student_count': child.student_count,
+            'staff_count': child.students.filter(
+                institution_role__in=('owner', 'teacher', 'registrar')
+            ).count(),
+            'contact_name': child.contact_name,
+            'contact_email': child.contact_email,
+            'contact_phone': child.contact_phone,
+            'business_type': child.business_type,
+            'created_at': child.created_at.isoformat(),
+        })
+
+    def put(self, request, pk):
+        inst = request.user.institution
+        child = get_object_or_404(Institution, id=pk, parent=inst)
+        allowed = ['name', 'contact_name', 'contact_email', 'contact_phone', 'business_type', 'inherit_plan']
+        for field in allowed:
+            if field in request.data:
+                setattr(child, field, request.data[field])
+        # 取消继承时可设置独立 plan
+        if not child.inherit_plan and 'plan' in request.data:
+            child.plan = request.data['plan']
+        child.save()
+        return Response({
+            'id': child.id,
+            'name': child.name,
+            'plan': child.get_effective_plan(),
+            'own_plan': child.plan,
+            'inherit_plan': child.inherit_plan,
+        })
+
+    def delete(self, request, pk):
+        inst = request.user.institution
+        child = get_object_or_404(Institution, id=pk, parent=inst)
+        # 软删除：标记为 inactive 而非真删
+        child.is_active = False
+        child.save(update_fields=['is_active'])
+        return Response({'status': 'deactivated'})
+
+
+class InstitutionChildContextView(APIView):
+    """POST /api/users/institution/me/children/<pk>/context/ — 切换校区上下文。"""
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def post(self, request, pk):
+        inst = request.user.institution
+        child = get_object_or_404(Institution, id=pk)
+        # 必须是子校区或就是自身
+        if child.id != inst.id and child.parent_id != inst.id:
+            return Response({'error': '无权访问此校区'}, status=403)
+        request.session['current_institution_id'] = child.id
+        return Response({
+            'current_institution_id': child.id,
+            'name': child.name,
+            'plan': child.get_effective_plan(),
+        })
+
+
+class InstitutionStudentHealthView(APIView):
+    """GET /api/users/institution/me/student-health/ — 学员流失风险评估。
+    基于活跃度、Memorix 复习率、连续签到、学习趋势四个维度综合评分。
+    """
+    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get(self, request):
+        inst = request.user.institution
+        include_children = request.query_params.get('include_children') == 'true'
+        inst_ids = _get_institution_ids_for_query(inst, include_children)
+
+        from quizzes.services.student_health import compute_student_health
+
+        students = User.objects.filter(
+            institution_id__in=inst_ids, institution_role='student'
+        ).order_by('-last_active')
+
+        results = []
+        for s in students:
+            h = compute_student_health(s)
+            results.append({
+                'student_id': s.id,
+                'name': s.nickname or s.username,
+                'email': s.email,
+                'avatar_url': getattr(s, 'avatar_url', None),
+                'date_joined': s.date_joined.isoformat() if s.date_joined else None,
+                'last_active': s.last_active.isoformat() if s.last_active else None,
+                **h,
+            })
+
+        results.sort(key=lambda x: x['score'])
+        return Response({
+            'results': results,
+            'summary': {
+                'total': len(results),
+                'healthy': sum(1 for r in results if r['level'] == 'healthy'),
+                'at_risk': sum(1 for r in results if r['level'] == 'at_risk'),
+                'critical': sum(1 for r in results if r['level'] == 'critical'),
+            },
+        })

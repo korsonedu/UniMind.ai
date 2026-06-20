@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from payments.models import Order, Invoice
+from payments.models import Order, Invoice, Subscription
 from payments.serializers import CreateOrderSerializer, OrderSerializer, InvoiceSerializer
 from payments.services.base import create_order, confirm_order
 from payments.services.gateway_router import get_gateway
@@ -124,6 +124,92 @@ class SimulatePaymentView(APIView):
         })
 
 
+# ── Subscription ──
+
+
+class CreateSubscriptionView(APIView):
+    """POST /api/payments/subscriptions/ — 创建订阅结账会话。"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        inst = getattr(user, 'institution', None)
+        if not inst:
+            return Response({'error': '无机构归属'}, status=403)
+
+        role = getattr(user, 'institution_role', '')
+        if role not in ('owner',):
+            return Response({'error': '仅机构所有者可操作'}, status=403)
+
+        plan = request.data.get('plan', 'starter')
+        billing_cycle = request.data.get('billing_cycle', 'monthly')
+
+        if plan not in dict(Subscription.PLAN_CHOICES):
+            return Response({'error': f'无效方案: {plan}'}, status=400)
+        if billing_cycle not in dict(Subscription.BILLING_CHOICES):
+            return Response({'error': f'无效周期: {billing_cycle}'}, status=400)
+
+        try:
+            from payments.services.stripe_gateway import create_subscription_checkout
+            data = create_subscription_checkout(inst, plan, billing_cycle, user.email)
+            return Response({
+                'subscription_id': data['subscription_id'],
+                'checkout_url': data['checkout_url'],
+            }, status=status.HTTP_201_CREATED)
+        except Exception:
+            logger.exception('Subscription create failed')
+            return Response({'error': '创建订阅失败'}, status=500)
+
+
+class SubscriptionStatusView(APIView):
+    """GET/POST /api/payments/subscriptions/me/ — 查看/取消机构订阅。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        inst = getattr(request.user, 'institution', None)
+        if not inst:
+            return Response({'error': '无机构归属'}, status=403)
+
+        sub = Subscription.objects.filter(institution=inst).order_by('-created_at').first()
+        if not sub:
+            return Response({'subscription': None})
+
+        return Response({
+            'subscription': {
+                'id': sub.id,
+                'plan': sub.plan,
+                'billing_cycle': sub.billing_cycle,
+                'status': sub.status,
+                'current_period_start': sub.current_period_start.isoformat() if sub.current_period_start else None,
+                'current_period_end': sub.current_period_end.isoformat() if sub.current_period_end else None,
+                'canceled_at': sub.canceled_at.isoformat() if sub.canceled_at else None,
+                'created_at': sub.created_at.isoformat(),
+            }
+        })
+
+    def post(self, request):
+        """取消订阅（周期结束时取消）。"""
+        inst = getattr(request.user, 'institution', None)
+        if not inst:
+            return Response({'error': '无机构归属'}, status=403)
+
+        role = getattr(request.user, 'institution_role', '')
+        if role not in ('owner',):
+            return Response({'error': '仅机构所有者可操作'}, status=403)
+
+        sub = Subscription.objects.filter(institution=inst, status='active').first()
+        if not sub:
+            return Response({'error': '无活跃订阅'}, status=404)
+
+        try:
+            from payments.services.stripe_gateway import cancel_subscription
+            result = cancel_subscription(sub)
+            return Response(result)
+        except Exception:
+            logger.exception('Subscription cancel failed')
+            return Response({'error': '取消订阅失败'}, status=500)
+
+
 # ── Webhook (no auth — 真实支付时校验签名) ──
 
 class WebhookView(APIView):
@@ -159,6 +245,17 @@ class WebhookView(APIView):
             result = gw.process_webhook_event(event)
             if not result:
                 return Response({'status': 'ignored'})
+
+            # Subscription events — already handled in process_webhook_event
+            if result.get('type') in (
+                'customer.subscription.updated',
+                'customer.subscription.deleted',
+                'invoice.paid',
+                'subscription_checkout_completed',
+            ):
+                return Response({'status': 'ok', 'type': result['type']})
+
+            # One-time payment events
             confirm_order(result['order_id'], result['gateway_txn_id'], result['raw'], result.get('amount_cents'))
             return Response({'status': 'ok'})
         except Order.DoesNotExist:

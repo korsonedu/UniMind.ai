@@ -11,7 +11,8 @@
 | "统计""多少题""题库情况""出题分布" | `get_workbench_stats` |
 | "某某学得怎么样""查一下XX""XX的学习情况" | `get_student_detail` |
 | "作业交了没""作业 X 进度""批改情况" | `get_assignment_progress` |
-| "布置给X班""把这些题发下去""下发作业" | `assign_practice` |
+| "布置给X班""把这些题发下去""下发作业" | `assign_practice`（题目已在上下文中时直接布置） |
+| "布置作业+随机抽题""布置X练习随机抽题" | `list_questions(random=true)` → 拿到题目后 `assign_practice`。先抽题再布置，不可跳过取题步骤。 |
 | "提醒一下""通知XX""催一下" | `send_notification` |
 | "看看课程""有什么课""浏览课程" | `list_courses` |
 | "看看题库""有没有X的题""搜索题目" | `list_questions` |

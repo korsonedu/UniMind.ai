@@ -520,10 +520,12 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   // 其他工具步骤 → ToolStepMessage
                   // quick_generate/bulk_generate 完成后不再展示步骤卡片，
                   // 因为后续文字气泡已经说明了结果，避免两个气泡说同一件事
+                  // render_visual 完成但无 visual → 后端校验拒绝了无效参数，AI 会自纠正，用户无需看到
                   if (msg.toolStep) {
                     const step = msg.toolStep;
                     const isGenDone = (step.name === 'quick_generate' || step.name === 'bulk_generate_questions') && step.status === 'done';
                     if (isGenDone) return null;
+                    if (step.name === 'render_visual' && step.status === 'done' && !step.visual) return null;
                     return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
                   }
                   // 普通消息 → ChatBubble

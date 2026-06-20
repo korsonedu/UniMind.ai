@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import api, { setPreviewInstitutionId } from '@/lib/api';
+import api, { setPreviewInstitutionId, setCampusContextId } from '@/lib/api';
 
 interface InstitutionInfo {
   id: number;
@@ -61,6 +61,17 @@ export function quotaLabel(key: string): string {
   return QUOTA_LABELS[key] || key;
 }
 
+export interface CampusInfo {
+  id: number;
+  name: string;
+  slug: string;
+  plan: string;
+  inherit_plan: boolean;
+  is_active: boolean;
+  student_count: number;
+  staff_count: number;
+}
+
 interface InstitutionState {
   isPlatformAdmin: boolean;
   institution: InstitutionInfo | null;
@@ -74,6 +85,12 @@ interface InstitutionState {
   previewInstitution: InstitutionInfo | null;
   enterPreview: (institutionId: number) => Promise<void>;
   exitPreview: () => Promise<void>;
+
+  // Campus / sub-institution
+  currentCampusId: number | null;
+  children: CampusInfo[];
+  fetchChildren: () => Promise<void>;
+  switchCampus: (campusId: number | null) => Promise<void>;
 
   fetchFeatures: () => Promise<void>;
   hasFeature: (feature: string) => boolean;
@@ -89,6 +106,26 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
   featuresError: false,
   previewMode: false,
   previewInstitution: null,
+
+  // Campus / sub-institution
+  currentCampusId: null,
+  children: [],
+  fetchChildren: async () => {
+    try {
+      const { data } = await api.get('/users/institution/me/children/');
+      set({ children: Array.isArray(data) ? data : [] });
+    } catch {
+      set({ children: [] });
+    }
+  },
+  switchCampus: async (campusId: number | null) => {
+    setCampusContextId(campusId);
+    set({ currentCampusId: campusId });
+    // Re-fetch features to reflect the new campus context
+    if (campusId !== null) {
+      get().fetchFeatures();
+    }
+  },
 
   fetchFeatures: async () => {
     const state = get();
@@ -159,6 +196,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
 
   clear: () => {
     setPreviewInstitutionId(null);
+    setCampusContextId(null);
     set({
       isPlatformAdmin: false,
       institution: null,
@@ -166,6 +204,8 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
       loading: false,
       previewMode: false,
       previewInstitution: null,
+      currentCampusId: null,
+      children: [],
     });
   },
 }));

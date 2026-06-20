@@ -187,17 +187,57 @@ class Institution(models.Model):
     notes = models.TextField(blank=True, verbose_name="管理员备注")
     storage_used_bytes = models.BigIntegerField(default=0, verbose_name="已用存储(字节)")
     has_used_bulk_init = models.BooleanField(default=False, verbose_name="已使用批量初始化出题")
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children', verbose_name='上级机构')
+    inherit_plan = models.BooleanField(default=True, verbose_name='继承上级方案', help_text='为真时 plan/plan_expires_at 从 parent 实时派生')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_institutions', verbose_name="创建人")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
     _PLAN_STUDENT_LIMITS = {'free': 30, 'starter': 50, 'growth': 200, 'enterprise': 999999}
 
+    # ── Plan 继承 ──
+
+    def get_effective_plan(self) -> str:
+        """返回生效的 plan：若继承且有父机构则向上查找，否则返回自身 plan。"""
+        if self.inherit_plan and self.parent_id:
+            return self.parent.get_effective_plan()
+        return self.plan
+
+    def get_effective_plan_expires_at(self):
+        """返回生效的到期时间，继承逻辑同 get_effective_plan。"""
+        if self.inherit_plan and self.parent_id:
+            return self.parent.get_effective_plan_expires_at()
+        return self.plan_expires_at
+
+    # ── 层级辅助 ──
+
+    def is_root(self) -> bool:
+        return self.parent_id is None
+
+    def get_root(self):
+        """向上走到根机构。"""
+        node = self
+        while node.parent_id:
+            node = node.parent
+        return node
+
+    def get_descendant_ids(self) -> list[int]:
+        """BFS 收集所有子孙 institution ID。"""
+        ids: list[int] = []
+        queue = list(self.children.all())
+        while queue:
+            child = queue.pop(0)
+            ids.append(child.pk)
+            queue.extend(child.children.all())
+        return ids
+
+    # ── 现有属性（改用 effective plan）──
+
     @property
     def max_students(self):
         if self.max_students_override is not None:
             return self.max_students_override
-        return self._PLAN_STUDENT_LIMITS.get(self.plan, 30)
+        return self._PLAN_STUDENT_LIMITS.get(self.get_effective_plan(), 30)
 
     @property
     def student_count(self):
@@ -207,10 +247,11 @@ class Institution(models.Model):
     def is_plan_active(self):
         if not self.is_active:
             return False
-        if self.plan_expires_at is None:
+        expires = self.get_effective_plan_expires_at()
+        if expires is None:
             return True
         from django.utils import timezone
-        return self.plan_expires_at > timezone.now()
+        return expires > timezone.now()
 
     class Meta:
         verbose_name = '机构'
@@ -446,10 +487,10 @@ def get_plan_features(plan: str) -> list[str]:
 
 
 def has_plan_feature(institution, feature: str) -> bool:
-    """检查机构是否具备指定功能。"""
+    """检查机构是否具备指定功能。子机构继承父机构 plan 时会向上查找。"""
     if institution is None:
         return False
-    return feature in get_plan_features(institution.plan)
+    return feature in get_plan_features(institution.get_effective_plan())
 
 
 def compute_expiry(duration_days: int):

@@ -25,6 +25,12 @@ export const InlineVisualCard: React.FC<InlineVisualCardProps> = React.memo(({ v
     );
   }
 
+  // 空数据不渲染（避免 AI 生成空 action_cards 时出现空白卡片边框）
+  const payload = visual.payload as Record<string, unknown> | undefined;
+  if (visual.type === 'action_cards' && (!payload || !(payload.cards as unknown[])?.length)) {
+    return null;
+  }
+
   return (
     <div
       className={cn(

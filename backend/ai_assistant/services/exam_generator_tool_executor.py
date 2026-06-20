@@ -487,6 +487,11 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
 
     def _handle_assign_practice(self, args: Dict) -> Dict:
         """创建作业并布置给学生（仅教师/机构主可用）。"""
+        logger.info("assign_practice args: title=%r question_ids=%r class_names=%r due_date=%r inst=%s inst_role=%s",
+                     args.get('title'), args.get('question_ids'), args.get('class_names'), args.get('due_date'),
+                     self.institution.id if self.institution else None,
+                     getattr(self.user, 'institution_role', ''))
+
         from quizzes.models import Assignment, AssignmentQuestion, Question
         from notifications.models import Notification
         from users.models import Class as ClassModel
@@ -505,6 +510,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         questions = list(Question.objects.filter(
             id__in=question_ids, institution=self.institution,
         ))
+        logger.info("assign_practice questions filter: ids=%s found=%d", question_ids, len(questions))
         if not questions:
             return {"error": "未找到有效题目"}
 
@@ -680,8 +686,18 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
 
         questions = qs.order_by('-created_at')[:limit]
 
+        # 随机模式：从结果集中随机选取
+        random_mode = str(args.get('random', '')).lower() in ('true', '1', 'yes')
+        if random_mode and questions:
+            import random as _random
+            questions = list(questions)
+            _random.shuffle(questions)
+            questions = questions[:limit]
+
         return {
             "total": qs.count(),
+            "returned": len(questions),
+            "random": random_mode,
             "questions": [
                 {"id": q.id, "text": (q.text or '')[:200],
                  "q_type": q.q_type, "difficulty": q.difficulty_level,

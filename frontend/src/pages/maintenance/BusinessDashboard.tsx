@@ -3,7 +3,7 @@
  * 学生数 / 月活 / 作业数 / 留存率。
  */
 import { useEffect, useState } from 'react';
-import { Spinner, Users, UserCircle, ClipboardText, ChartLine, TrendUp, TrendDown } from '@phosphor-icons/react';
+import { Spinner, Users, UserCircle, ClipboardText, ChartLine, TrendUp, TrendDown, CurrencyDollar, ClockCounterClockwise, CreditCard } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -11,10 +11,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface BusinessDashboardData {
-  total_students: number;
-  active_this_month: number;
+  student_count: number;
+  active_students_this_month: number;
   total_assignments: number;
-  retention_rate: number | null; // 0-100
+  retention_rate: number | null;
+  revenue: number;
+  revenue_this_month: number;
+  mrr: number;
+  arr: number;
+  active_subscriptions: number;
+  subscriptions_by_plan?: Record<string, number>;
+  arpu: number;
+  renewal_rate: number;
+  paying_users: number;
   trends?: {
     students_trend?: 'up' | 'down' | 'flat';
     active_trend?: 'up' | 'down' | 'flat';
@@ -24,31 +33,14 @@ interface BusinessDashboardData {
 }
 
 const STAT_CARDS = [
-  {
-    key: 'total_students' as const,
-    label: '总学生数',
-    icon: Users,
-    trendKey: 'students_trend' as const,
-  },
-  {
-    key: 'active_this_month' as const,
-    label: '本月活跃',
-    icon: UserCircle,
-    trendKey: 'active_trend' as const,
-  },
-  {
-    key: 'total_assignments' as const,
-    label: '作业总数',
-    icon: ClipboardText,
-    trendKey: 'assignments_trend' as const,
-  },
-  {
-    key: 'retention_rate' as const,
-    label: '留存率',
-    icon: ChartLine,
-    trendKey: 'retention_trend' as const,
-    suffix: '%',
-  },
+  { key: 'student_count' as const, label: '总学生数', icon: Users, trendKey: 'students_trend' as const },
+  { key: 'active_students_this_month' as const, label: '本月活跃', icon: UserCircle, trendKey: 'active_trend' as const },
+  { key: 'mrr' as const, label: 'MRR (月经常收入)', icon: CurrencyDollar, prefix: '¥', isCurrency: true },
+  { key: 'arr' as const, label: 'ARR (年经常收入)', icon: ChartLine, prefix: '¥', isCurrency: true },
+  { key: 'active_subscriptions' as const, label: '活跃订阅', icon: CreditCard },
+  { key: 'total_assignments' as const, label: '作业总数', icon: ClipboardText, trendKey: 'assignments_trend' as const },
+  { key: 'retention_rate' as const, label: '留存率', icon: ClockCounterClockwise, trendKey: 'retention_trend' as const, suffix: '%' },
+  { key: 'renewal_rate' as const, label: '续费率', icon: TrendUp, suffix: '%' },
 ];
 
 function TrendIcon({ trend }: { trend?: 'up' | 'down' | 'flat' }) {
@@ -111,11 +103,19 @@ export function BusinessDashboard() {
     <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
       <h1 className="text-lg font-bold">业务数据</h1>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {STAT_CARDS.map((card) => {
           const Icon = card.icon;
           const value = stats[card.key];
-          const trend = stats.trends?.[card.trendKey];
+          const trend = stats.trends?.[card.trendKey as keyof typeof stats.trends];
+          let display = '—';
+          if (value != null) {
+            if (card.isCurrency) {
+              display = `¥${Number(value).toLocaleString()}`;
+            } else {
+              display = `${card.prefix || ''}${value}${card.suffix || ''}`;
+            }
+          }
           return (
             <Card key={card.key}>
               <CardHeader className="pb-2">
@@ -126,9 +126,7 @@ export function BusinessDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-end gap-2">
-                  <p className="text-2xl font-bold">
-                    {value != null ? `${value}${card.suffix || ''}` : '—'}
-                  </p>
+                  <p className="text-2xl font-bold">{display}</p>
                   <TrendIcon trend={trend} />
                 </div>
               </CardContent>

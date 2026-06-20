@@ -42,6 +42,8 @@ from .views_institution import (
     ClassCourseManageView, StudentClassCourseView, ClassGradebookView,
     InstitutionBusinessDashboardView, InstitutionDataExportView,
     InstitutionStudentReportCardView,
+    InstitutionChildListView, InstitutionChildDetailView, InstitutionChildContextView,
+    InstitutionStudentHealthView,
     InstitutionInviteListView, InstitutionInviteDetailView,
     InstitutionJoinRequestListView, InstitutionJoinRequestReviewView,
 )
@@ -132,6 +134,14 @@ urlpatterns = [
     path('institution/me/gradebook/', ClassGradebookView.as_view(), name='institution-gradebook'),
     path('institution/me/business-dashboard/', InstitutionBusinessDashboardView.as_view(), name='institution-business-dashboard'),
     path('institution/me/data-export/', InstitutionDataExportView.as_view(), name='institution-data-export'),
+
+    # Institution — children / campuses
+    path('institution/me/children/', InstitutionChildListView.as_view(), name='institution-child-list'),
+    path('institution/me/children/<int:pk>/', InstitutionChildDetailView.as_view(), name='institution-child-detail'),
+    path('institution/me/children/<int:pk>/context/', InstitutionChildContextView.as_view(), name='institution-child-context'),
+
+    # Institution — student health (churn risk)
+    path('institution/me/student-health/', InstitutionStudentHealthView.as_view(), name='institution-student-health'),
 
     # Institution invites + join requests
     path('institution/me/invites/', InstitutionInviteListView.as_view(), name='institution-invite-list'),

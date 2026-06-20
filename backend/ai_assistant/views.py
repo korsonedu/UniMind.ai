@@ -546,11 +546,21 @@ class AIChatStreamView(APIView):
                     event = await step_queue.get()
                     if event is _SENTINEL:
                         break
-                    # Log step events with visual for debugging
-                    if event.get("type") == "step" and event.get("name") == "render_visual":
+                    # ── 诊断日志：空卡片追踪 ──
+                    if event.get("type") == "step":
+                        _ev_vis = event.get("visual")
+                        _ev_diag = ""
+                        if _ev_vis:
+                            _ev_payload = _ev_vis.get("payload", {}) if isinstance(_ev_vis, dict) else {}
+                            _ev_diag = (
+                                f"vtype={_ev_vis.get('type')} "
+                                f"vcards={len(_ev_payload.get('cards', [])) if isinstance(_ev_payload, dict) else '?'} "
+                                f"vtitle={repr(_ev_payload.get('title', '')) if isinstance(_ev_payload, dict) else '?'}"
+                            )
                         logging.getLogger("agent_debug").info(
-                            "SSE out render_visual: status=%s has_visual=%s call_id=%s",
-                            event.get("status"), "visual" in event, event.get("call_id"),
+                            "SSE out step: name=%s status=%s has_visual=%s %s label=%s",
+                            event.get("name"), event.get("status"), bool(_ev_vis),
+                            _ev_diag, event.get("label", ""),
                         )
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 

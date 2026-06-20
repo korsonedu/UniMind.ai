@@ -11,11 +11,20 @@ let _previewInstitutionId: number | null = null;
 export function setPreviewInstitutionId(id: number | null) { _previewInstitutionId = id; }
 export function getPreviewInstitutionId() { return _previewInstitutionId; }
 
+// Campus context: parent admin switched to a child campus
+let _campusContextId: number | null = null;
+export function setCampusContextId(id: number | null) { _campusContextId = id; }
+export function getCampusContextId() { return _campusContextId; }
+
 api.interceptors.request.use((config) => {
   // Auth via httpOnly cookie (CookieTokenAuthentication) — no Authorization header needed
   // Attach preview institution ID for backend filtering
   if (_previewInstitutionId) {
     config.params = { ...config.params, preview_institution: _previewInstitutionId };
+  }
+  // Attach campus context header for sub-institution context switch
+  if (_campusContextId) {
+    config.headers['X-Campus-Context'] = String(_campusContextId);
   }
   return config;
 });

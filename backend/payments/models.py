@@ -55,6 +55,39 @@ class PaymentTransaction(models.Model):
         return f'TXN {self.gateway_txn_id} — {self.status}'
 
 
+class Subscription(models.Model):
+    """机构订阅——对接 Stripe Subscription。"""
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('past_due', 'Past Due'),
+        ('canceled', 'Canceled'),
+        ('trialing', 'Trialing'),
+        ('incomplete', 'Incomplete'),
+    ]
+    PLAN_CHOICES = [('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise')]
+    BILLING_CHOICES = [('monthly', 'Monthly'), ('annual', 'Annual')]
+
+    institution = models.ForeignKey('users.Institution', on_delete=models.CASCADE, related_name='subscriptions')
+    plan = models.CharField(max_length=20, choices=PLAN_CHOICES)
+    billing_cycle = models.CharField(max_length=10, choices=BILLING_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='incomplete', db_index=True)
+    stripe_subscription_id = models.CharField(max_length=128, unique=True, null=True, blank=True)
+    stripe_customer_id = models.CharField(max_length=128, blank=True)
+    current_period_start = models.DateTimeField(null=True, blank=True)
+    current_period_end = models.DateTimeField(null=True, blank=True)
+    canceled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = '订阅'
+        verbose_name_plural = '订阅'
+
+    def __str__(self):
+        return f'{self.get_plan_display()} {self.get_billing_cycle_display()} ({self.get_status_display()})'
+
+
 class Invoice(models.Model):
     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='invoice')
     invoice_number = models.CharField(max_length=32, unique=True, verbose_name='发票号')

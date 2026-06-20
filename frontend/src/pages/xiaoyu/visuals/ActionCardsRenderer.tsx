@@ -98,7 +98,7 @@ async function loadCompletionStatus(): Promise<Record<string, boolean>> {
 export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({ payload }) => {
   const navigate = useNavigate();
   const { onReply } = useAgentReply();
-  const cards = payload.cards || [];
+  const cards = (payload.cards || []).filter(c => c.title);
   const [completedMap, setCompletedMap] = useState<Record<string, boolean>>({});
   const [chosenUrl, setChosenUrl] = useState<string | null>(null);
   const [multiSelected, setMultiSelected] = useState<Set<string>>(new Set());

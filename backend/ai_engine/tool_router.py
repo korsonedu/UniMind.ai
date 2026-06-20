@@ -5,7 +5,7 @@
   tool body 是路由决策的决定性信号（91.7% 注意力集中在 body），
   仅用 name+description 会导致 29-44pp 精度下降。
 
-路由链：embedding 检索 → 关键词匹配 → 全量工具
+路由链：Retrieve（embedding）→ Workflow Expansion → 关键词 fallback
 """
 
 import logging
@@ -140,97 +140,97 @@ EXAM_GENERATOR_TOOLS_META = [
     ToolMeta(
         name="search_knowledge",
         description="搜索知识点或知识树结构",
-        body="搜索知识点或知识树。参数: query(str)=搜索关键词, subject(str)=学科(可选), mode(str)=搜索模式(kp/tree/auto,默认auto)。auto模式先搜知识点，无结果则搜知识树。返回：知识点ID和名称，或知识树节点。出题前必须先搜索获取知识点ID。适用于：确认知识点、查找相关知识点。不适用于：搜索题目。",
+        body="搜索知识点或知识树。触发词：搜索、查、找、有哪些知识点、XX属于哪个知识点。参数: query(str)=搜索关键词, subject(str)=学科(可选), mode(str)=搜索模式(kp/tree/auto,默认auto)。auto模式先搜知识点，无结果则搜知识树。返回：知识点ID和名称，或知识树节点。出题前必须先搜索获取知识点ID。不适用于：搜索题目（用list_questions）、搜索课程（用list_courses）、搜索文章（用list_articles）。",
     ),
     ToolMeta(
         name="quick_generate",
-        description="快速出题（Author单步，约5-10秒）",
-        body="根据知识点快速生成题目。参数: kp_ids(list)=知识点ID列表, count(int)=总题数(默认5)。调用Author单步生成+去重+校验，跳过Reviewer。返回：题目列表存入候选池，前端QuestionPanel展示。适用于：快速出题、教师审阅。不适用于：高质量出题（用launch_arc_pipeline精修）。",
+        description="快速生成新题目（Author单步，约5-10秒）",
+        body="生成全新题目。触发词：出题、生成、出几道、来几道、给我出、新题、再来一组、换一道、再出。参数: kp_ids(list)=知识点ID列表, count(int)=总题数(默认5)。调用AI生成全新题目，不会从题库中选取已有题目。不适用于：随机抽题/抽取/选题/从题库选（用list_questions random=true）、精修题目（用launch_arc_pipeline）。",
     ),
     ToolMeta(
         name="launch_arc_pipeline",
         description="启动ARC对抗精修管线",
-        body="启动Author→Reviewer→AuthorRevise→Classifier四阶段管线。参数: kp_ids(list)=知识点ID列表, questions_per_kp(int)=每知识点题数(默认3), difficulty(str)=难度, types(list)=题型, title(str)=任务标题。返回：task_id用于追踪进度。适用于：精修已有题目、高质量出题。不适用于：快速出题（用quick_generate）。",
+        body="对已有题目进行精修审核。触发词：精修、ARC、润色、改进、提升质量、对抗审核、管线。参数: kp_ids(list)=知识点ID列表, questions_per_kp(int)=每知识点题数(默认3), difficulty(str)=难度, types(list)=题型, title(str)=任务标题。返回：task_id用于追踪进度。不适用于：快速出题（用quick_generate）。",
     ),
     ToolMeta(
         name="check_pipeline_status",
         description="检查ARC管线执行状态",
-        body="查询管线任务状态。参数: task_id(int)=管线任务ID。返回：状态(pending/running/completed/failed)、当前阶段、进度百分比。适用于：追踪管线进度。不适用于：启动管线。",
+        body="查询管线任务进度。触发词：进度、跑完没、好了吗、状态、结果、完成没。参数: task_id(int)=管线任务ID。返回：状态(pending/running/completed/failed)、当前阶段、进度百分比。",
     ),
     ToolMeta(
         name="get_workbench_stats",
         description="获取题库统计数据",
-        body="获取题库统计。参数: scope(str)=数据范围(summary/recent/insights,默认summary)。summary返回总题数和分布；recent返回最近20道题；insights返回教师出题偏好。适用于：了解题库情况、查看出题统计。不适用于：出题、搜索。",
+        body="查看题库概况。触发词：统计、多少题、出题情况、分布、题库统计、题库概况、出了多少。参数: scope(str)=数据范围(summary/recent/insights,默认summary)。summary返回总题数和分布；recent返回最近20道题；insights返回教师出题偏好。不适用于：出题、搜索知识点。",
     ),
     ToolMeta(
         name="get_student_detail",
         description="获取指定学生的详细学习数据（仅教师/机构主）",
-        body="查询学生答题统计、薄弱知识点、ELO、周活跃度。参数: student_name(str)=学生姓名模糊匹配, student_id(int)=学生ID精确匹配。需要teacher/owner角色。适用于：教师问'某某学得怎么样'、查看学生个人数据。不适用于：查看全班数据（用get_class_weak_points）。",
+        body="查询学生个人学习数据。触发词：学生、学员、学得怎么样、学习情况、成绩、表现、某某的数据、看一下谁、查一下谁。参数: student_name(str)=学生姓名模糊匹配, student_id(int)=学生ID精确匹配。需要teacher/owner角色。不适用于：查看全班数据（用get_class_weak_points或get_class_gradebook）。",
     ),
     ToolMeta(
         name="get_assignment_progress",
         description="查询指定作业的提交和批改进度（仅教师/机构主）",
-        body="查询作业提交状态。参数: assignment_id(int)=作业ID。返回：提交数/总人数、已批改数、待批改数、作业标题和截止日期。需要teacher/owner角色。适用于：教师问'作业交了没''还有谁没交'。不适用于：批改作业。",
+        body="查询作业提交和批改情况。触发词：作业交了没、还有谁没交、提交进度、批改进度、作业#N进度。参数: assignment_id(int)=作业ID。返回：提交数/总人数、已批改数、待批改数、作业标题和截止日期。需要teacher/owner角色。不适用于：批改作业（用grade_submissions）。",
     ),
     ToolMeta(
         name="assign_practice",
         description="创建作业并布置给学生（仅教师/机构主）",
-        body="创建作业记录并发布给学生。参数: title(str)=作业标题, question_ids(list)=题目ID列表, class_names(list)=目标班级名, due_date(str)=截止日期(ISO), points_per_question(int)=每题分值。需要teacher/owner角色。适用于：教师说'布置给X班''把这些题发下去'。不适用于：出题（先用quick_generate）。",
+        body="创建作业记录并发布给学生。触发词：布置、发布、发下去、分配、下发、布置给、发给、安排练习。参数: title(str)=作业标题, question_ids(list)=题目ID列表（需先从list_questions获取或save_questions_to_bank入库）, class_names(list)=目标班级名, due_date(str)=截止日期(ISO), points_per_question(int)=每题分值。需要teacher/owner角色。不适用于：出题（先用list_questions抽题或quick_generate生成）。",
     ),
     ToolMeta(
         name="send_notification",
         description="向指定学生发送学习提醒通知（仅教师/机构主）",
-        body="发送站内通知。参数: student_name(str)或student_id(int)=目标学生, title(str)=通知标题, content(str)=通知正文。需要teacher/owner角色。适用于：教师说'提醒一下某某''通知学生'。不适用于：群发通知。",
+        body="发送站内通知提醒。触发词：提醒、通知、告知、跟XX说。参数: student_name(str)或student_id(int)=目标学生, title(str)=通知标题, content(str)=通知正文。需要teacher/owner角色。不适用于：群发通知、查看通知。",
     ),
     ToolMeta(
         name="list_courses",
-        description="浏览机构课程库",
-        body="查询本机构课程。参数: subject(str)=学科筛选(可选), query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：课程标题、学科、难度、时长。适用于：教师说'看看我的课程''有哪些视频课'。不适用于：搜索知识点。",
+        description="浏览或查找机构课程库",
+        body="从已有课程库中查找课程。触发词：看看课程、有什么课、找课程、选课、浏览课程、有哪些视频课。参数: subject(str)=学科筛选(可选), query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：课程标题、学科、难度、时长。从机构已有课程中检索，不会创建新课程。不适用于：搜索知识点（用search_knowledge）。",
     ),
     ToolMeta(
         name="list_questions",
-        description="浏览机构题库",
-        body="查询本机构题目。参数: kp_name(str)=知识点搜索(可选), subject(str)=学科筛选(可选), q_type(str)=题型筛选(可选), difficulty(str)=难度筛选(可选), limit(int)=数量上限(默认20)。返回：题干摘要、题型、难度、知识点。适用于：教师说'看看题库''有没有关于X的题'。不适用于：出题（用quick_generate）。",
+        description="从题库中浏览或随机抽题",
+        body="从机构已有题库中选取题目。触发词：随机抽、抽取、抽几道、选题、选几道、从题库选、看看题库、有没有题、找题、浏览题库。这是从已有题库检索，不会生成新题目。参数: kp_name(str)=知识点搜索(可选), subject(str)=学科筛选(可选), q_type(str)=题型筛选(可选), difficulty(str)=难度筛选(可选), random(bool)=是否随机排列(默认false), limit(int)=数量上限(默认20)。返回：题目ID、题干摘要、题型、难度、知识点。教师说随机或抽取时必须传random=true。返回的题目ID可直接用于assign_practice。不适用于：生成新题（用quick_generate）、精修题目（用launch_arc_pipeline）。",
     ),
     ToolMeta(
         name="list_articles",
-        description="浏览机构文章库",
-        body="查询本机构文章。参数: query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：标题、摘要、发布日期。适用于：教师说'看看文章''有没有关于X的文章'。不适用于：搜索知识点。",
+        description="浏览或查找机构文章库",
+        body="从已有文章库中查找文章。触发词：看看文章、找文章、选文章、浏览文章、有没有文章。参数: query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：标题、摘要、发布日期。从机构已有文章中检索，不会创建新文章。不适用于：搜索知识点（用search_knowledge）。",
     ),
     ToolMeta(
         name="get_class_weak_points",
         description="获取班级知识点薄弱分析",
-        body="分析班级整体知识点掌握情况。参数: institution_id(int)=机构ID, class_name(str)=班级名(可选)。返回：班级各知识点正确率、最薄弱知识点。需要teacher/owner角色。适用于：教师说'哪些知识点薄弱''班级学情分析'。不适用于：查看单个学生详情（用get_student_detail）。",
+        body="分析班级整体薄弱知识点。触发词：薄弱、弱项、薄弱点、薄弱知识、学情、正确率低、哪些知识点弱。参数: institution_id(int)=机构ID, class_name(str)=班级名(可选)。返回：班级各知识点正确率、最薄弱知识点。需要teacher/owner角色。不适用于：查看单个学生（用get_student_detail）。",
     ),
     ToolMeta(
         name="list_classes",
         description="获取机构下的所有班级列表，可按名称筛选",
-        body="查询当前机构的所有班级。参数: name(str)=班级名称筛选(可选，模糊匹配)。返回：班级ID、名称、学生数。适用于：教师说'有哪些班''班级列表''找XX班'。不适用于：查看班级成绩（用get_class_gradebook）。",
+        body="查询机构班级。触发词：有哪些班、班级列表、找XX班、查班级、看看班级。参数: name(str)=班级名称筛选(可选，模糊匹配)。返回：班级ID、名称、学生数。仅用于查找/列出班级，不会修改班级。不适用于：查看班级成绩（用get_class_gradebook）、搜索知识点（用search_knowledge）。",
     ),
     ToolMeta(
         name="assign_class_course",
         description="将课程分配给指定班级",
-        body="创建班级与课程的关联。参数: class_id(int)=班级ID, course_id(int)=课程ID。返回：分配结果。适用于：教师说'把XX课程分配给X班''给X班加XX课'。不适用于：查看班级课程列表。",
+        body="建立班级与课程的关联。触发词：分配课程、给XX班加课、把XX课给XX班。参数: class_id(int)=班级ID, course_id(int)=课程ID。返回：分配结果。需要teacher/owner角色。不适用于：查看班级课程列表。",
     ),
     ToolMeta(
         name="get_class_gradebook",
         description="获取班级成绩册（学生×作业矩阵）",
-        body="查询班级内所有学生的作业成绩。参数: class_id(int)=班级ID。返回：学生列表、作业列表、每个学生在每项作业的得分。适用于：教师说'看看X班成绩''成绩册''X班学得怎么样'。不适用于：查看单个学生详情（用get_student_detail）。",
+        body="查看班级成绩。触发词：成绩册、看看X班成绩、班级成绩、X班学得怎么样。参数: class_id(int)=班级ID。返回：学生列表、作业列表、每个学生在每项作业的得分及统计。需要teacher/owner角色。不适用于：查看单个学生详情（用get_student_detail）。",
     ),
     ToolMeta(
         name="grade_submissions",
         description="批改学生作业提交",
-        body="为学生的作业提交打分。参数: submission_id(int)=提交ID, score(number)=评分, feedback(str)=评语(可选)。返回：更新后的提交信息。适用于：教师说'给XX分''批改这份作业'。不适用于：查看作业进度（用get_assignment_progress）。",
+        body="为学生作业打分。触发词：批改、判分、给XX分、批作业、判作业。参数: submission_id(int)=提交ID, score(number)=评分, feedback(str)=评语(可选)。返回：更新后的提交信息。需要teacher/owner角色。不适用于：查看作业进度（用get_assignment_progress）。",
     ),
     ToolMeta(
         name="render_visual",
         description="在对话中渲染可视化卡片（确认操作、选项选择、数据摘要）",
-        body="渲染交互式卡片到对话中。参数: type(str)=可视化类型, payload(dict)=卡片数据。action_cards 类型支持两种 action：导航卡片点击跳转页面，reply 卡片点击发送消息到对话。适用于：需要教师确认操作、选择分支、展示数据摘要时。最常用 type='action_cards'。",
+        body="渲染交互式卡片。触发词：展示卡片、让我选择、确认操作。参数: type(str)=可视化类型, payload(dict)=卡片数据。action_cards类型：导航卡片点击跳转页面，reply卡片点击发送消息到对话。适用于：需要教师确认操作、选择分支、展示数据摘要时。",
     ),
     ToolMeta(
         name="save_questions_to_bank",
-        description="将最近生成的题目存入题库并返回题目ID",
-        body="将 quick_generate 生成的题目正式存入题库。参数: 无（自动使用最近一次生成的题目）。返回：入库数量、题目ID列表。适用于：教师确认要保留生成的题目后入库。调用前应先通过 render_visual(action_cards) 让教师确认。不适用于：直接出题（用 quick_generate）。",
+        description="将生成的题目存入题库",
+        body="把quick_generate生成的题目正式入库。触发词：入库、保存、存入题库、确认保留。参数: 无（自动使用最近一次quick_generate生成的题目）。返回：入库数量、题目ID列表（可用于assign_practice）。调用前应先render_visual让教师确认。不适用于：从题库抽题（用list_questions）。",
     ),
 ]
 
@@ -244,6 +244,44 @@ BOT_TOOL_REGISTRY: Dict[str, List[ToolMeta]] = {
 
 _embedding_cache: Dict[str, List[List[float]]] = {}  # bot_type → embeddings
 _tool_names_cache: Dict[str, List[str]] = {}          # bot_type → tool names
+
+# ── 本地 Embedding 模型（sentence-transformers，优先级高于 API）──
+
+_local_model = None
+_LOCAL_MODEL_NAME = "BAAI/bge-small-zh-v1.5"
+
+
+def _get_local_model():
+    """Lazy-load 本地 embedding 模型，加载一次全局复用。"""
+    global _local_model
+    if _local_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _local_model = SentenceTransformer(_LOCAL_MODEL_NAME)
+            logger.info("Local embedding model loaded: %s", _LOCAL_MODEL_NAME)
+        except ImportError:
+            logger.warning(
+                "sentence-transformers not installed; embedding routing falls back to API"
+            )
+            return None
+        except Exception:
+            logger.exception("Failed to load local embedding model")
+            return None
+    return _local_model
+
+
+def preload_embedding_model():
+    """预加载本地 embedding 模型（Django 启动时调用）。"""
+    _get_local_model()
+
+
+def _call_embedding_local(texts: List[str]) -> List[List[float]]:
+    """本地 sentence-transformers embedding，返回 float 向量列表。"""
+    model = _get_local_model()
+    if model is None:
+        raise RuntimeError("Local embedding model not available")
+    embeddings = model.encode(texts, normalize_embeddings=True)
+    return [emb.tolist() for emb in embeddings]
 
 
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
@@ -263,7 +301,14 @@ def _get_embedding_api_url() -> str:
 
 
 def _call_embedding_api(texts: List[str]) -> List[List[float]]:
-    """调用 DeepSeek embedding API 获取向量。"""
+    """获取文本的 embedding 向量：本地模型优先，HTTP API 降级。"""
+    # Stage 1: 本地 sentence-transformers
+    try:
+        return _call_embedding_local(texts)
+    except Exception:
+        pass  # 静默降级到 API
+
+    # Stage 2: HTTP API fallback
     import httpx
     api_url = _get_embedding_api_url()
     api_key = os.getenv('LLM_API_KEY', '')
@@ -282,11 +327,6 @@ def _call_embedding_api(texts: List[str]) -> List[List[float]]:
 
 def _ensure_embeddings(bot_type: str) -> bool:
     """预计算并缓存工具 body embeddings。返回是否成功。"""
-    # DeepSeek 不支持 /v1/embeddings 端点，暂禁用 embedding 路由，
-    # 所有工具路由走关键词匹配 fallback。
-    # 后续切换到支持 embedding 的 provider 时移除此行即可。
-    return False
-
     if bot_type in _embedding_cache:
         return True
 
@@ -344,7 +384,7 @@ PLANNER_INTENT_MAP = {
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_due_reviews", "save_study_plan", "get_active_plan",
-            "update_plan_task", "render_visual",
+            "update_plan_task", "get_user_weak_points", "render_visual",
         ],
     },
     "analysis": {
@@ -352,7 +392,8 @@ PLANNER_INTENT_MAP = {
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_class_weak_points", "get_class_performance_summary",
-            "get_exam_history", "get_knowledge_difficulty_analysis", "render_visual",
+            "get_exam_history", "get_knowledge_difficulty_analysis",
+            "get_user_weak_points", "get_user_wrong_questions", "render_visual",
         ],
     },
     "quiz": {
@@ -401,7 +442,7 @@ EXAM_GENERATOR_INTENT_MAP = {
     "refine": {
         "keywords": ["精修", "arc", "润色", "改进", "提升", "高质量", "对抗", "审核", "题目质量"],
         "tools": [
-            "launch_arc_pipeline", "check_pipeline_status",
+            "launch_arc_pipeline", "check_pipeline_status", "render_visual",
         ],
     },
     "generate": {
@@ -430,6 +471,7 @@ EXAM_GENERATOR_INTENT_MAP = {
                      "看一下", "查一下", "某某", "错误多", "没交"],
         "tools": [
             "get_student_detail", "send_notification", "get_class_weak_points",
+            "get_assignment_progress",
         ],
     },
     "assignment": {
@@ -439,7 +481,7 @@ EXAM_GENERATOR_INTENT_MAP = {
             "get_assignment_progress", "assign_practice",
             "assign_class_course", "grade_submissions",
             "list_questions", "list_classes",
-            "render_visual", "save_questions_to_bank",
+            "render_visual",
         ],
     },
     "browse": {
@@ -558,30 +600,69 @@ def _keyword_fallback(user_message: str, all_tools: List[dict],
 
 # ── 主路由函数 ─────────────────────────────────────────────────
 
+# 工作流延续信号：AI 上一轮在等用户回复来完成某工作流时，
+# 当前消息的语义路由可能遗漏该工作流的关键工具。
+_WORKFLOW_SIGNALS = {
+    "assignment": ["作业", "标题", "截止", "班级", "布置", "发下去", "发"],
+    "generate":   ["出题", "题目", "生成", "精修", "调整", "换"],
+    "student_lookup": ["学生", "学得", "数据", "成绩"],
+}
+
+
+def _detect_active_workflow(recent_messages, bot_type: str) -> set:
+    """检测 AI 是否在等待用户回复来完成工作流。返回需补充的工具名集合。"""
+    if not recent_messages:
+        return set()
+
+    last_ai = ""
+    for m in reversed(recent_messages[-4:]):
+        if m.get("role") == "assistant" and m.get("content"):
+            last_ai = m["content"]
+            break
+    if not last_ai:
+        return set()
+
+    if not any(m in last_ai for m in ["?", "？", "吗", "确认", "选择", "可以"]):
+        return set()
+
+    intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
+    for wf_name, keywords in _WORKFLOW_SIGNALS.items():
+        if any(kw in last_ai for kw in keywords):
+            wf_tools = set(intent_map.get(wf_name, {}).get("tools", []))
+            if wf_tools:
+                logger.info(
+                    "Workflow expansion: active=%s, injecting %d tools",
+                    wf_name, len(wf_tools),
+                )
+                return wf_tools
+    return set()
+
+
 def route_tools(
     user_message: str,
     all_tools: List[dict],
     recent_messages: List[Dict[str, str]] = None,
     bot_type: str = "planner",
 ) -> List[dict]:
-    """工具路由：embedding 检索 + 关键词意图保底。
+    """工具路由：Retrieve（embedding） + Workflow Expansion + 关键词保底。
 
-    路由链：embedding 检索 top-k → 合并关键词意图匹配的工具 → 全量工具
+    对齐 SkillRouter 两段式架构，但 Stage 2 做的是召回补全而非精度重排：
+    1. Embedding 检索 top-k（纯语义，不混上下文）
+    2. Workflow Expansion（AI 在等回复时补入该工作流的工具集）
+    3. 合并意图关键词 → 输出；失败则关键词 fallback
     """
     _dbg = logging.getLogger("agent_debug")
-    all_names = [t["function"]["name"] for t in all_tools]
 
-    # Stage 1: Embedding 检索
     candidates = _retrieve_candidates(user_message, bot_type, top_k=8)
-
-    # Stage 2: 关键词意图匹配（始终执行，作为保底）
     intent = classify_intent(user_message, recent_messages, bot_type=bot_type)
     intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
     intent_tools = set(intent_map.get(intent, {}).get("tools", []))
 
+    # Stage 2: Workflow Expansion
+    workflow_tools = _detect_active_workflow(recent_messages, bot_type)
+
     if candidates:
-        # 合并 embedding 候选 + 意图关键工具
-        merged = set(candidates) | intent_tools
+        merged = set(candidates) | intent_tools | workflow_tools
         filtered = [t for t in all_tools if t["function"]["name"] in merged]
         if filtered:
             filtered_names = [t["function"]["name"] for t in filtered]

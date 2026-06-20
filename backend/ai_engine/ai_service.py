@@ -325,6 +325,17 @@ class AIService:
             variant_suffix=variant_suffix,
         )
 
+    @classmethod
+    def chat(cls, messages, temperature=0.7, max_tokens=4096,
+             response_format=None, operation='general'):
+        """通用 AI 对话，支持 response_format (json_object)。"""
+        from .service import AIEngine
+        return AIEngine.call_ai(
+            messages=messages, temperature=temperature,
+            max_tokens=max_tokens, operation=operation,
+            _response_format=response_format,
+        )
+
     # ── Legacy private methods (delegated to QuestionGenerator) ──
 
     @classmethod

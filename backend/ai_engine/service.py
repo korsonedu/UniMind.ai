@@ -157,7 +157,7 @@ class AIEngine:
         return tool_calls
 
     @staticmethod
-    def _build_body(config, messages, temperature, max_tokens, tools, tool_choice, stream=False, _preserve_tool_choice=False):
+    def _build_body(config, messages, temperature, max_tokens, tools, tool_choice, stream=False, _preserve_tool_choice=False, _response_format=None):
         """构建 LLM 请求体。处理 DeepSeek thinking mode 对 tool_choice 的限制。"""
         body = {
             "model": config['model'],
@@ -165,6 +165,8 @@ class AIEngine:
             "temperature": temperature,
             "max_completion_tokens": max_tokens,
         }
+        if _response_format:
+            body["response_format"] = _response_format
         if stream:
             body["stream"] = True
         if tools is not None:
@@ -206,6 +208,7 @@ class AIEngine:
         tools=None,
         tool_choice=None,
         _preserve_tool_choice=False,
+        _response_format=None,
     ):
         """
         通用的 AI 模型调用接口。
@@ -247,7 +250,7 @@ class AIEngine:
 
         for attempt in range(max_retries + 1):
             try:
-                body = cls._build_body(config, messages, temperature, max_tokens, tools, tool_choice, _preserve_tool_choice=_preserve_tool_choice)
+                body = cls._build_body(config, messages, temperature, max_tokens, tools, tool_choice, _preserve_tool_choice=_preserve_tool_choice, _response_format=_response_format)
 
                 logger.info(
                     "ai.call_ai request: model=%s operation=%s tool_choice=%s thinking=%s",
@@ -631,6 +634,8 @@ class AIEngine:
                 name = func.get('name', '')
                 try:
                     args = json.loads(func.get('arguments', '{}'))
+                    if not isinstance(args, dict):
+                        args = {}
                 except (json.JSONDecodeError, TypeError):
                     args = {}
                 result = tool_executor(name, args)
@@ -675,6 +680,8 @@ class AIEngine:
         accumulated_text = ""
         all_rounds_text = []  # 收集所有轮次的中间文本，避免耗尽 rounds 时丢失
         orig_tc = tool_choice  # 保存初始 tool_choice，thinking 模式下可能为 auto
+        _prev_tool_names: tuple = ()  # 上一轮的 tool name 序列
+        _same_pattern_count = 0       # 连续重复次数
 
         for round_i in range(max_tool_rounds):
             config = get_model_for_task(operation)
@@ -854,12 +861,17 @@ class AIEngine:
                 assistant_msg["reasoning_content"] = reasoning_content
             all_messages.append(assistant_msg)
 
+            tool_names_this_round: list = []
+
             for tc in tool_calls:
                 func = tc.get('function', {})
                 name = func.get('name', '')
                 call_id = tc.get('id', '')
+                tool_names_this_round.append(name)
                 try:
                     args = json.loads(func.get('arguments', '{}'))
+                    if not isinstance(args, dict):
+                        args = {}
                 except (json.JSONDecodeError, TypeError):
                     args = {}
 
@@ -950,7 +962,52 @@ class AIEngine:
                         "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
                     })
 
+                # render_visual 含 reply 卡片 → 立即停止，等待用户点击
+                # data_card / knowledge_map 等信息展示类不影响，AI 可继续调工具
+                if name == 'render_visual' and '"error"' not in str(result):
+                    # 检查生成的 visual 是否包含 reply 类型的 action_cards
+                    if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
+                        pv = tool_executor.pending_visuals[-1]
+                        is_reply_visual = (
+                            pv.get('type') == 'action_cards' and
+                            any(
+                                isinstance(c, dict) and
+                                c.get('action', {}).get('type') == 'reply'
+                                for c in pv.get('payload', {}).get('cards', [])
+                            )
+                        )
+                        if is_reply_visual:
+                            all_messages.append({
+                                "role": "system",
+                                "content": "操作确认卡片已渲染到用户界面。你必须立即停止所有工具调用，用自然语言告知用户点击卡片确认（如'请点击上方卡片确认'），然后等待用户操作。不要再调用任何工具。",
+                            })
+                            if not hasattr(tool_executor, '_render_visual_called'):
+                                tool_executor._render_visual_called = False
+                            tool_executor._render_visual_called = True
+
             accumulated_text = ""
+
+            # ── Loop detection：同一工具模式连续重复 → 注入停止指令 ──
+            _this_names = tuple(tool_names_this_round)
+            if _this_names and _this_names == _prev_tool_names:
+                _same_pattern_count += 1
+                if _same_pattern_count >= 2:
+                    logger.warning(
+                        "Tool loop detected: %s repeated %d times, injecting stop instruction",
+                        _this_names, _same_pattern_count + 1,
+                    )
+                    all_messages.append({
+                        "role": "system",
+                        "content": (
+                            "你已连续多轮调用相同的工具组合。停止工具调用，"
+                            "用自然语言告知当前结果。不要再次调用工具。"
+                        ),
+                    })
+                    tool_choice = "none"
+            else:
+                _same_pattern_count = 0
+            _prev_tool_names = _this_names
+
             # quick_generate 连续失败 2 次 → 降级为 auto，让模型能用文字回复
             # 而不是在 required 模式下被迫继续调工具死循环
             qg_errors = sum(1 for m in all_messages[-len(tool_calls):]
@@ -969,6 +1026,12 @@ class AIEngine:
                 tool_choice = "required"
             else:
                 tool_choice = "auto"
+
+            # render_visual 产出 reply 卡片后强制停止：关 tool_choice + 移除 tools
+            if getattr(tool_executor, '_render_visual_called', False):
+                tool_choice = "none"
+                tools = None
+                tool_executor._render_visual_called = False
 
         logger.warning(
             "call_ai_with_streaming_tools: exhausted max_tool_rounds=%s, forcing final text reply",
@@ -1064,6 +1127,8 @@ class AIEngine:
                 name = func.get('name', '')
                 try:
                     args = json.loads(func.get('arguments', '{}'))
+                    if not isinstance(args, dict):
+                        args = {}
                 except (json.JSONDecodeError, TypeError):
                     args = {}
 

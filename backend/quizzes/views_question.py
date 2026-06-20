@@ -564,7 +564,7 @@ class StudentAssignmentDetailView(APIView):
 
 
 class StudentAssignmentSubmitView(APIView):
-    """POST /api/quizzes/assignments/submit/ — 学生提交作业。"""
+    """POST /api/quizzes/assignments/submit/ — 学生提交作业，逐题 AI 判分。"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -583,32 +583,54 @@ class StudentAssignmentSubmitView(APIView):
         except Assignment.DoesNotExist:
             return Response({'error': '作业不存在'}, status=404)
 
-        # Check due date
         if assignment.due_date and timezone.now() > assignment.due_date:
             return Response({'error': '作业已截止'}, status=400)
 
-        # Auto-grade objective questions
-        total_score = 0
-        max_score = 0
-        graded_count = 0
+        # 逐题 AI 判分
+        from .ai_workflow import grade_answer_for_user
+
+        total_score = 0.0
+        total_max = 0.0
+        question_results = []
         for aq in assignment.assignment_questions.all():
             q = aq.question
-            max_score += aq.points
+            points = float(aq.points)
+            total_max += points
             user_answer = str(answers.get(str(q.id), '')).strip()
-            if q.q_type == 'objective' and q.answer:
-                if user_answer == q.answer.strip():
-                    total_score += aq.points
-                    graded_count += 1
-                elif user_answer:
-                    graded_count += 1
+
+            if not user_answer:
+                question_results.append({
+                    'question_id': q.id,
+                    'score': 0,
+                    'max_score': points,
+                    'is_correct': False,
+                    'feedback': '未作答',
+                    'analysis': '',
+                })
+                continue
+
+            result = grade_answer_for_user(user, q, user_answer)
+            actual_score = result['score']
+            total_score += actual_score
+            question_results.append({
+                'question_id': q.id,
+                'score': actual_score,
+                'max_score': result.get('max_score', points),
+                'is_correct': result.get('is_correct', False),
+                'feedback': result.get('feedback', ''),
+                'analysis': result.get('analysis', ''),
+            })
 
         sub, created = AssignmentSubmission.objects.update_or_create(
             assignment=assignment, student=user,
             defaults={
                 'answers': answers,
-                'score': round(total_score / max_score * 100, 1) if max_score > 0 else None,
+                'score': round(total_score / total_max * 100, 1) if total_max > 0 else None,
+                'question_results': question_results,
             },
         )
+
+        graded_count = sum(1 for r in question_results if r['feedback'] != '未作答')
 
         return Response({
             'id': sub.id,
@@ -616,7 +638,8 @@ class StudentAssignmentSubmitView(APIView):
             'graded_count': graded_count,
             'total_questions': assignment.assignment_questions.count(),
             'score': sub.score,
-            'message': f'已提交，客观题自动批改 {graded_count} 题',
+            'question_results': question_results,
+            'message': f'已提交，AI 逐题批改完成 {graded_count} 题',
         })
 
 
@@ -650,6 +673,7 @@ class AssignmentSubmissionListView(APIView):
                 'answers': sub.answers,
                 'score': sub.score,
                 'graded': sub.score is not None,
+                'question_results': sub.question_results,
             })
 
         # Also list students who haven't submitted

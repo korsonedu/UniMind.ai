@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure } from '@phosphor-icons/react';
+import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure, ClipboardText } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
 import { AchievementPill } from '@/components/AchievementPill';
 import { InvitePopover } from '@/pages/workbench/InvitePopover';
+import { CampusSelector } from '@/components/CampusSelector';
 
 import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -207,12 +208,14 @@ export const MainLayout: React.FC = () => {
   const teacherNavItems: NavItem[] = [
     { to: '/workbench', icon: Robot, label: '工作台' },
     { to: '/teacher-assignments', icon: CalendarCheck, label: '作业' },
+    { to: '/lesson-plans', icon: ClipboardText, label: '教案' },
     { to: '/questions', icon: Brain, label: '题库' },
     { to: '/courses', icon: BookOpen, label: '课程' },
     { to: '/articles', icon: FileText, label: '文章' },
     { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
     { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
     { to: '/institution/students', icon: Users, label: t('layout:nav.members') },
+    { to: '/institution/campuses', icon: Buildings, label: '校区管理' },
     { to: '/management', icon: Wrench, label: t('layout:nav.maintenance') },
   ];
 
@@ -270,6 +273,7 @@ export const MainLayout: React.FC = () => {
     : [
         { to: '/workbench', icon: Robot, label: '工作台' },
         { to: '/teacher-assignments', icon: CalendarCheck, label: '作业' },
+        { to: '/lesson-plans', icon: ClipboardText, label: '教案' },
         { to: '/questions', icon: Brain, label: '题库' },
         { to: '/courses', icon: BookOpen, label: '课程' },
         { to: '/articles', icon: FileText, label: '文章' },
@@ -340,6 +344,7 @@ export const MainLayout: React.FC = () => {
               )}
               <EloPopover />
               <AchievementPill />
+              <CampusSelector />
               <NotificationBell />
               {/* 头像下拉 */}
               <DropdownMenu modal={false}>
