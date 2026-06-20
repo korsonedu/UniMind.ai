@@ -41,6 +41,9 @@ from .views_online_exam import (
     OnlineExamCreateView, OnlineExamStartView, OnlineExamSubmitView,
     OnlineExamResultView, OnlineExamTeacherResultsView, OnlineExamQuestionListView,
 )
+from .views_field import (
+    FieldDiagnoseView, FieldSubjectsView, FieldInvalidateCacheView,
+)
 
 urlpatterns = [
     path('questions/', QuestionListView.as_view(), name='question-list'),
@@ -106,4 +109,8 @@ urlpatterns = [
     path('admin/prompt-templates/', AdminPromptTemplateListView.as_view(), name='admin-prompt-template-list'),
     path('admin/prompt-templates/detail/', AdminPromptTemplateDetailView.as_view(), name='admin-prompt-template-detail'),
     path('admin/prompt-templates/rollback/', AdminPromptTemplateRollbackView.as_view(), name='admin-prompt-template-rollback'),
+    # Field 知识图谱诊断
+    path('field/diagnose/', FieldDiagnoseView.as_view(), name='field-diagnose'),
+    path('field/subjects/', FieldSubjectsView.as_view(), name='field-subjects'),
+    path('field/invalidate-cache/', FieldInvalidateCacheView.as_view(), name='field-invalidate-cache'),
 ]
