@@ -1,16 +1,16 @@
 {
   "hero": {
-    "title1": "Memorix UM1-Preview",
-    "title2": "Smart Assessment System",
-    "mobileSubtitle": "Quickly pinpoint weak areas based on your learning trajectory and dive into focused practice.",
-    "desktopSubtitle": "The Memorix system automatically identifies your knowledge blind spots from your learning history. Through deep academic training, it helps you build outstanding subject mastery and scoring ability within limited time."
+    "title1": "Memorix × Field",
+    "title2": "Dual AI Engine",
+    "mobileSubtitle": "Memorix schedules your reviews with precision. Field maps your knowledge gaps from the graph. Two engines, one goal: maximize your score.",
+    "desktopSubtitle": "Memorix memory engine handles when to review. Field graph engine reveals where you're weak. Together they concentrate your limited study time where it matters most."
   },
   "memorixDialog": {
-    "title": "Next-Gen Memorix Smart Assessment System",
-    "description": "This is not the traditional fixed-interval Memorix review — it's a more advanced, more precise, self-evolving memory algorithm.",
-    "p1": "Our Memorix UM1 continuously learns from your real answering trajectory, dynamically fits your forgetting curve, and calculates for each question \"when is the optimal time to review\" — rather than pushing reviews on a fixed schedule.",
-    "p2": "Compared to older approaches, it excels in three dimensions: finer granularity (question-level scheduling), higher precision (individualized parameter iteration), and greater efficiency (prioritizing borderline forgetting points to reduce wasted repetition).",
-    "p3": "This is the core purpose of the Memorix Smart Assessment System: using advanced algorithms to concentrate limited study time on the areas that need it most, maximizing score improvement efficiency."
+    "title": "Memorix × Field Dual AI Engine",
+    "description": "UniMind's learning system is powered by two complementary AI engines: Memorix manages memory timing, Field maps knowledge structure.",
+    "p1": "Memorix (Memory Engine): Continuously learns from your answering trajectory, dynamically fits your forgetting curve for each question, and computes the optimal review moment. Compared to fixed-interval methods, it delivers three advantages — question-level granularity, individualized parameter iteration, and prioritized targeting of borderline forgetting thresholds.",
+    "p2": "Field (Graph Diagnostic Engine): Takes the entire subject knowledge graph and infers your mastery of every knowledge point from a sparse set of test results. Answer 20 questions and get a heatmap of all 200 knowledge points — showing which chapters are solid, which concepts are weak, and which prerequisites are missing.",
+    "p3": "Together: Memorix finds the questions to review. Field finds the knowledge clusters to fix. Not just practicing individual items, but filling structural gaps in your understanding."
   },
   "suggestion": "Recommendation: {{recommended}} questions, ~{{estimated}} min ({{weakFocus}} weak-point focus)",
   "reminder": {
