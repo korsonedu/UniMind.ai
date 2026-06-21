@@ -1,0 +1,199 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>{{ plan.title }} - 教学计划</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #1a1a1a;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── cover ── */
+  .cover {
+    text-align: center;
+    padding: 80px 20px 60px;
+    page-break-after: always;
+  }
+  .cover h1 { font-size: 26px; font-weight: 800; letter-spacing: 2px; margin-bottom: 24px; }
+  .cover .meta { display: inline-block; text-align: left; }
+  .cover .meta p { font-size: 14px; margin: 8px 0; color: #444; }
+  .cover .meta strong { display: inline-block; min-width: 72px; color: #222; }
+  .cover .date { margin-top: 40px; font-size: 12px; color: #999; }
+
+  /* ── header ── */
+  .page-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-bottom: 16px;
+  }
+  .page-header h2 { font-size: 18px; font-weight: 700; color: #1e3a5f; }
+  .page-header span { font-size: 10px; color: #888; }
+
+  /* ── week section ── */
+  .week-section { margin-bottom: 32px; page-break-inside: avoid; }
+  .week-title {
+    font-size: 15px; font-weight: 700; color: #2563eb;
+    border-left: 4px solid #2563eb; padding-left: 10px; margin-bottom: 12px;
+  }
+  .week-meta { font-size: 11px; color: #666; margin-bottom: 10px; margin-left: 14px; }
+  .week-meta span { margin-right: 24px; }
+
+  /* ── lesson card ── */
+  .lesson-card {
+    border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px;
+    margin-bottom: 16px; margin-left: 14px;
+    background: #fafbfc;
+  }
+  .lesson-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 6px; color: #111; }
+  .lesson-card .duration { font-size: 10px; color: #999; margin-left: 8px; font-weight: 400; }
+  .lesson-card .objectives { font-size: 11px; color: #444; margin-bottom: 10px; line-height: 1.6; }
+
+  /* ── activities table ── */
+  .act-table { width: 100%; border-collapse: collapse; margin: 8px 0 10px; font-size: 11px; }
+  .act-table th {
+    background: #2563eb; color: #fff; font-weight: 600; padding: 6px 8px;
+    text-align: left; font-size: 10px; letter-spacing: 0.5px;
+  }
+  .act-table th:first-child { width: 12%; }
+  .act-table th:nth-child(2) { width: 8%; }
+  .act-table td { padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .act-table tr:nth-child(even) td { background: #f8fafc; }
+
+  /* ── materials ── */
+  .materials { margin-top: 6px; }
+  .materials .tag {
+    display: inline-block; background: #eef2ff; color: #4338ca;
+    font-size: 10px; padding: 2px 8px; border-radius: 4px; margin: 2px 4px 2px 0;
+  }
+
+  /* ── empty state ── */
+  .empty { color: #aaa; font-style: italic; font-size: 11px; padding: 6px 0; }
+
+  /* ── footer ── */
+  .footer {
+    margin-top: 40px; padding-top: 12px; border-top: 1px solid #e5e7eb;
+    text-align: center; font-size: 10px; color: #aaa;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Cover Page ── -->
+<div class="cover">
+  <h1>{{ plan.title }}</h1>
+  <div class="meta">
+    <p><strong>学科</strong> {{ plan.subject }}</p>
+    <p><strong>学期</strong> {{ plan.semester }}</p>
+    <p><strong>教学周数</strong> {{ plan.week_count }} 周</p>
+    {% if plan.description %}
+    <p><strong>教学描述</strong> {{ plan.description }}</p>
+    {% endif %}
+    <p><strong>课时总数</strong> {{ lesson_plans|length }} 节</p>
+  </div>
+  <p class="date">生成时间：{{ generated_at|date:"Y-m-d H:i" }}</p>
+</div>
+
+<!-- ── Content ── -->
+<div class="page-header">
+  <h2>{{ plan.title }}</h2>
+  <span>{{ plan.subject }} / {{ plan.semester }}</span>
+</div>
+
+{% if weekly_plans %}
+  {% for wp in weekly_plans %}
+    <div class="week-section">
+      <div class="week-title">第 {{ wp.week }} 周 · {{ wp.topic|default:"未设置主题" }}</div>
+      <div class="week-meta">
+        {% if wp.objectives %}<span>教学目标：{{ wp.objectives }}</span>{% endif %}
+        {% if wp.materials %}<span>教学材料：{{ wp.materials }}</span>{% endif %}
+      </div>
+
+      {% for lesson in lesson_plans %}
+        {% if lesson.week_number == wp.week %}
+          <div class="lesson-card">
+            <h4>{{ lesson.title }}<span class="duration">{{ lesson.duration_minutes }} 分钟</span></h4>
+            {% if lesson.objectives %}
+            <div class="objectives">{{ lesson.objectives }}</div>
+            {% endif %}
+
+            {% if lesson.activities %}
+            <table class="act-table">
+              <thead><tr><th>环节</th><th>时长</th><th>内容</th></tr></thead>
+              <tbody>
+                {% for act in lesson.activities %}
+                <tr>
+                  <td>{{ act.name }}</td>
+                  <td>{{ act.duration }}′</td>
+                  <td>{{ act.description }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% endif %}
+
+            {% if lesson.materials %}
+            <div class="materials">
+              {% for m in lesson.materials %}<span class="tag">{{ m }}</span>{% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        {% endif %}
+      {% endfor %}
+
+      {% if not lesson_plans %}
+      <p class="empty">暂无教案内容</p>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  {# No weekly_plans — list lessons by week_number grouping #}
+  {% regroup lesson_plans by week_number as week_groups %}
+  {% for group in week_groups %}
+    <div class="week-section">
+      <div class="week-title">第 {{ group.grouper|default:"—" }} 周</div>
+      {% for lesson in group.list %}
+        <div class="lesson-card">
+          <h4>{{ lesson.title }}<span class="duration">{{ lesson.duration_minutes }} 分钟</span></h4>
+          {% if lesson.objectives %}
+          <div class="objectives">{{ lesson.objectives }}</div>
+          {% endif %}
+
+          {% if lesson.activities %}
+          <table class="act-table">
+            <thead><tr><th>环节</th><th>时长</th><th>内容</th></tr></thead>
+            <tbody>
+              {% for act in lesson.activities %}
+              <tr>
+                <td>{{ act.name }}</td>
+                <td>{{ act.duration }}′</td>
+                <td>{{ act.description }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% endif %}
+
+          {% if lesson.materials %}
+          <div class="materials">
+            {% for m in lesson.materials %}<span class="tag">{{ m }}</span>{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+{% endif %}
+
+<div class="footer">
+  UniMind.ai · 智能教育基础设施 · {{ generated_at|date:"Y-m-d H:i" }}
+</div>
+
+</body>
+</html>

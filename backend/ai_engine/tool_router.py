@@ -198,6 +198,11 @@ EXAM_GENERATOR_TOOLS_META = [
         body="从已有文章库中查找文章。触发词：看看文章、找文章、选文章、浏览文章、有没有文章。参数: query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：标题、摘要、发布日期。从机构已有文章中检索，不会创建新文章。不适用于：搜索知识点（用search_knowledge）。",
     ),
     ToolMeta(
+        name="list_lesson_plans",
+        description="浏览或查找机构教案库",
+        body="从已有教案库中查找教案（教学计划）。触发词：看看教案、找教案、有没有教案、教学计划、教案列表。参数: subject(str)=学科筛选(可选), class_name(str)=班级名筛选(可选), limit(int)=数量上限(默认10)。返回：教案标题、学科、学期、班级、周数。从机构已有教案中检索，不会创建新教案。不适用于：生成新教案、搜索知识点（用search_knowledge）。",
+    ),
+    ToolMeta(
         name="get_class_weak_points",
         description="获取班级知识点薄弱分析",
         body="分析班级整体薄弱知识点。触发词：薄弱、弱项、薄弱点、薄弱知识、学情、正确率低、哪些知识点弱。参数: institution_id(int)=机构ID, class_name(str)=班级名(可选)。返回：班级各知识点正确率、最薄弱知识点。需要teacher/owner角色。不适用于：查看单个学生（用get_student_detail）。",
@@ -231,6 +236,21 @@ EXAM_GENERATOR_TOOLS_META = [
         name="save_questions_to_bank",
         description="将生成的题目存入题库",
         body="把quick_generate生成的题目正式入库。触发词：入库、保存、存入题库、确认保留。参数: 无（自动使用最近一次quick_generate生成的题目）。返回：入库数量、题目ID列表（可用于assign_practice）。调用前应先render_visual让教师确认。不适用于：从题库抽题（用list_questions）。",
+    ),
+    ToolMeta(
+        name="get_report_card",
+        description="获取学生学习报告/成绩单",
+        body="查看完整学习报告。触发词：学习报告、成绩单、我学得怎么样、我的学习数据、学习统计。参数: 无。返回：打卡天数、总答题量、正确率、已掌握知识点、ELO分数、最近考试、已解锁成就。适用于：学生主动询问学习进展时。",
+    ),
+    ToolMeta(
+        name="get_my_courses",
+        description="获取学生当前班级的课程列表",
+        body="查看我的课程。触发词：我的课程、我在学什么、有什么课、课程列表。参数: 无。返回：课程标题、学科、班级名称。适用于：学生询问课程相关问题时。未加入班级时提示联系老师。",
+    ),
+    ToolMeta(
+        name="get_my_achievements",
+        description="获取学生成就列表和进度",
+        body="查看成就/徽章。触发词：我的成就、徽章、拿到了什么、成就进度。参数: 无。返回：已解锁成就列表、全部成就及解锁状态。适用于：学生询问成就进展时。",
     ),
 ]
 
@@ -388,12 +408,13 @@ PLANNER_INTENT_MAP = {
         ],
     },
     "analysis": {
-        "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告", "难度"],
+        "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告", "难度", "成就", "徽章", "学习报告", "学得怎么样"],
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_class_weak_points", "get_class_performance_summary",
             "get_exam_history", "get_knowledge_difficulty_analysis",
             "get_user_weak_points", "get_user_wrong_questions", "render_visual",
+            "get_report_card", "get_my_achievements",
         ],
     },
     "quiz": {
@@ -405,9 +426,10 @@ PLANNER_INTENT_MAP = {
         ],
     },
     "resource": {
-        "keywords": ["课程", "视频", "文章", "资料", "推荐", "学习资源"],
+        "keywords": ["课程", "视频", "文章", "资料", "推荐", "学习资源", "我的课程", "有什么课", "我在学什么"],
         "tools": [
             "search_courses", "search_asr", "search_articles", "render_visual",
+            "get_my_courses",
         ],
     },
     "error_review": {
@@ -450,8 +472,8 @@ EXAM_GENERATOR_INTENT_MAP = {
                      "再来", "换", "调整", "改", "不同", "其他", "再难", "更难", "简单"],
         "tools": [
             "search_knowledge", "quick_generate", "launch_arc_pipeline",
-            "get_workbench_stats", "get_class_weak_points",
-            "render_visual", "save_questions_to_bank",
+            "get_class_weak_points",
+            "render_visual",
         ],
     },
     "status": {
@@ -471,7 +493,7 @@ EXAM_GENERATOR_INTENT_MAP = {
                      "看一下", "查一下", "某某", "错误多", "没交"],
         "tools": [
             "get_student_detail", "send_notification", "get_class_weak_points",
-            "get_assignment_progress",
+            "get_assignment_progress", "get_class_gradebook",
         ],
     },
     "assignment": {
@@ -480,7 +502,7 @@ EXAM_GENERATOR_INTENT_MAP = {
         "tools": [
             "get_assignment_progress", "assign_practice",
             "assign_class_course", "grade_submissions",
-            "list_questions", "list_classes",
+            "list_classes",
             "render_visual",
         ],
     },
@@ -488,8 +510,7 @@ EXAM_GENERATOR_INTENT_MAP = {
         "keywords": ["课程", "视频", "看看课程", "有什么课", "文章", "看看文章",
                      "看看题库", "有什么题", "搜索题", "浏览", "资产", "有没有", "有哪些"],
         "tools": [
-            "list_courses", "list_questions", "list_articles",
-            "list_classes",
+            "list_courses", "list_questions", "list_articles", "list_lesson_plans",
         ],
     },
 }

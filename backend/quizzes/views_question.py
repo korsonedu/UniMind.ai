@@ -3,7 +3,7 @@ import json
 import csv
 import io
 import logging
-from django.db.models import Case, IntegerField, Q, When
+from django.db.models import Case, Count, IntegerField, Q, When
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import generics
@@ -91,7 +91,7 @@ class QuestionListView(generics.ListCreateAPIView):
         if kp_name:
             qs = qs.filter(knowledge_point__name__icontains=kp_name)
 
-        # 按学科（SUB 级知识点）过滤；若过滤后为空则 fallback 到全量
+        # 按学科（SUB 级知识点）过滤；若过滤后为空则返回空集
         sub_ids = self.request.query_params.get('sub_ids', '')
         if sub_ids:
             sub_id_list = [int(x) for x in str(sub_ids).split(',') if x.strip().isdigit()]
@@ -100,6 +100,8 @@ class QuestionListView(generics.ListCreateAPIView):
                 filtered = qs.filter(knowledge_point_id__in=kp_ids)
                 if filtered.exists():
                     qs = filtered
+                else:
+                    qs = Question.objects.none()
 
         if is_platform_admin(user) and not self.request.query_params.get('limit'):
             return qs
@@ -496,26 +498,28 @@ class StudentAssignmentListView(APIView):
 
         assignments = Assignment.objects.filter(
             institution=institution, status='published'
+        ).annotate(
+            q_count=Count('assignment_questions')
         ).order_by('-created_at')
+
+        # 批量查询所有提交记录，避免 N+1
+        subs = {
+            sub.assignment_id: sub
+            for sub in AssignmentSubmission.objects.filter(
+                assignment__in=assignments, student=user
+            )
+        }
 
         result = []
         for a in assignments:
-            # Check if student has submitted
-            try:
-                sub = AssignmentSubmission.objects.get(assignment=a, student=user)
-                submitted = True
-                score = sub.score
-            except AssignmentSubmission.DoesNotExist:
-                submitted = False
-                score = None
-
+            sub = subs.get(a.id)
             result.append({
                 'id': a.id,
                 'title': a.title,
                 'due_date': a.due_date.isoformat() if a.due_date else None,
-                'question_count': a.assignment_questions.count(),
-                'submitted': submitted,
-                'score': score,
+                'question_count': a.q_count,
+                'submitted': sub is not None,
+                'score': sub.score if sub else None,
                 'created_at': a.created_at.isoformat(),
             })
 
@@ -535,8 +539,9 @@ class StudentAssignmentDetailView(APIView):
         except Assignment.DoesNotExist:
             return Response({'error': '作业不存在'}, status=404)
 
+        aq_list = list(assignment.assignment_questions.select_related('question').order_by('order'))
         questions = []
-        for aq in assignment.assignment_questions.select_related('question').order_by('order'):
+        for aq in aq_list:
             q = aq.question
             questions.append({
                 'id': q.id,
@@ -551,6 +556,21 @@ class StudentAssignmentDetailView(APIView):
 
         # Check existing submission
         sub = AssignmentSubmission.objects.filter(assignment=assignment, student=user).first()
+
+        # 已提交时注入逐题 AI 批改结果和标准答案
+        if sub:
+            question_results = sub.question_results or []
+            qr_map = {r['question_id']: r for r in question_results}
+            correct_answer_map = {aq.question.id: aq.question.correct_answer or '' for aq in aq_list}
+            for q_data in questions:
+                qr = qr_map.get(q_data['id'])
+                if qr:
+                    q_data['score'] = qr.get('score')
+                    q_data['max_score'] = qr.get('max_score', q_data['points'])
+                    q_data['is_correct'] = qr.get('is_correct', False)
+                    q_data['feedback'] = qr.get('feedback', '')
+                    q_data['analysis'] = qr.get('analysis', '')
+                q_data['correct_answer'] = correct_answer_map.get(q_data['id'], '')
 
         return Response({
             'id': assignment.id,
@@ -606,6 +626,7 @@ class StudentAssignmentSubmitView(APIView):
                     'is_correct': False,
                     'feedback': '未作答',
                     'analysis': '',
+                    'correct_answer': q.correct_answer or '',
                 })
                 continue
 
@@ -619,6 +640,7 @@ class StudentAssignmentSubmitView(APIView):
                 'is_correct': result.get('is_correct', False),
                 'feedback': result.get('feedback', ''),
                 'analysis': result.get('analysis', ''),
+                'correct_answer': q.correct_answer or '',
             })
 
         sub, created = AssignmentSubmission.objects.update_or_create(
@@ -754,23 +776,34 @@ class TeacherAssignmentListView(APIView):
 
         assignments = Assignment.objects.filter(
             institution=institution, created_by=user
+        ).annotate(
+            q_count=Count('assignment_questions'),
+            sub_count=Count('assignment_submissions'),
+            graded_count=Count('assignment_submissions', filter=Q(assignment_submissions__score__isnull=False)),
+        ).prefetch_related(
+            'target_classes'
         ).order_by('-created_at')
+
+        # 预计算每个班级的学生数
+        class_student_counts = {}
+        for a in assignments:
+            for c in a.target_classes.all():
+                if c.id not in class_student_counts:
+                    class_student_counts[c.id] = c.students.count()
 
         data = []
         for a in assignments:
-            submissions = AssignmentSubmission.objects.filter(assignment=a)
-            submitted = submissions.count()
-            graded = submissions.filter(score__isnull=False).count()
+            total_students = sum(class_student_counts.get(c.id, 0) for c in a.target_classes.all())
             data.append({
                 'id': a.id,
                 'title': a.title,
                 'status': a.status,
                 'due_date': a.due_date.isoformat() if a.due_date else None,
-                'question_count': a.assignment_questions.count(),
-                'submitted_count': submitted,
-                'graded_count': graded,
+                'question_count': a.q_count,
+                'submitted_count': a.sub_count,
+                'graded_count': a.graded_count,
                 'class_names': [c.name for c in a.target_classes.all()],
-                'total_students': sum(c.students.count() for c in a.target_classes.all()),
+                'total_students': total_students,
                 'created_at': a.created_at.isoformat(),
             })
 

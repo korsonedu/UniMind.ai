@@ -213,6 +213,7 @@ if _get_bool("USE_X_FORWARDED_PROTO", default=IS_PROD):
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "core.authentication.CookieTokenAuthentication",
+        "core.authentication.APIKeyAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -378,6 +379,14 @@ CELERY_BEAT_SCHEDULE = {
     "experience-aggregate-verifications-daily": {
         "task": "ai_assistant.tasks.experience_aggregate_verifications",
         "schedule": crontab(minute=0, hour=5),  # 每天凌晨 5:00
+    },
+    "send-student-health-alerts-weekly": {
+        "task": "notifications.tasks_reminder.send_student_health_alerts",
+        "schedule": crontab(minute=0, hour=8, day_of_week=1),  # 每周一早 8:00
+    },
+    "deactivate-expired-invites-hourly": {
+        "task": "users.tasks.deactivate_expired_invites",
+        "schedule": 3600.0,  # 每小时
     },
 }
 CELERY_BROKER_TRANSPORT_OPTIONS = {

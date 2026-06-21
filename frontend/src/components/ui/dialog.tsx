@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRef } from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
-import { X } from "lucide-react"
+import { X } from "@phosphor-icons/react"
 
 import { cn } from "@/lib/utils"
 import { useScrollBoundaryShift } from "@/lib/useScrollBoundaryShift"

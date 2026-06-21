@@ -77,21 +77,26 @@ class AdminBroadcastView(APIView):
             return Response({'error': '内容不能超过50字'}, status=400)
 
         if is_platform_admin(request.user):
-            users = User.objects.all()
+            user_qs = User.objects.all()
         else:
             inst = request.user.institution
             if inst:
-                users = User.objects.filter(institution=inst, is_active=True)
+                user_qs = User.objects.filter(institution=inst, is_active=True)
             else:
-                users = User.objects.filter(institution__isnull=True)
+                user_qs = User.objects.filter(institution__isnull=True)
 
-        notifications = [
-            Notification(recipient=u, title=title, content=content, ntype='system')
-            for u in users
-        ]
-        Notification.objects.bulk_create(notifications)
+        batch = []
+        total = 0
+        for u in user_qs.iterator(chunk_size=2000):
+            batch.append(Notification(recipient=u, title=title, content=content, ntype='system'))
+            total += 1
+            if len(batch) >= 2000:
+                Notification.objects.bulk_create(batch)
+                batch = []
+        if batch:
+            Notification.objects.bulk_create(batch)
 
-        return Response({'status': 'ok', 'count': len(notifications)})
+        return Response({'status': 'ok', 'count': total})
 
 
 class UnreadCountView(APIView):

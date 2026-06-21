@@ -51,6 +51,7 @@ export function DiagnosticTest() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [timeLeft, setTimeLeft] = useState(300);
   const [result, setResult] = useState<DiagnosticResult | null>(null);
+  const [isReassessment, setIsReassessment] = useState(false);
   const submittedRef = useRef(false);
 
   useEffect(() => {
@@ -73,7 +74,10 @@ export function DiagnosticTest() {
         knowledge_point_id: q.knowledge_point_id,
         _kp_name: q._kp_name,
       }));
-      const res = await api.post('/users/me/diagnostic/submit/', { answers: formattedAnswers });
+      const res = await api.post('/users/me/diagnostic/submit/', {
+        answers: formattedAnswers,
+        is_reassessment: isReassessment,
+      });
       setResult(res.data);
       updateUser({ has_completed_initial_assessment: true });
       setPhase('results');
@@ -83,7 +87,7 @@ export function DiagnosticTest() {
     } finally {
       setLoading(false);
     }
-  }, [questions, answers]);
+  }, [questions, answers, isReassessment]);
 
   useEffect(() => {
     if (timeLeft <= 0 && phase === 'testing') {
@@ -106,6 +110,30 @@ export function DiagnosticTest() {
       } else {
         toast.error(err.response?.data?.error || t('errors.generateFailed'));
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReassess = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.post('/users/me/diagnostic/reassess/');
+      setQuestions(data.questions);
+      setTimeLeft(data.time_limit_seconds || 300);
+      setCurrentIndex(0);
+      setAnswers({});
+      setResult(null);
+      setIsReassessment(true);
+      setPhase('testing');
+      submittedRef.current = false;
+    } catch (err: any) {
+      if (err.response?.data?.status === 'already_completed') {
+        toast.info('您已完成诊断评估');
+        navigate('/tests');
+        return;
+      }
+      toast.error(err.response?.data?.error || '生成重评估失败');
     } finally {
       setLoading(false);
     }
@@ -174,6 +202,13 @@ export function DiagnosticTest() {
 
     return (
       <div className="min-h-screen p-4 max-w-2xl mx-auto">
+        {/* Reassessment banner */}
+        {isReassessment && (
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-sm rounded-xl px-4 py-3 mb-4 text-center">
+            重新评估中 — 本次评估聚焦你之前的薄弱知识点
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -261,9 +296,12 @@ export function DiagnosticTest() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-2">{t('results.title')}</h1>
           <div className="text-5xl font-bold mt-4 mb-2">{accuracy}%</div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mb-4">
             {t('results.correctOf', { score: result.total_score, total: result.total_questions })}
           </p>
+          <Button onClick={handleReassess} variant="outline" className="rounded-full">
+            重新评估（聚焦弱项）
+          </Button>
         </div>
 
         <div className="space-y-6 mb-10">

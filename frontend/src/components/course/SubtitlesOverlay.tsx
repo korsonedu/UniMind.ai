@@ -12,7 +12,7 @@ export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
   videoRef,
   visible = false,
 }) => {
-  const { transcriptStatus, transcriptSegments, fetchTranscript, triggerTranscription } =
+  const { transcriptStatus, transcriptSegments, fetchTranscript, triggerTranscription, clearCourseTimers } =
     useCourseAIStore();
   const activeIdxRef = useRef(-1);
   const [, forceRender] = useState(0);
@@ -20,7 +20,8 @@ export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
 
   useEffect(() => {
     fetchTranscript(courseId);
-  }, [courseId, fetchTranscript]);
+    return () => { clearCourseTimers(courseId); };
+  }, [courseId, fetchTranscript, clearCourseTimers]);
 
   useEffect(() => {
     if (transcriptStatus === 'unavailable' && !autoTriggeredRef.current) {

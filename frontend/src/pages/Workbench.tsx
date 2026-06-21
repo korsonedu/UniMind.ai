@@ -3,9 +3,11 @@ import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, 
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import AgentChatLayout from '@/components/AgentChatLayout';
+import ClassSelector from '@/components/ClassSelector';
 import QuestionPanel from '@/pages/workbench/QuestionPanel';
 import { BulkInitCard } from '@/pages/workbench/BulkInitCard';
 import { QuickStartPanel } from '@/pages/workbench/QuickStartPanel';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import type { Bot, Message, ConversationSession } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/hooks/useAgentChat';
 
@@ -223,6 +225,7 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
 // ── Main Component ──
 
 export default function Workbench() {
+  const currentClassId = useInstitutionStore(s => s.currentClassId);
   const [instInfo, setInstInfo] = useState<InstitutionInfo | null>(null);
   const [stats, setStats] = useState<InstitutionStats | null>(null);
   const [bot, setBot] = useState<Bot | null>(null);
@@ -350,7 +353,11 @@ export default function Workbench() {
   }
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0">
+      {/* Header: ClassSelector — Slack 模型下的频道选择器 */}
+      <ClassSelector />
+
+      <div className="flex flex-1 min-h-0">
       {/* Left: QuestionPanel or Copilot Overview — 仅对话时显示，landing 隐藏 */}
       {hasConversation && (viewMode !== 'questions' || generatedQuestions.length === 0 ? (
         !wasResetManually && instInfo && stats && (
@@ -452,12 +459,14 @@ export default function Workbench() {
             setHasConversation(false);
             defaultHandler();
           }}
+          getExtraPayload={() => currentClassId ? { class_id: currentClassId } : {}}
           onDone={(refreshSessions) => {
             setWasResetManually(false);
             refreshSessions();
           }}
         />
       </div>
+    </div>
     </div>
   );
 }

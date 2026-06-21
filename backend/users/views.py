@@ -4,6 +4,7 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
+from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.contrib.auth import authenticate
 from django.http import HttpResponse
@@ -129,14 +130,26 @@ class RegisterView(generics.CreateAPIView):
         while User.objects.filter(username=username).exists():
             username = f"{username_base}{counter}"
             counter += 1
-        user = User.objects.create_user(username=username, email=email)
+        user = User.objects.create_user(username=username, email=email, password=password)
         if nickname:
             user.nickname = nickname
         user.email_verified = True
         user.agreed_to_terms = True
         user.agreed_to_terms_at = timezone.now()
-        user.set_password(password)
         user.save()
+
+        # Process referral code
+        referral_code = str(self.request.data.get('referral_code', '')).strip()
+        if referral_code:
+            from payments.models import ReferralCode, ReferralRecord
+            ref = ReferralCode.objects.filter(code=referral_code.upper()).first()
+            if ref:
+                ref.signups += 1
+                ref.save(update_fields=['signups'])
+                ReferralRecord.objects.get_or_create(
+                    referrer=ref.user,
+                    referee=user,
+                )
 
 class UpdateProfileView(generics.UpdateAPIView):
     serializer_class = UserSerializer
@@ -499,8 +512,9 @@ class LoginView(APIView):
                 user.failed_login_count = 0
                 user.locked_until = None
                 user.save(update_fields=['failed_login_count', 'locked_until'])
-            Token.objects.filter(user=user).delete()
-            token = Token.objects.create(user=user)
+            with transaction.atomic():
+                Token.objects.filter(user=user).delete()
+                token = Token.objects.create(user=user)
             user.last_login = timezone.now()
             user.save(update_fields=['last_login'])
             SecurityAuditLog.objects.create(
@@ -753,7 +767,7 @@ class DiagnosticSubmitView(APIView):
 
         with transaction.atomic():
             user = User.objects.select_for_update().get(pk=request.user.pk)
-            if user.has_completed_initial_assessment:
+            if user.has_completed_initial_assessment and not request.data.get('is_reassessment'):
                 return Response({'error': '诊断已完成'}, status=400)
 
             from quizzes.services.diagnostic_service import (
@@ -778,6 +792,31 @@ class DiagnosticSubmitView(APIView):
             'total_questions': len(results),
             'results': results,
             'study_plan': study_plan,
+        })
+
+
+class DiagnosticReassessView(APIView):
+    """POST /api/users/me/diagnostic/reassess/ — 生成重新评估题目，聚焦薄弱知识点。"""
+    permission_classes = [IsMember]
+
+    def post(self, request):
+        user = request.user
+        inst = user.institution
+        if not inst:
+            return Response({'error': '请先加入机构'}, status=400)
+
+        from quizzes.services.diagnostic_service import (
+            generate_reassessment, DIAGNOSTIC_TIME_LIMIT_SECONDS,
+        )
+        questions = generate_reassessment(user)
+
+        if not questions:
+            return Response({'error': '暂无可用题目'}, status=400)
+
+        return Response({
+            'questions': questions,
+            'time_limit_seconds': DIAGNOSTIC_TIME_LIMIT_SECONDS,
+            'is_reassessment': True,
         })
 
 
@@ -1079,6 +1118,8 @@ class AccountDeleteView(APIView):
             user.is_member = False
             user.membership_tier = 'free'
             user.membership_expires_at = None
+            user.is_superuser = False
+            user.is_staff = False
 
             # 清空敏感字段
             user.current_task = ''
@@ -1369,7 +1410,7 @@ class UserCheckInView(APIView):
         streak = (prev.streak + 1) if prev else 1
 
         record = DailyCheckIn.objects.create(user=request.user, date=today, streak=streak)
-        record_event(request.user, 'checkin', metadata={'streak': streak})
+        record_event('checkin', user=request.user, properties={'streak': streak})
 
         check_and_unlock(request.user)
 

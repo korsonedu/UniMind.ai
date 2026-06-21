@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { CalendarCheck, ChatCircle, Trash, Clock, ArrowLeft } from '@phosphor-icons/react';
+import { CalendarCheck, ChatCircle, Trash, Clock, ArrowLeft, Plus, Check } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
@@ -19,6 +20,8 @@ interface PlanTask {
   day: number;
   subject?: string;
   estimated_minutes?: number;
+  target_accuracy?: number;
+  question_count?: number;
   status: 'pending' | 'completed' | 'skipped';
   completed_at?: string | null;
   action?: string;
@@ -47,6 +50,12 @@ const STATUS_COLORS: Record<string, string> = {
   archived: 'bg-gray-100 text-gray-500',
 };
 
+let taskIdCounter = Date.now();
+
+function newTaskId(): string {
+  return `task_${++taskIdCounter}`;
+}
+
 export function StudyPlan() {
   const { t } = useTranslation('plan');
   const navigate = useNavigate();
@@ -54,11 +63,20 @@ export function StudyPlan() {
   const safePlans = Array.isArray(plans) ? plans : [];
   const [selectedPlan, setSelectedPlan] = useState<StudyPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [savedFields, setSavedFields] = useState<Record<string, boolean>>({});
   const { confirm, Dialog } = useConfirm();
 
   useEffect(() => {
     fetchPlans();
   }, []);
+
+  const flashSaved = (fieldKey: string) => {
+    setSavedFields(prev => ({ ...prev, [fieldKey]: true }));
+    setTimeout(() => {
+      setSavedFields(prev => ({ ...prev, [fieldKey]: false }));
+    }, 1500);
+  };
 
   const fetchPlans = async () => {
     try {
@@ -84,15 +102,54 @@ export function StudyPlan() {
     }
   };
 
-  const toggleTask = async (taskId: string, currentStatus: string) => {
+  // Atomic field update via PATCH
+  const updateTaskField = async (taskId: string, field: string, value: any) => {
     if (!selectedPlan) return;
-    const newStatus = currentStatus === 'completed' ? 'pending' : 'completed';
+    const fieldKey = `${taskId}_${field}`;
     try {
-      const res = await api.patch(`/ai/plans/${selectedPlan.id}/tasks/${taskId}/`, { status: newStatus });
+      const res = await api.patch(`/ai/plans/${selectedPlan.id}/tasks/${taskId}/`, { [field]: value });
       setSelectedPlan(res.data);
       setPlans(prev => (Array.isArray(prev) ? prev : []).map(p => p.id === res.data.id ? { ...p, task_progress: res.data.task_progress, status: res.data.status } : p));
+      flashSaved(fieldKey);
     } catch {
       toast.error('更新失败');
+    }
+  };
+
+  const deleteTask = async (taskId: string) => {
+    if (!selectedPlan) return;
+    if (!(await confirm(t('deleteTaskConfirm')))) return;
+    try {
+      const res = await api.delete(`/ai/plans/${selectedPlan.id}/tasks/${taskId}/`);
+      setSelectedPlan(res.data);
+      setPlans(prev => (Array.isArray(prev) ? prev : []).map(p => p.id === res.data.id ? { ...p, task_progress: res.data.task_progress, status: res.data.status } : p));
+      toast.success('已删除');
+    } catch {
+      toast.error('删除失败');
+    }
+  };
+
+  const addTask = async (day: number) => {
+    if (!selectedPlan) return;
+    const newTask: PlanTask = {
+      id: newTaskId(),
+      title: t('newTaskDefaultTitle'),
+      day,
+      status: 'pending',
+    };
+    const updatedPlanData = {
+      ...selectedPlan.plan_data,
+      tasks: [...(selectedPlan.plan_data?.tasks || []), newTask],
+    };
+    try {
+      const res = await api.put(`/ai/plans/${selectedPlan.id}/`, {
+        plan_data: updatedPlanData,
+      });
+      setSelectedPlan(res.data);
+      setPlans(prev => (Array.isArray(prev) ? prev : []).map(p => p.id === res.data.id ? { ...p, task_progress: res.data.task_progress, status: res.data.status } : p));
+      toast.success('任务已添加');
+    } catch {
+      toast.error('添加失败');
     }
   };
 
@@ -121,6 +178,19 @@ export function StudyPlan() {
   }, {});
 
   const sortedDays = Object.keys(tasksByDay).map(Number).sort((a, b) => a - b);
+
+  // Determine if we need to add a new day at the end (for the "add" button after last day)
+  const lastDay = sortedDays.length > 0 ? sortedDays[sortedDays.length - 1] : 0;
+
+  const SavedIndicator = ({ fieldKey }: { fieldKey: string }) => {
+    if (!savedFields[fieldKey]) return null;
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-bold animate-in fade-in duration-200">
+        <Check className="h-3 w-3" />
+        {t('saved')}
+      </span>
+    );
+  };
 
   if (loading) {
     return <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}><div className="flex items-center justify-center h-64">加载中...</div></PageWrapper>;
@@ -195,42 +265,190 @@ export function StudyPlan() {
                       <CardContent className="p-4 flex items-start gap-3">
                         <Checkbox
                           checked={task.status === 'completed'}
-                          onCheckedChange={() => toggleTask(task.id, task.status)}
+                          onCheckedChange={() => updateTaskField(task.id, 'status', task.status === 'completed' ? 'pending' : 'completed')}
                           className="mt-0.5"
                         />
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 space-y-2">
+                          {/* Row 1: Task title (inline editable) + saved indicator */}
                           <div className="flex items-center gap-2">
-                            {task.action ? (
-                              <Link to={task.action} className={`font-medium text-sm hover:underline ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground/90'}`}>
-                                {task.title}
-                              </Link>
+                            {editingTaskId === task.id ? (
+                              <Input
+                                autoFocus
+                                value={task.title}
+                                onChange={e => {
+                                  setSelectedPlan(prev => {
+                                    if (!prev) return prev;
+                                    const newTasks = (prev.plan_data?.tasks || []).map(t =>
+                                      t.id === task.id ? { ...t, title: e.target.value } : t
+                                    );
+                                    return { ...prev, plan_data: { ...prev.plan_data, tasks: newTasks } };
+                                  });
+                                }}
+                                onBlur={() => {
+                                  setEditingTaskId(null);
+                                  updateTaskField(task.id, 'title', task.title);
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    setEditingTaskId(null);
+                                    updateTaskField(task.id, 'title', task.title);
+                                  }
+                                  if (e.key === 'Escape') setEditingTaskId(null);
+                                }}
+                                className="h-8 text-sm font-medium rounded-lg"
+                              />
                             ) : (
-                              <span className={`font-medium text-sm ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
-                                {task.title}
+                              <span
+                                className={`font-medium text-sm cursor-pointer hover:text-indigo-600 transition-colors ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}
+                                onDoubleClick={() => setEditingTaskId(task.id)}
+                                title={t('doubleClickToEdit')}
+                              >
+                                {task.action ? (
+                                  <Link to={task.action} className="hover:underline">{task.title}</Link>
+                                ) : (
+                                  task.title
+                                )}
                               </span>
                             )}
-                            {task.subject && (
-                              <Badge variant="secondary" className="text-xs">{task.subject}</Badge>
-                            )}
+                            <SavedIndicator fieldKey={`${task.id}_title`} />
                           </div>
+
+                          {/* Row 2: Meta fields — estimated_minutes, target_accuracy, question_count */}
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[10px] font-bold text-muted-foreground">{t('estimatedMinutes', { min: '' }).replace(/~?\s*$/, '').trim()}</label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={180}
+                                value={task.estimated_minutes ?? ''}
+                                onChange={e => {
+                                  const val = e.target.value ? parseInt(e.target.value) : undefined;
+                                  setSelectedPlan(prev => {
+                                    if (!prev) return prev;
+                                    const newTasks = (prev.plan_data?.tasks || []).map(t =>
+                                      t.id === task.id ? { ...t, estimated_minutes: val } : t
+                                    );
+                                    return { ...prev, plan_data: { ...prev.plan_data, tasks: newTasks } };
+                                  });
+                                }}
+                                onBlur={() => {
+                                  if (task.estimated_minutes !== undefined) {
+                                    updateTaskField(task.id, 'estimated_minutes', task.estimated_minutes);
+                                  }
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                className="h-7 w-16 text-xs rounded-lg px-2"
+                                placeholder="分钟"
+                              />
+                              <SavedIndicator fieldKey={`${task.id}_estimated_minutes`} />
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[10px] font-bold text-muted-foreground">{t('targetAccuracy')}</label>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={task.target_accuracy ?? ''}
+                                onChange={e => {
+                                  const val = e.target.value ? parseInt(e.target.value) : undefined;
+                                  setSelectedPlan(prev => {
+                                    if (!prev) return prev;
+                                    const newTasks = (prev.plan_data?.tasks || []).map(t =>
+                                      t.id === task.id ? { ...t, target_accuracy: val } : t
+                                    );
+                                    return { ...prev, plan_data: { ...prev.plan_data, tasks: newTasks } };
+                                  });
+                                }}
+                                onBlur={() => {
+                                  if (task.target_accuracy !== undefined) {
+                                    updateTaskField(task.id, 'target_accuracy', task.target_accuracy);
+                                  }
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                className="h-7 w-16 text-xs rounded-lg px-2"
+                                placeholder="%"
+                              />
+                              <SavedIndicator fieldKey={`${task.id}_target_accuracy`} />
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[10px] font-bold text-muted-foreground">{t('questionCount')}</label>
+                              <Input
+                                type="number"
+                                min={0}
+                                max={200}
+                                value={task.question_count ?? ''}
+                                onChange={e => {
+                                  const val = e.target.value ? parseInt(e.target.value) : undefined;
+                                  setSelectedPlan(prev => {
+                                    if (!prev) return prev;
+                                    const newTasks = (prev.plan_data?.tasks || []).map(t =>
+                                      t.id === task.id ? { ...t, question_count: val } : t
+                                    );
+                                    return { ...prev, plan_data: { ...prev.plan_data, tasks: newTasks } };
+                                  });
+                                }}
+                                onBlur={() => {
+                                  if (task.question_count !== undefined) {
+                                    updateTaskField(task.id, 'question_count', task.question_count);
+                                  }
+                                }}
+                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                className="h-7 w-16 text-xs rounded-lg px-2"
+                                placeholder="题"
+                              />
+                              <SavedIndicator fieldKey={`${task.id}_question_count`} />
+                            </div>
+
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-red-500 ml-auto"
+                              onClick={() => deleteTask(task.id)}
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+
                           {task.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
-                          )}
-                          {task.estimated_minutes && (
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground mt-1.5">
-                              <Clock className="w-3 h-3" />
-                              {task.estimated_minutes} 分钟
-                            </span>
+                            <p className="text-sm text-muted-foreground">{task.description}</p>
                           )}
                         </div>
                       </CardContent>
                     </Card>
                   ))}
+
+                  {/* Add task button for this day */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full rounded-xl h-10 text-xs font-bold border-dashed border-border/70 text-muted-foreground hover:text-foreground hover:border-indigo-300"
+                    onClick={() => addTask(day)}
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1.5" />
+                    {t('addTask')}
+                  </Button>
                 </div>
               </div>
             ))}
+
+            {/* Add task to new day */}
+            <div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full rounded-xl h-10 text-xs font-bold border-dashed border-border/70 text-muted-foreground hover:text-foreground hover:border-indigo-300"
+                onClick={() => addTask(lastDay + 1)}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                {t('addTask')}（第 {lastDay + 1} 天）
+              </Button>
+            </div>
           </div>
         </div>
+        {Dialog}
       </PageWrapper>
     );
   }

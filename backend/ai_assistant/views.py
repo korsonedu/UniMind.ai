@@ -420,6 +420,7 @@ class AIChatStreamView(APIView):
         bot_id = request.data.get('bot_id')
         web_search = request.data.get('web_search', False)
         conversation_id = request.data.get('conversation_id')
+        class_id = request.data.get('class_id')
 
         if not user_message:
             return Response({'error': 'Message is required'}, status=400)
@@ -476,6 +477,7 @@ class AIChatStreamView(APIView):
                 message=user_message,
                 history=history_msgs,
                 institution=getattr(request.user, 'institution', None),
+                class_id=class_id,
                 student_context=student_context,
                 memory_context=memory_context,
                 adaptive_directives=adaptive_directives,
@@ -741,28 +743,84 @@ class StudyPlanTaskUpdateView(APIView):
         if not plan:
             return Response({'error': 'Plan not found'}, status=404)
 
-        new_status = request.data.get('status')
-        if new_status not in ('pending', 'completed', 'skipped'):
-            return Response({'error': 'Invalid status'}, status=400)
-
         data = plan.plan_data or {}
         tasks = data.get('tasks', [])
         updated = False
+        task_to_update = None
         for task in tasks:
             if task.get('id') == task_id:
-                task['status'] = new_status
-                task['completed_at'] = timezone.now().isoformat() if new_status == 'completed' else None
-                updated = True
+                task_to_update = task
                 break
 
-        if not updated:
+        if task_to_update is None:
             return Response({'error': 'Task not found'}, status=404)
 
+        # Update status
+        new_status = request.data.get('status')
+        if new_status is not None:
+            if new_status not in ('pending', 'completed', 'skipped'):
+                return Response({'error': 'Invalid status'}, status=400)
+            task_to_update['status'] = new_status
+            task_to_update['completed_at'] = timezone.now().isoformat() if new_status == 'completed' else None
+            updated = True
+
+        # Update title
+        if 'title' in request.data:
+            task_to_update['title'] = request.data['title']
+            updated = True
+
+        # Update action
+        if 'action' in request.data:
+            task_to_update['action'] = request.data['action']
+            updated = True
+
+        # Update estimated_minutes
+        if 'estimated_minutes' in request.data:
+            val = request.data['estimated_minutes']
+            task_to_update['estimated_minutes'] = int(val) if val is not None else None
+            updated = True
+
+        # Update target_accuracy
+        if 'target_accuracy' in request.data:
+            val = request.data['target_accuracy']
+            task_to_update['target_accuracy'] = int(val) if val is not None else None
+            updated = True
+
+        # Update question_count
+        if 'question_count' in request.data:
+            val = request.data['question_count']
+            task_to_update['question_count'] = int(val) if val is not None else None
+            updated = True
+
+        if not updated:
+            return Response({'error': 'No valid fields to update'}, status=400)
+
+        # Auto-complete plan if all tasks done
         all_done = all(t.get('status') in ('completed', 'skipped') for t in tasks)
         if all_done:
             plan.status = 'completed'
             plan.completed_at = timezone.now()
 
+        plan.plan_data = data
+        plan.save()
+
+        return Response(StudyPlanSerializer(plan).data)
+
+    def delete(self, request, plan_id, task_id):
+        from django.utils import timezone
+
+        plan = StudyPlan.objects.filter(id=plan_id, user=request.user).first()
+        if not plan:
+            return Response({'error': 'Plan not found'}, status=404)
+
+        data = plan.plan_data or {}
+        tasks = data.get('tasks', [])
+        tasks = [t for t in tasks if t.get('id') != task_id]
+
+        if len(tasks) == len(data.get('tasks', [])):
+            return Response({'error': 'Task not found'}, status=404)
+
+        data['tasks'] = tasks
         plan.plan_data = data
         plan.save()
 

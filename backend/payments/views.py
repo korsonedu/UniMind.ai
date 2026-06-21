@@ -4,13 +4,19 @@ Payment views — 通过 gateway_router 动态选择支付网关。
 import logging
 
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
 
-from payments.models import Order, Invoice, Subscription
-from payments.serializers import CreateOrderSerializer, OrderSerializer, InvoiceSerializer
-from payments.services.base import create_order, confirm_order
+from payments.models import Order, Invoice, Subscription, Coupon
+from payments.serializers import (
+    CreateOrderSerializer, OrderSerializer, InvoiceSerializer,
+    CouponSerializer, CouponValidateSerializer,
+)
+from payments.services.base import create_order, confirm_order, get_plan_price
+from payments.services.coupon import validate_coupon
 from payments.services.gateway_router import get_gateway
 
 logger = logging.getLogger(__name__)
@@ -38,6 +44,7 @@ class CreateCheckoutSessionView(APIView):
             billing_cycle=billing_cycle,
             gateway=gateway,
             institution=request.user.institution,
+            coupon_code=ser.validated_data.get('coupon_code', ''),
         )
 
         try:
@@ -152,6 +159,8 @@ class CreateSubscriptionView(APIView):
         try:
             from payments.services.stripe_gateway import create_subscription_checkout
             data = create_subscription_checkout(inst, plan, billing_cycle, user.email)
+            if data.get('contact_admin'):
+                return Response({'message': data['message']}, status=status.HTTP_200_OK)
             return Response({
                 'subscription_id': data['subscription_id'],
                 'checkout_url': data['checkout_url'],
@@ -208,6 +217,111 @@ class SubscriptionStatusView(APIView):
         except Exception:
             logger.exception('Subscription cancel failed')
             return Response({'error': '取消订阅失败'}, status=500)
+
+
+# ── Coupons ──
+
+
+class CouponValidateView(APIView):
+    """POST /api/payments/coupons/validate/ — 验证优惠码并预览折扣。"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ser = CouponValidateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        code = ser.validated_data['code']
+        plan = ser.validated_data['plan']
+        billing_cycle = ser.validated_data['billing_cycle']
+
+        try:
+            amount = get_plan_price(plan, billing_cycle)
+        except (KeyError, ValueError):
+            return Response({'error': '无效的方案或计费周期'}, status=400)
+
+        result = validate_coupon(code, request.user, plan, amount)
+        if result['valid']:
+            return Response({
+                'valid': True,
+                'discount_cents': result['discount_cents'],
+                'final_amount_cents': result['final_amount_cents'],
+                'original_amount_cents': amount,
+                'code': code,
+            })
+        return Response({'valid': False, 'error': result['error']}, status=400)
+
+
+class CouponListCreateView(APIView):
+    """GET/POST /api/payments/coupons/ — 列表+创建优惠券。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        inst = getattr(request.user, 'institution', None)
+        if request.user.is_admin and not inst:
+            qs = Coupon.objects.filter(institution__isnull=True)
+        elif inst:
+            qs = Coupon.objects.filter(institution=inst) | Coupon.objects.filter(institution__isnull=True)
+        else:
+            qs = Coupon.objects.none()
+        ser = CouponSerializer(qs, many=True)
+        return Response(ser.data)
+
+    def post(self, request):
+        inst = getattr(request.user, 'institution', None)
+        if not inst and not request.user.is_admin:
+            return Response({'error': '无权创建优惠券'}, status=403)
+
+        ser = CouponSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        ser.save(institution=inst, created_by=request.user)
+        return Response(ser.data, status=201)
+
+
+class CouponDetailView(APIView):
+    """PUT/DELETE /api/payments/coupons/<int:pk>/ — 更新/删除优惠券。"""
+    permission_classes = [IsAuthenticated]
+
+    def _get_coupon(self, pk, user):
+        inst = getattr(user, 'institution', None)
+        coupon = get_object_or_404(Coupon, pk=pk)
+        if coupon.institution and coupon.institution != inst:
+            raise PermissionDenied('无权操作此优惠券')
+        if not coupon.institution and not user.is_admin:
+            raise PermissionDenied('无权操作平台通用优惠券')
+        return coupon
+
+    def put(self, request, pk):
+        coupon = self._get_coupon(pk, request.user)
+        ser = CouponSerializer(coupon, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ser.data)
+
+    def delete(self, request, pk):
+        coupon = self._get_coupon(pk, request.user)
+        coupon.delete()
+        return Response(status=204)
+
+
+# ── Referral ──
+
+
+class MyReferralView(APIView):
+    """GET /api/payments/referral/ — 获取或创建用户推荐码。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from payments.models import ReferralCode
+        import secrets
+        code_obj, created = ReferralCode.objects.get_or_create(
+            user=request.user,
+            defaults={'code': secrets.token_hex(4).upper()},
+        )
+        return Response({
+            'code': code_obj.code,
+            'clicks': code_obj.clicks,
+            'signups': code_obj.signups,
+            'purchases': code_obj.purchases,
+        })
 
 
 # ── Webhook (no auth — 真实支付时校验签名) ──

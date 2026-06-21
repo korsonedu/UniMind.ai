@@ -33,7 +33,26 @@
     "promptShort": "Prompts",
     "platformAnalytics": "Analytics",
     "members": "Members",
-    "billing": "Billing"
+    "billing": "Billing",
+    "marketplace": "Marketplace",
+    "apiPlatform": "API Platform",
+    "assignments": "Assignments",
+    "myAssignments": "My Assignments",
+    "lessonPlans": "Lesson Plans",
+    "questionBank": "Question Bank",
+    "knowledgeTree": "Knowledge Tree",
+    "gradebook": "Gradebook",
+    "campuses": "Campuses",
+    "achievements": "Achievements",
+    "reportCard": "Report Card",
+    "parentMode": "Parent Mode",
+    "marketplaceShort": "Market",
+    "apiPlatformShort": "API",
+    "parentShort": "Parent",
+    "studentsShort": "Students",
+    "dashboardShort": "Dashboard",
+    "gradeShort": "Grades",
+    "xiaoyuShort": "XiaoYu"
   },
   "userMenu": {
     "accountPreferences": "Account & Preferences",
@@ -110,5 +129,8 @@
     "upgradeTo": "Upgrade to {{plan}}",
     "later": "Maybe Later",
     "learnMore": "Learn More"
-  }
+  },
+  "studentView": "Student View",
+  "previewStudent": "Preview as Student",
+  "exitStudentPreview": "Exit Student Preview"
 }

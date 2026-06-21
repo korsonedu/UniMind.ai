@@ -6,7 +6,7 @@ from .views import (
     ActivateMembershipView,
     BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
-    DiagnosticGenerateView, DiagnosticSubmitView,
+    DiagnosticGenerateView, DiagnosticSubmitView, DiagnosticReassessView,
     AnalyticsDashboardView, AnalyticsExportView, NPSSubmitView, NPSStatusView,
     AccountDeleteView, DataExportView, FeedbackSubmitView,
     AvatarProxyView,
@@ -47,6 +47,17 @@ from .views_institution import (
     InstitutionInviteListView, InstitutionInviteDetailView,
     InstitutionJoinRequestListView, InstitutionJoinRequestReviewView,
 )
+from .views_parent import (
+    ParentLinkRequestView, ParentLinkVerifyView, ParentChildListView,
+    ParentChildProgressView, ParentChildWeeklyReportView,
+    MyParentLinksView,
+)
+from .views_api import (
+    APIKeyListCreateView, APIKeyDetailView,
+)
+from .views_sso import (
+    SSOAuthorizeView, SSOCallbackView, SSOConfigView,
+)
 
 urlpatterns = [
     # Auth & profile
@@ -54,6 +65,10 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('send-verification-code/', SendVerificationCodeView.as_view(), name='send-verification-code'),
+    # SSO
+    path('sso/authorize/', SSOAuthorizeView.as_view(), name='sso-authorize'),
+    path('sso/callback/', SSOCallbackView.as_view(), name='sso-callback'),
+    path('institution/me/sso-config/', SSOConfigView.as_view(), name='institution-sso-config'),
     path('me/', UserDetailView.as_view(), name='user-detail'),
     path('me/update/', UpdateProfileView.as_view(), name='user-update'),
     path('me/email/', UpdateEmailView.as_view(), name='email-update'),
@@ -63,6 +78,7 @@ urlpatterns = [
     path('me/knowledge-mastery/', MyKnowledgeMasteryView.as_view(), name='knowledge-mastery'),
     path('me/diagnostic/generate/', DiagnosticGenerateView.as_view(), name='diagnostic-generate'),
     path('me/diagnostic/submit/', DiagnosticSubmitView.as_view(), name='diagnostic-submit'),
+    path('me/diagnostic/reassess/', DiagnosticReassessView.as_view(), name='diagnostic-reassess'),
     path('heartbeat/', HeartbeatView.as_view(), name='heartbeat'),
     path('nps/submit/', NPSSubmitView.as_view(), name='nps-submit'),
     path('nps/status/', NPSStatusView.as_view(), name='nps-status'),
@@ -177,6 +193,18 @@ urlpatterns = [
     # Report card
     path('me/report-card/', StudentReportCardView.as_view(), name='student-report-card'),
     path('me/report-card/pdf/', StudentReportCardPDFView.as_view(), name='student-report-card-pdf'),
+
+    # Parent portal
+    path('parent/link-request/', ParentLinkRequestView.as_view(), name='parent-link-request'),
+    path('parent/link-verify/', ParentLinkVerifyView.as_view(), name='parent-link-verify'),
+    path('parent/children/', ParentChildListView.as_view(), name='parent-children'),
+    path('parent/children/<int:child_id>/progress/', ParentChildProgressView.as_view(), name='parent-child-progress'),
+    path('parent/children/<int:child_id>/weekly-report/', ParentChildWeeklyReportView.as_view(), name='parent-child-weekly-report'),
+    path('me/parent-links/', MyParentLinksView.as_view(), name='my-parent-links'),
+
+    # API platform
+    path('institution/me/api-keys/', APIKeyListCreateView.as_view(), name='api-key-list'),
+    path('institution/me/api-keys/<int:pk>/', APIKeyDetailView.as_view(), name='api-key-detail'),
 
     # Push notifications
     path('me/push-subscribe/', PushSubscribeView.as_view(), name='push-subscribe'),

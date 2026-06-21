@@ -5,7 +5,7 @@ from .serializers import ArticleSerializer
 from django.db.models import Count, F
 from django.utils.decorators import method_decorator
 from users.views import IsMember
-from users.permissions import IsAdminWriteMemberRead, HasQuota
+from users.permissions import IsAdmin, IsAdminWriteMemberRead, HasQuota
 from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES
 from core.rate_limit import user_rate_limit
 from users.quota import check_and_add_storage_usage

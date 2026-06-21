@@ -92,6 +92,10 @@ interface InstitutionState {
   fetchChildren: () => Promise<void>;
   switchCampus: (campusId: number | null) => Promise<void>;
 
+  // Class selector
+  currentClassId: number | null;
+  setCurrentClassId: (id: number | null) => void;
+
   fetchFeatures: () => Promise<void>;
   hasFeature: (feature: string) => boolean;
   clear: () => void;
@@ -126,6 +130,10 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
       get().fetchFeatures();
     }
   },
+
+  // Class selector
+  currentClassId: null,
+  setCurrentClassId: (id: number | null) => set({ currentClassId: id }),
 
   fetchFeatures: async () => {
     const state = get();
@@ -205,6 +213,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
       previewMode: false,
       previewInstitution: null,
       currentCampusId: null,
+      currentClassId: null,
       children: [],
     });
   },
@@ -240,4 +249,5 @@ export const FEATURES = {
   AUDIT_LOG: 'audit.log',
   DEDICATED_SUPPORT: 'dedicated.support',
   SLA_99_9: 'sla.99.9',
+  TEACHING_PLANS: 'teaching_plans',
 } as const;

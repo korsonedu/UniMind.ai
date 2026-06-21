@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import api from '@/lib/api';
 import { ArrowRight, List, X, Clock, Repeat, ChartBar } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useNavigate, Link } from 'react-router-dom';
@@ -139,7 +140,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
           {token ? (
             <Button
               size="sm"
-              className="text-[#2d2b6b] border-[#d4d0f5] bg-[#f0efff] hover:bg-[#e4e2ff]"
+              className="text-xiaoyu-500 border-xiaoyu-100 bg-xiaoyu-50 hover:bg-xiaoyu-100"
               onClick={() => navigate('/courses')}
             >
               {t('nav.enterConsole')}
@@ -154,7 +155,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
               </button>
               <Button
                 size="sm"
-                className="text-white border-0 font-semibold bg-[#2d2b6b] hover:bg-[#232260]"
+                className="text-white border-0 font-semibold bg-xiaoyu-500 hover:bg-xiaoyu-600"
                 onClick={() => navigate('/register')}
               >
                 {t('nav.freeTrial')}
@@ -186,7 +187,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
 };
 
 /* ────────────────────────────────────────────
-   Hero — white, full viewport
+   Hero — white, full viewport (uses xiaoyu brand tokens)
    ──────────────────────────────────────────── */
 
 const Hero: React.FC = () => {
@@ -203,7 +204,7 @@ const Hero: React.FC = () => {
             onClick={() => navigate('/memorix')}
             className="inline-block cursor-pointer group"
           >
-            <span className="text-[18px] text-[#2d2b6b] group-hover:underline">
+            <span className="text-[18px] text-xiaoyu-500 group-hover:underline">
               🎉 <strong>Memorix-Field</strong> 图扩散记忆调度发布 — 遗忘率相比 SOTA 降低 19.9%，现已全面支持 Agent 个性化学习路径 →
             </span>
           </button>
@@ -211,7 +212,7 @@ const Hero: React.FC = () => {
           <h1 className="text-[36px] md:text-[52px] lg:text-[64px] font-extrabold leading-[1.08] text-unimind-text max-w-4xl mx-auto tracking-[-0.03em]">
             {t('hero.titleLine1')}
             <br />
-            <span className="text-[#2d2b6b]">
+            <span className="text-xiaoyu-500">
               {t('hero.titleLine2')}
             </span>
           </h1>
@@ -223,7 +224,7 @@ const Hero: React.FC = () => {
         <div className="flex items-center justify-center gap-3 pt-2 reveal reveal-delay-2">
           <Button
             size="lg"
-            className="h-12 px-8 text-sm font-bold rounded-xl text-white bg-[#2d2b6b] hover:bg-[#232260]"
+            className="h-12 px-8 text-sm font-bold rounded-xl text-white bg-xiaoyu-500 hover:bg-xiaoyu-600"
             onClick={() => navigate('/register')}
           >
             {t('hero.cta')}
@@ -637,6 +638,41 @@ const Footer: React.FC = () => {
    Main — white with FinalCTA dark anchor
    ──────────────────────────────────────────── */
 
+const ReferralBanner: React.FC = () => {
+  const [code, setCode] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    api.get('/payments/referral/').then(({ data }) => setCode(data.code)).catch(() => {});
+  }, []);
+
+  if (!code) return null;
+
+  const refLink = `https://unimind-ai.com/register?ref=${code}`;
+  const handleCopy = () => {
+    navigator.clipboard.writeText(refLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  return (
+    <section className="py-16 px-6 bg-[#f8f7ff]">
+      <div className="max-w-2xl mx-auto text-center space-y-4">
+        <h3 className="text-xl font-bold text-[#1a1a2e]">邀请朋友，一起学习</h3>
+        <p className="text-muted-foreground">复制你的专属推荐链接，朋友注册后双方都将获得奖励</p>
+        <div className="flex items-center justify-center gap-2">
+          <code className="bg-white border px-4 py-2 rounded-lg text-sm font-mono text-[#1a1a2e] select-all">{refLink}</code>
+          <Button size="sm" onClick={handleCopy} variant="outline">
+            {copied ? '已复制' : '复制链接'}
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+
 export const Landing: React.FC = () => {
   const { token } = useAuthStore();
   useScrollReveal();
@@ -648,6 +684,7 @@ export const Landing: React.FC = () => {
       <StatsBar />            {/* white */}
       <PainPoints />          {/* white */}
       <Showcase />            {/* white */}
+      {token && <ReferralBanner />}
       <Testimonials />        {/* white */}
       <HowItWorks />          {/* white */}
       <Subjects />            {/* white */}

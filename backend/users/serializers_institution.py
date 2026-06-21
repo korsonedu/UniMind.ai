@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Institution, InstitutionInvite, JoinRequest, User
+from .models import Institution, InstitutionInvite, JoinRequest, User, APICredential, SSOConfig
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -106,3 +106,22 @@ class InstitutionChildSerializer(serializers.ModelSerializer):
 
     def get_staff_count(self, obj):
         return obj.students.filter(institution_role__in=('owner', 'teacher', 'registrar')).count()
+
+
+class APICredentialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = APICredential
+        fields = ['id', 'name', 'key_id', 'scopes', 'rate_limit', 'is_active',
+                  'last_used_at', 'created_at']
+        read_only_fields = ['id', 'key_id', 'last_used_at', 'created_at']
+
+
+class SSOConfigSerializer(serializers.ModelSerializer):
+    client_secret = serializers.CharField(write_only=True, required=False)
+
+    class Meta:
+        model = SSOConfig
+        fields = ['id', 'provider', 'enabled', 'client_id', 'client_secret',
+                  'redirect_uri', 'domain_whitelist', 'auto_join', 'default_role',
+                  'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

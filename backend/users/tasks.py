@@ -205,3 +205,19 @@ def check_performance_drops():
             "check_performance_drops: institution=%s alerts=%d",
             inst.name, len(alerts),
         )
+
+
+@shared_task
+def deactivate_expired_invites():
+    """每小时执行：将过期邀请链接设为非活跃。"""
+    from .models import InstitutionInvite
+
+    now = timezone.now()
+    expired = InstitutionInvite.objects.filter(
+        expires_at__lt=now,
+        is_active=True,
+    )
+    count = expired.count()
+    if count > 0:
+        expired.update(is_active=False)
+        logger.info("deactivate_expired_invites: deactivated %d expired invites", count)

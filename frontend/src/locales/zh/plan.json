@@ -14,5 +14,13 @@
   "day": "第 {{day}} 天",
   "estimatedMinutes": "预计 {{min}} 分钟",
   "deleteConfirm": "确定要删除这个计划吗？",
-  "viewInChat": "在对话中查看"
+  "deleteTaskConfirm": "确定要删除这个任务吗？",
+  "viewInChat": "在对话中查看",
+  "addTask": "添加任务",
+  "saved": "已保存",
+  "taskName": "任务名称",
+  "targetAccuracy": "目标正确率",
+  "questionCount": "题目数量",
+  "doubleClickToEdit": "双击编辑名称",
+  "newTaskDefaultTitle": "新任务"
 }

@@ -739,6 +739,41 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             ],
         }
 
+    def _handle_list_lesson_plans(self, args: Dict) -> Dict:
+        """浏览教案库（教师视角，仅看到本机构教案）。"""
+        from courses.models import TeachingPlan
+
+        subject = (args.get('subject') or '').strip()
+        class_name = (args.get('class_name') or '').strip()
+        limit = min(int(args.get('limit', 10)), 20)
+
+        qs = TeachingPlan.objects.all()
+        if self.institution:
+            qs = qs.filter(institution=self.institution)
+
+        if subject:
+            qs = qs.filter(subject=subject)
+        if class_name:
+            qs = qs.filter(class_obj__name__icontains=class_name)
+
+        plans = qs.select_related('class_obj').order_by('-created_at')[:limit]
+
+        return {
+            "total": qs.count(),
+            "plans": [
+                {"id": p.id, "title": p.title,
+                 "subject": p.subject or '',
+                 "semester": p.semester or '',
+                 "class_name": p.class_obj.name if p.class_obj else '',
+                 "week_count": p.week_count,
+                 "url": f"/lesson-plans"}
+                for p in plans
+            ],
+            "_actions": [
+                {"label": "查看全部教案", "route": "/lesson-plans"},
+            ],
+        }
+
     # ── 班级/课程管理工具 ───────────────────────────────────────
 
     def _handle_list_classes(self, args: Dict) -> Dict:
@@ -827,17 +862,25 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             target_classes=class_obj, institution=self.institution,
         ).order_by('-created_at')
 
+        # 预计算每份作业的满分
+        assignment_max_scores = {}
+        for a in assignments:
+            pts = list(a.assignment_questions.values_list('points', flat=True))
+            assignment_max_scores[a.id] = sum(pts) or a.assignment_questions.count()
+
+        # 批量查询所有提交记录，避免 M×N 次查询
+        all_subs = AssignmentSubmission.objects.filter(
+            student__in=students, assignment__in=assignments,
+        )
+        sub_map = {(s.student_id, s.assignment_id): s for s in all_subs}
+
         students_data = []
         for student in students:
             student_scores = []
             for assignment in assignments:
-                max_score = sum(
-                    assignment.assignment_questions.values_list('points', flat=True)
-                ) or assignment.assignment_questions.count()
-                try:
-                    sub = AssignmentSubmission.objects.get(
-                        assignment=assignment, student=student,
-                    )
+                sub = sub_map.get((student.id, assignment.id))
+                max_score = assignment_max_scores[assignment.id]
+                if sub:
                     student_scores.append({
                         "assignment_id": assignment.id,
                         "assignment_title": assignment.title,
@@ -846,7 +889,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                         "submitted": True,
                         "graded": sub.score is not None,
                     })
-                except AssignmentSubmission.DoesNotExist:
+                else:
                     student_scores.append({
                         "assignment_id": assignment.id,
                         "assignment_title": assignment.title,

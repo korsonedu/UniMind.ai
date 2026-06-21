@@ -44,6 +44,13 @@ from .views_online_exam import (
 from .views_field import (
     FieldDiagnoseView, FieldSubjectsView, FieldInvalidateCacheView,
 )
+from .views_diagnostic import (
+    StudentHealthTrendView, StudentHealthDetailView,
+)
+from .views_marketplace import (
+    MarketplaceListView, MarketplaceDetailView, MarketplacePublishView,
+    MarketplaceManageView, MarketplacePurchaseView,
+)
 
 urlpatterns = [
     path('questions/', QuestionListView.as_view(), name='question-list'),
@@ -109,8 +116,17 @@ urlpatterns = [
     path('admin/prompt-templates/', AdminPromptTemplateListView.as_view(), name='admin-prompt-template-list'),
     path('admin/prompt-templates/detail/', AdminPromptTemplateDetailView.as_view(), name='admin-prompt-template-detail'),
     path('admin/prompt-templates/rollback/', AdminPromptTemplateRollbackView.as_view(), name='admin-prompt-template-rollback'),
+    # 学情诊断
+    path('health-trend/', StudentHealthTrendView.as_view(), name='health-trend'),
+    path('health-detail/', StudentHealthDetailView.as_view(), name='health-detail'),
     # Field 知识图谱诊断
     path('field/diagnose/', FieldDiagnoseView.as_view(), name='field-diagnose'),
     path('field/subjects/', FieldSubjectsView.as_view(), name='field-subjects'),
     path('field/invalidate-cache/', FieldInvalidateCacheView.as_view(), name='field-invalidate-cache'),
+    # 内容市场
+    path('marketplace/', MarketplaceListView.as_view(), name='marketplace-list'),
+    path('marketplace/publish/', MarketplacePublishView.as_view(), name='marketplace-publish'),
+    path('marketplace/manage/<int:pk>/', MarketplaceManageView.as_view(), name='marketplace-manage'),
+    path('marketplace/<int:pk>/', MarketplaceDetailView.as_view(), name='marketplace-detail'),
+    path('marketplace/<int:pk>/purchase/', MarketplacePurchaseView.as_view(), name='marketplace-purchase'),
 ]

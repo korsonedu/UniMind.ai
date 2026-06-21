@@ -1,7 +1,7 @@
 import csv
 import logging
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -927,12 +927,18 @@ class InstitutionInviteListView(APIView):
         inst = request.user.institution
         serializer = CreateInstitutionInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        invite = InstitutionInvite.objects.create(
-            institution=inst,
-            created_by=request.user,
-            **serializer.validated_data,
-        )
-        return Response(InstitutionInviteSerializer(invite).data, status=201)
+        count = int(request.data.get('count', 1))
+        invites = []
+        for _ in range(max(1, min(count, 50))):  # 上限 50
+            invite = InstitutionInvite.objects.create(
+                institution=inst,
+                created_by=request.user,
+                **serializer.validated_data,
+            )
+            invites.append(invite)
+        if len(invites) == 1:
+            return Response(InstitutionInviteSerializer(invites[0]).data, status=201)
+        return Response(InstitutionInviteSerializer(invites, many=True).data, status=201)
 
 
 class InstitutionInviteDetailView(APIView):
@@ -1528,6 +1534,7 @@ class ClassListCreateView(APIView):
             data.append({
                 'id': c.id,
                 'name': c.name,
+                'category': c.category or '',
                 'institution_name': c.institution.name,
                 'institution_id': c.institution_id,
                 'student_count': c.students.count(),
@@ -1540,11 +1547,12 @@ class ClassListCreateView(APIView):
     def post(self, request):
         inst = request.user.institution
         name = (request.data.get('name') or '').strip()
+        category = (request.data.get('category') or '').strip()
         if not name:
             return Response({'error': '班级名称不能为空'}, status=400)
         try:
-            c = ClassModel.objects.create(institution=inst, name=name)
-            return Response({'id': c.id, 'name': c.name, 'student_count': 0}, status=201)
+            c = ClassModel.objects.create(institution=inst, name=name, category=category[:100] if category else '')
+            return Response({'id': c.id, 'name': c.name, 'category': c.category or '', 'student_count': 0}, status=201)
         except IntegrityError:
             return Response({'error': f'班级「{name}」已存在'}, status=409)
 
@@ -1761,42 +1769,113 @@ class ClassGradebookView(APIView):
 
         assignment_list = []
         for a in assignments:
+            max_score = sum(aq.points for aq in a.assignment_questions.all())
             assignment_list.append({
                 'id': a.id,
                 'title': a.title,
                 'due_date': a.due_date.isoformat() if a.due_date else None,
+                'max_score': max_score if max_score > 0 else None,
             })
 
-        students = class_obj.students.all().order_by('id')
+        # Sort & search
+        sort_by = request.query_params.get('sort_by', 'name')
+        sort_dir = request.query_params.get('sort_dir', 'asc')
+        search = request.query_params.get('search', '').strip()
+
+        students = class_obj.students.all()
+        if search:
+            students = students.filter(
+                Q(nickname__icontains=search) | Q(username__icontains=search)
+            )
+
+        # Build student list with scores and averages
+        # Bulk fetch all submissions once (avoid N+1)
+        all_subs = AssignmentSubmission.objects.filter(
+            student__in=students, assignment__in=assignments,
+        ).select_related('assignment')
+        sub_map: dict = {}
+        for sub in all_subs:
+            sub_map[(sub.student_id, sub.assignment_id)] = sub
+
         student_list = []
         for student in students:
-            submissions = AssignmentSubmission.objects.filter(
-                student=student, assignment__in=assignments,
-            ).select_related('assignment')
-            sub_map = {s.assignment_id: s for s in submissions}
-
             scores = []
+            student_score_sum = 0.0
+            student_max_sum = 0.0
+            submitted_count = 0
             for a in assignments:
-                sub = sub_map.get(a.id)
-                max_score = sum(aq.points for aq in a.assignment_questions.all())
+                sub = sub_map.get((student.id, a.id))
+                max_sc = next((al['max_score'] for al in assignment_list if al['id'] == a.id), None)
+                score_val = sub.score if sub else None
                 scores.append({
                     'assignment_id': a.id,
                     'assignment_title': a.title,
-                    'score': sub.score if sub else None,
+                    'score': score_val,
                     'submitted': sub is not None,
-                    'max_score': max_score if max_score > 0 else None,
+                    'max_score': max_sc,
                 })
+                if score_val is not None and max_sc:
+                    student_score_sum += score_val
+                    student_max_sum += max_sc
+                    submitted_count += 1
+
+            avg = round(student_score_sum / submitted_count, 1) if submitted_count > 0 else None
 
             student_list.append({
                 'id': student.id,
                 'name': student.nickname or student.username,
                 'scores': scores,
+                'average': avg,
             })
 
+        # Sort
+        if sort_by == 'average':
+            student_list.sort(
+                key=lambda s: (s['average'] is None, s['average'] or 0),
+                reverse=(sort_dir == 'desc')
+            )
+        else:
+            student_list.sort(
+                key=lambda s: s['name'].lower(),
+                reverse=(sort_dir == 'desc')
+            )
+
+        # CSV export
+        if request.query_params.get('format') == 'csv':
+            import csv
+            from django.http import HttpResponse
+            response = HttpResponse(content_type='text/csv; charset=utf-8')
+            response['Content-Disposition'] = f'attachment; filename="gradebook_{class_obj.name}.csv"'
+            response.write('\ufeff')  # BOM for Excel
+            writer = csv.writer(response)
+            header = ['学生'] + [a['title'] for a in assignment_list] + ['均分']
+            writer.writerow(header)
+            for row in student_list:
+                writer.writerow(
+                    [row['name']] +
+                    [s['score'] if s['score'] is not None else '—' for s in row['scores']] +
+                    [row['average'] if row['average'] is not None else '—']
+                )
+            return response
+
+        # Compute class stats
+        all_averages = [s['average'] for s in student_list if s['average'] is not None]
+        class_average = round(sum(all_averages) / len(all_averages), 1) if all_averages else None
+        submission_rate = round(
+            sum(1 for s in student_list if any(sc['submitted'] for sc in s['scores'])) / len(student_list) * 100, 1
+        ) if student_list else None
+
         return Response({
+            'class_id': class_obj.id,
             'class_name': class_obj.name,
             'students': student_list,
             'assignments': assignment_list,
+            'stats': {
+                'class_average': class_average,
+                'submission_rate': submission_rate,
+                'total_assignments': len(assignment_list),
+                'total_students': len(student_list),
+            },
         })
 
 

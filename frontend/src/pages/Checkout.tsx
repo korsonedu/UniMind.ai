@@ -1,64 +1,95 @@
-import { useEffect, useState, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
-import { Spinner, WarningCircle } from '@phosphor-icons/react';
+import { Spinner, WarningCircle, Ticket } from '@phosphor-icons/react';
+import { Button } from '@/components/ui/button';
+
+const PLAN_LABELS: Record<string, string> = {
+  starter: 'Starter',
+  growth: 'Growth',
+  enterprise: 'Enterprise',
+};
+
+const CYCLE_LABELS: Record<string, string> = {
+  monthly: '月度',
+  annual: '年度',
+};
 
 export function Checkout() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const [error, setError] = useState('');
-  const started = useRef(false);
+  const [paying, setPaying] = useState(false);
 
   const plan = searchParams.get('plan') || 'starter';
   const cycle = searchParams.get('cycle') || 'annual';
   const gateway = searchParams.get('gateway') || 'stub';
 
+  // Promo code
+  const [couponCode, setCouponCode] = useState('');
+  const [couponResult, setCouponResult] = useState<any>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
+  const validateCoupon = useCallback(async (code: string) => {
+    if (!code.trim()) { setCouponResult(null); return; }
+    setValidatingCoupon(true);
+    try {
+      const { data } = await api.post('/payments/coupons/validate/', {
+        code: code.trim(),
+        plan: plan,
+        billing_cycle: cycle,
+      });
+      setCouponResult(data);
+    } catch (err: any) {
+      setCouponResult({ valid: false, error: err.response?.data?.error || '验证失败' });
+    } finally { setValidatingCoupon(false); }
+  }, [plan, cycle]);
+
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+    const timer = setTimeout(() => validateCoupon(couponCode), 500);
+    return () => clearTimeout(timer);
+  }, [couponCode, validateCoupon]);
 
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { data } = await api.post('/payments/create-session/', {
-          plan,
-          billing_cycle: cycle,
-          gateway,
-        });
-        if (cancelled) return;
-        if (data.checkout_url) {
-          // Validate URL is from a known payment provider
-          const url = new URL(data.checkout_url);
-          const allowedHosts = ['checkout.stripe.com', 'pay.stripe.com', 'mapi.alipay.com', 'openapi.alipay.com', 'airwallex.com'];
-          if (!allowedHosts.some(h => url.hostname === h || url.hostname.endsWith('.' + h))) {
-            // Allow same-origin redirects and localhost for dev
-            if (url.origin !== window.location.origin && url.hostname !== 'localhost') {
-              setError('支付网关地址异常，请联系客服');
-              return;
-            }
-          }
-          window.location.href = data.checkout_url;
-        } else {
-          setError('支付网关未返回结算地址');
-        }
-      } catch (e: any) {
-        if (cancelled) return;
-        const msg =
-          e?.response?.data?.error ||
-          e?.response?.data?.detail ||
-          e?.message ||
-          '创建订单失败，请重试';
-        setError(msg);
+  const handlePay = async () => {
+    setPaying(true);
+    setError('');
+    try {
+      const payload: any = { plan, billing_cycle: cycle, gateway };
+      if (couponCode.trim() && couponResult?.valid) {
+        payload.coupon_code = couponCode.trim();
       }
-    })();
+      const { data } = await api.post('/payments/create-session/', payload);
+      if (data.checkout_url) {
+        const url = new URL(data.checkout_url);
+        const allowedHosts = ['checkout.stripe.com', 'pay.stripe.com', 'mapi.alipay.com', 'openapi.alipay.com', 'airwallex.com'];
+        if (!allowedHosts.some(h => url.hostname === h || url.hostname.endsWith('.' + h))) {
+          if (url.origin !== window.location.origin && url.hostname !== 'localhost') {
+            setError('支付网关地址异常，请联系客服');
+            setPaying(false);
+            return;
+          }
+        }
+        window.location.href = data.checkout_url;
+      } else {
+        setError('支付网关未返回结算地址');
+        setPaying(false);
+      }
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.error ||
+        e?.response?.data?.detail ||
+        e?.message ||
+        '创建订单失败，请重试';
+      setError(msg);
+      setPaying(false);
+    }
+  };
 
-    return () => { cancelled = true; };
-  }, [plan, cycle, gateway]);
+  const planLabel = PLAN_LABELS[plan] || plan;
+  const cycleLabel = CYCLE_LABELS[cycle] || cycle;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-unimind-bg-secondary">
-      <div className="w-full max-w-sm mx-4 bg-card rounded-[2rem] border border-border shadow-dialog p-8 text-center">
+      <div className="w-full max-w-sm mx-4 bg-card rounded-[2rem] border border-border shadow-dialog p-8 text-center space-y-5">
         {error ? (
           <div className="space-y-5">
             <div className="mx-auto w-12 h-12 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
@@ -69,22 +100,81 @@ export function Checkout() {
               <p className="mt-1.5 text-sm text-muted-foreground">{error}</p>
             </div>
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => {
+                setError('');
+                setPaying(false);
+              }}
               className="text-sm font-bold text-primary hover:underline"
             >
-              返回重试
+              重试
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <Spinner className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <>
+            {/* Plan Summary */}
             <div>
-              <h2 className="text-lg font-bold text-foreground">正在创建订单…</h2>
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                即将跳转至支付页面
+              <h2 className="text-lg font-extrabold text-foreground">确认订阅</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {planLabel} · {cycleLabel}
               </p>
             </div>
-          </div>
+
+            {/* Promo Code */}
+            <div className="space-y-2 text-left">
+              <div className="relative">
+                <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="输入优惠码"
+                  value={couponCode}
+                  onChange={e => setCouponCode(e.target.value)}
+                  className="w-full h-10 pl-9 pr-3 rounded-xl border border-border bg-background text-sm font-medium placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                {validatingCoupon && (
+                  <Spinner className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+
+              {couponResult?.valid && (
+                <div className="flex items-center gap-2 px-1">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+                    ✓ 已优惠 ¥{(couponResult.discount / 100).toFixed(2)}
+                  </span>
+                  {couponResult.original_amount != null && (
+                    <span className="text-xs text-muted-foreground line-through">
+                      ¥{(couponResult.original_amount / 100).toFixed(2)}
+                    </span>
+                  )}
+                  {couponResult.final_amount != null && (
+                    <span className="text-xs font-bold text-foreground">
+                      ¥{(couponResult.final_amount / 100).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {couponResult?.valid === false && (
+                <p className="text-xs text-red-500 px-1">{couponResult.error}</p>
+              )}
+            </div>
+
+            {/* Pay Button */}
+            <Button
+              variant="apple"
+              className="w-full h-12 rounded-xl font-bold text-sm"
+              onClick={handlePay}
+              disabled={paying}
+            >
+              {paying ? (
+                <>
+                  <Spinner className="h-4 w-4 animate-spin mr-2" />
+                  正在创建订单…
+                </>
+              ) : (
+                '立即支付'
+              )}
+            </Button>
+          </>
         )}
       </div>
     </div>

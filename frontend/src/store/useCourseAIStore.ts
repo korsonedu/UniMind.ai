@@ -26,6 +26,10 @@ interface CourseAIState {
   fetchTranscript: (courseId: number) => Promise<void>;
   triggerTranscription: (courseId: number) => Promise<void>;
   reset: () => void;
+  /** 清除指定课程的轮询定时器（组件卸载时调用） */
+  clearCourseTimers: (courseId: number) => void;
+  /** 清除全部轮询定时器（仅应用级清理） */
+  clearAllTimers: () => void;
 }
 
 const POLL_INTERVAL = 5000;
@@ -181,6 +185,19 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       transcriptSegments: [],
       fullText: null,
     });
+  },
+
+  /** Clear poll timers for a specific course */
+  clearCourseTimers: (courseId: number) => {
+    const outlineKey = `outline_${courseId}`;
+    const transcriptKey = `transcript_${courseId}`;
+    for (const key of [outlineKey, transcriptKey]) {
+      const timer = _pollTimers.get(key);
+      if (timer) {
+        clearInterval(timer);
+        _pollTimers.delete(key);
+      }
+    }
   },
 
   /** Clear all poll timers — call on app-level cleanup only, not per-course unmount */

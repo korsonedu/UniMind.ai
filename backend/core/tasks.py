@@ -25,30 +25,22 @@ def aggregate_daily_platform_stats():
     total_users = User.objects.count()
     new_users = User.objects.filter(date_joined__date=yesterday).count()
 
-    # DAU: 从 AnalyticsEvent 中取 user_login 去重
-    dau = (
+    # DAU / WAU / MAU: 一次查询用条件聚合
+    stats = (
         AnalyticsEvent.objects
-        .filter(event_type='user_login', created_at__date=yesterday)
-        .values('user')
-        .distinct()
-        .count()
+        .filter(
+            event_type='user_login',
+            created_at__date__gte=yesterday - timedelta(days=29),
+        )
+        .aggregate(
+            dau=Count('user', distinct=True, filter=Q(created_at__date=yesterday)),
+            wau=Count('user', distinct=True, filter=Q(created_at__date__gte=yesterday - timedelta(days=6))),
+            mau=Count('user', distinct=True),
+        )
     )
-
-    # WAU / MAU: 过去 7/30 天有登录事件的去重用户
-    wau = (
-        AnalyticsEvent.objects
-        .filter(event_type='user_login', created_at__date__gte=yesterday - timedelta(days=6))
-        .values('user')
-        .distinct()
-        .count()
-    )
-    mau = (
-        AnalyticsEvent.objects
-        .filter(event_type='user_login', created_at__date__gte=yesterday - timedelta(days=29))
-        .values('user')
-        .distinct()
-        .count()
-    )
+    dau = stats['dau']
+    wau = stats['wau']
+    mau = stats['mau']
 
     # ── 机构 ──
     total_institutions = Institution.objects.count()

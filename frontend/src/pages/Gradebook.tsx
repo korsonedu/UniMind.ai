@@ -3,11 +3,13 @@
  * 班级选择 → 学生×作业矩阵表 → 班级统计。
  */
 import { useEffect, useState } from 'react';
-import { Spinner, Users, ClipboardText, ChartBar, GraduationCap } from '@phosphor-icons/react';
+import { Spinner, Users, ClipboardText, ChartBar, GraduationCap, MagnifyingGlass, FileCsv, SortAscending, SortDescending } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { PageWrapper } from '@/components/PageWrapper';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -25,13 +27,22 @@ interface ClassItem {
 interface AssignmentColumn {
   id: number;
   title: string;
-  max_score: number;
+  max_score: number | null;
+}
+
+interface ScoreItem {
+  assignment_id: number;
+  assignment_title: string;
+  score: number | null;
+  submitted: boolean;
+  max_score: number | null;
 }
 
 interface StudentRow {
-  student_id: number;
-  student_name: string;
-  scores: Record<string, number | null>; // assignment_id → score
+  id: number;
+  name: string;
+  scores: ScoreItem[];
+  average: number | null;
 }
 
 interface GradebookData {
@@ -41,7 +52,7 @@ interface GradebookData {
   students: StudentRow[];
   stats: {
     class_average: number | null;
-    submission_rate: number | null; // 0-100
+    submission_rate: number | null;
     total_assignments: number;
     total_students: number;
   };
@@ -53,6 +64,11 @@ export function Gradebook() {
   const [classesLoading, setClassesLoading] = useState(true);
   const [data, setData] = useState<GradebookData | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Sort & search
+  const [sortBy, setSortBy] = useState<string>('name');
+  const [sortDir, setSortDir] = useState<string>('asc');
+  const [search, setSearch] = useState('');
 
   const fetchClasses = async () => {
     setClassesLoading(true);
@@ -69,12 +85,14 @@ export function Gradebook() {
     fetchClasses();
   }, []);
 
-  const fetchGradebook = async (classId: string) => {
+  const fetchGradebook = async (classId: string, sort_by?: string, sort_dir?: string, search_query?: string) => {
     setLoading(true);
     try {
-      const res = await api.get('/users/institution/me/gradebook/', {
-        params: { class_id: classId },
-      });
+      const params: Record<string, string> = { class_id: classId };
+      if (sort_by) params.sort_by = sort_by;
+      if (sort_dir) params.sort_dir = sort_dir;
+      if (search_query) params.search = search_query;
+      const res = await api.get('/users/institution/me/gradebook/', { params });
       setData(res.data);
     } catch {
       toast.error('加载成绩册失败');
@@ -85,11 +103,30 @@ export function Gradebook() {
 
   useEffect(() => {
     if (selectedClassId) {
-      fetchGradebook(selectedClassId);
+      fetchGradebook(selectedClassId, sortBy, sortDir, search);
     } else {
       setData(null);
     }
   }, [selectedClassId]);
+
+  const handleSort = (column: string) => {
+    const newDir = sortBy === column && sortDir === 'asc' ? 'desc' : 'asc';
+    setSortBy(column);
+    setSortDir(newDir);
+    if (selectedClassId) fetchGradebook(selectedClassId, column, newDir, search);
+  };
+
+  const handleSearch = (q: string) => {
+    setSearch(q);
+    if (selectedClassId) fetchGradebook(selectedClassId, sortBy, sortDir, q);
+  };
+
+  const handleExport = () => {
+    if (!selectedClassId) return;
+    window.open(`/api/users/institution/me/gradebook/?class_id=${selectedClassId}&format=csv`, '_blank');
+  };
+
+  const SortIcon = sortDir === 'asc' ? SortAscending : SortDescending;
 
   if (classesLoading) {
     return (
@@ -102,23 +139,38 @@ export function Gradebook() {
   return (
     <PageWrapper title="成绩册" subtitle="">
       <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
-        <div className="flex items-center justify-between">
-          <div />
-          <div className="flex items-center gap-2">
-        <Select value={selectedClassId} onValueChange={setSelectedClassId}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="选择班级" />
-          </SelectTrigger>
-          <SelectContent>
-            {classes.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
+        {/* Controls row */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="选择班级" />
+            </SelectTrigger>
+            <SelectContent>
+              {classes.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
+          {selectedClassId && (
+            <>
+              <div className="relative flex-1 max-w-xs">
+                <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="搜索学生..."
+                  value={search}
+                  onChange={e => handleSearch(e.target.value)}
+                  className="pl-8 h-9 text-sm"
+                />
+              </div>
+              <div className="flex-1" />
+              <Button size="sm" variant="outline" onClick={handleExport}>
+                <FileCsv className="h-4 w-4 mr-1" />导出 CSV
+              </Button>
+            </>
+          )}
         </div>
-      </div>
 
       {!selectedClassId && (
         <div className="text-center py-20 space-y-2">
@@ -204,8 +256,14 @@ export function Gradebook() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-muted/50 border-b border-border">
-                      <th className="text-left px-4 py-3 font-bold text-muted-foreground sticky left-0 bg-muted/50 z-10">
-                        学生
+                      <th className="text-left px-4 py-3 sticky left-0 bg-muted/50 z-10">
+                        <button
+                          onClick={() => handleSort('name')}
+                          className="flex items-center gap-1 font-bold text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          学生
+                          {sortBy === 'name' && <SortIcon className="h-3 w-3" />}
+                        </button>
                       </th>
                       {data.assignments.map((a) => (
                         <th
@@ -214,53 +272,47 @@ export function Gradebook() {
                           title={a.title}
                         >
                           <div className="text-xs max-w-[120px] truncate mx-auto">{a.title}</div>
-                          <div className="text-[10px] text-muted-foreground/60">{a.max_score}分</div>
+                          <div className="text-[10px] text-muted-foreground/60">{a.max_score != null ? `${a.max_score}分` : ''}</div>
                         </th>
                       ))}
-                      <th className="text-center px-3 py-3 font-bold text-muted-foreground whitespace-nowrap">
-                        均分
+                      <th className="text-center px-3 py-3 whitespace-nowrap">
+                        <button
+                          onClick={() => handleSort('average')}
+                          className="flex items-center gap-1 font-bold text-muted-foreground hover:text-foreground transition-colors mx-auto"
+                        >
+                          均分
+                          {sortBy === 'average' && <SortIcon className="h-3 w-3" />}
+                        </button>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.students.map((student) => {
-                      const scores = data.assignments
-                        .map((a) => student.scores[String(a.id)])
-                        .filter((s): s is number => s != null);
-                      const avg =
-                        scores.length > 0
-                          ? scores.reduce((a, b) => a + b, 0) / scores.length
-                          : null;
-                      return (
-                        <tr
-                          key={student.student_id}
-                          className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                        >
-                          <td className="px-4 py-2.5 font-medium whitespace-nowrap sticky left-0 bg-card">
-                            {student.student_name}
+                    {data.students.map((student) => (
+                      <tr
+                        key={student.id}
+                        className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="px-4 py-2.5 font-medium whitespace-nowrap sticky left-0 bg-card">
+                          {student.name}
+                        </td>
+                        {student.scores.map((s) => (
+                          <td
+                            key={s.assignment_id}
+                            className={cn(
+                              'text-center px-3 py-2.5 tabular-nums',
+                              s.score == null
+                                ? 'text-muted-foreground/40'
+                                : 'font-medium'
+                            )}
+                          >
+                            {s.score != null ? s.score : '—'}
                           </td>
-                          {data.assignments.map((a) => {
-                            const score = student.scores[String(a.id)];
-                            return (
-                              <td
-                                key={a.id}
-                                className={cn(
-                                  'text-center px-3 py-2.5 tabular-nums',
-                                  score == null
-                                    ? 'text-muted-foreground/40'
-                                    : 'font-medium'
-                                )}
-                              >
-                                {score != null ? score : '—'}
-                              </td>
-                            );
-                          })}
-                          <td className="text-center px-3 py-2.5 font-bold tabular-nums">
-                            {avg != null ? avg.toFixed(1) : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                        ))}
+                        <td className="text-center px-3 py-2.5 font-bold tabular-nums">
+                          {student.average != null ? student.average.toFixed(1) : '—'}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

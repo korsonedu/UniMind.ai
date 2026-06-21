@@ -8,6 +8,9 @@ import uuid
 
 from django.conf import settings
 from django.core.files import File
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from rest_framework.response import Response
@@ -40,6 +43,14 @@ OSS_PART_SIZE = 10 * 1024 * 1024  # 10MB per part
 
 
 logger = logging.getLogger(__name__)
+
+
+def _load_prompt(template_name: str) -> str:
+    """从 prompts/courses/ 目录加载 prompt 模板文件。"""
+    path = os.path.join(settings.BASE_DIR, 'prompts', 'courses', template_name)
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
+
 
 def _extract_first_frame(video_path: str, course_title: str) -> str | None:
     """用 ffmpeg 提取视频第一帧，返回截图临时文件路径。失败返回 None。"""
@@ -292,19 +303,19 @@ class VideoProgressUpdateView(APIView):
             pos = request.data.get('position', 0)
             finished = request.data.get('is_finished', False)
             
-            progress, created = VideoProgress.objects.get_or_create(
-                user=request.user,
-                course=course
-            )
-            if created:
-                record_event('course_view', user=request.user, properties={'course_id': course.id})
-
-            # 如果之前没完成，现在标记为完成，则发放奖励
+            from django.db import transaction
             elo_added = 0
-            if finished and not progress.is_finished:
-                from django.db.models import F
-                from django.db import transaction
-                with transaction.atomic():
+            with transaction.atomic():
+                progress, created = VideoProgress.objects.get_or_create(
+                    user=request.user,
+                    course=course
+                )
+                if created:
+                    record_event('course_view', user=request.user, properties={'course_id': course.id})
+
+                # 如果之前没完成，现在标记为完成，则发放奖励
+                if finished and not progress.is_finished:
+                    from django.db.models import F
                     user = request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
                     # 双重检查：atomic 内再次确认未完成，防止并发重复发放
                     progress_check = VideoProgress.objects.select_for_update().get(pk=progress.pk)
@@ -317,7 +328,8 @@ class VideoProgressUpdateView(APIView):
                         record_event('course_complete', user=request.user, properties={'course_id': course.id})
                 # refresh to get actual value instead of F expression
                 request.user.refresh_from_db(fields=['elo_score'])
-                progress.is_finished = True
+                if finished:
+                    progress.is_finished = True
             
             progress.last_position = pos
             progress.save()
@@ -605,9 +617,9 @@ class TeachingPlanListCreateView(APIView):
         if role == 'student':
             # 学生只看自己班级的教学计划
             student_classes = user.classes.all()
-            qs = TeachingPlan.objects.filter(class_obj__in=student_classes).select_related('class_obj')
+            qs = TeachingPlan.objects.filter(class_obj__in=student_classes).select_related('class_obj').prefetch_related('lesson_plans')
         elif role in ('teacher', 'owner', 'registrar'):
-            qs = TeachingPlan.objects.filter(institution=institution).select_related('class_obj')
+            qs = TeachingPlan.objects.filter(institution=institution).select_related('class_obj').prefetch_related('lesson_plans')
         else:
             return Response({'error': '无权限'}, status=403)
 
@@ -785,13 +797,7 @@ class AIGenerateLessonPlanView(APIView):
 
         kp_names = list(lesson.knowledge_points.values_list('name', flat=True))
 
-        system_prompt = (
-            '你是一位资深教育工作者。请根据提供的课题和教学目标，生成一份结构化的教案。'
-            '必须返回 JSON 格式：'
-            '{"objectives":"教学目标","key_points":"教学重点","difficult_points":"教学难点",'
-            '"activities":[{"name":"环节名","duration":分钟数,"description":"具体内容"}],'
-            '"materials":["教具1","教具2"],"homework":"课后作业","reflection":"教学反思提示"}'
-        )
+        system_prompt = _load_prompt('lesson_plan_generate.txt')
         user_prompt = (
             f'学科：{subject}\n课题：{lesson.title}\n'
             f'教学目标：{lesson.objectives}\n'
@@ -877,11 +883,7 @@ class AIGenerateWeeklyPlansView(APIView):
 
         from ai_engine import AIService
 
-        system_prompt = (
-            '你是一位资深课程设计师。请为一个学期的课程设计周教学计划。'
-            '必须返回 JSON 格式：{"weekly_plans":[{"week":1,"topic":"主题","objectives":"本周教学目标","materials":"教学材料"}]}'
-            'topic 应具体、可执行，objectives 应可衡量。按知识递进逻辑安排顺序。'
-        )
+        system_prompt = _load_prompt('weekly_plans_generate.txt')
         user_prompt = (
             f'学科：{plan.subject}\n'
             f'学期：{plan.semester}\n'
@@ -975,13 +977,7 @@ class AIGenerateWeekLessonsView(APIView):
 
         from ai_engine import AIService
 
-        system_prompt = (
-            '你是一位资深教育工作者。请为一周的教学主题设计若干节教案。'
-            '必须返回 JSON 格式：{"lessons":[{"title":"课题","objectives":"教学目标",'
-            '"activities":[{"name":"环节名","duration":分钟数,"description":"具体内容"}],'
-            '"materials":["教具"],"duration_minutes":45}]}'
-            '每节课应有独立的教学目标，activities 包含完整教学过程。'
-        )
+        system_prompt = _load_prompt('week_lessons_generate.txt')
         user_prompt = (
             f'学科：{plan.subject}\n'
             f'本周主题：{topic}\n'
@@ -1049,6 +1045,41 @@ class AIGenerateWeekLessonsView(APIView):
             'lessons': created,
             'message': f'第 {week_number} 周已生成 {len(created)} 节教案',
         })
+
+
+class LessonPlanPDFView(APIView):
+    """GET /api/courses/teaching-plans/<pk>/pdf/ — 导出教学计划为 PDF。"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        plan = get_object_or_404(TeachingPlan, pk=pk)
+        # Check institution access
+        inst = getattr(request.user, 'institution', None)
+        if inst and plan.institution_id != inst.id:
+            return Response({'error': '无权访问'}, status=403)
+
+        lesson_plans = plan.lesson_plans.all().order_by('week_number', 'order')
+        html = render_to_string('lesson_plan_pdf.html', {
+            'plan': plan,
+            'lesson_plans': lesson_plans,
+            'weekly_plans': plan.weekly_plans or [],
+            'generated_at': timezone.now(),
+        })
+
+        from quizzes.services.pdf_generator import _html_to_pdf
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+            pdf_path = tmp.name
+        try:
+            _html_to_pdf(html, pdf_path)
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+        finally:
+            os.unlink(pdf_path)
+
+        filename = f'教学计划-{plan.title}-{plan.semester}.pdf'
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class TeachingPlanAnalyticsView(APIView):

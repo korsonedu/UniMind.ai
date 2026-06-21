@@ -49,6 +49,7 @@ def dispatch_bot_chat(
     message: str,
     history: list,
     institution=None,
+    class_id=None,
     *,
     stream: bool = False,
     on_step: Optional[Callable] = None,
@@ -67,7 +68,14 @@ def dispatch_bot_chat(
 
     # Create tool executor
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
-    tool_executor = profile.executor_class(user=user)
+    tool_executor = profile.executor_class(user=user, institution=institution)
+    # 注入班级上下文
+    if class_id:
+        try:
+            class_id_int = int(class_id)
+            tool_executor.class_id = class_id_int
+        except (ValueError, TypeError):
+            tool_executor.class_id = None
 
     # 通用状态恢复钩子
     if profile.restore_state:
@@ -116,6 +124,7 @@ def dispatch_bot_chat_sync(
     message: str,
     history: list,
     institution=None,
+    class_id=None,
     *,
     student_context: str = '',
     memory_context: str = '',
@@ -130,7 +139,14 @@ def dispatch_bot_chat_sync(
     from ai_engine.tool_permissions import filter_tools
 
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
-    tool_executor = profile.executor_class(user=user)
+    tool_executor = profile.executor_class(user=user, institution=institution)
+    # 注入班级上下文
+    if class_id:
+        try:
+            class_id_int = int(class_id)
+            tool_executor.class_id = class_id_int
+        except (ValueError, TypeError):
+            tool_executor.class_id = None
 
     # 通用状态恢复钩子
     if profile.restore_state:

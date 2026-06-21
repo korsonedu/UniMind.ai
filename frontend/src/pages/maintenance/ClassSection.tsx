@@ -2,7 +2,7 @@
  * 班级管理 — 创建/编辑/删除班级，添加/移除学员。
  */
 import { useEffect, useState } from 'react';
-import { Plus, Trash, Pencil, X, Users } from '@phosphor-icons/react';
+import { Plus, Trash, Pencil, X, Users, BookOpen } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,12 +14,24 @@ interface StudentRef {
   name: string;
 }
 
+interface CourseRef {
+  id: number;
+  title: string;
+}
+
 interface ClassData {
   id: number;
   name: string;
   student_count: number;
   students: StudentRef[];
   created_at: string;
+}
+
+interface ClassCourseRef {
+  id: number;
+  class_obj: number;
+  course: CourseRef;
+  order: number;
 }
 
 export const ClassSection: React.FC = () => {
@@ -35,6 +47,12 @@ export const ClassSection: React.FC = () => {
   const [manageClassId, setManageClassId] = useState<number | null>(null);
   const [availableStudents, setAvailableStudents] = useState<StudentRef[]>([]);
   const [searchStudent, setSearchStudent] = useState('');
+
+  // Course management state
+  const [courseClassId, setCourseClassId] = useState<number | null>(null);
+  const [classCourses, setClassCourses] = useState<ClassCourseRef[]>([]);
+  const [availableCourses, setAvailableCourses] = useState<CourseRef[]>([]);
+  const [searchCourse, setSearchCourse] = useState('');
 
   const fetchClasses = async () => {
     setLoading(true);
@@ -110,9 +128,52 @@ export const ClassSection: React.FC = () => {
     } catch { toast.error('操作失败'); }
   };
 
+  // ── Course management ──
+  const openCourseManager = async (c: ClassData) => {
+    setCourseClassId(c.id);
+    try {
+      // fetch assigned courses
+      const ccRes = await api.get('/users/institution/me/class-courses/', { params: { class_id: c.id } });
+      setClassCourses(ccRes.data || []);
+      // fetch all institution courses
+      const courseRes = await api.get('/courses/');
+      setAvailableCourses((courseRes.data?.results || courseRes.data || []).map((co: any) => ({
+        id: co.id,
+        title: co.title,
+      })));
+    } catch {
+      toast.error('加载课程列表失败');
+      setAvailableCourses([]);
+    }
+  };
+
+  const handleToggleCourse = async (courseId: number, isAssigned: boolean) => {
+    if (!courseClassId) return;
+    try {
+      if (isAssigned) {
+        const cc = classCourses.find(cc => cc.course.id === courseId);
+        if (cc) await api.delete(`/users/institution/me/class-courses/${cc.id}/`);
+      } else {
+        await api.post('/users/institution/me/class-courses/', {
+          class_id: courseClassId,
+          course_id: courseId,
+          order: 0,
+        });
+      }
+      // refresh
+      const ccRes = await api.get('/users/institution/me/class-courses/', { params: { class_id: courseClassId } });
+      setClassCourses(ccRes.data || []);
+    } catch { toast.error('操作失败'); }
+  };
+
   const filteredStudents = searchStudent
     ? availableStudents.filter(s => s.name.includes(searchStudent))
     : availableStudents;
+
+  const filteredCourses = searchCourse
+    ? availableCourses.filter(c => c.title.toLowerCase().includes(searchCourse.toLowerCase()))
+    : availableCourses;
+  const assignedCourseIds = new Set(classCourses.map(cc => cc.course.id));
 
   return (
     <div className="space-y-4">
@@ -164,6 +225,9 @@ export const ClassSection: React.FC = () => {
                 </>
               ) : (
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button size="sm" variant="ghost" onClick={() => openCourseManager(c)}>
+                    <BookOpen className="h-3.5 w-3.5 mr-1" />课程
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => openManage(c)}>
                     <Users className="h-3.5 w-3.5 mr-1" />学员
                   </Button>
@@ -221,6 +285,57 @@ export const ClassSection: React.FC = () => {
                   </span>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Course Management Overlay ── */}
+      {courseClassId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setCourseClassId(null)}>
+          <div className="bg-card rounded-2xl border border-border shadow-xl w-full max-w-md max-h-[70vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <span className="text-sm font-bold">课程分配 · {classes.find(c => c.id === courseClassId)?.name || ''}</span>
+              <button onClick={() => setCourseClassId(null)} className="p-1 rounded hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-3 border-b border-border">
+              <Input
+                placeholder="搜索课程..."
+                value={searchCourse}
+                onChange={e => setSearchCourse(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+              {filteredCourses.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">暂无课程</p>
+              ) : (
+                filteredCourses.map(co => (
+                  <button
+                    key={co.id}
+                    onClick={() => handleToggleCourse(co.id, assignedCourseIds.has(co.id))}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-left',
+                      assignedCourseIds.has(co.id)
+                        ? 'bg-primary/10 text-primary font-bold'
+                        : 'hover:bg-muted/50 text-foreground/70'
+                    )}
+                  >
+                    <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                    <span className="flex-1 truncate">{co.title}</span>
+                    <span className={cn(
+                      'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                      assignedCourseIds.has(co.id)
+                        ? 'bg-primary/20 text-primary'
+                        : 'text-muted-foreground'
+                    )}>
+                      {assignedCourseIds.has(co.id) ? '已分配' : '添加'}
+                    </span>
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </div>

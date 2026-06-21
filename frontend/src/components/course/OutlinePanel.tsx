@@ -11,13 +11,14 @@ interface OutlinePanelProps {
 
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }) => {
   const { t } = useTranslation('videoLesson');
-  const { outlineStatus, outlineItems, fetchOutline, triggerOutlineGeneration } = useCourseAIStore();
+  const { outlineStatus, outlineItems, fetchOutline, triggerOutlineGeneration, clearCourseTimers } = useCourseAIStore();
   const [expanded, setExpanded] = useState(true);
   const autoTriggeredRef = useRef(false);
 
   useEffect(() => {
     fetchOutline(courseId);
-  }, [courseId, fetchOutline]);
+    return () => { clearCourseTimers(courseId); };
+  }, [courseId, fetchOutline, clearCourseTimers]);
 
   // 旧课程自动触发生成
   useEffect(() => {

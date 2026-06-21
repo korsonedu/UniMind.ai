@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import api from '@/lib/api';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
+import { Buildings } from '@phosphor-icons/react';
 
 export const Login: React.FC = () => {
   const { t } = useTranslation('auth');
@@ -16,6 +17,7 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [ssoSlug, setSsoSlug] = useState('');
   const { setAuth, updateUser } = useAuthStore();
   const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
@@ -119,6 +121,54 @@ export const Login: React.FC = () => {
               {loading ? t('login.loggingIn') : t('login.submit')}
             </Button>
           </form>
+
+          {/* SSO 登录 */}
+          <div className="mt-4 space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-card/80 backdrop-blur-xl px-3 text-muted-foreground font-medium">或通过企业 SSO 登录</span>
+              </div>
+            </div>
+            <div className="relative">
+              <Buildings className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="输入机构标识，如 korsonedu"
+                value={ssoSlug}
+                onChange={(e) => setSsoSlug(e.target.value)}
+                className="pl-9 bg-muted/50 border-none h-12 rounded-xl"
+                spellCheck={false}
+              />
+            </div>
+            {ssoSlug.trim() && (
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-xl text-xs font-medium"
+                  onClick={() => { window.location.href = `/api/users/sso/authorize/?institution_slug=${encodeURIComponent(ssoSlug.trim())}&provider=feishu`; }}
+                >
+                  飞书登录
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-xl text-xs font-medium"
+                  onClick={() => { window.location.href = `/api/users/sso/authorize/?institution_slug=${encodeURIComponent(ssoSlug.trim())}&provider=dingtalk`; }}
+                >
+                  钉钉登录
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-xl text-xs font-medium"
+                  onClick={() => { window.location.href = `/api/users/sso/authorize/?institution_slug=${encodeURIComponent(ssoSlug.trim())}&provider=wecom`; }}
+                >
+                  企业微信登录
+                </Button>
+              </div>
+            )}
+          </div>
+
           <div className="mt-6 text-center text-sm text-muted-foreground">
             {t('login.noAccount')}{" "}
             <Link to={institutionSlug ? `/register?institution=${institutionSlug}` : '/register'} className="text-foreground font-semibold hover:underline">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Spinner, ArrowsOut, Target } from '@phosphor-icons/react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Spinner, ArrowsOut, Target, Lightning } from '@phosphor-icons/react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { KnowledgeTrainingDialog } from './knowledge-map/TrainingDialog';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 interface KnowledgePointDetail {
   id: number;
@@ -23,6 +24,7 @@ interface KnowledgePointDetail {
 
 export const KnowledgeNodeDetail: React.FC = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { t } = useTranslation('knowledgeMap');
   const [loading, setLoading] = useState(true);
   const [node, setNode] = useState<KnowledgePointDetail | null>(null);
@@ -78,6 +80,16 @@ export const KnowledgeNodeDetail: React.FC = () => {
                   {processMathContent(node?.description || t('detailPage.descriptionFallback'))}
                 </ReactMarkdown>
               </div>
+              <Button
+                onClick={() => {
+                  toast.success(`小宇会帮你练习「${node?.name || '知识点'}」`);
+                  navigate('/xiaoyu');
+                }}
+                className="rounded-xl h-10 px-5 text-sm font-bold bg-indigo-500 hover:bg-indigo-600 text-white"
+              >
+                <Lightning className="h-4 w-4 mr-2" />
+                开始练习
+              </Button>
             </Card>
 
             <Card className="rounded-2xl border border-border/60 bg-card p-5 space-y-3">

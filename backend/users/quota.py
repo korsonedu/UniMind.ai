@@ -86,7 +86,7 @@ def _get_limit(institution, resource_type) -> int | None:
     """返回该机构在该资源上的配额上限。None=无限制，0=已耗尽。"""
     if institution is None:
         return 0
-    limits = PLAN_QUOTA_LIMITS.get(institution.plan, {})
+    limits = PLAN_QUOTA_LIMITS.get(institution.get_effective_plan(), {})
     return limits.get(resource_type)
 
 
@@ -94,7 +94,7 @@ def _next_plan_and_limit(institution, resource_type) -> tuple[str | None, int | 
     """找到下一个有更高配额的 plan 和对应 limit。"""
     if institution is None:
         return None, None
-    current = institution.plan
+    current = institution.get_effective_plan()
     try:
         idx = PLAN_ORDER.index(current)
     except ValueError:
@@ -179,7 +179,7 @@ def get_all_quota_info(institution) -> dict:
     if institution is None:
         return {}
 
-    plan = institution.plan
+    plan = institution.get_effective_plan()
     plan_limits = PLAN_QUOTA_LIMITS.get(plan, {})
 
     # 月计型：一次查出当月 UsageLog
@@ -253,7 +253,7 @@ def check_storage_quota(institution, file_size: int) -> bool:
     """检查机构是否有足够存储空间上传指定大小的文件。"""
     if institution is None:
         return False
-    limit = STORAGE_QUOTA_BYTES.get(institution.plan)
+    limit = STORAGE_QUOTA_BYTES.get(institution.get_effective_plan())
     if limit is None:
         return True
     return institution.storage_used_bytes + file_size <= limit
@@ -285,7 +285,7 @@ def remove_storage_usage(institution, file_size: int):
 def validate_storage_quota(institution, file_size: int):
     """检查存储配额，不足时抛 ValidationError。供 views 直接调用。"""
     if not check_storage_quota(institution, file_size):
-        limit = STORAGE_QUOTA_BYTES.get(institution.plan, 0)
+        limit = STORAGE_QUOTA_BYTES.get(institution.get_effective_plan(), 0)
         limit_mb = limit // (1024 * 1024)
         used_mb = institution.storage_used_bytes // (1024 * 1024)
         raise ValidationError(
@@ -309,7 +309,7 @@ def check_and_add_storage_usage(institution, file_size: int):
         inst = Institution.objects.select_for_update().filter(pk=institution.pk).first()
         if not inst:
             return
-        limit = STORAGE_QUOTA_BYTES.get(inst.plan)
+        limit = STORAGE_QUOTA_BYTES.get(inst.get_effective_plan())
         if limit is not None and inst.storage_used_bytes + file_size > limit:
             limit_mb = limit // (1024 * 1024)
             used_mb = inst.storage_used_bytes // (1024 * 1024)
@@ -325,7 +325,7 @@ def get_storage_usage(institution) -> dict:
     """返回机构存储用量信息。"""
     if institution is None:
         return {'used_bytes': 0, 'limit_bytes': 0, 'used_pct': 0}
-    limit = STORAGE_QUOTA_BYTES.get(institution.plan)
+    limit = STORAGE_QUOTA_BYTES.get(institution.get_effective_plan())
     used = institution.storage_used_bytes
     if limit is None:
         return {'used_bytes': used, 'limit_bytes': None, 'used_pct': 0}

@@ -3,7 +3,7 @@ from .models import (
     Question, QuizAttempt, KnowledgePoint, UserQuestionStatus, QuizExam, ExamQuestionResult,
     ContentPipelineTask, TeacherExam, StudentExamSubmission, KnowledgePointAnnotation,
     PersonalizedMockExam, ExamTemplate, KnowledgeEdge,
-    ExamQuestion, OnlineExamAttempt,
+    ExamQuestion, OnlineExamAttempt, MarketplaceListing,
 )
 from users.serializers import UserSerializer
 
@@ -236,3 +236,19 @@ class OnlineExamAttemptSerializer(serializers.ModelSerializer):
                   'started_at', 'submitted_at', 'score', 'max_score',
                   'question_results', 'question_order')
         read_only_fields = ('id', 'user', 'started_at', 'question_order')
+
+
+class MarketplaceListingSerializer(serializers.ModelSerializer):
+    publisher_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MarketplaceListing
+        fields = [
+            'id', 'publisher', 'publisher_name', 'title', 'description',
+            'content_type', 'subject', 'grade', 'price_cents', 'license_type',
+            'status', 'downloads', 'rating', 'content_ids', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'publisher', 'publisher_name', 'downloads', 'rating', 'created_at', 'updated_at']
+
+    def get_publisher_name(self, obj):
+        return obj.publisher.name if obj.publisher else None

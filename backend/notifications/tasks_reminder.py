@@ -107,6 +107,74 @@ def send_due_review_reminders():
 
 
 @shared_task
+def send_student_health_alerts():
+    """每周计算所有学生健康分、保存快照、通知管理员高风险学生。"""
+    from users.models import Institution
+    from quizzes.services.student_health import compute_student_health, compute_institution_student_health
+    from quizzes.models import StudentHealthSnapshot
+    from notifications.models import Notification
+    from core.email_service import send_email
+
+    now = timezone.now()
+    today = now.date()
+    alert_count = 0
+
+    for inst in Institution.objects.filter(is_active=True):
+        results = compute_institution_student_health(inst)
+
+        critical_students = []
+        for r in results:
+            # 保存每日快照
+            StudentHealthSnapshot.objects.update_or_create(
+                user_id=r['student_id'],
+                snapshot_date=today,
+                defaults={
+                    'institution': inst,
+                    'score': r['score'],
+                    'level': r['level'],
+                    'components': r['components'],
+                    'details': r['details'],
+                },
+            )
+
+            if r['level'] == 'critical':
+                critical_students.append(r)
+
+        # 通知机构管理员
+        if critical_students and inst.contact_email:
+            names = '、'.join(s['name'] for s in critical_students[:5])
+            more = f' 等{len(critical_students)}人' if len(critical_students) > 5 else ''
+            subject = f'UniMind 学情预警：{len(critical_students)} 名学生处于危险状态'
+            body = (
+                f'尊敬的 {inst.contact_name}，\n\n'
+                f'以下学生学习健康度较低，建议关注：{names}{more}\n\n'
+                f'登录 UniMind 工作台 → 机构仪表盘查看详情。\n\n'
+                f'UniMind.ai'
+            )
+            try:
+                send_email(inst.contact_email, subject, body)
+                alert_count += 1
+            except Exception:
+                pass
+
+            # 为每个危险学生创建站内通知
+            for s in critical_students[:10]:
+                try:
+                    Notification.objects.create(
+                        recipient_id=s['student_id'],
+                        ntype='system',
+                        title='学习健康度提醒',
+                        content=f'你已连续多日未活跃学习，建议尽快开始复习。当前健康分：{s["score"]}',
+                        link='/xiaoyu',
+                    )
+                    alert_count += 1
+                except Exception:
+                    pass
+
+    return f'Saved {today} health snapshots, sent {alert_count} alerts'
+
+
+@shared_task
 def send_notification_email(notification_id: int):
     """为新创建的站内通知发送邮件（收件人开启了 email_notifications）。"""
     from notifications.models import Notification

@@ -1,16 +1,16 @@
 {
   "hero": {
-    "title1": "Memorix × Field",
-    "title2": "Dual AI Engine",
-    "mobileSubtitle": "Memorix schedules your reviews with precision. Field maps your knowledge gaps from the graph. Two engines, one goal: maximize your score.",
-    "desktopSubtitle": "Memorix memory engine handles when to review. Field graph engine reveals where you're weak. Together they concentrate your limited study time where it matters most."
+    "title1": "Memorix-Field",
+    "title2": "2nd-Gen Assessment Engine",
+    "mobileSubtitle": "A joint engine combining memory scheduling with knowledge graph diagnostics. From your practice history, it schedules reviews at the question level and identifies weak knowledge clusters at the structural level.",
+    "desktopSubtitle": "Memorix-Field consists of two cooperating modules: a memory engine that tracks per-question forgetting curves to schedule reviews, and a graph diagnostic engine that models the entire subject knowledge graph to infer mastery across all knowledge points from sparse test results."
   },
   "memorixDialog": {
-    "title": "Memorix × Field Dual AI Engine",
-    "description": "UniMind's learning system is powered by two complementary AI engines: Memorix manages memory timing, Field maps knowledge structure.",
-    "p1": "Memorix (Memory Engine): Continuously learns from your answering trajectory, dynamically fits your forgetting curve for each question, and computes the optimal review moment. Compared to fixed-interval methods, it delivers three advantages — question-level granularity, individualized parameter iteration, and prioritized targeting of borderline forgetting thresholds.",
-    "p2": "Field (Graph Diagnostic Engine): Takes the entire subject knowledge graph and infers your mastery of every knowledge point from a sparse set of test results. Answer 20 questions and get a heatmap of all 200 knowledge points — showing which chapters are solid, which concepts are weak, and which prerequisites are missing.",
-    "p3": "Together: Memorix finds the questions to review. Field finds the knowledge clusters to fix. Not just practicing individual items, but filling structural gaps in your understanding."
+    "title": "Memorix-Field: 2nd-Gen Assessment Engine",
+    "description": "Memorix-Field extends spaced repetition with global knowledge graph diagnostics. Not a replacement, but a completion — scaling from per-item memory management to structural knowledge diagnosis.",
+    "p1": "Memory Engine — per-question forgetting modeling. Continuously fits the memory decay curve of each question, estimating individualized parameters at the question level. Intervenes precisely at the retrieval threshold to reduce wasted repetition and maximize retention per unit time. This is the core capability from Memoix Gen 1, now serving as the scheduling foundation in Gen 2.",
+    "p2": "Graph Diagnostic Engine — global knowledge graph inference. Models domain knowledge as a Gaussian Markov Random Field (GMRF), exploiting the smoothness prior that neighboring knowledge points share similar mastery levels. From partial observations — an exam covering 10% of knowledge points — it extrapolates mastery estimates for the entire graph, producing a full heatmap.",
+    "p3": "Dual-engine synergy. The memory engine outputs when to review which question. The graph engine outputs which knowledge clusters have structural weaknesses. The former optimizes time allocation; the latter optimizes knowledge construction. Both share a unified student model, with diagnostic results weighting scheduling priorities."
   },
   "suggestion": "Recommendation: {{recommended}} questions, ~{{estimated}} min ({{weakFocus}} weak-point focus)",
   "reminder": {

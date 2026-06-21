@@ -51,6 +51,7 @@ export const Register: React.FC = () => {
   };
   const institutionSlug = getInstitutionSlug();
   const institutionRole = getInstitutionRole();
+  const refCode = searchParams.get('ref') || '';
 
   const handleSendCode = async () => {
     if (!email.trim() || countdown > 0) return;
@@ -83,7 +84,7 @@ export const Register: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      await api.post('/users/register/', { email, code, nickname, password, agreed_to_terms: agreedToTerms });
+      await api.post('/users/register/', { email, code, nickname, password, agreed_to_terms: agreedToTerms, referral_code: refCode });
       navigate(institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login');
     } catch (err: any) {
       setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat()[0] as string || t('register.errors.registerFailed'));
@@ -101,6 +102,11 @@ export const Register: React.FC = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">
+            {refCode && (
+              <div className="text-sm text-center bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-xl py-2.5 px-3">
+                通过推荐链接注册，完成首次购买后你和推荐人都将获得奖励
+              </div>
+            )}
             {error && <p className="text-sm text-center bg-destructive/10 text-destructive rounded-xl py-2.5 px-3">{error}</p>}
 
             <div className="flex gap-2">

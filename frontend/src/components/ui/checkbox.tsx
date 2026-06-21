@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Check } from "lucide-react"
+import { Check } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 
 const Checkbox = React.forwardRef<

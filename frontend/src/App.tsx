@@ -43,12 +43,12 @@ const PdfMockExam = lazyNamed(() => import('./pages/PdfMockExam'), 'PdfMockExam'
 const WrongQuestionReviewPage = lazyNamed(() => import('./pages/WrongQuestionReviewPage'), 'WrongQuestionReviewPage');
 const ReportCard = lazyNamed(() => import('./pages/ReportCard'), 'ReportCard');
 const Achievements = lazyNamed(() => import('./pages/Achievements'), 'Achievements');
+const ParentDashboard = lazyNamed(() => import('./pages/ParentDashboard'), 'ParentDashboard');
 const BillingPage = lazyNamed(() => import('./pages/Billing'), 'BillingPage');
 const PaymentResult = lazyNamed(() => import('./pages/PaymentResult'), 'PaymentResult');
 const Checkout = lazyNamed(() => import('./pages/Checkout'), 'Checkout');
 const DiagnosticTest = lazyNamed(() => import('./pages/DiagnosticTest'), 'DiagnosticTest');
 const StudyPlan = lazyNamed(() => import('./pages/StudyPlan'), 'StudyPlan');
-const StudentHome = lazyNamed(() => import('./pages/StudentHome'), 'StudentHome');
 const XiaoYu = lazyNamed(() => import('./pages/XiaoYu'), 'XiaoYu');
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
@@ -69,7 +69,8 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const OnlineExam = lazyNamed(() => import('./pages/OnlineExam'), 'OnlineExam');
 const Gradebook = lazyNamed(() => import('./pages/Gradebook'), 'Gradebook');
 const TeacherAssignments = lazyNamed(() => import('./pages/TeacherAssignments'), 'TeacherAssignments');
-const CampusManagement = lazyNamed(() => import('./pages/CampusManagement'), 'CampusManagement');
+const Marketplace = lazyNamed(() => import('./pages/Marketplace'), 'Marketplace');
+const APIPlatform = lazyNamed(() => import('./pages/APIPlatform'), 'APIPlatform');
 const MyAssignments = lazy(() => import('./pages/MyAssignments'));
 const CourseManage = lazy(() => import('./pages/CourseManage'));
 const ArticleManage = lazy(() => import('./pages/ArticleManage'));
@@ -175,6 +176,10 @@ const HomeRedirect = () => {
   if (user?.institution_role === 'student') {
     return <Navigate to="/xiaoyu" replace />;
   }
+  // 家长 → 家长模式
+  if (user?.role === 'parent' || user?.institution_role === 'parent') {
+    return <Navigate to="/parent" replace />;
+  }
   return <Navigate to="/xiaoyu" replace />;
 };
 
@@ -241,7 +246,6 @@ const router = createBrowserRouter([
           { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
           { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
-          { path: "home", element: lazyPage(StudentHome) },
           { path: "xiaoyu", element: lazyPage(XiaoYu) },
           { path: "xiaoyu/practice/:sessionId", element: lazyPage(PracticeSession) },
           { path: "plan", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}>{lazyPage(StudyPlan)}</FeatureGuard> },
@@ -255,6 +259,7 @@ const router = createBrowserRouter([
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "my-assignments", element: lazyPage(MyAssignments) },
           { path: "achievements", element: lazyPage(Achievements) },
+          { path: "parent", element: <RequireAuth>{lazyPage(ParentDashboard)}</RequireAuth> },
           { path: "report-card", element: lazyPage(ReportCard) },
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
           { path: "exam/:examId", element: lazyPage(OnlineExam) },
@@ -267,8 +272,9 @@ const router = createBrowserRouter([
           { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
           { path: "gradebook", element: <RequireInstitution>{lazyPage(Gradebook)}</RequireInstitution> },
           { path: "teacher-assignments", element: <RequireInstitution>{lazyPage(TeacherAssignments)}</RequireInstitution> },
-          { path: "lesson-plans", element: <RequireInstitution>{lazyPage(LessonPlans)}</RequireInstitution> },
-          { path: "institution/campuses", element: <RequireInstitution>{lazyPage(CampusManagement)}</RequireInstitution> },
+          { path: "lesson-plans", element: <RequireInstitution><FeatureGuard feature={FEATURES.TEACHING_PLANS}>{lazyPage(LessonPlans)}</FeatureGuard></RequireInstitution> },
+          { path: "marketplace", element: <RequireInstitution>{lazyPage(Marketplace)}</RequireInstitution> },
+          { path: "api-platform", element: <RequireInstitution><FeatureGuard feature={FEATURES.API_ACCESS}>{lazyPage(APIPlatform)}</FeatureGuard></RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },
           { path: "institution/audit-logs", element: <RequireAdmin>{lazyPage(AuditLogs)}</RequireAdmin> },
           { path: "invite-codes", element: <RequirePlatformAdmin>{lazyPage(InviteCodeAdmin)}</RequirePlatformAdmin> },

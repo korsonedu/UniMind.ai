@@ -3,11 +3,13 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
-import { Buildings, Plus, MagnifyingGlass, Spinner, Pencil, Power,Users, Calendar, ArrowLeft, Stack, Eye, Upload, ShieldCheck } from '@phosphor-icons/react';
+import { Buildings, Plus, MagnifyingGlass, Spinner, Pencil, Power, Users, Calendar, ArrowLeft, Stack, Eye, Upload, ShieldCheck, Ticket, Key, Copy } from '@phosphor-icons/react';
 import { Label } from '@/components/ui/label';
 import { DirectionSelector } from '@/components/DirectionSelector';
 
@@ -16,6 +18,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useConfirm } from '@/components/useConfirm';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
+import { PLAN_DIRECTION_LIMITS } from '@/constants/version';
 
 interface Institution {
   id: number;
@@ -53,6 +56,11 @@ export default function InstitutionAdmin() {
   const [editTarget, setEditTarget] = useState<Institution | null>(null);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
+  // Coupon management
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponsLoading, setCouponsLoading] = useState(false);
+  const [couponCreateOpen, setCouponCreateOpen] = useState(false);
+
   const fetchInstitutions = useCallback(async () => {
     try {
       const params: Record<string, string> = {};
@@ -65,6 +73,32 @@ export default function InstitutionAdmin() {
   }, [debouncedSearch, planFilter]);
 
   useEffect(() => { fetchInstitutions(); }, [fetchInstitutions]);
+
+  const fetchCoupons = useCallback(async () => {
+    setCouponsLoading(true);
+    try {
+      const { data } = await api.get('/payments/coupons/');
+      setCoupons(Array.isArray(data) ? data : data.results || []);
+    } catch { console.error('[CouponAdmin] fetch failed'); }
+    setCouponsLoading(false);
+  }, []);
+
+  useEffect(() => { fetchCoupons(); }, [fetchCoupons]);
+
+  const handleToggleCoupon = async (id: number, isActive: boolean) => {
+    try {
+      await api.put(`/payments/coupons/${id}/`, { is_active: !isActive });
+      fetchCoupons();
+    } catch { toast.error('更新失败'); }
+  };
+
+  const handleDeleteCoupon = async (id: number, code: string) => {
+    if (!(await confirm(`确认删除优惠券「${code}」？`))) return;
+    try {
+      await api.delete(`/payments/coupons/${id}/`);
+      fetchCoupons();
+    } catch { toast.error('删除失败'); }
+  };
 
   const handleActivate = async (id: number) => {
     try {
@@ -241,6 +275,82 @@ export default function InstitutionAdmin() {
           ))}
         </div>
       )}
+
+      {/* Coupon Management */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-extrabold text-foreground tracking-tight">优惠券管理</h2>
+            <p className="text-sm text-muted-foreground/60 mt-1">创建和管理促销优惠码</p>
+          </div>
+          <Button variant="apple" size="sm" onClick={() => setCouponCreateOpen(true)}>
+            <Plus className="h-4 w-4" /> 创建优惠券
+          </Button>
+        </div>
+
+        {couponsLoading ? (
+          <div className="flex justify-center py-8">
+            <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : coupons.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <Ticket className="h-10 w-10 mx-auto mb-2 opacity-20" />
+            <p className="text-sm font-medium">暂无优惠券</p>
+            <p className="text-xs mt-1">点击「创建优惠券」添加促销码</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {coupons.map((c: any) => (
+              <Card key={c.id} variant="apple" className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0',
+                      c.is_active ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-muted-foreground/10')}>
+                      <Ticket className={cn('h-4 w-4',
+                        c.is_active ? 'text-emerald-600' : 'text-muted-foreground')} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-extrabold text-foreground font-mono">{c.code}</span>
+                        {c.is_active ? (
+                          <Badge className="text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">生效中</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">已禁用</Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        <span>{c.discount_type === 'percentage' ? `${c.discount_value}% 折扣` : `¥${(c.discount_value / 100).toFixed(0)} 减免`}</span>
+                        {c.min_order_cents > 0 && <span>满 ¥{(c.min_order_cents / 100).toFixed(0)}</span>}
+                        <span>{c.current_uses || 0}/{c.max_uses || '∞'} 次</span>
+                        {c.expires_at && <span>至 {c.expires_at.slice(0, 10)}</span>}
+                        {c.plan_restriction && (
+                          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">{c.plan_restriction}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Switch
+                      checked={c.is_active}
+                      onCheckedChange={() => handleToggleCoupon(c.id, c.is_active)}
+                    />
+                    <Button variant="ghost" size="sm" className="h-8 text-xs text-red-500" onClick={() => handleDeleteCoupon(c.id, c.code)}>
+                      删除
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Create Coupon Dialog */}
+      <CreateCouponDialog
+        open={couponCreateOpen}
+        onClose={() => setCouponCreateOpen(false)}
+        onCreated={() => { setCouponCreateOpen(false); fetchCoupons(); }}
+      />
 
       {/* Create Dialog */}
       <CreateInstitutionDialog
@@ -441,6 +551,15 @@ function InstitutionSelfSettings() {
   const [maxStudents, setMaxStudents] = useState(0);
   const [planActive, setPlanActive] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [slug, setSlug] = useState('');
+  const [ssoConfig, setSsoConfig] = useState({
+    provider: 'feishu', enabled: false, client_id: '', client_secret: '',
+    redirect_uri: '', domain_whitelist: '', auto_join: false, default_role: 'student',
+  });
+  const [ssoLoading, setSsoLoading] = useState(false);
+  const [ssoSaving, setSsoSaving] = useState(false);
+  const [apiKeysCount, setApiKeysCount] = useState(0);
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
 
   // Direction editing
   const [directionOpen, setDirectionOpen] = useState(false);
@@ -469,11 +588,56 @@ function InstitutionSelfSettings() {
       setStudentCount(data.student_count || 0);
       setMaxStudents(data.max_students || 0);
       setPlanActive(data.is_plan_active);
+      setSlug(data.slug || '');
     }).catch((e) => {
       console.error('[InstitutionSelfSettings] fetch failed:', e);
       toast.error('加载机构信息失败');
     });
   }, []);
+
+  // Fetch SSO config & API keys (enterprise only)
+  useEffect(() => {
+    if (plan !== 'enterprise') return;
+    setSsoLoading(true);
+    api.get('/users/institution/me/sso-config/')
+      .then(({ data }) => setSsoConfig({
+        provider: data.provider || 'feishu',
+        enabled: data.enabled || false,
+        client_id: data.client_id || '',
+        client_secret: data.client_secret || '',
+        redirect_uri: data.redirect_uri || '',
+        domain_whitelist: (data.domain_whitelist || []).join(', '),
+        auto_join: data.auto_join || false,
+        default_role: data.default_role || 'student',
+      }))
+      .catch(() => {})
+      .finally(() => setSsoLoading(false));
+    setApiKeysLoading(true);
+    api.get('/users/institution/me/api-keys/')
+      .then(({ data }) => {
+        const keys = Array.isArray(data) ? data : data.results || [];
+        setApiKeysCount(keys.filter((k: any) => k.is_active).length);
+      })
+      .catch(() => setApiKeysCount(0))
+      .finally(() => setApiKeysLoading(false));
+  }, [plan]);
+
+  const handleSsoSave = async () => {
+    setSsoSaving(true);
+    try {
+      const payload = {
+        ...ssoConfig,
+        domain_whitelist: ssoConfig.domain_whitelist
+          .split(',').map((s: string) => s.trim()).filter(Boolean),
+      };
+      await api.put('/users/institution/me/sso-config/', payload);
+      toast.success('SSO 配置已保存');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '保存 SSO 配置失败');
+    } finally {
+      setSsoSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -617,6 +781,174 @@ function InstitutionSelfSettings() {
           </Button>
         </Card>
 
+        {/* SSO 配置 (企业版) */}
+        {plan === 'enterprise' && (
+          <Card className="p-8 rounded-2xl border-none shadow-sm bg-card space-y-6">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <h2 className="text-base font-extrabold text-foreground">企业 SSO 单点登录</h2>
+            </div>
+
+            {ssoLoading ? (
+              <div className="flex justify-center py-8">
+                <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">提供商</Label>
+                  <select
+                    value={ssoConfig.provider}
+                    onChange={e => setSsoConfig({ ...ssoConfig, provider: e.target.value })}
+                    className="h-10 rounded-xl border border-border bg-muted/50 px-3 text-sm font-medium w-full"
+                  >
+                    <option value="feishu">飞书</option>
+                    <option value="dingtalk">钉钉</option>
+                    <option value="wecom">企业微信</option>
+                    <option value="oidc">通用 OIDC</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">启用</Label>
+                  <Switch
+                    checked={ssoConfig.enabled}
+                    onCheckedChange={v => setSsoConfig({ ...ssoConfig, enabled: v })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Client ID</Label>
+                  <Input
+                    value={ssoConfig.client_id}
+                    onChange={e => setSsoConfig({ ...ssoConfig, client_id: e.target.value })}
+                    className="h-10 rounded-xl bg-muted/50 border-none text-sm"
+                    spellCheck={false}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Client Secret</Label>
+                  <Input
+                    type="password"
+                    value={ssoConfig.client_secret}
+                    onChange={e => setSsoConfig({ ...ssoConfig, client_secret: e.target.value })}
+                    className="h-10 rounded-xl bg-muted/50 border-none text-sm"
+                    spellCheck={false}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Redirect URI</Label>
+                <Input
+                  value={ssoConfig.redirect_uri}
+                  onChange={e => setSsoConfig({ ...ssoConfig, redirect_uri: e.target.value })}
+                  className="h-10 rounded-xl bg-muted/50 border-none text-sm"
+                  spellCheck={false}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">域名白名单（逗号分隔）</Label>
+                <Input
+                  value={ssoConfig.domain_whitelist}
+                  onChange={e => setSsoConfig({ ...ssoConfig, domain_whitelist: e.target.value })}
+                  placeholder="example.com, corp.example.com"
+                  className="h-10 rounded-xl bg-muted/50 border-none text-sm"
+                  spellCheck={false}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">自动加入</Label>
+                  <Switch
+                    checked={ssoConfig.auto_join}
+                    onCheckedChange={v => setSsoConfig({ ...ssoConfig, auto_join: v })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">默认角色</Label>
+                  <select
+                    value={ssoConfig.default_role}
+                    onChange={e => setSsoConfig({ ...ssoConfig, default_role: e.target.value })}
+                    className="h-10 rounded-xl border border-border bg-muted/50 px-3 text-sm font-medium w-full"
+                  >
+                    <option value="student">学生</option>
+                    <option value="teacher">老师</option>
+                  </select>
+                </div>
+              </div>
+
+              {slug && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/50 text-xs">
+                  <span className="text-muted-foreground shrink-0">SSO 登录链接:</span>
+                  <code className="text-primary font-mono truncate">https://unimind-ai.com/api/users/sso/authorize/?institution_slug={slug}</code>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://unimind-ai.com/api/users/sso/authorize/?institution_slug=${slug}`);
+                      toast.success('已复制登录链接');
+                    }}
+                  >
+                    <Copy className="h-3 w-3 mr-1" />复制
+                  </Button>
+                </div>
+              )}
+
+              <Button
+                onClick={handleSsoSave}
+                disabled={ssoSaving}
+                className="w-full h-12 rounded-xl bg-black text-white font-bold text-xs uppercase tracking-widest"
+              >
+                {ssoSaving ? <Spinner className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                保存 SSO 配置
+              </Button>
+            </div>
+            )}
+          </Card>
+        )}
+
+        {/* API 开放平台摘要 (企业版) */}
+        {plan === 'enterprise' && (
+          <Card className="p-8 rounded-2xl border-none shadow-sm bg-card space-y-4">
+            <div className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-primary" />
+              <h2 className="text-base font-extrabold text-foreground">API 开放平台</h2>
+            </div>
+
+            {apiKeysLoading ? (
+              <div className="flex justify-center py-4">
+                <Spinner className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-primary/8 flex items-center justify-center">
+                    <Key className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-foreground">{apiKeysCount} 个有效 API Key</p>
+                    <p className="text-xs text-muted-foreground">管理和监控 API 使用情况</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-xl text-xs font-medium"
+                  onClick={() => navigate('/api-platform')}
+                >
+                  前往 API 开放平台
+                </Button>
+              </div>
+            )}
+          </Card>
+        )}
+
         <DirectionEditDialog
           open={directionOpen}
           onClose={() => setDirectionOpen(false)}
@@ -649,8 +981,6 @@ function InstitutionSelfSettings() {
 }
 
 /* ── Direction Edit Dialog ── */
-
-const PLAN_DIRECTION_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 999999, free: 0 };
 
 function DirectionEditDialog({
   open, onClose, plan, subjects, selected, onSelectedChange, onSave, saving, error,
@@ -740,5 +1070,130 @@ function DirectionEditDialog({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/* ── Create Coupon Dialog ── */
+
+function CreateCouponDialog({
+  open, onClose, onCreated,
+}: {
+  open: boolean; onClose: () => void; onCreated: () => void;
+}) {
+  const [form, setForm] = useState({
+    code: '',
+    discount_type: 'fixed',
+    discount_value: '',
+    min_order_cents: '',
+    max_uses: '0',
+    max_uses_per_user: '1',
+    expires_at: '',
+    plan_restriction: '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true); setError('');
+    try {
+      const payload: any = {
+        code: form.code.trim(),
+        discount_type: form.discount_type,
+        discount_value: parseInt(form.discount_value, 10),
+        min_order_cents: parseInt(form.min_order_cents, 10) || 0,
+        max_uses: parseInt(form.max_uses, 10) || 0,
+        max_uses_per_user: parseInt(form.max_uses_per_user, 10) || 1,
+      };
+      if (form.expires_at) payload.expires_at = form.expires_at;
+      if (form.plan_restriction.trim()) {
+        payload.plan_restriction = form.plan_restriction
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+          .join(',');
+      }
+      await api.post('/payments/coupons/', payload);
+      onCreated();
+    } catch (err: any) {
+      setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat().join('; ') || '创建失败');
+    }
+    setSaving(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>创建优惠券</DialogTitle>
+          <DialogDescription>设置促销码的折扣规则和使用限制</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <Input placeholder="优惠码 *" required
+            value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} />
+
+          <div className="grid grid-cols-2 gap-2">
+            <Select
+              value={form.discount_type}
+              onValueChange={v => setForm({ ...form, discount_type: v })}
+            >
+              <SelectTrigger className="h-10 rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">百分比折扣</SelectItem>
+                <SelectItem value="fixed">固定金额减免</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder={form.discount_type === 'percentage' ? '折扣百分比（如 20）' : '减免金额（分）'}
+              type="number" required
+              value={form.discount_value}
+              onChange={e => setForm({ ...form, discount_value: e.target.value })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              placeholder="最低订单金额（分）" type="number"
+              value={form.min_order_cents}
+              onChange={e => setForm({ ...form, min_order_cents: e.target.value })}
+            />
+            <Input
+              placeholder="最大使用次数（0=无限制）" type="number"
+              value={form.max_uses}
+              onChange={e => setForm({ ...form, max_uses: e.target.value })}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              placeholder="每人限用次数" type="number"
+              value={form.max_uses_per_user}
+              onChange={e => setForm({ ...form, max_uses_per_user: e.target.value })}
+            />
+            <Input
+              type="date"
+              value={form.expires_at}
+              onChange={e => setForm({ ...form, expires_at: e.target.value })}
+            />
+          </div>
+
+          <Input
+            placeholder="限制方案（逗号分隔，如 starter,growth）"
+            value={form.plan_restriction}
+            onChange={e => setForm({ ...form, plan_restriction: e.target.value })}
+          />
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>取消</Button>
+            <Button type="submit" variant="apple" size="sm" disabled={saving}>
+              {saving ? '创建中…' : '创建'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

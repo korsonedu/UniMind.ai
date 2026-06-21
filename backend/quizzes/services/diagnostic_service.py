@@ -11,22 +11,15 @@ DIAGNOSTIC_TIME_LIMIT_SECONDS = 300
 
 
 def generate_diagnostic_questions(institution):
-    """从题库随机抽取诊断题目（优先机构题目，fallback 全局题目）。"""
+    """从题库随机抽取诊断题目（仅机构题目，不足时返回更少量）。"""
     from quizzes.models import Question
 
-    # 优先从机构题库抽题
+    # 从机构题库抽题
     qs = list(Question.objects.filter(
         q_type='objective',
         institution=institution,
     ).exclude(correct_answer__isnull=True).exclude(correct_answer='').order_by('?')[:DIAGNOSTIC_QUESTION_COUNT])
 
-    # 不够则从全局题库补
-    if len(qs) < DIAGNOSTIC_QUESTION_COUNT:
-        existing_ids = [q.id for q in qs]
-        remaining = DIAGNOSTIC_QUESTION_COUNT - len(qs)
-        qs += list(Question.objects.filter(
-            q_type='objective',
-        ).exclude(id__in=existing_ids).exclude(correct_answer__isnull=True).exclude(correct_answer='').order_by('?')[:remaining])
 
     # 转为前端格式
     questions = []
@@ -139,13 +132,15 @@ def initialize_memorix_from_diagnostic(user, kp_scores):
     for kp_id, scores in kp_scores.items():
         accuracy = scores['correct'] / max(scores['total'], 1)
 
-        # 获取该知识点下的题目（优先机构题，回退全局题）
+        # 获取该知识点下的题目
         from quizzes.models import Question
         from django.db.models import Q
         qs = Question.objects.filter(knowledge_point_id=kp_id)
         inst = getattr(user, 'institution', None)
         if inst:
             qs = qs.filter(institution=inst)
+        else:
+            qs = qs.filter(institution__isnull=True)
         questions = qs[:5]
 
         for q in questions:
@@ -175,30 +170,78 @@ def initialize_memorix_from_diagnostic(user, kp_scores):
 
 
 def build_study_plan(kp_scores):
-    """根据诊断结果生成学习计划建议。"""
-    weak_kps = []
-    strong_kps = []
-
+    """根据诊断结果生成结构化学习计划（使用 study_plan_builder）。"""
+    # 转换为 structured builder 所需格式
+    diagnostic_results = []
     for kp_id, scores in kp_scores.items():
         accuracy = scores['correct'] / max(scores['total'], 1)
-        info = {'kp_id': kp_id, 'kp_name': scores['kp_name'], 'accuracy': round(accuracy * 100)}
-        if accuracy < 0.4:
-            weak_kps.append(info)
-        elif accuracy >= 0.7:
-            strong_kps.append(info)
+        diagnostic_results.append({
+            'kp_id': kp_id,
+            'kp_name': scores['kp_name'],
+            'accuracy': accuracy,
+        })
 
-    plan = {
-        'weak_kps': weak_kps,
-        'strong_kps': strong_kps,
-        'recommendation': '',
-    }
+    from .study_plan_builder import build_structured_plan
+    return build_structured_plan(None, diagnostic_results)
 
-    if weak_kps:
-        names = '、'.join([kp['kp_name'] for kp in weak_kps[:3]])
-        plan['recommendation'] = f'建议优先复习：{names}。每天花 20 分钟针对薄弱知识点做题。'
-    elif strong_kps:
-        plan['recommendation'] = '基础不错！建议保持每日复习节奏，巩固已学知识。'
+
+def generate_reassessment(user, previous_diagnostic_id=None):
+    """生成重新评估题目 — 聚焦之前薄弱的知识点，排除已掌握内容。"""
+    from quizzes.models import Question, UserKnowledgeState
+
+    # 获取用户知识点掌握状态
+    weak_kp_ids = set()
+    known_states = UserKnowledgeState.objects.filter(user=user)
+    for state in known_states:
+        if state.mastery_score is not None and state.mastery_score >= 80:
+            continue  # 已掌握，跳过
+        if state.mastery_score is not None:
+            weak_kp_ids.add(state.knowledge_point_id)
+
+    inst = getattr(user, 'institution', None)
+    qs = Question.objects.filter(q_type='objective').exclude(
+        correct_answer__isnull=True
+    ).exclude(correct_answer='')
+
+    # 机构隔离
+    if inst:
+        qs = qs.filter(institution=inst)
     else:
-        plan['recommendation'] = '建议先完成更多练习，系统将自动分析你的薄弱环节。'
+        qs = qs.filter(institution__isnull=True)
 
-    return plan
+    # 优先从弱知识点抽题
+    if weak_kp_ids:
+        qs = qs.filter(knowledge_point_id__in=weak_kp_ids)
+
+    questions = list(qs.order_by('?')[:DIAGNOSTIC_QUESTION_COUNT])
+
+    # 不够则放宽限制（保持机构隔离）
+    if len(questions) < DIAGNOSTIC_QUESTION_COUNT:
+        remaining = DIAGNOSTIC_QUESTION_COUNT - len(questions)
+        existing_ids = [q.id for q in questions]
+        qs_extra = Question.objects.filter(
+            q_type='objective',
+        ).exclude(id__in=existing_ids).exclude(
+            correct_answer__isnull=True
+        ).exclude(correct_answer='')
+        if inst:
+            qs_extra = qs_extra.filter(institution=inst)
+        else:
+            qs_extra = qs_extra.filter(institution__isnull=True)
+        extra = list(qs_extra.order_by('?')[:remaining])
+        questions += extra
+
+    result = []
+    for q in questions[:DIAGNOSTIC_QUESTION_COUNT]:
+        kp = q.knowledge_point
+        result.append({
+            'id': q.id,
+            'question_text': q.text,
+            'q_type': q.q_type,
+            'options': q.options or [],
+            'answer': q.correct_answer,
+            'knowledge_point_id': kp.id if kp else None,
+            '_kp_name': kp.name if kp else '',
+        })
+
+    return result

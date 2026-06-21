@@ -512,6 +512,32 @@ class UserAbility(models.Model):
         return f"Ability(u={self.user_id}, kp={self.knowledge_point_id}, θ={self.theta:.3f})"
 
 
+# ── AI学情诊断: StudentHealthSnapshot ──
+class StudentHealthSnapshot(models.Model):
+    """学生健康度每日快照 — 用于趋势追踪和流失预警。"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='health_snapshots')
+    institution = models.ForeignKey('users.Institution', on_delete=models.CASCADE, related_name='student_health_snapshots')
+    score = models.IntegerField(verbose_name='健康分 (0-100)')
+    level = models.CharField(max_length=20, choices=[
+        ('healthy', '健康'), ('at_risk', '注意'), ('critical', '危险'),
+    ], verbose_name='健康等级')
+    components = models.JSONField(default=dict, verbose_name='分维度得分')
+    details = models.JSONField(default=dict, verbose_name='诊断详情')
+    snapshot_date = models.DateField(db_index=True, verbose_name='快照日期')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-snapshot_date']
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'snapshot_date'], name='unique_health_snapshot_per_day'),
+        ]
+        verbose_name = '健康快照'
+        verbose_name_plural = '健康快照'
+
+    def __str__(self):
+        return f'{self.user.username} {self.snapshot_date} score={self.score}'
+
+
 # ── Phase 6: QMatrixEntry ──
 class QMatrixEntry(models.Model):
     """Q-matrix 条目 - 题目与知识点的关联矩阵，标记该题是否需要掌握此知识点才能答对。"""
@@ -587,3 +613,37 @@ class KnowledgeEdge(models.Model):
 
     def __str__(self):
         return f"{self.source} → {self.target} ({self.edge_type}, w={self.weight})"
+
+
+class MarketplaceListing(models.Model):
+    LICENSE_CHOICES = [
+        ('free', '免费'), ('one_time', '买断'), ('subscription', '订阅'),
+    ]
+    CONTENT_CHOICES = [
+        ('question_set', '题库'), ('course', '课程'), ('exam_template', '出题模板'),
+    ]
+    STATUS_CHOICES = [
+        ('draft', '草稿'), ('published', '已上架'), ('unpublished', '已下架'),
+    ]
+    publisher = models.ForeignKey('users.Institution', null=True, blank=True, on_delete=models.SET_NULL, related_name='published_listings')
+    title = models.CharField(max_length=300, verbose_name='商品标题')
+    description = models.TextField(blank=True, verbose_name='商品描述')
+    content_type = models.CharField(max_length=20, choices=CONTENT_CHOICES, verbose_name='内容类型')
+    content_ids = models.JSONField(default=list, verbose_name='内容 ID 列表', help_text='{question_ids: [], course_ids: []}')
+    subject = models.CharField(max_length=100, verbose_name='学科')
+    grade = models.CharField(max_length=50, blank=True, verbose_name='适用年级')
+    price_cents = models.IntegerField(default=0, verbose_name='价格(分)')
+    license_type = models.CharField(max_length=20, choices=LICENSE_CHOICES, default='free')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft', db_index=True)
+    downloads = models.IntegerField(default=0, verbose_name='下载/购买次数')
+    rating = models.FloatField(default=0, verbose_name='平均评分')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = '市场列表'
+        verbose_name_plural = '市场列表'
+
+    def __str__(self):
+        return f'{self.title} ({self.get_content_type_display()})'

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, DailyPlan, DailyCheckIn, Achievement, UserAchievement
+from .models import User, DailyPlan, DailyCheckIn, Achievement, UserAchievement, ParentStudentLink
 
 class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.ReadOnlyField()
@@ -108,3 +108,19 @@ class UserAchievementSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAchievement
         fields = ('id', 'achievement', 'unlocked_at', 'progress')
+
+
+class ParentStudentLinkSerializer(serializers.ModelSerializer):
+    student_name = serializers.SerializerMethodField()
+    parent_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ParentStudentLink
+        fields = ['id', 'parent', 'student', 'student_name', 'parent_name', 'verified', 'created_at', 'verified_at']
+        read_only_fields = ['id', 'verified', 'created_at', 'verified_at']
+
+    def get_student_name(self, obj):
+        return obj.student.nickname or obj.student.username
+
+    def get_parent_name(self, obj):
+        return obj.parent.nickname or obj.parent.username

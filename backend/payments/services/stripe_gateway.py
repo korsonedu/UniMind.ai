@@ -76,6 +76,12 @@ def verify_webhook(headers, body: bytes):
 
 def create_subscription_checkout(institution, plan: str, billing_cycle: str, user_email: str = '') -> dict:
     """Create a Stripe Checkout Session for subscription mode. Returns checkout_url and subscription record."""
+    return {
+        'subscription_id': None,
+        'checkout_url': None,
+        'contact_admin': True,
+        'message': '请联系管理员开通会员',
+    }
     s = _get_stripe()
 
     # Build price data based on plan
@@ -256,16 +262,9 @@ def _process_subscription_webhook(event) -> dict | None:
         sub.save(update_fields=['status'])
 
     elif event.type == 'invoice.paid':
-        # Auto-renewal successful — extend period and update institution expiry
-        if stripe_sub.get('current_period_end'):
-            from datetime import datetime
-            sub.current_period_end = datetime.fromtimestamp(stripe_sub.current_period_end)
-            sub.status = 'active'
-            sub.save(update_fields=['status', 'current_period_end'])
-            # Extend institution plan expiry
-            inst = sub.institution
-            inst.plan_expires_at = sub.current_period_end
-            inst.save(update_fields=['plan_expires_at'])
+        # Subscription renewal — contact admin workflow
+        logger.info("invoice.paid webhook for subscription %s — 请联系管理员处理续费", sub_id)
+        return {'subscription_id': sub.id, 'status': sub.status, 'message': '请联系管理员处理续费'}
 
     return {
         'type': event.type,

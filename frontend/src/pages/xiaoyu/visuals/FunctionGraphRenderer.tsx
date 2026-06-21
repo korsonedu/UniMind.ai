@@ -27,28 +27,57 @@ interface FunctionGraphPayload {
   formula?: string;
 }
 
+/**
+ * 安全数学表达式求值。
+ * 严格字符白名单验证后才执行计算，防止代码注入。
+ */
+const MATH_WHITELIST = /^[\d\s+\-*/().,%^!<>=&|?:xXeEa-zA-Z_]+$/;
+
+function safeEvaluate(expr: string, x: number): number {
+  // 第一层：字符白名单 — 仅允许数学表达式中的合法字符
+  if (!MATH_WHITELIST.test(expr)) return NaN;
+
+  // 第二层：仅允许白名单中的标识符
+  const ALLOWED_IDENTIFIERS = new Set([
+    'Math', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2',
+    'sqrt', 'abs', 'log', 'log2', 'log10', 'exp', 'pow',
+    'PI', 'E', 'LN2', 'LN10', 'SQRT2', 'SQRT1_2',
+    'floor', 'ceil', 'round', 'sign', 'min', 'max',
+    'x',  // 自变量
+  ]);
+
+  // 提取所有标识符并验证
+  const identifiers = expr.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
+  for (const id of identifiers) {
+    if (!ALLOWED_IDENTIFIERS.has(id)) return NaN;
+    // 禁止连续大写字母后跟小写（防止 Math 被误用为其他）
+  }
+
+  // 第三层：禁止危险模式
+  if (/constructor|prototype|__proto__|eval|Function|import|require/i.test(expr)) return NaN;
+
+  const normalized = expr
+    .replace(/\^/g, '**')
+    .replace(/\bPI\b/g, 'Math.PI')
+    .replace(/\bE\b/g, 'Math.E');
+
+  try {
+    const fn = new Function('x', `"use strict"; const { sin, cos, tan, asin, acos, atan, atan2, sqrt, abs, log, log2, log10, exp, pow, floor, ceil, round, sign, min, max, PI, E, LN2, LN10, SQRT2, SQRT1_2 } = Math; return (${normalized});`);
+    const y = fn(x);
+    return Number.isFinite(y) ? y : NaN;
+  } catch {
+    return NaN;
+  }
+}
+
 function sampleFormula(formula: string, xMin: number, xMax: number, steps = 200) {
   const data: Array<{ x: number; y: number }> = [];
-  const safe = formula
-    .replace(/\^/g, '**')
-    .replace(/sin/g, 'Math.sin')
-    .replace(/cos/g, 'Math.cos')
-    .replace(/tan/g, 'Math.tan')
-    .replace(/sqrt/g, 'Math.sqrt')
-    .replace(/abs/g, 'Math.abs')
-    .replace(/log/g, 'Math.log')
-    .replace(/exp/g, 'Math.exp')
-    .replace(/pi/gi, 'Math.PI')
-    .replace(/(?<![a-zA-Z.])x(?![a-zA-Z0-9_])/g, '(__x__)');
 
   for (let i = 0; i <= steps; i++) {
     const x = xMin + (xMax - xMin) * (i / steps);
-    try {
-      // eslint-disable-next-line no-new-func
-      const y = new Function('__x__', `return ${safe.replace(/__x__/g, String(x))}`)();
-      if (Number.isFinite(y)) data.push({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 10000) / 10000 });
-    } catch {
-      // skip
+    const y = safeEvaluate(formula, x);
+    if (Number.isFinite(y)) {
+      data.push({ x: Math.round(x * 1000) / 1000, y: Math.round(y * 10000) / 10000 });
     }
   }
   return data;

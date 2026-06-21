@@ -9,7 +9,7 @@ from .views import (
     TeachingPlanListCreateView, TeachingPlanDetailView,
     LessonPlanListCreateView, LessonPlanDetailView,
     AIGenerateLessonPlanView, AIGenerateWeeklyPlansView, AIGenerateWeekLessonsView,
-    TeachingPlanAnalyticsView,
+    TeachingPlanAnalyticsView, LessonPlanPDFView,
 )
 from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
 
@@ -25,6 +25,7 @@ urlpatterns = [
     path('teaching-plans/<int:pk>/analytics/', TeachingPlanAnalyticsView.as_view(), name='teaching-plan-analytics'),
     path('teaching-plans/<int:pk>/ai-generate-weeks/', AIGenerateWeeklyPlansView.as_view(), name='teaching-plan-ai-weeks'),
     path('teaching-plans/<int:pk>/ai-generate-lessons/', AIGenerateWeekLessonsView.as_view(), name='teaching-plan-ai-lessons'),
+    path('teaching-plans/<int:pk>/pdf/', LessonPlanPDFView.as_view(), name='teaching-plan-pdf'),
     path('lesson-plans/', LessonPlanListCreateView.as_view(), name='lesson-plan-list'),
     path('lesson-plans/ai-generate/', AIGenerateLessonPlanView.as_view(), name='lesson-plan-ai-generate'),
     path('lesson-plans/<int:pk>/', LessonPlanDetailView.as_view(), name='lesson-plan-detail'),

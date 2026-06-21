@@ -38,9 +38,22 @@ def get_plan_price(plan: str, billing_cycle: str) -> int:
     return prices.get(plan, 0)
 
 
-def create_order(*, user, plan: str, billing_cycle: str, gateway: str, institution=None) -> Order:
+def create_order(*, user, plan: str, billing_cycle: str, gateway: str, institution=None, coupon_code: str = '') -> Order:
     amount = get_plan_price(plan, billing_cycle)
     now = timezone.now()
+
+    discount_cents = 0
+    applied_coupon_code = ''
+
+    if coupon_code:
+        from .coupon import validate_coupon
+        result = validate_coupon(coupon_code, user, plan, amount)
+        if result['valid']:
+            discount_cents = result['discount_cents']
+            amount = result['final_amount_cents']
+            applied_coupon_code = coupon_code
+            # 注意：apply_coupon 在 confirm_order 时调用，避免未支付就扣减次数
+
     return Order.objects.create(
         user=user,
         institution=institution,
@@ -48,6 +61,8 @@ def create_order(*, user, plan: str, billing_cycle: str, gateway: str, instituti
         billing_cycle=billing_cycle,
         amount_cents=amount,
         gateway=gateway,
+        coupon_code=applied_coupon_code,
+        discount_cents=discount_cents,
         expires_at=now + timedelta(minutes=ORDER_TIMEOUT_MINUTES),
     )
 
@@ -69,6 +84,14 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
         if amount_cents is not None and amount_cents != order.amount_cents:
             logger.error("Order %s amount mismatch: expected %s, got %s", order.id, order.amount_cents, amount_cents)
             raise ValueError(f"Payment amount mismatch: expected {order.amount_cents}, got {amount_cents}")
+
+        # 如果使用了优惠券，在标记支付成功前扣减使用次数
+        # （失败则抛出异常回滚整个事务，避免已付款但未扣减的情况）
+        if order.coupon_code:
+            from .coupon import apply_coupon
+            from payments.models import Coupon
+            coupon = Coupon.objects.get(code=order.coupon_code, is_active=True)
+            apply_coupon(coupon, order.user, order)
 
         PaymentTransaction.objects.create(
             order=order,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +49,32 @@ export const Settings: React.FC = () => {
   const [email, setEmail] = useState('');
   const [passwords, setPasswords] = useState({ old: '', new: '' });
 
+  // Parent-child binding
+  const [bindCode, setBindCode] = useState('');
+  const [bindVerifying, setBindVerifying] = useState(false);
+  const [parentLinks, setParentLinks] = useState<any[]>([]);
+  const [linksLoading, setLinksLoading] = useState(false);
+
+  const isStudent = user?.role === 'student' || user?.institution_role === 'student';
+  const isParentUser = user?.role === 'parent' || user?.institution_role === 'parent';
+
+  const fetchLinks = async () => {
+    if (!isStudent && !isParentUser) return;
+    setLinksLoading(true);
+    try {
+      const res = await api.get('/users/me/parent-links/');
+      setParentLinks(res.data);
+    } catch {
+      // silent
+    } finally {
+      setLinksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLinks();
+  }, [user]);
+
   const previewUrl = `https://api.dicebear.com/7.x/${avatar.style}/svg?seed=${avatar.seed}`;
 
   const handleSaveProfile = async () => {
@@ -84,6 +110,21 @@ export const Settings: React.FC = () => {
       toast.success(t('security.passwordSaved'));
       setPasswords({ old: '', new: '' });
     } catch (e) { toast.error(t('security.passwordError')); }
+  };
+
+  const handleVerifyBind = async () => {
+    if (!bindCode.trim()) return toast.error('请输入验证码');
+    setBindVerifying(true);
+    try {
+      const res = await api.post('/users/parent/link-verify/', { code: bindCode.trim() });
+      toast.success(res.data.message || '绑定成功');
+      setBindCode('');
+      fetchLinks();
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '验证失败');
+    } finally {
+      setBindVerifying(false);
+    }
   };
 
   return (
@@ -167,6 +208,78 @@ export const Settings: React.FC = () => {
                <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><FloppyDisk className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
              </div>
           </Card>
+
+          {/* 家长绑定 */}
+          {(isStudent || isParentUser) && (
+            <Card className="border-none shadow-sm rounded-3xl bg-card p-8 border border-border/30">
+              <div className="text-left space-y-4">
+                <h4 className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">
+                  {isStudent ? '绑定家长' : '家长关联'}
+                </h4>
+
+                {/* Student: verification code input */}
+                {isStudent && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground ml-1">
+                      输入家长提供的验证码，完成绑定。
+                    </p>
+                    <div className="flex gap-2">
+                      <Input
+                        value={bindCode}
+                        onChange={(e) => setBindCode(e.target.value.toUpperCase())}
+                        placeholder="6位验证码"
+                        maxLength={6}
+                        className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 uppercase tracking-widest"
+                      />
+                      <Button
+                        onClick={handleVerifyBind}
+                        disabled={bindVerifying || bindCode.length < 6}
+                        className="rounded-xl h-10 px-4 text-xs font-bold"
+                      >
+                        {bindVerifying ? '验证中...' : '确认绑定'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Linked list */}
+                {linksLoading ? (
+                  <p className="text-xs text-muted-foreground">加载中...</p>
+                ) : parentLinks.length > 0 ? (
+                  <div className="space-y-2">
+                    {parentLinks.map((link: any) => (
+                      <div
+                        key={link.id}
+                        className="flex items-center justify-between p-3 rounded-xl bg-muted"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-7 w-7">
+                            <AvatarFallback className="text-[10px] font-bold">
+                              {(isStudent ? link.parent_name : link.student_name)?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-xs font-bold">
+                            {isStudent ? link.parent_name : link.student_name}
+                          </span>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          link.verified
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {link.verified ? '已绑定' : '待验证'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground ml-1">
+                    {isStudent ? '暂无家长绑定' : '暂无孩子绑定'}
+                  </p>
+                )}
+              </div>
+            </Card>
+          )}
 
           {/* 数据导出 */}
           <Card className="border-none shadow-sm rounded-3xl bg-card p-8 border border-border/30">

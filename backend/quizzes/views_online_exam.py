@@ -205,6 +205,12 @@ class OnlineExamSubmitView(APIView):
 
         attempt = get_object_or_404(OnlineExamAttempt, user=user, exam=exam, status='in_progress')
 
+        # 检查考试是否超时
+        if exam.duration_minutes and attempt.started_at:
+            elapsed = (timezone.now() - attempt.started_at).total_seconds()
+            if elapsed > exam.duration_minutes * 60:
+                return Response({'error': '考试时间已到'}, status=400)
+
         answers = request.data.get('answers', {})
         attempt.answers = answers
         attempt.submitted_at = timezone.now()

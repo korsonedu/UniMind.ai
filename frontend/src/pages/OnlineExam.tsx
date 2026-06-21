@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Clock, AlertTriangle, ChevronLeft, ChevronRight, Send } from 'lucide-react';
+import { Clock, Warning, CaretLeft, CaretRight, PaperPlaneTilt } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
@@ -58,11 +58,33 @@ export function OnlineExam() {
   const [error, setError] = useState('');
   const timeLeftRef = useRef<number | null>(null);
   const submittedRef = useRef(false);
+  const violationRef = useRef(0);
 
   // Keep ref in sync for timer callback
   useEffect(() => {
     timeLeftRef.current = timeLeft;
   }, [timeLeft]);
+
+  // Tab switch detection
+  useEffect(() => {
+    if (!session || result) return;
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        violationRef.current += 1;
+        const count = violationRef.current;
+        if (count === 1) {
+          toast.warning('请勿切换页面，系统已记录');
+        } else if (count === 2) {
+          toast.warning(`第 ${count} 次切屏警告，再次切屏将自动交卷`);
+        } else if (count >= 3) {
+          toast.error(`第 ${count} 次切屏，系统自动交卷`);
+          handleSubmit();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [session, result, handleSubmit]);
 
   // Start exam
   const startExam = useCallback(async () => {
@@ -196,8 +218,8 @@ export function OnlineExam() {
                 );
               })}
             </div>
-            <Button onClick={() => navigate('/home')} className="w-full">
-              返回首页
+            <Button onClick={() => navigate('/xiaoyu')} className="w-full">
+              返回小宇
             </Button>
           </CardContent>
         </Card>
@@ -212,7 +234,7 @@ export function OnlineExam() {
         <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="pt-6 space-y-4">
             <div className="flex items-center gap-3 text-destructive">
-              <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+              <Warning className="h-5 w-5 flex-shrink-0" />
               <p className="font-medium">{error}</p>
             </div>
             <div className="flex gap-2">
@@ -344,7 +366,7 @@ export function OnlineExam() {
             size="sm"
             className="gap-1"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <CaretLeft className="h-4 w-4" />
             <span className="hidden sm:inline">上一题</span>
           </Button>
 
@@ -373,11 +395,11 @@ export function OnlineExam() {
             {currentIdx < totalCount - 1 ? (
               <Button onClick={() => setCurrentIdx(i => Math.min(i + 1, totalCount - 1))} size="sm" className="gap-1">
                 <span className="hidden sm:inline">下一题</span>
-                <ChevronRight className="h-4 w-4" />
+                <CaretRight className="h-4 w-4" />
               </Button>
             ) : (
               <Button onClick={confirmSubmit} disabled={submitting} size="sm" className="gap-1">
-                <Send className="h-4 w-4" />
+                <PaperPlaneTilt className="h-4 w-4" />
                 <span className="hidden sm:inline">{submitting ? '提交中...' : '提交试卷'}</span>
               </Button>
             )}

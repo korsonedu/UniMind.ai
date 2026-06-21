@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Spinner, Check, Clock, FileText, CaretRight,
+  ArrowLeft, Spinner, Check, Clock, FileText, CaretRight, CaretDown,
   CalendarCheck, Warning, CheckCircle, Hourglass,
 } from '@phosphor-icons/react';
 import api from '@/lib/api';
@@ -37,6 +37,13 @@ interface QuestionData {
   kp_name: string;
   points: number;
   order: number;
+  // 提交后从 question_results 注入的逐题批改字段
+  score?: number;
+  max_score?: number;
+  is_correct?: boolean;
+  feedback?: string;
+  analysis?: string;
+  correct_answer?: string;
 }
 
 type View = 'list' | 'detail';
@@ -108,6 +115,7 @@ export default function MyAssignments() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [expandedCards, setExpandedCards] = useState<Set<number>>(new Set());
 
   const fetchList = async () => {
     setLoading(true);
@@ -135,10 +143,27 @@ export default function MyAssignments() {
     try {
       const res = await api.post('/assignments/submit/', { assignment_id: detail.id, answers });
       toast.success(res.data.message);
-      setDetail({ ...detail, submitted: true, score: res.data.score, previous_answers: answers });
+      // 将逐题批改结果合并到题目列表中
+      const qrMap = new Map((res.data.question_results || []).map((r: any) => [r.question_id, r]));
+      const updatedQuestions = detail.questions.map(q => {
+        const qr = qrMap.get(q.id);
+        if (qr) {
+          return { ...q, score: qr.score, max_score: qr.max_score, is_correct: qr.is_correct, feedback: qr.feedback, analysis: qr.analysis, correct_answer: qr.correct_answer };
+        }
+        return q;
+      });
+      setDetail({ ...detail, submitted: true, score: res.data.score, previous_answers: answers, questions: updatedQuestions });
       fetchList();
     } catch (e: any) { toast.error(e?.response?.data?.error || '提交失败'); }
     setSubmitting(false);
+  };
+
+  const toggleCard = (id: number) => {
+    setExpandedCards(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   const stats = useMemo(() => {
@@ -284,22 +309,64 @@ export default function MyAssignments() {
 
         {detail.submitted ? (
           <div className="space-y-3">
-            {detail.questions.map((q, i) => (
-              <div key={q.id} className="rounded-xl border border-border bg-card p-4 animate-in fade-in slide-in-from-bottom-1 duration-300" style={{ animationDelay: `${i * 40}ms` }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[11px] font-bold text-muted-foreground">第 {i + 1} 题</span>
-                  <span className="text-[10px] text-muted-foreground/50">{q.points} 分</span>
-                  {q.kp_name && <span className="text-[10px] text-muted-foreground/40 ml-auto">{q.kp_name}</span>}
+            {detail.questions.map((q, i) => {
+              const userAnswer = detail.previous_answers[String(q.id)];
+              const hasGrading = q.score !== undefined;
+              const expanded = expandedCards.has(q.id);
+              return (
+                <div key={q.id} className="rounded-xl border border-border bg-card overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-300" style={{ animationDelay: `${i * 40}ms` }}>
+                  <button onClick={() => toggleCard(q.id)} className="w-full flex items-center gap-2 p-4 text-left hover:bg-muted/30 transition-colors">
+                    <span className="text-[11px] font-bold text-muted-foreground shrink-0">第 {i + 1} 题</span>
+                    {hasGrading && (
+                      <span className={cn(
+                        'text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0',
+                        q.is_correct ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400' : 'bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400',
+                      )}>
+                        {q.score}/{q.max_score} 分
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground/40">{q.points} 分</span>
+                    {q.kp_name && <span className="text-[10px] text-muted-foreground/40 ml-auto mr-2">{q.kp_name}</span>}
+                    <CaretDown className={cn('h-4 w-4 text-muted-foreground/30 shrink-0 transition-transform duration-200', expanded && 'rotate-180')} />
+                  </button>
+                  {expanded && (
+                    <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
+                      <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.text}</ReactMarkdown>
+                      </div>
+                      <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                        <span className="text-[11px] font-bold text-muted-foreground">你的答案</span>
+                        <p className="text-sm mt-1 leading-relaxed">{userAnswer || <span className="text-muted-foreground/40 italic">未作答</span>}</p>
+                      </div>
+                      {q.correct_answer && (
+                        <div className="p-3 rounded-lg bg-emerald-50/50 border border-emerald-200/50 dark:bg-emerald-950/20 dark:border-emerald-800/30">
+                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">参考答案</span>
+                          <div className="text-sm mt-1 leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.correct_answer}</ReactMarkdown>
+                          </div>
+                        </div>
+                      )}
+                      {q.feedback && (
+                        <div className="p-3 rounded-lg bg-blue-50/50 border border-blue-200/50 dark:bg-blue-950/20 dark:border-blue-800/30">
+                          <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">AI 批改反馈</span>
+                          <div className="text-sm mt-1 leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.feedback}</ReactMarkdown>
+                          </div>
+                        </div>
+                      )}
+                      {q.analysis && (
+                        <div className="p-3 rounded-lg bg-amber-50/50 border border-amber-200/50 dark:bg-amber-950/20 dark:border-amber-800/30">
+                          <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">详细分析</span>
+                          <div className="text-sm mt-1 leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.analysis}</ReactMarkdown>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{q.text}</ReactMarkdown>
-                </div>
-                <div className="mt-3 p-3 rounded-lg bg-muted/30 border border-border/50">
-                  <span className="text-[11px] font-bold text-muted-foreground">你的答案</span>
-                  <p className="text-sm mt-1 leading-relaxed">{detail.previous_answers[String(q.id)] || <span className="text-muted-foreground/40 italic">未作答</span>}</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="space-y-3">

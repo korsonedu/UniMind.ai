@@ -688,6 +688,24 @@ def get_assistant_tools():
             impl_summary="全文搜索 article 表的 title 和 body，返回按 relevance 排序的文章列表（含 slug 用于前端链接）。"),
     ]
 
+GET_REPORT_CARD_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": False,
+}
+
+GET_MY_COURSES_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": False,
+}
+
+GET_MY_ACHIEVEMENTS_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": False,
+}
+
 def get_planner_tools():
     """学习规划师 Agent 工具集（含助教工具 + 规划专用工具）。"""
     assistant = get_assistant_tools()
@@ -716,6 +734,12 @@ def get_planner_tools():
             impl_summary="查找题目→GradingEngine.grade 判分→返回 score/feedback/analysis/remediation_questions/kp_breakdown。需要 question_id 和 user_answer。"),
         _make_tool("run_diagnostic", "启动诊断测试。generate 模式返回题目列表和时间限制；submit 模式提交答案，返回评分结果和学习计划建议。用于新用户首次评估。", RUN_DIAGNOSTIC_SCHEMA,
             impl_summary="调用 diagnostic_service 的 generate_diagnostic_questions 和 grade_diagnostic_answers。generate 从题库随机抽取客观题；submit 评分后初始化 Memorix 状态并生成学习建议。"),
+        _make_tool("get_report_card", "获取学生的学习报告/成绩单。包含打卡天数、总答题量、正确率、已掌握知识点数、ELO分数、最近考试记录和已解锁成就。用于回答'我的学习报告''我学得怎么样'等问题。", GET_REPORT_CARD_SCHEMA,
+            impl_summary="调用 users.views._build_report_data 获取学生完整报告数据，提取 stats、exams、achievements 等关键字段返回。"),
+        _make_tool("get_my_courses", "获取学生所在班级分配的课程列表。返回课程标题、学科和班级名称。用于回答'我有哪些课''我在学什么'等问题。", GET_MY_COURSES_SCHEMA,
+            impl_summary="查询 ClassCourse + Course 表，通过 student→Class→ClassCourse 关联获取该班分配的课程。未加入班级时返回提示。"),
+        _make_tool("get_my_achievements", "获取学生的成就列表，包括已解锁和未解锁的成就及进度。用于回答'我的成就''我拿到了什么徽章'等问题。", GET_MY_ACHIEVEMENTS_SCHEMA,
+            impl_summary="查询 UserAchievement + Achievement 表，返回已解锁成就列表和全部成就的解锁状态。"),
     ]
     return assistant + planner_only
 
@@ -894,6 +918,15 @@ LIST_ARTICLES_SCHEMA = {
     },
 }
 
+LIST_LESSON_PLANS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "subject": {"type": "string", "description": "按学科筛选"},
+        "class_name": {"type": "string", "description": "按班级名称筛选（模糊匹配）"},
+        "limit": {"type": "integer", "description": "返回数量上限，默认 10"},
+    },
+}
+
 LIST_CLASSES_SCHEMA = {
     "type": "object",
     "properties": {},
@@ -959,6 +992,8 @@ def get_exam_generator_tools():
             impl_summary="查询 Question 表（按机构隔离），支持 kp_name/subject/q_type/difficulty 多维度筛选，返回题目 ID、文本预览、题型、难度和知识点。"),
         _make_tool("list_articles", "浏览机构文章库。教师说'看看文章'时使用。", LIST_ARTICLES_SCHEMA,
             impl_summary="查询 Article 表（按机构隔离），支持标题/内容搜索，返回文章 ID、标题、作者、标签和链接。"),
+        _make_tool("list_lesson_plans", "浏览机构教案库。教师说'看看教案''有没有教学计划'时使用。", LIST_LESSON_PLANS_SCHEMA,
+            impl_summary="查询 TeachingPlan 表（按机构隔离），支持 subject/class_name 筛选，返回教案 ID、标题、学科、学期、班级、周数。"),
         _make_tool("list_classes", "获取机构下的所有班级列表。教师说'有哪些班''班级列表'时使用。", LIST_CLASSES_SCHEMA,
             impl_summary="查询 Class 表（按机构隔离），返回班级 ID、名称、学生数。"),
         _make_tool("assign_class_course", "将课程分配给班级。教师说'把XX课程分配给X班'时使用。", ASSIGN_CLASS_COURSE_SCHEMA,

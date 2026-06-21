@@ -4,6 +4,7 @@ import logging
 import os
 from django.db import models
 from django.db.models import Sum, Count, Q
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.views import APIView
@@ -113,23 +114,34 @@ class XiaoYuDashboardView(APIView):
         today_checkin = DailyCheckIn.objects.filter(user=user, date=now.date()).first()
         checkin_streak = today_checkin.streak if today_checkin else 0
 
-        # Weekly activity heatmap (last 28 days)
+        # Weekly activity heatmap (last 28 days) — single query
+        cutoff = now.date() - timedelta(days=27)
+        daily_counts = dict(
+            ReviewLog.objects
+            .filter(user=user, review_time__date__gte=cutoff)
+            .annotate(day=TruncDate('review_time'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .values_list('day', 'count')
+        )
         heatmap_days = []
         for i in range(27, -1, -1):
             d = now.date() - timedelta(days=i)
-            count = ReviewLog.objects.filter(
-                user=user, review_time__date=d,
-            ).count()
-            heatmap_days.append({'date': d.isoformat(), 'count': count})
+            heatmap_days.append({'date': d.isoformat(), 'count': daily_counts.get(d, 0)})
 
-        # 7-day check-in history
+        # 7-day check-in history — single query
+        week_ago_date = now.date() - timedelta(days=6)
+        checkin_dates = set(
+            DailyCheckIn.objects
+            .filter(user=user, date__gte=week_ago_date)
+            .values_list('date', flat=True)
+        )
         checkin_history = []
         for i in range(6, -1, -1):
             d = now.date() - timedelta(days=i)
-            record = DailyCheckIn.objects.filter(user=user, date=d).first()
             checkin_history.append({
                 'date': d.isoformat(),
-                'checked_in': record is not None,
+                'checked_in': d in checkin_dates,
             })
 
         # Next achievements

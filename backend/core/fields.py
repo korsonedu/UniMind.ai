@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import logging
 from django.conf import settings
 from django.db import models
@@ -12,7 +14,16 @@ _fernet_instance = None
 def _get_fernet() -> Fernet:
     global _fernet_instance
     if _fernet_instance is None:
-        key = getattr(settings, 'ENCRYPTION_KEY', None) or settings.SECRET_KEY
+        encryption_key = getattr(settings, 'ENCRYPTION_KEY', None)
+        if encryption_key:
+            key = encryption_key
+        else:
+            logger.warning(
+                "ENCRYPTION_KEY not set; deriving Fernet key from SECRET_KEY. "
+                "Set ENCRYPTION_KEY in production for stable encryption across deployments."
+            )
+            derived = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+            key = base64.urlsafe_b64encode(derived).decode()
         _fernet_instance = Fernet(key.encode() if isinstance(key, str) else key)
     return _fernet_instance
 

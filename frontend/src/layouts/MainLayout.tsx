@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure, ClipboardText } from '@phosphor-icons/react';
+import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure, ClipboardText, Storefront, Code } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -127,6 +127,7 @@ export const MainLayout: React.FC = () => {
     pathname === '/my-assignments' ||
     pathname === '/report-card' ||
     pathname === '/workbench' ||
+    pathname === '/parent' ||
     pathname === '/plan' ||
     pathname.startsWith('/institution');
   const isMobileStudyPage = isMobile && location.pathname === '/study';
@@ -169,8 +170,9 @@ export const MainLayout: React.FC = () => {
   const isSuperAdmin = user?.role === 'admin' && !instInfo;
   const isInstStudent = Boolean(instInfo) && user?.institution_role === 'student';
   const isInstRegistrar = Boolean(instInfo) && user?.institution_role === 'registrar';
+  const isParent = user?.role === 'parent' || user?.institution_role === 'parent';
   const effectiveIsInstStudent = studentPreview || isInstStudent;
-  const homePath = effectiveIsInstStudent ? '/xiaoyu' : '/workbench';
+  const homePath = isParent ? '/parent' : effectiveIsInstStudent ? '/xiaoyu' : '/workbench';
   const instPlan = instInfo?.plan || 'free';
   const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 4 })[p] || 1;
   const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
@@ -196,9 +198,11 @@ export const MainLayout: React.FC = () => {
     return hasFeature(feat);
   };
 
-  // ── 超级管理员 4 套件 ──
+  // ── 超级管理员 ──
   const superAdminNavItems: NavItem[] = [
     { to: '/institution/admin', icon: Buildings, label: t('layout:nav.institutionAdmin') },
+    { to: '/marketplace', icon: Storefront, label: '内容市场' },
+    { to: '/api-platform', icon: Code, label: 'API 平台' },
     { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteCodes') },
     { to: '/platform-analytics', icon: ChartLineUp, label: t('layout:nav.platformAnalytics') },
     { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
@@ -214,9 +218,8 @@ export const MainLayout: React.FC = () => {
     { to: '/articles', icon: FileText, label: '文章' },
     { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
     { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
-    { to: '/institution/students', icon: Users, label: t('layout:nav.members') },
-    { to: '/institution/campuses', icon: Buildings, label: '校区管理' },
-    { to: '/management', icon: Wrench, label: t('layout:nav.maintenance') },
+    { to: '/marketplace', icon: Storefront, label: '内容市场' },
+    ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') } as NavItem] : []),
   ];
 
   // ── 学生端 9 套件 ──
@@ -238,27 +241,41 @@ export const MainLayout: React.FC = () => {
   const registrarNavItems: NavItem[] = [
     { to: '/workbench', icon: Robot, label: '工作台' },
     { to: '/institution/students', icon: Users, label: t('layout:nav.members') },
-    { to: '/management', icon: Wrench, label: t('layout:nav.maintenance') },
+    ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') } as NavItem] : []),
+  ];
+
+  // ── 家长端 ──
+  const parentNavItems: NavItem[] = [
+    { to: '/parent', icon: Users, label: '家长模式' },
+    { to: '/settings', icon: Gear, label: '设置' },
   ];
 
   const navItems: NavItem[] = isSuperAdmin
     ? superAdminNavItems
-    : isInstRegistrar
-      ? registrarNavItems
-      : (effectiveIsInstStudent ? studentNavItems : teacherNavItems);
+    : isParent
+      ? parentNavItems
+      : isInstRegistrar
+        ? registrarNavItems
+        : (effectiveIsInstStudent ? studentNavItems : teacherNavItems);
 
   const visibleNavItems = navItems.filter(itemVisible);
 
   const mobileNavItems: NavItem[] = isSuperAdmin
     ? [
         { to: '/institution', icon: Buildings, label: t('layout:nav.institutionShort') },
+        { to: '/marketplace', icon: Storefront, label: '市场' },
+        { to: '/api-platform', icon: Code, label: 'API' },
         { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteShort') },
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptShort') },
+      ]
+    : isParent ? [
+        { to: '/parent', icon: Users, label: '家长' },
+        { to: '/settings', icon: Gear, label: '设置' },
       ]
     : isInstRegistrar ? [
         { to: '/workbench', icon: Robot, label: '工作台' },
         { to: '/institution/students', icon: Users, label: '学员' },
-        { to: '/management', icon: Wrench, label: '维护' },
+        ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: '维护' }] : []),
       ]
     : effectiveIsInstStudent ? [
         { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort', '小宇') },
@@ -278,7 +295,9 @@ export const MainLayout: React.FC = () => {
         { to: '/courses', icon: BookOpen, label: '课程' },
         { to: '/articles', icon: FileText, label: '文章' },
         { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
-        { to: '/institution', icon: Users, label: '学员' },
+        { to: '/qa', icon: ChatCircleText, label: '答疑' },
+        { to: '/marketplace', icon: Storefront, label: '市场' },
+        ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: '维护' }] : []),
       ];
 
   const visibleMobileNavItems = mobileNavItems.filter(itemVisible);
@@ -382,10 +401,16 @@ export const MainLayout: React.FC = () => {
                     </DropdownMenuItem>
                   )}
                   {!isSuperAdmin && instInfo && !isInstStudent && !studentPreview && (
-                    <DropdownMenuItem onClick={() => { setStudentPreview(true); navigate('/xiaoyu'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <Eye className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">预览学生端</span>
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => navigate('/institution/students')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                        <Users className="h-3.5 w-3.5" />
+                        <span className="font-bold text-xs">学员管理</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { setStudentPreview(true); navigate('/xiaoyu'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
+                        <Eye className="h-3.5 w-3.5" />
+                        <span className="font-bold text-xs">预览学生端</span>
+                      </DropdownMenuItem>
+                    </>
                   )}
                   {studentPreview && (
                     <DropdownMenuItem onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">

@@ -10,6 +10,8 @@
 - `get_knowledge_difficulty_analysis` → 知识点的 Memorix 难度分析（avg_difficulty、avg_stability、mastery_level、memorix_insight）。用于回答"我哪些知识点最薄弱""为什么总是记不住"等问题
 - `get_class_weak_points` → 班级整体薄弱知识点分析。用于教师身份的学情分析
 - `get_class_performance_summary` → 班级整体表现（平均正确率、活跃度、学习时长分布）。用于教师查看班情
+- `get_report_card` → 完整学习报告（打卡天数、总答题量、正确率、已掌握知识点、ELO、最近考试、成就）。用于回答"学习报告""学得怎么样"
+- `get_my_achievements` → 成就列表和进度。用于回答"我的成就""拿到了什么徽章"
 
 ### 学习执行类（计划和复习的当前状态）
 - `get_active_plan` → 当前进行中的计划（任务列表、完成度）
@@ -26,6 +28,7 @@
 - `search_knowledge_tree` → 按名称或描述搜索知识点，返回定义和层级关系
 - `lookup_question` → 根据 ID 查询题目详情
 - `search_courses` → 搜索课程（返回标题、关联知识点、链接）
+- `get_my_courses` → 查询学生当前班级分配的课程列表。用于回答"我的课程""有什么课"
 - `search_asr` → 搜索视频转录文本，定位知识点在视频中的时间位置
 - `search_articles` → 搜索深度文章
 

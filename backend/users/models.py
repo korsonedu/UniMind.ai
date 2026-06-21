@@ -6,6 +6,7 @@ class User(AbstractUser):
     ROLE_CHOICES = (
         ('student', '学生'),
         ('admin', '管理员'),
+        ('parent', '家长'),
     )
     MEMBERSHIP_TIER_CHOICES = (
         ('free', 'Free'), ('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise'),
@@ -15,6 +16,7 @@ class User(AbstractUser):
         ('teacher', '教师'),
         ('registrar', '教务主管'),
         ('student', '学员'),
+        ('parent', '家长'),
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     nickname = models.CharField(max_length=100, blank=True, verbose_name="昵称")
@@ -277,6 +279,7 @@ class Class(models.Model):
     """机构下的班级，支持将学生分组管理。"""
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='classes', verbose_name="所属机构")
     name = models.CharField(max_length=200, verbose_name="班级名称")
+    category = models.CharField(max_length=100, blank=True, verbose_name='班级分类', help_text='如：物理、数学、公考')
     students = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='classes', blank=True, verbose_name="学员")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
@@ -446,6 +449,76 @@ class UserAchievement(models.Model):
         return f"{self.user.username} - {self.achievement.name}"
 
 
+class ParentStudentLink(models.Model):
+    parent = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='linked_children')
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='linked_parents')
+    verified = models.BooleanField(default=False, verbose_name="已验证")
+    verification_code = models.CharField(max_length=10, blank=True, verbose_name="绑定验证码")
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = '家长关联'
+        verbose_name_plural = '家长关联'
+        unique_together = ('parent', 'student')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.parent.username} → {self.student.username}'
+
+
+class APICredential(models.Model):
+    """API 开放平台凭证 — 企业版机构可创建 API Key 访问平台数据。"""
+    institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='api_credentials')
+    name = models.CharField(max_length=100, verbose_name='凭证名称')
+    key_id = models.CharField(max_length=40, unique=True, verbose_name='API Key ID', help_text='ak- 前缀，公开标识')
+    key_secret_hash = models.CharField(max_length=128, verbose_name='API Secret 哈希')
+    scopes = models.JSONField(default=list, verbose_name='权限范围', help_text='["read:questions","read:analytics"]')
+    rate_limit = models.IntegerField(default=60, verbose_name='速率限制(次/分钟)')
+    is_active = models.BooleanField(default=True, verbose_name='是否启用')
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_api_credentials')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'API 凭证'
+        verbose_name_plural = 'API 凭证'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.name} ({self.key_id})'
+
+
+class SSOConfig(models.Model):
+    """SSO 单点登录配置 — 企业版专属，支持飞书/钉钉/企微/通用 OIDC。"""
+    PROVIDER_CHOICES = [
+        ('feishu', '飞书 (Feishu)'),
+        ('dingtalk', '钉钉 (DingTalk)'),
+        ('wecom', '企业微信 (WeCom)'),
+        ('generic_oidc', '通用 OIDC'),
+    ]
+    institution = models.OneToOneField(Institution, on_delete=models.CASCADE, related_name='sso_config', verbose_name='所属机构')
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, verbose_name='SSO 提供商')
+    enabled = models.BooleanField(default=False, verbose_name='是否启用')
+    client_id = models.CharField(max_length=200, verbose_name='Client ID / App ID')
+    client_secret = models.CharField(max_length=500, verbose_name='Client Secret')
+    redirect_uri = models.CharField(max_length=300, blank=True, verbose_name='回调地址')
+    domain_whitelist = models.JSONField(default=list, blank=True, verbose_name='域名白名单', help_text='用户邮箱/域名匹配后才自动加入机构')
+    auto_join = models.BooleanField(default=True, verbose_name='首次 SSO 登录自动加入机构')
+    default_role = models.CharField(max_length=20, choices=[('student', '学生'), ('teacher', '老师')], default='student', verbose_name='默认机构角色')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'SSO 配置'
+        verbose_name_plural = 'SSO 配置'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.institution.name} — {self.get_provider_display()}'
+
+
 # ── Plan features utility ──
 DEFAULT_DURATION_DAYS = 30
 DURATION_PERMANENT = 0
@@ -460,21 +533,21 @@ PLAN_FEATURES: dict[str, list[str]] = {
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report',
         'ai.assistant', 'course.video',
-        'ai.bot.custom',
+        'ai.bot.custom', 'teaching_plans',
     ],
     'growth': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline', 'faq.system',
         'pdf.mock', 'study.room', 'multi.teacher', 'class.compare', 'data.export',
-        'interview.mock', 'ai.bot.custom',
+        'interview.mock', 'ai.bot.custom', 'teaching_plans',
     ],
     'enterprise': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
         'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
         'ai.assistant', 'course.video', 'video.outline', 'faq.system',
         'pdf.mock', 'study.room', 'multi.teacher', 'class.compare', 'data.export',
-        'interview.mock', 'ai.bot.custom',
+        'interview.mock', 'ai.bot.custom', 'teaching_plans',
         'brand.custom', 'api.access', 'student.payment',
         'private.deploy', 'i18n.custom', 'sso.saml', 'audit.log',
         'dedicated.support', 'sla.99.9',

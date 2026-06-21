@@ -124,10 +124,12 @@ def sync_kp_neighborhood(kp: KnowledgePoint, old_parent_id: int | None = None) -
     """
     result = {'kp_id': kp.id, 'action': 'synced'}
 
-    # 1. 删旧边
+    # 1. 删旧边（限定同 subject，避免跨学科误删）
     deleted, _ = KnowledgeEdge.objects.filter(
         source_type='tree',
         institution=kp.institution,
+        source__subject=kp.subject,
+        target__subject=kp.subject,
     ).filter(
         models.Q(source=kp) | models.Q(target=kp)
     ).delete()

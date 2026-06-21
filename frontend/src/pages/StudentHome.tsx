@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
-import { CalendarCheck, ChatCircle, BookOpen, FileText, Trophy, Brain, ArrowRight, CheckCircle, Clock } from '@phosphor-icons/react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { CalendarCheck, ChatCircle, BookOpen, FileText, Trophy, Brain, ArrowRight, CheckCircle, Clock, Fire, Target, Lightning } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -32,10 +33,20 @@ interface StudyPlan {
   task_progress: { total: number; completed: number; skipped: number };
 }
 
+interface DashboardStats {
+  checkin_streak: number;
+  total_attempted: number;
+  correct_count: number;
+  accuracy: number;
+  mastered_count: number;
+  study_streak: number;
+}
+
 export function StudentHome() {
   const navigate = useNavigate();
   const [activePlan, setActivePlan] = useState<StudyPlan | null>(null);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
   useEffect(() => {
     api.get('/ai/plans/').catch(() => ({ data: { results: [] } })).then((res: any) => {
@@ -45,6 +56,11 @@ export function StudentHome() {
         api.get(`/ai/plans/${active.id}/`).then(r => setActivePlan(r.data)).catch(() => {});
       }
     }).finally(() => setLoading(false));
+
+    // Fetch learning stats
+    api.get('/users/me/report-card/').then((r: any) => {
+      setStats(r.data?.stats || null);
+    }).catch(() => {});
   }, []);
 
   const todayTasks = activePlan
@@ -112,6 +128,56 @@ export function StudentHome() {
             </button>
           ))}
         </div>
+
+        {/* Stats Cards */}
+        {stats && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10">
+            <Card className="border-border/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
+                  <Fire className="w-5 h-5 text-orange-500" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold tabular-nums">{stats.checkin_streak}</p>
+                  <p className="text-xs text-muted-foreground">连续打卡</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-border/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                  <Lightning className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold tabular-nums">{stats.total_attempted}</p>
+                  <p className="text-xs text-muted-foreground">已练题目</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-border/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                  <Target className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold tabular-nums">{stats.accuracy != null ? `${Math.round(stats.accuracy)}%` : '—'}</p>
+                  <p className="text-xs text-muted-foreground">正确率</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-border/50">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
+                  <Brain className="w-5 h-5 text-purple-500" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold tabular-nums">{stats.mastered_count}</p>
+                  <p className="text-xs text-muted-foreground">已掌握</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Today's Tasks */}
         {todayTasks.length > 0 && (

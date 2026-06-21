@@ -15,7 +15,7 @@ import {
 import { PageWrapper } from '@/components/PageWrapper';
 import {
   Plus, Pencil, Trash, Sparkle, CaretDown, CaretRight,
-  Spinner, Books, CheckCircle, CalendarCheck, Users, Clock, Lightning, ChartBar,
+  Spinner, Books, CheckCircle, CalendarCheck, Users, Clock, Lightning, ChartBar, FilePdf,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { TeachingPlanAnalytics } from '@/components/TeachingPlanAnalytics';
@@ -193,7 +193,7 @@ export default function LessonPlans() {
 
   /* ── inline week edit ── */
 
-  const startEditWeek = (wp: WeekPlan) => { setEditingWeek(wp.week); setWeekForm({ ...wp }); };
+  const startEditWeek = (wp: WeekPlan) => { setEditingWeek(wp.week); setWeekForm({ ...wp }); setExpandedWeeks(prev => new Set(prev).add(wp.week)); };
   const cancelEditWeek = () => setEditingWeek(null);
 
   const saveWeekInline = async () => {
@@ -204,6 +204,21 @@ export default function LessonPlans() {
     await api.put(`/courses/teaching-plans/${selectedPlan.id}/`, { weekly_plans: updated });
     setEditingWeek(null); refreshPlan(selectedPlan.id);
     toast.success('已保存');
+  };
+
+  /* ── actions ── */
+
+  const downloadPDF = async (planId: number, title: string) => {
+    try {
+      const res = await api.get(`/courses/teaching-plans/${planId}/pdf/`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `教学计划-${title}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('PDF 已下载');
+    } catch { toast.error('PDF 导出失败'); }
   };
 
   /* ── AI actions ── */
@@ -349,11 +364,16 @@ export default function LessonPlans() {
                       <h3 className="text-sm font-bold tracking-tight">{plan.title}</h3>
                       <Badge variant="secondary" className="text-[10px]">{plan.subject}</Badge>
                     </div>
-                    <Button variant="apple-outline" size="sm" className="gap-1"
-                      onClick={ai.weeks} disabled={!!aiLoading}>
-                      <Sparkle className={`w-3.5 h-3.5 ${aiLoading === `plan-${plan.id}` ? 'animate-spin' : ''}`} />
-                      {aiLoading === `plan-${plan.id}` ? 'AI 正在分析学期内容…' : plan.weekly_plans?.length ? '重新生成周计划' : 'AI 生成整学期周计划'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" className="gap-1" onClick={() => downloadPDF(plan.id, plan.title)}>
+                        <FilePdf className="w-3.5 h-3.5" />导出 PDF
+                      </Button>
+                      <Button variant="apple-outline" size="sm" className="gap-1"
+                        onClick={ai.weeks} disabled={!!aiLoading}>
+                        <Sparkle className={`w-3.5 h-3.5 ${aiLoading === `plan-${plan.id}` ? 'animate-spin' : ''}`} />
+                        {aiLoading === `plan-${plan.id}` ? 'AI 正在分析学期内容…' : plan.weekly_plans?.length ? '重新生成周计划' : 'AI 生成整学期周计划'}
+                      </Button>
+                    </div>
                   </div>
 
                   {/* analytics toggle */}
@@ -380,42 +400,51 @@ export default function LessonPlans() {
                           {isExpanded ? <CaretDown className="w-4 h-4 shrink-0 text-muted-foreground" /> : <CaretRight className="w-4 h-4 shrink-0 text-muted-foreground" />}
                           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground w-16 shrink-0">第 {week} 周</span>
 
-                          {isEditing ? (
-                            <div className="flex-1 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                              <Input className="h-7 text-xs flex-1" placeholder="主题" value={weekForm.topic}
-                                onChange={e => setWeekForm({ ...weekForm, topic: e.target.value })} />
-                              <Input className="h-7 text-xs flex-1" placeholder="教学目标"
-                                value={weekForm.objectives} onChange={e => setWeekForm({ ...weekForm, objectives: e.target.value })} />
-                              <Input className="h-7 text-xs w-32" placeholder="材料"
-                                value={weekForm.materials} onChange={e => setWeekForm({ ...weekForm, materials: e.target.value })} />
-                              <Button size="sm" variant="apple" className="h-7 text-[10px]" onClick={saveWeekInline}>保存</Button>
-                              <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={cancelEditWeek}>取消</Button>
+                          <div className="flex-1 flex items-center gap-2 min-w-0">
+                            <span className={`text-sm truncate ${!wp?.topic ? 'text-muted-foreground/50 italic' : 'font-medium'}`}>
+                              {wp?.topic || '未设置'}
+                            </span>
+                            {wp?.materials && <span className="text-[11px] text-muted-foreground truncate hidden sm:inline max-w-[140px]">{wp.materials}</span>}
+                            <div className="ml-auto flex items-center gap-1 shrink-0">
+                              {lessons.length > 0 && <Badge variant="secondary" className="text-[10px]">{lessons.length}课时</Badge>}
+                              <Button size="sm" variant="ghost" className="h-7" onClick={e => { e.stopPropagation(); wp ? startEditWeek(wp) : startEditWeek({ week, topic: '', objectives: '', kp_ids: [], materials: '' }); }}>
+                                <Pencil className="w-3 h-3" />
+                              </Button>
                             </div>
-                          ) : (
-                            <div className="flex-1 flex items-center gap-2 min-w-0">
-                              <span className={`text-sm truncate ${!wp?.topic ? 'text-muted-foreground/50 italic' : 'font-medium'}`}>
-                                {wp?.topic || '未设置'}
-                              </span>
-                              {wp?.materials && <span className="text-[11px] text-muted-foreground truncate hidden sm:inline max-w-[140px]">{wp.materials}</span>}
-                              <div className="ml-auto flex items-center gap-1 shrink-0">
-                                {lessons.length > 0 && <Badge variant="secondary" className="text-[10px]">{lessons.length}课时</Badge>}
-                                <Button size="sm" variant="ghost" className="h-7" onClick={e => { e.stopPropagation(); wp ? startEditWeek(wp) : startEditWeek({ week, topic: '', objectives: '', kp_ids: [], materials: '' }); }}>
-                                  <Pencil className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          )}
+                          </div>
                         </button>
 
                         {/* expanded week content */}
                         {isExpanded && (
                           <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                            {!isEditing && wp?.topic && (
+                            {isEditing ? (
+                              <div className="space-y-3 bg-background rounded-lg p-4 border border-border/50">
+                                <div>
+                                  <Label htmlFor={`week-topic-${week}`} className="text-xs">周主题</Label>
+                                  <Input id={`week-topic-${week}`} placeholder="如：函数基础" value={weekForm.topic}
+                                    onChange={e => setWeekForm({ ...weekForm, topic: e.target.value })} />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`week-obj-${week}`} className="text-xs">教学目标</Label>
+                                  <Textarea id={`week-obj-${week}`} rows={2} placeholder="本周学生应掌握的知识和技能" value={weekForm.objectives}
+                                    onChange={e => setWeekForm({ ...weekForm, objectives: e.target.value })} />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`week-mat-${week}`} className="text-xs">教学材料</Label>
+                                  <Input id={`week-mat-${week}`} placeholder="如：PPT、实验器材、练习题" value={weekForm.materials}
+                                    onChange={e => setWeekForm({ ...weekForm, materials: e.target.value })} />
+                                </div>
+                                <div className="flex items-center gap-2 pt-1">
+                                  <Button size="sm" variant="apple" onClick={saveWeekInline}>保存</Button>
+                                  <Button size="sm" variant="ghost" onClick={cancelEditWeek}>取消</Button>
+                                </div>
+                              </div>
+                            ) : wp?.topic ? (
                               <div className="text-xs space-y-1 bg-background rounded-lg p-3 border border-border/50">
                                 <p><span className="font-bold text-muted-foreground">教学目标：</span>{wp.objectives || '未设置'}</p>
                                 <p><span className="font-bold text-muted-foreground">教学材料：</span>{wp.materials || '未设置'}</p>
                               </div>
-                            )}
+                            ) : null}
 
                             {/* lessons */}
                             {lessons.map(lesson => (
@@ -574,7 +603,7 @@ export default function LessonPlans() {
 
       {/* ══════ Lesson Dialog ══════ */}
       <Dialog open={lessonDialog} onOpenChange={setLessonDialog}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingLesson ? '编辑教案' : '新建教案'}</DialogTitle>
             <DialogDescription>
@@ -608,20 +637,34 @@ export default function LessonPlans() {
                       }}><Plus className="w-3 h-3 mr-1" />添加环节</Button>
                   </div>
                   {(editingLesson.activities || []).map((a, i) => (
-                    <div key={i} className="grid grid-cols-12 gap-1.5 items-start bg-muted/20 p-2 rounded-lg">
-                      <Input className="col-span-3 h-7 text-[11px]" placeholder="环节" value={a.name}
-                        onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], name: e.target.value }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
-                      <Input className="col-span-2 h-7 text-[11px]" type="number" placeholder="分钟" value={a.duration}
-                        onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], duration: Number(e.target.value) || 0 }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
-                      <Input className="col-span-5 h-7 text-[11px]" placeholder="内容" value={a.description}
-                        onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], description: e.target.value }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
-                      <Button type="button" variant="ghost" size="icon" className="col-span-2 h-7 w-7"
-                        onClick={async () => {
-                          const acts = (editingLesson.activities || []).filter((_, j) => j !== i);
-                          await api.put(`/courses/lesson-plans/${editingLesson.id}/`, { activities: acts.length > 0 ? acts : null });
-                          if (selectedId) refreshPlan(selectedId);
-                        }}><Trash className="w-3 h-3 text-destructive" /></Button>
-                    </div>
+                    <Card key={i}>
+                      <CardContent className="p-3 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-muted-foreground">环节 {i + 1}</span>
+                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
+                            onClick={async () => {
+                              const acts = (editingLesson.activities || []).filter((_, j) => j !== i);
+                              await api.put(`/courses/lesson-plans/${editingLesson.id}/`, { activities: acts.length > 0 ? acts : null });
+                              if (selectedId) refreshPlan(selectedId);
+                            }}><Trash className="w-3.5 h-3.5 text-destructive" /></Button>
+                        </div>
+                        <div>
+                          <Label className="text-xs">环节名称</Label>
+                          <Input placeholder="如：导入、讲解、练习" value={a.name}
+                            onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], name: e.target.value }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">时长（分钟）</Label>
+                          <Input type="number" placeholder="分钟" value={a.duration}
+                            onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], duration: Number(e.target.value) || 0 }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">环节描述</Label>
+                          <Textarea rows={2} placeholder="描述该环节的具体内容和安排" value={a.description}
+                            onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], description: e.target.value }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
+                        </div>
+                      </CardContent>
+                    </Card>
                   ))}
                   {editingLesson.activities && editingLesson.activities.length > 0 && (
                     <Button type="button" size="sm" variant="outline"

@@ -122,6 +122,12 @@ if _APP_ON('interviews'):
     urlpatterns.append(path("api/interviews/", include("interviews.urls")))
 if _APP_ON('payments'):
     urlpatterns.append(path("api/payments/", include("payments.urls")))
+# API v1 (external, API Key auth)
+from users.views_api import ExternalQuestionListView, ExternalAnalyticsView
+urlpatterns += [
+    path("api/v1/questions/", ExternalQuestionListView.as_view(), name='v1-questions'),
+    path("api/v1/analytics/overview/", ExternalAnalyticsView.as_view(), name='v1-analytics'),
+]
 urlpatterns.append(path("api/", include("core.urls")))
 urlpatterns += [
     re_path(r'^media/(?P<path>.*)$', media_serve, name='media-serve'),

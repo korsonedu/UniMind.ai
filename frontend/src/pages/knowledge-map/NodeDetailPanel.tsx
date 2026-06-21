@@ -1,5 +1,6 @@
 import React from 'react';
-import { Target, ArrowsOut, FileText, Video, X, Stack } from '@phosphor-icons/react';
+import { useNavigate } from 'react-router-dom';
+import { Target, ArrowsOut, FileText, Video, X, Stack, Lightning } from '@phosphor-icons/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import type { KPNode } from './types';
 import { LEVEL_COLORS } from './types';
 
@@ -20,6 +22,7 @@ export const NodeDetailPanel: React.FC<{
   masteryData?: Record<string, string>;
 }> = ({ node, details, loading, onQuestionClick, onClear, masteryData = {} }) => {
   const { t } = useTranslation('knowledgeMap');
+  const navigate = useNavigate();
 
   const MASTERY_LABELS: Record<string, string> = {
     mastered: t('masteryLevels.mastered'), stable: t('masteryLevels.stable'), learning: t('masteryLevels.learning'), weak: t('masteryLevels.weak'), unknown: t('masteryLevels.unknown'),
@@ -66,6 +69,19 @@ export const NodeDetailPanel: React.FC<{
                 {processMathContent(node.description)}
               </ReactMarkdown>
             </div>
+          )}
+
+          {node.level === 'kp' && (
+            <Button
+              onClick={() => {
+                toast.success(`小宇会帮你练习「${node.name}」`);
+                navigate('/xiaoyu');
+              }}
+              className="w-full rounded-xl h-9 text-xs font-bold bg-indigo-500 hover:bg-indigo-600 text-white"
+            >
+              <Lightning className="h-3.5 w-3.5 mr-1.5" />
+              开始练习
+            </Button>
           )}
 
           {loading ? (

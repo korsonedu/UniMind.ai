@@ -33,7 +33,26 @@
     "promptShort": "Prompt",
     "platformAnalytics": "数据分析",
     "members": "成员管理",
-    "billing": "方案与账单"
+    "billing": "方案与账单",
+    "marketplace": "内容市场",
+    "apiPlatform": "API 平台",
+    "assignments": "作业",
+    "myAssignments": "我的作业",
+    "lessonPlans": "教案",
+    "questionBank": "题库",
+    "knowledgeTree": "知识树",
+    "gradebook": "成绩册",
+    "campuses": "校区管理",
+    "achievements": "成就",
+    "reportCard": "成绩报告",
+    "parentMode": "家长模式",
+    "marketplaceShort": "市场",
+    "apiPlatformShort": "API",
+    "parentShort": "家长",
+    "studentsShort": "学员",
+    "dashboardShort": "看板",
+    "gradeShort": "成绩",
+    "xiaoyuShort": "小宇"
   },
   "userMenu": {
     "accountPreferences": "账户与偏好",
@@ -110,5 +129,8 @@
     "upgradeTo": "升级到 {{plan}} 方案",
     "later": "稍后再说",
     "learnMore": "了解详情"
-  }
+  },
+  "studentView": "学生视角",
+  "previewStudent": "预览学生端",
+  "exitStudentPreview": "退出学生端预览"
 }

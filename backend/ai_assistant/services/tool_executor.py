@@ -76,6 +76,10 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'list_courses': lambda a: "浏览课程库" + (f"（{a.get('subject', '')}）" if a.get('subject') else ""),
         'list_questions': lambda a: "浏览题库" + (f"（{a.get('kp_name', '')}）" if a.get('kp_name') else ""),
         'list_articles': lambda a: "浏览文章库" + (f"（搜索: {a.get('query', '')}）" if a.get('query') else ""),
+        'list_lesson_plans': lambda a: "浏览教案库" + (f"（{a.get('subject', '')}）" if a.get('subject') else ""),
+        'get_report_card': lambda a: "生成学习报告",
+        'get_my_courses': lambda a: "查询我的课程",
+        'get_my_achievements': lambda a: "查看我的成就",
     }
     generator = labels.get(tool_name)
     if generator:
@@ -151,6 +155,10 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'list_courses': lambda r: f"共 {r.get('total', 0)} 门课程",
         'list_questions': lambda r: f"共 {r.get('total', 0)} 道题",
         'list_articles': lambda r: f"共 {r.get('total', 0)} 篇文章",
+        'list_lesson_plans': lambda r: f"共 {r.get('total', 0)} 份教案",
+        'get_report_card': lambda r: f"正确率 {r.get('accuracy', 0)}%，掌握 {r.get('mastered_count', 0)} 个知识点",
+        'get_my_courses': lambda r: f"共 {len(r.get('courses', []))} 门课程",
+        'get_my_achievements': lambda r: f"已解锁 {r.get('unlocked_count', len(r.get('unlocked', [])))} 个成就",
     }
 
     fn = summaries.get(tool_name)
@@ -179,6 +187,7 @@ class BaseToolExecutor:
         self.user = user
         self._allowed_tool_names = None
         self.institution = institution or getattr(user, 'institution', None)
+        self.class_id: int | None = None  # 由 chat_dispatch 注入，当前选中的班级 ID
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
         self.tool_call_log: list = []     # MUTAR 轨迹：工具调用序列
@@ -813,4 +822,107 @@ class PlannerToolExecutor(BaseToolExecutor):
             }
 
         return {"error": f"未知模式: {mode}，支持 generate 或 submit"}
+
+    # ── 成绩报告 ──
+
+    def _handle_get_report_card(self, args: Dict) -> Dict:
+        """获取学生成绩单/学习报告。"""
+        try:
+            from users.views import _build_report_data
+            data = _build_report_data(self.user)
+            stats = data.get('stats', {})
+            return {
+                'checkin_streak': stats.get('checkin_streak', 0),
+                'total_attempted': stats.get('total_attempted', 0),
+                'accuracy': stats.get('accuracy', 0),
+                'mastered_count': stats.get('mastered_count', 0),
+                'elo_score': data.get('student', {}).get('elo_score', 0),
+                'subjects': [r['subject'] for r in data.get('radar', [])],
+                'recent_exams': [
+                    {'score': e['total_score'], 'max': e['max_score'], 'date': e['created_at'][:10]}
+                    for e in data.get('exams', [])[:5]
+                ],
+                'achievements': [
+                    {'name': a['name'], 'icon': a['icon'], 'date': a['unlocked_at'][:10]}
+                    for a in data.get('achievements', [])[:5]
+                ],
+            }
+        except Exception as e:
+            logger.exception("get_report_card failed")
+            return {"error": f"获取报告失败: {str(e)}"}
+
+    def _handle_get_my_courses(self, args: Dict) -> Dict:
+        """获取学生当前班级分配的课程列表。"""
+        from courses.models import Course
+        from users.models import Class, ClassCourse
+
+        member_class = None
+        class_id = None
+        if self.user.institution:
+            member_class = Class.objects.filter(
+                students=self.user, institution=self.user.institution
+            ).first()
+            if member_class:
+                class_id = member_class.id
+
+        if not class_id:
+            return {"courses": [], "message": "你尚未加入任何班级，请联系老师"}
+
+        course_ids = ClassCourse.objects.filter(
+            class_obj_id=class_id,
+        ).values_list('course_id', flat=True)
+
+        courses = Course.objects.filter(
+            id__in=course_ids,
+        ).order_by('title')[:20]
+
+        return {
+            'courses': [
+                {'id': c.id, 'title': c.title, 'subject': c.subject or ''}
+                for c in courses
+            ],
+            'class_name': member_class.name if member_class else '',
+        }
+
+    def _handle_get_my_achievements(self, args: Dict) -> Dict:
+        """获取学生已解锁的成就列表。"""
+        from users.models import UserAchievement
+        qs = UserAchievement.objects.filter(
+            user=self.user,
+        ).select_related('achievement').order_by('-unlocked_at')
+
+        unlocked = [
+            {
+                'name': ua.achievement.name,
+                'description': ua.achievement.description,
+                'icon': ua.achievement.icon,
+                'category': ua.achievement.category,
+                'unlocked_at': ua.unlocked_at.isoformat() if ua.unlocked_at else '',
+            }
+            for ua in qs
+        ]
+
+        # Also get all achievements with progress
+        from users.models import Achievement, DailyCheckIn
+        all_achs = Achievement.objects.filter(is_active=True).order_by('category', 'threshold')
+        all_list = []
+        unlocked_keys = {ua.achievement.key for ua in qs}
+        checkin = DailyCheckIn.objects.filter(user=self.user).order_by('-date').first()
+        streak_val = checkin.streak if checkin else 0
+
+        for a in all_achs:
+            entry = {
+                'name': a.name,
+                'description': a.description,
+                'icon': a.icon,
+                'category': a.category,
+                'unlocked': a.key in unlocked_keys,
+            }
+            all_list.append(entry)
+
+        return {
+            'unlocked_count': len(unlocked),
+            'unlocked': unlocked[:8],
+            'all': all_list,
+        }
 

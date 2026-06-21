@@ -119,11 +119,13 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/courses/` | 课程/视频 API |
 | `/api/courses/oss/multipart/init/` | POST 初始化 OSS 分片上传（返回签名 URL 列表） |
 | `/api/courses/oss/multipart/complete/` | POST 确认 OSS 分片完成 + 创建课程 |
+| `/api/courses/teaching-plans/` | GET/POST 教学计划（班级-学科-周进度）+ analytics/ + ai-generate-weeks/lessons/ |
+| `/api/courses/lesson-plans/` | GET/POST 教案（AI 生成 + 活动编辑）+ ai-generate/ |
 | `/api/qa/` | 答疑系统 API |
 | `/api/study/` | 自习室 API |
 | `/api/interviews/` | AI 模拟面试 API |
 | `/api/notifications/` | 站内通知 API |
-| `/api/payments/` | 支付 API（订单/支付配置） |
+| `/api/payments/` | 支付 API（订单/订阅/Stripe Billing webhook） |
 | `/health` | GET 健康检查 |
 | `/ws/ai/chat/<bot_id>/` | WS Agent 对话（工作台/小宇，多步可见） |
 
