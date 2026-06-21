@@ -135,8 +135,13 @@ class InterviewTextTurnView(APIView):
         if not user_text:
             return Response({"error": "text 不能为空"}, status=400)
 
-        last_turn = session.turns.order_by("-turn_number", "-created_at").first()
-        next_turn_number = int(last_turn.turn_number + 1) if last_turn else 1
+        from django.db import transaction
+        with transaction.atomic():
+            last_turn = (
+                session.turns.select_for_update()
+                .order_by("-turn_number", "-created_at").first()
+            )
+            next_turn_number = int(last_turn.turn_number + 1) if last_turn else 1
 
         turn_started = time.monotonic()
         candidate_feedback = ""
@@ -211,8 +216,13 @@ class InterviewReplyStreamView(APIView):
         if not user_text:
             return Response({"error": "text 不能为空"}, status=400)
 
-        last_turn = session.turns.order_by("-turn_number", "-created_at").first()
-        next_turn_number = int(last_turn.turn_number + 1) if last_turn else 1
+        from django.db import transaction
+        with transaction.atomic():
+            last_turn = (
+                session.turns.select_for_update()
+                .order_by("-turn_number", "-created_at").first()
+            )
+            next_turn_number = int(last_turn.turn_number + 1) if last_turn else 1
 
         # 保存 candidate turn（annotation 跳过，流式场景不做逐句反馈）
         candidate_turn = InterviewTurn.objects.create(

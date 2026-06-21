@@ -68,6 +68,8 @@ class SuperuserUserListView(APIView):
         if 'is_staff' in request.data:
             user.is_staff = bool(request.data['is_staff'])
         if 'is_superuser' in request.data:
+            if bool(request.data['is_superuser']) and not request.data.get('confirm_superuser'):
+                return Response({'detail': '设置超级管理员需要二次确认 (confirm_superuser=true)'}, status=400)
             user.is_superuser = bool(request.data['is_superuser'])
         user.save()
 

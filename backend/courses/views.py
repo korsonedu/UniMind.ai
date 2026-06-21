@@ -253,9 +253,23 @@ class OSSMultipartCompleteView(APIView):
             institution=inst,
         )
         if str(album_obj_id or "").strip() and str(album_obj_id) != "0":
-            course.album_obj_id = _safe_int(album_obj_id, None)
+            album_id = _safe_int(album_obj_id, None)
+            if inst and album_id:
+                from courses.models import Album
+                album = Album.objects.filter(id=album_id).first()
+                if not album or album.institution_id != inst.id:
+                    return Response({"error": "专辑不属于当前机构"}, status=403)
+            course.album_obj_id = album_id
         if str(knowledge_point_id or "").strip() and str(knowledge_point_id) != "0":
-            course.knowledge_point_id = _safe_int(knowledge_point_id, None)
+            kp_id = _safe_int(knowledge_point_id, None)
+            if inst and kp_id:
+                from quizzes.models import KnowledgePoint
+                kp = KnowledgePoint.objects.filter(id=kp_id).first()
+                if not kp:
+                    return Response({"error": "知识点不存在"}, status=400)
+                if kp.institution_id and kp.institution_id != inst.id:
+                    return Response({"error": "知识点不属于当前机构"}, status=403)
+            course.knowledge_point_id = kp_id
         if cover_image:
             course.cover_image = cover_image
         if courseware:
