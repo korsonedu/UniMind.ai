@@ -329,7 +329,7 @@ export default function MyAssignments() {
                   {expanded && (
                     <div className="px-4 pb-4 space-y-3 border-t border-border/50 pt-3">
                       <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                        <MarkdownContent content={q.text}}
+                        <MarkdownContent content={q.text} />
                       </div>
                       <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
                         <span className="text-[11px] font-bold text-muted-foreground">你的答案</span>
@@ -339,7 +339,7 @@ export default function MyAssignments() {
                         <div className="p-3 rounded-lg bg-emerald-50/50 border border-emerald-200/50 dark:bg-emerald-950/20 dark:border-emerald-800/30">
                           <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">参考答案</span>
                           <div className="text-sm mt-1 leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                            <MarkdownContent content={q.correct_answer}}
+                            <MarkdownContent content={q.correct_answer} />
                           </div>
                         </div>
                       )}
@@ -347,7 +347,7 @@ export default function MyAssignments() {
                         <div className="p-3 rounded-lg bg-blue-50/50 border border-blue-200/50 dark:bg-blue-950/20 dark:border-blue-800/30">
                           <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">AI 批改反馈</span>
                           <div className="text-sm mt-1 leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                            <MarkdownContent content={q.feedback}}
+                            <MarkdownContent content={q.feedback} />
                           </div>
                         </div>
                       )}
@@ -355,7 +355,7 @@ export default function MyAssignments() {
                         <div className="p-3 rounded-lg bg-amber-50/50 border border-amber-200/50 dark:bg-amber-950/20 dark:border-amber-800/30">
                           <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">详细分析</span>
                           <div className="text-sm mt-1 leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                            <MarkdownContent content={q.analysis}}
+                            <MarkdownContent content={q.analysis} />
                           </div>
                         </div>
                       )}
@@ -375,7 +375,7 @@ export default function MyAssignments() {
                   {q.kp_name && <span className="text-[10px] text-muted-foreground/40 ml-auto">{q.kp_name}</span>}
                 </div>
                 <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert mb-3">
-                  <MarkdownContent content={q.text}}
+                  <MarkdownContent content={q.text} />
                 </div>
                 {q.q_type === 'objective' && q.options?.length ? (
                   <div className="space-y-1.5">
