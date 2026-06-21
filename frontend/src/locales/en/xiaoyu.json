@@ -1,0 +1,96 @@
+{
+  "landingTitle": "XiaoYu makes learning more efficient. Conversation is learning.",
+  "landingDesc": "Your personal learning agent — from data analysis to knowledge explanation, all in one place.",
+  "botDisplayName": "XiaoYu",
+  "chatPlaceholder": "Chat with XiaoYu...",
+  "resetMessage": "Started a new conversation",
+  "typewriterWords": [
+    "Ask XiaoYu to create a study plan",
+    "Let XiaoYu analyze your weak areas",
+    "Ask XiaoYu to recommend courses",
+    "Let XiaoYu check your review progress"
+  ],
+  "skills": [
+    {
+      "label": "Analyze Weak Points",
+      "prompt": "Help me identify my weak areas and suggest improvements"
+    },
+    {
+      "label": "Create Study Plan",
+      "prompt": "Create a study plan based on my current status"
+    },
+    {
+      "label": "Review Tasks",
+      "prompt": "Show me what I need to review today"
+    },
+    {
+      "label": "Learning Overview",
+      "prompt": "Analyze my learning data and show the big picture"
+    },
+    {
+      "label": "Recommend Courses",
+      "prompt": "Recommend courses based on my weak areas"
+    },
+    {
+      "label": "Explain a Concept",
+      "prompt": "Please explain a knowledge point to me"
+    },
+    {
+      "label": "Analyze a Question",
+      "prompt": "Help me analyze the solution approach for this question"
+    },
+    {
+      "label": "Summarize Knowledge",
+      "prompt": "Help me summarize the key points of a topic"
+    },
+    {
+      "label": "Take Diagnostic Test",
+      "prompt": "Help me take a diagnostic test to assess my level"
+    },
+    {
+      "label": "Review Mistakes",
+      "prompt": "Help me analyze my mistakes and find weak areas"
+    },
+    {
+      "label": "Start Practice",
+      "prompt": "Give me a few questions to practice"
+    }
+  ],
+  "newUserTitle": "Start Your First Diagnostic Test",
+  "newUserDesc": "Understand your learning level in 5 minutes. XiaoYu will create a personalized study plan for you.",
+  "startDiagnostic": "Start Diagnostic",
+  "valuePropWeakPoints": "Pinpoint weak areas",
+  "valuePropPath": "Get a personalized learning path",
+  "valuePropProgress": "Track progress in real time",
+  "streakLabel": "Learning Streak",
+  "checkInToday": "Check In",
+  "checkingIn": "Checking in...",
+  "checkedIn": "✓ Checked In",
+  "daysUnit": "days",
+  "thisWeek": "This Week",
+  "questionsUnit": "questions",
+  "pendingReview": "Due for review",
+  "noPendingReview": "No reviews due",
+  "noExamYet": "No exams yet",
+  "accuracyLabel": "Accuracy",
+  "totalQuestions": "Total",
+  "recentExam": "Recent",
+  "ahead": "Ahead",
+  "behind": "Behind",
+  "noPlan": "No study plan yet",
+  "noPlanHint": "Chat with XiaoYu to create one",
+  "tasksCompleted": "Completed",
+  "tasksUnit": "tasks",
+  "progressLabel": "Progress",
+  "dayLabel": "Day",
+  "daysLabel": "",
+  "heatmapActive": "28-Day Activity",
+  "heatmapDefault": "Activity",
+  "heatmapLess": "Less",
+  "heatmapMore": "More",
+  "heatmapEmpty": "Your daily activity will appear here once you start learning",
+  "nextAchievement": "Next Achievement",
+  "achievementUnlocked": "{{count}} unlocked",
+  "heatmapTooltip": "{{date}}: {{count}} questions",
+  "adjustPlan": "Adjust Plan"
+}

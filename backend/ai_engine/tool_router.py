@@ -134,6 +134,21 @@ PLANNER_TOOLS_META = [
         description="为学生运行诊断测试",
         body="为新用户或需要重新评估的学生启动诊断测试。参数: user_id(int)=用户ID, subject(str)=学科(可选)。返回: 诊断题目列表。适用于：新用户首次使用、需要重新评估学习水平。不适用于：日常练习（用get_practice_questions）。",
     ),
+    ToolMeta(
+        name="get_report_card",
+        description="获取学生学习报告/成绩单",
+        body="查看完整学习报告。触发词：学习报告、成绩单、我学得怎么样、我的学习数据、学习统计。参数: 无。返回：打卡天数、总答题量、正确率、已掌握知识点、ELO分数、最近考试、已解锁成就。适用于：学生主动询问学习进展时。",
+    ),
+    ToolMeta(
+        name="get_my_courses",
+        description="获取学生当前班级的课程列表",
+        body="查看我的课程。触发词：我的课程、我在学什么、有什么课、课程列表。参数: 无。返回：课程标题、学科、班级名称。适用于：学生询问课程相关问题时。未加入班级时提示联系老师。",
+    ),
+    ToolMeta(
+        name="get_my_achievements",
+        description="获取学生成就列表和进度",
+        body="查看成就/徽章。触发词：我的成就、徽章、拿到了什么、成就进度。参数: 无。返回：已解锁成就列表、全部成就及解锁状态。适用于：学生询问成就进展时。",
+    ),
 ]
 
 EXAM_GENERATOR_TOOLS_META = [
@@ -236,21 +251,6 @@ EXAM_GENERATOR_TOOLS_META = [
         name="save_questions_to_bank",
         description="将生成的题目存入题库",
         body="把quick_generate生成的题目正式入库。触发词：入库、保存、存入题库、确认保留。参数: 无（自动使用最近一次quick_generate生成的题目）。返回：入库数量、题目ID列表（可用于assign_practice）。调用前应先render_visual让教师确认。不适用于：从题库抽题（用list_questions）。",
-    ),
-    ToolMeta(
-        name="get_report_card",
-        description="获取学生学习报告/成绩单",
-        body="查看完整学习报告。触发词：学习报告、成绩单、我学得怎么样、我的学习数据、学习统计。参数: 无。返回：打卡天数、总答题量、正确率、已掌握知识点、ELO分数、最近考试、已解锁成就。适用于：学生主动询问学习进展时。",
-    ),
-    ToolMeta(
-        name="get_my_courses",
-        description="获取学生当前班级的课程列表",
-        body="查看我的课程。触发词：我的课程、我在学什么、有什么课、课程列表。参数: 无。返回：课程标题、学科、班级名称。适用于：学生询问课程相关问题时。未加入班级时提示联系老师。",
-    ),
-    ToolMeta(
-        name="get_my_achievements",
-        description="获取学生成就列表和进度",
-        body="查看成就/徽章。触发词：我的成就、徽章、拿到了什么、成就进度。参数: 无。返回：已解锁成就列表、全部成就及解锁状态。适用于：学生询问成就进展时。",
     ),
 ]
 
@@ -508,7 +508,8 @@ EXAM_GENERATOR_INTENT_MAP = {
     },
     "browse": {
         "keywords": ["课程", "视频", "看看课程", "有什么课", "文章", "看看文章",
-                     "看看题库", "有什么题", "搜索题", "浏览", "资产", "有没有", "有哪些"],
+                     "看看题库", "有什么题", "搜索题", "浏览", "资产", "有没有", "有哪些",
+                     "教案", "教学计划", "看看教案"],
         "tools": [
             "list_courses", "list_questions", "list_articles", "list_lesson_plans",
         ],

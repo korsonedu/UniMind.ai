@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import api from '@/lib/api';
+import api, { streamFetch } from '@/lib/api';
 // processMathContent removed — LLM outputs LaTeX directly
 import { toast } from 'sonner';
 import type { AgentStep } from '@/hooks/useAgentChat';
@@ -241,13 +241,13 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     setInput('');
 
     try {
-      const res = await fetch('/api/ai/chat/stream/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ message: text, bot_id: bot.id, conversation_id: conversationIdRef.current, ...(getExtraPayloadRef.current?.() ?? {}) }),
-        signal: controller.signal,
-      });
+      const { url, init } = streamFetch('/api/ai/chat/stream/', {
+        message: text,
+        bot_id: bot.id,
+        conversation_id: conversationIdRef.current,
+        ...(getExtraPayloadRef.current?.() ?? {}),
+      }, controller.signal);
+      const res = await fetch(url, init);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 

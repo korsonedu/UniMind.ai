@@ -8,6 +8,7 @@ import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useTypewriter } from '@/hooks/useTypewriter';
+import ClassSelector from '@/components/ClassSelector';
 import ChatBubble from '@/components/ChatBubble';
 import { ToolStepMessage } from '@/components/AgentStepCard';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
@@ -383,6 +384,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       <TooltipContent side="top" className="text-[10px]">{toolbarAction.tooltip}</TooltipContent>
                     </Tooltip>
                   )}
+                  <ClassSelector />
                   <Button
                     onClick={() => doSend(input)}
                     disabled={loading || !input.trim()}
@@ -589,6 +591,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </Tooltip>
                   )}
                   <div className="flex-1" />
+                  <ClassSelector />
                   <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
                     className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
                     {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <PaperPlaneTilt className="h-4 w-4" />}

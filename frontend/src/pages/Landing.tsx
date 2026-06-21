@@ -187,7 +187,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
 };
 
 /* ────────────────────────────────────────────
-   Hero — white, full viewport (uses xiaoyu brand tokens)
+   Hero — white, full viewport
    ──────────────────────────────────────────── */
 
 const Hero: React.FC = () => {
@@ -236,10 +236,10 @@ const Hero: React.FC = () => {
         <div className="reveal reveal-delay-2">
           <button
             onClick={() => navigate('/promo/plus')}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[#d4d0f5] hover:border-[#2d2b6b] transition-all duration-300 cursor-pointer group bg-[#f0efff]"
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-xiaoyu-100 hover:border-xiaoyu-500 transition-all duration-300 cursor-pointer group bg-xiaoyu-50"
           >
-            <span className="text-[11px] font-semibold text-[#2d2b6b]">首批机构专享 · Growth 方案免费开放</span>
-            <ArrowRight className="h-3 w-3 text-[#2d2b6b] group-hover:translate-x-0.5 transition-transform" />
+            <span className="text-[11px] font-semibold text-xiaoyu-500">首批机构专享 · Growth 方案免费开放</span>
+            <ArrowRight className="h-3 w-3 text-xiaoyu-500 group-hover:translate-x-0.5 transition-transform" />
           </button>
         </div>
 
@@ -283,7 +283,7 @@ const StatsBar: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-16">
           {stats.map((item, i) => (
             <div key={item.label} className="text-center space-y-2">
-              <p className="text-5xl md:text-6xl font-bold tracking-tight text-[#2d2b6b]" style={{ fontFamily: '"DM Mono", monospace' }}>
+              <p className="text-5xl md:text-6xl font-bold tracking-tight text-xiaoyu-500" style={{ fontFamily: '"DM Mono", monospace' }}>
                 {displays[i]}
               </p>
               <p className="text-[12px] font-medium uppercase tracking-[0.2em] text-muted-foreground">{item.label}</p>
@@ -391,7 +391,7 @@ const Showcase: React.FC = () => {
     <section id="features" ref={sectionRef} className="py-28 md:py-36 px-6 relative overflow-hidden bg-background">
       <div className="max-w-6xl mx-auto relative z-10">
         <div className="reveal mb-20 text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b] mb-4">{t('features.label')}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-xiaoyu-500 mb-4">{t('features.label')}</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">{t('features.title')}</h2>
           <p className="text-base md:text-lg text-muted-foreground max-w-xl mx-auto mt-4">{t('features.subtitle')}</p>
         </div>
@@ -407,7 +407,7 @@ const Showcase: React.FC = () => {
             >
               {/* Text */}
               <div className={cn('flex-1 min-w-0', `reveal-delay-${i + 1}`)}>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#2d2b6b] mb-3">{item.subtitle}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-xiaoyu-500 mb-3">{item.subtitle}</p>
                 <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-4">{item.title}</h3>
                 <p className="text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
               </div>
@@ -456,10 +456,10 @@ const Testimonials: React.FC = () => {
               className="flex-shrink-0 w-[340px] mx-3 p-7 rounded-2xl border border-gray-100 bg-gray-50"
             >
               {/* Brand-colored opening quote */}
-              <p className="text-3xl font-bold leading-none mb-2 text-[#2d2b6b]">"</p>
+              <p className="text-3xl font-bold leading-none mb-2 text-xiaoyu-500">"</p>
               <p className="text-sm leading-relaxed text-unimind-text-secondary mb-5">{item.quote}</p>
               <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white bg-[#2d2b6b]">
+                <div className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white bg-xiaoyu-500">
                   {item.name[0]}
                 </div>
                 <div>
@@ -487,7 +487,7 @@ const HowItWorks: React.FC = () => {
     <section className="py-28 md:py-36 px-6 bg-card">
       <div className="max-w-4xl mx-auto">
         <div className="reveal text-center mb-20">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[#2d2b6b] mb-4">{t('how.label')}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-xiaoyu-500 mb-4">{t('how.label')}</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">{t('how.title')}</h2>
           <p className="text-sm text-muted-foreground max-w-lg mx-auto mt-4">{t('how.subtitle')}</p>
         </div>
@@ -497,7 +497,7 @@ const HowItWorks: React.FC = () => {
             <div key={step.title} className={cn('reveal', `reveal-delay-${i + 1}`)}>
               <div className="flex items-start gap-8 py-10">
                 {/* Big number */}
-                <span className="text-6xl md:text-7xl font-bold shrink-0 leading-none select-none text-[#2d2b6b]" style={{ fontFamily: '"DM Mono", monospace' }}>
+                <span className="text-6xl md:text-7xl font-bold shrink-0 leading-none select-none text-xiaoyu-500" style={{ fontFamily: '"DM Mono", monospace' }}>
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <div className="pt-1">
@@ -537,7 +537,7 @@ const Subjects: React.FC = () => {
           {allTags.map((tag) => (
             <span
               key={tag}
-              className="text-[13px] font-medium px-4 py-2 rounded-full border border-gray-200 text-unimind-text-secondary hover:text-[#2d2b6b] hover:border-[#d4d0f5] hover:bg-[#f0efff] transition-all duration-300 cursor-default"
+              className="text-[13px] font-medium px-4 py-2 rounded-full border border-gray-200 text-unimind-text-secondary hover:text-xiaoyu-500 hover:border-xiaoyu-100 hover:bg-xiaoyu-50 transition-all duration-300 cursor-default"
             >
               {tag}
             </span>
@@ -575,7 +575,7 @@ const FinalCTA: React.FC = () => {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 reveal reveal-delay-1">
           <Button
             size="lg"
-            className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0 bg-[#2d2b6b] hover:bg-[#232260]"
+            className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0 bg-xiaoyu-500 hover:bg-xiaoyu-600"
             onClick={() => navigate('/register')}
           >
             {t('cta.button')}
@@ -657,12 +657,12 @@ const ReferralBanner: React.FC = () => {
   };
 
   return (
-    <section className="py-16 px-6 bg-[#f8f7ff]">
+    <section className="py-16 px-6 bg-xiaoyu-50">
       <div className="max-w-2xl mx-auto text-center space-y-4">
-        <h3 className="text-xl font-bold text-[#1a1a2e]">邀请朋友，一起学习</h3>
+        <h3 className="text-xl font-bold text-foreground">邀请朋友，一起学习</h3>
         <p className="text-muted-foreground">复制你的专属推荐链接，朋友注册后双方都将获得奖励</p>
         <div className="flex items-center justify-center gap-2">
-          <code className="bg-white border px-4 py-2 rounded-lg text-sm font-mono text-[#1a1a2e] select-all">{refLink}</code>
+          <code className="bg-white border px-4 py-2 rounded-lg text-sm font-mono text-foreground select-all">{refLink}</code>
           <Button size="sm" onClick={handleCopy} variant="outline">
             {copied ? '已复制' : '复制链接'}
           </Button>

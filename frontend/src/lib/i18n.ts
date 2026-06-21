@@ -25,6 +25,7 @@ import zhTestSession from '@/locales/zh/testSession.json';
 import zhMaintenance from '@/locales/zh/maintenance.json';
 import zhPlan from '@/locales/zh/plan.json';
 import zhDiagnostic from '@/locales/zh/diagnostic.json';
+import zhXiaoyu from '@/locales/zh/xiaoyu.json';
 
 // ── 英文 ──
 import enCommon from '@/locales/en/common.json';
@@ -49,6 +50,7 @@ import enTestSession from '@/locales/en/testSession.json';
 import enMaintenance from '@/locales/en/maintenance.json';
 import enPlan from '@/locales/en/plan.json';
 import enDiagnostic from '@/locales/en/diagnostic.json';
+import enXiaoyu from '@/locales/en/xiaoyu.json';
 
 i18n
   .use(LanguageDetector)
@@ -78,6 +80,7 @@ i18n
         maintenance: zhMaintenance,
         plan: zhPlan,
         diagnostic: zhDiagnostic,
+        xiaoyu: zhXiaoyu,
       },
       en: {
         common: enCommon,
@@ -102,6 +105,7 @@ i18n
         maintenance: enMaintenance,
         plan: enPlan,
         diagnostic: enDiagnostic,
+        xiaoyu: enXiaoyu,
       },
     },
     fallbackLng: 'zh',

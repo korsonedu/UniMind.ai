@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle, Fire, Trophy } from '@phosphor-icons/react';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import { Button } from '@/components/ui/button';
@@ -7,19 +8,7 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import type { Bot, ConversationSession } from '@/hooks/useAgentConversation';
 
-const SKILLS = [
-  { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
-  { icon: CalendarCheck, label: '制定学习计划', prompt: '根据我的现状制定一份学习计划' },
-  { icon: CheckCircle, label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容' },
-  { icon: ChartBar, label: '学习数据总览', prompt: '帮我分析学习数据，看看整体情况' },
-  { icon: BookOpen, label: '推荐课程', prompt: '根据我的薄弱点推荐适合的课程' },
-  { icon: Lightbulb, label: '解释一个概念', prompt: '请帮我讲解一个知识点' },
-  { icon: ChatCircleText, label: '分析一道题', prompt: '帮我分析这道题的解题思路' },
-  { icon: Brain, label: '总结知识点', prompt: '帮我总结某个知识点的核心内容' },
-  { icon: Stethoscope, label: '做诊断测试', prompt: '帮我做一次诊断测试，了解我的学习水平' },
-  { icon: WarningCircle, label: '查看错题', prompt: '帮我分析错题，找出薄弱环节' },
-  { icon: PlayCircle, label: '开始刷题', prompt: '帮我出几道题练习一下' },
-];
+const SKILL_ICONS = [Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle];
 
 interface DashPlan {
   id: number; title: string;
@@ -50,6 +39,7 @@ interface DashData {
 
 export const XiaoYu: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation('xiaoyu');
   const [dash, setDash] = useState<DashData | null>(null);
   const [hasConversation, setHasConversation] = useState(false);
 
@@ -59,13 +49,16 @@ export const XiaoYu: React.FC = () => {
     }).catch(() => {});
   }, []);
 
+  const rawSkills = t('skills', { returnObjects: true }) as Array<{ label: string; prompt: string }>;
+  const SKILLS = rawSkills.map((s, i) => ({ icon: SKILL_ICONS[i], label: s.label, prompt: s.prompt }));
+
   const stats = dash?.stats;
   const plan = dash?.plan;
   const reviews = dash?.reviews;
   const lastExam = dash?.exams?.[0];
 
   const [checkingIn, setCheckingIn] = useState(false);
-  const [checkedIn, setCheckedIn] = useState(stats?.today_checked_in || false);
+  const [checkedIn, setCheckedIn] = useState(false);
 
   useEffect(() => {
     if (stats?.today_checked_in !== undefined) setCheckedIn(stats.today_checked_in);
@@ -75,44 +68,38 @@ export const XiaoYu: React.FC = () => {
     setCheckingIn(true);
     try {
       await api.post('/users/me/checkin/');
-      setCheckedIn(true);
-      // Refresh dashboard to get updated checkin_streak + achievements
+      // Refetch dashboard to update streak + checked-in status
       const r = await api.get('/ai/dashboard/');
-      if (r.data) setDash(r.data);
+      if (r.data) {
+        setDash(r.data);
+      }
     } catch {
-      // already checked in or network error — ignore
     } finally {
       setCheckingIn(false);
     }
   };
 
-  /* ── Heatmap helper: chunk flat 28-day array into rows of 7 ── */
+  /* Heatmap helper — horizontal row, newest on right */
   const renderHeatmap = (days: { date: string; count: number }[]) => {
-    const rows: { date: string; count: number }[][] = [];
-    for (let i = 0; i < days.length; i += 7) rows.push(days.slice(i, i + 7));
     return (
-      <div className="flex gap-[4px]">
-        {rows.map((row, ri) => (
-          <div key={ri} className="flex flex-col gap-[4px]">
-            {row.map((d, di) => {
-              const level = d.count === 0 ? 0 : d.count <= 3 ? 1 : d.count <= 8 ? 2 : d.count <= 15 ? 3 : 4;
-              return (
-                <div
-                  key={`${ri}-${di}`}
-                  className={cn(
-                    'w-[15px] h-[15px] rounded-[3px] border border-border/20',
-                    level === 0 && 'bg-muted/40',
-                    level === 1 && 'bg-xiaoyu-100',
-                    level === 2 && 'bg-xiaoyu-200',
-                    level === 3 && 'bg-xiaoyu-400',
-                    level === 4 && 'bg-xiaoyu-500',
-                  )}
-                  title={`${d.date}: ${d.count} 道题`}
-                />
-              );
-            })}
-          </div>
-        ))}
+      <div className="flex items-center gap-[3px] flex-wrap">
+        {days.map((d, i) => {
+          const level = d.count === 0 ? 0 : d.count <= 3 ? 1 : d.count <= 8 ? 2 : d.count <= 15 ? 3 : 4;
+          return (
+            <div
+              key={i}
+              className={cn(
+                'w-[14px] h-[14px] rounded-[2px]',
+                level === 0 && 'bg-muted/30',
+                level === 1 && 'bg-xiaoyu-100',
+                level === 2 && 'bg-xiaoyu-200',
+                level === 3 && 'bg-xiaoyu-400',
+                level === 4 && 'bg-xiaoyu-500',
+              )}
+              title={`${d.date}: ${d.count} 次练习`}
+            />
+          );
+        })}
       </div>
     );
   };
@@ -120,26 +107,26 @@ export const XiaoYu: React.FC = () => {
   const landingBanner = !hasConversation && stats ? (
     <div className="animate-in fade-in duration-500">
       {stats.is_new_user ? (
-        /* ── 新用户：诊断 CTA + value-prop pills ── */
+        /* New user: diagnostic CTA + value-prop pills */
         <div className="space-y-8">
           <div className="rounded-2xl bg-card border border-border/40 p-8 text-center">
             <div className="w-14 h-14 rounded-2xl bg-xiaoyu-50 dark:bg-xiaoyu-500/20 flex items-center justify-center mx-auto mb-4">
               <Stethoscope className="w-7 h-7 text-xiaoyu-500 dark:text-xiaoyu-300" />
             </div>
-            <h3 className="text-lg font-bold text-foreground">开始你的第一次诊断测试</h3>
+            <h3 className="text-lg font-bold text-foreground">{t('newUserTitle')}</h3>
             <p className="text-sm text-muted-foreground mt-1.5 mb-5 max-w-sm mx-auto leading-relaxed">
-              5 分钟了解你的学习水平，小宇会为你定制个性化学习计划
+              {t('newUserDesc')}
             </p>
             <Button size="sm" onClick={() => navigate('/diagnostic')} className="rounded-full px-6 h-9 bg-xiaoyu-500 hover:bg-xiaoyu-600 text-white">
-              开始诊断
+              {t('startDiagnostic')}
             </Button>
           </div>
 
           <div className="flex flex-wrap justify-center gap-3">
             {[
-              { icon: Target, label: '定位薄弱知识点' },
-              { icon: Brain, label: '获得个性化学习路径' },
-              { icon: ChartBar, label: '实时追踪学习进度' },
+              { icon: Target, label: t('valuePropWeakPoints') },
+              { icon: Brain, label: t('valuePropPath') },
+              { icon: ChartBar, label: t('valuePropProgress') },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-muted/40 border border-border/30">
                 <item.icon className="w-4 h-4 text-xiaoyu-500/60 dark:text-xiaoyu-300/60" />
@@ -148,19 +135,20 @@ export const XiaoYu: React.FC = () => {
             ))}
           </div>
         </div>
+
       ) : (
-        /* ── 回访用户：2x2 不对称 Bento Grid ── */
+        /* Returning user: 2x2 asymmetric Bento Grid */
         <div className="space-y-4">
-          {/* Row 1: 连续学习 + 正确率 */}
+          {/* Row 1: streak + accuracy */}
           <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-4">
-            {/* 连续学习 + 打卡 */}
+            {/* Streak + check-in */}
             <div className="rounded-2xl bg-card border border-border/40 p-5 flex flex-col justify-between">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-lg bg-xiaoyu-50 dark:bg-xiaoyu-500/20 flex items-center justify-center shrink-0">
                     <Fire className="w-4 h-4 text-xiaoyu-500 dark:text-xiaoyu-300" />
                   </div>
-                  <span className="text-[13px] font-semibold text-foreground/80">连续学习</span>
+                  <span className="text-[13px] font-semibold text-foreground/80">{t('streakLabel')}</span>
                 </div>
                 <button
                   onClick={handleCheckIn}
@@ -173,44 +161,44 @@ export const XiaoYu: React.FC = () => {
                     checkingIn && 'opacity-60 pointer-events-none',
                   )}
                 >
-                  {checkingIn ? '签到中...' : checkedIn ? '✓ 已打卡' : '今日打卡'}
+                  {checkingIn ? t('checkingIn') : checkedIn ? t('checkedIn') : t('checkInToday')}
                 </button>
               </div>
               <p className="text-4xl font-black tracking-tighter tabular-nums text-xiaoyu-500 dark:text-xiaoyu-300">
-                {stats.streak_days}<span className="text-base font-normal text-muted-foreground ml-1">天</span>
+                {stats.streak_days}<span className="text-base font-normal text-muted-foreground ml-1">{t('daysUnit')}</span>
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
                 <span className="text-muted-foreground/60">
-                  本周 <span className="font-semibold text-foreground/70">{stats.weekly_activity}</span> 题
+                  {t('thisWeek')} <span className="font-semibold text-foreground/70">{stats.weekly_activity}</span> {t('questionsUnit')}
                 </span>
                 {reviews && reviews.due_count > 0 ? (
                   <span className="text-muted-foreground/60">
-                    待复习 <span className="font-semibold text-amber-600">{reviews.due_count}</span> 题
+                    {t('pendingReview')} <span className="font-semibold text-amber-600">{reviews.due_count}</span> {t('questionsUnit')}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground/40">暂无待复习</span>
+                  <span className="text-muted-foreground/40">{t('noPendingReview')}</span>
                 )}
               </div>
             </div>
 
-            {/* 正确率 */}
+            {/* Accuracy */}
             <div className="rounded-2xl bg-card border border-border/40 p-5 flex flex-col justify-between">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="w-8 h-8 rounded-lg bg-xiaoyu-50 dark:bg-xiaoyu-500/20 flex items-center justify-center shrink-0">
                   <Trophy className="w-4 h-4 text-xiaoyu-500 dark:text-xiaoyu-300" />
                 </div>
-                <span className="text-[13px] font-semibold text-foreground/80">正确率</span>
+                <span className="text-[13px] font-semibold text-foreground/80">{t('accuracyLabel')}</span>
               </div>
               <p className="text-4xl font-black tracking-tighter tabular-nums text-xiaoyu-500 dark:text-xiaoyu-300">
                 {stats.accuracy}<span className="text-base font-normal text-muted-foreground ml-0.5">%</span>
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
                 <span className="text-muted-foreground/60">
-                  累计 <span className="font-semibold text-foreground/70">{stats.total_attempted}</span> 题
+                  {t('totalQuestions')} <span className="font-semibold text-foreground/70">{stats.total_attempted}</span> {t('questionsUnit')}
                 </span>
                 {lastExam ? (
                   <span className="text-muted-foreground/60">
-                    最近 <span className="font-semibold text-foreground/70">{lastExam.total_score}/{lastExam.max_score}</span>
+                    {t('recentExam')} <span className="font-semibold text-foreground/70">{lastExam.total_score}/{lastExam.max_score}</span>
                     {lastExam.elo_change !== 0 && (
                       <span className={cn('ml-1 font-semibold', lastExam.elo_change >= 0 ? 'text-emerald-600' : 'text-red-500')}>
                         {lastExam.elo_change >= 0 ? '+' : ''}{lastExam.elo_change}
@@ -218,13 +206,13 @@ export const XiaoYu: React.FC = () => {
                     )}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground/40">暂无考试</span>
+                  <span className="text-muted-foreground/40">{t('noExamYet')}</span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Row 2: 学习计划 — 全宽 */}
+          {/* Row 2: Learning plan - full width */}
           <div className="rounded-2xl bg-card border border-border/40 p-5">
             {plan ? (
               <div>
@@ -233,60 +221,65 @@ export const XiaoYu: React.FC = () => {
                     <CalendarCheck className="w-4 h-4 text-xiaoyu-500 dark:text-xiaoyu-300" />
                   </div>
                   <span className="text-[13px] font-semibold text-foreground/80 truncate">{plan.title}</span>
-                  {plan.progress_delta !== null && plan.progress_delta !== 0 && (
+                  {plan.progress_delta != null && !Number.isNaN(plan.progress_delta) && plan.progress_delta !== 0 && (
                     <span className={cn('text-[11px] font-semibold ml-auto shrink-0', plan.progress_delta > 0 ? 'text-emerald-600' : 'text-red-500')}>
-                      {plan.progress_delta > 0 ? '领先' : '落后'} {Math.abs(plan.progress_delta)}%
+                      {plan.progress_delta > 0 ? t('ahead') : t('behind')} {Math.abs(plan.progress_delta).toFixed(0)}%
                     </span>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[12px] text-muted-foreground/60">
-                  <span>已完成 <span className="font-semibold text-foreground/70">{plan.completed_tasks}/{plan.total_tasks}</span> 任务</span>
-                  <span>进度 <span className="font-semibold text-xiaoyu-500 dark:text-xiaoyu-300">{plan.progress_pct}%</span></span>
+                  <span>{t('tasksCompleted')} <span className="font-semibold text-foreground/70">{plan.completed_tasks}/{plan.total_tasks}</span> {t('tasksUnit')}</span>
+                  <span>{t('progressLabel')} <span className="font-semibold text-xiaoyu-500 dark:text-xiaoyu-300">{plan.progress_pct}%</span></span>
                   {plan.total_days > 0 && (
-                    <span>第 <span className="font-semibold text-foreground/70">{plan.elapsed_days}/{plan.total_days}</span> 天</span>
+                    <span>{t('dayLabel')} <span className="font-semibold text-foreground/70">{plan.elapsed_days}/{plan.total_days}</span> {t('daysLabel')}</span>
                   )}
+                </div>
+                <div className="mt-3 pt-3 border-t border-border/30">
+                  <Button size="sm" variant="outline" onClick={() => navigate('/plan')} className="h-8 text-[12px] gap-1">
+                    {t('adjustPlan')}
+                  </Button>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-6 text-center">
                 <CalendarCheck className="w-6 h-6 text-muted-foreground/15 mb-2" />
-                <p className="text-[12px] text-muted-foreground/50">暂无学习计划</p>
-                <p className="text-[10px] text-muted-foreground/30 mt-0.5">和小宇对话来制定</p>
+                <p className="text-[12px] text-muted-foreground/50">{t('noPlan')}</p>
+                <p className="text-[10px] text-muted-foreground/30 mt-0.5">{t('noPlanHint')}</p>
               </div>
             )}
           </div>
 
-          {/* Row 3: 活跃热力图 */}
+          {/* Row 3: Activity heatmap */}
           <div className="rounded-2xl bg-card border border-border/40 p-5">
             <p className="text-[12px] font-semibold text-foreground/70 mb-3">
-              {stats.heatmap_days && stats.heatmap_days.length > 0 ? '28 天学习活跃度' : '学习活跃度'}
+              {stats.heatmap_days && stats.heatmap_days.length > 0 ? t('heatmapActive') : t('heatmapDefault')}
             </p>
             {stats.heatmap_days && stats.heatmap_days.length > 0 ? (
               <>
                 {renderHeatmap(stats.heatmap_days)}
                 <div className="flex items-center justify-end gap-1 mt-3 text-[10px] text-muted-foreground/40">
-                  <span>少</span>
+                  <span>{t('heatmapLess')}</span>
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-muted/40 border border-border/20" />
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-xiaoyu-100" />
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-xiaoyu-200" />
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-xiaoyu-400" />
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-xiaoyu-500" />
-                  <span>多</span>
+                  <span>{t('heatmapMore')}</span>
                 </div>
               </>
             ) : (
-              <p className="text-[12px] text-muted-foreground/40 py-3 text-center">开始学习后这里将显示你的每日活跃情况</p>
+              <p className="text-[12px] text-muted-foreground/40 py-3 text-center">{t('heatmapEmpty')}</p>
             )}
           </div>
 
-          {/* Row 4: 成就进度 — 下一个要解锁的成就 */}
+          {/* Row 4: Achievements */}
           {stats.next_achievements && stats.next_achievements.length > 0 && (
             <div className="rounded-2xl bg-card border border-border/40 p-5">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[12px] font-semibold text-foreground/70">
-                  下一个成就
+                  {t('nextAchievement')}
                   {stats.unlocked_achievement_count > 0 && (
-                    <span className="text-muted-foreground/40 ml-1">（已解锁 {stats.unlocked_achievement_count} 个）</span>
+                    <span className="text-muted-foreground/40 ml-1">({t('achievementUnlocked', { count: stats.unlocked_achievement_count })})</span>
                   )}
                 </p>
               </div>
@@ -313,12 +306,12 @@ export const XiaoYu: React.FC = () => {
       layout="inline"
       findBot={(bots) => bots.find((b: Bot) => b.name === '小宇')}
       skills={SKILLS}
-      typewriterWords={['让小宇帮你制定学习计划', '让小宇分析薄弱知识点', '让小宇推荐适合的课程', '让小宇看看复习进度']}
-      chatPlaceholder="和小宇对话..."
-      resetMessage="已开始新对话"
-      landingTitle="小宇XiaoYu让学习更具效率。对话即学习。"
-      landingDescription="最懂你的学习agent，从数据分析到知识讲解，一个入口搞定"
-      botDisplayName="小宇"
+      typewriterWords={t('typewriterWords', { returnObjects: true }) as string[]}
+      chatPlaceholder={t('chatPlaceholder')}
+      resetMessage={t('resetMessage')}
+      landingTitle={t('landingTitle')}
+      landingDescription={t('landingDesc')}
+      botDisplayName={t('botDisplayName')}
       landingBanner={landingBanner}
       onHasConversation={setHasConversation}
       onDeleteSession={() => {}}

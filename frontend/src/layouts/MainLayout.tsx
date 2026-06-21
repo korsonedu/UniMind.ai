@@ -201,8 +201,8 @@ export const MainLayout: React.FC = () => {
   // ── 超级管理员 ──
   const superAdminNavItems: NavItem[] = [
     { to: '/institution/admin', icon: Buildings, label: t('layout:nav.institutionAdmin') },
-    { to: '/marketplace', icon: Storefront, label: '内容市场' },
-    { to: '/api-platform', icon: Code, label: 'API 平台' },
+    { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplace') },
+    { to: '/api-platform', icon: Code, label: t('layout:nav.apiPlatform') },
     { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteCodes') },
     { to: '/platform-analytics', icon: ChartLineUp, label: t('layout:nav.platformAnalytics') },
     { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
@@ -210,24 +210,24 @@ export const MainLayout: React.FC = () => {
 
   // ── 教师端 ──
   const teacherNavItems: NavItem[] = [
-    { to: '/workbench', icon: Robot, label: '工作台' },
-    { to: '/teacher-assignments', icon: CalendarCheck, label: '作业' },
-    { to: '/lesson-plans', icon: ClipboardText, label: '教案' },
-    { to: '/questions', icon: Brain, label: '题库' },
-    { to: '/courses', icon: BookOpen, label: '课程' },
-    { to: '/articles', icon: FileText, label: '文章' },
-    { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
+    { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
+    { to: '/teacher-assignments', icon: CalendarCheck, label: t('layout:nav.assignments') },
+    { to: '/lesson-plans', icon: ClipboardText, label: t('layout:nav.lessonPlans') },
+    { to: '/questions', icon: Brain, label: t('layout:nav.questionBank') },
+    { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
+    { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
+    { to: '/knowledge-tree', icon: TreeStructure, label: t('layout:nav.knowledgeTree') },
     { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
-    { to: '/marketplace', icon: Storefront, label: '内容市场' },
+    { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplace') },
     ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') } as NavItem] : []),
   ];
 
   // ── 学生端 9 套件 ──
   const studentNavItems: NavItem[] = [
     { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyu') },
-    { to: '/my-assignments', icon: CalendarCheck, label: '我的作业' },
-    { to: '/achievements', icon: Trophy, label: '成就' },
-    { to: '/report-card', icon: FileText, label: '成绩报告' },
+    { to: '/my-assignments', icon: CalendarCheck, label: t('layout:nav.myAssignments') },
+    { to: '/achievements', icon: Trophy, label: t('layout:nav.achievements') },
+    { to: '/report-card', icon: FileText, label: t('layout:nav.reportCard') },
     { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
     { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
     { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeMap') },
@@ -239,15 +239,15 @@ export const MainLayout: React.FC = () => {
   ];
 
   const registrarNavItems: NavItem[] = [
-    { to: '/workbench', icon: Robot, label: '工作台' },
+    { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
     { to: '/institution/students', icon: Users, label: t('layout:nav.members') },
     ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') } as NavItem] : []),
   ];
 
   // ── 家长端 ──
   const parentNavItems: NavItem[] = [
-    { to: '/parent', icon: Users, label: '家长模式' },
-    { to: '/settings', icon: Gear, label: '设置' },
+    { to: '/parent', icon: Users, label: t('layout:nav.parentMode') },
+    { to: '/settings', icon: Gear, label: t('layout:nav.settings') },
   ];
 
   const navItems: NavItem[] = isSuperAdmin
@@ -263,24 +263,24 @@ export const MainLayout: React.FC = () => {
   const mobileNavItems: NavItem[] = isSuperAdmin
     ? [
         { to: '/institution', icon: Buildings, label: t('layout:nav.institutionShort') },
-        { to: '/marketplace', icon: Storefront, label: '市场' },
-        { to: '/api-platform', icon: Code, label: 'API' },
+        { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplaceShort') },
+        { to: '/api-platform', icon: Code, label: t('layout:nav.apiPlatformShort') },
         { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteShort') },
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptShort') },
       ]
     : isParent ? [
-        { to: '/parent', icon: Users, label: '家长' },
-        { to: '/settings', icon: Gear, label: '设置' },
+        { to: '/parent', icon: Users, label: t('layout:nav.parentShort') },
+        { to: '/settings', icon: Gear, label: t('layout:nav.settings') },
       ]
     : isInstRegistrar ? [
-        { to: '/workbench', icon: Robot, label: '工作台' },
-        { to: '/institution/students', icon: Users, label: '学员' },
-        ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: '维护' }] : []),
+        { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
+        { to: '/institution/students', icon: Users, label: t('layout:nav.studentsShort') },
+        ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') }] : []),
       ]
     : effectiveIsInstStudent ? [
-        { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort', '小宇') },
-        { to: '/my-assignments', icon: CalendarCheck, label: '作业' },
-        { to: '/achievements', icon: Trophy, label: '成就' },
+        { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort') },
+        { to: '/my-assignments', icon: CalendarCheck, label: t('layout:nav.myAssignments') },
+        { to: '/achievements', icon: Trophy, label: t('layout:nav.achievements') },
         { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
         { to: '/tests', icon: Trophy, label: t('layout:nav.testsShort') },
         { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeShort') },
@@ -288,16 +288,16 @@ export const MainLayout: React.FC = () => {
         { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
       ]
     : [
-        { to: '/workbench', icon: Robot, label: '工作台' },
-        { to: '/teacher-assignments', icon: CalendarCheck, label: '作业' },
-        { to: '/lesson-plans', icon: ClipboardText, label: '教案' },
-        { to: '/questions', icon: Brain, label: '题库' },
-        { to: '/courses', icon: BookOpen, label: '课程' },
-        { to: '/articles', icon: FileText, label: '文章' },
-        { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
-        { to: '/qa', icon: ChatCircleText, label: '答疑' },
-        { to: '/marketplace', icon: Storefront, label: '市场' },
-        ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: '维护' }] : []),
+        { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
+        { to: '/teacher-assignments', icon: CalendarCheck, label: t('layout:nav.assignments') },
+        { to: '/lesson-plans', icon: ClipboardText, label: t('layout:nav.lessonPlans') },
+        { to: '/questions', icon: Brain, label: t('layout:nav.questionBank') },
+        { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
+        { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
+        { to: '/knowledge-tree', icon: TreeStructure, label: t('layout:nav.knowledgeTree') },
+        { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
+        { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplaceShort') },
+        ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') }] : []),
       ];
 
   const visibleMobileNavItems = mobileNavItems.filter(itemVisible);
@@ -355,9 +355,9 @@ export const MainLayout: React.FC = () => {
               {studentPreview && (
                 <div className="flex items-center gap-1.5 text-xs text-primary font-bold mr-auto">
                   <Eye className="h-3 w-3" />
-                  <span className="opacity-70">学生视角</span>
+                  <span className="opacity-70">{t('layout:studentView')}</span>
                   <button onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="ml-1 px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-bold">
-                    退出预览
+                    {t('layout:exitPreview')}
                   </button>
                 </div>
               )}
@@ -404,18 +404,18 @@ export const MainLayout: React.FC = () => {
                     <>
                       <DropdownMenuItem onClick={() => navigate('/institution/students')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Users className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">学员管理</span>
+                        <span className="font-bold text-xs">{t("layout:nav.students")}</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setStudentPreview(true); navigate('/xiaoyu'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Eye className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">预览学生端</span>
+                        <span className="font-bold text-xs">{t('layout:previewStudent')}</span>
                       </DropdownMenuItem>
                     </>
                   )}
                   {studentPreview && (
                     <DropdownMenuItem onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <EyeSlash className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">退出学生端预览</span>
+                      <span className="font-bold text-xs">{t('layout:exitStudentPreview')}</span>
                     </DropdownMenuItem>
                   )}
                   {user?.role === 'admin' && (

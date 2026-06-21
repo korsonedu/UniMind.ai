@@ -3,7 +3,6 @@ import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, 
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import AgentChatLayout from '@/components/AgentChatLayout';
-import ClassSelector from '@/components/ClassSelector';
 import QuestionPanel from '@/pages/workbench/QuestionPanel';
 import { BulkInitCard } from '@/pages/workbench/BulkInitCard';
 import { QuickStartPanel } from '@/pages/workbench/QuickStartPanel';
@@ -354,9 +353,6 @@ export default function Workbench() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header: ClassSelector — Slack 模型下的频道选择器 */}
-      <ClassSelector />
-
       <div className="flex flex-1 min-h-0">
       {/* Left: QuestionPanel or Copilot Overview — 仅对话时显示，landing 隐藏 */}
       {hasConversation && (viewMode !== 'questions' || generatedQuestions.length === 0 ? (

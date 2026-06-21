@@ -8,6 +8,7 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
 import { Check, Spinner, GraduationCap, ChalkboardTeacher } from '@phosphor-icons/react';
 import { DirectionSelector } from '@/components/DirectionSelector';
+import { PLAN_DIRECTION_LIMITS } from '@/constants/version';
 
 // Teacher flow: steps 2-6 (role selected at step 1)
 const TEACHER_STEPS = 5;
@@ -58,8 +59,6 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
       setTimeout(() => setAnimState('visible'), 300);
     }, 300);
   }, []);
-
-  const PLAN_DIRECTION_LIMITS: Record<string, number> = { starter: 1, growth: 3, enterprise: 999999 };
 
   // Don't show if: no user / has institution / platform admin
   // Exception: show success screen (done=true) even after institution is created

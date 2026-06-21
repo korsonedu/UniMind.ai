@@ -1,0 +1,96 @@
+{
+  "landingTitle": "小宇XiaoYu让学习更具效率。对话即学习。",
+  "landingDesc": "最懂你的学习agent，从数据分析到知识讲解，一个入口搞定",
+  "botDisplayName": "小宇",
+  "chatPlaceholder": "和小宇对话...",
+  "resetMessage": "已开始新对话",
+  "typewriterWords": [
+    "让小宇帮你制定学习计划",
+    "让小宇分析薄弱知识点",
+    "让小宇推荐适合的课程",
+    "让小宇看看复习进度"
+  ],
+  "skills": [
+    {
+      "label": "分析薄弱点",
+      "prompt": "帮我分析薄弱知识点，给出提升建议"
+    },
+    {
+      "label": "制定学习计划",
+      "prompt": "根据我的现状制定一份学习计划"
+    },
+    {
+      "label": "查看复习任务",
+      "prompt": "帮我看看今天有哪些需要复习的内容"
+    },
+    {
+      "label": "学习数据总览",
+      "prompt": "帮我分析学习数据，看看整体情况"
+    },
+    {
+      "label": "推荐课程",
+      "prompt": "根据我的薄弱点推荐适合的课程"
+    },
+    {
+      "label": "解释一个概念",
+      "prompt": "请帮我讲解一个知识点"
+    },
+    {
+      "label": "分析一道题",
+      "prompt": "帮我分析这道题的解题思路"
+    },
+    {
+      "label": "总结知识点",
+      "prompt": "帮我总结某个知识点的核心内容"
+    },
+    {
+      "label": "做诊断测试",
+      "prompt": "帮我做一次诊断测试，了解我的学习水平"
+    },
+    {
+      "label": "查看错题",
+      "prompt": "帮我分析错题，找出薄弱环节"
+    },
+    {
+      "label": "开始刷题",
+      "prompt": "帮我出几道题练习一下"
+    }
+  ],
+  "newUserTitle": "开始你的第一次诊断测试",
+  "newUserDesc": "5 分钟了解你的学习水平，小宇会为你定制个性化学习计划",
+  "startDiagnostic": "开始诊断",
+  "valuePropWeakPoints": "定位薄弱知识点",
+  "valuePropPath": "获得个性化学习路径",
+  "valuePropProgress": "实时追踪学习进度",
+  "streakLabel": "连续学习",
+  "checkInToday": "今日打卡",
+  "checkingIn": "签到中...",
+  "checkedIn": "✓ 已打卡",
+  "daysUnit": "天",
+  "thisWeek": "本周",
+  "questionsUnit": "题",
+  "pendingReview": "待复习",
+  "noPendingReview": "暂无待复习",
+  "noExamYet": "暂无考试",
+  "accuracyLabel": "正确率",
+  "totalQuestions": "累计",
+  "recentExam": "最近",
+  "ahead": "领先",
+  "behind": "落后",
+  "noPlan": "暂无学习计划",
+  "noPlanHint": "和小宇对话来制定",
+  "tasksCompleted": "已完成",
+  "tasksUnit": "任务",
+  "progressLabel": "进度",
+  "dayLabel": "第",
+  "daysLabel": "天",
+  "heatmapActive": "28 天学习活跃度",
+  "heatmapDefault": "学习活跃度",
+  "heatmapLess": "少",
+  "heatmapMore": "多",
+  "heatmapEmpty": "开始学习后这里将显示你的每日活跃情况",
+  "nextAchievement": "下一个成就",
+  "achievementUnlocked": "已解锁 {{count}} 个",
+  "heatmapTooltip": "{{date}}: {{count}} 道题",
+  "adjustPlan": "调整计划"
+}

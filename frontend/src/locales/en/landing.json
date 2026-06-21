@@ -333,6 +333,152 @@
           "REST API access"
         ]
       }
+    ],
+    "rows": [
+      [
+        "30 questions / month",
+        "100 questions / month",
+        "Unlimited questions",
+        "Unlimited questions"
+      ],
+      [
+        "AI auto-grading",
+        "AI auto-grading",
+        "AI auto-grading",
+        "AI auto-grading"
+      ],
+      [
+        "Memorix adaptive review",
+        "Memorix adaptive review",
+        "Memorix adaptive review",
+        "Memorix adaptive review"
+      ],
+      [
+        "Question bank · Manual",
+        "Question bank · Manual",
+        "Question bank · Manual + Auto",
+        "Question bank · Manual + Auto"
+      ],
+      [
+        "Mistake review center",
+        "Mistake review center",
+        "Mistake review center",
+        "Mistake review center"
+      ],
+      [
+        "Basic analytics",
+        "Student reports",
+        "Class comparison · Export",
+        "Advanced dashboard · AI insights"
+      ],
+      [
+        "30 students",
+        "50 students",
+        "200 students",
+        "Unlimited students"
+      ],
+      [
+        "1 teacher · 1 subject",
+        "1 teacher · 3 subjects",
+        "5 teachers · All subjects",
+        "Unlimited teachers & subjects"
+      ],
+      [
+        "—",
+        "XiaoYu chat 500 turns/mo",
+        "XiaoYu chat 3,000 turns/mo",
+        "XiaoYu chat unlimited"
+      ],
+      [
+        "—",
+        "PDF export 10/mo",
+        "PDF export 100/mo",
+        "PDF export unlimited"
+      ],
+      [
+        "—",
+        "—",
+        "Course videos · AI outlines",
+        "Course videos · AI outlines"
+      ],
+      [
+        "—",
+        "—",
+        "Interactive knowledge graph",
+        "Interactive knowledge graph"
+      ],
+      [
+        "—",
+        "—",
+        "Online Q&A system",
+        "Online Q&A system"
+      ],
+      [
+        "—",
+        "—",
+        "Teacher collaboration · RBAC",
+        "Teacher collaboration · RBAC"
+      ],
+      [
+        "—",
+        "—",
+        "Online study rooms",
+        "Online study rooms"
+      ],
+      [
+        "—",
+        "—",
+        "AI mock exams 10/mo",
+        "AI mock exams 50/mo"
+      ],
+      [
+        "—",
+        "2,000 questions",
+        "10,000 questions",
+        "Unlimited questions"
+      ],
+      [
+        "—",
+        "Up to 3 classes",
+        "Up to 10 classes",
+        "Unlimited classes"
+      ],
+      [
+        "500 MB storage",
+        "5 GB storage",
+        "50 GB storage",
+        "Unlimited storage"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "White-label deployment"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "Data sovereignty"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "Custom knowledge trees"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "REST API access"
+      ],
+      [
+        "—",
+        "—",
+        "—",
+        "Dedicated account manager"
+      ]
     ]
   },
   "faq": {

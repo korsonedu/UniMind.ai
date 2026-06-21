@@ -70,4 +70,47 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * Build fetch RequestInit for SSE streaming requests.
+ * Injects the same context that axios interceptors provide:
+ *   - credentials: 'include' (Cookie auth)
+ *   - X-Campus-Context header (sub-institution context switch)
+ *   - preview_institution query param (platform admin preview)
+ *
+ * Usage:
+ *   const { url, init } = streamFetch('/ai/chat/stream/', { message: 'hi' }, controller.signal);
+ *   const res = await fetch(url, init);
+ */
+export function streamFetch(
+  path: string,
+  body?: Record<string, unknown>,
+  signal?: AbortSignal,
+  extraHeaders?: Record<string, string>,
+): { url: string; init: RequestInit } {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...extraHeaders,
+  };
+  if (_campusContextId) {
+    headers['X-Campus-Context'] = String(_campusContextId);
+  }
+
+  let urlPath = path.startsWith('/') ? path : `/${path}`;
+  if (_previewInstitutionId) {
+    const sep = urlPath.includes('?') ? '&' : '?';
+    urlPath = `${urlPath}${sep}preview_institution=${_previewInstitutionId}`;
+  }
+
+  return {
+    url: urlPath,
+    init: {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: body ? JSON.stringify(body) : undefined,
+      signal,
+    },
+  };
+}
+
 export default api;

@@ -13,7 +13,7 @@ import { InlineVisualCard } from '@/components/InlineVisualCard';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/ActionCardsRenderer';
 import type { AgentStep } from '@/hooks/useAgentChat';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
-import api from '@/lib/api';
+import api, { streamFetch } from '@/lib/api';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -68,20 +68,14 @@ export function CopilotPanel() {
     abortRef.current = controller;
 
     try {
-      const response = await fetch('/api/ai/chat/stream/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-          'X-CSRFToken': getCsrfToken(),
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          message: trimmed,
-          bot_type: 'exam_generator',
-        }),
-        signal: controller.signal,
+      const { url, init } = streamFetch('/api/ai/chat/stream/', {
+        message: trimmed,
+        bot_type: 'exam_generator',
+      }, controller.signal, {
+        Accept: 'text/event-stream',
+        'X-CSRFToken': getCsrfToken(),
       });
+      const response = await fetch(url, init);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
