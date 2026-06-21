@@ -185,13 +185,13 @@ export const VideoLesson: React.FC = () => {
   };
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center gap-4 text-center bg-background">
+    <div className="min-h-dvh flex flex-col items-center justify-center gap-4 text-center bg-background">
       <div className="h-10 w-10 border-4 border-border border-t-primary rounded-full animate-spin" />
       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">{t('loading')}</p>
     </div>
   );
 
-  if (!course) return <div className="h-screen flex items-center justify-center font-bold">{t('notFound')}</div>;
+  if (!course) return <div className="min-h-dvh flex items-center justify-center font-bold">{t('notFound')}</div>;
 
   return (
     <div className="animate-in fade-in duration-700 text-left">
@@ -338,7 +338,7 @@ export const VideoLesson: React.FC = () => {
                      <Link key={c.id} to={`/course/${c.id}`}>
                        <div className="p-4 rounded-2xl border bg-transparent border-transparent hover:bg-card hover:border-border hover:shadow-md transition-all text-left mb-2 group">
                           <div className="aspect-video bg-slate-100 rounded-xl mb-3 overflow-hidden">
-                             {c.cover_image && <img src={c.cover_image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
+                             {c.cover_image && <img src={c.cover_image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />}
                           </div>
                           <div className="space-y-1">
                              <span className="text-[9px] font-bold opacity-30 uppercase">{t('lessonNumber', { i: i + 1 })}</span>

@@ -20,7 +20,7 @@ export const Loading: React.FC<LoadingProps> = ({
     <div
       className={cn(
         'flex flex-col items-center justify-center gap-3',
-        fullScreen && 'h-screen w-screen fixed inset-0 bg-background z-50',
+        fullScreen && 'h-dvh w-screen fixed inset-0 bg-background z-50',
         className
       )}
     >

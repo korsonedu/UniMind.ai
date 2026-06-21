@@ -44,13 +44,13 @@ export const ArticleDetail: React.FC = () => {
   }, [id]);
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center gap-4 text-center">
+    <div className="min-h-dvh flex flex-col items-center justify-center gap-4 text-center">
       <Spinner className="h-10 w-10 animate-spin text-muted-foreground/40" />
       <p className="text-[11px] font-medium text-muted-foreground">Loading...</p>
     </div>
   );
 
-  if (!article) return <div className="h-screen flex items-center justify-center font-bold">Article Not Found</div>;
+  if (!article) return <div className="min-h-dvh flex items-center justify-center font-bold">Article Not Found</div>;
 
   const processedContent = processMathContent(article.content);
 

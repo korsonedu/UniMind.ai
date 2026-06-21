@@ -608,7 +608,7 @@ const Footer: React.FC = () => {
         <div className="flex flex-col md:flex-row items-start justify-between gap-8 mb-8">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
+              <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" loading="lazy" />
               <span className="font-bold text-sm text-foreground tracking-tight">UniMind.ai</span>
             </div>
             <p className="text-[12px] text-muted-foreground">{t('footer.tagline')}</p>

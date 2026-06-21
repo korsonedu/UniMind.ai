@@ -88,6 +88,34 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: SidebarItemPr
   ) : content;
 };
 
+// ── Module-level pure helpers ──
+
+const isMobileAllowedPath = (pathname: string) =>
+  pathname === '/' ||
+  pathname === '/articles' ||
+  pathname.startsWith('/article/') ||
+  pathname === '/qa' ||
+  pathname.startsWith('/qa/') ||
+  pathname === '/study' ||
+  pathname === '/knowledge-map' ||
+  pathname.startsWith('/knowledge-map/') ||
+  pathname === '/tests' ||
+  pathname.startsWith('/tests/') ||
+  pathname === '/settings' ||
+  pathname === '/courses' ||
+  pathname.startsWith('/course/') ||
+  pathname === '/xiaoyu' ||
+  pathname.startsWith('/xiaoyu/practice') ||
+  pathname === '/achievements' ||
+  pathname === '/my-assignments' ||
+  pathname === '/report-card' ||
+  pathname === '/workbench' ||
+  pathname === '/parent' ||
+  pathname === '/plan' ||
+  pathname.startsWith('/institution');
+
+const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 4 })[p] || 1;
+
 export const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -107,29 +135,6 @@ export const MainLayout: React.FC = () => {
 
   const isFullPage = ['/management'].includes(location.pathname);
   const isEdgeToEdge = ['/workbench'].includes(location.pathname);
-  const isMobileAllowedPath = (pathname: string) =>
-    pathname === '/' ||
-    pathname === '/articles' ||
-    pathname.startsWith('/article/') ||
-    pathname === '/qa' ||
-    pathname.startsWith('/qa/') ||
-    pathname === '/study' ||
-    pathname === '/knowledge-map' ||
-    pathname.startsWith('/knowledge-map/') ||
-    pathname === '/tests' ||
-    pathname.startsWith('/tests/') ||
-    pathname === '/settings' ||
-    pathname === '/courses' ||
-    pathname.startsWith('/course/') ||
-    pathname === '/xiaoyu' ||
-    pathname.startsWith('/xiaoyu/practice') ||
-    pathname === '/achievements' ||
-    pathname === '/my-assignments' ||
-    pathname === '/report-card' ||
-    pathname === '/workbench' ||
-    pathname === '/parent' ||
-    pathname === '/plan' ||
-    pathname.startsWith('/institution');
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && (
     location.pathname.startsWith('/tests/session') ||
@@ -167,15 +172,12 @@ export const MainLayout: React.FC = () => {
 
 
   // ── 身份与方案层级 ──
-  const isSuperAdmin = user?.role === 'admin' && !instInfo;
+  const isPlatformAdmin = user?.is_admin === true;
   const isInstStudent = Boolean(instInfo) && user?.institution_role === 'student';
-  const isInstRegistrar = Boolean(instInfo) && user?.institution_role === 'registrar';
-  const isParent = user?.role === 'parent' || user?.institution_role === 'parent';
   const effectiveIsInstStudent = studentPreview || isInstStudent;
-  const homePath = isParent ? '/parent' : effectiveIsInstStudent ? '/xiaoyu' : '/workbench';
-  const instPlan = instInfo?.plan || 'free';
-  const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 4 })[p] || 1;
-  const myPlanLevel = Math.max(planLevel(user?.membership_tier || 'free'), planLevel(instPlan));
+  const homePath = effectiveIsInstStudent ? '/xiaoyu' : '/workbench';
+  const effectivePlan = instInfo?.plan || user?.personal_plan || user?.membership_tier || 'free';
+  const myPlanLevel = planLevel(effectivePlan);
 
   type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string };
 
@@ -238,44 +240,19 @@ export const MainLayout: React.FC = () => {
     { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams') },
   ];
 
-  const registrarNavItems: NavItem[] = [
-    { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
-    { to: '/institution/students', icon: Users, label: t('layout:nav.members') },
-    ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') } as NavItem] : []),
-  ];
-
-  // ── 家长端 ──
-  const parentNavItems: NavItem[] = [
-    { to: '/parent', icon: Users, label: t('layout:nav.parentMode') },
-    { to: '/settings', icon: Gear, label: t('layout:nav.settings') },
-  ];
-
-  const navItems: NavItem[] = isSuperAdmin
+  const navItems: NavItem[] = isPlatformAdmin
     ? superAdminNavItems
-    : isParent
-      ? parentNavItems
-      : isInstRegistrar
-        ? registrarNavItems
-        : (effectiveIsInstStudent ? studentNavItems : teacherNavItems);
+    : (effectiveIsInstStudent ? studentNavItems : teacherNavItems);
 
   const visibleNavItems = navItems.filter(itemVisible);
 
-  const mobileNavItems: NavItem[] = isSuperAdmin
+  const mobileNavItems: NavItem[] = isPlatformAdmin
     ? [
         { to: '/institution', icon: Buildings, label: t('layout:nav.institutionShort') },
         { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplaceShort') },
         { to: '/api-platform', icon: Code, label: t('layout:nav.apiPlatformShort') },
         { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteShort') },
         { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptShort') },
-      ]
-    : isParent ? [
-        { to: '/parent', icon: Users, label: t('layout:nav.parentShort') },
-        { to: '/settings', icon: Gear, label: t('layout:nav.settings') },
-      ]
-    : isInstRegistrar ? [
-        { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
-        { to: '/institution/students', icon: Users, label: t('layout:nav.studentsShort') },
-        ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') }] : []),
       ]
     : effectiveIsInstStudent ? [
         { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort') },
@@ -304,7 +281,7 @@ export const MainLayout: React.FC = () => {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
+      <div className="flex h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
         <aside className={cn(
           "relative border-r border-border flex-col p-2 bg-card/70 backdrop-blur-2xl transition-[width] duration-300 ease-in-out z-0 shrink-0 hidden md:flex",
           collapsed ? "w-16" : "w-48"
@@ -344,7 +321,7 @@ export const MainLayout: React.FC = () => {
         </aside>
 
         <main className={cn(
-          "flex-1 h-screen relative z-[var(--z-base)] flex flex-col bg-background",
+          "flex-1 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background",
           (isMobileImmersivePage || isMobileStudyPage)
             ? "overflow-hidden pb-0"
             : "overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"
@@ -388,19 +365,19 @@ export const MainLayout: React.FC = () => {
                     <CreditCard className="h-3.5 w-3.5" />
                     <span className="font-bold text-xs">{t('layout:nav.billing')}</span>
                   </DropdownMenuItem>
-                  {!isSuperAdmin && instInfo && user?.is_institution_owner && (
+                  {!isPlatformAdmin && instInfo && user?.is_institution_owner && (
                     <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Gear className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:userMenu.institutionSettings')}</span>
                     </DropdownMenuItem>
                   )}
-                  {!isSuperAdmin && instInfo && user?.is_institution_admin && (
+                  {!isPlatformAdmin && instInfo && user?.is_institution_admin && (
                     <DropdownMenuItem id="invite-menu-item" onClick={() => setInvitePopoverOpen(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <UserPlus className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:invite.trigger')}</span>
                     </DropdownMenuItem>
                   )}
-                  {!isSuperAdmin && instInfo && !isInstStudent && !studentPreview && (
+                  {!isPlatformAdmin && instInfo && !isInstStudent && !studentPreview && (
                     <>
                       <DropdownMenuItem onClick={() => navigate('/institution/students')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Users className="h-3.5 w-3.5" />
@@ -475,20 +452,20 @@ export const MainLayout: React.FC = () => {
                       <CreditCard className="h-3.5 w-3.5" />
                       <span className="font-bold text-xs">{t('layout:nav.billing')}</span>
                     </DropdownMenuItem>
-                    {!isSuperAdmin && instInfo && user?.is_institution_owner && (
+                    {!isPlatformAdmin && instInfo && user?.is_institution_owner && (
                       <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Gear className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">{t('layout:userMenu.institutionSettings')}</span>
                       </DropdownMenuItem>
                     )}
                     {/* 机构看板：管理员可见 */}
-                    {!isSuperAdmin && instInfo && !isInstStudent && (
+                    {!isPlatformAdmin && instInfo && !isInstStudent && (
                       <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <ChartBar className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">{t('layout:userMenu.institutionDashboard')}</span>
                       </DropdownMenuItem>
                     )}
-                    {!isSuperAdmin && instInfo && user?.is_institution_admin && (
+                    {!isPlatformAdmin && instInfo && user?.is_institution_admin && (
                       <DropdownMenuItem
                         onClick={() => setInvitePopoverOpen(true)}
                         className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
@@ -580,7 +557,7 @@ export const MainLayout: React.FC = () => {
           <UpgradeModal
             open={showUpgradeModal}
             onOpenChange={setShowUpgradeModal}
-            currentPlan={user?.membership_tier || instPlan || 'free'}
+            currentPlan={user?.membership_tier || instInfo?.plan || 'free'}
           />
         )}
 

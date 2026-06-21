@@ -43,7 +43,7 @@ const PdfMockExam = lazyNamed(() => import('./pages/PdfMockExam'), 'PdfMockExam'
 const WrongQuestionReviewPage = lazyNamed(() => import('./pages/WrongQuestionReviewPage'), 'WrongQuestionReviewPage');
 const ReportCard = lazyNamed(() => import('./pages/ReportCard'), 'ReportCard');
 const Achievements = lazyNamed(() => import('./pages/Achievements'), 'Achievements');
-const ParentDashboard = lazyNamed(() => import('./pages/ParentDashboard'), 'ParentDashboard');
+
 const BillingPage = lazyNamed(() => import('./pages/Billing'), 'BillingPage');
 const PaymentResult = lazyNamed(() => import('./pages/PaymentResult'), 'PaymentResult');
 const Checkout = lazyNamed(() => import('./pages/Checkout'), 'Checkout');
@@ -80,7 +80,29 @@ const PricingPage = lazy(() => import('./pages/Pricing'));
 const PromoPlus = lazy(() => import('./pages/PromoPlus'));
 const LessonPlans = lazy(() => import('./pages/LessonPlans'));
 
-const PageLoader = () => <Loading fullScreen size="lg" />;
+import { Skeleton } from '@/components/ui/skeleton';
+
+const PageLoader = () => (
+  <div className="min-h-dvh w-full flex items-center justify-center bg-background">
+    <div className="w-full max-w-6xl mx-auto px-6 md:px-8 py-12 space-y-8">
+      {/* Header skeleton */}
+      <div className="space-y-3 max-w-lg">
+        <Skeleton className="h-8 w-64 rounded-lg" />
+        <Skeleton className="h-4 w-96 rounded-md" />
+      </div>
+      {/* Card grid skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="space-y-3 rounded-xl border border-border/50 p-5">
+            <Skeleton className="h-36 w-full rounded-lg" />
+            <Skeleton className="h-5 w-3/4 rounded-md" />
+            <Skeleton className="h-4 w-1/2 rounded-md" />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
 
 // Language redirect helper
 const LanguageRedirect = ({ lang }: { lang: string }) => {
@@ -176,10 +198,7 @@ const HomeRedirect = () => {
   if (user?.institution_role === 'student') {
     return <Navigate to="/xiaoyu" replace />;
   }
-  // 家长 → 家长模式
-  if (user?.role === 'parent' || user?.institution_role === 'parent') {
-    return <Navigate to="/parent" replace />;
-  }
+
   return <Navigate to="/xiaoyu" replace />;
 };
 
@@ -259,7 +278,7 @@ const router = createBrowserRouter([
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "my-assignments", element: lazyPage(MyAssignments) },
           { path: "achievements", element: lazyPage(Achievements) },
-          { path: "parent", element: <RequireAuth>{lazyPage(ParentDashboard)}</RequireAuth> },
+
           { path: "report-card", element: lazyPage(ReportCard) },
           { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
           { path: "exam/:examId", element: lazyPage(OnlineExam) },
