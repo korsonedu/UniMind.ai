@@ -190,7 +190,7 @@ const PricingPage: React.FC = () => {
         <footer className="py-10 border-t border-white/[0.06]">
           <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" />
+              <img src="/Unimind_logo.png" alt="UniMind" className="h-7 w-7 rounded-lg object-contain" loading="lazy" />
               <span className="font-bold text-sm tracking-tight text-white/70">UniMind.ai</span>
             </div>
             <div className="flex items-center gap-4 text-[11px] text-white/40">

@@ -22,7 +22,7 @@ from quizzes.services.field_service import (
     get_or_build_graph,
     invalidate_graph_cache,
 )
-from users.permissions import IsAdminWriteMemberRead
+from users.permissions import IsAdminWriteMemberRead, IsPlatformAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -126,15 +126,9 @@ class FieldInvalidateCacheView(APIView):
     {"subject": "金融431"}
     """
 
-    permission_classes = [IsAdminWriteMemberRead]
+    permission_classes = [IsPlatformAdmin]
 
     def post(self, request):
-        if not request.user.is_staff and not getattr(request.user, 'is_platform_admin', False):
-            return Response(
-                {'error': 'Admin only'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         subject = request.data.get('subject', '').strip()
         if not subject:
             return Response(

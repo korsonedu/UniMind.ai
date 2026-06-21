@@ -24,7 +24,7 @@ export function FeatureGuard({
   feature: string;
   children: React.ReactNode;
 }) {
-  const { hasFeature, loading, featuresError, fetchFeatures } = useInstitutionStore();
+  const { hasFeature, loading, featuresError, fetchFeatures, institution } = useInstitutionStore();
   const user = useAuthStore(s => s.user);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
@@ -74,7 +74,7 @@ export function FeatureGuard({
         open={showUpgrade}
         onOpenChange={setShowUpgrade}
         feature={feature}
-        currentPlan={user?.membership_tier || 'free'}
+        currentPlan={institution?.plan || user?.personal_plan || user?.membership_tier || 'free'}
       />
     </>
   );

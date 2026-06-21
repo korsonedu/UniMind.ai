@@ -361,7 +361,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
           <div className="mt-3">
             {isImageAttachment ? (
               <div className="rounded-xl overflow-hidden border border-border/50 max-w-[200px] md:max-w-sm group/img relative">
-                <img src={question.attachment} alt="attachment" className="w-full h-auto max-h-[140px] md:max-h-[300px] object-cover" />
+                <img src={question.attachment} alt="attachment" className="w-full h-auto max-h-[140px] md:max-h-[300px] object-cover" loading="lazy" />
                 <a href={question.attachment} target="_blank" rel="noreferrer" className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-opacity">
                   <Paperclip className="h-3.5 w-3.5" />
                 </a>

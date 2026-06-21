@@ -614,7 +614,7 @@ function InstitutionSelfSettings() {
         auto_join: data.auto_join || false,
         default_role: data.default_role || 'student',
       }))
-      .catch(() => {})
+      .catch((e) => { console.error('[InstitutionSelfSettings] SSO config fetch failed:', e); })
       .finally(() => setSsoLoading(false));
     setApiKeysLoading(true);
     api.get('/users/institution/me/api-keys/')

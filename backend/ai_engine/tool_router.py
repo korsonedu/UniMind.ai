@@ -243,6 +243,11 @@ EXAM_GENERATOR_TOOLS_META = [
         body="为学生作业打分。触发词：批改、判分、给XX分、批作业、判作业。参数: submission_id(int)=提交ID, score(number)=评分, feedback(str)=评语(可选)。返回：更新后的提交信息。需要teacher/owner角色。不适用于：查看作业进度（用get_assignment_progress）。",
     ),
     ToolMeta(
+        name="create_teaching_plan",
+        description="创建或更新班级教学计划",
+        body="为班级设定教学目标并规划周进度。触发词：制定教学计划、设定目标、教学规划、XX班XX学科教学计划。参数: class_id(int)=班级ID(必填), subject(str)=学科, semester(str)=学期, week_count(int)=周数, goal(str)=目标(如'1年内高考130分'), deadline(str)=截止日期, target_score(int)=目标分数, current_level(str)=当前水平。返回：教学计划ID和目标信息。需要teacher/owner角色。",
+    ),
+    ToolMeta(
         name="render_visual",
         description="在对话中渲染可视化卡片（确认操作、选项选择、数据摘要）",
         body="渲染交互式卡片。触发词：展示卡片、让我选择、确认操作。参数: type(str)=可视化类型, payload(dict)=卡片数据。action_cards类型：导航卡片点击跳转页面，reply卡片点击发送消息到对话。适用于：需要教师确认操作、选择分支、展示数据摘要时。",
@@ -498,11 +503,12 @@ EXAM_GENERATOR_INTENT_MAP = {
     },
     "assignment": {
         "keywords": ["作业", "提交", "进度", "交了没", "批改", "交作业", "布置", "发布",
-                     "分配", "下发", "发下去", "布置给", "安排练习", "选", "选题"],
+                     "分配", "下发", "发下去", "布置给", "安排练习", "选", "选题",
+                     "教学计划", "教学规划", "设定目标", "制定计划", "学期规划"],
         "tools": [
             "get_assignment_progress", "assign_practice",
             "assign_class_course", "grade_submissions",
-            "list_classes",
+            "list_classes", "create_teaching_plan",
             "render_visual",
         ],
     },

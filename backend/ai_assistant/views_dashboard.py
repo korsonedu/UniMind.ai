@@ -62,7 +62,8 @@ class XiaoYuDashboardView(APIView):
         data = plan.plan_data or {}
         tasks = data.get('tasks', [])
         completed = sum(1 for t in tasks if t.get('status') == 'completed')
-        return {
+
+        plan_result = {
             'id': plan.id,
             'title': plan.title,
             'summary': plan.summary,
@@ -73,6 +74,30 @@ class XiaoYuDashboardView(APIView):
             'created_at': plan.created_at.isoformat(),
             'subjects_covered': data.get('subjects_covered', []),
         }
+
+        # 目标信息来自关联的 TeachingPlan
+        if plan.teaching_plan_id:
+            tp = plan.teaching_plan
+            total_days = (tp.deadline - plan.created_at.date()).days if tp.deadline and plan.created_at else (tp.week_count * 7)
+            elapsed_days = max((timezone.now().date() - plan.created_at.date()).days, 0) if plan.created_at else 0
+            expected_progress_pct = round(min(elapsed_days / total_days * 100, 100), 1) if total_days > 0 else None
+            progress_delta = round(plan_result['progress_pct'] - expected_progress_pct, 1) if expected_progress_pct is not None else None
+
+            plan_result.update({
+                'goal': tp.goal or '',
+                'deadline': tp.deadline.isoformat() if tp.deadline else None,
+                'subject': tp.subject or '',
+                'target_score': tp.target_score,
+                'current_level': tp.current_level or '',
+                'expected_progress_pct': expected_progress_pct,
+                'progress_delta': progress_delta,
+                'total_days': total_days,
+                'elapsed_days': elapsed_days,
+                'teaching_plan_id': tp.id,
+                'teaching_plan_title': tp.title,
+            })
+
+        return plan_result
 
     # ── Stats ─────────────────────────────────────────────
     def _get_stats(self, user, institution=None):

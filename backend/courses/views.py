@@ -17,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics, permissions
 from rest_framework.permissions import IsAuthenticated
-from users.permissions import IsAdmin, HasQuota
+from users.permissions import IsAdmin, HasQuota, is_institution_teacher, IsInstitutionTeacher
 
 from .models import Course, Album, StartupMaterial, VideoProgress
 
@@ -632,7 +632,7 @@ class TeachingPlanListCreateView(APIView):
             # 学生只看自己班级的教学计划
             student_classes = user.classes.all()
             qs = TeachingPlan.objects.filter(class_obj__in=student_classes).select_related('class_obj').prefetch_related('lesson_plans')
-        elif role in ('teacher', 'owner', 'registrar'):
+        elif is_institution_teacher(user):
             qs = TeachingPlan.objects.filter(institution=institution).select_related('class_obj').prefetch_related('lesson_plans')
         else:
             return Response({'error': '无权限'}, status=403)
@@ -650,8 +650,7 @@ class TeachingPlanListCreateView(APIView):
         if not institution:
             return Response({'error': '无机构归属'}, status=403)
 
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
+        if not is_institution_teacher(user):
             return Response({'error': '仅教师/机构主可创建'}, status=403)
 
         serializer = TeachingPlanSerializer(data=request.data)
@@ -723,8 +722,7 @@ class LessonPlanListCreateView(APIView):
         if not institution:
             return Response({'error': '无机构归属'}, status=403)
 
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
+        if not is_institution_teacher(user):
             return Response({'error': '仅教师/机构主可创建'}, status=403)
 
         serializer = LessonPlanSerializer(data=request.data)
@@ -774,17 +772,11 @@ class LessonPlanDetailView(APIView):
 
 class AIGenerateLessonPlanView(APIView):
     """POST /api/courses/lesson-plans/ai-generate/ — AI 生成教案详细内容（结构化）。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
 
     def post(self, request):
         user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
-            return Response({'error': '仅教师/机构主可操作'}, status=403)
+        institution = user.institution
 
         plan_id = request.data.get('lesson_plan_id')
         if not plan_id:
@@ -878,17 +870,11 @@ class AIGenerateLessonPlanView(APIView):
 
 class AIGenerateWeeklyPlansView(APIView):
     """POST /api/courses/teaching-plans/<id>/ai-generate-weeks/ — AI 生成整学期周计划。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
 
     def post(self, request, pk):
         user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
-            return Response({'error': '仅教师/机构主可操作'}, status=403)
+        institution = user.institution
 
         try:
             plan = TeachingPlan.objects.get(id=pk, institution=institution)
@@ -960,17 +946,11 @@ class AIGenerateWeeklyPlansView(APIView):
 
 class AIGenerateWeekLessonsView(APIView):
     """POST /api/courses/teaching-plans/<id>/ai-generate-lessons/ — AI 为指定周批量生成教案。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
 
     def post(self, request, pk):
         user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
-            return Response({'error': '仅教师/机构主可操作'}, status=403)
+        institution = user.institution
 
         try:
             plan = TeachingPlan.objects.get(id=pk, institution=institution)
@@ -1098,17 +1078,11 @@ class LessonPlanPDFView(APIView):
 
 class TeachingPlanAnalyticsView(APIView):
     """GET /api/courses/teaching-plans/<id>/analytics/ — 班级学情分析 + AI 教学建议。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
 
     def get(self, request, pk):
         user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
-            return Response({'error': '仅教师/机构主可查看'}, status=403)
+        institution = user.institution
 
         try:
             plan = TeachingPlan.objects.select_related('class_obj').get(id=pk, institution=institution)

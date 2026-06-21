@@ -542,7 +542,7 @@ class InstitutionDashboardView(APIView):
                 'is_plan_active': inst.is_plan_active,
                 'max_students': inst.max_students,
                 'student_count': User.objects.filter(institution_id__in=inst_ids, institution_role='student').count(),
-                'staff_count': User.objects.filter(institution_id__in=inst_ids, institution_role__in=('owner', 'teacher', 'registrar')).count(),
+                'staff_count': User.objects.filter(institution_id__in=inst_ids, institution_role__in=('owner', 'teacher')).count(),
             },
             'stats': {
                 'weekly_active_students': weekly_active,
@@ -574,7 +574,7 @@ class PlatformAdminInstitutionOverviewView(APIView):
                     'is_plan_active': i.is_plan_active,
                     'max_students': i.max_students,
                     'student_count': i.student_count,
-                    'staff_count': i.students.filter(institution_role__in=('owner', 'teacher', 'registrar')).count(),
+                    'staff_count': i.students.filter(institution_role__in=('owner', 'teacher')).count(),
                 }
                 for i in qs
             ],
@@ -649,7 +649,7 @@ class InstitutionSelfUpdateView(APIView):
             'is_plan_active': inst.is_plan_active,
             'max_students': inst.max_students,
             'student_count': inst.student_count,
-            'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher', 'registrar')).count(),
+            'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher')).count(),
             'notes': inst.notes or '',
             'description': inst.description or '',
             'custom_domain': inst.custom_domain or '',
@@ -749,17 +749,17 @@ class InstitutionMemberListView(APIView):
 
 
 class InstitutionMemberRoleView(APIView):
-    """机构所有者修改成员角色（student ↔ teacher ↔ registrar）"""
+    """机构所有者修改成员角色（student ↔ teacher）"""
     permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
 
     def patch(self, request, pk):
         inst = request.user.institution
         member = get_object_or_404(
             User, pk=pk, institution=inst)
-        if member.institution_role not in ('teacher', 'student', 'registrar'):
+        if member.institution_role not in ('teacher', 'student'):
             return Response({'error': '不能修改此用户的角色'}, status=400)
         new_role = (request.data.get('role') or '').strip()
-        if new_role not in ('teacher', 'student', 'registrar'):
+        if new_role not in ('teacher', 'student'):
             return Response({'error': '无效的角色'}, status=400)
         member.institution_role = new_role
         member.save(update_fields=['institution_role'])
@@ -881,7 +881,7 @@ class InstitutionJoinByInviteSlugView(APIView):
             )
             # 通知机构管理员
             from notifications.models import Notification
-            admins = inst.students.filter(institution_role__in=('owner', 'teacher', 'registrar'))
+            admins = inst.students.filter(institution_role__in=('owner', 'teacher'))
             for admin in admins:
                 Notification.objects.create(
                     recipient=admin, sender=user, ntype='join_request',
@@ -1421,14 +1421,12 @@ class InstitutionAuditLogView(APIView):
 
     GET /api/users/institution/me/audit-logs/?page=1
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher, IsInstitutionActive]
 
     def get(self, request):
         inst = request.user.institution
         if not inst:
             return Response({'error': '未加入机构'}, status=400)
-        if request.user.institution_role not in ('owner', 'teacher'):
-            return Response({'error': '无权限'}, status=403)
 
         from .models import InstitutionAuditLog
         page = int(request.query_params.get('page', 1))
@@ -1460,14 +1458,12 @@ class InstitutionNotificationConfigView(APIView):
     GET  /api/users/institution/me/notification-config/
     PUT  /api/users/institution/me/notification-config/
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher, IsInstitutionActive]
 
     def get(self, request):
         inst = request.user.institution
         if not inst:
             return Response({'error': '未加入机构'}, status=400)
-        if request.user.institution_role not in ('owner', 'teacher'):
-            return Response({'error': '无权限'}, status=403)
 
         from users.models_commercial import InstitutionNotificationConfig
         config, _ = InstitutionNotificationConfig.objects.get_or_create(
@@ -1484,8 +1480,6 @@ class InstitutionNotificationConfigView(APIView):
         inst = request.user.institution
         if not inst:
             return Response({'error': '未加入机构'}, status=400)
-        if request.user.institution_role not in ('owner', 'teacher'):
-            return Response({'error': '无权限'}, status=403)
 
         from users.models_commercial import InstitutionNotificationConfig
         config, _ = InstitutionNotificationConfig.objects.get_or_create(
@@ -2048,7 +2042,11 @@ class InstitutionStudentReportCardView(APIView):
 
 class InstitutionChildListView(APIView):
     """GET /api/users/institution/me/children/ — 列出子校区 + 创建。"""
-    permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            return [IsAuthenticated(), IsInstitutionOwner(), IsInstitutionActive()]
+        return [IsAuthenticated(), IsInstitutionAdmin(), IsInstitutionActive()]
 
     def get(self, request):
         inst = request.user.institution
@@ -2065,7 +2063,7 @@ class InstitutionChildListView(APIView):
                 'is_plan_active': child.is_plan_active,
                 'student_count': child.student_count,
                 'staff_count': child.students.filter(
-                    institution_role__in=('owner', 'teacher', 'registrar')
+                    institution_role__in=('owner', 'teacher')
                 ).count(),
                 'business_type': child.business_type,
                 'created_at': child.created_at.isoformat(),
@@ -2076,8 +2074,6 @@ class InstitutionChildListView(APIView):
         inst = request.user.institution
         if not inst.is_root():
             return Response({'error': '仅总校可创建子校区'}, status=403)
-        if request.user.institution_role != 'owner':
-            return Response({'error': '仅机构所有者可创建子校区'}, status=403)
 
         name = (request.data.get('name') or '').strip()
         if not name:
@@ -2134,7 +2130,7 @@ class InstitutionChildDetailView(APIView):
             'is_plan_active': child.is_plan_active,
             'student_count': child.student_count,
             'staff_count': child.students.filter(
-                institution_role__in=('owner', 'teacher', 'registrar')
+                institution_role__in=('owner', 'teacher')
             ).count(),
             'contact_name': child.contact_name,
             'contact_email': child.contact_email,

@@ -113,7 +113,9 @@ class TeachingPlanSerializer(serializers.ModelSerializer):
         model = TeachingPlan
         fields = [
             'id', 'institution', 'class_obj', 'class_name', 'title', 'description',
-            'subject', 'semester', 'week_count', 'weekly_plans', 'lesson_plans',
+            'subject', 'semester', 'week_count',
+            'goal', 'deadline', 'target_score', 'current_level', 'milestones',
+            'weekly_plans', 'lesson_plans',
             'created_by', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_at', 'updated_at', 'institution', 'created_by']

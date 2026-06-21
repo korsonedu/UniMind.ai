@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from users.permissions import IsInstitutionOwner
 from .models import Institution, SSOConfig
 from .serializers_institution import SSOConfigSerializer
 from .services.sso import (
@@ -71,16 +72,10 @@ class SSOCallbackView(APIView):
 
 class SSOConfigView(APIView):
     """GET/PUT /api/users/institution/me/sso-config/ — 机构 SSO 配置管理。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionOwner]
 
     def get(self, request):
-        inst = getattr(request.user, 'institution', None)
-        if not inst:
-            return Response({'error': '无机构归属'}, status=403)
-        role = getattr(request.user, 'institution_role', '')
-        if role not in ('owner',):
-            return Response({'error': '仅机构所有者可查看'}, status=403)
-
+        inst = request.user.institution
         config, _ = SSOConfig.objects.get_or_create(
             institution=inst,
             defaults={'provider': 'feishu', 'enabled': False},
@@ -88,13 +83,7 @@ class SSOConfigView(APIView):
         return Response(SSOConfigSerializer(config).data)
 
     def put(self, request):
-        inst = getattr(request.user, 'institution', None)
-        if not inst:
-            return Response({'error': '无机构归属'}, status=403)
-        role = getattr(request.user, 'institution_role', '')
-        if role not in ('owner',):
-            return Response({'error': '仅机构所有者可配置'}, status=403)
-
+        inst = request.user.institution
         config, _ = SSOConfig.objects.get_or_create(institution=inst)
         ser = SSOConfigSerializer(config, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)

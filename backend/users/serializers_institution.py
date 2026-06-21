@@ -105,7 +105,7 @@ class InstitutionChildSerializer(serializers.ModelSerializer):
                   'student_count', 'staff_count', 'created_at']
 
     def get_staff_count(self, obj):
-        return obj.students.filter(institution_role__in=('owner', 'teacher', 'registrar')).count()
+        return obj.students.filter(institution_role__in=('owner', 'teacher')).count()
 
 
 class APICredentialSerializer(serializers.ModelSerializer):

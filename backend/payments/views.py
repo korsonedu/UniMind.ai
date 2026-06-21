@@ -18,6 +18,7 @@ from payments.serializers import (
 from payments.services.base import create_order, confirm_order, get_plan_price
 from payments.services.coupon import validate_coupon
 from payments.services.gateway_router import get_gateway
+from users.permissions import IsInstitutionOwner, is_institution_owner
 
 logger = logging.getLogger(__name__)
 
@@ -136,17 +137,11 @@ class SimulatePaymentView(APIView):
 
 class CreateSubscriptionView(APIView):
     """POST /api/payments/subscriptions/ — 创建订阅结账会话。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionOwner]
 
     def post(self, request):
         user = request.user
-        inst = getattr(user, 'institution', None)
-        if not inst:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role not in ('owner',):
-            return Response({'error': '仅机构所有者可操作'}, status=403)
+        inst = user.institution
 
         plan = request.data.get('plan', 'starter')
         billing_cycle = request.data.get('billing_cycle', 'monthly')
@@ -198,14 +193,10 @@ class SubscriptionStatusView(APIView):
 
     def post(self, request):
         """取消订阅（周期结束时取消）。"""
-        inst = getattr(request.user, 'institution', None)
-        if not inst:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(request.user, 'institution_role', '')
-        if role not in ('owner',):
+        if not is_institution_owner(request.user):
             return Response({'error': '仅机构所有者可操作'}, status=403)
 
+        inst = request.user.institution
         sub = Subscription.objects.filter(institution=inst, status='active').first()
         if not sub:
             return Response({'error': '无活跃订阅'}, status=404)

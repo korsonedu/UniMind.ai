@@ -133,6 +133,13 @@ class StudyPlan(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
     plan_data = models.JSONField(default=dict, help_text="AI 生成的完整计划 JSON，包含 tasks 数组")
     auto_generated = models.BooleanField(default=False, help_text="是否由 AI 自动生成")
+
+    # 关联教师端的教学计划（可选，有班级的学生自动关联）
+    teaching_plan = models.ForeignKey(
+        'courses.TeachingPlan', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='student_plans', verbose_name="关联教学计划"
+    )
+
     completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

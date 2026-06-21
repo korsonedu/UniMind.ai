@@ -46,7 +46,7 @@ def filter_tools(bot_type: str, institution, all_tools: list) -> list:
     Returns:
         Filtered tool list containing only tools the plan allows.
     """
-    plan = getattr(institution, 'plan', 'free') if institution else 'free'
+    plan = institution.get_effective_plan() if institution else 'free'
     allowed = PLAN_TOOL_ACCESS.get(plan, PLAN_TOOL_ACCESS["free"]).get(bot_type, [])
     if allowed == "all":
         return all_tools

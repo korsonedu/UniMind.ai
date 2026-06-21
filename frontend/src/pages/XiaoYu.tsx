@@ -13,9 +13,12 @@ const SKILL_ICONS = [Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lig
 interface DashPlan {
   id: number; title: string;
   total_tasks: number; completed_tasks: number;
-  progress_pct: number; expected_progress_pct: number | null;
-  progress_delta: number | null;
-  total_days: number; elapsed_days: number;
+  progress_pct: number; expected_progress_pct?: number | null;
+  progress_delta?: number | null;
+  total_days?: number; elapsed_days?: number;
+  goal?: string; deadline?: string | null; subject?: string;
+  target_score?: number | null; current_level?: string;
+  teaching_plan_id?: number; teaching_plan_title?: string;
 }
 interface DashStats {
   streak_days: number; weekly_activity: number;
@@ -227,14 +230,26 @@ export const XiaoYu: React.FC = () => {
                     </span>
                   )}
                 </div>
+                {plan.goal && (
+                  <p className="text-[12px] text-muted-foreground/60 mb-2">
+                    🎯 {plan.goal}
+                    {plan.deadline && <span className="ml-2">· 截止 {plan.deadline}</span>}
+                  </p>
+                )}
+                {plan.teaching_plan_title && (
+                  <p className="text-[11px] text-muted-foreground/40 mb-2">📋 来自 {plan.teaching_plan_title}</p>
+                )}
+                <div className="w-full h-1.5 bg-muted/50 rounded-full mb-2 overflow-hidden">
+                  <div className="h-full bg-xiaoyu-400 rounded-full transition-all" style={{ width: `${Math.min(plan.progress_pct, 100)}%` }} />
+                </div>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[12px] text-muted-foreground/60">
                   <span>{t('tasksCompleted')} <span className="font-semibold text-foreground/70">{plan.completed_tasks}/{plan.total_tasks}</span> {t('tasksUnit')}</span>
                   <span>{t('progressLabel')} <span className="font-semibold text-xiaoyu-500 dark:text-xiaoyu-300">{plan.progress_pct}%</span></span>
-                  {plan.total_days > 0 && (
+                  {plan.total_days != null && plan.total_days > 0 && (
                     <span>{t('dayLabel')} <span className="font-semibold text-foreground/70">{plan.elapsed_days}/{plan.total_days}</span> {t('daysLabel')}</span>
                   )}
                 </div>
-                <div className="mt-3 pt-3 border-t border-border/30">
+                <div className="mt-3 pt-3 border-t border-border/30 flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => navigate('/plan')} className="h-8 text-[12px] gap-1">
                     {t('adjustPlan')}
                   </Button>

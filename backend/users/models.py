@@ -6,7 +6,6 @@ class User(AbstractUser):
     ROLE_CHOICES = (
         ('student', '学生'),
         ('admin', '管理员'),
-        ('parent', '家长'),
     )
     MEMBERSHIP_TIER_CHOICES = (
         ('free', 'Free'), ('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise'),
@@ -14,9 +13,7 @@ class User(AbstractUser):
     INSTITUTION_ROLE_CHOICES = (
         ('owner', '机构所有者'),
         ('teacher', '教师'),
-        ('registrar', '教务主管'),
         ('student', '学员'),
-        ('parent', '家长'),
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='student')
     nickname = models.CharField(max_length=100, blank=True, verbose_name="昵称")
@@ -36,7 +33,8 @@ class User(AbstractUser):
     email_verified = models.BooleanField(default=False, verbose_name="邮箱已验证")
     email_notifications = models.BooleanField(default=True, verbose_name="接收邮件通知")
     membership_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="会员到期时间")
-    membership_tier = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="会员等级")
+    membership_tier = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="会员等级（已弃用，迁移至 personal_plan）")
+    personal_plan = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="个人方案（无机构用户）")
     trial_ends_at = models.DateTimeField(null=True, blank=True, verbose_name="试用到期时间（已废弃，保留兼容）")
     MEMBERSHIP_SOURCE_CHOICES = (
         ('trial', '试用'), ('code', '激活码'), ('payment', '付费'), ('admin', '管理员'),
@@ -60,6 +58,8 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         if self.is_superuser:
             self.role = 'admin'
+            self.institution = None
+            self.institution_role = ''
         if self.role == 'admin':
             self.is_staff = True
             self.is_member = True
@@ -449,24 +449,6 @@ class UserAchievement(models.Model):
         return f"{self.user.username} - {self.achievement.name}"
 
 
-class ParentStudentLink(models.Model):
-    parent = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='linked_children')
-    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='linked_parents')
-    verified = models.BooleanField(default=False, verbose_name="已验证")
-    verification_code = models.CharField(max_length=10, blank=True, verbose_name="绑定验证码")
-    created_at = models.DateTimeField(auto_now_add=True)
-    verified_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = '家长关联'
-        verbose_name_plural = '家长关联'
-        unique_together = ('parent', 'student')
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f'{self.parent.username} → {self.student.username}'
-
-
 class APICredential(models.Model):
     """API 开放平台凭证 — 企业版机构可创建 API Key 访问平台数据。"""
     institution = models.ForeignKey(Institution, on_delete=models.CASCADE, related_name='api_credentials')
@@ -564,6 +546,21 @@ def has_plan_feature(institution, feature: str) -> bool:
     if institution is None:
         return False
     return feature in get_plan_features(institution.get_effective_plan())
+
+
+def get_effective_plan_for_user(user) -> str:
+    """获取用户的生效方案。
+    - 超管 → enterprise
+    - 有机构 → institution.get_effective_plan()
+    - 无机构 → personal_plan（默认 free）
+    """
+    if not user or not user.is_authenticated:
+        return 'free'
+    if user.is_superuser:
+        return 'enterprise'
+    if user.institution_id:
+        return user.institution.get_effective_plan()
+    return getattr(user, 'personal_plan', 'free')
 
 
 def compute_expiry(duration_days: int):

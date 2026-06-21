@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import DOMPurify from 'dompurify';
 import api from '@/lib/api';
 import { PageWrapper } from '@/components/PageWrapper';
 
@@ -52,7 +53,7 @@ export default function Legal() {
         <p className="text-muted-foreground">
           版本：{doc.version} &nbsp;|&nbsp; 生效日期：{doc.effective_date}
         </p>
-        <div dangerouslySetInnerHTML={{ __html: doc.content }} />
+        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(doc.content) }} />
         <div className="mt-8 pt-4 border-t text-sm text-muted-foreground">
           <Link to="/privacy" className={docType === 'privacy' ? 'font-bold' : 'underline'}>隐私政策</Link>
           {' · '}

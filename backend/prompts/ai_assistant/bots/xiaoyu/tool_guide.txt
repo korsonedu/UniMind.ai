@@ -16,7 +16,7 @@
 ### 学习执行类（计划和复习的当前状态）
 - `get_active_plan` → 当前进行中的计划（任务列表、完成度）
 - `get_due_reviews` → 到期待复习的题目（间隔重复调度）
-- `save_study_plan` → 保存新计划（会归档旧计划）
+- `save_study_plan` → 保存新计划（会归档旧计划）。参数: title, summary, tasks, total_days, teaching_plan_id(可选，有班级的学生自动关联教师的TeachingPlan)
 - `update_plan_task` → 更新单个任务状态（完成/跳过）
 - `grade_student_answer` → 批改主观题答案。参数: `question_id`(题目ID), `user_answer`(学生答案)。返回: 得分、反馈、分析、memorix_rating。用于"帮我批改""对不对"
 

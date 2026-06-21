@@ -8,6 +8,7 @@ import json
 import logging
 from typing import Any, Dict, List
 from django.db import models
+from users.permissions import is_institution_teacher
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +324,7 @@ class BaseToolExecutor:
 
     def _handle_get_class_weak_points(self, args: Dict) -> Dict:
         """获取班级最薄弱的知识点（仅 teacher/owner 可用）。"""
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用班级分析功能"}
 
         from ai_assistant.services.memory_system import MemorySystem
@@ -332,7 +333,7 @@ class BaseToolExecutor:
 
     def _handle_get_class_performance_summary(self, args: Dict) -> Dict:
         """获取班级整体学习数据概览（仅 teacher/owner 可用）。"""
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用班级分析功能"}
 
         from ai_assistant.services.memory_system import MemorySystem
@@ -502,17 +503,18 @@ class PlannerToolExecutor(BaseToolExecutor):
                 task['id'] = f"task_{i + 1}"
             task.setdefault('status', 'pending')
             task.setdefault('completed_at', None)
-            # 归一化 LLM 可能用错的字段名
             if 'task' in task and 'title' not in task:
                 task['title'] = task.pop('task')
             task.setdefault('title', task.get('description', f'任务 {i + 1}'))
             task.setdefault('day', 1)
-            task.setdefault('estimated_minutes', 0)
             task.setdefault('subject', '')
             task.setdefault('description', '')
 
         # Archive any existing active plan
         StudyPlan.objects.filter(user=self.user, status='active').update(status='archived')
+
+        # 关联教学计划（有班级的学生自动关联）
+        teaching_plan_id = args.get('teaching_plan_id')
 
         plan = StudyPlan.objects.create(
             user=self.user,
@@ -524,6 +526,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                 "subjects_covered": list({t.get('subject', '') for t in tasks if t.get('subject')}),
                 "diagnostic_suggested": args.get('diagnostic_suggested', False),
             },
+            teaching_plan_id=teaching_plan_id,
             auto_generated=True,
         )
         return {"plan_id": plan.id, "title": plan.title, "task_count": len(tasks), "status": "active"}
@@ -537,7 +540,7 @@ class PlannerToolExecutor(BaseToolExecutor):
         data = plan.plan_data or {}
         tasks = data.get('tasks', [])
         completed = sum(1 for t in tasks if t.get('status') == 'completed')
-        return {
+        result = {
             "has_active_plan": True,
             "plan_id": plan.id,
             "title": plan.title,
@@ -548,6 +551,15 @@ class PlannerToolExecutor(BaseToolExecutor):
             "tasks": tasks,
             "created_at": plan.created_at.isoformat(),
         }
+        # 如果关联了教学计划，返回目标信息
+        if plan.teaching_plan:
+            tp = plan.teaching_plan
+            result["teaching_plan"] = {
+                "id": tp.id, "title": tp.title,
+                "goal": tp.goal or '', "deadline": tp.deadline.isoformat() if tp.deadline else None,
+                "subject": tp.subject or '', "current_week": None,
+            }
+        return result
 
     def _handle_update_plan_task(self, args: Dict) -> Dict:
         from ai_assistant.models import StudyPlan

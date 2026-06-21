@@ -36,13 +36,28 @@ def is_platform_admin(user) -> bool:
 
 
 def is_institution_admin(user) -> bool:
-    """机构管理员：owner、teacher 或 registrar。"""
+    """机构管理员：owner 或 teacher。"""
     return bool(
         user
         and user.is_authenticated
         and user.institution is not None
-        and user.institution_role in ('owner', 'teacher', 'registrar')
+        and user.institution_role in ('owner', 'teacher')
     )
+
+
+def is_institution_owner(user) -> bool:
+    """机构所有者：仅 owner。"""
+    return bool(
+        user
+        and user.is_authenticated
+        and user.institution is not None
+        and user.institution_role == 'owner'
+    )
+
+
+def is_institution_teacher(user) -> bool:
+    """机构教师权限：owner 或 teacher（owner 包含 teacher 所有权限）。"""
+    return is_institution_admin(user)
 
 
 def is_member_or_admin(user) -> bool:
@@ -113,7 +128,9 @@ class IsPlatformAdmin(permissions.BasePermission):
 
 
 class IsAdmin(permissions.BasePermission):
-    """超级管理员或机构管理员（owner / teacher）"""
+    """管理端用户：平台超管（Layer 1）或机构管理者（Layer 2/3: owner / teacher）。
+    注意：此权限不区分 Layer 2（owner）和 Layer 3（teacher）。
+    如需严格区分，请使用 IsInstitutionOwner / IsInstitutionTeacher。"""
     message = "需要管理员权限。"
 
     def has_permission(self, request, view):
@@ -155,7 +172,7 @@ class IsAdminWriteMemberRead(permissions.BasePermission):
 
 
 class IsInstitutionAdmin(permissions.BasePermission):
-    """机构管理员权限（owner、teacher、registrar）"""
+    """机构管理员权限（owner、teacher）"""
     message = "需要机构管理员权限。"
 
     def has_permission(self, request, view):
@@ -166,11 +183,11 @@ class IsInstitutionAdmin(permissions.BasePermission):
         if request.query_params.get('preview_institution') and is_platform_admin(user):
             return True
         return (user.institution is not None
-                and user.institution_role in ('owner', 'teacher', 'registrar'))
+                and user.institution_role in ('owner', 'teacher'))
 
 
 class IsInstitutionTeacher(permissions.BasePermission):
-    """机构教师权限（owner 或 teacher，不含 registrar）"""
+    """机构教师权限（owner 或 teacher）"""
     message = "需要机构教师权限。"
 
     def has_permission(self, request, view):
@@ -212,8 +229,11 @@ class IsInstitutionActive(permissions.BasePermission):
 
 class HasPlanFeature(permissions.BasePermission):
     """
-    检查用户所在机构是否具备指定功能。
+    检查用户是否具备指定功能（基于生效方案）。
     用法: permission_classes = [HasPlanFeature]; required_feature = 'ai.generate'
+
+    方案来源：超管 → enterprise；有机构 → institution.get_effective_plan()；
+    无机构 → personal_plan（默认 free）。
     """
     message = "当前版本不支持此功能，请升级。"
 
@@ -221,13 +241,11 @@ class HasPlanFeature(permissions.BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        if is_platform_admin(user):
-            return True
         required = getattr(view, 'required_feature', None)
         if required is None:
             return True
-        from users.models import has_plan_feature
-        return has_plan_feature(user.institution, required)
+        from users.models import get_effective_plan_for_user, get_plan_features
+        return required in get_plan_features(get_effective_plan_for_user(user))
 
 
 class IsInstitutionMember(permissions.BasePermission):

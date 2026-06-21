@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { InterviewRadarChart } from './RadarChart';
 import { toast } from 'sonner';
 import { formatApiErrorToast } from '@/lib/apiError';
-import api from '@/lib/api';
+import api, { streamFetch } from '@/lib/api';
 import { PaperPlaneTilt, StopCircle } from '@phosphor-icons/react';
 
 interface Turn {
@@ -61,12 +61,10 @@ export const SessionChat: React.FC<Props> = ({ session, onRefresh }) => {
     setLocalCandidateTurn({ text });
 
     try {
-      const res = await fetch(`/api/interviews/sessions/${session.id}/text-turn/stream/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ text }),
+      const { url, init } = streamFetch(`/api/interviews/sessions/${session.id}/text-turn/stream/`, {
+        text,
       });
+      const res = await fetch(url, init);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const reader = res.body?.getReader();
       if (!reader) throw new Error('stream not available');

@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
+from users.permissions import is_institution_owner
 from .models import APICredential
 from .serializers_institution import APICredentialSerializer
 
@@ -28,13 +29,10 @@ class APIKeyListCreateView(APIView):
         return Response(ser.data)
 
     def post(self, request):
-        inst = getattr(request.user, 'institution', None)
-        if not inst:
-            return Response({'error': '无机构归属'}, status=403)
-        role = getattr(request.user, 'institution_role', '')
-        if role not in ('owner',):
+        if not is_institution_owner(request.user):
             return Response({'error': '仅机构所有者可创建 API Key'}, status=403)
 
+        inst = request.user.institution
         ser = APICredentialSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 

@@ -143,7 +143,7 @@ export const CourseCenter: React.FC = () => {
              >
                 <div className="aspect-video bg-slate-100 relative overflow-hidden">
                    {course.cover_image ? (
-                     <img src={course.cover_image} alt={course.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                     <img src={course.cover_image} alt={course.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy" />
                    ) : (
                      <div className="w-full h-full flex items-center justify-center text-muted-foreground font-bold uppercase tracking-widest text-[11px]">No Preview</div>
                    )}

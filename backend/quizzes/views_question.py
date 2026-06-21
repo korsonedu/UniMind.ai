@@ -13,7 +13,7 @@ from quizzes.models import Question, UserQuestionStatus, KnowledgePoint, Assignm
 from quizzes.serializers import QuestionSerializer, QuestionListSerializer
 from users.models import User
 from users.views import IsMember
-from users.permissions import IsAdmin, is_platform_admin, HasQuota
+from users.permissions import IsAdmin, is_platform_admin, HasQuota, IsInstitutionTeacher, is_institution_teacher
 from ai_service import AIService
 from quizzes.services.memorix_scheduler import build_adaptive_question_ids
 from quizzes.ai_workflow import save_confirmed_questions
@@ -412,18 +412,11 @@ from users.models import Class as ClassModel
 
 class AssignmentCreateView(APIView):
     """POST /api/quizzes/assignments/create/ — 教师创建作业并发布给学生。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
 
     def post(self, request):
         user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
-            return Response({'error': '仅教师/机构主可创建作业'}, status=403)
-
+        institution = user.institution
         title = (request.data.get('title') or '').strip()
         question_ids = request.data.get('question_ids', [])
         class_ids = request.data.get('class_ids', [])
@@ -726,17 +719,11 @@ class AssignmentSubmissionListView(APIView):
 
 class AssignmentGradeView(APIView):
     """POST /api/quizzes/assignments/submissions/<id>/grade/ — 教师批改/评分。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
 
     def post(self, request, pk):
         user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
-            return Response({'error': '仅教师/机构主可批改'}, status=403)
+        institution = user.institution
 
         try:
             sub = AssignmentSubmission.objects.select_related('assignment').get(
@@ -762,17 +749,11 @@ class AssignmentGradeView(APIView):
 
 class TeacherAssignmentListView(APIView):
     """GET /api/quizzes/teacher-assignments/ — 教师查看自己创建的作业列表。"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
 
     def get(self, request):
         user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role not in ('teacher', 'owner'):
-            return Response({'error': '仅教师/机构主可查看'}, status=403)
+        institution = user.institution
 
         assignments = Assignment.objects.filter(
             institution=institution, created_by=user

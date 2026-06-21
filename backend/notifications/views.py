@@ -17,6 +17,7 @@ from users.permissions import (
     IsInstitutionOwner,
     is_platform_admin,
     is_institution_admin,
+    is_institution_owner,
 )
 
 
@@ -29,7 +30,7 @@ class CanCreateAnnouncement(permissions.BasePermission):
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return True
-        return is_platform_admin(request.user) or request.user.institution_role == 'owner'
+        return is_platform_admin(request.user) or is_institution_owner(request.user)
 
 
 class CanEditAnnouncement(permissions.BasePermission):

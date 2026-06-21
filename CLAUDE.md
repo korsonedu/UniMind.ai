@@ -27,6 +27,7 @@ Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepS
 - **敏感字段加密**：支付密钥等用 `core.fields.EncryptedCharField` / `EncryptedTextField`（Fernet AES），加密密钥通过 `ENCRYPTION_KEY` 环境变量设置（默认从 SECRET_KEY 派生）。
 - **Cookie 认证为主**：REST API 用 `core.authentication.CookieTokenAuthentication`（先读 httpOnly cookie，fallback Authorization header），前端 `api.ts` 设 `withCredentials:true`。WebSocket 仅 Cookie 认证（connect 时校验，未认证直接 close 4001），前端不存 token 到 localStorage。
 - **题目机构隔离**：所有 Question 查询必须按机构过滤。机构成员只能看到本机构题目（`qs.filter(institution=inst)`），禁止将全局题目（`institution__isnull=True`）作为机构成员的 fallback 数据源。独立用户（无机构）仅见全局题目。
+- **四层权限模型**：Layer 1 超管(`is_superuser`+无机构) → Layer 2 机构所有者(`owner`) → Layer 3 教师(`teacher`) → Layer 4 学生(`student`)。禁止内联 `institution_role in (...)` 判断，统一用 `users.permissions` 中的 helper 函数（`is_platform_admin` / `is_institution_owner` / `is_institution_teacher`）或 DRF 权限类。方案获取用 `get_effective_plan_for_user(user)`。详见 `docs/tech/architecture/PERMISSION_ARCHITECTURE.md`。
 - **只做被要求的事**：严格按指令执行，不擅自追加额外改动。如果认为某件额外的事确实有用，先询问，不得自行决定。
 
 ## 项目结构速查

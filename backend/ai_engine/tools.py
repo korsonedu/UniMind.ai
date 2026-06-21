@@ -537,7 +537,6 @@ SAVE_STUDY_PLAN_SCHEMA = {
                     "description": {"type": "string"},
                     "day": {"type": "integer", "minimum": 1},
                     "subject": {"type": "string"},
-                    "estimated_minutes": {"type": "integer", "minimum": 5},
                     "knowledge_point_ids": {
                         "type": "array", "items": {"type": "integer"},
                     },
@@ -547,8 +546,8 @@ SAVE_STUDY_PLAN_SCHEMA = {
             "description": "任务列表",
         },
         "total_days": {"type": "integer", "minimum": 1, "description": "计划总天数"},
+        "teaching_plan_id": {"type": "integer", "description": "关联的教师端教学计划ID（可选）"},
     },
-    "required": ["title", "tasks"],
 }
 
 GET_ACTIVE_PLAN_SCHEMA = {
@@ -959,6 +958,22 @@ GRADE_SUBMISSIONS_SCHEMA = {
     "required": ["submission_id", "score"],
 }
 
+CREATE_TEACHING_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "class_id": {"type": "integer", "description": "班级 ID（必填）"},
+        "title": {"type": "string", "description": "计划标题"},
+        "subject": {"type": "string", "description": "学科"},
+        "semester": {"type": "string", "description": "学期，如 2026-春季"},
+        "week_count": {"type": "integer", "description": "教学周数，默认18"},
+        "goal": {"type": "string", "description": "教学目标"},
+        "deadline": {"type": "string", "description": "目标截止日期 ISO 格式"},
+        "target_score": {"type": "integer", "description": "目标分数"},
+        "current_level": {"type": "string", "description": "学生当前水平"},
+    },
+    "required": ["class_id"],
+}
+
 
 def get_exam_generator_tools():
     """教师 Agent 工具集（17 个工具）。"""
@@ -1002,6 +1017,8 @@ def get_exam_generator_tools():
             impl_summary="查询 Assignment 和 AssignmentSubmission 表，按学生汇总作业得分，返回成绩矩阵。"),
         _make_tool("grade_submissions", "批改学生作业提交。教师说'给XX分''批改'时使用。", GRADE_SUBMISSIONS_SCHEMA,
             impl_summary="更新 AssignmentSubmission 的 score、graded_by、graded_at 字段，返回更新后的提交信息。"),
+        _make_tool("create_teaching_plan", "创建或更新班级教学计划。教师设定目标（goal/deadline/target_score），Agent 据此规划周进度。参数: class_id(必填), title, subject, semester, week_count, goal, deadline, target_score, current_level。", CREATE_TEACHING_PLAN_SCHEMA,
+            impl_summary="upsert TeachingPlan 表，同一班级+学科+学期只保留一份。返回 plan id 和目标信息。"),
         _make_tool("render_visual", "在对话中渲染可视化卡片。用于向教师展示确认操作（布置作业/发送通知等）、选项选择、数据摘要等需要视觉呈现的内容。纯文字问答不需要调用。", RENDER_VISUAL_SCHEMA,
             impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到对话流中。常用 type=action_cards 用于让教师确认操作或选择选项。"),
     ]

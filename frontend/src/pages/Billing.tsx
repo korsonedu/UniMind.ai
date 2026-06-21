@@ -30,7 +30,7 @@ export function BillingPage() {
   const [contactOpen, setContactOpen] = useState(false);
   const [contactPlan, setContactPlan] = useState('');
 
-  const currentTier = user?.institution?.plan || user?.membership_tier || 'free';
+  const currentTier = user?.institution?.plan || user?.personal_plan || user?.membership_tier || 'free';
   const isTrial = user?.is_member && user?.membership_source === 'trial';
   const membershipEnd = user?.membership_expires_at ? new Date(user?.membership_expires_at) : null;
   const daysLeft = membershipEnd

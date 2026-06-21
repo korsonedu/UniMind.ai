@@ -98,7 +98,7 @@ export const KnowledgeMap: React.FC = () => {
       else flatNodes.push(...rawData);
       flatNodes.sort((a, b) => (b.questions_count || 0) - (a.questions_count || 0) || (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
       setAllNodes(flatNodes);
-    } catch (e) {
+    } catch (e) { console.debug('[KnowledgeMap] fetchMap failed:', e);
     } finally {
       setLoading(false);
     }
@@ -157,7 +157,7 @@ export const KnowledgeMap: React.FC = () => {
         articles: aRes.data.articles || aRes.data || [],
         questions: qRes.data || [],
       });
-    } catch (e) {
+    } catch (e) { console.debug('[KnowledgeMap] node detail fetch failed:', e);
     } finally {
       setDetailsLoading(false);
     }

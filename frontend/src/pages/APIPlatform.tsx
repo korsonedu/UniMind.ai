@@ -35,6 +35,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 
 interface ApiKey {
   id: number;
@@ -99,6 +100,7 @@ function ApiKeysTab() {
   const [showCreate, setShowCreate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);
@@ -156,7 +158,7 @@ function ApiKeysTab() {
   }
 
   async function handleDelete(key: ApiKey) {
-    if (!confirm(`确定删除密钥「${key.name}」？使用该密钥的集成将立即失效。`)) return;
+    if (!(await confirm(`确定删除密钥「${key.name}」？使用该密钥的集成将立即失效。`))) return;
     try {
       await api.delete(`/users/institution/me/api-keys/${key.id}/`);
       await fetchKeys();
@@ -296,6 +298,7 @@ function ApiKeysTab() {
         </div>
       )}
 
+      <ConfirmDialog />
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-md">

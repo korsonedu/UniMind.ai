@@ -39,6 +39,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 import { useAuthStore } from '@/store/useAuthStore';
 
 interface Listing {
@@ -385,6 +386,7 @@ function MyListingsTab() {
   const [showPublish, setShowPublish] = useState(false);
   const [editItem, setEditItem] = useState<Listing | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   const fetchMyListings = useCallback(async () => {
     setLoading(true);
@@ -464,7 +466,7 @@ function MyListingsTab() {
   }
 
   async function handleDelete(item: Listing) {
-    if (!confirm(`确定删除「${item.title}」？此操作不可撤销。`)) return;
+    if (!(await confirm(`确定删除「${item.title}」？此操作不可撤销。`))) return;
     try {
       await api.delete(`/quizzes/marketplace/manage/${item.id}/`);
       await fetchMyListings();
@@ -653,6 +655,7 @@ function MyListingsTab() {
         </DialogContent>
       </Dialog>
 
+      <ConfirmDialog />
       {/* Edit Dialog */}
       <Dialog open={!!editItem} onOpenChange={(v) => { if (!v) setEditItem(null); }}>
         <DialogContent className="max-w-md">

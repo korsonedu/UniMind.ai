@@ -18,6 +18,7 @@ import {
   Spinner, Books, CheckCircle, CalendarCheck, Users, Clock, Lightning, ChartBar, FilePdf,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
+import { useConfirm } from '@/components/useConfirm';
 import { TeachingPlanAnalytics } from '@/components/TeachingPlanAnalytics';
 
 /* ── types ── */
@@ -35,6 +36,7 @@ interface TeachingPlan {
   id: number; class_obj: number; class_name: string;
   title: string; description: string; subject: string; semester: string;
   week_count: number; weekly_plans: WeekPlan[] | null; lesson_plans: LessonPlan[];
+  goal?: string; deadline?: string; target_score?: number; current_level?: string;
 }
 interface Klass { id: number; name: string }
 interface KP { id: number; name: string }
@@ -81,6 +83,8 @@ export default function LessonPlans() {
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState('');
 
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
+
   const selectedPlan = plans.find(p => p.id === selectedId) || null;
 
   /* ── data fetching ── */
@@ -126,6 +130,9 @@ export default function LessonPlans() {
       class_obj: Number(planClassId), title: fd.get('title'),
       subject: planSubject, semester: fd.get('semester'),
       description: fd.get('description'), week_count: Number(fd.get('week_count')) || 18,
+      goal: fd.get('goal') || '', deadline: fd.get('deadline') || null,
+      target_score: fd.get('target_score') ? Number(fd.get('target_score')) : null,
+      current_level: fd.get('current_level') || '',
     };
     try {
       let id: number;
@@ -156,7 +163,7 @@ export default function LessonPlans() {
   };
 
   const deletePlan = async (plan: TeachingPlan) => {
-    if (!confirm(`删除「${plan.title}」及所有教案？`)) return;
+    if (!(await confirm(`删除「${plan.title}」及所有教案？`))) return;
     await api.delete(`/courses/teaching-plans/${plan.id}/`);
     setPlans(prev => prev.filter(p => p.id !== plan.id));
     if (selectedId === plan.id) setSelectedId(null);
@@ -185,7 +192,7 @@ export default function LessonPlans() {
   };
 
   const deleteLesson = async (l: LessonPlan) => {
-    if (!confirm(`删除「${l.title}」？`)) return;
+    if (!(await confirm(`删除「${l.title}」？`))) return;
     await api.delete(`/courses/lesson-plans/${l.id}/`);
     if (selectedId) refreshPlan(selectedId);
     toast.success('已删除');
@@ -564,6 +571,35 @@ export default function LessonPlans() {
               </div>
             </div>
 
+            {/* goal */}
+            <div className=\"space-y-3 pt-1 border-t border-border/50\">
+              <p className=\"text-[11px] font-bold uppercase tracking-wider text-muted-foreground\">学习目标</p>
+              <div>
+                <Label htmlFor=\"pg\">目标描述</Label>
+                <Textarea id=\"pg\" name=\"goal\" rows={2}
+                  defaultValue={editingPlan?.goal || ''}
+                  placeholder=\"如：1年内达到高考数学130分\" />
+              </div>
+              <div className=\"grid grid-cols-2 gap-3\">
+                <div>
+                  <Label htmlFor=\"pdl\">截止日期</Label>
+                  <Input id=\"pdl\" name=\"deadline\" type=\"date\"
+                    defaultValue={editingPlan?.deadline || ''} />
+                </div>
+                <div>
+                  <Label htmlFor=\"pts\">目标分数</Label>
+                  <Input id=\"pts\" name=\"target_score\" type=\"number\"
+                    defaultValue={editingPlan?.target_score || ''} min={0} max={750} />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor=\"pcl\">学生当前水平</Label>
+                <Input id=\"pcl\" name=\"current_level\"
+                  defaultValue={editingPlan?.current_level || ''}
+                  placeholder=\"如：已掌握基础代数，薄弱在函数和解析几何\" />
+              </div>
+            </div>
+
             {/* scope */}
             <div className="space-y-3 pt-1 border-t border-border/50">
               <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">教学范围</p>
@@ -700,6 +736,8 @@ export default function LessonPlans() {
           </form>
         </DialogContent>
       </Dialog>
+      {/* Confirm Dialog */}
+      <ConfirmDialog />
     </PageWrapper>
   );
 }

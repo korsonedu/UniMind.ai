@@ -313,108 +313,23 @@ export function StudyPlan() {
                             <SavedIndicator fieldKey={`${task.id}_title`} />
                           </div>
 
-                          {/* Row 2: Meta fields — estimated_minutes, target_accuracy, question_count */}
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <div className="flex items-center gap-1.5">
-                              <label className="text-[10px] font-bold text-muted-foreground">{t('estimatedMinutes', { min: '' }).replace(/~?\s*$/, '').trim()}</label>
-                              <Input
-                                type="number"
-                                min={1}
-                                max={180}
-                                value={task.estimated_minutes ?? ''}
-                                onChange={e => {
-                                  const val = e.target.value ? parseInt(e.target.value) : undefined;
-                                  setSelectedPlan(prev => {
-                                    if (!prev) return prev;
-                                    const newTasks = (prev.plan_data?.tasks || []).map(t =>
-                                      t.id === task.id ? { ...t, estimated_minutes: val } : t
-                                    );
-                                    return { ...prev, plan_data: { ...prev.plan_data, tasks: newTasks } };
-                                  });
-                                }}
-                                onBlur={() => {
-                                  if (task.estimated_minutes !== undefined) {
-                                    updateTaskField(task.id, 'estimated_minutes', task.estimated_minutes);
-                                  }
-                                }}
-                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                className="h-7 w-16 text-xs rounded-lg px-2"
-                                placeholder="分钟"
-                              />
-                              <SavedIndicator fieldKey={`${task.id}_estimated_minutes`} />
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              <label className="text-[10px] font-bold text-muted-foreground">{t('targetAccuracy')}</label>
-                              <Input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={task.target_accuracy ?? ''}
-                                onChange={e => {
-                                  const val = e.target.value ? parseInt(e.target.value) : undefined;
-                                  setSelectedPlan(prev => {
-                                    if (!prev) return prev;
-                                    const newTasks = (prev.plan_data?.tasks || []).map(t =>
-                                      t.id === task.id ? { ...t, target_accuracy: val } : t
-                                    );
-                                    return { ...prev, plan_data: { ...prev.plan_data, tasks: newTasks } };
-                                  });
-                                }}
-                                onBlur={() => {
-                                  if (task.target_accuracy !== undefined) {
-                                    updateTaskField(task.id, 'target_accuracy', task.target_accuracy);
-                                  }
-                                }}
-                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                className="h-7 w-16 text-xs rounded-lg px-2"
-                                placeholder="%"
-                              />
-                              <SavedIndicator fieldKey={`${task.id}_target_accuracy`} />
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              <label className="text-[10px] font-bold text-muted-foreground">{t('questionCount')}</label>
-                              <Input
-                                type="number"
-                                min={0}
-                                max={200}
-                                value={task.question_count ?? ''}
-                                onChange={e => {
-                                  const val = e.target.value ? parseInt(e.target.value) : undefined;
-                                  setSelectedPlan(prev => {
-                                    if (!prev) return prev;
-                                    const newTasks = (prev.plan_data?.tasks || []).map(t =>
-                                      t.id === task.id ? { ...t, question_count: val } : t
-                                    );
-                                    return { ...prev, plan_data: { ...prev.plan_data, tasks: newTasks } };
-                                  });
-                                }}
-                                onBlur={() => {
-                                  if (task.question_count !== undefined) {
-                                    updateTaskField(task.id, 'question_count', task.question_count);
-                                  }
-                                }}
-                                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                className="h-7 w-16 text-xs rounded-lg px-2"
-                                placeholder="题"
-                              />
-                              <SavedIndicator fieldKey={`${task.id}_question_count`} />
-                            </div>
-
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 rounded-lg text-muted-foreground hover:text-red-500 ml-auto"
-                              onClick={() => deleteTask(task.id)}
-                            >
-                              <Trash className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-
-                          {task.description && (
-                            <p className="text-sm text-muted-foreground">{task.description}</p>
+                          {/* Task meta: subject only */}
+                          {task.subject && (
+                            <Badge variant="secondary" className="text-[10px]">{task.subject}</Badge>
                           )}
+                          {task.description && (
+                            <p className="text-[12px] text-muted-foreground/60 leading-relaxed">{task.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 rounded-lg text-muted-foreground hover:text-red-500"
+                            onClick={() => deleteTask(task.id)}
+                          >
+                            <Trash className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>

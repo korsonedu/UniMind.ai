@@ -196,6 +196,14 @@ class TeachingPlan(models.Model):
     subject = models.CharField(max_length=100, verbose_name='学科', help_text='如 金融431、高中数学')
     semester = models.CharField(max_length=50, verbose_name='学期', help_text='如 2026-春季')
     week_count = models.PositiveSmallIntegerField(default=18, verbose_name='教学周数')
+
+    # ── 目标驱动 ──
+    goal = models.TextField(blank=True, verbose_name="教学目标", help_text="如 '1年内达到高考数学130分'")
+    deadline = models.DateField(null=True, blank=True, verbose_name="目标截止日期")
+    target_score = models.PositiveIntegerField(null=True, blank=True, verbose_name="目标分数")
+    current_level = models.CharField(max_length=200, blank=True, verbose_name="学生当前水平", help_text="如 '已掌握基础代数，薄弱在函数和解析几何'")
+    milestones = models.JSONField(null=True, blank=True, verbose_name="里程碑", help_text='[{week:4, target:"函数章节掌握80%", achieved:false}]')
+
     weekly_plans = models.JSONField(null=True, blank=True, verbose_name='周计划', help_text='[{week:1,topic:"",objectives:"",kp_ids:[],materials:""}]')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_teaching_plans')
     created_at = models.DateTimeField(auto_now_add=True)

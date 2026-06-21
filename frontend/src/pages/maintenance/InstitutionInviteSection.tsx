@@ -27,7 +27,6 @@ interface Invite {
 const ROLE_LABEL: Record<string, string> = {
   owner: '机构所有者',
   teacher: '教师',
-  registrar: '教务主管',
   student: '学员',
 };
 
@@ -97,7 +96,7 @@ export const InstitutionInviteSection: React.FC = () => {
                 <Select value={assignedRole} onValueChange={setAssignedRole}>
                   <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {['student', 'teacher', 'registrar'].map(r => (
+                    {['student', 'teacher'].map(r => (
                       <SelectItem key={r} value={r} className="text-xs">{ROLE_LABEL[r]}</SelectItem>
                     ))}
                   </SelectContent>

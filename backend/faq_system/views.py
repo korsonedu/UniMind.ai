@@ -6,7 +6,7 @@ from .models import Question, Answer
 from .serializers import QuestionSerializer, AnswerSerializer
 from notifications.models import Notification
 from users.views import IsMember
-from users.permissions import is_platform_admin, is_institution_admin
+from users.permissions import is_platform_admin, is_institution_admin, is_institution_teacher
 from core.file_validation import validate_upload_file
 from core.rate_limit import user_rate_limit
 from core.utils import apply_institution_filter
@@ -99,7 +99,7 @@ class AnswerCreateView(generics.CreateAPIView):
         except Question.DoesNotExist:
             return Response({'error': 'Question not found'}, status=404)
 
-        is_teacher = request.user.institution_role in ('teacher', 'owner') or request.user.role == 'admin'
+        is_teacher = is_institution_teacher(request.user) or is_platform_admin(request.user)
         
         # 逻辑：首次回答仅允许教师
         if question.answers.count() == 0:

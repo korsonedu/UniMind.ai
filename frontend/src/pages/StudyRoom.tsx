@@ -98,9 +98,9 @@ export const StudyRoom: React.FC = () => {
   }, [setPageHeader, t]);
 
   // ── API calls ──
-  const fetchOnline = async () => { try { const res = await api.get('/users/online/'); setOnlineUsers(res.data); } catch (e) { console.warn('fetchOnline failed', e); } };
-  const fetchMessages = async () => { try { const res = await api.get('/study/messages/'); setMessages(res.data); } catch (e) { console.warn('fetchMessages failed', e); } };
-  const fetchPlans = async () => { try { const res = await api.get('/users/plans/'); setPlans(res.data); } catch (e) { console.warn('fetchPlans failed', e); } };
+  const fetchOnline = async () => { try { const res = await api.get('/users/online/'); setOnlineUsers(res.data); } catch (e) { console.error('fetchOnline failed', e); } };
+  const fetchMessages = async () => { try { const res = await api.get('/study/messages/'); setMessages(res.data); } catch (e) { console.error('fetchMessages failed', e); } };
+  const fetchPlans = async () => { try { const res = await api.get('/users/plans/'); setPlans(res.data); } catch (e) { console.error('fetchPlans failed', e); } };
 
   // ── Heartbeat ──
   const getHeartbeatPayload = useCallback(() => {

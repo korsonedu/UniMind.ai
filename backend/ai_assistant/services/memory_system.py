@@ -32,7 +32,7 @@ class MemorySystem:
         """检查用户是否具备某个付费功能。user 为 None 或 free 用户不具备付费功能。"""
         if user is None:
             return False
-        tier = getattr(user, 'membership_tier', 'free') or 'free'
+        tier = getattr(user, 'personal_plan', None) or getattr(user, 'membership_tier', 'free') or 'free'
         return tier in MemorySystem.TIER_FEATURES.get(feature, [])
 
     @staticmethod

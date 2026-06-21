@@ -241,7 +241,7 @@ const PromoPlus: React.FC = () => {
       <footer className="py-8 border-t border-[#e5e7eb]" style={{ background: '#f8f9fb' }}>
         <div className="max-w-4xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <img src="/Unimind_logo.png" alt="UniMind" className="h-5 w-5 rounded-md object-contain" />
+            <img src="/Unimind_logo.png" alt="UniMind" className="h-5 w-5 rounded-md object-contain" loading="lazy" />
             <span className="text-[12px] font-medium text-[#9ca3af]">UniMind.ai</span>
           </div>
           <p className="text-[10px] text-[#9ca3af]">© 2019-2026 北京融知高科 · UniMind.ai</p>

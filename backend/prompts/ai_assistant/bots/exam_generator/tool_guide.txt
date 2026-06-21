@@ -21,6 +21,7 @@
 - `send_notification` → 向指定学生发送学习提醒。参数: `student_name` 或 `student_id`, `title`(通知标题), `content`(通知正文)。仅教师/机构主可用。
 - `assign_class_course` → 为班级分配课程（替换现有全部课程关联）。参数: `class_id`(班级ID), `course_id`(课程ID)。仅教师/机构主可用。
 - `get_class_gradebook` → 获取班级成绩册：学生×作业成绩矩阵 + 统计。参数: `class_id`(班级ID)。仅教师/机构主可用。
+- `create_teaching_plan` → 创建或更新班级教学计划。教师说"为XX班制定教学计划""设定目标""学期规划"时使用。参数: `class_id`(必填), `subject`, `semester`, `week_count`, `goal`(目标), `deadline`(截止日期), `target_score`(目标分数), `current_level`(当前水平)。仅教师/机构主可用。
 
 ### 浏览工具（4 个）
 - `list_courses` → 浏览机构课程库。参数: `subject`(可选), `query`(可选), `limit`(默认10)。

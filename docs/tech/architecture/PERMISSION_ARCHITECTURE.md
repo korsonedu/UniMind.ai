@@ -1,21 +1,37 @@
 # UniMind.ai 权限架构
 
-> 最后更新：2026-05-27
-> 审计范围：全系统（后端 11 个 Django app + 前端 21 个页面 + 路由/侧边栏 + Agent 工具权限沙箱）
+> 最后更新：2026-06-21（四层模型重构）
+> 审计范围：全系统（后端 11 个 Django app + 前端 21+ 页面 + 路由/侧边栏 + Agent 工具权限沙箱）
 
 ---
 
-## 一、三层权限模型
+## 一、四层权限模型
 
-UniMind 的权限由三个独立维度叠加决定：
+权限由 **角色** + **方案** 两个维度叠加决定。角色决定你能管理谁，方案决定你能看到什么功能。
 
-| 维度 | 后端存储 | 控制范围 |
-|------|---------|---------|
-| **平台角色** | `User.role` — `student` / `admin` | 是否为平台超级管理员 |
-| **机构角色** | `User.institution_role` — `owner` / `teacher` / `student` | 机构内的管理权限 |
-| **方案层级** | `Institution.plan` + `User.membership_tier` — `free` / `solo` / `plus` / `pro` | 功能可见性 |
+### 1.1 四层角色
 
-实际权限取三者**交集**：方案决定你能看到什么功能，机构角色决定你能管理谁，平台角色决定你能跨机构操作。
+```
+Layer 1  系统管理员    is_superuser=True, institution_id=NULL
+Layer 2  机构管理员    institution_role='owner'
+Layer 3  老师         institution_role='teacher'
+Layer 4  学生         institution_role='student'（或无机构）
+```
+
+每层是上一层的**真子集**：学生能用的老师都能用，老师能用的机构管理员都能用，机构管理员能用的超管都能用。
+
+### 1.2 方案层级
+
+方案由机构决定（`Institution.plan`），通过 `get_effective_plan()` 支持父子机构继承。无机构用户使用 `User.personal_plan`。
+
+| 方案 | 说明 |
+|------|------|
+| `free` | 免费基础功能 |
+| `starter` | 入门版 |
+| `growth` | 成长版 |
+| `enterprise` | 企业版（超管等同此方案） |
+
+统一获取用户生效方案：`get_effective_plan_for_user(user)`
 
 ---
 
@@ -24,25 +40,28 @@ UniMind 的权限由三个独立维度叠加决定：
 ### 2.1 User 核心字段（`backend/users/models.py`）
 
 ```
+is_superuser      : boolean                        （Layer 1：平台超管）
 role              : 'student' | 'admin'           （平台角色，默认 student）
 is_member         : boolean                        （是否已激活会员）
-membership_tier   : 'free' | 'solo' | 'plus' | 'pro' （个人会员等级）
-institution       : FK → Institution               （所属机构，可为 null）
+personal_plan     : 'free' | 'starter' | 'growth' | 'enterprise' （无机构用户的个人方案）
+membership_tier   : 同上（已弃用，过渡期保留）
+institution       : FK → Institution               （所属机构，超管强制为 null）
 institution_role  : 'owner' | 'teacher' | 'student'  （机构内角色，默认 student）
 ```
 
-### 2.2 计算属性
+### 2.2 四层角色检测
 
-| 属性 | 定义 | 含义 |
-|------|------|------|
-| `is_platform_admin` | `is_superuser AND institution_id IS NULL` | 无机构归属的超级管理员 |
-| `is_institution_admin`（前端） | `institution IS NOT NULL AND institution_role IN ('owner','teacher')` | 机构管理者 |
-| `is_institution_owner`（前端） | `institution IS NOT NULL AND institution_role = 'owner'` | 机构所有者 |
+| 属性 | 后端 helper | 前端 |
+|------|-----------|------|
+| Layer 1 超管 | `is_platform_admin(user)` | `user.is_admin === true` |
+| Layer 2 机构所有者 | `is_institution_owner(user)` | `user.is_institution_owner === true` |
+| Layer 3 教师 | `is_institution_teacher(user)` | `user.is_institution_teacher === true` |
+| Layer 4 学生 | `institution_role == 'student'` | `user.institution_role === 'student'` |
 
 ### 2.3 save() 自动规则
 
 ```
-is_superuser → role='admin', is_staff=True, is_member=True
+is_superuser → role='admin', institution=None, institution_role='', is_staff=True, is_member=True
 ```
 
 ---
@@ -416,11 +435,16 @@ admin   : [learning.access, member.access, admin.panel, content.manage, users.ma
 ### 11.1 新增后端视图时
 
 1. **权限类从 `users.permissions` 引用**，不要在 app 内定义局部权限类
-2. 机构管理数据必须用 `IsInstitutionAdmin` + `IsInstitutionActive` 组合
-3. 功能门控用 `HasPlanFeature` + `view.required_feature`
-4. 消耗性/配额型接口用 `HasQuota` + `view.quota_resource`
-5. queryset 必须做机构数据隔离（见第七节模式）
-6. **`IsMember` 从 `users.permissions` 导入**，这是唯一定义位置（`users.views.IsMember` 仅为向后兼容 re-export）
+2. **禁止内联权限检查**：所有 `institution_role in (...)` 判断必须通过 helper 函数或权限类实现
+3. 四层权限选择指南：
+   - Layer 1（超管）：`IsPlatformAdmin`
+   - Layer 2（机构所有者）：`IsInstitutionOwner`
+   - Layer 3（教师+所有者）：`IsInstitutionTeacher` 或 `IsInstitutionAdmin`
+   - Layer 4（学生/会员）：`IsMember`（含会员过期检查）
+4. 机构管理数据必须组合 `IsInstitutionActive`（检查机构启用+方案未到期）
+5. 功能门控用 `HasPlanFeature` + `view.required_feature`（基于 `get_effective_plan_for_user`）
+6. 消耗性/配额型接口用 `HasQuota` + `view.quota_resource`
+7. queryset 必须做机构数据隔离（见第七节模式）
 
 ### 11.2 新增前端路由时
 

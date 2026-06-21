@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List
 
 from ai_assistant.services.tool_executor import BaseToolExecutor
+from users.permissions import is_institution_teacher
 
 logger = logging.getLogger(__name__)
 
@@ -381,7 +382,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from django.db.models import Avg, Count, Q
         from quizzes.models import Question, UserQuestionStatus
 
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         student_name = (args.get('name') or args.get('student_name') or '').strip()
@@ -450,7 +451,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         """查询指定作业的提交/批改进度（仅教师/机构主可用）。"""
         from quizzes.models import Assignment, AssignmentSubmission
 
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         assignment_id = args.get('assignment_id')
@@ -496,7 +497,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from notifications.models import Notification
         from users.models import Class as ClassModel
 
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         title = args.get('title', '课后练习')
@@ -579,7 +580,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from notifications.models import Notification
         from users.models import User as UserModel
 
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         student_name = args.get('student_name', '').strip()
@@ -804,7 +805,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from users.models import Class as ClassModel, ClassCourse
         from courses.models import Course
 
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         class_id = args.get('class_id')
@@ -845,7 +846,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from users.models import Class as ClassModel
         from quizzes.models import Assignment, AssignmentSubmission
 
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         class_id = args.get('class_id')
@@ -916,7 +917,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from quizzes.models import AssignmentSubmission
         from django.utils import timezone
 
-        if not self.institution or getattr(self.user, 'institution_role', '') not in ('teacher', 'owner'):
+        if not self.institution or not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         submission_id = args.get('submission_id')
@@ -949,4 +950,53 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             "feedback": feedback or None,
             "graded_by": self.user.nickname or self.user.username,
             "graded_at": submission.graded_at.isoformat(),
+        }
+
+    # ── 教学计划 ──
+
+    def _handle_create_teaching_plan(self, args: Dict) -> Dict:
+        """创建或更新教学计划。"""
+        from courses.models import TeachingPlan
+        from users.models import Class
+
+        class_id = int(args.get('class_id', 0))
+        if not class_id:
+            return {"error": "缺少 class_id"}
+
+        class_obj = Class.objects.filter(id=class_id, institution=self.institution).first()
+        if not class_obj:
+            return {"error": "班级不存在或无权操作"}
+
+        title = args.get('title', f'{class_obj.name}教学计划')
+        subject = args.get('subject', '')
+        semester = args.get('semester', '')
+        week_count = int(args.get('week_count', 18))
+        goal = args.get('goal', '')
+        deadline = None
+        if args.get('deadline'):
+            from django.utils.dateparse import parse_date
+            deadline = parse_date(args['deadline'])
+        target_score = args.get('target_score')
+        current_level = args.get('current_level', '')
+
+        plan, created = TeachingPlan.objects.update_or_create(
+            class_obj=class_obj,
+            subject=subject,
+            semester=semester,
+            defaults={
+                'institution': self.institution,
+                'title': title,
+                'week_count': week_count,
+                'goal': goal,
+                'deadline': deadline,
+                'target_score': target_score,
+                'current_level': current_level,
+                'created_by': self.user,
+            },
+        )
+        return {
+            'id': plan.id, 'title': plan.title, 'created': created,
+            'goal': plan.goal or '',
+            'deadline': plan.deadline.isoformat() if plan.deadline else None,
+            'week_count': plan.week_count,
         }

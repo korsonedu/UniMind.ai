@@ -120,7 +120,7 @@ export const AlbumSection: React.FC = () => {
                         )}
                         <div className="h-12 w-12 rounded-xl bg-[#F5F5F7] flex items-center justify-center overflow-hidden shrink-0">
                           {item.cover_image ? (
-                            <img src={item.cover_image} alt="" className="h-full w-full object-cover" />
+                            <img src={item.cover_image} alt="" className="h-full w-full object-cover" loading="lazy" />
                           ) : (
                             <ImageIcon className="h-5 w-5 text-[#AEAEB2]" />
                           )}
@@ -154,7 +154,7 @@ export const AlbumSection: React.FC = () => {
                             <div key={c.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-white/60 transition-colors">
                               <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
                                 {c.cover_image ? (
-                                  <img src={c.cover_image} alt="" className="h-full w-full object-cover" />
+                                  <img src={c.cover_image} alt="" className="h-full w-full object-cover" loading="lazy" />
                                 ) : (
                                   <ImageIcon className="h-3.5 w-3.5 text-[#AEAEB2]" />
                                 )}

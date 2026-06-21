@@ -47,11 +47,6 @@ from .views_institution import (
     InstitutionInviteListView, InstitutionInviteDetailView,
     InstitutionJoinRequestListView, InstitutionJoinRequestReviewView,
 )
-from .views_parent import (
-    ParentLinkRequestView, ParentLinkVerifyView, ParentChildListView,
-    ParentChildProgressView, ParentChildWeeklyReportView,
-    MyParentLinksView,
-)
 from .views_api import (
     APIKeyListCreateView, APIKeyDetailView,
 )
@@ -194,13 +189,6 @@ urlpatterns = [
     path('me/report-card/', StudentReportCardView.as_view(), name='student-report-card'),
     path('me/report-card/pdf/', StudentReportCardPDFView.as_view(), name='student-report-card-pdf'),
 
-    # Parent portal
-    path('parent/link-request/', ParentLinkRequestView.as_view(), name='parent-link-request'),
-    path('parent/link-verify/', ParentLinkVerifyView.as_view(), name='parent-link-verify'),
-    path('parent/children/', ParentChildListView.as_view(), name='parent-children'),
-    path('parent/children/<int:child_id>/progress/', ParentChildProgressView.as_view(), name='parent-child-progress'),
-    path('parent/children/<int:child_id>/weekly-report/', ParentChildWeeklyReportView.as_view(), name='parent-child-weekly-report'),
-    path('me/parent-links/', MyParentLinksView.as_view(), name='my-parent-links'),
 
     # API platform
     path('institution/me/api-keys/', APIKeyListCreateView.as_view(), name='api-key-list'),
