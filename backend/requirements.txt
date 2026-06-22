@@ -50,3 +50,8 @@ mem0ai>=0.1.0
 pgvector>=0.3.0
 # IRT parameter estimation
 scipy>=1.13.0
+# Dev & monitoring
+sentry-sdk>=2.0
+pytest>=8.0
+pytest-django>=4.8
+drf-spectacular>=0.27

@@ -472,7 +472,7 @@ export function KnowledgeSystemPanel() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-[calc(100vh-14rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
       {/* Left: Tree */}
       <Card className="p-4 lg:col-span-2 flex flex-col min-h-0">
         <div className="flex items-center justify-between mb-3">

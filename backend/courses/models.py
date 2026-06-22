@@ -217,25 +217,4 @@ class TeachingPlan(models.Model):
         return f'{self.title} ({self.semester})'
 
 
-class LessonPlan(models.Model):
-    """教案：单课教学设计，支持 AI 生成。"""
-    teaching_plan = models.ForeignKey(TeachingPlan, on_delete=models.CASCADE, null=True, blank=True, related_name='lesson_plans')
-    institution = models.ForeignKey('users.Institution', on_delete=models.CASCADE, related_name='lesson_plans')
-    title = models.CharField(max_length=500, verbose_name='课题')
-    objectives = models.TextField(blank=True, verbose_name='教学目标')
-    knowledge_points = models.ManyToManyField('quizzes.KnowledgePoint', blank=True, related_name='lesson_plans', verbose_name='知识点')
-    activities = models.JSONField(null=True, blank=True, verbose_name='教学活动', help_text='[{name:"导入",duration:5,description:""}]')
-    materials = models.JSONField(null=True, blank=True, verbose_name='教学材料', help_text='["PPT","视频","实验器材"]')
-    ai_generated = models.JSONField(null=True, blank=True, verbose_name='AI 生成内容', help_text='LLM 生成的教案详细内容')
-    duration_minutes = models.PositiveSmallIntegerField(default=45, verbose_name='课时(分钟)')
-    week_number = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='所属周')
-    order = models.PositiveIntegerField(default=0, verbose_name='排序')
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_lesson_plans')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        ordering = ['teaching_plan', 'week_number', 'order']
-
-    def __str__(self):
-        return self.title

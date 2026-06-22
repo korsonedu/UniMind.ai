@@ -60,7 +60,7 @@ def _send_via_smtp(*, to: str, subject: str, html: str, text: str) -> bool:
 
 
 def _verification_email_html(code: str) -> str:
-    logo_url = getattr(settings, "UNIMIND_LOGO_URL", "https://unimind-ai.com/logo.png")
+    logo_url = getattr(settings, "UNIMIND_LOGO_URL", "https://unimind-ai.com/logo_email.png")
     minutes = VERIFICATION_CODE_TTL_MINUTES
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -77,8 +77,8 @@ def _verification_email_html(code: str) -> str:
 
         <!-- Header -->
         <tr>
-          <td style="background-color:#1a1a1a;padding:32px 40px;text-align:center;">
-            <img src="{logo_url}" alt="UniMind" width="140" height="28" style="display:block;margin:0 auto;border:0;">
+          <td style="background-color:#f8f9fb;padding:32px 40px;text-align:center;border-bottom:1px solid #eef0f4;">
+            <img src="{logo_url}" alt="UniMind" width="120" style="display:block;margin:0 auto;border:0;height:auto;">
           </td>
         </tr>
 

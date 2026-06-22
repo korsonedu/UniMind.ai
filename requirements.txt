@@ -1,5 +1,0 @@
--r backend/requirements.txt
-sentry-sdk>=2.0
-pytest>=8.0
-pytest-django>=4.8
-drf-spectacular>=0.27

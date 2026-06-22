@@ -339,25 +339,21 @@ def _build_adjacency_from_edges():
     return adj
 
 
-def _field_rerank(question_ids, user, now, alpha):
+def _field_rerank(question_ids, user, now, _alpha_unused=None):
     """
-    对候选题目列表进行图扩散重排。
-    
-    公式: score_i = α × urgency_i + (1-α) × field_benefit_i
-    field_benefit_i = Σ_j w_ij × max(0, 1 - R_j(t))
-    
-    urgency 计算取决于 MEMORIX_REC_ENABLED：
-      - 关闭：urgency_i = 1 - R_i(t)                     （标准 Weibull）
-      - 打开：urgency_i = P_i(t_elapsed) / P_i(t_opt)    （再巩固窗口）
-    
-    返回重新排序后的 question_id 列表。
+    对候选题目列表进行 Memorix-Field 图扩散重排。
+
+    使用扩散状态估计器 u 向量 + 乘性评分公式：
+      score_i = (1 - u_i) × (1 + βa × Σ_j w_ij × max(0, 1 - u_j))
+
+    u 向量由复习传播（即时）+ 每日扩散（Celery）共同维护。
+    无 u 条目的 KP 回退到 Weibull R(t) 作为 urgency 估计。
+
+    乘性形式（论文 §5.1）：u_i 高的 KP 不会被邻居拖到前面。
     """
     from quizzes.models import UserQuestionStatus, Question
     from quizzes.memorix.service import predict_retrievability
-
-    rec_enabled = getattr(settings, 'MEMORIX_REC_ENABLED', False)
-    rec_tau = getattr(settings, 'MEMORIX_REC_TAU', 0.042)  # 默认 1 小时（天）
-    rec_k = getattr(settings, 'MEMORIX_REC_K', 1.2)
+    from quizzes.memorix.field import get_u_vector, compute_field_score, ensure_u_entry
 
     adj = _build_adjacency_from_edges()
     if not adj:
@@ -368,52 +364,41 @@ def _field_rerank(question_ids, user, now, alpha):
     ).values_list('id', 'knowledge_point_id'))
 
     kp_ids = set(q_to_kp.values())
-    statuses = UserQuestionStatus.objects.filter(
-        user=user,
-        question__knowledge_point_id__in=kp_ids,
-    ).select_related('question')
 
-    # kp_id → {'R': float, 'stability': float, 'elapsed': float}
-    kp_state = {}
-    for st in statuses:
-        kp_id = st.question.knowledge_point_id
-        elapsed = (now - st.last_review).total_seconds() / 86400 if st.last_review else 999
-        R = predict_retrievability(st.stability, elapsed, user_id=user.id)
-        kp_state[kp_id] = {
-            'R': R,
-            'stability': st.stability,
-            'elapsed': elapsed,
-        }
+    # 加载 u 向量（扩散状态估计器）
+    u = get_u_vector(user.id)
 
-    # 计算每个题目的 score
+    # 对有 u 条目的 KP，直接用 u 值评分
+    # 对无 u 条目的 KP，用 Weibull R(t) 作为 fallback urgency
+    kps_without_u = [kp for kp in kp_ids if kp and kp not in u]
+
+    kp_urgency_fallback = {}
+    if kps_without_u:
+        statuses = UserQuestionStatus.objects.filter(
+            user=user,
+            question__knowledge_point_id__in=kps_without_u,
+        ).select_related('question')
+        for st in statuses:
+            kp_id = st.question.knowledge_point_id
+            elapsed = (now - st.last_review).total_seconds() / 86400 if st.last_review else 999
+            R = predict_retrievability(st.stability, elapsed, user_id=user.id)
+            kp_urgency_fallback[kp_id] = max(0.0, 1.0 - R)
+            # 同时初始化 u 条目，下次调度就能用扩散值
+            ensure_u_entry(user.id, kp_id, R)
+
+    # 评分
     scored = []
     for qid in question_ids:
         kp_id = q_to_kp.get(qid)
-        state = kp_state.get(kp_id, {})
-        R_self = state.get('R', 0.0)
-
-        # urgency
-        if rec_enabled and kp_id and kp_id in kp_state:
-            from quizzes.memorix.reconsolidation import compute_urgency
-            urgency = compute_urgency(
-                state['stability'],
-                state['elapsed'],
-                k=rec_k,
-                tau=rec_tau,
-            )
+        if kp_id and kp_id in u:
+            # 有扩散状态 → 乘性评分
+            score = compute_field_score(u, kp_id, adj)
+        elif kp_id and kp_id in kp_urgency_fallback:
+            # 无 u 条目 → Weibull urgency（纯 urgency，无 field_benefit）
+            score = kp_urgency_fallback[kp_id]
         else:
-            urgency = 1.0 - R_self
+            score = 0.0
 
-        # field_benefit: 对每个邻居 j，贡献 = w_ij × (1 - R_j)
-        # 注意：field_benefit 始终用标准 (1-R_j)，不受 REC 影响
-        fb = 0.0
-        if kp_id and kp_id in adj:
-            for neighbor_kp, w in adj[kp_id]:
-                nbr_state = kp_state.get(neighbor_kp, {})
-                R_neighbor = nbr_state.get('R', 0.0)
-                fb += w * max(0.0, 1.0 - R_neighbor)
-
-        score = alpha * urgency + (1 - alpha) * fb
         scored.append((qid, score))
 
     scored.sort(key=lambda x: -x[1])

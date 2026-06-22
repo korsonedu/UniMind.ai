@@ -759,8 +759,8 @@ class TeacherAssignmentListView(APIView):
             institution=institution, created_by=user
         ).annotate(
             q_count=Count('assignment_questions'),
-            sub_count=Count('assignment_submissions'),
-            graded_count=Count('assignment_submissions', filter=Q(assignment_submissions__score__isnull=False)),
+            sub_count=Count('submissions'),
+            graded_count=Count('submissions', filter=Q(submissions__score__isnull=False)),
         ).prefetch_related(
             'target_classes'
         ).order_by('-created_at')

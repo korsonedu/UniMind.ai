@@ -253,6 +253,13 @@ AI_BULK_GENERATE_CONCURRENCY = _get_int("AI_BULK_GENERATE_CONCURRENCY", 4)
 AI_DIFFICULTY_CHECK_ENABLED = _get_bool("AI_DIFFICULTY_CHECK_ENABLED", default=True)
 QUIZ_EXAM_GRADING_USE_CELERY = _get_bool("QUIZ_EXAM_GRADING_USE_CELERY", default=True)
 
+# Memorix-Field: 图扩散记忆调度（新一代 Memorix）
+MEMORIX_FIELD_ENABLED = _get_bool("MEMORIX_FIELD_ENABLED", default=True)
+MEMORIX_FIELD_ALPHA = float(os.getenv("MEMORIX_FIELD_ALPHA", "0.60"))  # urgency vs field_benefit 权重
+MEMORIX_REC_ENABLED = _get_bool("MEMORIX_REC_ENABLED", default=True)    # 再巩固窗口 urgency 模型
+MEMORIX_REC_TAU = float(os.getenv("MEMORIX_REC_TAU", "0.042"))          # 不应期常数（天）
+MEMORIX_REC_K = float(os.getenv("MEMORIX_REC_K", "1.2"))               # 再巩固形状参数
+
 # ELO 积分系统
 ELO_K_FACTOR = _get_int("ELO_K_FACTOR", 32)
 ELO_INITIAL_BONUS = _get_int("ELO_INITIAL_BONUS", 200)
@@ -401,7 +408,7 @@ GIPHY_API_KEY = os.getenv("GIPHY_API_KEY", "")
 # Email — Feishu SMTP (core/email_service.py)
 FEISHU_NOTIFY_PASSWORD = os.getenv("FEISHU_NOTIFY_PASSWORD", "")
 EMAIL_NOREPLY_ADDRESS = os.getenv("EMAIL_NOREPLY_ADDRESS", "notification@unimind-ai.com")
-UNIMIND_LOGO_URL = os.getenv("UNIMIND_LOGO_URL", "https://unimind-ai.com/logo.png")
+UNIMIND_LOGO_URL = os.getenv("UNIMIND_LOGO_URL", "https://unimind-ai.com/logo_email.png")
 
 # ── Logging（等保二级：日志持久化 + 轮转） ──
 LOG_DIR = os.path.join(BASE_DIR, "logs")

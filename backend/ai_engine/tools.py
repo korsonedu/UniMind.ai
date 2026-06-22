@@ -917,15 +917,6 @@ LIST_ARTICLES_SCHEMA = {
     },
 }
 
-LIST_LESSON_PLANS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "subject": {"type": "string", "description": "按学科筛选"},
-        "class_name": {"type": "string", "description": "按班级名称筛选（模糊匹配）"},
-        "limit": {"type": "integer", "description": "返回数量上限，默认 10"},
-    },
-}
-
 LIST_CLASSES_SCHEMA = {
     "type": "object",
     "properties": {},
@@ -974,9 +965,17 @@ CREATE_TEACHING_PLAN_SCHEMA = {
     "required": ["class_id"],
 }
 
+GET_TEACHING_PLAN_KPS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "teaching_plan_id": {"type": "integer", "description": "教学计划 ID（可选，不传则返回机构所有教学计划列表）"},
+        "week_number": {"type": "integer", "description": "周号（可选，需配合 teaching_plan_id 使用）"},
+    },
+}
+
 
 def get_exam_generator_tools():
-    """教师 Agent 工具集（17 个工具）。"""
+    """教师 Agent 工具集（18 个工具）。"""
     return [
         _make_tool("search_knowledge", "搜索知识点或知识树结构。出题前先用此工具确认知识点存在并获取 ID。", SEARCH_KNOWLEDGE_SCHEMA,
             impl_summary="合并搜索：mode=kp 时模糊匹配 knowledge_point 表的 name 和 code；mode=tree 时搜索知识树结构（sub/ch/sec 层级）；mode=auto 时先搜 kp，无结果则自动搜 tree。支持 subject 过滤。返回知识点 ID 和名称。"),
@@ -1007,8 +1006,6 @@ def get_exam_generator_tools():
             impl_summary="查询 Question 表（按机构隔离），支持 kp_name/subject/q_type/difficulty 多维度筛选，返回题目 ID、文本预览、题型、难度和知识点。"),
         _make_tool("list_articles", "浏览机构文章库。教师说'看看文章'时使用。", LIST_ARTICLES_SCHEMA,
             impl_summary="查询 Article 表（按机构隔离），支持标题/内容搜索，返回文章 ID、标题、作者、标签和链接。"),
-        _make_tool("list_lesson_plans", "浏览机构教案库。教师说'看看教案''有没有教学计划'时使用。", LIST_LESSON_PLANS_SCHEMA,
-            impl_summary="查询 TeachingPlan 表（按机构隔离），支持 subject/class_name 筛选，返回教案 ID、标题、学科、学期、班级、周数。"),
         _make_tool("list_classes", "获取机构下的所有班级列表。教师说'有哪些班''班级列表'时使用。", LIST_CLASSES_SCHEMA,
             impl_summary="查询 Class 表（按机构隔离），返回班级 ID、名称、学生数。"),
         _make_tool("assign_class_course", "将课程分配给班级。教师说'把XX课程分配给X班'时使用。", ASSIGN_CLASS_COURSE_SCHEMA,
@@ -1019,6 +1016,8 @@ def get_exam_generator_tools():
             impl_summary="更新 AssignmentSubmission 的 score、graded_by、graded_at 字段，返回更新后的提交信息。"),
         _make_tool("create_teaching_plan", "创建或更新班级教学计划。教师设定目标（goal/deadline/target_score），Agent 据此规划周进度。参数: class_id(必填), title, subject, semester, week_count, goal, deadline, target_score, current_level。", CREATE_TEACHING_PLAN_SCHEMA,
             impl_summary="upsert TeachingPlan 表，同一班级+学科+学期只保留一份。返回 plan id 和目标信息。"),
+        _make_tool("get_teaching_plan_kps", "查询教学计划某周的知识点。基于教学计划出题时先调用此工具获取该周知识点，再用 quick_generate。教师说'基于教案出题''按教学计划出题'时使用。参数: teaching_plan_id(必填), week_number(可选)。", GET_TEACHING_PLAN_KPS_SCHEMA,
+            impl_summary="查询 TeachingPlan 的 weekly_plans JSON，提取指定周（或全部周）的 kp_ids，然后从 KnowledgePoint 表查名称。返回 teaching_plan 元信息 + 每周知识点列表。"),
         _make_tool("render_visual", "在对话中渲染可视化卡片。用于向教师展示确认操作（布置作业/发送通知等）、选项选择、数据摘要等需要视觉呈现的内容。纯文字问答不需要调用。", RENDER_VISUAL_SCHEMA,
             impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到对话流中。常用 type=action_cards 用于让教师确认操作或选择选项。"),
     ]

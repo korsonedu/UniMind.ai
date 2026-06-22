@@ -7,9 +7,7 @@
  * - 结构化卡片：AgentStepCard（工具步骤）、DataCard（数据）、DecisionCard（决策）
  */
 import React, { useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { cn } from '@/lib/utils';
 import { AgentStepCard } from '@/components/AgentStepCard';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
@@ -133,15 +131,10 @@ export function AgentTimeline({
                 msg.isPush && "border-primary/30 bg-primary/5",
               )}>
                 <div className="text-sm leading-relaxed prose-code:bg-muted prose-pre:bg-muted">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                  >
-                    {msg.content
+                  <MarkdownContent content={msg.content
                       .replace(/\\\(/g, '$')
                       .replace(/\\\)/g, '$')
-                    }
-                  </ReactMarkdown>
+                    } />
                 </div>
               </div>
             )}

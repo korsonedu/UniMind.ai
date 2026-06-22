@@ -6,10 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CaretLeft, CaretRight, CheckCircle, Star, Spinner } from '@phosphor-icons/react';
 import { cn, processMathContent } from '@/lib/utils';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 interface AssessmentProps {
   open: boolean;
@@ -145,9 +142,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
 
               {/* Question text */}
               <div className="text-[15px] font-medium text-stone-800 leading-relaxed mb-8">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {processMathContent(currentQ.text)}
-                </ReactMarkdown>
+                <MarkdownContent content={processMathContent(currentQ.text)} />
               </div>
 
               {/* Answer area */}

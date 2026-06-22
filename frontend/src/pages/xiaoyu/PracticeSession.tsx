@@ -2,10 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Spinner, CaretLeft, Target, Clock } from '@phosphor-icons/react';
 import api from '@/lib/api';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 interface QuestionItem {
   id: number;
@@ -340,12 +337,7 @@ const PracticeSession: React.FC = () => {
 
           {/* Question text */}
           <div className="text-stone-800 text-lg leading-relaxed mb-6 prose prose-stone max-w-none">
-            <ReactMarkdown
-              remarkPlugins={[remarkMath]}
-              rehypePlugins={[rehypeKatex]}
-            >
-              {processMathContent(current.text)}
-            </ReactMarkdown>
+            <MarkdownContent content={processMathContent(current.text)} />
           </div>
 
           {/* Answer area */}

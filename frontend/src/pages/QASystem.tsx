@@ -20,10 +20,7 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 import { cn, processMathContent } from '@/lib/utils';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 // --- Sub-Components ---
 
@@ -134,12 +131,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
                 isFirst ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-200 font-medium border border-indigo-200/50 dark:border-indigo-300/20" : "bg-muted/30 text-foreground"
                 )}
             >
-                <ReactMarkdown 
-                remarkPlugins={[remarkMath]} 
-                rehypePlugins={[rehypeKatex]}
-                >
-                {processMathContent(answer.content)}
-                </ReactMarkdown>
+                <MarkdownContent content={processMathContent(answer.content)} />
                 
                 {answer.is_teacher && (
                 <button
@@ -347,12 +339,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
             onClick={triggerReply}
             className="text-sm font-medium text-foreground leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-muted/20 rounded-xl transition-colors -m-2 p-2"
           >
-            <ReactMarkdown 
-              remarkPlugins={[remarkMath]} 
-              rehypePlugins={[rehypeKatex]}
-            >
-              {processMathContent(question.content)}
-            </ReactMarkdown>
+            <MarkdownContent content={processMathContent(question.content)} />
           </div>
         )}
         

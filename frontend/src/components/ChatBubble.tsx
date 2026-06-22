@@ -1,9 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Sparkle, ThumbsUp, ThumbsDown } from '@phosphor-icons/react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import remarkGfm from 'remark-gfm';
-import rehypeKatex from 'rehype-katex';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
@@ -104,9 +101,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
               // KaTeX display math spacing
               "prose-[.katex-display]:my-2 prose-[.katex-display]:overflow-x-auto",
             )}>
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {msg.content}
-              </ReactMarkdown>
+              <MarkdownContent content={msg.content} />
             </div>
           )}
         </div>

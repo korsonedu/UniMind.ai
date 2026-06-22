@@ -574,6 +574,110 @@ class LoginView(APIView):
             return Response({'error': '邮箱或密码错误'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+class LoginByCodeView(APIView):
+    """邮箱验证码登录（未注册则自动创建账号）。"""
+    permission_classes = (AllowAny,)
+
+    @method_decorator(rate_limit(key_prefix="login_by_code", max_requests=10, window_seconds=300))
+    def post(self, request, *args, **kwargs):
+        from core.models import SecurityAuditLog
+        from django.contrib.auth.hashers import check_password
+        from django.core.cache import cache
+
+        email = str(request.data.get('email', '')).strip().lower()
+        code = str(request.data.get('code', '')).strip()
+        if not email or not code:
+            return Response({'error': '请提供邮箱和验证码'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 验证码校验
+        cached = cache.get(f"verification_code:{email}")
+        if not cached or not check_password(code, cached.get("code_hash", "")):
+            return Response({'error': '验证码错误或已过期'}, status=status.HTTP_400_BAD_REQUEST)
+
+        sent_at = parse_datetime(cached["sent_at"]) if cached.get("sent_at") else None
+        if sent_at and timezone.now() > sent_at + datetime.timedelta(minutes=10):
+            return Response({'error': '验证码已过期，请重新发送'}, status=status.HTTP_400_BAD_REQUEST)
+
+        cache.delete(f"verification_code:{email}")
+
+        client_ip = _get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
+
+        user = User.objects.filter(email=email, email_verified=True).first()
+        is_new = False
+
+        if not user:
+            # 自动注册
+            is_new = True
+            username_base = email.split('@')[0]
+            username = username_base
+            counter = 1
+            while User.objects.filter(username=username).exists():
+                username = f"{username_base}{counter}"
+                counter += 1
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=None,
+            )
+            user.set_unusable_password()
+            user.nickname = username_base
+            user.email_verified = True
+            user.save()
+
+        # 账号锁定检查
+        if user.locked_until and user.locked_until > timezone.now():
+            remaining = int((user.locked_until - timezone.now()).total_seconds() / 60) + 1
+            return Response(
+                {'error': f'账号已锁定，请 {remaining} 分钟后重试', 'code': 'account_locked'},
+                status=status.HTTP_423_LOCKED,
+            )
+
+        # 登录成功
+        if user.failed_login_count > 0 or user.locked_until:
+            user.failed_login_count = 0
+            user.locked_until = None
+            user.save(update_fields=['failed_login_count', 'locked_until'])
+
+        with transaction.atomic():
+            Token.objects.filter(user=user).delete()
+            token = Token.objects.create(user=user)
+
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
+
+        SecurityAuditLog.objects.create(
+            event_type='login_success',
+            user=user,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            detail='via verification code' + (' (new account)' if is_new else ''),
+        )
+        security_logger.info("login_by_code user=%s ip=%s new=%s", user.username, client_ip, is_new)
+        record_event('user_login', user=user)
+
+        try:
+            from ai_assistant.tasks import precompute_user_profile
+            precompute_user_profile.delay(user_id=user.id)
+        except Exception:
+            pass
+
+        response = Response({
+            'token': token.key,
+            'user': UserSerializer(user).data,
+            'is_new': is_new,
+        })
+        is_secure = getattr(settings, 'IS_PROD', False)
+        response.set_cookie(
+            'auth_token', token.key,
+            httponly=True,
+            secure=is_secure,
+            samesite='Lax',
+            max_age=30 * 24 * 3600,
+        )
+        return response
+
+
 class LogoutView(APIView):
     permission_classes = [AllowAny]
 
@@ -659,11 +763,11 @@ class SendVerificationCodeView(APIView):
         if not email:
             return Response({'error': '请提供邮箱地址'}, status=400)
 
-        existing_verified = User.objects.filter(email=email, email_verified=True).first()
-        if existing_verified:
-            if request.user.is_authenticated and existing_verified == request.user:
-                pass
-            else:
+        purpose = str(request.data.get('purpose', 'register')).strip()
+        existing_verified = User.objects.filter(email=email, email_verified=True).exists()
+
+        if purpose == 'register' and existing_verified:
+            if request.user.is_authenticated:
                 return Response({'error': '该邮箱已被注册'}, status=400)
 
         from core.email_service import generate_verification_code, send_verification_email
@@ -673,7 +777,12 @@ class SendVerificationCodeView(APIView):
         code = generate_verification_code()
         cache.set(
             f"verification_code:{email}",
-            {"code_hash": make_password(code), "sent_at": timezone.now().isoformat()},
+            {
+                "code_hash": make_password(code),
+                "sent_at": timezone.now().isoformat(),
+                "purpose": purpose,
+                "is_existing": existing_verified,
+            },
             timeout=600,
         )
 
@@ -1308,12 +1417,27 @@ class DataExportView(APIView):
 # ──────────────────────────────────────────────
 
 class FeedbackSubmitView(APIView):
-    """提交用户反馈。
+    """提交用户反馈 & 查看历史。
 
     POST /api/users/feedback/
     Body: { "category": "bug|feature|other", "content": "...", "contact": "optional" }
+
+    GET /api/users/feedback/  → 当前用户已提交的反馈列表
     """
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from core.models import Feedback
+        qs = Feedback.objects.filter(user=request.user).order_by('-created_at')[:50]
+        data = [{
+            'id': f.id,
+            'category': f.category,
+            'content': f.content[:200],
+            'contact': f.contact,
+            'page_url': f.page_url,
+            'created_at': f.created_at.isoformat(),
+        } for f in qs]
+        return Response(data)
 
     @method_decorator(rate_limit(key_prefix="feedback", max_requests=10, window_seconds=3600))
     def post(self, request):
@@ -1336,6 +1460,49 @@ class FeedbackSubmitView(APIView):
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
         )
         return Response({'status': 'ok', 'message': '感谢您的反馈！'})
+
+
+class AdminFeedbackListView(APIView):
+    """管理端查看所有用户反馈。
+
+    GET /api/users/admin/feedback/?category=bug
+    """
+    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+
+    def get(self, request):
+        from core.models import Feedback
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        qs = Feedback.objects.select_related('user').order_by('-created_at')
+
+        category = request.query_params.get('category')
+        if category:
+            qs = qs.filter(category=category)
+
+        page = int(request.query_params.get('page', 1))
+        page_size = min(int(request.query_params.get('page_size', 20)), 100)
+        total = qs.count()
+        offset = (page - 1) * page_size
+        paged = qs[offset:offset + page_size]
+
+        data = [{
+            'id': f.id,
+            'category': f.category,
+            'content': f.content,
+            'contact': f.contact or '',
+            'page_url': f.page_url or '',
+            'user_name': f.user.nickname or f.user.username,
+            'user_email': f.user.email,
+            'created_at': f.created_at.isoformat(),
+        } for f in paged]
+
+        return Response({
+            'items': data,
+            'total': total,
+            'page': page,
+            'total_pages': max(1, (total + page_size - 1) // page_size),
+        })
 
 
 # ──────────────────────────────────────────────

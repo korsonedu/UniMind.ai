@@ -1,34 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AuthLayout } from '@/components/AuthLayout';
 import { useAuthStore } from '@/store/useAuthStore';
-import { toast } from 'sonner';
-import { useTranslation } from 'react-i18next';
+import { Warning, Spinner } from '@phosphor-icons/react';
 
 import api from '@/lib/api';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
-import { Buildings } from '@phosphor-icons/react';
+
+type LoginTab = 'password' | 'code';
 
 export const Login: React.FC = () => {
-  const { t } = useTranslation('auth');
-  const [username, setUsername] = useState('');
+  const [tab, setTab] = useState<LoginTab>('password');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [ssoSlug, setSsoSlug] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
   const { setAuth, updateUser } = useAuthStore();
   const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // 已登录则跳转首页
   useEffect(() => {
     const { user } = useAuthStore.getState();
-    if (user) {
-      navigate('/', { replace: true });
-    }
+    if (user) navigate('/', { replace: true });
   }, []);
 
   const getInstitutionSlug = (): string => {
@@ -48,135 +45,167 @@ export const Login: React.FC = () => {
   const institutionSlug = getInstitutionSlug();
   const institutionRole = getInstitutionRole();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim() || !password) return;
     setLoading(true);
     setError('');
     try {
-      const response = await api.post('/users/login/', { username, password });
+      const response = await api.post('/users/login/', { username: email, password });
       const user = response.data.user;
       const token = response.data.token;
       setAuth(user, token);
-
-      // Auto-join institution from invite link or registration flow
       if (institutionSlug) {
         try {
           await api.post('/users/institution/join-by-slug/', { slug: institutionSlug, role: institutionRole });
           const meRes = await api.get('/users/me/');
           updateUser(meRes.data);
-        } catch (err: any) {
-          // Only show error if user still has no institution after login
-          if (!user.institution && !user.institution_id) {
-            toast.error(err.response?.data?.error || t('login.joinInstitutionError'));
-          }
-        }
+        } catch (_err) {}
       }
-
-      // Fetch institution features/plan so permissions are correct immediately
       await fetchFeatures();
-
       navigate('/');
     } catch (err: any) {
       const errorData = err.response?.data;
-      setError(errorData?.error || errorData?.non_field_errors?.[0] || errorData?.detail || t('login.error'));
+      setError(errorData?.error || errorData?.non_field_errors?.[0] || errorData?.detail || '登录失败');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSendCode = async () => {
+    if (!email.trim()) return;
+    setSendingCode(true);
+    setError('');
+    try {
+      await api.post('/users/send-verification-code/', { email, purpose: 'login_by_code' });
+      navigate(`/verify-code?email=${encodeURIComponent(email)}&purpose=login_by_code${institutionSlug ? `&institution=${institutionSlug}&role=${institutionRole}` : ''}`);
+    } catch (err: any) {
+      setError(err.response?.data?.error || '发送失败，请稍后重试');
+      setSendingCode(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-card/80 backdrop-blur-xl">
-        <CardHeader className="p-6 space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight">{t('login.title')}</CardTitle>
-          <CardDescription>{t('login.subtitle')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            {error && <p className="text-sm text-center bg-destructive/10 text-destructive rounded-xl py-2.5 px-3">{error}</p>}
-            <div className="space-y-2">
-              <Input
-                placeholder={t('login.usernamePlaceholder')}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                spellCheck={false}
-                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Input
-                type="password"
-                placeholder={t('login.passwordPlaceholder')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                spellCheck={false}
-                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring"
-                required
-              />
-            </div>
-            <Button className="w-full h-12 bg-primary text-primary-foreground rounded-xl font-medium hover:opacity-90 transition-all" disabled={loading}>
-              {loading ? t('login.loggingIn') : t('login.submit')}
-            </Button>
-          </form>
-
-          {/* SSO 登录 */}
-          <div className="mt-4 space-y-3">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-card/80 backdrop-blur-xl px-3 text-muted-foreground font-medium">或通过企业 SSO 登录</span>
-              </div>
-            </div>
-            <div className="relative">
-              <Buildings className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="输入机构标识，如 korsonedu"
-                value={ssoSlug}
-                onChange={(e) => setSsoSlug(e.target.value)}
-                className="pl-9 bg-muted/50 border-none h-12 rounded-xl"
-                spellCheck={false}
-              />
-            </div>
-            {ssoSlug.trim() && (
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-xl text-xs font-medium"
-                  onClick={() => { window.location.href = `/api/users/sso/authorize/?institution_slug=${encodeURIComponent(ssoSlug.trim())}&provider=feishu`; }}
-                >
-                  飞书登录
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-xl text-xs font-medium"
-                  onClick={() => { window.location.href = `/api/users/sso/authorize/?institution_slug=${encodeURIComponent(ssoSlug.trim())}&provider=dingtalk`; }}
-                >
-                  钉钉登录
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-xl text-xs font-medium"
-                  onClick={() => { window.location.href = `/api/users/sso/authorize/?institution_slug=${encodeURIComponent(ssoSlug.trim())}&provider=wecom`; }}
-                >
-                  企业微信登录
-                </Button>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            {t('login.noAccount')}{" "}
-            <Link to={institutionSlug ? `/register?institution=${institutionSlug}` : '/register'} className="text-foreground font-semibold hover:underline">
-              {t('login.registerLink')}
+    <AuthLayout
+      title="欢迎回来"
+      subtitle={tab === 'password' ? '登录你的 UniMind 账号' : '新用户将自动创建账号'}
+      footer={
+        tab === 'password' ? (
+          <p className="text-sm text-[#6E6E73] dark:text-white/40">
+            没有账号？
+            <Link
+              to={institutionSlug ? `/register?institution=${institutionSlug}` : '/register'}
+              className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-1"
+            >
+              注册
             </Link>
+          </p>
+        ) : undefined
+      }
+    >
+      {/* Tab switcher */}
+      <div className="flex rounded-xl bg-[#F5F5F7] dark:bg-white/[0.06] p-1 mb-6">
+        <button
+          type="button"
+          onClick={() => { setTab('password'); setError(''); }}
+          className={`
+            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
+            ${tab === 'password'
+              ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
+              : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
+            }
+          `}
+        >
+          密码登录
+        </button>
+        <button
+          type="button"
+          onClick={() => { setTab('code'); setError(''); }}
+          className={`
+            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
+            ${tab === 'code'
+              ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
+              : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
+            }
+          `}
+        >
+          验证码登录
+        </button>
+      </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="flex items-start gap-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 px-4 py-3 mb-5 text-sm text-red-700 dark:text-red-400">
+          <Warning className="h-4 w-4 mt-0.5 shrink-0" weight="fill" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Shared email field */}
+      <div className="space-y-1.5 mb-4">
+        <label htmlFor="login-email" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
+          邮箱
+        </label>
+        <Input
+          id="login-email"
+          type="email"
+          placeholder="name@example.com"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setError(''); }}
+          autoComplete="username"
+          spellCheck={false}
+          className="h-12 rounded-xl"
+          required
+        />
+      </div>
+
+      {/* Password tab */}
+      {tab === 'password' && (
+        <form onSubmit={handlePasswordLogin} className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="login-password" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
+              密码
+            </label>
+            <Input
+              id="login-password"
+              type="password"
+              placeholder="输入密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              spellCheck={false}
+              className="h-12 rounded-xl"
+              required
+            />
           </div>
-        </CardContent>
-      </Card>
-    </div>
+
+          <Button
+            type="submit"
+            className="w-full h-12 rounded-xl font-semibold tracking-tight text-[15px]"
+            disabled={loading}
+          >
+            {loading ? '登录中...' : '登录'}
+          </Button>
+        </form>
+      )}
+
+      {/* Code tab */}
+      {tab === 'code' && (
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-12 rounded-xl font-medium"
+            disabled={sendingCode || !email.trim()}
+            onClick={handleSendCode}
+          >
+            {sendingCode ? <Spinner className="h-4 w-4 animate-spin" /> : '发送验证码'}
+          </Button>
+          <p className="text-xs text-[#AEAEB2] dark:text-white/25 text-center pt-1">
+            未注册邮箱自动创建账号，验证码 10 分钟内有效
+          </p>
+        </div>
+      )}
+    </AuthLayout>
   );
 };

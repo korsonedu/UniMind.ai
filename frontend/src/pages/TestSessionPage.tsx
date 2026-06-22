@@ -8,10 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { cn, processMathContent, normalizeOptions } from '@/lib/utils';
 import api from '@/lib/api';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import {
   getLearningReminderSettings,
   sendLearningReminder,
@@ -270,9 +267,7 @@ export const TestSessionPage: React.FC = () => {
 
             {/* Question text */}
             <div className="text-sm font-medium text-foreground leading-relaxed">
-              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {processMathContent(currentQ.text)}
-              </ReactMarkdown>
+              <MarkdownContent content={processMathContent(currentQ.text)} />
             </div>
 
             {/* Action buttons */}
@@ -337,9 +332,7 @@ export const TestSessionPage: React.FC = () => {
                           {String.fromCharCode(65 + i)}
                         </span>
                         <span className={cn('text-[13px] leading-snug', selected ? 'text-white' : 'text-foreground/80')}>
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {processMathContent(opt)}
-                          </ReactMarkdown>
+                          <MarkdownContent content={processMathContent(opt)} />
                         </span>
                       </button>
                     );

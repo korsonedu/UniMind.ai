@@ -3,9 +3,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Spinner, Sparkle, ArrowCounterClockwise, CaretRight } from '@phosphor-icons/react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { cn, processMathContent } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -156,9 +154,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
               <>
                 {/* Question text */}
                 <div className="text-[15px] font-medium text-stone-800 leading-relaxed mb-8">
-                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                    {processMathContent(question.text)}
-                  </ReactMarkdown>
+                  <MarkdownContent content={processMathContent(question.text)} />
                 </div>
 
                 {/* Answer area */}
@@ -231,9 +227,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                 <div className="space-y-2">
                   <h5 className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">{t('training.standardAnswer')}</h5>
                   <div className="p-5 bg-stone-50 rounded-xl border border-stone-100 text-sm font-medium leading-relaxed text-stone-700">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {processMathContent(standardAnswerText)}
-                    </ReactMarkdown>
+                    <MarkdownContent content={processMathContent(standardAnswerText)} />
                   </div>
                 </div>
 
@@ -243,9 +237,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                     <Sparkle className="w-3 h-3" /> {t('training.rationale')}
                   </h5>
                   <div className="p-5 bg-zinc-900 text-stone-200 rounded-xl text-sm leading-relaxed">
-                    <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                      {processMathContent(rationaleText)}
-                    </ReactMarkdown>
+                    <MarkdownContent content={processMathContent(rationaleText)} />
                   </div>
                 </div>
               </div>

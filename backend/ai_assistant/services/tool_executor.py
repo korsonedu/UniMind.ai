@@ -77,10 +77,14 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'list_courses': lambda a: "浏览课程库" + (f"（{a.get('subject', '')}）" if a.get('subject') else ""),
         'list_questions': lambda a: "浏览题库" + (f"（{a.get('kp_name', '')}）" if a.get('kp_name') else ""),
         'list_articles': lambda a: "浏览文章库" + (f"（搜索: {a.get('query', '')}）" if a.get('query') else ""),
-        'list_lesson_plans': lambda a: "浏览教案库" + (f"（{a.get('subject', '')}）" if a.get('subject') else ""),
         'get_report_card': lambda a: "生成学习报告",
         'get_my_courses': lambda a: "查询我的课程",
         'get_my_achievements': lambda a: "查看我的成就",
+        'get_teaching_plan_kps': lambda a: (
+            "浏览教学计划列表" if not a.get('teaching_plan_id')
+            else f"查询教学计划 #{a.get('teaching_plan_id', '')} 知识点"
+        ),
+        'create_teaching_plan': lambda a: f"创建教学计划「{a.get('title', '')}」",
     }
     generator = labels.get(tool_name)
     if generator:
@@ -156,10 +160,14 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'list_courses': lambda r: f"共 {r.get('total', 0)} 门课程",
         'list_questions': lambda r: f"共 {r.get('total', 0)} 道题",
         'list_articles': lambda r: f"共 {r.get('total', 0)} 篇文章",
-        'list_lesson_plans': lambda r: f"共 {r.get('total', 0)} 份教案",
         'get_report_card': lambda r: f"正确率 {r.get('accuracy', 0)}%，掌握 {r.get('mastered_count', 0)} 个知识点",
         'get_my_courses': lambda r: f"共 {len(r.get('courses', []))} 门课程",
         'get_my_achievements': lambda r: f"已解锁 {r.get('unlocked_count', len(r.get('unlocked', [])))} 个成就",
+        'get_teaching_plan_kps': lambda r: (
+            f"共 {r.get('total', 0)} 个教学计划" if 'plans' in r
+            else f"教学计划「{r.get('title', '')}」，{r.get('total_kps', 0)} 个知识点"
+        ),
+        'create_teaching_plan': lambda r: f"{'已更新' if r.get('created') == False else '已创建'}「{r.get('title', '')}」",
     }
 
     fn = summaries.get(tool_name)
@@ -516,6 +524,21 @@ class PlannerToolExecutor(BaseToolExecutor):
         # 关联教学计划（有班级的学生自动关联）
         teaching_plan_id = args.get('teaching_plan_id')
 
+        # 如果有教学计划，提取知识点范围约束
+        teaching_plan_kp_ids = None
+        if teaching_plan_id:
+            try:
+                from courses.models import TeachingPlan
+                tp = TeachingPlan.objects.filter(id=int(teaching_plan_id)).first()
+                if tp and tp.weekly_plans:
+                    teaching_plan_kp_ids = list({
+                        kp_id
+                        for wp in tp.weekly_plans
+                        for kp_id in (wp.get('kp_ids') or [])
+                    })
+            except Exception:
+                pass
+
         plan = StudyPlan.objects.create(
             user=self.user,
             title=title,
@@ -525,6 +548,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                 "total_days": total_days,
                 "subjects_covered": list({t.get('subject', '') for t in tasks if t.get('subject')}),
                 "diagnostic_suggested": args.get('diagnostic_suggested', False),
+                **({"teaching_plan_kp_ids": teaching_plan_kp_ids} if teaching_plan_kp_ids else {}),
             },
             teaching_plan_id=teaching_plan_id,
             auto_generated=True,

@@ -1,7 +1,5 @@
 import React from 'react';
-import Markdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 interface LatexDerivationPayload {
   title: string;

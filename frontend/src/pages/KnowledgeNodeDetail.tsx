@@ -7,10 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import api from '@/lib/api';
 import { processMathContent } from '@/lib/utils';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { KnowledgeTrainingDialog } from './knowledge-map/TrainingDialog';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -76,9 +73,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
               </div>
               <h1 className="text-lg font-black tracking-tight text-foreground">{node?.name || t('detailPage.nodeFallback')}</h1>
               <div className="text-sm leading-relaxed text-muted-foreground">
-                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {processMathContent(node?.description || t('detailPage.descriptionFallback'))}
-                </ReactMarkdown>
+                <MarkdownContent content={processMathContent(node?.description || t('detailPage.descriptionFallback'))} />
               </div>
               <Button
                 onClick={() => {
@@ -108,9 +103,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
                       {q.subjective_type || q.q_type}
                     </Badge>
                     <div className="text-xs font-bold text-foreground truncate flex-1">
-                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {processMathContent(q.text)}
-                      </ReactMarkdown>
+                      <MarkdownContent content={processMathContent(q.text)} />
                     </div>
                     <ArrowsOut className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
                   </button>

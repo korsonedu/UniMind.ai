@@ -5,11 +5,7 @@ import { Button } from '@/components/ui/button';
 import { CaretLeft, Calendar, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent } from '@/lib/utils';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import remarkGfm from 'remark-gfm';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 export const ArticleDetail: React.FC = () => {
   const { id } = useParams();
@@ -102,12 +98,7 @@ export const ArticleDetail: React.FC = () => {
       </header>
 
       <div className="article-content max-w-none">
-         <ReactMarkdown 
-           remarkPlugins={[remarkMath, remarkGfm]} 
-           rehypePlugins={[rehypeKatex]}
-         >
-           {processedContent}
-         </ReactMarkdown>
+         <MarkdownContent content={processedContent} />
       </div>
 
       <footer className="mt-14 md:mt-20 pt-8 md:pt-12 border-t border-border/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">

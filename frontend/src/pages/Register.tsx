@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-
-import { useTranslation } from 'react-i18next';
+import { AuthLayout } from '@/components/AuthLayout';
+import { Warning } from '@phosphor-icons/react';
 
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export const Register: React.FC = () => {
-  const { t } = useTranslation('auth');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [nickname, setNickname] = useState('');
@@ -25,17 +23,14 @@ export const Register: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
 
-  // 已登录则跳转首页
   useEffect(() => {
     const { user } = useAuthStore.getState();
-    if (user) {
-      navigate('/', { replace: true });
-    }
+    if (user) navigate('/', { replace: true });
   }, []);
-
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
+
   const [searchParams] = useSearchParams();
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -63,16 +58,12 @@ export const Register: React.FC = () => {
       setCountdown(60);
       timerRef.current = setInterval(() => {
         setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current!);
-            timerRef.current = null;
-            return 0;
-          }
+          if (prev <= 1) { if (timerRef.current) clearInterval(timerRef.current); timerRef.current = null; return 0; }
           return prev - 1;
         });
       }, 1000);
     } catch (err: any) {
-      setError(err.response?.data?.error || t('register.errors.sendCodeFailed'));
+      setError(err.response?.data?.error || '发送失败');
     } finally {
       setSendingCode(false);
     }
@@ -80,119 +71,151 @@ export const Register: React.FC = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) { setError(t('register.errors.enterCode')); return; }
+    if (!code.trim()) { setError('请输入验证码'); return; }
     setLoading(true);
     setError('');
     try {
       await api.post('/users/register/', { email, code, nickname, password, agreed_to_terms: agreedToTerms, referral_code: refCode });
       navigate(institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login');
     } catch (err: any) {
-      setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat()[0] as string || t('register.errors.registerFailed'));
+      setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat()[0] as string || '注册失败');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-none shadow-lg rounded-3xl bg-card/80 backdrop-blur-xl">
-        <CardHeader className="p-6 space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold tracking-tight">{t('register.title')}</CardTitle>
-          <CardDescription>{t('register.subtitle')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleRegister} className="space-y-4">
-            {refCode && (
-              <div className="text-sm text-center bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-xl py-2.5 px-3">
-                通过推荐链接注册，完成首次购买后你和推荐人都将获得奖励
-              </div>
-            )}
-            {error && <p className="text-sm text-center bg-destructive/10 text-destructive rounded-xl py-2.5 px-3">{error}</p>}
+    <AuthLayout
+      title="创建账号"
+      subtitle="开启你的 UniMind 学习之旅"
+      footer={
+        <p className="text-sm text-[#6E6E73] dark:text-white/40">
+          已有账号？
+          <Link
+            to={institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login'}
+            className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-1"
+          >
+            登录
+          </Link>
+        </p>
+      }
+    >
+      {/* Referral banner */}
+      {refCode && (
+        <div className="rounded-xl bg-blue-50 dark:bg-blue-950/25 border border-blue-200 dark:border-blue-800/40 px-4 py-3 mb-5 text-sm text-blue-700 dark:text-blue-400">
+          通过推荐链接注册，完成首次购买后你和推荐人都将获得奖励
+        </div>
+      )}
 
-            <div className="flex gap-2">
-              <Input
-                type="email"
-                placeholder={t('register.email')}
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setCodeSent(false); }}
-                autoComplete="email"
-                spellCheck={false}
-                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring flex-1"
-                required
-              />
-              <Button
-                type="button"
-                onClick={handleSendCode}
-                disabled={sendingCode || !email.trim() || countdown > 0}
-                className="h-12 rounded-xl bg-primary text-primary-foreground font-medium shrink-0"
-              >
-                {sendingCode ? t('register.sending') : countdown > 0 ? `${countdown}s` : t('register.getCode')}
-              </Button>
-            </div>
+      {/* Error banner */}
+      {error && (
+        <div className="flex items-start gap-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 px-4 py-3 mb-5 text-sm text-red-700 dark:text-red-400">
+          <Warning className="h-4 w-4 mt-0.5 shrink-0" weight="fill" />
+          <span>{error}</span>
+        </div>
+      )}
 
-            <div className="space-y-2">
-              <Input
-                placeholder={t('register.code')}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                autoComplete="one-time-code"
-                spellCheck={false}
-                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring text-lg tracking-widest font-mono"
-                maxLength={6}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Input
-                placeholder={t('register.nickname')}
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Input
-                type="password"
-                placeholder={t('register.password')}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="new-password"
-                spellCheck={false}
-                className="bg-muted/50 border-none h-12 rounded-xl focus-visible:ring-ring"
-                minLength={6}
-                required
-              />
-            </div>
-
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="agree-terms"
-                checked={agreedToTerms}
-                onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
-                className="mt-0.5"
-              />
-              <label htmlFor="agree-terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
-                我已阅读并同意{' '}
-                <Link to="/terms" className="text-foreground font-medium hover:underline">用户协议</Link>
-                {' '}和{' '}
-                <Link to="/privacy" className="text-foreground font-medium hover:underline">隐私政策</Link>
-              </label>
-            </div>
-
-            <Button className="w-full h-12 bg-primary text-primary-foreground rounded-xl font-medium hover:opacity-90 transition-all" disabled={loading || !agreedToTerms}>
-              {loading ? t('register.registering') : t('register.submit')}
+      <form onSubmit={handleRegister} className="space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor="reg-email" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
+            邮箱
+          </label>
+          <div className="flex gap-2">
+            <Input
+              id="reg-email"
+              type="email"
+              placeholder="name@example.com"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setCodeSent(false); }}
+              autoComplete="email"
+              spellCheck={false}
+              className="h-12 rounded-xl flex-1"
+              required
+            />
+            <Button
+              type="button"
+              onClick={handleSendCode}
+              disabled={sendingCode || !email.trim() || countdown > 0}
+              variant="outline"
+              className="h-12 rounded-xl font-medium shrink-0"
+            >
+              {sendingCode ? '发送中' : countdown > 0 ? `${countdown}s` : '获取验证码'}
             </Button>
-          </form>
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            {t('register.hasAccount')}{" "}
-            <Link to={institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login'} className="text-foreground font-semibold hover:underline">
-              {t('register.loginLink')}
-            </Link>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="reg-code" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
+            验证码
+          </label>
+          <Input
+            id="reg-code"
+            placeholder="输入 6 位验证码"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            autoComplete="one-time-code"
+            spellCheck={false}
+            className="h-12 rounded-xl text-lg tracking-[0.3em] font-mono text-center"
+            maxLength={6}
+            required
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="reg-nickname" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
+            昵称
+          </label>
+          <Input
+            id="reg-nickname"
+            placeholder="你的称呼"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            className="h-12 rounded-xl"
+            required
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="reg-password" className="text-sm font-medium text-[#1D1D1F] dark:text-white/85">
+            密码
+          </label>
+          <Input
+            id="reg-password"
+            type="password"
+            placeholder="至少 8 位"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            spellCheck={false}
+            className="h-12 rounded-xl"
+            minLength={8}
+            required
+          />
+        </div>
+
+        <div className="flex items-start gap-2 pt-1">
+          <Checkbox
+            id="agree-terms"
+            checked={agreedToTerms}
+            onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+            className="mt-0.5"
+          />
+          <label htmlFor="agree-terms" className="text-xs text-[#6E6E73] dark:text-white/40 leading-relaxed cursor-pointer">
+            我已阅读并同意
+            <Link to="/terms" className="text-[#1D1D1F] dark:text-white font-medium hover:underline mx-0.5">用户协议</Link>
+            和
+            <Link to="/privacy" className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-0.5">隐私政策</Link>
+          </label>
+        </div>
+
+        <Button
+          type="submit"
+          className="w-full h-12 rounded-xl font-semibold tracking-tight text-[15px]"
+          disabled={loading || !agreedToTerms}
+        >
+          {loading ? '注册中...' : '注册'}
+        </Button>
+      </form>
+    </AuthLayout>
   );
 };

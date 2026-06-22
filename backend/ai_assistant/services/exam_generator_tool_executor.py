@@ -442,9 +442,6 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             "weak_points": [{"kp": kp, "errors": cnt} for kp, cnt in weak_kps],
             "weekly_active_days": min(7, weekly_active),
             "weekly_exams": weekly_exams,
-            "_actions": [
-                {"label": "查看学员详情", "route": f"/institution/students?student={student.id}"},
-            ],
         }
 
     def _handle_get_assignment_progress(self, args: Dict) -> Dict:
@@ -569,10 +566,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             "class_names": [c.name for c in classes],
             "due_date": due_date.isoformat() if due_date else None,
             "notified_students": notified,
-            "message": f"已发布作业「{title}」（{len(questions)} 题），已通知 {notified} 名学生。",
-            "_actions": [
-                {"label": "查看作业进度", "route": f"/institution/students"},
-            ],
+            "message": f"已发布作业「{title}」（{len(questions)} 题），已通知 {notified} 名学生。可在「作业管理」页面查看提交进度。",
         }
 
     def _handle_send_notification(self, args: Dict) -> Dict:
@@ -657,9 +651,6 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                  "url": f"/course/{c.id}"}
                 for c in courses
             ],
-            "_actions": [
-                {"label": f"查看全部 {qs.count()} 门课程", "route": "/courses"},
-            ],
         }
 
     def _handle_list_questions(self, args: Dict) -> Dict:
@@ -706,9 +697,6 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                  "subject": q.knowledge_point.subject if q.knowledge_point else ''}
                 for q in questions
             ],
-            "_actions": [
-                {"label": f"查看全部 {qs.count()} 道题", "route": "/questions"},
-            ],
         }
 
     def _handle_list_articles(self, args: Dict) -> Dict:
@@ -737,41 +725,6 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                  "author": a.author_display_name or (a.author.nickname if a.author else ''),
                  "tags": a.tags or [], "url": f"/article/{a.id}"}
                 for a in articles
-            ],
-        }
-
-    def _handle_list_lesson_plans(self, args: Dict) -> Dict:
-        """浏览教案库（教师视角，仅看到本机构教案）。"""
-        from courses.models import TeachingPlan
-
-        subject = (args.get('subject') or '').strip()
-        class_name = (args.get('class_name') or '').strip()
-        limit = min(int(args.get('limit', 10)), 20)
-
-        qs = TeachingPlan.objects.all()
-        if self.institution:
-            qs = qs.filter(institution=self.institution)
-
-        if subject:
-            qs = qs.filter(subject=subject)
-        if class_name:
-            qs = qs.filter(class_obj__name__icontains=class_name)
-
-        plans = qs.select_related('class_obj').order_by('-created_at')[:limit]
-
-        return {
-            "total": qs.count(),
-            "plans": [
-                {"id": p.id, "title": p.title,
-                 "subject": p.subject or '',
-                 "semester": p.semester or '',
-                 "class_name": p.class_obj.name if p.class_obj else '',
-                 "week_count": p.week_count,
-                 "url": f"/lesson-plans"}
-                for p in plans
-            ],
-            "_actions": [
-                {"label": "查看全部教案", "route": "/lesson-plans"},
             ],
         }
 
@@ -999,4 +952,81 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             'goal': plan.goal or '',
             'deadline': plan.deadline.isoformat() if plan.deadline else None,
             'week_count': plan.week_count,
+        }
+
+    def _handle_get_teaching_plan_kps(self, args: Dict) -> Dict:
+        """查询教学计划的知识点（按周筛选）。不传 teaching_plan_id 时返回列表。"""
+        from courses.models import TeachingPlan
+
+        teaching_plan_id = args.get('teaching_plan_id')
+        week_number = args.get('week_number')
+
+        # 无 teaching_plan_id → 返回机构下所有教学计划摘要
+        if not teaching_plan_id:
+            qs = TeachingPlan.objects.all()
+            if self.institution:
+                qs = qs.filter(institution=self.institution)
+            plans = qs.select_related('class_obj').order_by('-created_at')[:20]
+            return {
+                "plans": [
+                    {
+                        "id": p.id, "title": p.title,
+                        "subject": p.subject or '',
+                        "semester": p.semester or '',
+                        "class_name": p.class_obj.name if p.class_obj else '',
+                        "week_count": p.week_count,
+                        "goal": p.goal or '',
+                    }
+                    for p in plans
+                ],
+                "total": qs.count(),
+                "hint": "选择一个教学计划 ID，传入 teaching_plan_id 查询具体周的知识点",
+            }
+
+        teaching_plan_id = int(teaching_plan_id)
+
+        try:
+            plan = TeachingPlan.objects.get(id=teaching_plan_id)
+        except TeachingPlan.DoesNotExist:
+            return {"error": f"教学计划 #{teaching_plan_id} 不存在"}
+
+        if self.institution and plan.institution_id != self.institution.id:
+            return {"error": "无权访问该教学计划"}
+
+        weekly_plans = plan.weekly_plans or []
+
+        if week_number is not None:
+            week_number = int(week_number)
+            weekly_plans = [w for w in weekly_plans if w.get('week') == week_number]
+            if not weekly_plans:
+                return {"error": f"第 {week_number} 周不在教学计划中（1-{plan.week_count}）"}
+
+        from quizzes.models import KnowledgePoint
+        weeks_data = []
+        all_kp_ids = set()
+        for wp in weekly_plans:
+            kp_ids = wp.get('kp_ids') or []
+            all_kp_ids.update(kp_ids)
+            weeks_data.append({
+                "week": wp.get('week'),
+                "topic": wp.get('topic', ''),
+                "kp_ids": kp_ids,
+            })
+
+        # 查知识点名称
+        kp_map = {}
+        if all_kp_ids:
+            for kp in KnowledgePoint.objects.filter(id__in=list(all_kp_ids)).values('id', 'name', 'code'):
+                kp_map[kp['id']] = {"name": kp['name'], "code": kp['code'] or ''}
+
+        for wd in weeks_data:
+            wd['knowledge_points'] = [{"id": kp_id, **kp_map.get(kp_id, {"name": f"KP#{kp_id}", "code": ""})}
+                                       for kp_id in wd['kp_ids']]
+
+        return {
+            "teaching_plan_id": plan.id,
+            "title": plan.title,
+            "subject": plan.subject or '',
+            "weeks": weeks_data,
+            "total_kps": len(all_kp_ids),
         }

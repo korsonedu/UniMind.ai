@@ -5,10 +5,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn, processMathContent } from '@/lib/utils';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { isLearningReminderEnabled, sendLearningReminder } from '@/lib/learningReminders';
 
 interface ResultReportProps {
@@ -110,9 +107,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
                           {(currentReportIdx + 1).toString().padStart(2, '0')}
                         </span>
                         <div className="text-sm font-medium text-stone-800 leading-relaxed">
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {processMathContent(currentResult.question?.text || "")}
-                          </ReactMarkdown>
+                          <MarkdownContent content={processMathContent(currentResult.question?.text || "")} />
                         </div>
                       </div>
                       <Badge className={cn(
@@ -138,9 +133,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
                       <div className="space-y-1.5">
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600">{t('result.aiFeedback')}</p>
                         <div className="p-4 bg-emerald-50/50 rounded-lg border border-emerald-100 text-[13px] font-medium text-stone-700 leading-relaxed">
-                          <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                            {processMathContent(currentResult.feedback)}
-                          </ReactMarkdown>
+                          <MarkdownContent content={processMathContent(currentResult.feedback)} />
                         </div>
                       </div>
 
@@ -149,9 +142,7 @@ export const ResultReportDialog: React.FC<ResultReportProps> = ({
                         <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">{t('result.academicAnalysis')}</p>
                         <div className="p-5 bg-zinc-900 rounded-xl text-[13px] font-medium text-stone-200 leading-relaxed">
                           <div className="prose prose-invert prose-sm max-w-none prose-p:leading-relaxed">
-                            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                              {processMathContent(currentResult.analysis || currentResult.ai_answer || "")}
-                            </ReactMarkdown>
+                            <MarkdownContent content={processMathContent(currentResult.analysis || currentResult.ai_answer || "")} />
                           </div>
                         </div>
                       </div>

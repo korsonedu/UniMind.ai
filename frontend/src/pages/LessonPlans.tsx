@@ -13,46 +13,36 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { PageWrapper } from '@/components/PageWrapper';
+import { TeachingPlanAnalytics } from '@/components/TeachingPlanAnalytics';
 import {
-  Plus, Pencil, Trash, Sparkle, CaretDown, CaretRight,
-  Spinner, Books, CheckCircle, CalendarCheck, Users, Clock, Lightning, ChartBar, FilePdf,
+  Plus, Pencil, Trash, CaretDown, CaretRight,
+  Spinner, Books, CalendarCheck, Users, FilePdf,
+  ChartBar, ArrowSquareOut,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
-import { TeachingPlanAnalytics } from '@/components/TeachingPlanAnalytics';
+import { useNavigate } from 'react-router-dom';
 
 /* ── types ── */
 
-interface Activity { name: string; duration: number; description: string }
-interface LessonPlan {
-  id: number; teaching_plan: number | null; title: string;
-  objectives: string; knowledge_point_names: string[];
-  activities: Activity[] | null; materials: string[] | null;
-  ai_generated: { generated_at: string; content: string; model: string } | null;
-  duration_minutes: number; week_number: number | null; order: number;
-}
 interface WeekPlan { week: number; topic: string; objectives: string; kp_ids: number[]; materials: string }
-interface TeachingPlan {
+interface WeeklyPlansData {
   id: number; class_obj: number; class_name: string;
   title: string; description: string; subject: string; semester: string;
-  week_count: number; weekly_plans: WeekPlan[] | null; lesson_plans: LessonPlan[];
+  week_count: number; weekly_plans: WeekPlan[] | null;
   goal?: string; deadline?: string; target_score?: number; current_level?: string;
 }
 interface Klass { id: number; name: string }
-interface KP { id: number; name: string }
 
 /* ── helpers ── */
 
-const EMPTY_ACTIVITY: Activity = { name: '', duration: 5, description: '' };
-const weekLessons = (plan: TeachingPlan, w: number) =>
-  (plan.lesson_plans || []).filter(l => l.week_number === w).sort((a, b) => a.order - b.order);
-const plannedWeeks = (plan: TeachingPlan) =>
+const plannedWeeks = (plan: WeeklyPlansData) =>
   (plan.weekly_plans || []).filter(w => w.topic).length;
 
 /* ══════ page ══════ */
 
 export default function LessonPlans() {
-  const [plans, setPlans] = useState<TeachingPlan[]>([]);
+  const [plans, setPlans] = useState<WeeklyPlansData[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(new Set());
@@ -61,19 +51,12 @@ export default function LessonPlans() {
   // external data
   const [classes, setClasses] = useState<Klass[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
-  const [kps, setKps] = useState<KP[]>([]);
-  const [selectedKPs, setSelectedKPs] = useState<number[]>([]);
 
   // plan dialog
   const [planDialog, setPlanDialog] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<TeachingPlan | null>(null);
+  const [editingPlan, setEditingPlan] = useState<WeeklyPlansData | null>(null);
   const [planClassId, setPlanClassId] = useState('');
   const [planSubject, setPlanSubject] = useState('');
-
-  // lesson dialog
-  const [lessonDialog, setLessonDialog] = useState(false);
-  const [editingLesson, setEditingLesson] = useState<LessonPlan | null>(null);
-  const [targetWeek, setTargetWeek] = useState<number | null>(null);
 
   // inline week edit
   const [editingWeek, setEditingWeek] = useState<number | null>(null);
@@ -84,6 +67,7 @@ export default function LessonPlans() {
   const [aiLoading, setAiLoading] = useState('');
 
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
+  const navigate = useNavigate();
 
   const selectedPlan = plans.find(p => p.id === selectedId) || null;
 
@@ -107,14 +91,6 @@ export default function LessonPlans() {
   }, []);
 
   useEffect(() => { fetchPlans(); fetchMeta(); }, [fetchPlans, fetchMeta]);
-
-  const fetchKPs = useCallback(async (subject: string) => {
-    if (!subject) { setKps([]); setSelectedKPs([]); return; }
-    try {
-      const { data } = await api.get('/quizzes/knowledge-points/', { params: { subject, page_size: 200 } });
-      setKps(data.results || data);
-    } catch { setKps([]); }
-  }, []);
 
   const refreshPlan = useCallback(async (id: number) => {
     try { const { data } = await api.get(`/courses/teaching-plans/${id}/`); setPlans(prev => prev.map(p => p.id === data.id ? data : p)); }
@@ -145,10 +121,10 @@ export default function LessonPlans() {
         setPlans(prev => [data, ...prev]); id = data.id;
         toast.success('计划已创建');
       }
-      setPlanDialog(false); setEditingPlan(null); setPlanClassId(''); setPlanSubject(''); setSelectedKPs([]);
-      setSelectedId(id); setExpandedWeeks(new Set());
+      setPlanDialog(false); setEditingPlan(null); setPlanClassId(''); setPlanSubject('');
+      setSelectedId(id); setExpandedWeeks(new Set()); setShowAnalytics(false);
 
-      // auto-generate weeks
+      // auto-generate weeks for new plan
       if (!editingPlan) {
         setAiLoading(`plan-${id}`);
         try {
@@ -162,39 +138,11 @@ export default function LessonPlans() {
     finally { setSaving(false); }
   };
 
-  const deletePlan = async (plan: TeachingPlan) => {
-    if (!(await confirm(`删除「${plan.title}」及所有教案？`))) return;
+  const deletePlan = async (plan: WeeklyPlansData) => {
+    if (!(await confirm(`删除「${plan.title}」？`))) return;
     await api.delete(`/courses/teaching-plans/${plan.id}/`);
     setPlans(prev => prev.filter(p => p.id !== plan.id));
     if (selectedId === plan.id) setSelectedId(null);
-    toast.success('已删除');
-  };
-
-  /* ── lesson CRUD ── */
-
-  const saveLesson = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); setSaving(true);
-    const fd = new FormData(e.currentTarget);
-    const payload = {
-      teaching_plan: selectedId, title: fd.get('title') as string,
-      objectives: fd.get('objectives') as string,
-      duration_minutes: Number(fd.get('duration_minutes')) || 45,
-      week_number: targetWeek, order: Number(fd.get('order')) || 0,
-    };
-    try {
-      if (editingLesson) { await api.put(`/courses/lesson-plans/${editingLesson.id}/`, payload); }
-      else { await api.post('/courses/lesson-plans/', payload); }
-      setLessonDialog(false); setEditingLesson(null); setTargetWeek(null);
-      if (selectedId) refreshPlan(selectedId);
-      toast.success(editingLesson ? '已更新' : '已创建');
-    } catch { toast.error('保存失败'); }
-    finally { setSaving(false); }
-  };
-
-  const deleteLesson = async (l: LessonPlan) => {
-    if (!(await confirm(`删除「${l.title}」？`))) return;
-    await api.delete(`/courses/lesson-plans/${l.id}/`);
-    if (selectedId) refreshPlan(selectedId);
     toast.success('已删除');
   };
 
@@ -228,6 +176,15 @@ export default function LessonPlans() {
     } catch { toast.error('PDF 导出失败'); }
   };
 
+  const goToWorkbench = (planId: number, weekNumber: number) => {
+    // navigate to workbench with teaching plan context
+    const searchParams = new URLSearchParams({
+      teaching_plan_id: String(planId),
+      week_number: String(weekNumber),
+    });
+    navigate(`/workbench?${searchParams.toString()}`);
+  };
+
   /* ── AI actions ── */
 
   const ai = {
@@ -238,28 +195,14 @@ export default function LessonPlans() {
       catch { toast.error('AI 生成失败'); }
       finally { setAiLoading(''); }
     },
-    weekLessons: async (week: number) => {
-      if (!selectedPlan) return;
-      setAiLoading(`week-${selectedPlan.id}-${week}`);
-      try { await api.post(`/courses/teaching-plans/${selectedPlan.id}/ai-generate-lessons/`, { week_number: week }); refreshPlan(selectedPlan.id); setExpandedWeeks(prev => new Set(prev).add(week)); toast.success(`第${week}周教案已生成`); }
-      catch { toast.error('AI 生成失败'); }
-      finally { setAiLoading(''); }
-    },
-    lesson: async (l: LessonPlan) => {
-      setAiLoading(`lesson-${l.id}`);
-      try { await api.post('/courses/lesson-plans/ai-generate/', { lesson_plan_id: l.id }); if (selectedId) refreshPlan(selectedId); toast.success('教案内容已生成'); }
-      catch { toast.error('AI 生成失败'); }
-      finally { setAiLoading(''); }
-    },
   };
 
   /* ── stats ── */
 
   const stats = {
     totalPlans: plans.length,
-    totalLessons: plans.reduce((s, p) => s + (p.lesson_plans || []).length, 0),
+    totalWeeks: plans.reduce((s, p) => s + (p.weekly_plans || []).length, 0),
     plannedWeeks: plans.reduce((s, p) => s + plannedWeeks(p), 0),
-    aiGenerated: plans.reduce((s, p) => s + (p.lesson_plans || []).filter(l => l.ai_generated).length, 0),
   };
 
   /* ── render ── */
@@ -272,11 +215,11 @@ export default function LessonPlans() {
 
   if (plans.length === 0) {
     return (
-      <PageWrapper title="教案管理" subtitle="AI 驱动的教学计划与教案协同编辑">
+      <PageWrapper title="教案管理" subtitle="教学计划与学情追踪">
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Books className="w-12 h-12 mb-4 text-muted-foreground/30" />
           <p className="text-sm font-bold">还没有教学计划</p>
-          <p className="text-xs mt-1 text-muted-foreground/70">为班级创建教学计划，AI 自动生成周进度和教案</p>
+          <p className="text-xs mt-1 text-muted-foreground/70">为班级创建教学计划，AI 自动生成周进度，追踪学情</p>
           <Button className="mt-6 gap-1.5" variant="apple" onClick={() => { setEditingPlan(null); setPlanClassId(''); setPlanSubject(''); setPlanDialog(true); }}>
             <Plus className="w-4 h-4" />创建教学计划
           </Button>
@@ -286,24 +229,20 @@ export default function LessonPlans() {
   }
 
   return (
-    <PageWrapper title="教案管理" subtitle="AI 生成 · 手动精修 · 协同编辑">
+    <PageWrapper title="教案管理" subtitle="教学计划 · 学情追踪 · 联动出题">
       {/* ── stats bar ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-3 mb-6">
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs font-medium text-muted-foreground">教学计划</CardTitle></CardHeader>
           <CardContent className="pb-4"><p className="text-2xl font-bold tabular-nums">{stats.totalPlans}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-1"><CardTitle className="text-xs font-medium text-muted-foreground">总课时</CardTitle></CardHeader>
-          <CardContent className="pb-4"><p className="text-2xl font-bold tabular-nums">{stats.totalLessons}</p></CardContent>
+          <CardHeader className="pb-1"><CardTitle className="text-xs font-medium text-muted-foreground">总周数</CardTitle></CardHeader>
+          <CardContent className="pb-4"><p className="text-2xl font-bold tabular-nums">{stats.totalWeeks}</p></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-xs font-medium text-muted-foreground">已规划周</CardTitle></CardHeader>
           <CardContent className="pb-4"><p className="text-2xl font-bold tabular-nums">{stats.plannedWeeks}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1"><CardTitle className="text-xs font-medium text-muted-foreground">AI 教案</CardTitle></CardHeader>
-          <CardContent className="pb-4"><p className="text-2xl font-bold tabular-nums">{stats.aiGenerated}</p></CardContent>
         </Card>
       </div>
 
@@ -327,7 +266,7 @@ export default function LessonPlans() {
               <Card
                 variant={isSelected ? 'apple' : 'outlined'}
                 className={`cursor-pointer transition-colors ${isSelected ? 'ring-2 ring-primary/20' : 'hover:border-primary/30'}`}
-                onClick={() => { setSelectedId(isSelected ? null : plan.id); setExpandedWeeks(new Set()); }}
+                onClick={() => { setSelectedId(isSelected ? null : plan.id); setExpandedWeeks(new Set()); setShowAnalytics(false); }}
               >
                 <div className="p-4 flex items-center justify-between">
                   <div className="min-w-0 mr-2">
@@ -339,17 +278,10 @@ export default function LessonPlans() {
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
                       <span className="flex items-center gap-1"><CalendarCheck className="w-3 h-3" />{plan.week_count}周</span>
-                      <span className="flex items-center gap-1"><Books className="w-3 h-3" />{(plan.lesson_plans || []).length}课时</span>
-                      <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />{pw}/{plan.week_count}周已规划</span>
-                      {pw > 0 && (
-                        <span className="flex items-center gap-1 text-emerald-600">
-                          <Sparkle className="w-3 h-3" />
-                          {(plan.lesson_plans || []).filter(l => l.ai_generated).length}节AI
-                        </span>
-                      )}
+                      <span className="flex items-center gap-1"><Books className="w-3 h-3" />{pw}/{plan.week_count}周已规划</span>
                     </div>
-                    {plan.description && (
-                      <p className="text-xs text-muted-foreground/70 mt-1.5 line-clamp-1">{plan.description}</p>
+                    {plan.goal && (
+                      <p className="text-xs text-muted-foreground/70 mt-1.5 line-clamp-1">目标：{plan.goal}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
@@ -377,8 +309,7 @@ export default function LessonPlans() {
                       </Button>
                       <Button variant="apple-outline" size="sm" className="gap-1"
                         onClick={ai.weeks} disabled={!!aiLoading}>
-                        <Sparkle className={`w-3.5 h-3.5 ${aiLoading === `plan-${plan.id}` ? 'animate-spin' : ''}`} />
-                        {aiLoading === `plan-${plan.id}` ? 'AI 正在分析学期内容…' : plan.weekly_plans?.length ? '重新生成周计划' : 'AI 生成整学期周计划'}
+                        {aiLoading === `plan-${plan.id}` ? 'AI 分析中…' : '重新生成周计划'}
                       </Button>
                     </div>
                   </div>
@@ -394,7 +325,6 @@ export default function LessonPlans() {
                   {/* weeks */}
                   {Array.from({ length: plan.week_count }, (_, i) => i + 1).map(week => {
                     const wp = plan.weekly_plans?.find(w => w.week === week);
-                    const lessons = weekLessons(plan, week);
                     const isExpanded = expandedWeeks.has(week);
                     const isEditing = editingWeek === week;
 
@@ -413,7 +343,6 @@ export default function LessonPlans() {
                             </span>
                             {wp?.materials && <span className="text-[11px] text-muted-foreground truncate hidden sm:inline max-w-[140px]">{wp.materials}</span>}
                             <div className="ml-auto flex items-center gap-1 shrink-0">
-                              {lessons.length > 0 && <Badge variant="secondary" className="text-[10px]">{lessons.length}课时</Badge>}
                               <Button size="sm" variant="ghost" className="h-7" onClick={e => { e.stopPropagation(); wp ? startEditWeek(wp) : startEditWeek({ week, topic: '', objectives: '', kp_ids: [], materials: '' }); }}>
                                 <Pencil className="w-3 h-3" />
                               </Button>
@@ -451,64 +380,16 @@ export default function LessonPlans() {
                                 <p><span className="font-bold text-muted-foreground">教学目标：</span>{wp.objectives || '未设置'}</p>
                                 <p><span className="font-bold text-muted-foreground">教学材料：</span>{wp.materials || '未设置'}</p>
                               </div>
-                            ) : null}
+                            ) : (
+                              <p className="text-xs text-muted-foreground/50 italic px-3">未设置周主题，点击编辑按钮开始规划</p>
+                            )}
 
-                            {/* lessons */}
-                            {lessons.map(lesson => (
-                              <div key={lesson.id} className="flex items-start gap-3 p-3 rounded-lg border border-border/50 bg-background hover:border-primary/20 transition-colors">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium text-sm">{lesson.title}</span>
-                                    <span className="text-[10px] text-muted-foreground"><Clock className="w-3 h-3 inline mr-0.5" />{lesson.duration_minutes}′</span>
-                                    {lesson.ai_generated && (
-                                      <Badge className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">AI 已生成</Badge>
-                                    )}
-                                  </div>
-                                  {lesson.objectives && (
-                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{lesson.objectives}</p>
-                                  )}
-                                  {lesson.activities && lesson.activities.length > 0 && (
-                                    <div className="mt-2 space-y-0.5">
-                                      {lesson.activities.map((a, i) => (
-                                        <div key={i} className="text-[11px] flex gap-2">
-                                          <Badge variant="secondary" className="text-[10px] shrink-0 h-4">{a.duration}′</Badge>
-                                          <span className="font-medium shrink-0">{a.name}</span>
-                                          <span className="text-muted-foreground truncate">{a.description}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {lesson.materials && lesson.materials.length > 0 && (
-                                    <div className="flex gap-1 mt-2 flex-wrap">
-                                      {lesson.materials.map((m, i) => <Badge key={i} variant="outline" className="text-[10px]">{m}</Badge>)}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-0.5 shrink-0">
-                                  <Button size="sm" variant="ghost" disabled={!!aiLoading}
-                                    onClick={() => ai.lesson(lesson)} title="AI 生成详细内容">
-                                    <Lightning className={`w-3.5 h-3.5 ${aiLoading === `lesson-${lesson.id}` ? 'animate-pulse text-amber-500' : ''}`} />
-                                  </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => { setEditingLesson(lesson); setTargetWeek(week); setLessonDialog(true); }}>
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => deleteLesson(lesson)}>
-                                    <Trash className="w-3.5 h-3.5 text-destructive" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-
+                            {/* action — go to workbench */}
                             <div className="flex items-center gap-2 pt-1">
                               <Button size="sm" variant="outline" className="gap-1"
-                                onClick={() => { setEditingLesson(null); setTargetWeek(week); setLessonDialog(true); }}>
-                                <Plus className="w-3.5 h-3.5" />添加教案
-                              </Button>
-                              <Button size="sm" variant="ghost" className="gap-1"
-                                disabled={aiLoading === `week-${plan.id}-${week}`}
-                                onClick={() => ai.weekLessons(week)}>
-                                <Sparkle className={`w-3.5 h-3.5 ${aiLoading === `week-${plan.id}-${week}` ? 'animate-spin' : ''}`} />
-                                生成本周教案
+                                onClick={() => goToWorkbench(plan.id, week)}>
+                                <ArrowSquareOut className="w-3.5 h-3.5" />
+                                基于本周出题
                               </Button>
                             </div>
                           </div>
@@ -557,7 +438,7 @@ export default function LessonPlans() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="ps">学科 *</Label>
-                  <Select value={planSubject} onValueChange={v => { setPlanSubject(v); fetchKPs(v); }}>
+                  <Select value={planSubject} onValueChange={setPlanSubject}>
                     <SelectTrigger id="ps"><SelectValue placeholder="选择学科" /></SelectTrigger>
                     <SelectContent>
                       {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -572,31 +453,31 @@ export default function LessonPlans() {
             </div>
 
             {/* goal */}
-            <div className=\"space-y-3 pt-1 border-t border-border/50\">
-              <p className=\"text-[11px] font-bold uppercase tracking-wider text-muted-foreground\">学习目标</p>
+            <div className="space-y-3 pt-1 border-t border-border/50">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">学习目标</p>
               <div>
-                <Label htmlFor=\"pg\">目标描述</Label>
-                <Textarea id=\"pg\" name=\"goal\" rows={2}
+                <Label htmlFor="pg">目标描述</Label>
+                <Textarea id="pg" name="goal" rows={2}
                   defaultValue={editingPlan?.goal || ''}
-                  placeholder=\"如：1年内达到高考数学130分\" />
+                  placeholder="如：1年内达到高考数学130分" />
               </div>
-              <div className=\"grid grid-cols-2 gap-3\">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor=\"pdl\">截止日期</Label>
-                  <Input id=\"pdl\" name=\"deadline\" type=\"date\"
+                  <Label htmlFor="pdl">截止日期</Label>
+                  <Input id="pdl" name="deadline" type="date"
                     defaultValue={editingPlan?.deadline || ''} />
                 </div>
                 <div>
-                  <Label htmlFor=\"pts\">目标分数</Label>
-                  <Input id=\"pts\" name=\"target_score\" type=\"number\"
+                  <Label htmlFor="pts">目标分数</Label>
+                  <Input id="pts" name="target_score" type="number"
                     defaultValue={editingPlan?.target_score || ''} min={0} max={750} />
                 </div>
               </div>
               <div>
-                <Label htmlFor=\"pcl\">学生当前水平</Label>
-                <Input id=\"pcl\" name=\"current_level\"
+                <Label htmlFor="pcl">学生当前水平</Label>
+                <Input id="pcl" name="current_level"
                   defaultValue={editingPlan?.current_level || ''}
-                  placeholder=\"如：已掌握基础代数，薄弱在函数和解析几何\" />
+                  placeholder="如：已掌握基础代数，薄弱在函数和解析几何" />
               </div>
             </div>
 
@@ -607,29 +488,12 @@ export default function LessonPlans() {
                 <Label htmlFor="pd">教学描述</Label>
                 <Textarea id="pd" name="description" rows={3}
                   defaultValue={editingPlan?.description || ''}
-                  placeholder="描述本学期要覆盖的核心内容和教学目标。AI 会据此生成更精准的周计划。" />
+                  placeholder="描述本学期要覆盖的核心内容，AI 会据此生成更精准的周计划。" />
               </div>
-              {kps.length > 0 && (
-                <div>
-                  <Label className="text-xs text-muted-foreground">知识点覆盖（可选，勾选后 AI 重点关注）</Label>
-                <p className="text-[10px] text-muted-foreground/60 mb-1.5">勾选本学期重点覆盖的知识点，AI 生成时会优先安排</p>
-                <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto border border-border rounded-lg p-2">
-                  {kps.map(kp => (
-                    <Badge key={kp.id}
-                      variant={selectedKPs.includes(kp.id) ? 'default' : 'outline'}
-                      className="cursor-pointer text-[10px] select-none"
-                      onClick={() => setSelectedKPs(prev => prev.includes(kp.id) ? prev.filter(id => id !== kp.id) : [...prev, kp.id])}>
-                      {kp.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPlanDialog(false)}>取消</Button>
               <Button type="submit" variant="apple" disabled={saving || !planClassId || !planSubject} className="gap-1.5">
-                <Sparkle className="w-4 h-4" />
                 {saving ? '保存中…' : editingPlan ? '保存修改' : '创建并生成周计划'}
               </Button>
             </DialogFooter>
@@ -637,105 +501,6 @@ export default function LessonPlans() {
         </DialogContent>
       </Dialog>
 
-      {/* ══════ Lesson Dialog ══════ */}
-      <Dialog open={lessonDialog} onOpenChange={setLessonDialog}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingLesson ? '编辑教案' : '新建教案'}</DialogTitle>
-            <DialogDescription>
-              {targetWeek ? `第${targetWeek}周` : ''}{selectedPlan ? ` · ${selectedPlan.title}` : ''}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={saveLesson} className="space-y-4">
-            <div>
-              <Label htmlFor="lt">课题 *</Label>
-              <Input id="lt" name="title" required defaultValue={editingLesson?.title || ''} placeholder="如：货币的时间价值" />
-            </div>
-            <div>
-              <Label htmlFor="lo">教学目标</Label>
-              <Textarea id="lo" name="objectives" rows={2} defaultValue={editingLesson?.objectives || ''} placeholder="学生能够理解并掌握…" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label htmlFor="ld">课时(分钟)</Label><Input id="ld" name="duration_minutes" type="number" defaultValue={editingLesson?.duration_minutes || 45} min={5} max={180} /></div>
-              <div><Label htmlFor="lr">排序</Label><Input id="lr" name="order" type="number" defaultValue={editingLesson?.order || 0} min={0} /></div>
-            </div>
-
-            {editingLesson && (
-              <>
-                <div className="space-y-3 pt-2 border-t">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">教学活动</Label>
-                    <Button type="button" size="sm" variant="ghost"
-                      onClick={async () => {
-                        const updated = [...(editingLesson.activities || []), { ...EMPTY_ACTIVITY }];
-                        await api.put(`/courses/lesson-plans/${editingLesson.id}/`, { activities: updated });
-                        if (selectedId) refreshPlan(selectedId);
-                      }}><Plus className="w-3 h-3 mr-1" />添加环节</Button>
-                  </div>
-                  {(editingLesson.activities || []).map((a, i) => (
-                    <Card key={i}>
-                      <CardContent className="p-3 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-muted-foreground">环节 {i + 1}</span>
-                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7"
-                            onClick={async () => {
-                              const acts = (editingLesson.activities || []).filter((_, j) => j !== i);
-                              await api.put(`/courses/lesson-plans/${editingLesson.id}/`, { activities: acts.length > 0 ? acts : null });
-                              if (selectedId) refreshPlan(selectedId);
-                            }}><Trash className="w-3.5 h-3.5 text-destructive" /></Button>
-                        </div>
-                        <div>
-                          <Label className="text-xs">环节名称</Label>
-                          <Input placeholder="如：导入、讲解、练习" value={a.name}
-                            onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], name: e.target.value }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
-                        </div>
-                        <div>
-                          <Label className="text-xs">时长（分钟）</Label>
-                          <Input type="number" placeholder="分钟" value={a.duration}
-                            onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], duration: Number(e.target.value) || 0 }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
-                        </div>
-                        <div>
-                          <Label className="text-xs">环节描述</Label>
-                          <Textarea rows={2} placeholder="描述该环节的具体内容和安排" value={a.description}
-                            onChange={e => { const acts = [...(editingLesson.activities || [])]; acts[i] = { ...acts[i], description: e.target.value }; setEditingLesson({ ...editingLesson, activities: acts }); }} />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  {editingLesson.activities && editingLesson.activities.length > 0 && (
-                    <Button type="button" size="sm" variant="outline"
-                      onClick={async () => {
-                        await api.put(`/courses/lesson-plans/${editingLesson.id}/`, { activities: editingLesson.activities });
-                        if (selectedId) refreshPlan(selectedId); toast.success('活动已保存');
-                      }}>保存活动</Button>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">教学材料</Label>
-                  <Input placeholder="逗号分隔，如：PPT, 视频, 实验器材"
-                    defaultValue={(editingLesson.materials || []).join(', ')}
-                    onBlur={async e => {
-                      const arr = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
-                      await api.put(`/courses/lesson-plans/${editingLesson.id}/`, { materials: arr.length > 0 ? arr : null });
-                      if (selectedId) refreshPlan(selectedId);
-                    }} />
-                </div>
-                {editingLesson.ai_generated && (
-                  <div className="bg-purple-50 dark:bg-purple-950/30 rounded-lg p-3 max-h-40 overflow-y-auto border border-purple-200/50">
-                    <p className="text-[10px] font-bold text-purple-700 dark:text-purple-400 mb-1">AI 生成内容</p>
-                    <p className="text-[11px] whitespace-pre-wrap text-purple-900/70 dark:text-purple-300/70">{editingLesson.ai_generated.content.slice(0, 800)}</p>
-                  </div>
-                )}
-              </>
-            )}
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setLessonDialog(false)}>取消</Button>
-              <Button type="submit" variant="apple" disabled={saving}>{saving ? '保存中…' : '保存'}</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
       {/* Confirm Dialog */}
       <ConfirmDialog />
     </PageWrapper>

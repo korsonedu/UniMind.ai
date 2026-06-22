@@ -1,5 +1,5 @@
 """
-Memorix Field 学情分析服务 — 为教案管理提供班级知识掌握度数据。
+Memorix 学情分析服务 — 为教案管理提供班级知识掌握度数据。
 """
 import logging
 from collections import defaultdict

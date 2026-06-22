@@ -213,11 +213,6 @@ EXAM_GENERATOR_TOOLS_META = [
         body="从已有文章库中查找文章。触发词：看看文章、找文章、选文章、浏览文章、有没有文章。参数: query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：标题、摘要、发布日期。从机构已有文章中检索，不会创建新文章。不适用于：搜索知识点（用search_knowledge）。",
     ),
     ToolMeta(
-        name="list_lesson_plans",
-        description="浏览或查找机构教案库",
-        body="从已有教案库中查找教案（教学计划）。触发词：看看教案、找教案、有没有教案、教学计划、教案列表。参数: subject(str)=学科筛选(可选), class_name(str)=班级名筛选(可选), limit(int)=数量上限(默认10)。返回：教案标题、学科、学期、班级、周数。从机构已有教案中检索，不会创建新教案。不适用于：生成新教案、搜索知识点（用search_knowledge）。",
-    ),
-    ToolMeta(
         name="get_class_weak_points",
         description="获取班级知识点薄弱分析",
         body="分析班级整体薄弱知识点。触发词：薄弱、弱项、薄弱点、薄弱知识、学情、正确率低、哪些知识点弱。参数: institution_id(int)=机构ID, class_name(str)=班级名(可选)。返回：班级各知识点正确率、最薄弱知识点。需要teacher/owner角色。不适用于：查看单个学生（用get_student_detail）。",
@@ -246,6 +241,11 @@ EXAM_GENERATOR_TOOLS_META = [
         name="create_teaching_plan",
         description="创建或更新班级教学计划",
         body="为班级设定教学目标并规划周进度。触发词：制定教学计划、设定目标、教学规划、XX班XX学科教学计划。参数: class_id(int)=班级ID(必填), subject(str)=学科, semester(str)=学期, week_count(int)=周数, goal(str)=目标(如'1年内高考130分'), deadline(str)=截止日期, target_score(int)=目标分数, current_level(str)=当前水平。返回：教学计划ID和目标信息。需要teacher/owner角色。",
+    ),
+    ToolMeta(
+        name="get_teaching_plan_kps",
+        description="查询教学计划列表或某周的知识点",
+        body="不传 teaching_plan_id 时浏览机构所有教学计划。传入 teaching_plan_id 时查询该计划指定周的知识点。触发词：按教学计划出题、教案出题、有哪些教学计划、第X周出题。参数: teaching_plan_id(int)=教学计划ID(可选), week_number(int)=周号(可选)。",
     ),
     ToolMeta(
         name="render_visual",
@@ -477,7 +477,7 @@ EXAM_GENERATOR_INTENT_MAP = {
                      "再来", "换", "调整", "改", "不同", "其他", "再难", "更难", "简单"],
         "tools": [
             "search_knowledge", "quick_generate", "launch_arc_pipeline",
-            "get_class_weak_points",
+            "get_teaching_plan_kps", "get_class_weak_points",
             "render_visual",
         ],
     },
@@ -517,7 +517,7 @@ EXAM_GENERATOR_INTENT_MAP = {
                      "看看题库", "有什么题", "搜索题", "浏览", "资产", "有没有", "有哪些",
                      "教案", "教学计划", "看看教案"],
         "tools": [
-            "list_courses", "list_questions", "list_articles", "list_lesson_plans",
+            "list_courses", "list_questions", "list_articles",
         ],
     },
 }

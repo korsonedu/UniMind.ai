@@ -1,12 +1,13 @@
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 
 interface Props {
   content: string;
   className?: string;
-  /** 额外的 remark 插件（如 remarkGfm） */
+  /** 额外的 remark 插件 */
   extraRemarkPlugins?: any[];
   /** 额外的 rehype 插件 */
   extraRehypePlugins?: any[];
@@ -16,7 +17,7 @@ interface Props {
 
 /**
  * Markdown 渲染包装组件。
- * 统一加载 remarkMath + rehypeKatex，消除项目中重复的 react-markdown 配置。
+ * 内置 remarkMath + remarkGfm + rehypeKatex，消除项目中重复的 react-markdown 配置。
  */
 export function MarkdownContent({
   content,
@@ -28,7 +29,7 @@ export function MarkdownContent({
   return (
     <div className={className}>
       <ReactMarkdown
-        remarkPlugins={[remarkMath, ...(extraRemarkPlugins || [])]}
+        remarkPlugins={[remarkMath, remarkGfm, ...(extraRemarkPlugins || [])]}
         rehypePlugins={[rehypeKatex, ...(extraRehypePlugins || [])]}
         components={components}
       >

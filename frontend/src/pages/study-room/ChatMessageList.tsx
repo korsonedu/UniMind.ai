@@ -4,10 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { ArrowDown, Lightning, CheckCircle, XCircle, Calendar } from '@phosphor-icons/react';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { processMathContent } from '@/lib/utils';
 
 interface Message {
@@ -126,18 +123,16 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                     )}
                     style={!isMediaOnly && !isMe ? { backgroundColor: '#ffb0b3', color: '#0f172a' } : {}}
                   >
-                    <ReactMarkdown
-                      remarkPlugins={[remarkMath, remarkSoftBreaks]}
-                      rehypePlugins={[rehypeKatex]}
+                    <MarkdownContent
+                      content={processMathContent(msg.content)}
+                      extraRemarkPlugins={[remarkSoftBreaks]}
                       components={{
-                        img: ({node, ...props}) => <img {...props} loading="lazy" alt={props.alt || 'image'} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank', 'noopener,noreferrer')}/>,
-                        p: ({node, ...props}) => <p {...props} className="m-0 leading-normal w-fit" />,
-                        div: ({node, ...props}) => <div {...props} className="w-fit" />,
+                        img: ({node, ...props}: any) => <img {...props} loading="lazy" alt={props.alt || 'image'} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank', 'noopener,noreferrer')}/>,
+                        p: ({node, ...props}: any) => <p {...props} className="m-0 leading-normal w-fit" />,
+                        div: ({node, ...props}: any) => <div {...props} className="w-fit" />,
                         br: () => <br />
                       }}
-                    >
-                      {processMathContent(msg.content)}
-                    </ReactMarkdown>
+                    />
                   </div>
                   <div className="mt-0.3 flex items-center gap-2 px-1">
                     <span className="text-[11px] text-muted-foreground/40 font-medium">

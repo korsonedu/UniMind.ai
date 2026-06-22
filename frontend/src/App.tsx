@@ -29,6 +29,7 @@ const Settings = lazyNamed(() => import('./pages/Settings'), 'Settings');
 const Maintenance = lazyNamed(() => import('./pages/Maintenance'), 'Maintenance');
 const Login = lazyNamed(() => import('./pages/Login'), 'Login');
 const Register = lazyNamed(() => import('./pages/Register'), 'Register');
+const VerifyCode = lazyNamed(() => import('./pages/VerifyCode'), 'VerifyCode');
 const VideoLesson = lazyNamed(() => import('./pages/VideoLesson'), 'VideoLesson');
 const ArticleDetail = lazyNamed(() => import('./pages/ArticleDetail'), 'ArticleDetail');
 const ArticleCenter = lazyNamed(() => import('./pages/ArticleCenter'), 'ArticleCenter');
@@ -314,6 +315,7 @@ const router = createBrowserRouter([
   { path: "/memorix", element: lazyPage(MemorixPage) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/register", element: lazyPage(Register) },
+  { path: "/verify-code", element: lazyPage(VerifyCode) },
   { path: "/privacy", element: lazyPage(Legal) },
   { path: "/terms", element: lazyPage(Legal) },
   { path: "/diagnostic", element: <RequireAuth>{lazyPage(DiagnosticTest)}</RequireAuth> },

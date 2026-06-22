@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, Lightning, Hourglass, Database, ClipboardText, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
@@ -280,6 +281,49 @@ export default function Workbench() {
       });
   }, []);
 
+  // ── 从 LessonPlans 页面带入的教学计划上下文 ──
+  const [searchParams] = useSearchParams();
+  const teachingPlanId = searchParams.get('teaching_plan_id');
+  const teachingPlanWeek = searchParams.get('week_number');
+  const teachingPlanMessageRef = useRef<string | null>(null);
+  const teachingPlanSentRef = useRef(false);
+
+  useEffect(() => {
+    if (!teachingPlanId || !teachingPlanWeek || teachingPlanSentRef.current) return;
+    const planId = Number(teachingPlanId);
+    const weekNum = Number(teachingPlanWeek);
+    if (!planId || !weekNum) return;
+
+    api.get(`/courses/teaching-plans/${planId}/`)
+      .then(res => {
+        const plan = res.data;
+        const wp = (plan.weekly_plans || []).find((w: any) => w.week === weekNum);
+        const topic = wp?.topic || '';
+        const kpIds = wp?.kp_ids || [];
+        const subject = plan.subject || '';
+
+        let msg = `基于教学计划「${plan.title}」第 ${weekNum} 周`;
+        if (topic) msg += `（${topic}）`;
+        msg += '出题';
+
+        if (kpIds.length > 0) {
+          msg += `，涉及 ${kpIds.length} 个知识点`;
+          if (subject) msg += `，学科：${subject}`;
+          msg += `\n知识点 ID：${kpIds.join(', ')}`;
+        } else if (topic || wp?.objectives) {
+          // 无知识点时，让 Agent 根据主题和目标自行搜索
+          msg += '。';
+          if (topic) msg += `主题：${topic}。`;
+          if (wp?.objectives) msg += `目标：${wp.objectives}。`;
+          msg += '请先搜索相关知识点的 ID，然后出题。';
+        }
+        teachingPlanMessageRef.current = msg;
+      })
+      .catch(() => {
+        // 教学计划不存在或无权限，静默忽略
+      });
+  }, [teachingPlanId, teachingPlanWeek]);
+
   const handleQuestionsGenerated = useCallback((questions: AgentStep['questions']) => {
     if (!questions?.length) return;
     const mapped: QuestionData[] = questions.map((q: any) => ({
@@ -432,7 +476,14 @@ export default function Workbench() {
           botDisplayName="工作台"
           processContent={processMathContent}
           onHasConversation={setHasConversation}
-          onSendReady={(fn) => { doSendRef.current = fn; }}
+          onSendReady={(fn) => {
+            doSendRef.current = fn;
+            // 如果有来自教学计划的待发送消息，立即发送
+            if (teachingPlanMessageRef.current && !teachingPlanSentRef.current) {
+              teachingPlanSentRef.current = true;
+              fn(teachingPlanMessageRef.current!);
+            }
+          }}
           toolbarAction={{
             icon: Brain,
             label: '智能分析',

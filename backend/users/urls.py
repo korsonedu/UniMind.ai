@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import (
-    RegisterView, LoginView, UserDetailView, UpdateProfileView,
+    RegisterView, LoginView, LoginByCodeView, UserDetailView, UpdateProfileView,
     OnlineUserListView, UpdateEmailView, UpdatePasswordView,
     DailyPlanListView, DailyPlanDetailView,
     ActivateMembershipView,
@@ -8,7 +8,7 @@ from .views import (
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
     DiagnosticGenerateView, DiagnosticSubmitView, DiagnosticReassessView,
     AnalyticsDashboardView, AnalyticsExportView, NPSSubmitView, NPSStatusView,
-    AccountDeleteView, DataExportView, FeedbackSubmitView,
+    AccountDeleteView, DataExportView, FeedbackSubmitView, AdminFeedbackListView,
     AvatarProxyView,
     UserCheckInView, AchievementListView, UserAchievementView,
     UserClassListView,
@@ -58,6 +58,7 @@ urlpatterns = [
     # Auth & profile
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
+    path('login-by-code/', LoginByCodeView.as_view(), name='login-by-code'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('send-verification-code/', SendVerificationCodeView.as_view(), name='send-verification-code'),
     # SSO
@@ -175,6 +176,7 @@ urlpatterns = [
     path('me/delete/', AccountDeleteView.as_view(), name='account-delete'),
     path('me/data-export/', DataExportView.as_view(), name='data-export'),
     path('feedback/', FeedbackSubmitView.as_view(), name='feedback-submit'),
+    path('admin/feedback/', AdminFeedbackListView.as_view(), name='admin-feedback-list'),
 
     # Avatar proxy
     path('avatar/<str:style>/<str:seed>/', AvatarProxyView.as_view(), name='avatar-proxy'),

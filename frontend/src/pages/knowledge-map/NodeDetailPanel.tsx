@@ -5,9 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn, processMathContent } from '@/lib/utils';
-import ReactMarkdown from 'react-markdown';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { KPNode } from './types';
@@ -65,9 +63,7 @@ export const NodeDetailPanel: React.FC<{
         <div className="p-4 space-y-5">
           {node.description && (
             <div className="text-xs text-muted-foreground leading-relaxed">
-              <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {processMathContent(node.description)}
-              </ReactMarkdown>
+              <MarkdownContent content={processMathContent(node.description)} />
             </div>
           )}
 
@@ -104,9 +100,7 @@ export const NodeDetailPanel: React.FC<{
                     >
                       <Badge variant="outline" className="text-[8px] py-0 h-4 uppercase shrink-0">{q.subjective_type || q.q_type || 'Q'}</Badge>
                       <span className="text-[11px] font-medium truncate flex-1">
-                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                          {processMathContent(q.text)}
-                        </ReactMarkdown>
+                        <MarkdownContent content={processMathContent(q.text)} />
                       </span>
                       <ArrowsOut className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-all shrink-0" />
                     </button>
