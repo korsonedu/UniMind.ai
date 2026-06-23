@@ -14,50 +14,45 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.SeparateDatabaseAndState(
-            state_operations=[
-                migrations.CreateModel(
-                    name='Assignment',
-                    fields=[
-                        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                        ('title', models.CharField(max_length=500)),
-                        ('description', models.TextField(blank=True)),
-                        ('due_date', models.DateTimeField(blank=True, null=True)),
-                        ('status', models.CharField(choices=[('draft', '草稿'), ('published', '已发布'), ('closed', '已关闭')], default='draft', max_length=20)),
-                        ('created_at', models.DateTimeField(auto_now_add=True)),
-                        ('updated_at', models.DateTimeField(auto_now=True)),
-                        ('created_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_assignments', to=settings.AUTH_USER_MODEL)),
-                        ('institution', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignments', to='users.institution')),
-                        ('target_classes', models.ManyToManyField(related_name='assignments', to='users.class')),
-                    ],
-                    options={'ordering': ['-created_at']},
-                ),
-                migrations.CreateModel(
-                    name='AssignmentQuestion',
-                    fields=[
-                        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                        ('order', models.IntegerField(default=0)),
-                        ('points', models.IntegerField(default=1)),
-                        ('assignment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignment_questions', to='quizzes.assignment')),
-                        ('question', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='quizzes.question')),
-                    ],
-                    options={'ordering': ['order'], 'unique_together': {('assignment', 'question')}},
-                ),
-                migrations.CreateModel(
-                    name='AssignmentSubmission',
-                    fields=[
-                        ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                        ('submitted_at', models.DateTimeField(auto_now_add=True)),
-                        ('answers', models.JSONField(default=dict)),
-                        ('score', models.FloatField(blank=True, null=True)),
-                        ('graded_at', models.DateTimeField(blank=True, null=True)),
-                        ('assignment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='submissions', to='quizzes.assignment')),
-                        ('graded_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='graded_submissions', to=settings.AUTH_USER_MODEL)),
-                        ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignment_submissions', to=settings.AUTH_USER_MODEL)),
-                    ],
-                    options={'ordering': ['-submitted_at'], 'unique_together': {('assignment', 'student')}},
-                ),
+        migrations.CreateModel(
+            name='Assignment',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('title', models.CharField(max_length=500)),
+                ('description', models.TextField(blank=True)),
+                ('due_date', models.DateTimeField(blank=True, null=True)),
+                ('status', models.CharField(choices=[('draft', '草稿'), ('published', '已发布'), ('closed', '已关闭')], default='draft', max_length=20)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('created_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_assignments', to=settings.AUTH_USER_MODEL)),
+                ('institution', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignments', to='users.institution')),
+                ('target_classes', models.ManyToManyField(related_name='assignments', to='users.class')),
             ],
-            database_operations=[],
+            options={'ordering': ['-created_at']},
+        ),
+        migrations.CreateModel(
+            name='AssignmentQuestion',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('order', models.IntegerField(default=0)),
+                ('points', models.IntegerField(default=1)),
+                ('assignment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignment_questions', to='quizzes.assignment')),
+                ('question', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='quizzes.question')),
+            ],
+            options={'ordering': ['order'], 'unique_together': {('assignment', 'question')}},
+        ),
+        migrations.CreateModel(
+            name='AssignmentSubmission',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('submitted_at', models.DateTimeField(auto_now_add=True)),
+                ('answers', models.JSONField(default=dict)),
+                ('score', models.FloatField(blank=True, null=True)),
+                ('graded_at', models.DateTimeField(blank=True, null=True)),
+                ('assignment', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='submissions', to='quizzes.assignment')),
+                ('graded_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='graded_submissions', to=settings.AUTH_USER_MODEL)),
+                ('student', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='assignment_submissions', to=settings.AUTH_USER_MODEL)),
+            ],
+            options={'ordering': ['-submitted_at'], 'unique_together': {('assignment', 'student')}},
         ),
     ]

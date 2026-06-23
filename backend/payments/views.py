@@ -289,7 +289,7 @@ class CouponListCreateView(APIView):
 
     def get(self, request):
         inst = getattr(request.user, 'institution', None)
-        if request.user.is_admin and not inst:
+        if request.user.is_superuser and not inst:
             qs = Coupon.objects.filter(institution__isnull=True)
         elif inst:
             qs = Coupon.objects.filter(institution=inst) | Coupon.objects.filter(institution__isnull=True)
@@ -300,7 +300,7 @@ class CouponListCreateView(APIView):
 
     def post(self, request):
         inst = getattr(request.user, 'institution', None)
-        if not inst and not request.user.is_admin:
+        if not inst and not request.user.is_superuser:
             return Response({'error': '无权创建优惠券'}, status=403)
 
         ser = CouponSerializer(data=request.data)
@@ -318,7 +318,7 @@ class CouponDetailView(APIView):
         coupon = get_object_or_404(Coupon, pk=pk)
         if coupon.institution and coupon.institution != inst:
             raise PermissionDenied('无权操作此优惠券')
-        if not coupon.institution and not user.is_admin:
+        if not coupon.institution and not user.is_superuser:
             raise PermissionDenied('无权操作平台通用优惠券')
         return coupon
 

@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('ai_assistant', '0021_add_reply_action_type'),
-        ('courses', '__first__'),  # ensure TeachingPlan exists
+        ('courses', '0019_add_teaching_plan_models'),  # TeachingPlan created here
     ]
 
     operations = [

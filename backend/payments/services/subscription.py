@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 DURATION_DAYS = {'monthly': 30, 'annual': 365}
 
 
+def _get_institution_owner(inst):
+    """Return the institution owner user, or None."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    return User.objects.filter(institution=inst, institution_role='owner').first()
+
+
 def create_subscription(*, institution, plan: str, billing_cycle: str, gateway: str) -> Subscription:
     """Create a pending subscription record. Activated later via webhook callback."""
     now = timezone.now()
@@ -43,7 +50,7 @@ def activate_subscription(sub: Subscription, gateway_subscription_id: str, gatew
         sub.save(update_fields=['status', 'gateway_subscription_id', 'gateway_customer_id', 'updated_at'])
 
         # Activate membership for the institution owner
-        owner = sub.institution.owner
+        owner = _get_institution_owner(sub.institution)
         if owner:
             duration = DURATION_DAYS.get(sub.billing_cycle, 30)
             activate_membership(owner, sub.plan, duration, source=f'subscription:{sub.gateway}')
@@ -83,7 +90,7 @@ def expire_subscription(sub: Subscription) -> Subscription:
         inst.save(update_fields=['plan', 'plan_expires_at', 'updated_at'])
 
         # Also downgrade the institution owner's personal membership
-        owner = inst.owner
+        owner = _get_institution_owner(inst)
         if owner and owner.is_member:
             downgrade_to_free(owner)
 
