@@ -43,3 +43,27 @@ def expire_stale_orders():
     expired = Order.objects.filter(status='pending', created_at__lt=threshold).update(status='expired')
     if expired:
         logger.info("expire_stale_orders: %s orders expired", expired)
+
+
+@shared_task
+def check_subscription_expiry():
+    """Daily: find active subscriptions past their period_end → expire them."""
+    from payments.models import Subscription
+    from payments.services.subscription import expire_subscription
+
+    now = timezone.now()
+    expired_subs = Subscription.objects.filter(
+        status='active',
+        current_period_end__lt=now,
+    )
+
+    count = 0
+    for sub in expired_subs:
+        try:
+            expire_subscription(sub)
+            count += 1
+        except Exception:
+            logger.exception("Failed to expire subscription %s", sub.id)
+
+    if count:
+        logger.info("check_subscription_expiry: %s subscriptions expired", count)

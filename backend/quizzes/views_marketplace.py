@@ -130,7 +130,7 @@ class MarketplacePurchaseView(APIView):
             user=request.user,
             plan='starter',
             billing_cycle='annual',
-            gateway='stripe',
+            gateway='stub',
             institution=inst,
         )
         # 覆写金额为 listing 价格
@@ -139,7 +139,7 @@ class MarketplacePurchaseView(APIView):
 
         from payments.services.gateway_router import get_gateway
         try:
-            gw = get_gateway('stripe')
+            gw = get_gateway('stub')
             data = gw.create_checkout_session(order)
             return Response({
                 'status': 'payment_required',

@@ -18,6 +18,7 @@ from functools import lru_cache
 from typing import Optional
 
 import numpy as np
+from django.conf import settings
 from django.utils import timezone
 
 from quizzes.models import UserQuestionStatus, MemorixProfile
@@ -164,6 +165,17 @@ class MemorixService:
         # Persist weights every 10 reviews
         if opt.update_count % 10 == 0:
             _save_weights(user_id, opt)
+
+        # ── Memorix-Field: 复习传播 ──
+        if getattr(settings, 'MEMORIX_FIELD_ENABLED', False) and rating >= 3:
+            from quizzes.memorix.field import propagate_review
+            try:
+                kp_id = status.question.knowledge_point_id
+                if kp_id:
+                    inst_id = getattr(status.user, 'institution_id', None)
+                    propagate_review(user_id, kp_id, retrievability, institution_id=inst_id)
+            except Exception:
+                pass  # 传播失败不影响主流程
 
         return status
 

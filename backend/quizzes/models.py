@@ -261,6 +261,56 @@ class MemorixOptimizationLog(models.Model):
         ordering = ["-created_at"]
 
 
+# ── Memorix-Field 机构级参数自进化 ──
+class MemorixFieldConfig(models.Model):
+    """
+    Per-institution Field 参数覆盖 + 自进化状态。
+
+    自进化循环（每周）：
+      1. 每日计算机构 Brier score (7天窗口 ReviewLog)
+      2. 每周日选取一个参数 ±10%，记录基线 Brier
+      3. 下周对比 Brier → 改善则保留，劣化则回退
+      4. 8 周完整周期（4 参数 × 2 方向）
+    """
+    institution = models.OneToOneField(
+        "users.Institution", on_delete=models.CASCADE,
+        null=True, blank=True, related_name="memorix_field_config",
+        help_text="NULL=全局默认，不参与自进化"
+    )
+    # 参数值
+    decay = models.FloatField(default=0.02, help_text="α: 自然衰减率/天")
+    beta_e = models.FloatField(default=0.005, help_text="βe: 扩散强度")
+    beta_a = models.FloatField(default=0.5, help_text="βa: 评分放大系数")
+    eta = models.FloatField(default=0.02, help_text="η: 复习转移系数")
+
+    # 自进化状态
+    brier_score = models.FloatField(null=True, blank=True, help_text="最近 7 天 Brier score")
+    reviews_evaluated = models.IntegerField(default=0, help_text="评估窗口内的复习次数")
+    last_evaluated_at = models.DateTimeField(null=True, blank=True)
+
+    # 扰动状态（当前正在进行的参数实验）
+    perturbation_param = models.CharField(max_length=16, null=True, blank=True,
+                                          help_text="正在测试的参数名: decay/beta_e/beta_a/eta")
+    perturbation_multiplier = models.FloatField(null=True, blank=True,
+                                                help_text="扰动倍率: 1.1 或 0.9")
+    perturbation_brier_before = models.FloatField(null=True, blank=True,
+                                                  help_text="扰动前的 Brier score")
+    perturbation_original_value = models.FloatField(null=True, blank=True,
+                                                    help_text="扰动前的参数值")
+    last_perturbed_at = models.DateTimeField(null=True, blank=True)
+
+    # 扰动历史
+    perturbation_history = models.JSONField(default=list, blank=True,
+                                            help_text="[{param, old, new, brier_before, brier_after, accepted, at}]")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Memorix Field 机构配置"
+        verbose_name_plural = "Memorix Field 机构配置"
+
+
 class PersonalizedMockExam(models.Model):
     STATUS_CHOICES = [
         ("processing", "生成中"), ("ready", "可下载"), ("failed", "生成失败"),

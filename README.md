@@ -720,10 +720,15 @@ LLM_REQUEST_MAX_RETRIES=1
 ### 算法 Feature Flags
 
 ```bash
-# Memorix 调度
-MEMORIX_FIELD_ENABLED=true         # 图扩散（知识图谱结构融入调度）
-MEMORIX_REC_ENABLED=false          # 再巩固窗口（记忆不稳定期精确切入）
-MEMORIX_FIELD_ALPHA=0.60           # 图扩散权重融合系数
+# Memorix-Field 图扩散调度
+MEMORIX_FIELD_ENABLED=true         # 图扩散总开关（扩散状态估计器 + 乘性评分）
+MEMORIX_FIELD_DECAY=0.02           # α:  自然衰减率/天
+MEMORIX_FIELD_BETA_E=0.005         # βe: 扩散强度
+MEMORIX_FIELD_BETA_A=0.5           # βa: 评分放大系数
+MEMORIX_FIELD_ETA=0.02             # η:  复习转移系数
+MEMORIX_REC_ENABLED=false          # 再巩固窗口（暂关，等 u 向量稳定后启）
+MEMORIX_REC_TAU=0.042              # 不应期常数（天）
+MEMORIX_REC_K=1.2                  # 再巩固形状参数
 
 # IRT 认知诊断
 IRT_MIN_RESPONSES=50               # 题目参数估计最少答题数

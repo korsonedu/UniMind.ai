@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Order(models.Model):
@@ -21,7 +22,7 @@ class Order(models.Model):
     billing_cycle = models.CharField(max_length=10, choices=BILLING_CHOICES)
     amount_cents = models.IntegerField(verbose_name='金额（分）')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
-    gateway = models.CharField(max_length=20, choices=[('stub', 'Stub (开发)'), ('stripe', 'Stripe'), ('wechat', 'WeChat Pay'), ('alipay', 'Alipay')])
+    gateway = models.CharField(max_length=20, choices=[('stub', 'Stub (开发)'), ('wechat', 'WeChat Pay'), ('alipay', 'Alipay')])
     gateway_order_id = models.CharField(max_length=128, blank=True, unique=True, null=True, verbose_name='网关订单号')
     coupon_code = models.CharField(max_length=50, blank=True, default='', verbose_name='使用的优惠码')
     discount_cents = models.IntegerField(default=0, verbose_name='优惠金额(分)')
@@ -58,13 +59,13 @@ class PaymentTransaction(models.Model):
 
 
 class Subscription(models.Model):
-    """机构订阅——对接 Stripe Subscription。"""
+    """机构订阅——网关无关，接入任意支付网关只需实现订阅接口。"""
     STATUS_CHOICES = [
+        ('pending', 'Pending'),
         ('active', 'Active'),
         ('past_due', 'Past Due'),
         ('canceled', 'Canceled'),
-        ('trialing', 'Trialing'),
-        ('incomplete', 'Incomplete'),
+        ('expired', 'Expired'),
     ]
     PLAN_CHOICES = [('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise')]
     BILLING_CHOICES = [('monthly', 'Monthly'), ('annual', 'Annual')]
@@ -72,9 +73,10 @@ class Subscription(models.Model):
     institution = models.ForeignKey('users.Institution', on_delete=models.CASCADE, related_name='subscriptions')
     plan = models.CharField(max_length=20, choices=PLAN_CHOICES)
     billing_cycle = models.CharField(max_length=10, choices=BILLING_CHOICES)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='incomplete', db_index=True)
-    stripe_subscription_id = models.CharField(max_length=128, unique=True, null=True, blank=True)
-    stripe_customer_id = models.CharField(max_length=128, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    gateway = models.CharField(max_length=20, default='stub')
+    gateway_subscription_id = models.CharField(max_length=128, unique=True, null=True, blank=True)
+    gateway_customer_id = models.CharField(max_length=128, blank=True)
     current_period_start = models.DateTimeField(null=True, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
     canceled_at = models.DateTimeField(null=True, blank=True)
@@ -88,6 +90,12 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f'{self.get_plan_display()} {self.get_billing_cycle_display()} ({self.get_status_display()})'
+
+    @property
+    def is_active(self):
+        return self.status == 'active' and (
+            self.current_period_end is None or self.current_period_end > timezone.now()
+        )
 
 
 class Invoice(models.Model):

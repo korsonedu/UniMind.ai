@@ -57,7 +57,7 @@ export function Checkout() {
       const { data } = await api.post('/payments/create-session/', payload);
       if (data.checkout_url) {
         const url = new URL(data.checkout_url);
-        const allowedHosts = ['checkout.stripe.com', 'pay.stripe.com', 'mapi.alipay.com', 'openapi.alipay.com', 'airwallex.com'];
+        const allowedHosts = ['mapi.alipay.com', 'openapi.alipay.com'];
         if (!allowedHosts.some(h => url.hostname === h || url.hostname.endsWith('.' + h))) {
           if (url.origin !== window.location.origin && url.hostname !== 'localhost') {
             setError(t('checkoutGatewayError'));

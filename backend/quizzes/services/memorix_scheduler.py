@@ -171,8 +171,7 @@ def build_adaptive_question_ids(
 
     # ── Memorix-Field: 图扩散重排 ──
     if getattr(settings, 'MEMORIX_FIELD_ENABLED', False):
-        alpha = getattr(settings, 'MEMORIX_FIELD_ALPHA', 0.60)
-        selected = _field_rerank(selected, user, now, alpha)
+        selected = _field_rerank(selected, user, now)
 
     return {
         "question_ids": selected,
@@ -268,6 +267,8 @@ def invalidate_adjacency_cache():
     """KnowledgeEdge 变更时调用，清除邻接表缓存。"""
     from django.core.cache import cache
     cache.delete(MEMORIX_ADJ_CACHE_KEY)
+    # 同步清除 Field 的入边缓存
+    cache.delete("memorix:field:adj_in")
 
 
 def _build_adjacency_from_edges():
@@ -353,7 +354,7 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
     """
     from quizzes.models import UserQuestionStatus, Question
     from quizzes.memorix.service import predict_retrievability
-    from quizzes.memorix.field import get_u_vector, compute_field_score, ensure_u_entry
+    from quizzes.memorix.field import get_u_vector, compute_field_score, ensure_u_entry, get_field_params
 
     adj = _build_adjacency_from_edges()
     if not adj:
@@ -367,6 +368,10 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
 
     # 加载 u 向量（扩散状态估计器）
     u = get_u_vector(user.id)
+
+    # 加载机构级参数（一次查询，复用）
+    inst_id = getattr(user, 'institution_id', None)
+    params = get_field_params(inst_id)
 
     # 对有 u 条目的 KP，直接用 u 值评分
     # 对无 u 条目的 KP，用 Weibull R(t) 作为 fallback urgency
@@ -391,13 +396,14 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
     for qid in question_ids:
         kp_id = q_to_kp.get(qid)
         if kp_id and kp_id in u:
-            # 有扩散状态 → 乘性评分
-            score = compute_field_score(u, kp_id, adj)
+            # 有扩散状态 → 乘性评分（机构参数）
+            score = compute_field_score(u, kp_id, adj, params)
         elif kp_id and kp_id in kp_urgency_fallback:
-            # 无 u 条目 → Weibull urgency（纯 urgency，无 field_benefit）
+            # 无 u 条目但有复习历史 → Weibull urgency（纯 urgency，无 field_benefit）
             score = kp_urgency_fallback[kp_id]
         else:
-            score = 0.0
+            # 全新 KP（无 u 条目、无复习记录）→ 中性分，不挤到最末
+            score = 0.5
 
         scored.append((qid, score))
 

@@ -174,3 +174,8 @@ backend/uploads/
 # 等保二级：日志和备份
 backend/logs/
 backups/
+
+# 本地工具链 (不在版本库中)
+skills-lock.json
+.claude/skills/
+.hermes/

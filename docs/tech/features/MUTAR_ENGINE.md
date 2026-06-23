@@ -181,12 +181,89 @@ WHERE created_at > NOW() - INTERVAL '7 days'
 GROUP BY prompt_variant, outcome;
 ```
 
+## Memorix-Field 参数自进化
+
+**与 Prompt 层自进化不同，Field 参数自进化不依赖 LLM 评估，而是基于 ReviewLog 的统计信号（Brier score）进行直接优化。**
+
+### 架构
+
+```
+学生答题 → ReviewLog 写入（predicted_retrievability + grade）
+    ↓
+每天 3:00: evaluate_field_brier_daily (Celery)
+    ↓
+按机构聚合 7 天 ReviewLog
+    Brier = mean[(predicted_R - actual_binary)²]
+    ↓
+MemorixFieldConfig.brier_score（每机构）
+    ↓
+每周日 3:30: perturb_field_params_weekly (Celery)
+    ↓
+┌─ 评估进行中的扰动 ────────────────┐
+│ brier_now vs brier_before          │
+│ 改善 → 保留  劣化 → 回退           │
+└────────────────────────────────────┘
+    ↓
+┌─ 发起新扰动 ──────────────────────┐
+│ 轮询：decay → beta_e → beta_a → eta│
+│ 方向：+10% / -10%                  │
+│ 8 周完整周期，收敛后幅度减半         │
+└────────────────────────────────────┘
+```
+
+### 与 Prompt 层 MUTAR 的区别
+
+| 维度 | Prompt 层 MUTAR | Field 参数自进化 |
+|------|----------------|-----------------|
+| 数据源 | AITrajectory (对话轨迹 + 用户反馈) | ReviewLog (答题记录) |
+| 评估方式 | 启发式规则 + 用户赞踩 + LLM 评估 | Brier score（严格真分数） |
+| 优化对象 | system prompt 措辞 | 扩散方程参数 (α, βe, βa, η) |
+| 隔离粒度 | bot 级别 | 机构级别 (per-institution) |
+| 调度 | 每周日 analyze + 周一 optimize | 每天 Brier + 每周日扰动 |
+| 优化策略 | LLM 生成 variant → A/B 测试 → 胜出 | 有限差分爬山 ±10% → Brier 对比 → 接受/回退 |
+| 安全机制 | traffic_split 渐进放量 | SAFE_BOUNDS 硬边界 + 每次只动一个参数 |
+
+### 数据模型
+
+`MemorixFieldConfig`（`quizzes/models.py`）
+- 参数值: `decay, beta_e, beta_a, eta`
+- 评估状态: `brier_score, reviews_evaluated, last_evaluated_at`
+- 扰动状态: `perturbation_param, perturbation_multiplier, perturbation_brier_before, perturbation_original_value`
+- 历史: `perturbation_history` (JSON，完整调参轨迹)
+
+### 参数安全边界
+
+```python
+SAFE_BOUNDS = {
+    'decay':  (0.005, 0.10),   # 不至于忘太快或完全不衰减
+    'beta_e': (0.0005, 0.02),  # 扩散不够或过度
+    'beta_a': (0.1, 2.0),      # 评分放大失控
+    'eta':    (0.005, 0.08),   # 转移太弱或太强
+}
+```
+
+### Redis 缓存架构
+
+```
+memorix:field:params:{inst_id}  → JSON {decay, beta_e, beta_a, eta}
+    热缓存 5min TTL，命中即返回
+    miss → MemorixFieldConfig DB → settings 全局默认 → 写回 Redis
+```
+
+### Celery 任务
+
+| 任务 | 调度 | 说明 |
+|------|------|------|
+| `evaluate_field_brier_daily` | 每天 3:00 | 按机构算 Brier（最少 50 样本） |
+| `perturb_field_params_weekly` | 每周日 3:30 | 评估上轮扰动 + 发起新扰动 |
+
+---
+
 ## 后续优化（等待数据积累）
 
 - **自动 variant 生成**：`optimize_prompt_task` handler 调 LLM 根据建议生成 variant 措辞
 - **LLM 评估**：用 LLM 替代启发式规则评估对话质量
 - **自动部署**：胜出 variant 自动提升流量 → 失败 variant 自动退役
-- **Memorix 联调**：Memorix alpha 按成功率自动调整
 
 ## 相关文档
 

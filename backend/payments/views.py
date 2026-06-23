@@ -17,7 +17,11 @@ from payments.serializers import (
 )
 from payments.services.base import create_order, confirm_order, get_plan_price
 from payments.services.coupon import validate_coupon
-from payments.services.gateway_router import get_gateway
+from payments.services.gateway_router import get_gateway, gateway_supports_subscriptions
+from payments.services.subscription import (
+    create_subscription, activate_subscription, cancel_subscription as cancel_sub_biz,
+    get_active_subscription,
+)
 from users.permissions import IsInstitutionOwner, is_institution_owner
 
 logger = logging.getLogger(__name__)
@@ -136,7 +140,7 @@ class SimulatePaymentView(APIView):
 
 
 class CreateSubscriptionView(APIView):
-    """POST /api/payments/subscriptions/ — 创建订阅结账会话。"""
+    """POST /api/payments/subscriptions/ — 创建订阅结账会话（网关无关）。"""
     permission_classes = [IsAuthenticated, IsInstitutionOwner]
 
     def post(self, request):
@@ -145,28 +149,61 @@ class CreateSubscriptionView(APIView):
 
         plan = request.data.get('plan', 'starter')
         billing_cycle = request.data.get('billing_cycle', 'monthly')
+        gateway = request.data.get('gateway', 'stub')
 
         if plan not in dict(Subscription.PLAN_CHOICES):
             return Response({'error': f'无效方案: {plan}'}, status=400)
         if billing_cycle not in dict(Subscription.BILLING_CHOICES):
             return Response({'error': f'无效周期: {billing_cycle}'}, status=400)
 
+        if not gateway_supports_subscriptions(gateway):
+            return Response({'error': f'该支付方式暂不支持订阅'}, status=400)
+
+        # 1. Create a one-time order for the subscription checkout
         try:
-            from payments.services.stripe_gateway import create_subscription_checkout
-            data = create_subscription_checkout(inst, plan, billing_cycle, user.email)
-            if data.get('contact_admin'):
-                return Response({'message': data['message']}, status=status.HTTP_200_OK)
-            return Response({
-                'subscription_id': data['subscription_id'],
-                'checkout_url': data['checkout_url'],
-            }, status=status.HTTP_201_CREATED)
+            from payments.services.base import create_order as create_payment_order
+            order = create_payment_order(
+                user=user,
+                plan=plan,
+                billing_cycle=billing_cycle,
+                gateway=gateway,
+                institution=inst,
+            )
         except Exception:
-            logger.exception('Subscription create failed')
-            return Response({'error': '创建订阅失败'}, status=500)
+            logger.exception('Order creation failed for subscription')
+            return Response({'error': '创建订单失败'}, status=500)
+
+        # 2. Create pending subscription record
+        try:
+            sub = create_subscription(
+                institution=inst,
+                plan=plan,
+                billing_cycle=billing_cycle,
+                gateway=gateway,
+            )
+        except Exception:
+            logger.exception('Subscription record creation failed')
+            return Response({'error': '创建订阅记录失败'}, status=500)
+
+        # 3. Get checkout URL from gateway
+        try:
+            gw = get_gateway(gateway)
+            data = gw.create_subscription_checkout(order)
+        except Exception:
+            logger.exception('Subscription checkout failed for order %s (gateway=%s)', order.id, gateway)
+            order.status = 'cancelled'
+            order.save(update_fields=['status'])
+            return Response({'error': '创建订阅会话失败'}, status=500)
+
+        return Response({
+            'subscription_id': sub.id,
+            'order_id': order.id,
+            'checkout_url': data.get('checkout_url'),
+        }, status=status.HTTP_201_CREATED)
 
 
 class SubscriptionStatusView(APIView):
-    """GET/POST /api/payments/subscriptions/me/ — 查看/取消机构订阅。"""
+    """GET/POST /api/payments/subscriptions/me/ — 查看/取消机构订阅（网关无关）。"""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -174,7 +211,7 @@ class SubscriptionStatusView(APIView):
         if not inst:
             return Response({'error': '无机构归属'}, status=403)
 
-        sub = Subscription.objects.filter(institution=inst).order_by('-created_at').first()
+        sub = get_active_subscription(inst)
         if not sub:
             return Response({'subscription': None})
 
@@ -184,6 +221,7 @@ class SubscriptionStatusView(APIView):
                 'plan': sub.plan,
                 'billing_cycle': sub.billing_cycle,
                 'status': sub.status,
+                'gateway': sub.gateway,
                 'current_period_start': sub.current_period_start.isoformat() if sub.current_period_start else None,
                 'current_period_end': sub.current_period_end.isoformat() if sub.current_period_end else None,
                 'canceled_at': sub.canceled_at.isoformat() if sub.canceled_at else None,
@@ -192,22 +230,26 @@ class SubscriptionStatusView(APIView):
         })
 
     def post(self, request):
-        """取消订阅（周期结束时取消）。"""
+        """取消订阅。"""
         if not is_institution_owner(request.user):
             return Response({'error': '仅机构所有者可操作'}, status=403)
 
         inst = request.user.institution
-        sub = Subscription.objects.filter(institution=inst, status='active').first()
+        sub = get_active_subscription(inst)
         if not sub:
             return Response({'error': '无活跃订阅'}, status=404)
 
+        # Cancel on gateway side
         try:
-            from payments.services.stripe_gateway import cancel_subscription
-            result = cancel_subscription(sub)
-            return Response(result)
+            if gateway_supports_subscriptions(sub.gateway):
+                gw = get_gateway(sub.gateway)
+                gw.cancel_subscription(sub)
         except Exception:
-            logger.exception('Subscription cancel failed')
-            return Response({'error': '取消订阅失败'}, status=500)
+            logger.exception('Gateway cancel failed for subscription %s', sub.id)
+
+        # Always cancel locally
+        cancel_sub_biz(sub)
+        return Response({'success': True, 'status': 'canceled'})
 
 
 # ── Coupons ──
@@ -351,14 +393,36 @@ class WebhookView(APIView):
             if not result:
                 return Response({'status': 'ignored'})
 
-            # Subscription events — already handled in process_webhook_event
-            if result.get('type') in (
-                'customer.subscription.updated',
-                'customer.subscription.deleted',
-                'invoice.paid',
-                'subscription_checkout_completed',
-            ):
-                return Response({'status': 'ok', 'type': result['type']})
+            # Subscription checkout completed → activate the subscription
+            if result.get('type') == 'subscription_checkout_completed':
+                from payments.models import Subscription as SubscriptionModel
+                sub = SubscriptionModel.objects.filter(
+                    institution__orders__id=result['order_id'],
+                    status='pending',
+                ).order_by('-created_at').first()
+                if sub:
+                    activate_subscription(
+                        sub,
+                        result.get('gateway_subscription_id', ''),
+                        result.get('gateway_customer_id', ''),
+                    )
+                # Also confirm the order
+                confirm_order(result['order_id'], result['gateway_txn_id'], result['raw'], result.get('amount_cents'))
+                return Response({'status': 'ok', 'type': 'subscription_checkout_completed'})
+
+            # Subscription renewed → extend current_period_end
+            if result.get('type') == 'subscription_renewed':
+                from payments.models import Subscription as SubscriptionModel
+                from payments.services.subscription import renew_subscription
+                sub = SubscriptionModel.objects.filter(
+                    gateway_subscription_id=result.get('gateway_subscription_id'),
+                    status='active',
+                ).first()
+                if sub and result.get('new_period_end'):
+                    from django.utils.dateparse import parse_datetime
+                    new_end = parse_datetime(result['new_period_end']) if isinstance(result['new_period_end'], str) else result['new_period_end']
+                    renew_subscription(sub, new_end)
+                return Response({'status': 'ok', 'type': 'subscription_renewed'})
 
             # One-time payment events
             confirm_order(result['order_id'], result['gateway_txn_id'], result['raw'], result.get('amount_cents'))

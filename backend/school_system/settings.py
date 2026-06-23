@@ -253,12 +253,19 @@ AI_BULK_GENERATE_CONCURRENCY = _get_int("AI_BULK_GENERATE_CONCURRENCY", 4)
 AI_DIFFICULTY_CHECK_ENABLED = _get_bool("AI_DIFFICULTY_CHECK_ENABLED", default=True)
 QUIZ_EXAM_GRADING_USE_CELERY = _get_bool("QUIZ_EXAM_GRADING_USE_CELERY", default=True)
 
-# Memorix-Field: 图扩散记忆调度（新一代 Memorix）
+# Memorix-Field: 图扩散记忆调度
+# 论文 field-paper.md §4.1 最优参数
 MEMORIX_FIELD_ENABLED = _get_bool("MEMORIX_FIELD_ENABLED", default=True)
-MEMORIX_FIELD_ALPHA = float(os.getenv("MEMORIX_FIELD_ALPHA", "0.60"))  # urgency vs field_benefit 权重
-MEMORIX_REC_ENABLED = _get_bool("MEMORIX_REC_ENABLED", default=True)    # 再巩固窗口 urgency 模型
-MEMORIX_REC_TAU = float(os.getenv("MEMORIX_REC_TAU", "0.042"))          # 不应期常数（天）
-MEMORIX_REC_K = float(os.getenv("MEMORIX_REC_K", "1.2"))               # 再巩固形状参数
+MEMORIX_FIELD_AUTO_TUNE_ENABLED = _get_bool("MEMORIX_FIELD_AUTO_TUNE_ENABLED", default=True)  # 参数自进化
+MEMORIX_FIELD_DECAY = float(os.getenv("MEMORIX_FIELD_DECAY", "0.02"))     # α:  自然衰减率/天
+MEMORIX_FIELD_BETA_E = float(os.getenv("MEMORIX_FIELD_BETA_E", "0.005"))  # βe: 扩散强度
+MEMORIX_FIELD_BETA_A = float(os.getenv("MEMORIX_FIELD_BETA_A", "0.5"))    # βa: 评分放大系数
+MEMORIX_FIELD_ETA = float(os.getenv("MEMORIX_FIELD_ETA", "0.02"))         # η:  复习转移系数
+# 以下为 Phase 0 遗留（加性评分 α 权重，已弃用；保留兼容）
+MEMORIX_FIELD_ALPHA = float(os.getenv("MEMORIX_FIELD_ALPHA", "0.60"))
+MEMORIX_REC_ENABLED = _get_bool("MEMORIX_REC_ENABLED", default=False)     # 再巩固窗口（暂关，等 u 向量稳定后再启）
+MEMORIX_REC_TAU = float(os.getenv("MEMORIX_REC_TAU", "0.042"))
+MEMORIX_REC_K = float(os.getenv("MEMORIX_REC_K", "1.2"))
 
 # ELO 积分系统
 ELO_K_FACTOR = _get_int("ELO_K_FACTOR", 32)
@@ -331,6 +338,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "users.tasks.check_membership_expiry",
         "schedule": 86400.0,  # 24 hours
     },
+    "check-subscription-expiry-daily": {
+        "task": "payments.tasks.check_subscription_expiry",
+        "schedule": 86400.0,  # 24 hours
+    },
     "notify-trial-expiring-daily": {
         "task": "users.tasks.notify_trial_expiring",
         "schedule": 86400.0,
@@ -374,6 +385,18 @@ CELERY_BEAT_SCHEDULE = {
     "learn-memorix-edge-weights-daily": {
         "task": "quizzes.learn_edge_weights_from_reviews",
         "schedule": 86400.0,  # 每天一次
+    },
+    "diffuse-memorix-field-daily": {
+        "task": "quizzes.diffuse_memorix_field_daily",
+        "schedule": crontab(minute=30, hour=2),  # 每天凌晨 2:30（在边权重学习之后，利用新边）
+    },
+    "evaluate-field-brier-daily": {
+        "task": "quizzes.evaluate_field_brier_daily",
+        "schedule": crontab(minute=0, hour=3),  # 每天凌晨 3:00（扩散完成后评估 Brier）
+    },
+    "perturb-field-params-weekly": {
+        "task": "quizzes.perturb_field_params_weekly",
+        "schedule": crontab(minute=30, hour=3, day_of_week=0),  # 每周日凌晨 3:30
     },
     "estimate-irt-params-daily": {
         "task": "quizzes.tasks.estimate_irt_params_task",

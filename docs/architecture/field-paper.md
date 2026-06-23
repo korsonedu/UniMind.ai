@@ -143,17 +143,21 @@ Over 150 days with 6 reviews per round, this estimation efficiency compounds. Fi
 
 ### 5.4 Production Deployment
 
-Field is designed for deployment alongside existing scheduling infrastructure:
+Field is deployed alongside existing Memorix scheduling infrastructure in three layers:
 
-1. **State storage.** The u vector (215 floats for CFA) is stored in Redis with per-user keys.
-2. **Daily update.** A Celery task applies the diffusion step once per study day.
-3. **Scheduling.** The `_field_rerank` function in the existing Memorix scheduler re-ranks candidate KPs using Field's selection formula.
-4. **Feature flag.** Deploy behind `MEMORIX_FIELD_ENABLED` for gradual rollout and A/B testing.
-5. **Fallback.** If the graph Laplacian computation fails or Redis is unavailable, the system degrades to greedy urgency — safe and simple.
+**Layer 1 — Diffusion State Estimator.** Each user's u vector (KP activation map) is stored in Redis (`memorix:field:u:{user_id}`). After every successful review (rating ≥ 3), activation propagates instantly along outgoing KnowledgeEdges: `u_j += η × w_ij × u_i × (1 - u_j)`. Once per day, a Celery task applies the global diffusion step `u += (-α·u + βe·L·u) × dt` to all active users' u vectors.
+
+**Layer 2 — Multiplicative Scoring.** When a student requests questions, the scheduler loads their u vector and scores each candidate KP using the multiplicative formula `score_i = (1 - u_i) × (1 + βa × Σ_j w_ij × (1 - u_j))`. KPs without u entries (new students, new topics) fall back to Weibull R(t) urgency until enough review data accumulates.
+
+**Layer 3 — Per-Institution Auto-Tuning.** Parameters (α, βe, βa, η) are tuned independently per institution using a perturbation-based evolutionary strategy. A daily Celery task computes institution-level Brier score over a 7-day ReviewLog window. Each week, one parameter is perturbed ±10%; after one week of data accumulation, the perturbation is accepted if Brier improved, reverted otherwise. An 8-week full cycle (4 parameters × 2 directions) with halving perturbation magnitudes upon convergence. All parameters are clamped within safety bounds to prevent drift. Institution isolation ensures a cram-school's optimal parameters don't leak to a university's.
+
+**Feature flags.** `MEMORIX_FIELD_ENABLED` (diffusion + scoring), `MEMORIX_FIELD_AUTO_TUNE_ENABLED` (per-institution parameter evolution). Disabling either flag reverts to the baseline Memorix Weibull-only scheduler.
 
 ### 5.5 Future Work
 
-**Cognitive fingerprint (Phase 4).** Current Field uses uniform βe and α across all students. Individual students have different learning and forgetting rates; personalized parameters estimated from early review behavior could further improve retention.
+**Automated parameter tuning (completed).** ~~Optimal parameters (α = 0.02, βe = 0.001) may differ across knowledge domains and student populations. Automated parameter tuning from review logs is a planned extension.~~ Implemented as per-institution Brier-score-driven perturbation-based evolutionary tuning (§5.4 Layer 3). Parameters self-adjust weekly ±10%, accepting improvements and reverting degradations. 8-week full cycle with safety bounds.
+
+**Cognitive fingerprint (Phase 4).** Current Field uses uniform βe and α across all students within an institution. Individual students have different learning and forgetting rates; personalized parameters estimated from early review behavior could further improve retention.
 
 **Sleep anchoring (Phase 3).** The current model uses calendar time. Memory consolidation occurs primarily during sleep; scheduling reviews relative to sleep cycles rather than absolute timestamps may improve alignment with biological forgetting dynamics.
 

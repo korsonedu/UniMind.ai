@@ -14,8 +14,9 @@ const CONTACT_WECHAT = 'Korsonedu';
 
 export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdminModalProps) {
   const copyText = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} 已复制`);
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success(`${label} 已复制`))
+      .catch(() => toast.error(`复制${label}失败，请手动复制`));
   };
 
   return (

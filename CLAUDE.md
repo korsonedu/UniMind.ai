@@ -265,3 +265,9 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/ADAPTIVE_PROMPT_LLM.md` | LLM 驱动的自适应指令（用户画像→prompt 指令注入） |
 | `docs/tech/incidents/` | 历史事故记录 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |
+
+## Agent skills
+
+### Domain docs
+
+Single-context — 一个全局 `CONTEXT.md` + `docs/adr/` 在 repo 根目录。详见 `docs/agents/domain.md`。

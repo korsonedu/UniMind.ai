@@ -669,13 +669,14 @@ du/dt = -α(T(t))·u + β·L·u + M·s(P(t))
 
 Feature flag 分阶段上线，不一次全开：
 
-| 阶段 | flag | 内容 |
-|------|------|------|
-| Phase 0 | 无 | 离线验证：用 ReviewLog 估计 β。β≈0 则停，β 显著则进 Phase 1 |
-| Phase 1 | `MEMORIX_FIELD_ENABLED` | 图扩散权重融合，α=0.60，知识图用树结构初始 L |
-| Phase 2 | `MEMORIX_REC_ENABLED` | 再巩固窗口 P(t) 调度，叠加 Phase 1 |
-| Phase 3 | `MEMORIX_THERMO_L1` | 睡眠锚定，叠加 Phase 1+2 |
-| Phase 4 | `MEMORIX_META` | 认知指纹（需用户基数） |
+| 阶段 | flag | 内容 | 状态 |
+|------|------|------|------|
+| Phase 0 | 无 | 离线验证：用 ReviewLog 估计 β。β≈0 则停，β 显著则进 Phase 1 | ✅ 已完成 (2026-06-07) |
+| Phase 1 | `MEMORIX_FIELD_ENABLED` | 图扩散状态估计器 + 乘性评分，α=0.60，知识图用树结构初始 L | ✅ 已上线 (2026-06-23) |
+| Phase 1.5 | `MEMORIX_FIELD_AUTO_TUNE_ENABLED` | 参数自进化：per-institution Brier 驱动扰动式调参 | ✅ 已上线 (2026-06-23) |
+| Phase 2 | `MEMORIX_REC_ENABLED` | 再巩固窗口 P(t) urgency，叠加 Phase 1 | ⏸️ 暂关（等 u 向量稳定） |
+| Phase 3 | `MEMORIX_THERMO_L1` | 睡眠锚定，叠加 Phase 1+2 | 📋 待启动 |
+| Phase 4 | `MEMORIX_META` | 认知指纹（需用户基数） | 📋 待启动 |
 
 ---
 

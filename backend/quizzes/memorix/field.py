@@ -7,22 +7,25 @@ Memorix-Field Diffusion State Estimator.
 核心方程:  du/dt = -α·u + βe·L·u
 评分公式:  score_i = (1 - u_i) × (1 + βa × Σ_j w_ij × (1 - u_j))
 
-选择乘性而非加性的原因（论文 §5.1）：
-  加性 field_benefit 会覆盖 urgency——已掌握很好的 KP 可能因为邻居弱
-  而被错误推到前面。乘性天然防止此问题：u_i 高 → (1-u_i) 低 → score 低。
+参数自进化: 每机构独立参数集，每周扰动一个参数 ±10%，
+对比 Brier score 决定接受/回退。Redis 热缓存 + DB 持久化 + settings 兜底。
 """
+import json
 import logging
 from collections import defaultdict
+from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
 # ── Redis key patterns ──
-FIELD_U_PREFIX = "memorix:field:u"          # per-user hash: {kp_id: u_value}
-FIELD_LAST_DIFFUSION = "memorix:field:last"  # hash: {user_id: iso_timestamp}
-FIELD_ADJ_IN_KEY = "memorix:field:adj_in"    # incoming adjacency cache
+FIELD_U_PREFIX = "memorix:field:u"             # per-user hash: {kp_id: u_value}
+FIELD_LAST_DIFFUSION = "memorix:field:last"     # hash: {user_id: iso_timestamp}
+FIELD_ADJ_IN_KEY = "memorix:field:adj_in"       # incoming adjacency cache
+FIELD_PARAMS_KEY = "memorix:field:params"        # hash: {inst_id|'global': json}
 
 # ── 默认参数（论文 §4.1 最优值）──
 DEFAULT_DECAY = 0.02       # α:  自然衰减率/天
@@ -30,10 +33,20 @@ DEFAULT_BETA_E = 0.005     # βe: 扩散强度（§4.3: 0.001 已饱和）
 DEFAULT_BETA_A = 0.5       # βa: 评分放大系数
 DEFAULT_ETA = 0.02         # η:  复习转移系数
 
+# 安全边界（防止自进化跑偏）
+SAFE_BOUNDS = {
+    'decay':   (0.005, 0.10),
+    'beta_e':  (0.0005, 0.02),
+    'beta_a':  (0.1, 2.0),
+    'eta':     (0.005, 0.08),
+}
+
 # 每日扩散只处理近 N 天活跃用户
 ACTIVE_USER_WINDOW_DAYS = 7
-# 两次扩散最小间隔（小时），防止重复执行
+# 两次扩散最小间隔（小时）
 MIN_DIFFUSION_INTERVAL_H = 20
+# 参数缓存 TTL（秒）
+PARAMS_CACHE_TTL = 300
 
 
 # ═══════════════════════════════════════════
@@ -54,6 +67,98 @@ def _get_param(name, default):
 
 def _u_key(user_id: int) -> str:
     return f"{FIELD_U_PREFIX}:{user_id}"
+
+
+# ═══════════════════════════════════════════
+# 参数解析（Redis 热缓存 → DB → settings 兜底）
+# ═══════════════════════════════════════════
+
+def get_field_params(institution_id=None) -> dict:
+    """
+    获取 Field 参数，按机构隔离。
+
+    查询链：Redis 缓存 → MemorixFieldConfig DB → settings 全局默认。
+    结果缓存在 Redis 5 分钟。
+    """
+    auto_tune = getattr(settings, 'MEMORIX_FIELD_AUTO_TUNE_ENABLED', False)
+
+    if not auto_tune or not institution_id:
+        return _global_params()
+
+    r = _get_redis()
+    cache_key = str(institution_id)
+
+    # 1. Redis 热缓存
+    if r:
+        raw = r.hget(FIELD_PARAMS_KEY, cache_key)
+        if raw:
+            try:
+                return json.loads(raw.decode() if isinstance(raw, bytes) else raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    # 2. DB
+    try:
+        from quizzes.models import MemorixFieldConfig
+        config = MemorixFieldConfig.objects.only(
+            'decay', 'beta_e', 'beta_a', 'eta'
+        ).get(institution_id=institution_id)
+        params = {
+            'decay': config.decay,
+            'beta_e': config.beta_e,
+            'beta_a': config.beta_a,
+            'eta': config.eta,
+        }
+    except Exception:
+        params = _global_params()
+
+    # 3. 写回 Redis 缓存
+    if r:
+        r.hset(FIELD_PARAMS_KEY, cache_key, json.dumps(params))
+
+    return params
+
+
+def _global_params() -> dict:
+    return {
+        'decay': _get_param('MEMORIX_FIELD_DECAY', DEFAULT_DECAY),
+        'beta_e': _get_param('MEMORIX_FIELD_BETA_E', DEFAULT_BETA_E),
+        'beta_a': _get_param('MEMORIX_FIELD_BETA_A', DEFAULT_BETA_A),
+        'eta': _get_param('MEMORIX_FIELD_ETA', DEFAULT_ETA),
+    }
+
+
+def set_field_params(institution_id: int, params: dict):
+    """更新机构参数：DB 持久化 + 清除 Redis 缓存。"""
+    # 安全裁剪
+    for key, (lo, hi) in SAFE_BOUNDS.items():
+        if key in params:
+            params[key] = max(lo, min(hi, params[key]))
+
+    from quizzes.models import MemorixFieldConfig
+    MemorixFieldConfig.objects.update_or_create(
+        institution_id=institution_id,
+        defaults={
+            'decay': params.get('decay', DEFAULT_DECAY),
+            'beta_e': params.get('beta_e', DEFAULT_BETA_E),
+            'beta_a': params.get('beta_a', DEFAULT_BETA_A),
+            'eta': params.get('eta', DEFAULT_ETA),
+        },
+    )
+
+    # 清除 Redis 缓存
+    invalidate_param_cache(institution_id)
+
+
+def invalidate_param_cache(institution_id=None):
+    """清除参数缓存。institution_id=None 时清全部。"""
+    r = _get_redis()
+    if not r:
+        return
+    if institution_id:
+        r.hdel(FIELD_PARAMS_KEY, str(institution_id))
+    else:
+        r.delete(FIELD_PARAMS_KEY)
 
 
 # ═══════════════════════════════════════════
@@ -83,7 +188,6 @@ def set_u_vector(user_id: int, u: dict):
     payload = {str(kp): str(round(v, 6)) for kp, v in u.items() if v > 0.001}
     if payload:
         r.hset(key, mapping=payload)
-    # 清理归零的 key
     dead = [str(kp) for kp, v in u.items() if v <= 0.001]
     if dead:
         r.hdel(key, *dead)
@@ -127,20 +231,14 @@ def _get_dynamic_edges(redis_conn) -> dict:
 def build_outgoing_adjacency() -> dict:
     """
     构建出边邻接表 {kp_id: [(neighbor_kp_id, weight)]}。
-    合并 KnowledgeEdge 固定边 + Redis 动态边，缓存 1 小时。
-
-    与 memorix_scheduler._build_adjacency_from_edges 逻辑一致，
-    独立实现在此以避免循环导入。
+    合并 KnowledgeEdge 固定边 + Redis 动态边。
     """
     from quizzes.models import KnowledgeEdge
 
     adj = defaultdict(list)
-
-    # 层 1：DB 固定边
     for edge in KnowledgeEdge.objects.filter(is_active=True).only('source_id', 'target_id', 'weight'):
         adj[edge.source_id].append((edge.target_id, float(edge.weight)))
 
-    # 层 2：Redis 动态边
     r = _get_redis()
     if r:
         try:
@@ -155,9 +253,7 @@ def build_outgoing_adjacency() -> dict:
 def build_incoming_adjacency() -> dict:
     """
     构建入边邻接表 {kp_id: [(source_kp_id, weight)]}。
-    用于每日扩散步的 Laplacian 计算：Σ_{j→i} w_ji·u_j。
-
-    缓存 1 小时（与 outgoing 共用失效策略）。
+    用于每日扩散步的 Laplacian 计算，缓存 1 小时。
     """
     cached = cache.get(FIELD_ADJ_IN_KEY)
     if cached is not None:
@@ -169,7 +265,6 @@ def build_incoming_adjacency() -> dict:
     from quizzes.models import KnowledgeEdge
 
     adj_in = defaultdict(list)
-
     for edge in KnowledgeEdge.objects.filter(is_active=True).only('source_id', 'target_id', 'weight'):
         adj_in[edge.target_id].append((edge.source_id, float(edge.weight)))
 
@@ -207,21 +302,20 @@ def ensure_u_entry(user_id: int, kp_id: int, retrievability: float):
         set_u_vector(user_id, u)
 
 
-def propagate_review(user_id: int, kp_id: int, retrievability: float):
+def propagate_review(user_id: int, kp_id: int, retrievability: float, institution_id=None):
     """
-    成功复习 KP i 后，向邻居传播激活。
+    成功复习 KP i 后，向邻居传播激活（按机构参数）。
 
     对每条出边 i→j，权重 w_ij：
         u_j += η × w_ij × u_i × (1 - u_j)
 
-    论文 §2.1 物理模型：转移量与复习者的掌握度成正比——
-    还没掌握 i 的学生无法有效帮助邻居 j。
+    论文 §2.1 物理模型：转移量与复习者的掌握度成正比。
     """
-    eta = _get_param('MEMORIX_FIELD_ETA', DEFAULT_ETA)
+    params = get_field_params(institution_id)
+    eta = params['eta']
     if eta <= 0:
         return
 
-    # 确保当前 KP 有 u 条目
     ensure_u_entry(user_id, kp_id, retrievability)
 
     u = get_u_vector(user_id)
@@ -252,17 +346,18 @@ def propagate_review(user_id: int, kp_id: int, retrievability: float):
 # 每日扩散
 # ═══════════════════════════════════════════
 
-def diffuse_user(user_id: int) -> int:
+def diffuse_user(user_id: int, institution_id=None) -> int:
     """
-    对单个用户执行一次扩散步。
+    对单个用户执行一次扩散步（按机构参数）。
 
     对每个 KP i：
         u_i_new = (1 - α - βe·deg_out(i)) × u_i + βe × Σ_{j→i} w_ji × u_j
 
     Returns: 扩散的 KP 数量，0 表示跳过。
     """
-    alpha = _get_param('MEMORIX_FIELD_DECAY', DEFAULT_DECAY)
-    beta_e = _get_param('MEMORIX_FIELD_BETA_E', DEFAULT_BETA_E)
+    params = get_field_params(institution_id)
+    alpha = params['decay']
+    beta_e = params['beta_e']
 
     u = get_u_vector(user_id)
     if not u:
@@ -273,8 +368,6 @@ def diffuse_user(user_id: int) -> int:
     if r:
         last_ts = r.hget(FIELD_LAST_DIFFUSION, str(user_id))
         if last_ts:
-            from django.utils import timezone
-            from datetime import timedelta
             try:
                 last = timezone.datetime.fromisoformat(
                     last_ts.decode() if isinstance(last_ts, bytes) else last_ts
@@ -289,24 +382,37 @@ def diffuse_user(user_id: int) -> int:
 
     u_new = {}
     for kp_id, u_i in u.items():
-        # 出度
         deg_out = sum(w for _, w in adj_out.get(kp_id, []))
-
-        # 入边贡献
         incoming = 0.0
         for src_id, w in adj_in.get(kp_id, []):
             incoming += w * u.get(src_id, 0.0)
-
         u_new_i = (1.0 - alpha - beta_e * deg_out) * u_i + beta_e * incoming
         u_new[kp_id] = max(0.0, min(1.0, u_new_i))
 
     set_u_vector(user_id, u_new)
 
     if r:
-        from django.utils import timezone
         r.hset(FIELD_LAST_DIFFUSION, str(user_id), timezone.now().isoformat())
 
     return len(u_new)
+
+
+def _resolve_user_institution(user_id: int):
+    """查用户所属机构 ID，缓存 5 分钟。"""
+    cache_key = f"memorix:field:user_inst:{user_id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        from django.contrib.auth import get_user_model
+        user = get_user_model().objects.only('institution_id').get(id=user_id)
+        inst_id = user.institution_id
+    except Exception:
+        inst_id = None
+
+    cache.set(cache_key, inst_id, 300)
+    return inst_id
 
 
 def diffuse_all_active_users() -> dict:
@@ -314,18 +420,19 @@ def diffuse_all_active_users() -> dict:
     对所有活跃用户的 u 向量执行每日扩散步。
 
     扫描 Redis 中所有 memorix:field:u:* 键，
-    跳过最近 N 小时内已扩散的用户。
+    按用户所属机构使用对应参数。
 
-    Returns: {"processed": N, "skipped": N, "empty": N}
+    Returns: {"processed": N, "skipped": N}
     """
     r = _get_redis()
     if not r:
         return {"error": "Redis unavailable"}
 
-    cursor = 0
+    # 预加载所有机构参数（减少重复查询）
     processed = 0
     skipped = 0
 
+    cursor = 0
     while True:
         cursor, keys = r.scan(cursor, match=f"{FIELD_U_PREFIX}:*", count=200)
         for key in keys:
@@ -333,7 +440,8 @@ def diffuse_all_active_users() -> dict:
                 uid = int(key.decode().split(":")[-1] if isinstance(key, bytes) else key.split(":")[-1])
             except (ValueError, IndexError):
                 continue
-            count = diffuse_user(uid)
+            inst_id = _resolve_user_institution(uid)
+            count = diffuse_user(uid, institution_id=inst_id)
             if count > 0:
                 processed += 1
             else:
@@ -349,15 +457,15 @@ def diffuse_all_active_users() -> dict:
 # 评分
 # ═══════════════════════════════════════════
 
-def compute_field_score(u: dict, kp_id, adj_out: dict) -> float:
+def compute_field_score(u: dict, kp_id, adj_out: dict, params: dict) -> float:
     """
-    计算 Field 选题评分。
+    计算 Field 选题评分（按机构参数）。
 
     score_i = (1 - u_i) × (1 + βa × Σ_j w_ij × max(0, 1 - u_j))
 
     乘性形式：u_i 高 → score 低，无论邻居多弱。
     """
-    beta_a = _get_param('MEMORIX_FIELD_BETA_A', DEFAULT_BETA_A)
+    beta_a = params.get('beta_a', DEFAULT_BETA_A)
 
     u_i = u.get(kp_id, 0.0)
     urgency = max(0.0, 1.0 - u_i)
