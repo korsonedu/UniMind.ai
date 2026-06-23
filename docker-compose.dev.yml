@@ -1,0 +1,88 @@
+# 开发环境覆盖 — 热重载 + dev server
+# 用法: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# 覆盖 web 服务为 Django runserver（热重载），使用 SQLite 省去 PostgreSQL
+
+services:
+  # 热重载 Django（覆盖生产 web 服务）
+  web:
+    build:
+      dockerfile: Dockerfile.dev
+    environment:
+      DJANGO_ENV: development
+      DEBUG: "true"
+      DB_ENGINE: django.db.backends.sqlite3
+      DB_NAME: /app/backend/db.sqlite3
+      DB_HOST: ""
+      DB_PORT: ""
+      DB_USER: ""
+      DB_PASSWORD: ""
+      REDIS_URL: redis://redis:6379/0
+      CACHE_REDIS_URL: redis://redis:6379/1
+      CORS_ALLOW_ALL_ORIGINS: "true"
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app/backend          # 代码热重载
+      - backend_data:/app/backend       # SQLite 数据持久化
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # 热重载前端
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    command: npm run dev -- --host 0.0.0.0
+    volumes:
+      - ./frontend/src:/app/frontend/src  # 源码热重载
+      - ./frontend/public:/app/frontend/public
+    ports:
+      - "5173:5173"
+    depends_on:
+      - web
+
+  # Celery 也用热重载
+  celery:
+    build:
+      dockerfile: Dockerfile.dev
+    environment:
+      DJANGO_ENV: development
+      DEBUG: "true"
+      DB_ENGINE: django.db.backends.sqlite3
+      DB_NAME: /app/backend/db.sqlite3
+      DB_HOST: ""
+      DB_PORT: ""
+      DB_USER: ""
+      DB_PASSWORD: ""
+      REDIS_URL: redis://redis:6379/0
+    command: celery -A school_system worker -l info --pool=solo
+    volumes:
+      - ./backend:/app/backend
+
+  # 开发环境不需要 PostgreSQL，关掉
+  db:
+    profiles:
+      - prod
+
+  celery-beat:
+    build:
+      dockerfile: Dockerfile.dev
+    environment:
+      DJANGO_ENV: development
+      DB_ENGINE: django.db.backends.sqlite3
+      DB_NAME: /app/backend/db.sqlite3
+      DB_HOST: ""
+      DB_PORT: ""
+      DB_USER: ""
+      DB_PASSWORD: ""
+      REDIS_URL: redis://redis:6379/0
+    command: celery -A school_system beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app/backend
+    profiles:
+      - beat
+
+volumes:
+  backend_data:
