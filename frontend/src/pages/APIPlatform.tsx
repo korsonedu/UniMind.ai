@@ -298,7 +298,7 @@ function ApiKeysTab() {
         </div>
       )}
 
-      <ConfirmDialog />
+      {ConfirmDialog}
       {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-md">

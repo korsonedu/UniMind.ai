@@ -64,7 +64,7 @@ const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
 const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
 const MemorixPage = lazy(() => import('./pages/Memorix'));
 const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
-const PlatformAnalytics = lazyNamed(() => import('./pages/PlatformAnalytics'), 'PlatformAnalytics');
+const PlatformAdmin = lazy(() => import('./pages/PlatformAdmin'));
 const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
 const NotFound = lazy(() => import('./pages/NotFound'));
 const OnlineExam = lazyNamed(() => import('./pages/OnlineExam'), 'OnlineExam');
@@ -299,7 +299,7 @@ const router = createBrowserRouter([
           { path: "institution/audit-logs", element: <RequireAdmin>{lazyPage(AuditLogs)}</RequireAdmin> },
           { path: "invite-codes", element: <RequirePlatformAdmin>{lazyPage(InviteCodeAdmin)}</RequirePlatformAdmin> },
           { path: "prompt-templates", element: <RequirePlatformAdmin>{lazyPage(PromptTemplatesAdmin)}</RequirePlatformAdmin> },
-          { path: "platform-analytics", element: <RequirePlatformAdmin>{lazyPage(PlatformAnalytics)}</RequirePlatformAdmin> },
+          { path: "platform", element: <RequirePlatformAdmin>{lazyPage(PlatformAdmin)}</RequirePlatformAdmin> },
           { path: "*", element: lazyPage(NotFound) },
         ],
       },

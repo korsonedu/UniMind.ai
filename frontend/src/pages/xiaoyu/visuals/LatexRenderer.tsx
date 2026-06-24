@@ -66,9 +66,7 @@ export const LatexRenderer: React.FC<{ payload: LatexDerivationPayload }> = ({ p
             </div>
             {/* Formula */}
             <div className="py-1">
-              <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {`$$${deduplicateLatex(step.latex)}$$`}
-              </Markdown>
+              <MarkdownContent content={`$$${deduplicateLatex(step.latex)}$$`} />
             </div>
             {/* Note */}
             {step.note && (

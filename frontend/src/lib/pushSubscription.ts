@@ -37,7 +37,7 @@ export async function subscribeToPush(): Promise<boolean> {
 
     const sub = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlB64ToUint8Array(vapidPublicKey),
+      applicationServerKey: urlB64ToUint8Array(vapidPublicKey) as any,
     });
 
     await syncSubscription(sub);

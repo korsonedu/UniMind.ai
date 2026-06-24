@@ -502,7 +502,7 @@ export default function LessonPlans() {
       </Dialog>
 
       {/* Confirm Dialog */}
-      <ConfirmDialog />
+      {ConfirmDialog}
     </PageWrapper>
   );
 }

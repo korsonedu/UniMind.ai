@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, ChartLineUp, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure, ClipboardText, Storefront, Code } from '@phosphor-icons/react';
+import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure, ClipboardText, Storefront, Code } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -133,7 +133,7 @@ export const MainLayout: React.FC = () => {
   const { institution: instFromStore, fetchFeatures, hasFeature, loading: featuresLoading, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
   const instInfo = instFromStore || user?.institution || null;
 
-  const isFullPage = ['/management'].includes(location.pathname);
+  const isFullPage = ['/platform'].includes(location.pathname);
   const isEdgeToEdge = ['/workbench'].includes(location.pathname);
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && (
@@ -200,15 +200,8 @@ export const MainLayout: React.FC = () => {
     return hasFeature(feat);
   };
 
-  // ── 超级管理员 ──
-  const superAdminNavItems: NavItem[] = [
-    { to: '/institution/admin', icon: Buildings, label: t('layout:nav.institutionAdmin') },
-    { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplace') },
-    { to: '/api-platform', icon: Code, label: t('layout:nav.apiPlatform') },
-    { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteCodes') },
-    { to: '/platform-analytics', icon: ChartLineUp, label: t('layout:nav.platformAnalytics') },
-    { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptTemplates') },
-  ];
+  // ── 超级管理员 ──（不再替换侧边栏，作为附加入口注入到角色侧边栏中）
+  const platformAdminItem: NavItem = { to: '/platform', icon: Gauge, label: '平台管理' };
 
   // ── 教师端 ──
   const teacherNavItems: NavItem[] = [
@@ -221,7 +214,8 @@ export const MainLayout: React.FC = () => {
     { to: '/knowledge-tree', icon: TreeStructure, label: t('layout:nav.knowledgeTree') },
     { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
     { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplace') },
-    ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') } as NavItem] : []),
+    ...(isPlatformAdmin ? [platformAdminItem] : []),
+    ...(user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') } as NavItem] : []),
   ];
 
   // ── 学生端 9 套件 ──
@@ -238,23 +232,14 @@ export const MainLayout: React.FC = () => {
     { to: '/plan', icon: CalendarCheck, label: t('layout:nav.plan') },
     { to: '/study', icon: Clock, label: t('layout:nav.studyRoom') },
     { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams') },
+    ...(isPlatformAdmin ? [platformAdminItem] : []),
   ];
 
-  const navItems: NavItem[] = isPlatformAdmin
-    ? superAdminNavItems
-    : (effectiveIsInstStudent ? studentNavItems : teacherNavItems);
+  const navItems: NavItem[] = effectiveIsInstStudent ? studentNavItems : teacherNavItems;
 
   const visibleNavItems = navItems.filter(itemVisible);
 
-  const mobileNavItems: NavItem[] = isPlatformAdmin
-    ? [
-        { to: '/institution', icon: Buildings, label: t('layout:nav.institutionShort') },
-        { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplaceShort') },
-        { to: '/api-platform', icon: Code, label: t('layout:nav.apiPlatformShort') },
-        { to: '/invite-codes', icon: Sparkle, label: t('layout:nav.inviteShort') },
-        { to: '/prompt-templates', icon: FileText, label: t('layout:nav.promptShort') },
-      ]
-    : effectiveIsInstStudent ? [
+  const mobileNavItems: NavItem[] = effectiveIsInstStudent ? [
         { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort') },
         { to: '/my-assignments', icon: CalendarCheck, label: t('layout:nav.myAssignments') },
         { to: '/achievements', icon: Trophy, label: t('layout:nav.achievements') },
@@ -263,6 +248,7 @@ export const MainLayout: React.FC = () => {
         { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeShort') },
         { to: '/articles', icon: FileText, label: t('layout:nav.articlesShort') },
         { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
+        ...(isPlatformAdmin ? [{ to: '/platform', icon: Gauge, label: '平台' } as NavItem] : []),
       ]
     : [
         { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
@@ -274,7 +260,7 @@ export const MainLayout: React.FC = () => {
         { to: '/knowledge-tree', icon: TreeStructure, label: t('layout:nav.knowledgeTree') },
         { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
         { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplaceShort') },
-        ...(user?.is_admin || user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') }] : []),
+        ...(isPlatformAdmin ? [{ to: '/platform', icon: Gauge, label: '平台' } as NavItem] : []),
       ];
 
   const visibleMobileNavItems = mobileNavItems.filter(itemVisible);
@@ -569,7 +555,7 @@ export const MainLayout: React.FC = () => {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel className="rounded-xl font-bold border-border text-foreground hover:bg-muted">{t('layout:logout.cancel')}</AlertDialogCancel>
-              <AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch {} logout(); navigate('/login'); }} className="rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90">{t('layout:logout.confirm')}</AlertDialogAction>
+              <AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch (err) { console.error('Logout API failed:', err); } logout(); navigate('/login'); }} className="rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90">{t('layout:logout.confirm')}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

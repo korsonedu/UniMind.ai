@@ -22,9 +22,7 @@ export const StepSolutionRenderer: React.FC<{ payload: StepSolutionPayload }> = 
             </div>
             {step.latex && (
               <div className="ml-6 py-1.5">
-                <Markdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                  {`$$${step.latex}$$`}
-                </Markdown>
+                <MarkdownContent content={`$$${step.latex}$$`} />
               </div>
             )}
           </div>

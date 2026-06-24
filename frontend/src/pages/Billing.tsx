@@ -30,7 +30,7 @@ export function BillingPage() {
   const [contactOpen, setContactOpen] = useState(false);
   const [contactPlan, setContactPlan] = useState('');
 
-  const currentTier = user?.institution?.plan || user?.personal_plan || user?.membership_tier || 'free';
+  const currentTier = (user?.institution?.plan || user?.personal_plan || user?.membership_tier || 'free') as string;
   const isTrial = user?.is_member && user?.membership_source === 'trial';
   const membershipEnd = user?.membership_expires_at ? new Date(user?.membership_expires_at) : null;
   const daysLeft = membershipEnd
@@ -108,11 +108,11 @@ export function BillingPage() {
                 </Button>
               )}
             </div>
-            {currentTier !== 'free' && planFeatures[currentTier] && (
+            {currentTier !== 'free' && (planFeatures as Record<string, string[]>)[currentTier] && (
               <div className="bg-unimind-bg-secondary rounded-xl p-4">
                 <p className="text-[10px] font-extrabold text-muted-foreground/40 uppercase tracking-[0.25em] mb-3">{t('billingCurrentFeatures')}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                  {planFeatures[currentTier]?.map((f: string, i: number) => (
+                  {(planFeatures as Record<string, string[]>)[currentTier]?.map((f: string, i: number) => (
                     <div key={i} className="flex items-center gap-2 text-[12px] font-semibold text-foreground/55 py-0.5">
                       <Check className="h-3.5 w-3.5 text-unimind-green shrink-0" />
                       {f}
@@ -132,7 +132,7 @@ export function BillingPage() {
                   .filter(k => k !== 'free' && PLAN[k].priceM > (PLAN[currentTier]?.priceM || 0))
                   .map((k) => {
                     const p = PLAN[k];
-                    const feats = planFeatures[k] || [];
+                    const feats = (planFeatures as Record<string, string[]>)[k] || [];
                     return (
                       <Card key={k} className="border border-black/[0.04] shadow-none rounded-2xl p-4 space-y-3 text-center bg-card">
                         <Badge className={cn('text-[10px] font-extrabold text-white bg-gradient-to-br', p.gradient, 'border-none')}>

@@ -1138,6 +1138,68 @@ class AnalyticsExportView(APIView):
 
 
 # ──────────────────────────────────────────────
+# 平台营收仪表盘
+# ──────────────────────────────────────────────
+
+class PlatformRevenueView(APIView):
+    """GET /api/users/admin/revenue/ — 全平台营收总览，仅超管。"""
+    permission_classes = [IsAuthenticated, IsPlatformAdmin]
+
+    def get(self, request):
+        from payments.models import Order, Subscription
+        from users.models import Institution
+        from django.db.models import Sum, Count
+
+        now = timezone.now()
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # 全部已支付订单
+        paid_orders = Order.objects.filter(status='paid')
+        total_revenue = paid_orders.aggregate(total=Sum('amount_cents'))['total'] or 0
+        revenue_this_month = paid_orders.filter(paid_at__gte=month_start).aggregate(
+            total=Sum('amount_cents')
+        )['total'] or 0
+
+        # 付费用户数 & ARPU
+        paying_user_ids = paid_orders.values('user_id').distinct()
+        paying_count = paying_user_ids.count()
+        arpu = round(total_revenue / paying_count / 100, 2) if paying_count > 0 else 0
+
+        # 活跃订阅 (MRR/ARR)
+        PLAN_MONTHLY_PRICE = {
+            ('starter', 'monthly'): 9900, ('starter', 'annual'): 9900,
+            ('growth', 'monthly'): 29900, ('growth', 'annual'): 24917,
+            ('enterprise', 'monthly'): 99900, ('enterprise', 'annual'): 83250,
+        }
+        active_subs = Subscription.objects.filter(status__in=('active', 'trialing', 'past_due'))
+        mrr = 0
+        subs_by_plan: dict[str, int] = {}
+        for sub in active_subs:
+            price = PLAN_MONTHLY_PRICE.get((sub.plan, sub.billing_cycle), 0)
+            mrr += price
+            subs_by_plan[sub.plan] = subs_by_plan.get(sub.plan, 0) + 1
+
+        # 机构数 (按 plan 分布)
+        inst_plan_dist = (
+            Institution.objects.values('plan')
+            .annotate(count=Count('id'))
+            .order_by('plan')
+        )
+
+        return Response({
+            'total_revenue': round(total_revenue / 100, 2),
+            'revenue_this_month': round(revenue_this_month / 100, 2),
+            'paying_users': paying_count,
+            'arpu': arpu,
+            'mrr': round(mrr / 100, 2),
+            'arr': round(mrr * 12 / 100, 2),
+            'active_subscriptions': active_subs.count(),
+            'subs_by_plan': subs_by_plan,
+            'inst_by_plan': {d['plan']: d['count'] for d in inst_plan_dist},
+        })
+
+
+# ──────────────────────────────────────────────
 # NPS 问卷
 # ──────────────────────────────────────────────
 

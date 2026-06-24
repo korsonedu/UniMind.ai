@@ -655,7 +655,7 @@ function MyListingsTab() {
         </DialogContent>
       </Dialog>
 
-      <ConfirmDialog />
+      {ConfirmDialog}
       {/* Edit Dialog */}
       <Dialog open={!!editItem} onOpenChange={(v) => { if (!v) setEditItem(null); }}>
         <DialogContent className="max-w-md">

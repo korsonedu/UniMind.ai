@@ -60,6 +60,24 @@ export function OnlineExam() {
   const submittedRef = useRef(false);
   const violationRef = useRef(0);
 
+  // Submit handler (extracted so timer can call it)
+  const handleSubmit = useCallback(async () => {
+    if (submittedRef.current || submitting) return;
+    submittedRef.current = true;
+    setSubmitting(true);
+    try {
+      const r = await api.post(`/quizzes/online-exams/${examId}/submit/`, { answers });
+      setResult(r.data);
+      setTimeLeft(0);
+      toast.success('提交成功');
+    } catch (e: any) {
+      submittedRef.current = false;
+      toast.error(e.response?.data?.error || '提交失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [examId, answers, submitting]);
+
   // Keep ref in sync for timer callback
   useEffect(() => {
     timeLeftRef.current = timeLeft;
@@ -104,25 +122,7 @@ export function OnlineExam() {
     if (examId) startExam();
   }, [examId, startExam]);
 
-  // Submit handler (extracted so timer can call it)
-  const handleSubmit = useCallback(async () => {
-    if (submittedRef.current || submitting) return;
-    submittedRef.current = true;
-    setSubmitting(true);
-    try {
-      const r = await api.post(`/quizzes/online-exams/${examId}/submit/`, { answers });
-      setResult(r.data);
-      setTimeLeft(0);
-      toast.success('提交成功');
-    } catch (e: any) {
-      submittedRef.current = false;
-      toast.error(e.response?.data?.error || '提交失败');
-    } finally {
-      setSubmitting(false);
-    }
-  }, [examId, answers, submitting]);
-
-  // Submit with confirmation
+  // Start exam
   const confirmSubmit = useCallback(() => {
     const unanswered = session?.questions.filter(q => !answers[String(q.id)]?.trim()).length || 0;
     if (unanswered > 0) {

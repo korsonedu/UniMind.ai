@@ -28,7 +28,7 @@ self.addEventListener('push', (event: PushEvent) => {
   try {
     const payload = event.data.json();
     const title = payload.title || 'UniMind';
-    const options: NotificationOptions = {
+    const options: NotificationOptions & { vibrate?: number[] } = {
       body: payload.body || '',
       icon: '/pwa-192x192.png',
       badge: '/pwa-192x192.png',

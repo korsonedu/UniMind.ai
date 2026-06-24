@@ -189,7 +189,7 @@ export const CourseCenter: React.FC = () => {
           /* 网格视图 */
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-left animate-in fade-in duration-300">
-              {courses.map(course => (
+              {courses.map((course: any) => (
                 <Link
                   key={course.id}
                   to={`/course/${course.id}`}
@@ -243,7 +243,7 @@ export const CourseCenter: React.FC = () => {
         ) : (
           /* 列表视图 */
           <div className="space-y-2">
-            {courses.map(course => (
+            {courses.map((course: any) => (
               <Link
                 key={course.id}
                 to={`/course/${course.id}`}

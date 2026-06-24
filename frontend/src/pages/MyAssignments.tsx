@@ -143,7 +143,7 @@ export default function MyAssignments() {
       // 将逐题批改结果合并到题目列表中
       const qrMap = new Map((res.data.question_results || []).map((r: any) => [r.question_id, r]));
       const updatedQuestions = detail.questions.map(q => {
-        const qr = qrMap.get(q.id);
+        const qr: any = qrMap.get(q.id);
         if (qr) {
           return { ...q, score: qr.score, max_score: qr.max_score, is_correct: qr.is_correct, feedback: qr.feedback, analysis: qr.analysis, correct_answer: qr.correct_answer };
         }
