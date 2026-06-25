@@ -6,7 +6,7 @@ import { CheckoutModal } from './CheckoutModal';
 import { X } from '@phosphor-icons/react';
 
 export function TrialBanner() {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const [show, setShow] = useState(true);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 

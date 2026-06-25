@@ -46,7 +46,8 @@ const formatTime = (s: number) => {
 };
 
 export const StudyRoom: React.FC = () => {
-  const { user, updateUser } = useAuthStore();
+  const user = useAuthStore(s => s.user);
+  const updateUser = useAuthStore(s => s.updateUser);
   const { setPageHeader } = useSystemStore();
   const { t } = useTranslation('studyRoom');
 

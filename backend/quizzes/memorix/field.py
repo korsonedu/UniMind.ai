@@ -228,15 +228,21 @@ def _get_dynamic_edges(redis_conn) -> dict:
     return dyn
 
 
-def build_outgoing_adjacency() -> dict:
+def build_outgoing_adjacency(source_ids: list[int] | None = None) -> dict:
     """
     构建出边邻接表 {kp_id: [(neighbor_kp_id, weight)]}。
     合并 KnowledgeEdge 固定边 + Redis 动态边。
+
+    source_ids: 可选，仅加载指定 source 的出边。不传则加载全部。
     """
     from quizzes.models import KnowledgeEdge
 
+    qs = KnowledgeEdge.objects.filter(is_active=True).only('source_id', 'target_id', 'weight')
+    if source_ids:
+        qs = qs.filter(source_id__in=source_ids)
+
     adj = defaultdict(list)
-    for edge in KnowledgeEdge.objects.filter(is_active=True).only('source_id', 'target_id', 'weight'):
+    for edge in qs:
         adj[edge.source_id].append((edge.target_id, float(edge.weight)))
 
     r = _get_redis()
@@ -323,7 +329,7 @@ def propagate_review(user_id: int, kp_id: int, retrievability: float, institutio
     if u_i <= 0.01:
         return
 
-    adj_out = build_outgoing_adjacency()
+    adj_out = build_outgoing_adjacency(source_ids=[kp_id])
     neighbors = adj_out.get(kp_id, [])
     if not neighbors:
         return
@@ -377,7 +383,7 @@ def diffuse_user(user_id: int, institution_id=None) -> int:
             except (ValueError, TypeError):
                 pass
 
-    adj_out = build_outgoing_adjacency()
+    adj_out = build_outgoing_adjacency(source_ids=list(u.keys()))
     adj_in = build_incoming_adjacency()
 
     u_new = {}

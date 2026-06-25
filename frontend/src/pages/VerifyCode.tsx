@@ -21,7 +21,8 @@ export const VerifyCode: React.FC = () => {
   const [countdown, setCountdown] = useState(60);
   const [resending, setResending] = useState(false);
 
-  const { setAuth, updateUser } = useAuthStore();
+  const setAuth = useAuthStore(s => s.setAuth);
+  const updateUser = useAuthStore(s => s.updateUser);
   const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
 
@@ -52,7 +53,7 @@ export const VerifyCode: React.FC = () => {
           await api.post('/users/institution/join-by-slug/', { slug: institutionSlug, role: institutionRole });
           const meRes = await api.get('/users/me/');
           updateUser(meRes.data);
-        } catch (_err) {}
+        } catch (err) { console.error('Join institution after code login failed:', err); }
       }
       await fetchFeatures();
       navigate('/');
@@ -89,6 +90,18 @@ export const VerifyCode: React.FC = () => {
         </>
       }
     >
+      {/* Back button */}
+      <button
+        type="button"
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-1 text-sm text-[#6E6E73] dark:text-white/40 hover:text-[#1D1D1F] dark:hover:text-white/70 transition-colors -mt-2 mb-5"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+          <path d="M10 3L5 8L10 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        返回
+      </button>
+
       {/* Error banner */}
       {error && (
         <div className="flex items-start gap-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 px-4 py-3 mb-6 text-sm text-red-700 dark:text-red-400">

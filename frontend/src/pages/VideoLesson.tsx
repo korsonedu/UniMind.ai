@@ -22,7 +22,7 @@ export const VideoLesson: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation('videoLesson');
-  const { updateUser } = useAuthStore();
+  const updateUser = useAuthStore(s => s.updateUser);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const [course, setCourse] = useState<any>(null);

@@ -23,7 +23,7 @@ const fmtDate = (d: Date) =>
 
 
 export function BillingPage() {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { t } = useTranslation('common');
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);

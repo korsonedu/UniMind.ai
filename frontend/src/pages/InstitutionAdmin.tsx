@@ -45,7 +45,7 @@ const PLAN_COLORS: Record<string, string> = {
 
 export default function InstitutionAdmin() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { t } = useTranslation('common');
   const enterPreview = useInstitutionStore(s => s.enterPreview);
   const [institutions, setInstitutions] = useState<Institution[]>([]);

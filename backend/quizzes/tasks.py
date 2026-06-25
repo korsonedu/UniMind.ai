@@ -482,3 +482,34 @@ def estimate_irt_params_task():
     result = IRTEstimator.run_batch_estimation()
     logger.info("estimate_irt_params_task: %s", result)
     return result
+
+
+# ═══════════════════════════════════════════
+# 语义边分析
+# ═══════════════════════════════════════════
+
+@shared_task(
+    soft_time_limit=1800,
+    time_limit=1920,
+    acks_late=True,
+)
+def run_semantic_edge_analysis_task(subject: str, institution_id: int = None):
+    """
+    对指定学科的 KnowledgePoint 做全量 LLM 语义边分析。
+
+    按 SEC 分组，逐批送 LLM 判断跨章节 KP 间的关系类型
+    （prerequisite/similar/contrast/confusion/co_occur/derivation），
+    结果写入 KnowledgeEdge（source_type='llm', is_active=False，待教师审核）。
+    """
+    from quizzes.services.semantic_edge_analyzer import run_semantic_edge_analysis
+
+    try:
+        result = run_semantic_edge_analysis(
+            subject=subject,
+            institution_id=institution_id,
+        )
+        logger.info("run_semantic_edge_analysis_task: subject=%s result=%s", subject, result)
+        return result
+    except Exception:
+        logger.exception("run_semantic_edge_analysis_task failed: subject=%s", subject)
+        raise

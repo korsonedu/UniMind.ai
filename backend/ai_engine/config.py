@@ -21,6 +21,8 @@ _TASK_MODEL_MAP = {
     'pipeline.classifier':('AI_MODEL_GENERATE_CLASSIFIER', 'fast'),
     # ── Knowledge tree generation ──
     'generate_knowledge_tree': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'pro'),
+    # ── Knowledge edge analysis ──
+    'knowledge_edge_analyze': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'pro'),
     # ── Grading ──
     'quizzes.grade':  ('AI_MODEL_GRADE_SUBJECTIVE',   'pro'),
     'quizzes.mock_exam_generate': ('AI_MODEL_GENERATE_AUTHOR', 'pro'),

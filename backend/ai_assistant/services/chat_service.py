@@ -1,5 +1,7 @@
 from typing import Dict, Sequence
 
+from django.core.cache import cache
+
 from ai_engine.tools import get_assistant_tools, get_planner_tools, get_exam_generator_tools
 
 
@@ -124,12 +126,16 @@ class AssistantChatService:
 
         messages.append({'role': 'user', 'content': user_message})
 
-        # 从 registry 获取 tools
-        profile = get_bot_profile(bot.bot_type if bot else 'planner')
-        tools = profile.tools_factory()
+        # 从 registry 获取 tools（Redis 缓存 300s，按 bot_type 分 key）
+        bot_type = bot.bot_type if bot else 'planner'
+        profile = get_bot_profile(bot_type)
+        cache_key = f"bot:tools:{bot_type}"
+        tools = cache.get(cache_key)
+        if tools is None:
+            tools = profile.tools_factory()
+            cache.set(cache_key, tools, 300)
 
         # Apply tool permission sandbox
-        bot_type = bot.bot_type if bot else 'planner'
         tools = filter_tools(bot_type, institution, tools)
 
         # 意图预筛选（仅启用 use_intent_router 的 bot）

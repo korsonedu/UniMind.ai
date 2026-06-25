@@ -1,6 +1,9 @@
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate } from 'react-router-dom';
-import { lazy, Suspense, useState, useEffect, type ReactNode } from 'react';
-import { MainLayout } from './layouts/MainLayout';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
+const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ default: m.MainLayout })));
 import { useAuthStore } from './store/useAuthStore';
 import { useSystemStore } from './store/useSystemStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
@@ -16,6 +19,16 @@ const WeeklyReportDialog = lazy(() => import('./components/WeeklyReportDialog').
 const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
 import { FeedbackButton } from './components/FeedbackButton';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30000,
+      retry: 1,
+      refetchIntervalInBackground: false,
+    },
+  },
+});
 
 // Lazy-loaded pages — named exports need .then() wrapper
 const lazyNamed = <T extends Record<string, React.ComponentType<any>>>(loader: () => Promise<T>, name: keyof T) =>
@@ -115,7 +128,7 @@ const LanguageRedirect = ({ lang }: { lang: string }) => {
 
 // Auth Guard — RootRedirect already handles auth validation; here we just gate.
 const RequireAuth = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { theme, setTheme } = useSystemStore();
 
   useEffect(() => {
@@ -209,34 +222,38 @@ const isKorsonedu = typeof window !== 'undefined' &&
   /korsonedu\.com/.test(window.location.hostname);
 
 const RootRedirect = () => {
-  const { user, setAuth, logout } = useAuthStore();
+  const user = useAuthStore(s => s.user);
+  const setAuth = useAuthStore(s => s.setAuth);
+  const logout = useAuthStore(s => s.logout);
   const hasHydrated = useAuthStore.persist.hasHydrated();
-  const [checking, setChecking] = useState(true);
-  const [validUser, setValidUser] = useState(false);
   const navigate = useNavigate();
 
+  const { data: userData, isLoading, isError } = useQuery({
+    queryKey: queryKeys.user.me,
+    queryFn: () => api.get('/users/me/').then(r => r.data),
+    enabled: hasHydrated,
+    retry: false,
+  });
+
+  // Sync auth store with query result
   useEffect(() => {
-    if (!hasHydrated) return;
-    api.get('/users/me/')
+    if (userData) setAuth(userData, null);
+  }, [userData, setAuth]);
+
+  // On auth failure, log out and check invite status
+  useEffect(() => {
+    if (!isError) return;
+    logout();
+    api.get('/users/check-invite/')
       .then(res => {
-        setAuth(res.data, null);
-        setValidUser(true);
+        if (res.data?.has_invite) navigate('/register', { replace: true });
       })
-      .catch(() => {
-        logout();
-        setValidUser(false);
-        api.get('/users/check-invite/')
-          .then(res => {
-            if (res.data?.has_invite) navigate('/register', { replace: true });
-          })
-          .catch(() => {});
-      })
-      .finally(() => setChecking(false));
-  }, [hasHydrated, setAuth, logout, navigate]);
+      .catch(() => {});
+  }, [isError, logout, navigate]);
 
-  if (!hasHydrated || checking) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+  if (!hasHydrated || isLoading) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
-  if (validUser) return <Outlet />;
+  if (userData) return <Outlet />;
 
   // korsonedu.com → 直接展示机构主页
   if (isKorsonedu) return <Suspense fallback={<PageLoader />}><InstitutionHome slug="korsonedu" /></Suspense>;
@@ -255,7 +272,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomeRedirect /> },
       {
-        element: <RequireAuth><MainLayout /></RequireAuth>,
+        element: <RequireAuth><Suspense fallback={<PageLoader />}><MainLayout /></Suspense></RequireAuth>,
         children: [
           { path: "courses", element: lazyPage(CourseCenter) },
           { path: "courses/manage", element: <RequireInstitution>{lazyPage(CourseManage)}</RequireInstitution> },
@@ -326,16 +343,18 @@ const router = createBrowserRouter([
 
 function App() {
   return (
-    <ErrorBoundary>
-      <Toaster position="top-center" richColors />
-      <Suspense fallback={null}>
-        <WeeklyReportDialog />
-        <NPSSurvey />
-      </Suspense>
-      <OnboardingOverlay />
-      <RouterProvider router={router} />
-      <FeedbackButton />
-    </ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ErrorBoundary>
+        <Toaster position="top-center" richColors />
+        <Suspense fallback={null}>
+          <WeeklyReportDialog />
+          <NPSSurvey />
+        </Suspense>
+        <OnboardingOverlay />
+        <RouterProvider router={router} />
+        <FeedbackButton />
+      </ErrorBoundary>
+    </QueryClientProvider>
   );
 }
 

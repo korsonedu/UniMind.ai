@@ -44,7 +44,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-[#0071E3]/[0.03] dark:bg-[#3395ff]/[0.04] blur-[60px]" />
 
         {/* Content */}
-        <div className="relative z-10 flex flex-col items-center gap-8 px-12 text-center max-w-[360px]">
+        <div className="relative z-10 flex flex-col items-center gap-8 px-8 lg:px-12 text-center">
           <img
             src="/unimind_logo_small.png"
             alt="UniMind"
@@ -52,12 +52,12 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
           />
 
           <div className="space-y-4">
-            <h2 className="text-[22px] font-bold tracking-tight text-[#1D1D1F] dark:text-white leading-snug">
+            <h2 className="text-[64px] font-bold tracking-tight text-[#1D1D1F] dark:text-white leading-snug">
               AI 驱动的新一代
               <br />
               智能学习平台
             </h2>
-            <p className="text-[14px] leading-relaxed text-[#6E6E73] dark:text-white/40">
+            <p className="text-[24px] leading-relaxed text-[#6E6E73] dark:text-white/40">
               知识图谱 × 自适应记忆 × 智能教练
               <br />
               为每个学习者量身定制

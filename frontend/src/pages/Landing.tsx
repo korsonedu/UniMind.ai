@@ -674,7 +674,7 @@ const ReferralBanner: React.FC = () => {
 
 
 export const Landing: React.FC = () => {
-  const { token } = useAuthStore();
+  const token = useAuthStore(s => s.token);
   useScrollReveal();
 
   return (

@@ -1,4 +1,5 @@
 import logging
+from django.core.cache import cache
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,6 +17,20 @@ def _build_annotation_map(user):
     return {row.knowledge_point_id: row for row in rows}
 
 
+KNOWLEDGE_TREE_CACHE_TIMEOUT = 3600
+
+
+def _invalidate_tree_cache(instance=None):
+    """清除知识树缓存。instance 为 KnowledgePoint 时按机构精准清除，为 None 时清除全局。"""
+    if instance is not None:
+        if instance.institution_id:
+            cache.delete(f"knowledge_tree:ids:inst:{instance.institution_id}")
+        else:
+            cache.delete("knowledge_tree:ids:global")
+    else:
+        cache.delete("knowledge_tree:ids:global")
+
+
 class KnowledgePointListView(generics.ListCreateAPIView):
     # 只返回 parent__isnull=True 的顶层，序列化器会通过 children 把下面所有的全拉出来。
     queryset = KnowledgePoint.objects.filter(parent__isnull=True).prefetch_related('children').order_by('order', 'id')
@@ -28,24 +43,52 @@ class KnowledgePointListView(generics.ListCreateAPIView):
             return [IsAdmin(), HasQuota()]
         return [IsAdminWriteMemberRead()]
 
+    def _get_tree_cache_key(self, user):
+        """返回知识树缓存 key，按机构隔离。"""
+        preview_inst_id = self.request.query_params.get('preview_institution')
+        if preview_inst_id and is_platform_admin(user):
+            return f"knowledge_tree:ids:inst:{preview_inst_id}"
+        if is_platform_admin(user) and user.institution is None:
+            return "knowledge_tree:ids:global"
+        if user.institution:
+            return f"knowledge_tree:ids:inst:{user.institution_id}"
+        return None
+
     def get_queryset(self):
-        qs = super().get_queryset()
         user = self.request.user
         if not user.is_authenticated:
-            return qs.none()
+            return KnowledgePoint.objects.none()
+
         # 预览模式：平台管理员可查看任意机构知识树
         preview_inst_id = self.request.query_params.get('preview_institution')
         if preview_inst_id:
             if not is_platform_admin(user):
-                return qs.none()
-            return qs.filter(institution_id=preview_inst_id)
-        # 平台管理员：只看全局知识树（institution=NULL），不得接触机构资产
-        if is_platform_admin(user) and user.institution is None:
-            return qs.filter(institution__isnull=True)
-        # 机构用户：只看本机构知识树
-        if user.institution:
-            return qs.filter(institution=user.institution)
-        return qs.none()
+                return KnowledgePoint.objects.none()
+            cache_key = f"knowledge_tree:ids:inst:{preview_inst_id}"
+            inst_filter = {'institution_id': preview_inst_id}
+        elif is_platform_admin(user) and user.institution is None:
+            cache_key = "knowledge_tree:ids:global"
+            inst_filter = {'institution__isnull': True}
+        elif user.institution:
+            cache_key = f"knowledge_tree:ids:inst:{user.institution_id}"
+            inst_filter = {'institution': user.institution}
+        else:
+            return KnowledgePoint.objects.none()
+
+        # 尝试从 Redis 缓存中获取树节点 ID 列表
+        cached_ids = cache.get(cache_key)
+        if cached_ids is not None:
+            return KnowledgePoint.objects.filter(
+                id__in=cached_ids, parent__isnull=True,
+            ).prefetch_related('children').order_by('order', 'id')
+
+        # Cache miss — 执行完整查询并缓存根节点 ID
+        qs = KnowledgePoint.objects.filter(
+            parent__isnull=True, **inst_filter
+        ).prefetch_related('children').order_by('order', 'id')
+        ids = list(qs.values_list('id', flat=True))
+        cache.set(cache_key, ids, KNOWLEDGE_TREE_CACHE_TIMEOUT)
+        return qs
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -53,6 +96,7 @@ class KnowledgePointListView(generics.ListCreateAPIView):
         if user.is_authenticated and not is_platform_admin(user) and user.institution:
             institution = user.institution
         serializer.save(institution=institution)
+        _invalidate_tree_cache(serializer.instance)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -91,6 +135,11 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not is_platform_admin(user) and user.institution:
             institution = user.institution
         serializer.save(institution=institution)
+        _invalidate_tree_cache(serializer.instance)
+
+    def perform_destroy(self, instance):
+        _invalidate_tree_cache(instance)
+        instance.delete()
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -285,6 +334,11 @@ class KnowledgePointImportMDView(APIView):
             institution = user.institution
 
         created, updated = _create_or_update_knowledge_tree(tree, institution=institution)
+        # 清除对应机构（或全局）的知识树缓存
+        if institution:
+            cache.delete(f"knowledge_tree:ids:inst:{institution.id}")
+        else:
+            cache.delete("knowledge_tree:ids:global")
         return Response({
             'status': 'ok',
             'created': created,

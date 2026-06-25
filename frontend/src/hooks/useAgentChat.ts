@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import type { TaskListData } from '@/components/TaskList';
 
 export interface AgentStep {
   call_id: string;
   step: number;
-  status: 'calling' | 'done';
+  status: 'calling' | 'done' | 'batch_start';
   name: string;
   label: string;
   args_summary?: string;
@@ -18,6 +19,11 @@ export interface AgentStep {
     kp_name: string;
     answer_preview: string;
   }>;
+  task_list?: {
+    task_id: string;
+    items?: TaskListData['items'];
+    update?: { id: string; status: 'done'; duration_ms?: number };
+  };
 }
 
 type AgentEvent =
@@ -25,11 +31,40 @@ type AgentEvent =
   | { type: 'text_delta'; delta: string }
   | { type: 'message'; content: string }
   | { type: 'done'; full_content: string; has_intermediate?: boolean }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'ping' };
 
 const WS_BASE = import.meta.env.VITE_WS_URL || (
   window.location.protocol === 'https:' ? 'wss://' : 'ws://'
 ) + window.location.host;
+
+function updateTaskList(
+  prev: TaskListData | null,
+  event: AgentStep,
+): TaskListData | null {
+  if (!event.task_list) return prev;
+
+  const { task_id, items, update } = event.task_list;
+
+  // batch_start: initialize task list
+  if (event.status === 'batch_start' && items) {
+    return { task_id, items };
+  }
+
+  // Incremental update to an existing task
+  if (update && prev && prev.task_id === task_id) {
+    return {
+      ...prev,
+      items: prev.items.map(item =>
+        item.id === update.id
+          ? { ...item, status: update.status, duration_ms: update.duration_ms ?? item.duration_ms }
+          : item,
+      ),
+    };
+  }
+
+  return prev;
+}
 
 export function useAgentChat(botId: number) {
   const [steps, setSteps] = useState<AgentStep[]>([]);
@@ -38,6 +73,7 @@ export function useAgentChat(botId: number) {
   const [isDone, setIsDone] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [taskList, setTaskList] = useState<TaskListData | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Cleanup WebSocket on unmount
@@ -75,8 +111,15 @@ export function useAgentChat(botId: number) {
       try {
         const event: AgentEvent = JSON.parse(e.data);
         switch (event.type) {
-          case 'step':
-            setSteps(prev => upsertStep(prev, event as AgentStep));
+          case 'step': {
+            const stepEvent = event as AgentStep;
+            setTaskList(prev => updateTaskList(prev, stepEvent));
+            // batch_start events are UI-only (task list), not step timeline
+            if (stepEvent.status === 'batch_start') break;
+            setSteps(prev => upsertStep(prev, stepEvent));
+            break;
+          }
+          case 'ping':
             break;
           case 'text_delta':
             setStreamingText(prev => prev + (event as { type: 'text_delta'; delta: string }).delta);
@@ -129,6 +172,7 @@ export function useAgentChat(botId: number) {
     setIsDone(false);
     setError(null);
     setIsConnected(false);
+    setTaskList(null);
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -144,5 +188,6 @@ export function useAgentChat(botId: number) {
     error,
     sendMessage,
     reset,
+    taskList,
   };
 }

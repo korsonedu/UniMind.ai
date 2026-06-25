@@ -119,7 +119,8 @@ const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 
 export const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const user = useAuthStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
   const { primaryColor, pageTitle } = useSystemStore();
   const [collapsed, setCollapsed] = useState(false);
   const [studentPreview, setStudentPreview] = useState(false);

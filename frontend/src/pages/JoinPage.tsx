@@ -11,7 +11,8 @@ type Status = 'loading' | 'joining' | 'success' | 'conflict' | 'unauthenticated'
 export const JoinPage: React.FC = () => {
   const { invite_slug } = useParams<{ invite_slug: string }>();
   const navigate = useNavigate();
-  const { user, updateUser } = useAuthStore();
+  const user = useAuthStore(s => s.user);
+  const updateUser = useAuthStore(s => s.updateUser);
   const [status, setStatus] = useState<Status>('loading');
   const [instName, setInstName] = useState('');
 

@@ -30,7 +30,8 @@ const AVATAR_STYLE_IDS = ['avataaars', 'bottts', 'pixel-art', 'adventurer', 'big
 
 export const Settings: React.FC = () => {
   const { t } = useTranslation(['settings', 'common']);
-  const { user, updateUser } = useAuthStore();
+  const user = useAuthStore(s => s.user);
+  const updateUser = useAuthStore(s => s.updateUser);
   const [loading, setLoading] = useState(false);
 
   // Profile

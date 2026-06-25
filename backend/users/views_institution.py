@@ -1,5 +1,6 @@
 import csv
 import logging
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F, Q
 from django.http import HttpResponse
@@ -415,6 +416,12 @@ class InstitutionFeatureView(APIView):
         user = request.user
         inst = user.institution
 
+        # 缓存 key：按用户+机构组合（features 和 usage 变化不频繁，300s TTL）
+        cache_key = f"inst:features:u{user.id}:i{inst.id if inst else 0}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         inst_data = None
         if inst:
             effective_plan = inst.get_effective_plan()
@@ -447,12 +454,14 @@ class InstitutionFeatureView(APIView):
         usage.setdefault('used', ai_q.get('used', 0))
         usage.setdefault('limit', ai_q.get('limit', 0))
 
-        return Response(InstitutionFeatureSerializer({
+        data = InstitutionFeatureSerializer({
             'is_platform_admin': is_platform_admin(user),
             'institution': inst_data,
             'features': features,
             'usage': usage,
-        }).data)
+        }).data
+        cache.set(cache_key, data, 300)
+        return Response(data)
 
 
 # ── Institution Dashboard ──

@@ -8,14 +8,14 @@ class KnowledgePoint(models.Model):
         ('sec', '小节(SEC)'),
         ('kp', '考点(KP)'),
     )
-    code = models.CharField(max_length=50, blank=True, null=True, verbose_name="唯一编码(如MB-1001)")
+    code = models.CharField(max_length=50, blank=True, null=True, db_index=True, verbose_name="唯一编码(如MB-1001)")
     name = models.CharField(max_length=100, verbose_name="知识点名称")
-    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='kp', verbose_name="层级")
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='kp', db_index=True, verbose_name="层级")
     prefix_category = models.CharField(max_length=20, blank=True, null=True, verbose_name="学科前缀", help_text="如 MB, IF, CF 等")
     description = models.TextField(blank=True, verbose_name="知识点描述")
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children', verbose_name="上级知识点")
     institution = models.ForeignKey('users.Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='knowledge_points', verbose_name="所属机构")
-    subject = models.CharField(max_length=100, blank=True, null=True, verbose_name="学科名称", help_text="如 金融431、法学、CPA 等")
+    subject = models.CharField(max_length=100, blank=True, null=True, db_index=True, verbose_name="学科名称", help_text="如 金融431、法学、CPA 等")
     order = models.PositiveIntegerField(default=0, verbose_name="排序", help_text="同级节点中的显示顺序，数字越小越靠前")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -121,6 +121,9 @@ class UserQuestionStatus(models.Model):
 
     class Meta:
         unique_together = ('user', 'question')
+        indexes = [
+            models.Index(fields=['user', 'next_review_at']),
+        ]
 
 class QuizExam(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='exams')
@@ -231,7 +234,7 @@ class ReviewLog(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="review_logs")
     knowledge_point = models.ForeignKey(KnowledgePoint, on_delete=models.CASCADE)
     grade = models.IntegerField(choices=GRADE_CHOICES)
-    review_time = models.DateTimeField(auto_now_add=True)
+    review_time = models.DateTimeField(auto_now_add=True, db_index=True)
     elapsed_days = models.FloatField(help_text="距离上次复习过去的天数")
     predicted_retrievability = models.FloatField()
 
@@ -657,6 +660,7 @@ class KnowledgeEdge(models.Model):
             models.Index(fields=['target', 'is_active']),
             models.Index(fields=['institution', 'is_active']),
             models.Index(fields=['source_type']),
+            models.Index(fields=['edge_type', 'is_active']),
         ]
         verbose_name = '知识图边'
         verbose_name_plural = '知识图边'

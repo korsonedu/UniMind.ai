@@ -32,8 +32,19 @@ interface CourseAIState {
   clearAllTimers: () => void;
 }
 
-const POLL_INTERVAL = 5000;
-const _pollTimers = new Map<string, ReturnType<typeof setInterval>>();
+const POLL_INITIAL = 5000;
+const POLL_MAX = 60000;
+const _pollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const _pollIntervals = new Map<string, number>();
+
+// Reset all poll intervals when tab becomes visible
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      _pollIntervals.clear();
+    }
+  });
+}
 
 export const useCourseAIStore = create<CourseAIState>((set, get) => ({
   outlineStatus: 'idle',
@@ -45,10 +56,9 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
   fetchOutline: async (courseId) => {
     const key = `outline_${courseId}`;
     // Clear any existing poll for this outline
-    const timers = _pollTimers;
-    if (timers.has(key)) {
-      clearInterval(timers.get(key));
-      timers.delete(key);
+    if (_pollTimers.has(key)) {
+      clearTimeout(_pollTimers.get(key));
+      _pollTimers.delete(key);
     }
 
     set({ outlineStatus: 'loading' });
@@ -59,27 +69,39 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       } else if (res.data.status === 'not_available') {
         set({ outlineStatus: 'unavailable' });
       } else {
-        // Still processing — keep loading and start polling
+        // Still processing — keep loading and start polling with exponential backoff
         set({ outlineStatus: 'loading' });
-        const timer = setInterval(async () => {
+        const doPoll = async () => {
+          if (document.visibilityState === 'hidden') {
+            const nextTimer = setTimeout(doPoll, _pollIntervals.get(key) || POLL_INITIAL);
+            _pollTimers.set(key, nextTimer);
+            return;
+          }
           try {
             const pollRes = await api.get(`/courses/${courseId}/outline/`);
             if (pollRes.data.status === 'completed') {
-              clearInterval(timer);
               _pollTimers.delete(key);
+              _pollIntervals.delete(key);
               set({ outlineItems: pollRes.data.items || [], outlineStatus: 'available' });
+              return;
             } else if (pollRes.data.status === 'failed') {
-              clearInterval(timer);
               _pollTimers.delete(key);
+              _pollIntervals.delete(key);
               set({ outlineStatus: 'unavailable' });
+              return;
             }
+            // Still processing — reset interval on success
+            _pollIntervals.set(key, POLL_INITIAL);
           } catch {
             console.error('Outline poll failed');
-            clearInterval(timer);
-            _pollTimers.delete(key);
-            set({ outlineStatus: 'unavailable' });
+            // Backoff
+            const prev = _pollIntervals.get(key) || POLL_INITIAL;
+            _pollIntervals.set(key, Math.min(prev * 2, POLL_MAX));
           }
-        }, POLL_INTERVAL);
+          const nextTimer = setTimeout(doPoll, _pollIntervals.get(key) || POLL_INITIAL);
+          _pollTimers.set(key, nextTimer);
+        };
+        const timer = setTimeout(doPoll, POLL_INITIAL);
         _pollTimers.set(key, timer);
       }
     } catch {
@@ -102,10 +124,9 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
 
   fetchTranscript: async (courseId) => {
     const key = `transcript_${courseId}`;
-    const timers = _pollTimers;
-    if (timers.has(key)) {
-      clearInterval(timers.get(key));
-      timers.delete(key);
+    if (_pollTimers.has(key)) {
+      clearTimeout(_pollTimers.get(key));
+      _pollTimers.delete(key);
     }
 
     set({ transcriptStatus: 'loading' });
@@ -126,14 +147,19 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
       } else if (res.data.status === 'not_available') {
         set({ transcriptStatus: 'unavailable' });
       } else {
-        // Still processing — keep loading and start polling
+        // Still processing — keep loading and start polling with exponential backoff
         set({ transcriptStatus: 'loading' });
-        const timer = setInterval(async () => {
+        const doPoll = async () => {
+          if (document.visibilityState === 'hidden') {
+            const nextTimer = setTimeout(doPoll, _pollIntervals.get(key) || POLL_INITIAL);
+            _pollTimers.set(key, nextTimer);
+            return;
+          }
           try {
             const pollRes = await api.get(`/courses/${courseId}/transcript/`);
             if (pollRes.data.status === 'completed') {
-              clearInterval(timer);
               _pollTimers.delete(key);
+              _pollIntervals.delete(key);
               const pollSegments = (pollRes.data.segments || []).map((s: any) => ({
                 start: s.start_time ?? s.start ?? 0,
                 end: s.end_time ?? s.end ?? 0,
@@ -145,18 +171,25 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
                 fullText: pollRes.data.full_text,
                 transcriptStatus: 'available',
               });
+              return;
             } else if (pollRes.data.status === 'failed') {
-              clearInterval(timer);
               _pollTimers.delete(key);
+              _pollIntervals.delete(key);
               set({ transcriptStatus: 'unavailable' });
+              return;
             }
+            // Still processing — reset interval on success
+            _pollIntervals.set(key, POLL_INITIAL);
           } catch {
             console.error('Transcript poll failed');
-            clearInterval(timer);
-            _pollTimers.delete(key);
-            set({ transcriptStatus: 'unavailable' });
+            // Backoff
+            const prev = _pollIntervals.get(key) || POLL_INITIAL;
+            _pollIntervals.set(key, Math.min(prev * 2, POLL_MAX));
           }
-        }, POLL_INTERVAL);
+          const nextTimer = setTimeout(doPoll, _pollIntervals.get(key) || POLL_INITIAL);
+          _pollTimers.set(key, nextTimer);
+        };
+        const timer = setTimeout(doPoll, POLL_INITIAL);
         _pollTimers.set(key, timer);
       }
     } catch {
@@ -194,15 +227,17 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
     for (const key of [outlineKey, transcriptKey]) {
       const timer = _pollTimers.get(key);
       if (timer) {
-        clearInterval(timer);
+        clearTimeout(timer);
         _pollTimers.delete(key);
       }
+      _pollIntervals.delete(key);
     }
   },
 
   /** Clear all poll timers — call on app-level cleanup only, not per-course unmount */
   clearAllTimers: () => {
-    _pollTimers.forEach((timer) => clearInterval(timer));
+    _pollTimers.forEach((timer) => clearTimeout(timer));
     _pollTimers.clear();
+    _pollIntervals.clear();
   },
 }));

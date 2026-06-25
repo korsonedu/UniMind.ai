@@ -25,7 +25,7 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 // --- Sub-Components ---
 
 const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any, isFirst: boolean, onReplyClick: () => void, onRefresh: () => void }) => {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { t } = useTranslation('qaSystem');
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(answer.content);
@@ -164,7 +164,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
   const [replyContent, setReplyContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInput, setShowInput] = useState(false);
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { t } = useTranslation('qaSystem');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { confirm, Dialog } = useConfirm();
@@ -469,7 +469,7 @@ export const QASystem: React.FC = () => {
   const [isPosting, setIsPosting] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { t } = useTranslation('qaSystem');
   const isAdmin = user?.role === 'admin';
 

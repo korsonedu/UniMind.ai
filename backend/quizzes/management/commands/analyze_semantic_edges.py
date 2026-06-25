@@ -21,6 +21,9 @@ from quizzes.models import KnowledgePoint, KnowledgeEdge
 
 RELATION_TYPES = ['prerequisite', 'similar', 'contrast', 'confusion', 'co_occur', 'derivation']
 
+# 对称关系：边方向可逆，source↔target 都成立
+SYMMETRIC_RELATIONS = {'similar', 'contrast', 'confusion', 'co_occur'}
+
 SYSTEM_PROMPT = """你是教育领域的知识图谱专家。
 给定一个 SEC（章节）下的若干个知识点，以及一个"其他所有知识点"的摘要列表，
 请找出与每个给定知识点有语义关系的其他知识点。
@@ -214,17 +217,27 @@ class Command(BaseCommand):
         return result
 
     def _find_id(self, name, summary_lines):
-        """在全局摘要中按名字找 KP ID"""
+        """在全局摘要中按名字精确匹配 KP ID。
+
+        summary line 格式: [id] SEC名称 › KP名称
+        只匹配 › 之后的 KP 名称部分，避免子串误匹配。
+        """
+        if not name:
+            return None
         for line in summary_lines:
-            if name and name in line:
-                # 解析 [id] 格式
-                start = line.find('[')
-                end = line.find(']')
-                if start >= 0 and end > start:
-                    try:
-                        return int(line[start+1:end])
-                    except ValueError:
-                        pass
+            sep = ' › '
+            sep_idx = line.rfind(sep)
+            if sep_idx == -1:
+                continue
+            if line[sep_idx + len(sep):] != name:
+                continue
+            start = line.find('[')
+            end = line.find(']')
+            if start >= 0 and end > start:
+                try:
+                    return int(line[start+1:end])
+                except ValueError:
+                    pass
         return None
 
     def _parse_json_response(self, content):
@@ -265,12 +278,17 @@ class Command(BaseCommand):
         return []
 
     def _create_edges(self, results):
-        # 去重：同一对 KP 可能被 LLM 返回多个关系，只保留最高置信度的
-        best = {}  # (src, tgt, relation) → max confidence entry
+        """去重并写入 KnowledgeEdge（source_type='llm', is_active=False）。
+
+        对称关系（similar/contrast/confusion/co_occur）双向写入；
+        有向关系（prerequisite/derivation）仅保留原始方向。
+        """
+        from django.db import IntegrityError
+
+        best = {}  # (src, tgt) → max confidence entry
         for r in results:
             if r.get('relation') == 'none':
                 continue
-            # 每个 (src, tgt) 只保留最高置信度的一条
             pair_key = (r['source_id'], r['target_id'])
             if pair_key not in best or r.get('confidence', 0) > best[pair_key].get('confidence', 0):
                 best[pair_key] = r
@@ -278,8 +296,13 @@ class Command(BaseCommand):
         created = 0
         for r in best.values():
             weight = min(1.0, r.get('confidence', 0.7))
-            for src, tgt in [(r['source_id'], r['target_id']),
-                              (r['target_id'], r['source_id'])]:
+            is_symmetric = r['relation'] in SYMMETRIC_RELATIONS
+            directions = (
+                [(r['source_id'], r['target_id']), (r['target_id'], r['source_id'])]
+                if is_symmetric
+                else [(r['source_id'], r['target_id'])]
+            )
+            for src, tgt in directions:
                 try:
                     _, is_new = KnowledgeEdge.objects.get_or_create(
                         source_id=src,
@@ -293,7 +316,6 @@ class Command(BaseCommand):
                     )
                     if is_new:
                         created += 1
-                except Exception:
-                    # 并发或重复导致的 IntegrityError，跳过
+                except IntegrityError:
                     pass
         return created

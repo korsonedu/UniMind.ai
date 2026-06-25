@@ -22,7 +22,7 @@ interface ReportData {
 }
 
 export const ReportCard: React.FC = () => {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { t } = useTranslation('common');
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);

@@ -17,7 +17,7 @@ import { InstitutionBotSection } from './InstitutionBotSection';
 
 export const BotSection: React.FC = () => {
   const { t } = useTranslation('maintenance');
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   // 机构管理员看到可见性开关 + 自定义 bot 管理

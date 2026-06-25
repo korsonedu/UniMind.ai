@@ -90,7 +90,7 @@ function formatPrice(cents: number): string {
 }
 
 export function Marketplace() {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const isSuperAdmin = user?.role === 'admin' && !user?.institution;
   const [tab, setTab] = useState('browse');
 

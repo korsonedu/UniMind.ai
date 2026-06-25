@@ -583,7 +583,7 @@ const InstitutionHome: React.FC<{ slug?: string }> = ({ slug: propSlug }) => {
   const [institution, setInstitution] = useState<InstitutionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
 
   useEffect(() => {
     if (!slug) { setError(true); setLoading(false); return; }

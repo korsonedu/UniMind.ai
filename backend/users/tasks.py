@@ -12,24 +12,21 @@ User = get_user_model()
 
 @shared_task
 def check_membership_expiry():
-    """每日检查会员到期，自动降级。"""
-    from users.services.membership import downgrade_to_free
-
+    """每日检查会员到期，自动降级。使用批量 update 避免逐条 save。"""
     now = timezone.now()
-    expired = User.objects.filter(
+    expired_ids = list(User.objects.filter(
         is_member=True,
         membership_expires_at__lt=now,
+    ).values_list('id', flat=True))
+    if not expired_ids:
+        return
+    count = User.objects.filter(id__in=expired_ids).update(
+        is_member=False,
+        membership_tier='free',
+        membership_expires_at=None,
+        membership_source=None,
     )
-    count = 0
-    for user in expired:
-        try:
-            downgrade_to_free(user)
-            count += 1
-        except Exception:
-            logger.exception("Failed to downgrade user %s", user.id)
-
-    if count > 0:
-        logger.info("check_membership_expiry: %s users downgraded", count)
+    logger.info("check_membership_expiry: %s users downgraded", count)
 
 
 @shared_task

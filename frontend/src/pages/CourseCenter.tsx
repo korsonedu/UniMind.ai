@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 type ViewMode = 'grid' | 'list';
 
 export const CourseCenter: React.FC = () => {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const navigate = useNavigate();
   const [allTags, setAllTags] = useState<any[]>([]);
   const [activeTags, setActiveTags] = useState<string[]>([]);

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import threading
 import logging
 from asgiref.sync import sync_to_async
@@ -25,7 +26,17 @@ from ai_assistant.services.tool_executor import BaseToolExecutor
 
 logger = logging.getLogger(__name__)
 
-_AI_CHAT_SEMAPHORE = threading.Semaphore(5)  # max 5 concurrent AI chats
+_AI_CHAT_SEMAPHORE = threading.Semaphore(
+    int(os.getenv('AI_MAX_CONCURRENT_CHATS', '50'))
+)
+
+
+def _get_chat_semaphore(bot):
+    """按 bot_type 返回对应信号量，未匹配时回退到全局信号量。"""
+    bot_type = getattr(bot, 'bot_type', None) if bot else 'planner'
+    if bot_type == 'exam_generator':
+        return _AI_CHAT_SEMAPHORE  # 共享池，exam_generator 调用频率低
+    return _AI_CHAT_SEMAPHORE
 
 
 def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None, history_limit=10):

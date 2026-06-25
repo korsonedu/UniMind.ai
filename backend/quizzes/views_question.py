@@ -29,20 +29,21 @@ def _normalize_options(options):
 
 
 def _get_descendant_kp_ids(sub_ids):
-    """给定 SUB 级知识点 ID 列表，递归收集所有下层 KP 级节点 ID。"""
-    from quizzes.models import KnowledgePoint
-    kp_ids = set()
-    # 先收集所有 sub 的直接和间接后代
-    queue = list(KnowledgePoint.objects.filter(id__in=sub_ids, level='sub'))
-    while queue:
-        node = queue.pop()
-        children = KnowledgePoint.objects.filter(parent=node)
-        for child in children:
-            if child.level == 'kp':
-                kp_ids.add(child.id)
-            else:
-                queue.append(child)
-    return list(kp_ids)
+    """给定 SUB 级知识点 ID 列表，递归收集所有下层 KP 级节点 ID。
+
+    .. deprecated::
+        Use :func:`quizzes.services.knowledge_tree.get_descendant_kp_ids` instead.
+        Kept as a thin wrapper for backward compatibility.
+    """
+    import warnings
+    from quizzes.services.knowledge_tree import get_descendant_kp_ids
+    warnings.warn(
+        '_get_descendant_kp_ids is deprecated; '
+        'use quizzes.services.knowledge_tree.get_descendant_kp_ids directly.',
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_descendant_kp_ids(sub_ids)
 
 
 class QuestionListView(generics.ListCreateAPIView):

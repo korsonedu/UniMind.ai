@@ -18,7 +18,8 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
-  const { setAuth, updateUser } = useAuthStore();
+  const setAuth = useAuthStore(s => s.setAuth);
+  const updateUser = useAuthStore(s => s.updateUser);
   const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -60,7 +61,7 @@ export const Login: React.FC = () => {
           await api.post('/users/institution/join-by-slug/', { slug: institutionSlug, role: institutionRole });
           const meRes = await api.get('/users/me/');
           updateUser(meRes.data);
-        } catch (_err) {}
+        } catch (err) { console.error('Join institution after login failed:', err); }
       }
       await fetchFeatures();
       navigate('/');
@@ -72,8 +73,14 @@ export const Login: React.FC = () => {
     }
   };
 
+  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
   const handleSendCode = async () => {
     if (!email.trim()) return;
+    if (!isValidEmail(email)) {
+      setError('请输入有效的邮箱地址');
+      return;
+    }
     setSendingCode(true);
     setError('');
     try {

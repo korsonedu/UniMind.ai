@@ -3,6 +3,8 @@ import re
 import ssl
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
+
 import requests
 from requests.adapters import HTTPAdapter
 from django.conf import settings
@@ -17,7 +19,7 @@ def _create_deepseek_session() -> requests.Session:
     """创建强制 TLS 1.2 的 session。"""
     ctx = ssl.create_default_context()
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-    adapter = HTTPAdapter(pool_connections=10, pool_maxsize=20)
+    adapter = HTTPAdapter(pool_connections=30, pool_maxsize=100)
     session = requests.Session()
     session.mount('https://', adapter)
     # 覆盖 adapter 的 SSL context
@@ -55,6 +57,49 @@ class AIEngine:
     _DSML_RE_1 = re.compile(r'<龘.*?(?:</龘\w+>|/>)', re.DOTALL)
     # 匹配 <｜｜DSML｜｜xxx>...</｜｜DSML｜｜xxx>
     _DSML_RE_2 = re.compile(r'<｜｜DSML｜｜\w+.*?(?:</｜｜DSML｜｜\w+>)', re.DOTALL)
+
+    # 只读工具白名单：这些工具只做 SELECT 查询，无副作用，可并行执行。
+    # 不在白名单中的工具（写操作 / 外部 API 调用）保持串行执行。
+    _READ_ONLY_TOOLS = frozenset({
+        'search_knowledge_tree', 'get_user_weak_points', 'get_user_wrong_questions',
+        'get_class_weak_points', 'get_class_performance_summary', 'lookup_question',
+        'get_report_card', 'get_my_courses', 'get_my_achievements', 'render_visual',
+        'get_learning_stats', 'get_knowledge_mastery_map', 'get_due_reviews',
+        'get_practice_questions', 'get_exam_history', 'get_active_plan',
+        'search_courses', 'search_asr', 'search_articles',
+        'get_knowledge_difficulty_analysis', 'search_knowledge',
+        'check_pipeline_status', 'get_workbench_stats', 'get_student_detail',
+        'get_assignment_progress', 'list_courses', 'list_questions', 'list_articles',
+        'list_classes', 'get_teaching_plan_kps', 'get_class_gradebook',
+    })
+
+    @staticmethod
+    def _generate_task_list(tool_calls, round_i, batch_index=1):
+        """从工具调用列表生成 task_list 结构，用于前端"计划视图"。
+
+        返回 (task_id, items) 元组。
+        """
+        from ai_assistant.services.tool_executor import generate_step_label
+
+        task_id = f"round_{round_i}_batch_{batch_index}"
+        items = []
+        for tc in tool_calls:
+            func = tc.get('function', {})
+            name = func.get('name', '')
+            call_id = tc.get('id', '')
+            try:
+                args = json.loads(func.get('arguments', '{}'))
+                if not isinstance(args, dict):
+                    args = {}
+            except (json.JSONDecodeError, TypeError):
+                args = {}
+            label = generate_step_label(name, args)
+            items.append({
+                "id": call_id,
+                "label": label,
+                "status": "running",
+            })
+        return task_id, items
 
     @staticmethod
     def _strip_dsml(text: str) -> str:
@@ -583,6 +628,17 @@ class AIEngine:
         )
         return None
 
+    @staticmethod
+    def _run_tool_with_timeout(tool_executor, name, args, timeout=30):
+        """Execute a single tool call with a timeout. Returns the tool result
+        or a timeout error dict — never raises."""
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(tool_executor, name, args)
+            try:
+                return future.result(timeout=timeout)
+            except FutureTimeoutError:
+                return {"error": "timeout", "message": f"工具 {name} 执行超时 (30s)"}
+
     @classmethod
     def call_ai_with_tools(cls, messages, tools, tool_executor,
                            tool_choice="auto", temperature=0.7, max_tokens=8192,
@@ -629,6 +685,8 @@ class AIEngine:
             all_messages.append(assistant_msg)
 
             # 执行工具并追加结果
+            # 1. 先解析所有工具调用
+            _parsed_calls = []
             for tc in tool_calls:
                 func = tc.get('function', {})
                 name = func.get('name', '')
@@ -638,13 +696,57 @@ class AIEngine:
                         args = {}
                 except (json.JSONDecodeError, TypeError):
                     args = {}
-                result = tool_executor(name, args)
-                all_messages.append({
-                    "role": "tool",
-                    "type": "tool",
-                    "tool_call_id": tc.get('id', ''),
-                    "content": str(result),
-                })
+                _parsed_calls.append((tc, name, args))
+
+            # 2. 判断是否可并行：所有工具都在只读白名单中且 >1 个
+            _all_read_only = all(
+                name in cls._READ_ONLY_TOOLS for _, name, _ in _parsed_calls
+            )
+            _can_parallel = _all_read_only and len(_parsed_calls) > 1
+
+            if _can_parallel:
+                # 并行执行只读工具
+                _tool_results = [None] * len(_parsed_calls)
+
+                def _execute_tool(idx, name, args):
+                    import django.db
+                    django.db.close_old_connections()
+                    return idx, cls._run_tool_with_timeout(tool_executor, name, args)
+
+                with ThreadPoolExecutor(max_workers=min(4, len(_parsed_calls))) as executor:
+                    _future_to_idx = {
+                        executor.submit(_execute_tool, i, name, args): i
+                        for i, (_, name, args) in enumerate(_parsed_calls)
+                    }
+                    for future in as_completed(_future_to_idx):
+                        try:
+                            idx, result = future.result()
+                            _tool_results[idx] = result
+                        except Exception:
+                            idx = _future_to_idx[future]
+                            _tool_results[idx] = json.dumps(
+                                {"error": "parallel execution failed"},
+                                ensure_ascii=False,
+                            )
+
+                # 按原始顺序追加结果
+                for i, (tc, _, _) in enumerate(_parsed_calls):
+                    all_messages.append({
+                        "role": "tool",
+                        "type": "tool",
+                        "tool_call_id": tc.get('id', ''),
+                        "content": str(_tool_results[i]),
+                    })
+            else:
+                # 串行执行（含写操作工具或仅 1 个工具）
+                for tc, name, args in _parsed_calls:
+                    result = cls._run_tool_with_timeout(tool_executor, name, args)
+                    all_messages.append({
+                        "role": "tool",
+                        "type": "tool",
+                        "tool_call_id": tc.get('id', ''),
+                        "content": str(result),
+                    })
 
             # 首轮后改为 auto，让模型决定是否继续调用工具
             tool_choice = "auto"
@@ -863,127 +965,289 @@ class AIEngine:
 
             tool_names_this_round: list = []
 
+            # ── 1. 先解析所有工具调用 ──
+            _parsed_calls = []
             for tc in tool_calls:
                 func = tc.get('function', {})
                 name = func.get('name', '')
                 call_id = tc.get('id', '')
-                tool_names_this_round.append(name)
                 try:
                     args = json.loads(func.get('arguments', '{}'))
                     if not isinstance(args, dict):
                         args = {}
                 except (json.JSONDecodeError, TypeError):
                     args = {}
+                _parsed_calls.append((tc, name, args, call_id))
+                tool_names_this_round.append(name)
 
+            # 导入步骤标签和摘要函数（只 import 一次）
+            try:
+                from ai_assistant.services.tool_executor import generate_step_label, summarize_tool_result, extract_step_actions
+                _summarize_fn = summarize_tool_result
+                _extract_actions_fn = extract_step_actions
+            except ImportError:
+                _summarize_fn = None
+                _extract_actions_fn = None
+
+            # 预生成所有工具标签
+            _labels = []
+            for _, name, args, _ in _parsed_calls:
                 try:
-                    from ai_assistant.services.tool_executor import generate_step_label, summarize_tool_result, extract_step_actions
-                    label = generate_step_label(name, args)
-                except ImportError:
-                    label = f"执行 {name}"
-                    summarize_tool_result = None
-                    extract_step_actions = None
+                    _labels.append(generate_step_label(name, args))
+                except Exception:
+                    _labels.append(f"执行 {name}")
 
+            # ── 2. 判断是否可并行 ──
+            _all_read_only = all(
+                name in cls._READ_ONLY_TOOLS for _, name, _, _ in _parsed_calls
+            )
+            _can_parallel = _all_read_only and len(_parsed_calls) > 1
+
+            if _can_parallel:
+                # ── 并行执行只读工具 ──
+                import threading as _threading
+                import time as _time_module
+
+                _step_lock = _threading.Lock()
+                _tool_results = [None] * len(_parsed_calls)
+                task_id, task_items = cls._generate_task_list(tool_calls, round_i)
+
+                # 发送 batch_start 事件
                 if on_step:
                     on_step({
                         "type": "step",
+                        "status": "batch_start",
+                        "task_list": {
+                            "task_id": task_id,
+                            "items": task_items,
+                        },
+                    })
+
+                def _execute_and_notify(idx, tc, name, args, call_id, label):
+                    import django.db
+                    django.db.close_old_connections()
+
+                    _t0 = _time_module.monotonic()
+                    result = cls._run_tool_with_timeout(tool_executor, name, args)
+                    _duration_ms = int((_time_module.monotonic() - _t0) * 1000)
+
+                    result_str = str(result)
+
+                    done_event = {
+                        "type": "step",
                         "call_id": call_id,
                         "step": round_i + 1,
-                        "status": "calling",
+                        "status": "done",
                         "name": name,
                         "label": label,
-                        "args_summary": json.dumps(args, ensure_ascii=False)[:200],
-                    })
+                        "result_summary": _summarize_fn(name, result_str) if _summarize_fn else result_str[:200],
+                        "task_list": {
+                            "task_id": task_id,
+                            "update": {"id": call_id, "status": "done", "duration_ms": _duration_ms},
+                        },
+                    }
 
-                # 让工具内部能拿到真实 call_id，用于发送进度事件
-                if hasattr(tool_executor, '_current_call_id'):
-                    tool_executor._current_call_id = call_id
+                    # render_visual: 从结果中提取 visual payload
+                    if name == "render_visual" and '"error"' not in result_str:
+                        try:
+                            _parsed_r = json.loads(result_str) if isinstance(result_str, str) else result_str
+                            if isinstance(_parsed_r, dict) and _parsed_r.get('visual'):
+                                pv = _parsed_r['visual']
+                                if isinstance(pv.get('payload'), str):
+                                    try:
+                                        pv['payload'] = json.loads(pv['payload'])
+                                    except (json.JSONDecodeError, TypeError):
+                                        pv['payload'] = {}
+                                done_event["visual"] = pv
+                        except Exception:
+                            pass
 
-                try:
-                    result = tool_executor(name, args)
-                except Exception as e:
-                    result = json.dumps({"error": str(e)}, ensure_ascii=False)
+                    # quick_generate: 附加题目数据（虽然 quick_generate 不在只读白名单，保留兼容）
+                    if name == "quick_generate" and '"error"' not in result_str:
+                        try:
+                            _parsed_r = json.loads(result_str) if isinstance(result_str, str) else result_str
+                            if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
+                                done_event["questions"] = tool_executor._last_generated
+                            elif isinstance(_parsed_r, dict) and _parsed_r.get('questions'):
+                                done_event["questions"] = _parsed_r['questions']
+                        except Exception:
+                            pass
 
-                step_event = {
-                    "type": "step",
-                    "call_id": call_id,
-                    "step": round_i + 1,
-                    "status": "done",
-                    "name": name,
-                    "label": label,
-                    "result_summary": summarize_tool_result(name, result) if summarize_tool_result else str(result)[:200],
-                }
-                # 提取操作链接（如 assign_practice 返回的 _actions）
-                if extract_step_actions:
-                    actions = extract_step_actions(result)
-                    if actions:
-                        step_event["actions"] = actions
-                # render_visual: attach full payload for frontend rendering
-                if name == "render_visual" and hasattr(tool_executor, 'pending_visuals'):
-                    logger.info("[step] render_visual pending_visuals count=%d", len(tool_executor.pending_visuals))
-                    if tool_executor.pending_visuals:
-                        pv = tool_executor.pending_visuals[-1]  # Latest visual for step event
-                        # Ensure payload is dict (DeepSeek may pass it as JSON string)
-                        if isinstance(pv.get('payload'), str):
-                            try:
-                                pv['payload'] = json.loads(pv['payload'])
-                            except (json.JSONDecodeError, TypeError):
-                                pv['payload'] = {}
-                        step_event["visual"] = pv
-                # quick_generate: attach full question data for frontend QuestionPanel
-                if name == "quick_generate" and '"error"' not in str(result):
-                    try:
-                        import json as _json
-                        # 优先用 _last_generated（完整字段），fallback 到工具结果
-                        if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
-                            step_event["questions"] = tool_executor._last_generated
-                            logger.info("[step] quick_generate attached %d questions from _last_generated",
-                                       len(tool_executor._last_generated))
-                        else:
-                            _parsed = _json.loads(result) if isinstance(result, str) else result
-                            if isinstance(_parsed, dict) and _parsed.get('questions'):
-                                step_event["questions"] = _parsed['questions']
-                                logger.info("[step] quick_generate attached %d questions from result",
-                                           len(_parsed['questions']))
-                    except Exception:
-                        logger.exception("[step] quick_generate failed to attach questions")
-                if on_step:
-                    on_step(step_event)
+                    # 提取操作链接
+                    if _extract_actions_fn:
+                        try:
+                            actions = _extract_actions_fn(result_str)
+                            if actions:
+                                done_event["actions"] = actions
+                        except Exception:
+                            pass
 
-                all_messages.append({
-                    "role": "tool",
-                    "content": str(result),
-                    "tool_call_id": call_id,
-                })
+                    with _step_lock:
+                        if on_step:
+                            on_step(done_event)
 
-                # 题目生成成功后，注入提示——面板已展示题目，无需在文字中重复
-                if name in ('quick_generate', 'bulk_generate_questions') and '"error"' not in str(result):
-                    all_messages.append({
-                        "role": "system",
-                        "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
-                    })
+                    return idx, result_str
 
-                # render_visual 含 reply 卡片 → 立即停止，等待用户点击
-                # data_card / knowledge_map 等信息展示类不影响，AI 可继续调工具
-                if name == 'render_visual' and '"error"' not in str(result):
-                    # 检查生成的 visual 是否包含 reply 类型的 action_cards
-                    if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
-                        pv = tool_executor.pending_visuals[-1]
-                        is_reply_visual = (
-                            pv.get('type') == 'action_cards' and
-                            any(
-                                isinstance(c, dict) and
-                                c.get('action', {}).get('type') == 'reply'
-                                for c in pv.get('payload', {}).get('cards', [])
+                with ThreadPoolExecutor(max_workers=min(4, len(_parsed_calls))) as executor:
+                    _future_to_idx = {
+                        executor.submit(
+                            _execute_and_notify,
+                            i, tc, name, args, call_id, _labels[i],
+                        ): i
+                        for i, (tc, name, args, call_id) in enumerate(_parsed_calls)
+                    }
+                    for future in as_completed(_future_to_idx):
+                        try:
+                            idx, result_str = future.result()
+                            _tool_results[idx] = result_str
+                        except Exception:
+                            idx = _future_to_idx[future]
+                            _tool_results[idx] = json.dumps(
+                                {"error": "parallel execution failed"},
+                                ensure_ascii=False,
                             )
-                        )
-                        if is_reply_visual:
-                            all_messages.append({
-                                "role": "system",
-                                "content": "操作确认卡片已渲染到用户界面。你必须立即停止所有工具调用，用自然语言告知用户点击卡片确认（如'请点击上方卡片确认'），然后等待用户操作。不要再调用任何工具。",
-                            })
-                            if not hasattr(tool_executor, '_render_visual_called'):
-                                tool_executor._render_visual_called = False
-                            tool_executor._render_visual_called = True
+
+                # 按原始顺序追加工具结果 + 注入 system 消息
+                for i, (tc, name, args, call_id) in enumerate(_parsed_calls):
+                    result_str = _tool_results[i]
+                    all_messages.append({
+                        "role": "tool",
+                        "content": result_str,
+                        "tool_call_id": call_id,
+                    })
+
+                    # 题目生成后注入提示
+                    if name in ('quick_generate', 'bulk_generate_questions') and '"error"' not in result_str:
+                        all_messages.append({
+                            "role": "system",
+                            "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
+                        })
+
+                    # render_visual 含 reply 卡片 → 停止工具调用
+                    if name == 'render_visual' and '"error"' not in result_str:
+                        if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
+                            pv = tool_executor.pending_visuals[-1]
+                            is_reply_visual = (
+                                pv.get('type') == 'action_cards' and
+                                any(
+                                    isinstance(c, dict) and
+                                    c.get('action', {}).get('type') == 'reply'
+                                    for c in pv.get('payload', {}).get('cards', [])
+                                )
+                            )
+                            if is_reply_visual:
+                                all_messages.append({
+                                    "role": "system",
+                                    "content": "操作确认卡片已渲染到用户界面。你必须立即停止所有工具调用，用自然语言告知用户点击卡片确认（如'请点击上方卡片确认'），然后等待用户操作。不要再调用任何工具。",
+                                })
+                                if not hasattr(tool_executor, '_render_visual_called'):
+                                    tool_executor._render_visual_called = False
+                                tool_executor._render_visual_called = True
+
+            else:
+                # ── 串行执行（含写操作工具或仅 1 个工具）──
+                for i, (tc, name, args, call_id) in enumerate(_parsed_calls):
+                    label = _labels[i]
+
+                    if on_step:
+                        on_step({
+                            "type": "step",
+                            "call_id": call_id,
+                            "step": round_i + 1,
+                            "status": "calling",
+                            "name": name,
+                            "label": label,
+                            "args_summary": json.dumps(args, ensure_ascii=False)[:200],
+                        })
+
+                    # 让工具内部能拿到真实 call_id，用于发送进度事件
+                    if hasattr(tool_executor, '_current_call_id'):
+                        tool_executor._current_call_id = call_id
+
+                    try:
+                        result = cls._run_tool_with_timeout(tool_executor, name, args)
+                    except Exception as e:
+                        result = json.dumps({"error": str(e)}, ensure_ascii=False)
+
+                    result_str = str(result)
+
+                    step_event = {
+                        "type": "step",
+                        "call_id": call_id,
+                        "step": round_i + 1,
+                        "status": "done",
+                        "name": name,
+                        "label": label,
+                        "result_summary": _summarize_fn(name, result_str) if _summarize_fn else result_str[:200],
+                    }
+                    # 提取操作链接
+                    if _extract_actions_fn:
+                        actions = _extract_actions_fn(result_str)
+                        if actions:
+                            step_event["actions"] = actions
+                    # render_visual: attach full payload
+                    if name == "render_visual" and hasattr(tool_executor, 'pending_visuals'):
+                        logger.info("[step] render_visual pending_visuals count=%d", len(tool_executor.pending_visuals))
+                        if tool_executor.pending_visuals:
+                            pv = tool_executor.pending_visuals[-1]
+                            if isinstance(pv.get('payload'), str):
+                                try:
+                                    pv['payload'] = json.loads(pv['payload'])
+                                except (json.JSONDecodeError, TypeError):
+                                    pv['payload'] = {}
+                            step_event["visual"] = pv
+                    # quick_generate: attach full question data
+                    if name == "quick_generate" and '"error"' not in result_str:
+                        try:
+                            import json as _json
+                            if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
+                                step_event["questions"] = tool_executor._last_generated
+                                logger.info("[step] quick_generate attached %d questions from _last_generated",
+                                           len(tool_executor._last_generated))
+                            else:
+                                _parsed = _json.loads(result_str) if isinstance(result_str, str) else result
+                                if isinstance(_parsed, dict) and _parsed.get('questions'):
+                                    step_event["questions"] = _parsed['questions']
+                                    logger.info("[step] quick_generate attached %d questions from result",
+                                               len(_parsed['questions']))
+                        except Exception:
+                            logger.exception("[step] quick_generate failed to attach questions")
+                    if on_step:
+                        on_step(step_event)
+
+                    all_messages.append({
+                        "role": "tool",
+                        "content": result_str,
+                        "tool_call_id": call_id,
+                    })
+
+                    # 题目生成后注入提示
+                    if name in ('quick_generate', 'bulk_generate_questions') and '"error"' not in result_str:
+                        all_messages.append({
+                            "role": "system",
+                            "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
+                        })
+
+                    # render_visual 含 reply 卡片 → 停止工具调用
+                    if name == 'render_visual' and '"error"' not in result_str:
+                        if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
+                            pv = tool_executor.pending_visuals[-1]
+                            is_reply_visual = (
+                                pv.get('type') == 'action_cards' and
+                                any(
+                                    isinstance(c, dict) and
+                                    c.get('action', {}).get('type') == 'reply'
+                                    for c in pv.get('payload', {}).get('cards', [])
+                                )
+                            )
+                            if is_reply_visual:
+                                all_messages.append({
+                                    "role": "system",
+                                    "content": "操作确认卡片已渲染到用户界面。你必须立即停止所有工具调用，用自然语言告知用户点击卡片确认（如'请点击上方卡片确认'），然后等待用户操作。不要再调用任何工具。",
+                                })
+                                if not hasattr(tool_executor, '_render_visual_called'):
+                                    tool_executor._render_visual_called = False
+                                tool_executor._render_visual_called = True
 
             accumulated_text = ""
 

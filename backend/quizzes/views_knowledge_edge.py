@@ -215,37 +215,40 @@ class KnowledgeEdgeLLMAnalyzeView(APIView):
         user = request.user
         inst_id = getattr(user, 'institution_id', None)
 
-        # TODO: Tier 检查（对接订阅系统后实现）
-        # check_llm_quota(user, 'knowledge_edge_analyze')
+        # Tier 检查：需 growth 及以上（含 knowledge.graph 功能）
+        from users.models import has_plan_feature
+        inst = getattr(user, 'institution', None)
+        if not has_plan_feature(inst, 'knowledge.graph'):
+            return Response(
+                {'detail': '知识图谱功能需要 Growth 及以上方案，请联系管理员升级。'},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
 
-        # 收集跨 SEC KP 对
-        kps = KnowledgePoint.objects.filter(
-            subject=subject, level='kp',
-            institution=inst_id,
-        ).select_related('parent')
+        # 统计 KP 数量
+        kps_qs = KnowledgePoint.objects.filter(subject=subject, level='kp')
+        if inst_id:
+            kps_qs = kps_qs.filter(institution=inst_id)
+        kp_count = kps_qs.count()
 
-        kp_map = {}
-        for kp in kps:
-            sec_id = kp.parent_id
-            kp_map.setdefault(sec_id, []).append(kp)
+        if kp_count == 0:
+            return Response({'detail': f'学科 {subject} 没有知识点'}, status=status.HTTP_404_NOT_FOUND)
 
-        # 跨 SEC 候选对：不同 SEC 下的 KP 两两配对
-        sec_ids = list(kp_map.keys())
-        candidates = []
-        for i in range(len(sec_ids)):
-            for j in range(i + 1, len(sec_ids)):
-                for kp_a in kp_map[sec_ids[i]]:
-                    for kp_b in kp_map[sec_ids[j]]:
-                        candidates.append((kp_a, kp_b))
+        # 统计 SEC 数量
+        sec_count = kps_qs.values('parent_id').distinct().count()
 
-        # TODO: 实际 LLM 调用（需要对接项目内的 AI 管线）
-        # 当前返回统计信息
+        # 分发 Celery 后台任务
+        from quizzes.tasks import run_semantic_edge_analysis_task
+        task = run_semantic_edge_analysis_task.delay(
+            subject=subject,
+            institution_id=inst_id,
+        )
+
         return Response({
             'subject': subject,
-            'kp_count': len(kps),
-            'sec_count': len(sec_ids),
-            'cross_sec_pairs': len(candidates),
-            'status': 'queued',  # → 'running' → 'completed'
+            'kp_count': kp_count,
+            'sec_count': sec_count,
+            'status': 'processing',
+            'task_id': task.id,
             'note': 'LLM 分析已加入后台队列，完成后结果将出现在审核列表。',
         })
 

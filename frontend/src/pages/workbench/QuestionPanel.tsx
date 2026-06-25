@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner, Sparkle, Check, CheckSquareOffset, MagicWand } from '@phosphor-icons/react';
 import api from '@/lib/api';
@@ -64,6 +64,9 @@ const QTYPE_LABEL: Record<string, string> = {
   subjective: '主观题',
 };
 
+const POLL_INITIAL = 5000;
+const POLL_MAX = 60000;
+
 export default function QuestionPanel({ questions, savedIndices, pipelineTaskId, bot, onPipelineStart, onQuestionsSaved, onSystemMessage }: Props) {
   // 过滤掉已保存的题目，用原始索引
   const displayQuestions = questions
@@ -73,40 +76,59 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [pollInterval, setPollInterval] = useState(POLL_INITIAL);
 
-  // 轮询管线进度
+  // Eager initial fetch when pipelineTaskId changes
   useEffect(() => {
     if (!pipelineTaskId) {
       setTaskStatus(null);
       return;
     }
-
-    const poll = async () => {
+    setPollInterval(POLL_INITIAL);
+    const fetchStatus = async () => {
       try {
         const res = await api.get(`/quizzes/workbench/tasks/${pipelineTaskId}/status/`);
+        setTaskStatus(res.data);
+      } catch {
+        console.warn('Task status initial fetch failed, will retry');
+      }
+    };
+    fetchStatus();
+  }, [pipelineTaskId]);
+
+  // Poll pipeline progress with exponential backoff
+  useEffect(() => {
+    if (!pipelineTaskId) return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const res = await api.get(`/quizzes/workbench/tasks/${pipelineTaskId}/status/`);
+        if (cancelled) return;
         const data: TaskStatus = res.data;
         setTaskStatus(data);
         if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-          }
+          return; // stop polling
         }
+        setPollInterval(POLL_INITIAL);
       } catch {
-        console.warn('Task status poll failed, will retry');
+        if (!cancelled) setPollInterval(prev => Math.min(prev * 2, POLL_MAX));
       }
-    };
+    }, pollInterval);
 
-    poll();
-    pollingRef.current = setInterval(poll, 3000);
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [pipelineTaskId, pollInterval]);
+
+  // Reset polling interval when tab becomes visible again
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') setPollInterval(POLL_INITIAL);
     };
-  }, [pipelineTaskId]);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   const toggleSelect = useCallback((index: number) => {
     setSelected(prev => {

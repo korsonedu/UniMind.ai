@@ -29,7 +29,7 @@ const rankBadge = (rank: number) => {
 };
 
 export const EloPopover: React.FC = () => {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { t } = useTranslation('elo');
   const [ranking, setRanking] = useState<RankedUser[]>([]);
   const [loading, setLoading] = useState(false);

@@ -5,7 +5,7 @@ import math
 class BaselineOptimizer:
     def __init__(self, review_data, current_weights=None):
         self.data = review_data
-        # Default FSRS v4.5 weights
+        # Default baseline weights (17-param stability/difficulty core)
         self.weights = current_weights or [
             0.4, 0.6, 2.4, 5.8,
             4.93, 0.94, 0.86, 0.01,

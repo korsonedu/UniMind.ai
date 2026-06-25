@@ -9,6 +9,9 @@ import { AiExamTab } from '@/components/exam/AiExamTab';
 import { TeacherExamTab } from '@/components/exam/TeacherExamTab';
 import type { MockExamItem, TeacherExamItem } from '@/components/exam/types';
 
+const POLL_INITIAL = 5000;
+const POLL_MAX = 60000;
+
 export const PdfMockExam: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ai' | 'teacher'>('ai');
   const [loading, setLoading] = useState(true);
@@ -16,6 +19,7 @@ export const PdfMockExam: React.FC = () => {
   const [items, setItems] = useState<MockExamItem[]>([]);
   const [teacherItems, setTeacherItems] = useState<TeacherExamItem[]>([]);
   const [failed, setFailed] = useState('');
+  const [pollInterval, setPollInterval] = useState(POLL_INITIAL);
   const { t } = useTranslation('pdfMockExam');
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.is_admin || user?.is_institution_admin || user?.role === 'admin';
@@ -37,11 +41,33 @@ export const PdfMockExam: React.FC = () => {
 
   useEffect(() => { loadData(); }, []);
 
+  // Poll for processing items with exponential backoff
   useEffect(() => {
     if (!items.some((i) => i.status === 'processing')) return;
-    const timer = setInterval(loadData, 5000);
-    return () => clearInterval(timer);
-  }, [items, loadData]);
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      if (document.visibilityState === 'hidden') return;
+      try {
+        await loadData();
+        if (!cancelled) setPollInterval(POLL_INITIAL);
+      } catch {
+        if (!cancelled) setPollInterval(prev => Math.min(prev * 2, POLL_MAX));
+      }
+    }, pollInterval);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [pollInterval, items, loadData]);
+
+  // Reset polling interval when tab becomes visible again
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') setPollInterval(POLL_INITIAL);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   const createExam = async () => {
     setCreating(true);

@@ -343,7 +343,7 @@ type RosterMember = {
 
 function InstitutionRosterManagement({ institution }: { institution: any }) {
   const { t } = useTranslation('maintenance');
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const isOwner = user?.is_institution_owner;
   const [members, setMembers] = useState<RosterMember[]>([]);

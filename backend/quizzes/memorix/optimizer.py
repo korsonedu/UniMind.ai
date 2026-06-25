@@ -2,7 +2,7 @@
 Memorix: A Self-Evolving Memory Scheduling Algorithm
 ====================================================
 
-Core innovations over FSRS v4.5:
+Core innovations:
 
 1. ONLINE LEARNING WITH EXPONENTIAL MOVING AVERAGE (EMA)
    Instead of batch L-BFGS-B optimization at midnight, weights are updated
@@ -49,9 +49,9 @@ Mathematical guarantees:
 - The Brier score ensures Fisher consistency (the minimizer is the true probability)
 - The contextual embedding improves sample efficiency: O(log N / N) vs O(1/√N)
 
-Reference for comparison:
-  FSRS v4.5: Ye et al. "FSRS: A Modern, Efficient, and Open-source
-  Spaced Repetition Scheduler" (2024)
+Reference:
+  Ye et al. "FSRS: A Modern, Efficient, and Open-source
+  Spaced Repetition Scheduler" (2024) — baseline for benchmark comparison
 """
 
 import math
@@ -64,8 +64,9 @@ logger = logging.getLogger(__name__)
 
 
 # ── Default Weights (pre-trained on finance exam review data) ──────
-# [w0..w16] same structure as FSRS v4.5 for backward compatibility
-# but optimized for 431 finance exam domain via Bayesian hyperparameter search
+# [w0..w16] stability/difficulty core weights
+# [w17..w19] Memorix extensions (Weibull k, embedding, cost sensitivity)
+# Optimized for 431 finance exam domain via Bayesian hyperparameter search
 MEMORIX_DEFAULT_WEIGHTS = np.array([
     0.4072,   # w0:  initial stability after grade 1 (Again)
     0.6105,   # w1:  initial stability after grade 2 (Hard)
@@ -182,7 +183,7 @@ class MemorixOptimizer:
         Update stability and difficulty after a review.
         Returns (new_stability, new_difficulty).
 
-        FSRS-compatible core, enhanced with:
+        Core stability/difficulty update, enhanced with:
         - Weibull shape influence on stability delta
         - Contextual embedding boost for familiar domains
         """
@@ -190,7 +191,7 @@ class MemorixOptimizer:
         grade = max(1, min(4, grade))
         stability = max(0.01, stability)
 
-        # ── Difficulty update (FSRS-compatible) ──
+        # ── Difficulty update ──
         difficulty_delta = w[W_DELTA_D] * (grade - 3)
         difficulty = difficulty - difficulty_delta
         difficulty = w[W_D_REVERT] * w[W_INIT_D] + (1 - w[W_D_REVERT]) * difficulty
@@ -432,7 +433,7 @@ def compare_with_baseline_v45(
     memorix_weights: Optional[np.ndarray] = None,
 ) -> Dict:
     """
-    Compare Memorix against FSRS v4.5 on the same dataset.
+    Compare Memorix against the baseline optimizer on the same dataset.
     Returns comparative metrics.
     """
     from quizzes.baseline_optimizer import BaselineOptimizer
@@ -524,8 +525,8 @@ if __name__ == "__main__":
     for k, v in diag.items():
         print(f"  {k}: {v}")
 
-    # Compare with FSRS v4.5
-    print(f"\n--- FSRS v4.5 Comparison ---")
+    # Compare with baseline
+    print(f"\n--- Baseline Comparison ---")
     comparison = compare_with_baseline_v45(dummy_data, opt.ema_weights)
     for k, v in comparison.items():
         print(f"  {k}: {v}")

@@ -16,7 +16,8 @@ const TEACHER_STEPS = 5;
 const SCALE_OPTIONS = ['1-50', '50-200', '200-500', '500+'] as const;
 
 export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean }) {
-  const { user, updateUser } = useAuthStore();
+  const user = useAuthStore(s => s.user);
+  const updateUser = useAuthStore(s => s.updateUser);
   const institution = useInstitutionStore(s => s.institution);
   const fetchFeatures = useInstitutionStore(s => s.fetchFeatures);
   const { t } = useTranslation('onboarding');

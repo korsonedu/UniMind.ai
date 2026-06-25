@@ -16,7 +16,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 type ViewMode = 'list' | 'grid';
 
 export const ArticleCenter: React.FC = () => {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const navigate = useNavigate();
   const isManager = user?.role === 'admin' || user?.is_institution_admin;
   const [selectedTag, setSelectedTag] = useState<string | null>(null);

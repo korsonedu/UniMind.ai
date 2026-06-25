@@ -978,18 +978,22 @@ class AnalyticsDashboardView(APIView):
         )
         feature_breakdown = {e['event_type']: e['count'] for e in event_counts}
 
-        # ── 机构 Top 10（按学生数）──
+        # ── 机构 Top 10（按学生数）── 单次 annotate 替换 N+1 count
         from users.models import Institution
-        institution_top = []
-        for inst in Institution.objects.order_by('-created_at')[:10]:
-            student_count = inst.members.filter(institution_role='student').count()
-            institution_top.append({
-                'id': inst.id,
-                'name': inst.name,
-                'student_count': student_count,
-                'created_at': str(inst.created_at.date()),
-            })
-        institution_top.sort(key=lambda x: x['student_count'], reverse=True)
+        from django.db.models import Q
+        top_insts = (
+            Institution.objects
+            .annotate(
+                student_count=Count('students', filter=Q(students__institution_role='student')),
+            )
+            .order_by('-student_count')[:10]
+        )
+        institution_top = [{
+            'id': inst.id,
+            'name': inst.name,
+            'student_count': inst.student_count,
+            'created_at': str(inst.created_at.date()),
+        } for inst in top_insts]
 
         # ── NPS 汇总 ──
         nps_data = self._get_nps_summary()
@@ -1148,17 +1152,22 @@ class PlatformRevenueView(APIView):
     def get(self, request):
         from payments.models import Order, Subscription
         from users.models import Institution
-        from django.db.models import Sum, Count
+        from django.db.models import Sum, Count, Case, When, Q, Value
 
         now = timezone.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-        # 全部已支付订单
+        # 合并 total_revenue 和 revenue_this_month 为单次聚合（CASE WHEN）
         paid_orders = Order.objects.filter(status='paid')
-        total_revenue = paid_orders.aggregate(total=Sum('amount_cents'))['total'] or 0
-        revenue_this_month = paid_orders.filter(paid_at__gte=month_start).aggregate(
-            total=Sum('amount_cents')
-        )['total'] or 0
+        revenue_agg = paid_orders.aggregate(
+            total_revenue=Sum('amount_cents'),
+            revenue_this_month=Sum(Case(
+                When(paid_at__gte=month_start, then='amount_cents'),
+                default=Value(0),
+            )),
+        )
+        total_revenue = revenue_agg['total_revenue'] or 0
+        revenue_this_month = revenue_agg['revenue_this_month'] or 0
 
         # 付费用户数 & ARPU
         paying_user_ids = paid_orders.values('user_id').distinct()

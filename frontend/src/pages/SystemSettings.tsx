@@ -20,7 +20,7 @@ const PRESET_COLORS = [
 export const SystemSettings: React.FC = () => {
   const { t } = useTranslation('settings');
   const { theme, setTheme, primaryColor, setPrimaryColor } = useSystemStore();
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const canUseDarkMode = user?.role === 'admin';
 
   const colorName = (hex: string) => {

@@ -1,15 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Spinner, Check, XCircle, ArrowRight, House } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
+const POLL_INITIAL = 2000;
+const POLL_MAX = 60000;
+const MAX_ATTEMPTS = 30;
+
 export function PaymentResult() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<'checking' | 'paid' | 'failed'>('checking');
   const [mounted, setMounted] = useState(false);
+  const [pollInterval, setPollInterval] = useState(POLL_INITIAL);
+  const attemptsRef = useRef(0);
 
   const redirectStatus = searchParams.get('redirect_status');
   const isStripeReturn = !!searchParams.get('payment_intent');
@@ -25,26 +31,48 @@ export function PaymentResult() {
     }
 
     let cancelled = false;
-    let attempts = 0;
+    attemptsRef.current = 0;
 
-    const poll = async () => {
-      while (attempts < 30 && !cancelled) {
-        try {
-          const { data } = await api.get(`/payments/orders/${orderId}/`);
-          if (data.status === 'paid') {
-            if (!cancelled) { setStatus('paid'); sessionStorage.removeItem('last_order_id'); }
-            return;
-          }
-        } catch { console.error('Payment verification failed'); }
-        attempts++;
-        await new Promise(r => setTimeout(r, 2000));
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      if (document.visibilityState === 'hidden') return;
+      if (attemptsRef.current >= MAX_ATTEMPTS) {
+        if (!cancelled) setStatus('failed');
+        return;
       }
-      if (!cancelled) setStatus('failed');
-    };
+      try {
+        const { data } = await api.get(`/payments/orders/${orderId}/`);
+        if (data.status === 'paid') {
+          if (!cancelled) { setStatus('paid'); sessionStorage.removeItem('last_order_id'); }
+          return;
+        }
+        attemptsRef.current++;
+        if (attemptsRef.current >= MAX_ATTEMPTS) {
+          if (!cancelled) setStatus('failed');
+          return;
+        }
+        setPollInterval(prev => Math.min(prev * 2, POLL_MAX));
+      } catch {
+        attemptsRef.current++;
+        if (attemptsRef.current >= MAX_ATTEMPTS) {
+          if (!cancelled) setStatus('failed');
+          return;
+        }
+        setPollInterval(prev => Math.min(prev * 2, POLL_MAX));
+      }
+    }, pollInterval);
 
-    poll();
-    return () => { cancelled = true; };
-  }, [redirectStatus]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [redirectStatus, pollInterval]);
+
+  // Reset polling interval when tab becomes visible again
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') setPollInterval(POLL_INITIAL);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   return (
     <>

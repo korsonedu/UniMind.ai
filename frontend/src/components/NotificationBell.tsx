@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 import { Bell, ChatCircle, Info, Brain, PaperPlaneTilt } from '@phosphor-icons/react';
 import { EmptyState } from '@/components/EmptyState';
 import { useNotificationStore } from '@/store/useNotificationStore';
@@ -33,8 +35,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const NotificationBell = () => {
-  const { notifications, unreadCount, fetchNotifications, fetchUnreadCount, markAsRead, clearAll } = useNotificationStore();
-  const { user } = useAuthStore();
+  const { notifications, unreadCount, fetchNotifications, markAsRead, clearAll } = useNotificationStore();
+  const user = useAuthStore(s => s.user);
   const navigate = useNavigate();
   const { t, i18n } = useTranslation(['notifications', 'common']);
   const [isOpen, setIsOpen] = useState(false);
@@ -43,13 +45,19 @@ export const NotificationBell = () => {
   const [broadcastForm, setBroadcastForm] = useState({ title: '', content: '' });
   const isAdmin = user?.is_admin || user?.is_institution_admin;
 
+  const { data: unreadData } = useQuery({
+    queryKey: queryKeys.notifications.unreadCount,
+    queryFn: () => api.get('/notifications/unread-count/').then(r => r.data),
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+  });
+
+  // Sync React Query data to store (markAsRead still calls fetchUnreadCount internally)
   useEffect(() => {
-    fetchUnreadCount();
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchUnreadCount();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    if (unreadData?.unread_count !== undefined) {
+      useNotificationStore.setState({ unreadCount: unreadData.unread_count });
+    }
+  }, [unreadData]);
 
   const handleOpen = (open: boolean) => {
     setIsOpen(open);

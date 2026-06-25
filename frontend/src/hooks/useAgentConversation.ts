@@ -3,6 +3,7 @@ import api, { streamFetch } from '@/lib/api';
 // processMathContent removed — LLM outputs LaTeX directly
 import { toast } from 'sonner';
 import type { AgentStep } from '@/hooks/useAgentChat';
+import type { TaskListData } from '@/components/TaskList';
 
 /** 24 hours in ms — used to decide if a session is "recent" for auto-restore */
 export const RECENT_SESSION_MS = 24 * 60 * 60 * 1000;
@@ -89,6 +90,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [sessionOpen, setSessionOpen] = useState(false);
+  const [taskList, setTaskList] = useState<TaskListData | null>(null);
   const [chatWidth, setChatWidth] = useState(() => Math.min(Math.round(window.innerWidth * 0.36), 420));
   const [dragging, setDragging] = useState(false);
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
@@ -198,6 +200,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       setSessions(prev => prev.filter(s => s.id !== session.id));
       if (activeSessionId === session.id) {
         setMessages([]);
+        setTaskList(null);
         setActiveSessionId(null);
         setConversationId(crypto.randomUUID());
       }
@@ -299,6 +302,31 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               });
             } else if (payload.type === 'step') {
               const step = payload as AgentStep;
+
+              // batch_start: initialize task list (UI-only, not a message)
+              if (step.status === 'batch_start' && step.task_list?.items) {
+                setTaskList({
+                  task_id: step.task_list.task_id,
+                  items: step.task_list.items,
+                });
+                return;
+              }
+
+              // Incremental task_list update (done events with task_list.update)
+              if (step.task_list?.update) {
+                setTaskList(prev => {
+                  if (!prev || prev.task_id !== step.task_list!.task_id) return prev;
+                  return {
+                    ...prev,
+                    items: prev.items.map(item =>
+                      item.id === step.task_list!.update!.id
+                        ? { ...item, status: step.task_list!.update!.status, duration_ms: step.task_list!.update!.duration_ms ?? item.duration_ms }
+                        : item,
+                    ),
+                  };
+                });
+              }
+
               // render_visual 的 visual 数据由下方 step.status 块统一处理：
               //   calling → 创建带 toolStep 的消息，scheduleShow 淡入
               //   done    → 更新 toolStep（含 visual），AgentChatLayout 根据 toolStep.visual 渲染 InlineVisualCard
@@ -442,6 +470,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     dragging,
     hasConversation,
     conversationId,
+    taskList,
 
     // Refs
     scrollRef,

@@ -16,6 +16,7 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 from celery.schedules import crontab
+from kombu import Queue
 
 load_dotenv()
 
@@ -148,7 +149,7 @@ DATABASES = {
         "PASSWORD": os.getenv("DB_PASSWORD", ""),
         "HOST": os.getenv("DB_HOST", "localhost"),
         "PORT": os.getenv("DB_PORT", ""),
-        "CONN_MAX_AGE": 600,
+        "CONN_MAX_AGE": 120,  # 2min — short enough for WS, long enough for request reuse
         "CONN_HEALTH_CHECKS": True,
     }
 }
@@ -422,6 +423,33 @@ CELERY_BEAT_SCHEDULE = {
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "visibility_timeout": _get_int("CELERY_VISIBILITY_TIMEOUT", 3600),
 }
+
+# ── Celery 三级优先级队列 ──
+# 防止短任务被长任务阻塞。
+# Worker 启动示例:
+#   celery -A school_system worker -Q high_priority,default,low_priority -c 4
+#   celery -A school_system worker -Q high_priority -c 8  (专用高优 worker)
+CELERY_TASK_QUEUES = (
+    # high_priority: 短任务 (< 30s) — record_trajectory_async / generate_conversation_title / precompute_user_profile
+    Queue("high_priority", routing_key="high_priority"),
+    # default: 中等任务 (30s-10min) — ARC 管线 / AI 批改 / PDF 生成 / 批量操作
+    Queue("default", routing_key="default"),
+    # low_priority: 长任务 (10min+) — 语义边分析 / MUTAR 周度分析 / prompt 优化 / IRT 估计
+    Queue("low_priority", routing_key="low_priority"),
+)
+
+CELERY_TASK_ROUTES = {
+    # ── high_priority ──
+    "ai_assistant.tasks.record_trajectory_async": {"queue": "high_priority"},
+    "ai_assistant.tasks.generate_conversation_title": {"queue": "high_priority"},
+    "ai_assistant.tasks.precompute_user_profile": {"queue": "high_priority"},
+    # ── low_priority ──
+    "ai_assistant.tasks.analyze_trajectory_task": {"queue": "low_priority"},
+    "ai_assistant.tasks.optimize_prompt_task": {"queue": "low_priority"},
+    "quizzes.tasks.estimate_irt_params_task": {"queue": "low_priority"},
+    "quizzes.tasks.run_semantic_edge_analysis_task": {"queue": "low_priority"},
+}
+# 未列入的任务自动进入 default 队列（由 CELERY_TASK_DEFAULT_QUEUE='default' 控制）
 
 # GIPHY
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY", "")

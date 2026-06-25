@@ -1,10 +1,19 @@
 import json
 import logging
 import asyncio
+import threading
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 
 logger = logging.getLogger(__name__)
+
+# Per-user connection tracking (module-level, protected by lock)
+_ws_connections: dict[int, int] = {}
+_ws_connections_lock = threading.Lock()
+
+
+class AgentCancelled(Exception):
+    """Agent 线程被 disconnect 取消时抛出。"""
 
 
 class AgentChatConsumer(AsyncWebsocketConsumer):
@@ -16,12 +25,23 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.bot_id = self.scope['url_route']['kwargs']['bot_id']
         self.user = self.scope.get('user')
+        self._cancelled = threading.Event()
         logger.info("WS connect: bot_id=%s, session_user=%s", self.bot_id, self.user)
 
         if not (self.user and self.user.is_authenticated):
             logger.warning("WS rejected: no session auth")
             await self.close(code=4001)
             return
+
+        # Per-user connection limit: max 3 concurrent WebSocket connections
+        user_id = self.user.id
+        with _ws_connections_lock:
+            count = _ws_connections.get(user_id, 0) + 1
+            if count > 3:
+                logger.warning("WS rejected: user %s has %d active connections, limit 3", user_id, count - 1)
+                await self.close(code=4003)
+                return
+            _ws_connections[user_id] = count
 
         bot = await self._get_bot(self.bot_id)
         if not bot:
@@ -34,12 +54,42 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         logger.info("WS accepted: user=%s, bot=%s (%s)", self.user, bot.name, bot.bot_type)
         await self.accept()
 
+        # Start application-level heartbeat (ping every 30s)
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
         # 主动推送：连接建立后检查是否有值得推送的事件
         if bot.bot_type == 'exam_generator' and self.institution:
             asyncio.create_task(self._push_agent_analysis())
 
     async def disconnect(self, code):
-        pass
+        logger.info("WS disconnect: user=%s, code=%s — cancelling agent thread", self.user, code)
+
+        # Cancel heartbeat task
+        if hasattr(self, '_heartbeat_task'):
+            self._heartbeat_task.cancel()
+
+        # Decrement per-user connection counter
+        if self.user and self.user.is_authenticated:
+            user_id = self.user.id
+            with _ws_connections_lock:
+                count = _ws_connections.get(user_id, 0)
+                if count > 0:
+                    count -= 1
+                    if count == 0:
+                        del _ws_connections[user_id]
+                    else:
+                        _ws_connections[user_id] = count
+
+        self._cancelled.set()
+
+    async def _heartbeat_loop(self):
+        """Send application-level ping every 30s to keep the WebSocket alive."""
+        while not self._cancelled.is_set():
+            try:
+                await asyncio.sleep(30)
+                await self.send(text_data=json.dumps({"type": "ping"}))
+            except Exception:
+                break
 
     async def _push_agent_analysis(self):
         """连接建立后异步检查推送条件，通过 agent_push 事件推送到前端。"""
@@ -156,6 +206,8 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             loop = _asyncio.get_event_loop()
 
         def send_sync(event_dict):
+            if self._cancelled.is_set():
+                raise AgentCancelled("WS disconnected")
             logger.info("WS send_sync: type=%s", event_dict.get('type'))
             future = _asyncio.run_coroutine_threadsafe(
                 self.send(text_data=json.dumps(event_dict, ensure_ascii=False)),
@@ -280,9 +332,17 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             except Exception:
                 logger.warning("Trajectory recording failed (WS)", exc_info=True)
 
+        except AgentCancelled:
+            logger.info("Agent cancelled on WS disconnect: user=%s, bot=%s", self.user, self.bot_id)
         except Exception as e:
             logger.exception("Agent execution error: %s", e)
-            on_step({"type": "error", "message": "AI 助教暂时无法响应，请稍后再试"})
+            try:
+                on_step({"type": "error", "message": "AI 助教暂时无法响应，请稍后再试"})
+            except AgentCancelled:
+                pass
+        finally:
+            from django.db import close_old_connections
+            close_old_connections()
 
     @database_sync_to_async
     def _get_bot(self, bot_id):

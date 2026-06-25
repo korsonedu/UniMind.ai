@@ -1,14 +1,14 @@
 """
 MemorixService — Production bridge between MemorixOptimizer and Django models.
 
-Replaces quizzes.fsrs.FSRS with the full Memorix algorithm:
+Core algorithm:
   - Weibull forgetting curve:  R(t) = exp(-(t/λ)^k)
   - Online SGD with Nesterov momentum after every review
   - Brier score loss (strictly proper scoring rule)
   - Regret-minimizing review scheduling
   - Per-user weight vectors persisted in MemorixProfile.weights
 
-Usage (replaces FSRS.update_status):
+Usage:
     status = MemorixService.update_status(user_id, status, rating)
 """
 
@@ -70,7 +70,7 @@ def predict_retrievability(stability: float, elapsed_days: float, user_id: Optio
 
 
 class MemorixService:
-    """Production interface — mirrors the old FSRS class API."""
+    """Production interface for Memorix scheduling operations."""
 
     @staticmethod
     def update_status(user_id: int, status: UserQuestionStatus, rating: int) -> UserQuestionStatus:
@@ -105,7 +105,7 @@ class MemorixService:
         # ── Review (Memorix: Weibull retrievability) ──
         retrievability = predict_retrievability(status.stability, elapsed_days, user_id)
 
-        # ── Difficulty update (FSRS-compatible) ──
+        # ── Difficulty update ──
         status.difficulty = status.difficulty - float(w[5]) * (rating - 3)
         status.difficulty = float(w[7]) * float(w[4]) + (1 - float(w[7])) * status.difficulty
         status.difficulty = max(1.0, min(10.0, status.difficulty))

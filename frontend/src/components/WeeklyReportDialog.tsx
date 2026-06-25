@@ -96,7 +96,7 @@ const toDailyLabel = (day: string) => {
 };
 
 export const WeeklyReportDialog: React.FC = () => {
-  const { user } = useAuthStore();
+  const user = useAuthStore(s => s.user);
   const reportCaptureRef = useRef<HTMLDivElement | null>(null);
   const [report, setReport] = useState<WeeklyReportData | null>(null);
   const [isOpen, setIsOpen] = useState(false);
