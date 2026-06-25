@@ -9,11 +9,10 @@ UniMindCode/
 ├── backend/                     # Django 后端 (Python 3.12+)
 │   ├── school_system/           # 项目配置 (settings, urls, celery, asgi, middleware)
 │   ├── ai_engine/               # AI 引擎 (路由、熔断、可观测性、模型配置、Agent/工具调用)
-│   ├── ai_assistant/            # AI 助教对话 (多 Bot、WebSocket 流式)
+│   ├── ai_assistant/            # Agent 运行时（Bot 注册表、ToolExecutor、记忆系统、mem0 语义记忆）
 │   ├── quizzes/                 # 核心刷题系统
 │   │   ├── services/            #   出题管线、评分、解析、PDF 生成
-│   │   ├── memorix/             #   Memorix 自进化记忆调度算法
-│   │   └── templates/           #   AI 出题 Prompt 模板
+│   │   └── memorix/             #   Memorix 自进化记忆调度算法
 │   ├── users/                   # 用户/会员/RBAC 权限/ELO 积分/机构管理
 │   ├── courses/                 # 课程/专辑/导学资料/AI智能大纲/ASR/分片上传
 │   ├── articles/                # 深度文章
@@ -21,7 +20,8 @@ UniMindCode/
 │   ├── study_room/              # 在线自习室 (番茄钟/GIPHY/周计划)
 │   ├── faq_system/              # 答疑系统
 │   ├── notifications/           # 站内通知
-│   ├── core/                    # 基础设施 (邮件、Prompt 管理、限流)
+│   ├── payments/                # 支付网关（Stripe/支付宝/微信/Airwallex，统一 gateway_router 分发）
+│   ├── core/                    # 基础设施 (加密字段、Cookie认证、邮件、限流、文件校验)
 │   ├── prompts/                 # 统一 Prompt 模板目录
 │   │   ├── quizzes/             #   题库生成 Prompt
 │   │   ├── ai_assistant/        #   助教对话 Prompt
@@ -50,11 +50,17 @@ UniMindCode/
 
 | 页面 | URL | 说明 |
 |------|-----|------|
-| **产品介绍页** | `/`（未登录） | Landing 页，含功能展示、定价、FAQ。登录后 pro→机构主页，其他→课程中心 |
+| **产品介绍页** | `/`（未登录） | Landing 页，含功能展示、定价、FAQ |
+| **诊断测试** | `/diagnostic` | 学生首次登录强制诊断，评估知识掌握水平 |
+| **小宇学习教练** | `/xiaoyu` | 学生端 AI 对话入口：学习规划 + 知识讲解 + 可视化渲染 |
+| **工作台** | `/workbench` | 教师端 AI 对话入口：出题 + 查数据 + 管资产 |
 | **机构首页** | `/intro/:slug` | 公开的机构首页，无需登录 |
+| **成就勋章** | `/achievements` | 学生成就勋章墙（10 预置成就，进度展示） |
+| **定价页** | `/pricing` | 公开访问的定价页 |
 | **登录** | `/login` | 邮箱验证码登录 |
 | **注册** | `/register` | 邮箱验证码注册，自动开启 14 天全功能试用 |
 | **邀请链接** | `/join/:invite_slug` | 邀请链接落地页（未登录→注册/登录，已登录裸号→自动绑定机构） |
+| **平台分析** | `/platform-analytics` | 平台数据分析 Dashboard（仅超管） |
 | **管理后台** | `/management` | 题库管理、用户权限、系统配置（需管理员） |
 
 ---
@@ -65,9 +71,9 @@ UniMindCode/
 
 系统部署了两个自治 Agent，共享统一运行时（Bot → BotRegistry → ToolExecutor → chat_dispatch → 5 轮自主工具调用）。
 
-**小宇 · 学习教练**：学生的专属 AI 教练，自主调用 17 工具分析学习数据，诊断薄弱点、规划学习路径、讲解知识难点、渲染可视化卡片。教练型语气，跨会话记忆记住你的目标和偏好，每次对话都在变得更懂你。**自进化能力**：LLM 驱动的自适应指令（缓存预计算 + Celery 异步）、Memorix 联动（基于记忆难度/稳定性提供精准复习建议）、Trajectory 数据收集（为 MUTAR 自进化准备）。
+**小宇 · 学习教练**：学生的专属 AI 教练，自主调用 21 工具分析学习数据，诊断薄弱点、规划学习路径、讲解知识难点、渲染可视化卡片。跨会话记忆，每次对话都在变得更懂你。**自进化能力**：LLM 驱动的自适应指令（缓存预计算 + Celery 异步）、Memorix 联动（基于记忆难度/稳定性提供精准复习建议）、Trajectory 数据收集（为 MUTAR 自进化准备），MUTAR 闭环完整（Measure→Umpire→Think→Adapt→Refine）。
 
-**命题官 · 教研助手**：教师的对话式教研助手，一句话完成出题、精修与组卷。背靠 4-Agent ARC 对抗管线（Author → Reviewer → AuthorRevise → Classifier），说"入库"就存入题库，说"精修"就启动对抗博弈。
+**命题官 · 教研助手**：教师的对话式教研助手，自主调用 15 工具，一句话完成出题、精修与组卷。背靠 4-Agent ARC 对抗管线（Author → Reviewer → AuthorRevise → Classifier），支持快速出题和 ARC 精修双模式。
 
 **Agent 统一运行时**：新增一个 Agent 只需在 BotRegistry 注册 + 写 ToolExecutor 子类 + 系统提示词，不需要重建对话系统或 API。工具权限按机构方案自动过滤（free/starter/growth/enterprise），机构可配置 Agent 教学人格。
 
@@ -79,7 +85,7 @@ UniMindCode/
 
 **变式题匹配**：学生做错后自动检索同知识点、相近难度的变式题加入下次复习队列。基于 `query_similar_questions` 按知识点 + 难度区间随机匹配。
 
-**MUTAR 自进化管线**：Trajectory 数据收集 → 周度分析（工具调用成功率 / 对话完成度 / prompt_variant 对比）→ 自动生成优化建议（Memorix α 调整 / prompt 改进 / bot 审查）→ Redis 存储供人工审核。不自动应用。
+**MUTAR 自进化管线**：全链路 Measure→Umpire→Think→Adapt→Refine。Trajectory 自动记录 + 用户反馈闭环，周度分析（工具调用成功率 / 对话完成度 / prompt_variant 对比）→ 自动生成优化建议（Memorix α 调整 / prompt 改进 / bot 审查）→ 人工审核后应用。
 
 **调度执行器**：Celery beat 每 6 小时轮询 `due_count`，超机构阈值时邮件/飞书推送复习提醒。机构可自定义启用/渠道/阈值。
 
@@ -169,7 +175,7 @@ UniMindCode/
 | 后端框架 | Django 6.0 + Django REST Framework 3.16 |
 | 异步任务 | Celery 5.4 + Redis |
 | WebSocket | Django Channels 4.3 + Daphne 4.2 |
-| AI 引擎 | DeepSeek V4，Agent 运行时 + 按任务路由 + Function Calling 结构化输出 + 供应商热插拔 |
+| AI 引擎 | DeepSeek V4，Agent 运行时 + 按任务路由 + Function Calling 结构化输出 + 供应商热插拔 + 双层熔断器 |
 | 前端框架 | React 19 + TypeScript |
 | UI 组件 | shadcn/ui (Radix) + Tailwind CSS 4 |
 | 状态管理 | Zustand 5 |
@@ -177,11 +183,13 @@ UniMindCode/
 | 富文本 | TipTap + react-markdown |
 | 图表 | Recharts 3 |
 | 国际化 | i18next (中英双语) |
+| 对象存储 | 阿里云 OSS（分片直传 / 签名 URL） |
 | 数据库 | SQLite (开发) / PostgreSQL (生产) |
+| 连接池 | PgBouncer（生产环境 transaction pooling） |
 
 ## 版本方案
 
-| | Free | Solo | Growth | Pro |
+| | Free | Starter | Growth | Enterprise |
 |------|------|------|------|------|
 | **定位** | 免费体验 | AI 智能学习 | 机构教学平台 | 企业旗舰 · 含学生收费 |
 | **价格** | ¥0 | ¥299/月 (¥2,388/年) | ¥1,299/月 (¥10,388/年) | ¥3,999/月 (¥31,988/年) |
@@ -217,7 +225,7 @@ UniMindCode/
 | 三层个性化 | 诊断测试（冷启动）→ Memorix（行为建模）→ Agent Memory（对话提取） |
 | AI 模型路由 | 按任务分配 pro/fast，thinking + tool_choice 不冲突，供应商热插拔 |
 | 结构化输出 | `tool_choice="required"` + JSON Schema 强制输出，零脆弱正则解析 |
-| 熔断保护 | 按任务类型粒度熔断，单模型故障不扩散 |
+| 双层熔断器 | 操作层 + 模型分层独立熔断，pro 模型阈值 3 次（vs fast 5 次），更快隔离故障 |
 | Prompt 管理 | 统一文件系统 + 数据库版本历史，支持一键回滚 |
 | 大文件上传 | 分片上传 + 断点续传，支持 100MB+ 视频文件 |
 | 实时通信 | Django Channels + Redis，WebSocket 毫秒级推送 |
@@ -297,7 +305,7 @@ celery -A school_system beat -l info
             ▼            ▼            ▼
      ┌──────────┐ ┌──────────┐ ┌──────────┐
      │  Daphne  │ │  Daphne  │ │  Daphne  │  ASGI (WebSocket + HTTP)
-     │  :8000   │ │  :8001   │ │  :8002   │
+     │  :8001   │ │  :8002   │ │  :8003   │
      └────┬─────┘ └────┬─────┘ └────┬─────┘
           │             │             │
           └─────────────┼─────────────┘
@@ -417,7 +425,7 @@ WorkingDirectory=/opt/unimind/backend
 EnvironmentFile=/opt/unimind/backend/.env
 ExecStart=/opt/unimind/backend/.venv/bin/daphne \
     -b 127.0.0.1 \
-    -p 8000 \
+    -p 8001 \
     --websocket_connect_timeout 30 \
     school_system.asgi:application
 Restart=always
@@ -720,15 +728,11 @@ LLM_REQUEST_MAX_RETRIES=1
 ### 算法 Feature Flags
 
 ```bash
+# Memorix 记忆调度
+USE_MEMORIX=false                  # Memorix 自进化记忆调度总开关
+
 # Memorix-Field 图扩散调度
-MEMORIX_FIELD_ENABLED=true         # 图扩散总开关（扩散状态估计器 + 乘性评分）
-MEMORIX_FIELD_DECAY=0.02           # α:  自然衰减率/天
-MEMORIX_FIELD_BETA_E=0.005         # βe: 扩散强度
-MEMORIX_FIELD_BETA_A=0.5           # βa: 评分放大系数
-MEMORIX_FIELD_ETA=0.02             # η:  复习转移系数
-MEMORIX_REC_ENABLED=false          # 再巩固窗口（暂关，等 u 向量稳定后启）
-MEMORIX_REC_TAU=0.042              # 不应期常数（天）
-MEMORIX_REC_K=1.2                  # 再巩固形状参数
+MEMORIX_FIELD_ENABLED=true         # 图扩散总开关
 
 # IRT 认知诊断
 IRT_MIN_RESPONSES=50               # 题目参数估计最少答题数
@@ -800,11 +804,17 @@ ELO_K_FACTOR=32
 ELO_INITIAL_BONUS=200
 LEADERBOARD_SIZE=50
 
-# Memorix (设为 true 启用)
-USE_MEMORIX=false
+# 加密
+ENCRYPTION_KEY=                                    # 加密密钥（可选，默认 SECRET_KEY 派生），用于 EncryptedCharField/EncryptedTextField
 
 # GIPHY
 GIPHY_API_KEY=                                    # 自习室 GIF 功能
+
+# 阿里云 OSS 对象存储（可选）
+OSS_ACCESS_KEY_ID=xxx                             # 阿里云 AccessKey ID
+OSS_ACCESS_KEY_SECRET=xxx                         # 阿里云 AccessKey Secret
+OSS_BUCKET_NAME=unimind-courses                   # OSS Bucket 名称
+OSS_ENDPOINT=oss-cn-beijing.aliyuncs.com          # OSS 访问域名
 ```
 
 ---
@@ -813,20 +823,16 @@ GIPHY_API_KEY=                                    # 自习室 GIF 功能
 
 ### Prompt 模板管理
 
-所有 AI Prompt 模板以 `.txt` 文件形式存放在 `backend/prompts/` 目录。出题管线 Agent 通过 `backend/ai_engine/tools.py` 中的 JSON Schema 定义强制结构化输出（`tool_choice="required"`），从 API 层面杜绝格式偏差。
+所有 AI Prompt 模板以 `.txt` 文件形式存放在 `backend/prompts/` 目录。出题管线 Agent 通过 JSON Schema 定义强制结构化输出（`tool_choice="required"`），从 API 层面杜绝格式偏差。
 
 ```
 prompts/
 ├── quizzes/          # 题库生成相关 Prompt
-├── ai_assistant/     # AI 助教对话 Prompt
-│   └── bots/         #   各 Bot 独立 Prompt
-├── pipeline/         # 出题管线 Agent Prompt
-│   ├── author_generate.txt
-│   ├── reviewer_single.txt
-│   ├── reviewer_adversarial.txt
-│   ├── classifier.txt
-│   └── distractor.txt
+├── ai_assistant/     # Agent 对话 Prompt
+│   └── bots/         #   各 Bot 独立 Prompt（小宇/工作台）
+├── pipeline/         # 出题管线各 Agent Prompt
 ├── grading/          # 评分 Prompt
+├── courses/          # 课程大纲 Prompt
 └── interviews/       # 面试 Prompt
 ```
 
@@ -907,81 +913,6 @@ python manage.py generate_knowledge_tree --subject=高中数学
 
 ## 运维管理
 
-### 本地 SSH 快捷操作
-
-在本地 `~/.ssh/config` 配置免密登录和别名：
-
-```
-Host srv
-  HostName 47.104.77.217
-  User root
-  IdentityFile ~/.ssh/id_ed25519
-```
-
-首次传密钥到服务器：
-
-```bash
-ssh-copy-id -i ~/.ssh/id_ed25519.pub root@47.104.77.217
-```
-
-在 `~/.zshrc` 中添加一键操作别名：
-
-```bash
-alias srv='ssh srv'
-alias srv-pull='ssh srv "cd /opt/unimind && git pull && cd frontend && npm run build && sudo systemctl restart unimind.service unimind-celery.service"'
-alias srv-log='ssh srv "sudo journalctl -u unimind.service -f"'
-alias srv-status='ssh srv "sudo systemctl status unimind.service unimind-celery.service"'
-alias srv-reload='ssh srv "sudo systemctl restart unimind.service unimind-celery.service"'
-```
-
-日常使用：
-
-```bash
-srv              # 连服务器，免密
-srv-pull         # git pull + npm build + 重启所有服务
-srv-log          # 实时看生产日志
-srv-status       # 看服务运行状态
-srv-reload       # 纯重启，不动代码
-```
-
-### SSH 防断连与 tmux 会话保持
-
-**问题：** SSH 长时间无操作会被防火墙/NAT 断开，笔记本合盖也会导致断连，长任务（训练、部署）中断后前台进程丢失。
-
-**解决：** keepalive 保连接 + tmux 保状态，两者配合。
-
-**keepalive（`~/.ssh/config`）：**
-
-```
-Host *
-    ServerAliveInterval 60
-    ServerAliveCountMax 3
-```
-
-每 60 秒发心跳包，连续 3 次无响应才判定断开（3 分钟后）。
-
-**tmux 工作流：**
-
-```bash
-# 首次 SSH 进服务器，创建 session
-ssh srv
-tmux new -s work
-
-# 之后每次 SSH，一键恢复现场
-ssh srv -t tmux a -t work
-
-# 在 tmux 内常用操作
-Ctrl+b d         脱离 session（后台运行，SSH 断了会自动脱离）
-Ctrl+b [         翻页/滚动（q 退出滚动模式）
-Ctrl+b c         创建新窗口
-Ctrl+b 0/1/2    跳到指定窗口
-Ctrl+b ,         重命名当前窗口
-```
-
-tmux 脱离或 SSH 断开后，服务器上的所有进程（vim、脚本、训练任务）继续运行。重连后 `tmux a -t work` 恢复全部现场，包括未保存的编辑器内容。
-
-> 服务器需安装 tmux：`sudo apt install tmux`
-
 ### 查看日志
 
 ```bash
@@ -1023,19 +954,6 @@ cd ../frontend && npm ci && npm run build
 
 没有改依赖可跳过 `pip install`，没有 migration 可跳过 `migrate`，没改前端可跳过前端构建。
 
-### 重启服务
-
-```bash
-sudo systemctl restart unimind.service unimind-celery.service
-```
-
-### 查看日志
-
-```bash
-sudo journalctl -u unimind.service -f       # Daphne 日志
-sudo journalctl -u unimind-celery.service -f # Celery 日志
-```
-
 ---
 
 ## 安全注意事项
@@ -1044,10 +962,10 @@ sudo journalctl -u unimind-celery.service -f # Celery 日志
 - **API Key**：所有第三方 API Key（LLM、Gmail、GIPHY、ASR）必须通过环境变量注入，不得提交到版本控制
 - **数据库密码**：使用强随机密码，不要与其他系统重复
 - **HTTPS**：生产环境必须启用 HTTPS，建议使用 Let's Encrypt
-- **支付密钥**：支付宝/微信支付私钥属于高敏感信息，建议生产环境使用密钥管理服务（如 HashiCorp Vault），`.env` 文件权限设为 `600`
-- **令牌管理**：当前使用 DRF Token Authentication，生产环境建议迁移到 JWT (`djangorestframework-simplejwt`) 实现令牌过期和刷新机制
-- **速率限制**：登录、注册、验证码发送端点已启用速率限制（基于 Django cache 的滑动窗口算法），AI 生成端点建议在 Nginx 层额外添加速率限制
-- **文件上传**：分片上传已校验分片大小和块数有效性，生产环境建议在反向代理层添加文件类型白名单
+- **支付密钥**：支付宝/微信支付私钥等通过 `EncryptedCharField` / `EncryptedTextField`（Fernet AES）加密存储，加密密钥通过 `ENCRYPTION_KEY` 环境变量设置（默认从 SECRET_KEY 派生）
+- **认证方式**：Cookie 认证为主（httpOnly cookie + CSRF 保护），REST API 通过 `CookieTokenAuthentication` 读取，WebSocket 仅 Cookie 认证，前端不存储 token 到 localStorage
+- **速率限制**：登录、注册、验证码发送端点已启用速率限制，AI 生成端点建议在 Nginx 层额外添加速率限制
+- **文件上传**：分片上传已校验分片大小和块数有效性；文件校验通过 `core.file_validation` 模块统一处理
 - **XSS 防护**：系统使用 React JSX 转义 + TipTap HTML 过滤，渲染用户生成内容时应注意额外消毒
 
 ---
