@@ -3,11 +3,13 @@ from .models import Course, Album, StartupMaterial, CourseTag, CourseTagRelation
 
 
 class RelativeFileField(serializers.FileField):
-    """返回根相对 URL（以 / 开头），确保跨设备访问时资源 URL 正确"""
+    """返回 URL：OSS 绝对路径保持不变，本地路径补 / 前缀"""
     def to_representation(self, value):
         if not value:
             return None
         url = value.url
+        if url.startswith('http://') or url.startswith('https://'):
+            return url
         return url if url.startswith('/') else '/' + url
 
 
@@ -16,6 +18,8 @@ class RelativeImageField(serializers.ImageField):
         if not value:
             return None
         url = value.url
+        if url.startswith('http://') or url.startswith('https://'):
+            return url
         return url if url.startswith('/') else '/' + url
 
 
