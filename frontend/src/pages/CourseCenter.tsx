@@ -10,7 +10,8 @@ import { PageWrapper } from '@/components/PageWrapper';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/EmptyState';
 import { InlineError } from '@/components/InlineError';
-import { useFetch } from '@/lib/useFetch';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 import api from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -41,12 +42,13 @@ export const CourseCenter: React.FC = () => {
   queryParams.push('page_size=12');
   queryParams.push(`page=${page}`);
   const tagQuery = queryParams.length > 0 ? '?' + queryParams.join('&') : '';
-  const fetchKey = `courses-${search}-${activeTags.join(',')}-${classId || 'all'}-${page}`;
 
-  const { data: coursesData, loading, error, refetch } = useFetch<any>(
-    (signal) => api.get(`/courses/${tagQuery}`, { signal }).then(r => r.data),
-    fetchKey
-  );
+  const { data: coursesData, isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: queryKeys.courses.list(tagQuery),
+    queryFn: ({ signal }) => api.get(`/courses/${tagQuery}`, { signal }).then(r => r.data),
+    staleTime: 30000,
+  });
+  const error = queryError ? (queryError as Error).message || 'Failed to load courses' : null;
 
   const courses = coursesData?.items || coursesData || [];
   const totalPages = coursesData?.total_pages || 1;

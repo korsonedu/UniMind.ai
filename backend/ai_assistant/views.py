@@ -40,7 +40,7 @@ def _get_chat_semaphore(bot):
 
 
 def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None, history_limit=10):
-    base_qs = AIChatMessage.objects.filter(user=user, bot=bot)
+    base_qs = AIChatMessage.objects.filter(user=user, bot=bot).select_related('user', 'bot')
     if conversation_id:
         base_qs = base_qs.filter(conversation_id=conversation_id)
     history_objs = base_qs.order_by('-timestamp')[:history_limit]
@@ -376,7 +376,7 @@ class AIChatListView(generics.ListAPIView):
 
         bot_id = self.request.query_params.get('bot_id')
         conversation_id = self.request.query_params.get('conversation_id')
-        qs = AIChatMessage.objects.filter(user=self.request.user)
+        qs = AIChatMessage.objects.filter(user=self.request.user).select_related('user', 'bot')
         if bot_id:
             qs = qs.filter(bot_id=bot_id)
         if conversation_id:
@@ -466,7 +466,7 @@ class AIChatStreamView(APIView):
             """All sync DB/ORM work — called once via sync_to_async."""
             history_objs = AIChatMessage.objects.filter(
                 user=request.user, bot=bot, conversation_id=conversation_id
-            ).order_by('-timestamp')[:10]
+            ).select_related('user', 'bot').order_by('-timestamp')[:10]
             history_msgs = [
                 {"role": h.role, "content": h.content}
                 for h in reversed(history_objs)
@@ -710,7 +710,7 @@ class AgentMemoryListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        qs = AgentMemory.objects.filter(user=self.request.user)
+        qs = AgentMemory.objects.filter(user=self.request.user).select_related('user')
         memory_type = self.request.query_params.get('type')
         if memory_type:
             qs = qs.filter(memory_type=memory_type)
@@ -725,7 +725,7 @@ class AgentMemoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        return AgentMemory.objects.filter(user=self.request.user)
+        return AgentMemory.objects.filter(user=self.request.user).select_related('user')
 
 
 class StudyPlanListView(generics.ListAPIView):

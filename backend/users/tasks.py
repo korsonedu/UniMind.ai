@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-@shared_task
+@shared_task(soft_time_limit=60, time_limit=120)
 def check_membership_expiry():
     """每日检查会员到期，自动降级。使用批量 update 避免逐条 save。"""
     now = timezone.now()
@@ -29,7 +29,7 @@ def check_membership_expiry():
     logger.info("check_membership_expiry: %s users downgraded", count)
 
 
-@shared_task
+@shared_task(soft_time_limit=60, time_limit=120)
 def notify_trial_expiring():
     """提前 3 天提醒试用即将到期，提前 1 天再次提醒。"""
     from notifications.models import Notification
@@ -54,7 +54,7 @@ def notify_trial_expiring():
             logger.info("notify_trial_expiring: %s users notified for %s days left", users.count(), days_left)
 
 
-@shared_task
+@shared_task(soft_time_limit=120, time_limit=180)
 def send_membership_expiry_reminders():
     """提前 7/3/1 天给付费会员发邮件提醒续费。"""
     from core.email_service import send_email
@@ -87,7 +87,7 @@ def send_membership_expiry_reminders():
             logger.info("send_membership_expiry_reminders: %s emails sent for %s days left", users.count(), days_left)
 
 
-@shared_task
+@shared_task(soft_time_limit=300, time_limit=360)
 def check_performance_drops():
     """每日运行：检测各机构 KP 正确率本周 vs 上周下降 >15% → 通知老师/机构主。"""
     from django.db.models import Sum
@@ -206,7 +206,7 @@ def check_performance_drops():
         )
 
 
-@shared_task
+@shared_task(soft_time_limit=60, time_limit=120)
 def deactivate_expired_invites():
     """每小时执行：将过期邀请链接设为非活跃。"""
     from .models import InstitutionInvite

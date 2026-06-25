@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import api, { setPreviewInstitutionId, setCampusContextId } from '@/lib/api';
+import { queryClient } from '@/lib/queryClient';
+import { queryKeys } from '@/lib/queryKeys';
 
 interface InstitutionInfo {
   id: number;
@@ -143,7 +145,11 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
       set({ loading: true });
     }
     try {
-      const { data } = await api.get('/users/institution/me/features/');
+      const data = await queryClient.fetchQuery({
+        queryKey: queryKeys.institution.features,
+        queryFn: () => api.get('/users/institution/me/features/').then(r => r.data),
+        staleTime: 60000,
+      });
       set({
         isPlatformAdmin: data.is_platform_admin,
         institution: data.institution,

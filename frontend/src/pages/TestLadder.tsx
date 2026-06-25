@@ -38,6 +38,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useIsMobile } from '@/lib/useIsMobile';
+import { useQuery } from '@tanstack/react-query';
+import { Skeleton, SkeletonCard } from '@/components/ui/skeleton';
+import { queryKeys } from '@/lib/queryKeys';
 
 // Modularized Components
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
@@ -80,7 +83,6 @@ export const TestLadder: React.FC = () => {
   const isMobile = useIsMobile();
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
   const [selectedSubIds, setSelectedSubIds] = useState<number[]>([]);
-  const [subjectList, setSubjectList] = useState<Array<{ id: number; name: string; code: string }>>([]);
   const [preference, setPreference] = useState<string>(() => {
     try { return localStorage.getItem('quiz_preference') || 'balanced'; } catch { return 'balanced'; }
   });
@@ -118,8 +120,19 @@ export const TestLadder: React.FC = () => {
     fetchGoals();
     fetchMemorixCurve();
     fetchMemorixHistory();
-    fetchSubjects();
   }, []);
+
+  // React Query: 学科列表 — 低频变更数据，缓存 2 分钟
+  const { data: subjectList = [] } = useQuery({
+    queryKey: queryKeys.knowledgePoints.subjects,
+    queryFn: () => api.get('/quizzes/knowledge-points/').then(r => {
+      const data = Array.isArray(r.data) ? r.data : (r.data?.results || []);
+      return data.map((item: any) => ({ id: item.id, name: item.name, code: item.code }));
+    }),
+    staleTime: 120000,
+  });
+  const [loadingStates, setLoadingStates] = useState({ goals: true, curve: true, history: true });
+  const isPageLoading = loadingStates.goals || loadingStates.curve || loadingStates.history;
 
   useEffect(() => {
     if (isCustomCount) return;
@@ -162,19 +175,12 @@ export const TestLadder: React.FC = () => {
     } catch (e) { toast.error(formatApiErrorToast(e, t('toast.loadReportError'))); }
   };
 
-  const fetchSubjects = async () => {
-    try {
-      const res = await api.get('/quizzes/knowledge-points/');
-      const data = Array.isArray(res.data) ? res.data : (res.data?.results || []);
-      setSubjectList(data.map((item: any) => ({ id: item.id, name: item.name, code: item.code })));
-    } catch (e) { console.error('fetchSubjects failed', e); }
-  };
-
   const fetchGoals = async () => {
     try {
       const res = await api.get('/quizzes/stats/');
       setGoals(res.data);
     } catch (e) { console.error('fetchGoals failed', e); }
+    finally { setLoadingStates(s => ({ ...s, goals: false })); }
   };
 
   const fetchMemorixCurve = async () => {
@@ -182,6 +188,7 @@ export const TestLadder: React.FC = () => {
       const res = await api.get('/quizzes/memorix/curve/', { params: { window_days: 90 } });
       setMemorixCurve(res.data as MemorixCurvePayload);
     } catch (e) { console.error('fetchMemorixCurve failed', e); }
+    finally { setLoadingStates(s => ({ ...s, curve: false })); }
   };
 
   const fetchMemorixHistory = async () => {
@@ -189,6 +196,7 @@ export const TestLadder: React.FC = () => {
       const res = await api.get('/quizzes/memorix/optimization-history/');
       setMemorixHistory((res.data?.results || []) as MemorixOptimizationHistory[]);
     } catch (e) { console.error('fetchMemorixHistory failed', e); }
+    finally { setLoadingStates(s => ({ ...s, history: false })); }
   };
 
   const toggleFavorite = async (qId: number) => {
@@ -289,6 +297,27 @@ export const TestLadder: React.FC = () => {
 
     return { graphWidth, graphHeight, top, right, bottom, left, predictedPoints, actualPoints, predictedPath, actualPath };
   }, [memorixCurve]);
+
+  // 全部数据未就绪时渲染骨架屏
+  if (isPageLoading) {
+    return (
+      <PageWrapper title={t('pages:academicLadder.title')} subtitle={t('pages:academicLadder.subtitle')}>
+        <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
+          <div className="space-y-4 max-w-2xl">
+            <Skeleton className="h-10 w-64 rounded-lg" />
+            <Skeleton className="h-5 w-96 rounded-md" />
+            <Skeleton className="h-4 w-48 rounded-md" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+          <Skeleton className="h-48 w-full rounded-xl" />
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper title={t('pages:academicLadder.title')} subtitle={t('pages:academicLadder.subtitle')}>

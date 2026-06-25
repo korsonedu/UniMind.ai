@@ -1,7 +1,8 @@
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ default: m.MainLayout })));
 import { useAuthStore } from './store/useAuthStore';
@@ -19,16 +20,6 @@ const WeeklyReportDialog = lazy(() => import('./components/WeeklyReportDialog').
 const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
 import { FeedbackButton } from './components/FeedbackButton';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30000,
-      retry: 1,
-      refetchIntervalInBackground: false,
-    },
-  },
-});
 
 // Lazy-loaded pages — named exports need .then() wrapper
 const lazyNamed = <T extends Record<string, React.ComponentType<any>>>(loader: () => Promise<T>, name: keyof T) =>
@@ -262,7 +253,9 @@ const RootRedirect = () => {
 };
 
 const lazyPage = (Component: React.ComponentType) => (
-  <Suspense fallback={<PageLoader />}><Component /></Suspense>
+  <ErrorBoundary>
+    <Suspense fallback={<PageLoader />}><Component /></Suspense>
+  </ErrorBoundary>
 );
 
 const router = createBrowserRouter([

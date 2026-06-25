@@ -8,17 +8,17 @@ from quizzes.services.ai_parse_service import run_parse_task
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name='quizzes.run_exam_grading_task')
+@shared_task(name='quizzes.run_exam_grading_task', soft_time_limit=120, time_limit=180)
 def run_exam_grading_task(user_id: int, exam_id: int, questions_data):
     run_exam_grading(user_id, exam_id, questions_data)
 
 
-@shared_task(name='quizzes.run_ai_parse_task')
+@shared_task(name='quizzes.run_ai_parse_task', soft_time_limit=60, time_limit=120)
 def run_ai_parse_task(raw_text: str, task_id: str):
     run_parse_task(raw_text, task_id)
 
 
-@shared_task(name='quizzes.run_adversarial_pipeline_task')
+@shared_task(name='quizzes.run_adversarial_pipeline_task', soft_time_limit=600, time_limit=660)
 def run_adversarial_pipeline_task(task_id: int, kp_ids: list, questions_per_kp: int, difficulty: str = "normal", types: list = None):
     from quizzes.models import ContentPipelineTask, KnowledgePoint
     from quizzes.services.adversarial_pipeline import _execute_pipeline
@@ -36,7 +36,7 @@ def run_adversarial_pipeline_task(task_id: int, kp_ids: list, questions_per_kp: 
         task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
 
 
-@shared_task(name='quizzes.run_bulk_pipeline_task')
+@shared_task(name='quizzes.run_bulk_pipeline_task', soft_time_limit=600, time_limit=660)
 def run_bulk_pipeline_task(
     task_id: int,
     subject: str,
@@ -73,7 +73,7 @@ def run_bulk_pipeline_task(
         task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
 
 
-@shared_task(name='quizzes.generate_personalized_pdf_mock_exam')
+@shared_task(name='quizzes.generate_personalized_pdf_mock_exam', soft_time_limit=300, time_limit=360)
 def generate_personalized_pdf_mock_exam(record_id: int):
     from quizzes.models import PersonalizedMockExam
     from quizzes.services.pdf_generator import generate_mock_exam_pdf
@@ -106,7 +106,7 @@ DELTA_THRESHOLD = 0.10         # Δ 显著性阈值
 DYNAMIC_EDGE_TTL = 86400 * 7   # Redis TTL 7 天
 
 
-@shared_task(name='quizzes.learn_edge_weights_from_reviews')
+@shared_task(name='quizzes.learn_edge_weights_from_reviews', soft_time_limit=600, time_limit=660)
 def learn_edge_weights_from_reviews():
     """
     从 ReviewLog 学习知识点间的转移概率，生成动态边写入 Redis。
@@ -235,7 +235,7 @@ def learn_edge_weights_from_reviews():
 # Memorix-Field: 每日扩散
 # ═══════════════════════════════════════════
 
-@shared_task(name='quizzes.diffuse_memorix_field_daily')
+@shared_task(name='quizzes.diffuse_memorix_field_daily', soft_time_limit=600, time_limit=660)
 def diffuse_memorix_field_daily():
     """
     对所有活跃用户的 u 向量执行一次图扩散步。
@@ -261,7 +261,7 @@ _BRIER_MIN_SAMPLES = 50          # Brier 最少样本量
 _BRIER_WINDOW_DAYS = 7           # Brier 评估窗口
 
 
-@shared_task(name='quizzes.evaluate_field_brier_daily')
+@shared_task(name='quizzes.evaluate_field_brier_daily', soft_time_limit=300, time_limit=360)
 def evaluate_field_brier_daily():
     """
     每日计算各机构的 Field Brier score（7 天窗口 ReviewLog）。
@@ -328,7 +328,7 @@ def evaluate_field_brier_daily():
     return {"institutions_evaluated": updated}
 
 
-@shared_task(name='quizzes.perturb_field_params_weekly')
+@shared_task(name='quizzes.perturb_field_params_weekly', soft_time_limit=300, time_limit=360)
 def perturb_field_params_weekly():
     """
     每周参数扰动：对开启了自进化的机构，尝试调整一个参数 ±10%。

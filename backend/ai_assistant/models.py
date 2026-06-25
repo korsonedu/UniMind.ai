@@ -14,6 +14,9 @@ class AIChatMessage(models.Model):
 
     class Meta:
         ordering = ['timestamp']
+        indexes = [
+            models.Index(fields=['user', 'bot', 'timestamp'], name='ai_chat_user_bot_ts_idx'),
+        ]
 
 
 class Conversation(models.Model):

@@ -9,7 +9,7 @@ from django.utils import timezone
 from datetime import timedelta, date
 
 
-@shared_task
+@shared_task(soft_time_limit=300, time_limit=360)
 def aggregate_daily_platform_stats():
     """聚合昨日平台数据，写入 DailyPlatformStats。"""
     from core.models import DailyPlatformStats, AnalyticsEvent

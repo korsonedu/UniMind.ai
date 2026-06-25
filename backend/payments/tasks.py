@@ -10,7 +10,7 @@ from payments.models import Order, Invoice
 logger = logging.getLogger(__name__)
 
 
-@shared_task
+@shared_task(soft_time_limit=30, time_limit=60)
 def generate_invoice(order_id: int):
     """Generate PDF invoice for a paid order."""
     from django.conf import settings
@@ -36,7 +36,7 @@ def generate_invoice(order_id: int):
         logger.exception("Failed to generate invoice for order %s", order_id)
 
 
-@shared_task
+@shared_task(soft_time_limit=60, time_limit=120)
 def expire_stale_orders():
     """Cancel orders that have been pending for more than 30 minutes."""
     threshold = timezone.now() - timedelta(minutes=30)
@@ -45,7 +45,7 @@ def expire_stale_orders():
         logger.info("expire_stale_orders: %s orders expired", expired)
 
 
-@shared_task
+@shared_task(soft_time_limit=120, time_limit=180)
 def check_subscription_expiry():
     """Daily: find active subscriptions past their period_end → expire them (batch optimized)."""
     from payments.models import Subscription

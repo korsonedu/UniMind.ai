@@ -261,10 +261,33 @@ class Institution(models.Model):
         ordering = ['-created_at']
 
     def save(self, *args, **kwargs):
+        _needs_invalidate = False
+        if self.pk:
+            # 当 plan/到期/继承/父机构变更时，失效相关用户的 effective_plan 缓存
+            _plan_fields = {'plan', 'plan_expires_at', 'inherit_plan', 'parent'}
+            _update_fields = kwargs.get('update_fields')
+            _should_invalidate = (
+                _update_fields is None
+                or bool(_plan_fields & set(_update_fields))
+            )
+            if _should_invalidate:
+                try:
+                    old = Institution.objects.only('plan', 'plan_expires_at', 'inherit_plan', 'parent_id').get(pk=self.pk)
+                    if (old.plan != self.plan
+                            or old.plan_expires_at != self.plan_expires_at
+                            or old.inherit_plan != self.inherit_plan
+                            or old.parent_id != self.parent_id):
+                        _needs_invalidate = True
+                except Institution.DoesNotExist:
+                    pass  # 新建机构无需失效
+
         if not self.invite_slug:
             import secrets
             self.invite_slug = secrets.token_urlsafe(12)
         super().save(*args, **kwargs)
+
+        if _needs_invalidate:
+            _invalidate_plan_cache_for_institution(self)
 
     def regenerate_invite_slug(self):
         import secrets
@@ -553,14 +576,40 @@ def get_effective_plan_for_user(user) -> str:
     - 超管 → enterprise
     - 有机构 → institution.get_effective_plan()
     - 无机构 → personal_plan（默认 free）
+
+    结果缓存 300s，减少每次请求的递归查询。
     """
     if not user or not user.is_authenticated:
         return 'free'
+
+    from django.core.cache import cache
+    cache_key = f"effective_plan:{user.pk}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     if user.is_superuser:
-        return 'enterprise'
-    if user.institution_id:
-        return user.institution.get_effective_plan()
-    return getattr(user, 'personal_plan', 'free')
+        plan = 'enterprise'
+    elif user.institution_id:
+        plan = user.institution.get_effective_plan()
+    else:
+        plan = getattr(user, 'personal_plan', 'free')
+
+    cache.set(cache_key, plan, timeout=300)
+    return plan
+
+
+def _invalidate_plan_cache_for_institution(institution):
+    """失效该机构及子机构所有用户的 effective_plan 缓存。"""
+    from django.core.cache import cache
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    affected_ids = [institution.pk] + institution.get_descendant_ids()
+    user_ids = User.objects.filter(
+        institution_id__in=affected_ids,
+    ).values_list('id', flat=True)
+    for uid in user_ids:
+        cache.delete(f"effective_plan:{uid}")
 
 
 def compute_expiry(duration_days: int):

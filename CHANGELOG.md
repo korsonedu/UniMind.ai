@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.1.1 — 性能与体验优化 (2026-06-26)
+
+### Changed
+- **ErrorBoundary 路由级隔离**：`lazyPage()` 内包 ErrorBoundary，单页崩溃不再导致全白屏
+- **AI Assistant 查询优化**：5 处 queryset 加 `select_related('user', 'bot')`，消除 N+1
+- **Celery 任务超时保护**：20 个早期任务全部补 `soft_time_limit` + `time_limit`
+- **Institution plan 缓存**：`get_effective_plan_for_user()` 加 Redis 缓存 300s，减少每次请求的递归查询
+- **热点接口迁移 React Query**：机构 features、课程列表、学科列表改用 `useQuery`/`fetchQuery`，支持缓存去重
+- **TestLadder 骨架屏**：数据加载时渲染全页 Skeleton，替代内容逐块弹出
+
+### Added
+- `AIChatMessage` 联合索引 `(user, bot, timestamp)` — 优化高频查询
+- 共享 `queryClient` 模块 (`frontend/src/lib/queryClient.ts`)
+
 ## v1.1.0 — 双层熔断器 (2026-06-25)
 
 ### Added

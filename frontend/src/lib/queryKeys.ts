@@ -9,4 +9,10 @@ export const queryKeys = {
   notifications: {
     unreadCount: ['notifications', 'unread-count'] as const,
   },
+  knowledgePoints: {
+    subjects: ['knowledge-points', 'subjects'] as const,
+  },
+  courses: {
+    list: (params: string) => ['courses', 'list', params] as const,
+  },
 };

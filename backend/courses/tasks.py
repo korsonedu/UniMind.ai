@@ -4,7 +4,7 @@ from celery import shared_task
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=30)
+@shared_task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=600, time_limit=660)
 def transcribe_course_task(self, course_id: int):
     from courses.models import Course
     from courses.services.ai_course_service import AICourseService
@@ -19,7 +19,7 @@ def transcribe_course_task(self, course_id: int):
         raise self.retry(exc=exc)
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=30)
+@shared_task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=120, time_limit=180)
 def generate_outline_task(self, course_id: int):
     from courses.services.ai_course_service import AICourseService
 
