@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.0.2 — OSS URL 修复 (2026-06-25)
+
+### Fixed
+- **RelativeImageField 错误拼接 OSS 绝对 URL**：`RelativeImageField` 在 `https://` 开头的 OSS URL 前拼接 `/`，产生 `//https://...` 破损链接，导致封面图和视频文件均加载失败。改为识别绝对 URL 直接透传，不再补前缀。
+
+## v1.0.1 — OSS 签名 URL (2026-06-25)
+
+### Fixed
+- **OSS 私有 Bucket 返回 403**：`OssMediaStorage.url()` 返回未签名 URL，私有 OSS Bucket 直接返回 403，课程封面图和视频全部无法加载。改为返回带 24h 有效期的签名 URL，加 Redis 缓存避免每次 `url()` 调用都发 OSS API 请求。
+
+## v1.0.0 — 首个版本化发布 (2026-06-25)
+
+### Added
+- **Git 版本化治理**：GitHub Flow 分支策略、SemVer 版本号、commit 规范、CHANGELOG 联动
+- **Field 诊断引擎**：知识图谱诊断服务（`field_service.py`）+ API 端点（`views_field.py`）
+- **语义边分析器**：KnowledgeEdge 语义关系分析（`semantic_edge_analyzer.py`）
+- **知识树服务**：知识树 CRUD 服务层（`knowledge_tree.py`）
+- **学生健康诊断扩展**：健康分计算 + 趋势分析 + 机构健康概览
+- **前端 TaskList 组件**：任务列表 UI + `queryKeys` 统一管理
+- **AgentChat hooks 重构**：`useAgentChat` + `useAgentConversation` 提取
+- **Migration 0052**：KnowledgePoint code/level 字段调整
+
+### Changed
+- **AI 引擎重构**：`ai_engine/service.py` 大幅重构（+462/-?）
+- Memorix 优化（field/optimizer/service）
+- 前端 AgentChatLayout、课程、支付等多个页面改进
+
 ## v0.5.1 — MUTAR 自进化闭环 + 用户反馈 (2026-06-13)
 
 ### 架构
