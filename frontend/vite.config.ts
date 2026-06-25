@@ -1,7 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'child_process'
 import path from 'path'
+
+function getVersion(): string {
+  try {
+    return execSync('git describe --tags --always --dirty=-dirty', { encoding: 'utf8' }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -85,5 +94,8 @@ export default defineConfig({
         },
       },
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(getVersion()),
   },
 })
