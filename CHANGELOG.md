@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.1.0 — 双层熔断器 (2026-06-25)
+
+### Added
+- **双层熔断器（operation + model_tier）**：断路器支持操作层 + 模型分层独立熔断，pro 模型阈值 3 次（vs fast 5 次），更快隔离故障。操作层 key 向后兼容旧格式，部署时状态不丢失。
+
+### Changed
+- ai_engine 13 处调用点传入 model_tier 参数
+- config.py 新增 `get_model_tier_for_operation()`
+
+### Docs
+- PgBouncer 部署指南（transaction pooling 模式）
+
+## v1.0.4 — 版本号自动注入 (2026-06-25)
+
+### Added
+- **Footer 版本号从 git tag 自动注入**：vite build 时执行 `git describe --tags`，通过 `define` 注入 `__APP_VERSION__`，不再需要手改 version.ts。
+
+## v1.0.3 — CHANGELOG + 前端版本号 (2026-06-25)
+
+### Changed
+- 更新 CHANGELOG + 前端版本号 v1.0.2
+
 ## v1.0.2 — OSS URL 修复 (2026-06-25)
 
 ### Fixed
