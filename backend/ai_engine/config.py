@@ -49,6 +49,17 @@ _TASK_THINKING = {
 }
 
 
+def get_model_tier_for_operation(operation: str = 'general') -> str | None:
+    """根据 operation 返回模型等级（'fast' / 'pro' / None）。"""
+    if not operation:
+        return None
+    op_lower = operation.lower()
+    for prefix, (_, tier) in _TASK_MODEL_MAP.items():
+        if op_lower.startswith(prefix):
+            return tier
+    return None
+
+
 def get_model_for_task(operation: str = 'general'):
     """Select model + optional thinking effort based on operation tag.
 

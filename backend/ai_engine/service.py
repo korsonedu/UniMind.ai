@@ -262,10 +262,11 @@ class AIEngine:
         不传则行为与之前完全一致。
         """
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
+        from .config import get_model_tier_for_operation
         started_at = time.monotonic()
 
         try:
-            AICircuitBreaker.check(operation)
+            AICircuitBreaker.check(operation, model_tier=get_model_tier_for_operation(operation))
         except CircuitBreakerError as e:
             logger.warning("AI 熔断器已打开: operation=%s", operation)
             if raise_on_error:
@@ -313,7 +314,7 @@ class AIEngine:
                 )
                 r.raise_for_status()
                 payload = r.json()
-                AICircuitBreaker.record_success(operation)
+                AICircuitBreaker.record_success(operation, model_tier=get_model_tier_for_operation(operation))
                 duration_ms = int((time.monotonic() - started_at) * 1000)
                 usage = payload.get('usage', {}) if isinstance(payload, dict) else {}
                 record_ai_operation(
@@ -330,7 +331,7 @@ class AIEngine:
                 )
                 return payload
             except requests.Timeout as e:
-                AICircuitBreaker.record_failure(operation)
+                AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 logger.warning(
                     "AI 调用超时: attempt=%s/%s timeout=%ss err=%s",
                     attempt + 1,
@@ -359,7 +360,7 @@ class AIEngine:
                     ) from e
                 return None
             except requests.HTTPError as e:
-                AICircuitBreaker.record_failure(operation)
+                AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 response = getattr(e, "response", None)
                 status = response.status_code if response is not None else 502
                 detail = (response.text or "")[:500] if response is not None else ""
@@ -395,7 +396,7 @@ class AIEngine:
                     ) from e
                 return None
             except requests.RequestException as e:
-                AICircuitBreaker.record_failure(operation)
+                AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 logger.warning("AI 网络异常: attempt=%s/%s err=%s", attempt + 1, max_retries + 1, e)
                 if attempt < max_retries:
                     time.sleep(min(2 ** attempt, 4))
@@ -776,6 +777,7 @@ class AIEngine:
         返回: {"content": str} 最后一轮文本（无 tool_calls 时）
         """
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
+        from .config import get_model_tier_for_operation
         from django.conf import settings as _settings
 
         all_messages = list(messages)
@@ -793,7 +795,7 @@ class AIEngine:
                 return {"content": ""}
 
             try:
-                AICircuitBreaker.check(operation)
+                AICircuitBreaker.check(operation, model_tier=get_model_tier_for_operation(operation))
             except CircuitBreakerError:
                 if on_step:
                     on_step({"type": "error", "message": "AI 服务熔断中，请稍后重试"})
@@ -857,7 +859,7 @@ class AIEngine:
                         logger.error("  FAIL msg[%s] role=%s keys=%s tc=%s content_preview=%s",
                                      mi, role, keys, tc, str(m.get('content', ''))[:100])
                 logger.error("call_ai_with_streaming_tools HTTP error: operation=%s round=%s err=%s body=%s", operation, round_i, e, error_body)
-                AICircuitBreaker.record_failure(operation)
+                AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 if on_step:
                     on_step({"type": "error", "message": f"AI 调用失败: {e}"})
                 return {"content": accumulated_text or "AI 服务暂时不可用，请稍后重试。"}
@@ -918,7 +920,7 @@ class AIEngine:
                     if func_chunk.get('arguments'):
                         tc['function']['arguments'] += func_chunk['arguments']
 
-            AICircuitBreaker.record_success(operation)
+            AICircuitBreaker.record_success(operation, model_tier=get_model_tier_for_operation(operation))
 
             tool_calls = [tool_calls_map[k] for k in sorted(tool_calls_map.keys())] if tool_calls_map else []
 
@@ -1426,6 +1428,7 @@ class AIEngine:
     def call_ai_stream(cls, messages, temperature=0.7, max_tokens=8192, operation='general', max_retries=None):
         """流式 AI 调用，yield 每个 delta.content 片段。支持重试。"""
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
+        from .config import get_model_tier_for_operation
 
         if max_retries is None:
             max_retries = getattr(settings, "LLM_REQUEST_MAX_RETRIES", 1)
@@ -1442,7 +1445,7 @@ class AIEngine:
             started_at = time.monotonic()
 
             try:
-                AICircuitBreaker.check(operation)
+                AICircuitBreaker.check(operation, model_tier=get_model_tier_for_operation(operation))
             except CircuitBreakerError:
                 record_ai_operation(operation=operation, success=False, duration_ms=0, error_category='circuit_open')
                 yield None
@@ -1486,12 +1489,12 @@ class AIEngine:
                     except json.JSONDecodeError:
                         continue
 
-                AICircuitBreaker.record_success(operation)
+                AICircuitBreaker.record_success(operation, model_tier=get_model_tier_for_operation(operation))
                 duration_ms = int((time.monotonic() - started_at) * 1000)
                 record_ai_operation(operation=operation, success=True, duration_ms=duration_ms, metadata={'stream': True})
                 return
             except requests.Timeout:
-                AICircuitBreaker.record_failure(operation)
+                AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 if attempt < max_retries:
                     backoff = 2.0 ** attempt
                     logger.warning("call_ai_stream timeout retry %s/%s in %.1fs", attempt + 1, max_retries, backoff)
@@ -1502,7 +1505,7 @@ class AIEngine:
                 yield None
                 return
             except requests.HTTPError:
-                AICircuitBreaker.record_failure(operation)
+                AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 if attempt < max_retries:
                     backoff = 2.0 ** attempt
                     logger.warning("call_ai_stream HTTP error retry %s/%s in %.1fs", attempt + 1, max_retries, backoff)
@@ -1513,7 +1516,7 @@ class AIEngine:
                 yield None
                 return
             except requests.RequestException:
-                AICircuitBreaker.record_failure(operation)
+                AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 if attempt < max_retries:
                     backoff = 2.0 ** attempt
                     logger.warning("call_ai_stream request error retry %s/%s in %.1fs", attempt + 1, max_retries, backoff)
