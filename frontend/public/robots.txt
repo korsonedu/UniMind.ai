@@ -1,0 +1,13 @@
+# UniMind.ai — SEO 策略
+# 只索引公开营销页面，所有登录后功能页面禁止索引
+
+User-agent: *
+Allow: /$
+Allow: /pricing$
+Allow: /privacy$
+Allow: /terms$
+Allow: /memorix$
+Allow: /promo/plus$
+Disallow: /
+
+Sitemap: https://unimind-ai.com/sitemap.xml
