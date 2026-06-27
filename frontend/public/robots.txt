@@ -8,6 +8,8 @@ Allow: /privacy$
 Allow: /terms$
 Allow: /memorix$
 Allow: /promo/plus$
+Allow: /sitemap.xml
+Allow: /robots.txt
 Disallow: /
 
 Sitemap: https://unimind-ai.com/sitemap.xml
