@@ -497,7 +497,7 @@ export const TestLadder: React.FC = () => {
                       <div className="space-y-1">
                         <p className="text-xs font-semibold text-muted-foreground mb-2 pb-1 border-b border-border">{t('subjectFilter')}</p>
                         {subjectList.length === 0 ? (<p className="text-xs text-muted-foreground py-2">{t('loading')}</p>) : (
-                          subjectList.map((subject) => (
+                          subjectList.map((subject: { id: number; name: string; code: string }) => (
                             <div key={subject.id} className="flex items-center gap-2 py-1.5 px-1 rounded-lg hover:bg-muted/60 transition-colors">
                               <Checkbox id={`subject-${subject.id}`} checked={selectedSubIds.includes(subject.id)} onCheckedChange={(checked) => { checked ? setSelectedSubIds(prev => [...prev, subject.id]) : setSelectedSubIds(prev => prev.filter(id => id !== subject.id)); }} />
                               <label htmlFor={`subject-${subject.id}`} className="text-xs font-medium cursor-pointer select-none flex-1 leading-tight">{subject.name}</label>
