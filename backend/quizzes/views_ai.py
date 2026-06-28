@@ -330,7 +330,7 @@ class WorkbenchTaskStatusView(APIView):
                 return Response({'error': '任务不存在'}, status=404)
 
         payload = task.payload or {}
-        return Response({
+        data = {
             'id': task.id,
             'status': task.status,
             'progress': task.progress,
@@ -340,7 +340,10 @@ class WorkbenchTaskStatusView(APIView):
             'stages': payload.get('stages', []),
             'created_at': task.created_at,
             'finished_at': task.finished_at,
-        })
+        }
+        if task.status == 'completed' and task.result:
+            data['questions'] = task.result.get('questions', [])
+        return Response(data)
 
 
 class WorkbenchSaveQuestionsView(APIView):

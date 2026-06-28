@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { streamFetch } from '@/lib/api';
+import api, { streamFetch } from '@/lib/api';
 import { toast } from 'sonner';
 import { useXiaoYuStore } from '@/store/useXiaoYuStore';
 import type { AgentStep } from '@/hooks/useAgentChat';
@@ -30,15 +30,13 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
   // ── Fetch 小宇 bot on mount ──
   useEffect(() => {
     if (!enabled) return;
-    import('@/lib/api').then(({ default: api }) => {
-      api.get('/ai/bots/')
-        .then((r) => {
-          const bots = Array.isArray(r.data) ? r.data : (r.data?.results || []);
-          const xiaoyu = bots.find((b: any) => b.bot_type === 'planner');
-          if (xiaoyu) setBotId(xiaoyu.id);
-        })
-        .catch(() => {});
-    });
+    api.get('/ai/bots/')
+      .then((r) => {
+        const bots = Array.isArray(r.data) ? r.data : (r.data?.results || []);
+        const xiaoyu = bots.find((b: any) => b.bot_type === 'planner');
+        if (xiaoyu) setBotId(xiaoyu.id);
+      })
+      .catch(() => {});
   }, [enabled, setBotId]);
 
   // ── Send ──
@@ -239,7 +237,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
 
   // ── Register send in store for CoachPanel access ──
   useEffect(() => {
-    setSendMessage(() => send);
+    setSendMessage((text: string) => { send(text); });
     return () => setSendMessage(null);
   }, [send, setSendMessage]);
 

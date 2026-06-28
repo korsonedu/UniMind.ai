@@ -38,6 +38,8 @@ interface QuestionData {
   difficulty_level: string;
   kp_name?: string;
   kp_code?: string;
+  kp_id?: number;
+  source?: 'quick_generate' | 'arc_refine';
 }
 
 const SKILLS = [
@@ -336,10 +338,30 @@ export default function Workbench() {
       kp_name: q.kp_name || '',
       kp_code: q.kp_code || '',
       kp_id: q.kp_id,
+      source: 'quick_generate' as const,
     }));
     setGeneratedQuestions(prev => [...prev, ...mapped]);
     setSavedIndices(new Set());
     setViewMode('questions');
+  }, []);
+
+  const handlePipelineComplete = useCallback((questions: Array<Record<string, unknown>>, taskId: number) => {
+    const mapped: QuestionData[] = questions.map((q: any, i: number) => ({
+      question: q.question || '',
+      q_type: q.q_type || 'objective',
+      subjective_type: q.subjective_type || null,
+      options: q.options || null,
+      answer: q.answer || q.answer_preview || '',
+      grading_points: q.grading_points || null,
+      difficulty_level: q.difficulty_level || 'normal',
+      kp_name: q.kp_name || '',
+      kp_code: q.kp_code || '',
+      kp_id: q.kp_id,
+      source: 'arc_refine' as const,
+    }));
+    setGeneratedQuestions(prev => [...prev, ...mapped]);
+    setSavedIndices(new Set());
+    setPipelineTaskId(null);
   }, []);
 
   const handleQuestionsSaved = useCallback((indices: number[]) => {
@@ -462,6 +484,7 @@ export default function Workbench() {
                 pipelineTaskId={pipelineTaskId}
                 bot={bot}
                 onPipelineStart={handlePipelineStart}
+                onPipelineComplete={handlePipelineComplete}
                 onQuestionsSaved={handleQuestionsSaved}
                 onSystemMessage={handleSystemMessage}
               />

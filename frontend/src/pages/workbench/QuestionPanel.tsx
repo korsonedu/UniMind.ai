@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner, Sparkle, Check, CheckSquareOffset, MagicWand } from '@phosphor-icons/react';
 import api from '@/lib/api';
@@ -17,6 +17,7 @@ interface QuestionData {
   kp_name?: string;
   kp_code?: string;
   kp_id?: number;
+  source?: 'quick_generate' | 'arc_refine';
 }
 
 interface TaskStatus {
@@ -27,6 +28,7 @@ interface TaskStatus {
   current_stage: string;
   status_text: string;
   stages: Array<{ stage: string; count?: number; timestamp?: string }>;
+  questions?: Array<Record<string, unknown>>;
 }
 
 interface Bot {
@@ -40,6 +42,7 @@ interface Props {
   pipelineTaskId: number | null;
   bot: Bot | null;
   onPipelineStart?: (taskId: number) => void;
+  onPipelineComplete?: (questions: Array<Record<string, unknown>>, taskId: number) => void;
   onQuestionsSaved?: (indices: number[]) => void;
   onSystemMessage?: (msg: string) => void;
 }
@@ -65,10 +68,15 @@ const QTYPE_LABEL: Record<string, string> = {
   subjective: '主观题',
 };
 
+const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
+  quick_generate: { label: '一键生成', cls: 'bg-blue-50 text-blue-600' },
+  arc_refine: { label: 'ARC 精修', cls: 'bg-purple-50 text-purple-600' },
+};
+
 const POLL_INITIAL = 5000;
 const POLL_MAX = 60000;
 
-export default function QuestionPanel({ questions, savedIndices, pipelineTaskId, bot, onPipelineStart, onQuestionsSaved, onSystemMessage }: Props) {
+export default function QuestionPanel({ questions, savedIndices, pipelineTaskId, bot, onPipelineStart, onPipelineComplete, onQuestionsSaved, onSystemMessage }: Props) {
   // 过滤掉已保存的题目，用原始索引
   const displayQuestions = questions
     .map((q, i) => ({ q, originalIndex: i }))
@@ -77,55 +85,73 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [pollInterval, setPollInterval] = useState(POLL_INITIAL);
 
-  // Eager initial fetch when pipelineTaskId changes
+  // Refs for recursive polling
+  const cancelledRef = useRef(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const backoffRef = useRef(POLL_INITIAL);
+  const completedHandledRef = useRef(false);
+  const doPollRef = useRef<() => void>();
+
+  // ── Polling effect ──
   useEffect(() => {
     if (!pipelineTaskId) {
       setTaskStatus(null);
+      completedHandledRef.current = false;
       return;
     }
-    setPollInterval(POLL_INITIAL);
-    const fetchStatus = async () => {
-      try {
-        const res = await api.get(`/quizzes/workbench/tasks/${pipelineTaskId}/status/`);
-        setTaskStatus(res.data);
-      } catch {
-        console.warn('Task status initial fetch failed, will retry');
+
+    cancelledRef.current = false;
+    backoffRef.current = POLL_INITIAL;
+    completedHandledRef.current = false;
+
+    const doPoll = async () => {
+      if (cancelledRef.current) return;
+
+      if (document.visibilityState === 'hidden') {
+        timeoutRef.current = setTimeout(doPoll, backoffRef.current);
+        return;
       }
-    };
-    fetchStatus();
-  }, [pipelineTaskId]);
 
-  // Poll pipeline progress with exponential backoff
-  useEffect(() => {
-    if (!pipelineTaskId) return;
-
-    let cancelled = false;
-    const timer = setTimeout(async () => {
-      if (cancelled) return;
-      if (document.visibilityState === 'hidden') return;
       try {
         const res = await api.get(`/quizzes/workbench/tasks/${pipelineTaskId}/status/`);
-        if (cancelled) return;
+        if (cancelledRef.current) return;
+
         const data: TaskStatus = res.data;
         setTaskStatus(data);
+
         if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+          if (data.status === 'completed' && data.questions?.length && !completedHandledRef.current) {
+            completedHandledRef.current = true;
+            onPipelineComplete?.(data.questions, pipelineTaskId);
+          }
           return; // stop polling
         }
-        setPollInterval(POLL_INITIAL);
+
+        backoffRef.current = POLL_INITIAL;
       } catch {
-        if (!cancelled) setPollInterval(prev => Math.min(prev * 2, POLL_MAX));
+        backoffRef.current = Math.min(backoffRef.current * 2, POLL_MAX);
       }
-    }, pollInterval);
 
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [pipelineTaskId, pollInterval]);
+      timeoutRef.current = setTimeout(doPoll, backoffRef.current);
+    };
 
-  // Reset polling interval when tab becomes visible again
+    doPollRef.current = doPoll;
+    doPoll(); // immediate first fetch
+
+    return () => {
+      cancelledRef.current = true;
+      clearTimeout(timeoutRef.current);
+    };
+  }, [pipelineTaskId, onPipelineComplete]);
+
+  // ── Visibility change: poll immediately when tab becomes visible ──
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') setPollInterval(POLL_INITIAL);
+      if (document.visibilityState === 'visible') {
+        backoffRef.current = POLL_INITIAL;
+        doPollRef.current?.();
+      }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
@@ -183,7 +209,7 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
       toast.error('启动失败');
     }
     setSaving(false);
-  }, [selected, questions, onPipelineStart]);
+  }, [selected, displayQuestions, onPipelineStart]);
 
   // 空状态
   if (displayQuestions.length === 0 && !pipelineTaskId) {
@@ -268,8 +294,8 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
                 )}
                 onClick={() => toggleSelect(i)}
               >
-                {/* 头部：序号 + 标签 + 选择 */}
-                <div className="flex items-center gap-2 mb-2">
+                {/* 头部：序号 + 来源 + 类型 + 难度 + 知识点 */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <div className={cn(
                     "w-5 h-5 rounded border flex items-center justify-center shrink-0",
                     selected.has(i) ? "bg-primary border-primary" : "border-border",
@@ -277,6 +303,14 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
                     {selected.has(i) && <Check className="h-3 w-3 text-white" />}
                   </div>
                   <span className="text-xs font-bold text-foreground">#{i + 1}</span>
+                  {q.source && SOURCE_BADGE[q.source] && (
+                    <span className={cn(
+                      "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                      SOURCE_BADGE[q.source].cls,
+                    )}>
+                      {SOURCE_BADGE[q.source].label}
+                    </span>
+                  )}
                   <span className={cn(
                     "text-[10px] font-bold px-1.5 py-0.5 rounded",
                     q.q_type === 'objective' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700',
