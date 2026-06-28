@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.0 — 产品引导系统 (2026-06-28)
+
+### Added
+- **GuidedTour 引导系统**：新用户首次进入工作台/小宇时，遮罩式三步布局引导（输入框 → 侧栏 → 顶栏账号区），走完/跳过即记录，不再重复弹出
+- **面板引导（Phase 2）**：教师首次对话后左栏面板出现时，单独引导 CopilotOverview 工作区
+- 数据库持久化 `tour_dismissed_at` / `tour_panel_dismissed_at`，换设备不重复
+- 移动端 <768px 自动跳过引导
+
+### Changed
+- 头像下拉菜单纳入 header-right 高亮区域
+
 ## v1.1.1 — 性能与体验优化 (2026-06-26)
 
 ### Changed

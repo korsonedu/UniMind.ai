@@ -50,7 +50,7 @@ v2.10.0-dev  →  v2.10.0-rc.1  →  v2.10.0-rc.2  →  v2.10.0
 ```
 <type>(<scope>): <subject>
 
-<body>   ← 可选，复杂改动时写
+<body>   ← feat/fix/hotfix/refactor 必须写（what + why）；chore/docs/test 可选
 ```
 
 ### type 类型
@@ -85,7 +85,7 @@ fix(quizzes): 修复模拟考试提交时 race condition
 fix(security): 文件上传 magic bytes 校验扩展到视频/文档
 refactor(courses): OSS 分片直传重构，删除 5 个旧 View
 chore(migration): 移除废弃的 assistant bot_type
-docs: 更新 CHANGELOG 至 v2.9.2
+docs: 更新 CHANGELOG 至 v1.1.0
 
 # 差的 commit message（不要这样写）
 update code
@@ -132,39 +132,37 @@ git commit -m "feat(quizzes): 新增错题本导出 PDF 功能"
 
 ---
 
-## 五、分支策略（简化版）
+## 五、分支策略
+
+**强制分支隔离**：任何代码改动必须建分支。main 不接受直接提交。
 
 ```
-main          ← 稳定版，可直接部署到生产
-  └─ dev      ← 开发主线（可选，小团队可直接在 main 开发）
-      ├─ feat/render-visual    ← 功能分支
-      ├─ fix/upload-race       ← bugfix 分支
-      └─ hotfix/security-svg   ← 紧急修复
+main                          ← 唯一长期分支，永远可部署
+  ├─ feat/render-visual       ← 功能分支
+  ├─ fix/upload-race          ← bugfix 分支
+  └─ hotfix/security-svg      ← 紧急修复
 ```
 
-对于当前规模（1-2 人开发），可以直接在 main 上开发，关键节点 tag。
+详细规则见 Git 铁律（project_git_governance memory）。
 
 ---
 
 ## 六、CHANGELOG.md 模板
 
 ```markdown
-## [vX.Y.Z] - YYYY-MM-DD
+## vX.Y.Z — 标题 (YYYY-MM-DD)
 
-### 🚀 新功能
-- **功能名**：一句话描述
+### Added
+- 新功能描述
 
-### 🐛 Bug 修复
-- 修复了什么问题
+### Fixed
+- 修复描述
 
-### 🔒 安全
-- 修复了什么漏洞
+### Changed
+- 变更描述
 
-### ⚡ 性能优化
-- 优化了什么
-
-### 📝 文档
-- 更新了什么文档
+### Docs
+- 文档更新描述
 ```
 
 ---
@@ -172,8 +170,8 @@ main          ← 稳定版，可直接部署到生产
 ## 七、版本号快速参考
 
 ```
-当前版本:  v2.9.2-dev
-下次 MINOR: v2.10.0-dev（新模块/大功能上线时）
-下次 PATCH: v2.9.3-dev（日常迭代）
-下次 MAJOR: v3.0.0（架构大改/商业模式变更）
+当前版本:  v1.2.0
+下次 MINOR: v1.3.0（新模块/大功能上线时）
+下次 PATCH: v1.2.1（日常迭代）
+下次 MAJOR: v2.0.0（架构大改/商业模式变更）
 ```
