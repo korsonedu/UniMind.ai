@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.3.0 — AI 对话页会话侧栏 (2026-06-29)
+
+### Added
+- **AI 对话页左侧会话侧栏**：小宇页新增可拖动收起的会话侧栏，展示历史对话列表，随时切换
+- **后端轻量会话列表 API**：`GET /api/ai/conversations/?bot_id=xxx`，返回会话元数据 + 消息数，避免加载全量消息
+- **侧栏拖动吸附**：右边缘可拖拽调整宽度，拖到阈值以下自动收起到 48px，以上展开到 224px
+- **工作台会话切换优化**：保留 header 中「N 个对话」pill 按钮（无侧栏时），可见性从 `muted-foreground/55` 纯文字提升为 `bg-muted/50` 药丸按钮
+
+### Changed
+- **小宇页 edge-to-edge**：`/xiaoyu` 加入 `isEdgeToEdge`，去除 MainLayout 默认的 `px-4 py-4` padding，侧栏贴边
+- **「新对话」按钮强化**：从 `ghost muted-foreground/40` 改为 `bg-muted/60 rounded-full` pill 按钮
+- **对话标题来源统一**：chat header 和侧栏标题走同一套 fallback 逻辑（消息 → session.title → session.label），新对话无标题时为空
+- **侧栏收起方式**：从底部按钮切换改为右边缘拖拽吸附，无蓝色 hover 提示线
+
+### Fixed
+- **卡片不因刷新消失**：`handleRefreshSessions` 补充 `metadata.visual → toolStep.visual` 转换，侧栏切会话后 action card 不丢
+- **新对话标题残留**：`handleReset` 后 `activeSessionId === null` 时直接返回空标题，不再 fallback 到旧 session
+- **拖动时文字挤压**：副标题加 `whitespace-nowrap`，列表区拖动时禁用 overflow
+
 ## v1.2.2 — 页面 UI 一致性 (2026-06-28)
 
 ### Changed

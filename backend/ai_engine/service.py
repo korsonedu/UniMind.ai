@@ -1014,6 +1014,8 @@ class AIEngine:
                 _tool_results = [None] * len(_parsed_calls)
                 task_id, task_items = cls._generate_task_list(tool_calls, round_i)
 
+                logger.info("[taskList] batch_start task_id=%s items=%s", task_id, [i['label'] for i in task_items])
+
                 # 发送 batch_start 事件
                 if on_step:
                     on_step({
@@ -1086,6 +1088,8 @@ class AIEngine:
 
                     with _step_lock:
                         if on_step:
+                            logger.info("[taskList] done event: task_id=%s call_id=%s name=%s duration=%s",
+                                        task_id, call_id, name, _duration_ms)
                             on_step(done_event)
 
                     return idx, result_str
