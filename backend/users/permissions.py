@@ -27,11 +27,12 @@ ROLE_PERMISSION_MATRIX = {
 
 
 def is_platform_admin(user) -> bool:
-    """超级管理员：is_superuser 即为平台管理员。"""
+    """超级管理员：is_superuser + 无机构（Layer 1），与 CLAUDE.md 设计一致。"""
     return bool(
         user
         and user.is_authenticated
         and getattr(user, "is_superuser", False)
+        and user.institution_id is None
     )
 
 

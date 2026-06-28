@@ -240,7 +240,6 @@ export default function Workbench() {
   );
   const [pipelineTaskId, setPipelineTaskId] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('overview');
-  const [wasResetManually, setWasResetManually] = useState(false);
   const [hasConversation, setHasConversation] = useState<boolean | null>(null);
 
   const doSendRef = useRef<((text: string) => void) | null>(null);
@@ -401,7 +400,7 @@ export default function Workbench() {
       <div className="flex flex-1 min-h-0">
       {/* Left: QuestionPanel or Copilot Overview — 仅对话时显示，landing 隐藏。
           hasConversation 由 AgentChatLayout 的 useAgentConversation hook 管理：
-          发消息后立即变为 true → 左面板同步渲染，不再等待 wasResetManually / SSE done */}
+          发消息后立即变为 true → 左面板同步渲染 */}
       {hasConversation && (viewMode !== 'questions' || generatedQuestions.length === 0 ? (
           <div data-tour="workbench-panel" className="flex-1 min-w-0 overflow-y-auto bg-muted/50">
             <div className="p-4 md:p-6">
@@ -513,7 +512,6 @@ export default function Workbench() {
           }}
           onQuestionsGenerated={handleQuestionsGenerated}
           onLoadSession={(session, defaultHandler) => {
-            setWasResetManually(false);
             setViewMode('overview');
             defaultHandler(session);
           }}
@@ -522,14 +520,12 @@ export default function Workbench() {
             setSavedIndices(new Set());
             setPipelineTaskId(null);
             setViewMode('overview');
-            setWasResetManually(true);
             clearState();
             setHasConversation(false);
             defaultHandler();
           }}
           getExtraPayload={() => currentClassId ? { class_id: currentClassId } : {}}
           onDone={(refreshSessions) => {
-            setWasResetManually(false);
             refreshSessions();
           }}
         />

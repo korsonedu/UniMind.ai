@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -322,6 +322,8 @@ export function KnowledgeSystemPanel() {
   const [edgeTargetId, setEdgeTargetId] = useState<number | null>(null);
   const [edgeType, setEdgeType] = useState<EdgeType>('similar');
   const [edgeWeight, setEdgeWeight] = useState(0.3);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
   const dragCounter = useRef(0);
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -358,10 +360,19 @@ export function KnowledgeSystemPanel() {
       .finally(() => setImporting(false));
   }, []);
 
+  const fetchSubjects = async () => {
+    try {
+      const { data } = await api.get('/quizzes/knowledge-points/subjects/');
+      setSubjects(data.categories || []);
+    } catch { setSubjects([]); }
+  };
+
   const fetchTree = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/quizzes/knowledge-points/');
+      const params: any = {};
+      if (selectedSubject) params.subject = selectedSubject;
+      const { data } = await api.get('/quizzes/knowledge-points/', { params });
       setTree(data);
       // Flatten tree for parent selector
       const flat: KPNode[] = [];
@@ -377,7 +388,8 @@ export function KnowledgeSystemPanel() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchTree(); }, []);
+  useEffect(() => { fetchSubjects(); fetchTree(); }, []);
+  useEffect(() => { fetchTree(); }, [selectedSubject]);
 
   // ── 边操作 ──
   const fetchEdges = useCallback(async (kpId: number) => {
@@ -491,6 +503,39 @@ export function KnowledgeSystemPanel() {
             </Button>
           </div>
         </div>
+
+        {/* Subject tabs */}
+        {subjects.length > 0 && (
+          <div className="mb-3">
+            <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-wide mr-2 shrink-0">学科</span>
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 flex-wrap mt-1">
+              <Button
+                variant={!selectedSubject ? 'apple' : 'ghost'}
+                size="sm"
+                className="h-7 text-[10px] font-bold rounded-lg shrink-0"
+                onClick={() => setSelectedSubject('')}
+              >
+                全部
+              </Button>
+              {subjects.map((cat: any) => (
+                <Fragment key={cat.name}>
+                  <span className="text-[9px] text-muted-foreground/50 mx-0.5 shrink-0 select-none">·</span>
+                  {cat.subjects?.map((subj: any) => (
+                    <Button
+                      key={subj.subject}
+                      variant={selectedSubject === subj.subject ? 'apple' : 'ghost'}
+                      size="sm"
+                      className="h-7 text-[10px] font-bold rounded-lg shrink-0"
+                      onClick={() => setSelectedSubject(selectedSubject === subj.subject ? '' : subj.subject)}
+                    >
+                      {subj.label}
+                    </Button>
+                  ))}
+                </Fragment>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex-1 flex items-center justify-center"><Spinner className="h-5 w-5 animate-spin text-muted-foreground" /></div>

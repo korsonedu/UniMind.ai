@@ -85,6 +85,13 @@ def generate_step_label(tool_name: str, args: dict) -> str:
             else f"查询教学计划 #{a.get('teaching_plan_id', '')} 知识点"
         ),
         'create_teaching_plan': lambda a: f"创建教学计划「{a.get('title', '')}」",
+        # ── F2: 批改助手 ──
+        'bulk_grade_submissions': lambda a: f"AI 批量评分作业 #{a.get('assignment_id', '')}",
+        'confirm_grades': lambda a: f"确认批改作业 #{a.get('assignment_id', '')}",
+        # ── F3: 答疑 ──
+        'create_faq_ticket': lambda a: f"创建答疑工单「{a.get('question_text', '')[:30]}」",
+        # ── F4: 学情报告 ──
+        'generate_student_report': lambda a: f"生成「{a.get('student_name', a.get('student_id', '学生'))}」学情报告",
     }
     generator = labels.get(tool_name)
     if generator:
@@ -168,6 +175,14 @@ def summarize_tool_result(tool_name: str, result) -> str:
             else f"教学计划「{r.get('title', '')}」，{r.get('total_kps', 0)} 个知识点"
         ),
         'create_teaching_plan': lambda r: f"{'已更新' if r.get('created') == False else '已创建'}「{r.get('title', '')}」",
+        # ── F2: 批改助手 ──
+        'bulk_grade_submissions': lambda r: f"AI 已完成 {r.get('graded_count', 0)} 份评分" + (
+            " · 已驳回" if r.get('rejected') else ""),
+        'confirm_grades': lambda r: f"已确认 {r.get('confirmed_count', 0)} 份批改",
+        # ── F3: 答疑 ──
+        'create_faq_ticket': lambda r: f"工单 #{r.get('ticket_id', '')} 已创建 · {r.get('message', '')[:30]}",
+        # ── F4: 学情报告 ──
+        'generate_student_report': lambda r: f"{r.get('student_name', '学生')} 学情报告 · {r.get('action', 'preview')}",
     }
 
     fn = summaries.get(tool_name)
@@ -459,6 +474,66 @@ class BaseToolExecutor:
             'unlocked': unlocked[:8],
             'all': all_list,
         }
+
+    def _handle_create_faq_ticket(self, args: Dict) -> Dict:
+        """创建答疑工单。"""
+        from faq_system.models import Question as FAQQuestion
+
+        question_text = (args.get('question_text') or '').strip()
+        context_summary = (args.get('context_summary') or '').strip()
+        reason = (args.get('reason') or '').strip()
+
+        if not question_text:
+            return {"error": "请提供 question_text"}
+
+        content = question_text
+        if context_summary:
+            content = f"【背景】{context_summary}\n\n【问题】{question_text}"
+
+        ticket = FAQQuestion.objects.create(
+            user=self.user,
+            content=content,
+            institution=self.institution,
+        )
+
+        return {
+            "ticket_id": ticket.id,
+            "message": "已创建答疑工单，教师将尽快回复",
+            "reason": reason,
+        }
+
+    def _handle_search_similar_questions(self, args: Dict) -> Dict:
+        """按知识点搜索相似题目。"""
+        from quizzes.models import Question
+
+        kp_code = (args.get('kp_code') or '').strip()
+        limit = min(int(args.get('limit', 3)), 10)
+
+        if not kp_code:
+            return {"error": "请提供 kp_code"}
+
+        qs = Question.objects.filter(
+            knowledge_point__code=kp_code,
+        ).select_related('knowledge_point')
+
+        if self.institution:
+            qs = qs.filter(institution=self.institution)
+
+        results = qs.order_by('?')[:limit]
+
+        return {
+            "questions": [
+                {
+                    "id": q.id,
+                    "question_preview": (q.text or '')[:200],
+                    "q_type": q.q_type,
+                    "difficulty": q.difficulty_level,
+                    "kp_name": q.knowledge_point.name if q.knowledge_point else '',
+                }
+                for q in results
+            ],
+        }
+
 
 
 class PlannerToolExecutor(BaseToolExecutor):
@@ -962,4 +1037,81 @@ class PlannerToolExecutor(BaseToolExecutor):
 
         return {"error": f"未知模式: {mode}，支持 generate 或 submit"}
 
+    # ── F5: 督学工具 handler ──────────────────────────
 
+    def _handle_get_study_status(self, args: Dict) -> Dict:
+        """获取当前学习会话状态 + 今日累计专注数据。"""
+        from study_room.session_manager import get_today_focus_stats
+
+        stats = get_today_focus_stats(self.user.id)
+        return {
+            "current_session": stats.get("current_session"),
+            "current_elapsed_seconds": stats.get("current_elapsed_seconds", 0),
+            "current_elapsed_minutes": stats.get("current_elapsed_seconds", 0) // 60,
+            "today_sessions_count": stats.get("today_sessions_count", 0),
+            "today_total_focus_minutes": stats.get("today_total_focus_minutes", 0),
+            "yesterday_total_focus_minutes": stats.get("yesterday_total_focus_minutes", 0),
+            "trend": stats.get("trend", "neutral"),
+        }
+
+    def _handle_get_focus_history(self, args: Dict) -> Dict:
+        """获取近期每日专注汇总。"""
+        from study_room.session_manager import get_focus_history
+
+        days = min(int(args.get("days", 7)), 30)
+        history = get_focus_history(self.user.id, days)
+
+        total_minutes = sum(d["focus_minutes"] for d in history)
+        total_sessions = sum(d["sessions_count"] for d in history)
+        active_days = sum(1 for d in history if d["focus_minutes"] > 0)
+
+        return {
+            "days": days,
+            "history": history,
+            "total_focus_minutes": total_minutes,
+            "total_sessions": total_sessions,
+            "active_days": active_days,
+        }
+
+    def _handle_save_session_note(self, args: Dict) -> Dict:
+        """保存学习心得到当前会话。"""
+        from study_room.models import StudySession
+        from django.utils import timezone
+
+        note_text = (args.get("note_text") or "").strip()
+        if not note_text:
+            return {"error": "note_text 不能为空"}
+
+        # 找最近活跃的会话
+        session = StudySession.objects.filter(
+            user=self.user,
+            status__in=("active", "paused"),
+        ).order_by("-started_at").first()
+
+        if not session:
+            # 没有活跃会话时创建一条短暂的笔记记录
+            session = StudySession.objects.create(
+                user=self.user,
+                status="ended",
+                task_name="学习笔记",
+                duration_minutes=0,
+                ended_at=timezone.now(),
+                total_focus_seconds=0,
+            )
+
+        # 追加到 metrics.notes
+        metrics = session.metrics or {}
+        notes = metrics.get("notes", [])
+        notes.append({
+            "text": note_text,
+            "created_at": timezone.now().isoformat(),
+        })
+        metrics["notes"] = notes
+        session.metrics = metrics
+        session.save(update_fields=["metrics"])
+
+        return {
+            "ok": True,
+            "note_count": len(notes),
+            "message": "已保存学习心得",
+        }

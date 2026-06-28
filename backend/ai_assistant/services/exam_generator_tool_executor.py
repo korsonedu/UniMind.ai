@@ -197,6 +197,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                     "q_type": q.get('q_type', ''),
                     "difficulty_level": q.get('difficulty_level', 'normal'),
                     "kp_name": q.get('kp_name', ''),
+                    "kp_id": q.get('kp_id'),
                     "answer_preview": (q.get('answer', '') or '')[:100],
                 }
                 for i, q in enumerate(questions)
@@ -553,7 +554,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                     recipient=student,
                     title=f"新作业：{title}",
                     content=f"{self.user.nickname or self.user.username} 老师布置了作业「{title}」{due_info}",
-                    n_type='system',
+                    ntype='system',
                     link='/tests',
                 )
                 notified += 1
@@ -610,7 +611,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         for s in students:
             Notification.objects.create(
                 recipient=s, title=title, content=content,
-                n_type='system', link='/xiaoyu',
+                ntype='system', link='/xiaoyu',
             )
             created += 1
 
@@ -1030,3 +1031,206 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             "weeks": weeks_data,
             "total_kps": len(all_kp_ids),
         }
+
+    # ── 学生学情报告 ────────────────────────────────────────────
+
+    def _handle_generate_student_report(self, args: Dict) -> Dict:
+        """按需生成学生学情报告（仅教师/机构主可用）。"""
+        from users.models import User
+        from users.views import _build_report_data
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+        from users.permissions import is_institution_teacher
+
+        if not self.institution or not is_institution_teacher(self.user):
+            return {"error": "仅教师/机构主可使用此功能"}
+
+        # Resolve student
+        student_id = args.get('student_id')
+        student_name = args.get('student_name', '').strip()
+        try:
+            if student_id:
+                student = User.objects.get(id=int(student_id), institution=self.institution)
+            elif student_name:
+                student = User.objects.filter(
+                    institution=self.institution,
+                    nickname__icontains=student_name
+                ).first() or User.objects.filter(
+                    institution=self.institution,
+                    username__icontains=student_name
+                ).first()
+                if not student:
+                    return {"error": f"未找到学生: {student_name}"}
+            else:
+                return {"error": "请提供 student_name 或 student_id"}
+        except User.DoesNotExist:
+            return {"error": "学生不存在"}
+
+        # Parse date range (defensive against LLM malformed dates)
+        date_from_str = args.get('date_from', '')
+        date_to_str = args.get('date_to', '')
+        now = timezone.now()
+        try:
+            date_from = datetime.fromisoformat(date_from_str) if date_from_str else (now - timedelta(days=30))
+        except (ValueError, TypeError):
+            date_from = now - timedelta(days=30)
+        try:
+            date_to = datetime.fromisoformat(date_to_str) if date_to_str else now
+        except (ValueError, TypeError):
+            date_to = now
+
+        action = args.get('action', 'preview')
+
+        # Build report data
+        report = _build_report_data(student, date_from=date_from, date_to=date_to)
+        report['date_from'] = date_from.isoformat() if hasattr(date_from, 'isoformat') else str(date_from)
+        report['date_to'] = date_to.isoformat() if hasattr(date_to, 'isoformat') else str(date_to)
+        report['student_name'] = student.nickname or student.username
+
+        if action == 'preview':
+            self.pending_visuals.append({
+                'type': 'student_report',
+                'payload': report,
+            })
+            return {"report": report, "action": "preview"}
+        elif action == 'export_pdf':
+            return {"report": report, "action": "export_pdf", "message": "PDF 导出功能即将上线"}
+        elif action == 'send_to_student':
+            from notifications.models import Notification
+            Notification.objects.create(
+                recipient=student,
+                title='学情报告',
+                content=f'你的学习报告已生成，包含 {report.get("stats", {}).get("total_attempted", 0)} 次答题记录。',
+                ntype='system',
+            )
+            return {"action": "send_to_student", "message": f"报告已发送给 {student.nickname or student.username}"}
+        else:
+            return {"error": f"不支持的操作: {action}"}
+
+    # ── F2: 批改助手 ────────────────────────────────────────────────
+
+    def _apply_grade_edits(self, assignment_id: int, edits: list) -> int:
+        """共享方法：批量写入评分。返回确认数量。"""
+        from quizzes.models import AssignmentSubmission
+        from django.utils import timezone
+
+        confirmed = 0
+        for edit in edits:
+            sid = int(edit.get('submission_id', 0))
+            score = float(edit.get('score', 0))
+            feedback = (edit.get('feedback') or '').strip()
+            try:
+                sub = AssignmentSubmission.objects.get(
+                    id=sid, assignment_id=assignment_id,
+                    assignment__institution=self.institution,
+                )
+                sub.score = score
+                sub.graded_by = self.user
+                sub.graded_at = timezone.now()
+                if feedback:
+                    sub.feedback = feedback
+                sub.save(update_fields=['score', 'graded_by', 'graded_at', 'feedback'])
+                confirmed += 1
+            except AssignmentSubmission.DoesNotExist:
+                pass
+        return confirmed
+
+    def _handle_bulk_grade_submissions(self, args: Dict) -> Dict:
+        """批量 AI 评分并渲染可编辑预览卡片（仅教师/机构主可用）。"""
+        from quizzes.models import AssignmentSubmission, Assignment
+        from ai_assistant.services.grading_engine import GradingEngine
+        from ai_engine.config import AI_PROVIDER
+        from django.utils import timezone
+        from users.permissions import is_institution_teacher
+
+        if not self.institution or not is_institution_teacher(self.user):
+            return {"error": "仅教师/机构主可使用此功能"}
+
+        assignment_id = int(args.get('assignment_id', 0))
+        action = args.get('action', 'preview')
+
+        try:
+            assignment = Assignment.objects.get(id=assignment_id, institution=self.institution)
+        except Assignment.DoesNotExist:
+            return {"error": f"作业 #{assignment_id} 不存在"}
+
+        if action == 'reject':
+            return {'rejected': True, 'message': '已驳回全部 AI 评分，请重新批改或手动评分'}
+
+        if action not in ('preview', 'confirm', 'reject'):
+            return {"error": f"不支持的操作: {action}"}
+
+        submissions = AssignmentSubmission.objects.filter(
+            assignment_id=assignment_id, score__isnull=True
+        ).select_related('student', 'question', 'question__knowledge_point')
+
+        if not submissions.exists():
+            return {"error": "该作业没有待批改的提交"}
+
+        if action == 'preview':
+            ai = AI_PROVIDER
+            graded = []
+            for sub in submissions:
+                try:
+                    question = sub.question
+                    result = GradingEngine.grade(
+                        ai=ai,
+                        question_text=question.text or '',
+                        user_answer=sub.answers or '',
+                        correct_answer=getattr(question, 'answer', '') or '',
+                        q_type=question.q_type or 'obj',
+                        max_score=10,
+                        user=self.user,
+                    )
+                    graded.append({
+                        'submission_id': sub.id,
+                        'student_name': sub.student.nickname or sub.student.username,
+                        'question_preview': (question.text or '')[:200],
+                        'ai_score': result.get('score', 0),
+                        'ai_feedback': result.get('feedback', ''),
+                        'q_type': question.q_type or '',
+                    })
+                except Exception:
+                    graded.append({
+                        'submission_id': sub.id,
+                        'student_name': sub.student.nickname or sub.student.username,
+                        'question_preview': (getattr(sub.question, 'text', '') or str(sub.id))[:200],
+                        'ai_score': 0,
+                        'ai_feedback': 'AI 评分失败，请手动批改',
+                        'q_type': '',
+                    })
+
+            self.pending_visuals.append({
+                'type': 'grading_preview',
+                'payload': {
+                    'assignment_id': assignment_id,
+                    'title': assignment.title or f'作业 #{assignment_id}',
+                    'submissions': graded,
+                },
+            })
+            return {
+                'assignment_id': assignment_id,
+                'title': assignment.title,
+                'graded_count': len(graded),
+                'submissions': graded,
+            }
+
+        elif action == 'confirm':
+            edits = args.get('edits', [])
+            if not edits:
+                return {"error": "请提供 edits 列表"}
+            confirmed = self._apply_grade_edits(assignment_id, edits)
+            return {'confirmed_count': confirmed, 'message': f'已确认 {confirmed} 份批改'}
+
+    def _handle_confirm_grades(self, args: Dict) -> Dict:
+        """确认 AI 评分并批量写入数据库（仅教师/机构主可用）。"""
+        from users.permissions import is_institution_teacher
+
+        if not self.institution or not is_institution_teacher(self.user):
+            return {"error": "仅教师/机构主可使用此功能"}
+        assignment_id = int(args.get('assignment_id', 0))
+        edits = args.get('edits', [])
+        if not edits:
+            return {"error": "请提供 edits 列表"}
+        confirmed = self._apply_grade_edits(assignment_id, edits)
+        return {'confirmed_count': confirmed}

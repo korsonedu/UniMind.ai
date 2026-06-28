@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useSystemStore } from '@/store/useSystemStore';
+import { useStudyRoomStore } from '@/store/useStudyRoomStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +26,7 @@ import { ChatMessageList } from '@/pages/study-room/ChatMessageList';
 import { ChatInput } from '@/pages/study-room/ChatInput';
 import { OnlineUsersPanel } from '@/pages/study-room/OnlineUsersPanel';
 import { PlanList } from '@/pages/study-room/PlanList';
+import { CoachPanel } from '@/pages/study-room/CoachPanel';
 
 interface Message {
   id: number;
@@ -51,10 +53,16 @@ export const StudyRoom: React.FC = () => {
   const { setPageHeader } = useSystemStore();
   const { t } = useTranslation('studyRoom');
 
-  // ── Timer state ──
-  const [timeLeft, setTimeLeft] = useState(25 * 60);
-  const [isActive, setIsActive] = useState(false);
-  const [activePlanId, setActivePlanId] = useState<number | null>(null);
+  // ── Timer state (from server via WS store) ──
+  const timeLeft = useStudyRoomStore(s => s.timeLeft);
+  const isActive = useStudyRoomStore(s => s.isActive);
+  const lastSummary = useStudyRoomStore(s => s.lastSummary);
+  const coachEvent = useStudyRoomStore(s => s.coachEvent);
+  const setCoachEvent = useStudyRoomStore(s => s.setCoachEvent);
+  const startSession = useStudyRoomStore(s => s.startSession);
+  const pauseSession = useStudyRoomStore(s => s.pauseSession);
+  const resumeSession = useStudyRoomStore(s => s.resumeSession);
+  const endSession = useStudyRoomStore(s => s.endSession);
   const [duration, setDuration] = useState(25);
   const [taskName, setTaskName] = useState(t('deepFocus'));
 
@@ -63,6 +71,7 @@ export const StudyRoom: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [activePlanId, setActivePlanId] = useState<number | null>(null);
 
   // ── UI state ──
   const [showStopAlert, setShowStopAlert] = useState(false);
@@ -84,14 +93,10 @@ export const StudyRoom: React.FC = () => {
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<number | null>(null);
-  const isActiveRef = useRef<boolean>(false);
-  const taskNameRef = useRef<string>('');
-  const timeLeftRef = useRef<number>(25 * 60);
 
-  // ── Sync refs ──
-  useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
+  // ── Sync duration → taskName ref for broadcast ──
+  const taskNameRef = useRef(taskName);
   useEffect(() => { taskNameRef.current = taskName; }, [taskName]);
-  useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
 
   // ── Page header ──
   useEffect(() => {
@@ -103,33 +108,37 @@ export const StudyRoom: React.FC = () => {
   const fetchMessages = async () => { try { const res = await api.get('/study/messages/'); setMessages(res.data); } catch (e) { console.error('fetchMessages failed', e); } };
   const fetchPlans = async () => { try { const res = await api.get('/users/plans/'); setPlans(res.data); } catch (e) { console.error('fetchPlans failed', e); } };
 
-  // ── Heartbeat ──
-  const getHeartbeatPayload = useCallback(() => {
-    if (isActiveRef.current) {
-      return {
-        current_task: taskNameRef.current.trim() || t('deepFocus'),
-        current_timer_end: new Date(Date.now() + Math.max(timeLeftRef.current, 0) * 1000).toISOString(),
-      };
-    }
-    return { current_task: null, current_timer_end: null };
-  }, [t]);
-
-  const sendHeartbeat = async (override?: { current_task?: string | null; current_timer_end?: string | null }) => {
-    try { await api.post('/users/heartbeat/', { ...getHeartbeatPayload(), ...(override || {}) }); } catch (e) { console.warn('heartbeat failed', e); }
-  };
-
-  // ── Initial load + polling ──
+  // ── Coach event toast ──
   useEffect(() => {
-    fetchOnline(); fetchMessages(); fetchPlans(); sendHeartbeat();
-    const sync = setInterval(() => { fetchOnline(); fetchMessages(); }, 5000);
-    const hb = setInterval(() => { sendHeartbeat(); }, 30000);
-    return () => {
-      clearInterval(sync); clearInterval(hb);
-      sendHeartbeat({ current_task: null, current_timer_end: null });
-    };
-  }, []);
+    if (!coachEvent) return;
+    if (coachEvent.event === 'timer_expired') {
+      toast.success(t('focusAchieved'));
+      if (allowBroadcast) {
+        api.post('/study/messages/', {
+          content: t('taskCompleted', { emoji: '✅', taskName: coachEvent.task_name || taskName, duration: coachEvent.duration || duration }),
+        }).then(() => fetchMessages()).catch(() => {});
+      }
+    } else if (coachEvent.event === 'idle_warning') {
+      toast.warning(t('idleWarning'), { duration: 5000 });
+    } else if (coachEvent.event === 'milestone') {
+      toast.success(t('milestoneReached', { minutes: coachEvent.total_minutes }), { duration: 4000 });
+    }
+    setCoachEvent(null);
+  }, [coachEvent]);
 
-  useEffect(() => { sendHeartbeat(); }, [isActive]);
+  // ── Last session summary ──
+  useEffect(() => {
+    if (!lastSummary) return;
+    const mins = Math.floor(lastSummary.total_focus_seconds / 60);
+    toast.success(t('sessionSummary', { taskName: lastSummary.task_name, minutes: mins }));
+  }, [lastSummary]);
+
+  // ── Initial load + polling (chat & online only, timer is WS) ──
+  useEffect(() => {
+    fetchOnline(); fetchMessages(); fetchPlans();
+    const sync = setInterval(() => { fetchOnline(); fetchMessages(); }, 5000);
+    return () => { clearInterval(sync); };
+  }, []);
 
   // ── Textarea resize ──
   useEffect(() => {
@@ -166,20 +175,15 @@ export const StudyRoom: React.FC = () => {
     }
   }, [messages, user?.username, isAtBottom]);
 
-  // ── Timer logic ──
+  // ── Timer logic (delegates to store → WS) ──
   const handleDurationChange = (val: number) => {
     const v = Math.min(120, Math.max(1, val));
     setDuration(v);
-    if (!isActive) setTimeLeft(v * 60);
   };
 
   const handleStartTask = async () => {
     if (!taskName.trim()) return toast.error(t('enterTaskName'));
-    setIsActive(true);
-    sendHeartbeat({
-      current_task: taskName.trim(),
-      current_timer_end: new Date(Date.now() + Math.max(timeLeft, 0) * 1000).toISOString(),
-    });
+    startSession(taskName.trim(), duration);
     if (allowBroadcast) {
       try {
         await api.post('/study/messages/', { content: t('taskStarted', { emoji: '💪', taskName, duration }) });
@@ -188,11 +192,10 @@ export const StudyRoom: React.FC = () => {
     }
   };
 
-  const handlePause = () => { setIsActive(false); };
+  const handlePause = () => { pauseSession(); };
 
   const handleAbort = async () => {
-    setIsActive(false);
-    sendHeartbeat({ current_task: null, current_timer_end: null });
+    endSession();
     const focusedMins = Math.floor((duration * 60 - timeLeft) / 60);
     if (allowBroadcast) {
       try {
@@ -202,62 +205,6 @@ export const StudyRoom: React.FC = () => {
     }
   };
 
-  const handleCompleteTask = async (isManual: boolean) => {
-    setIsActive(false);
-    sendHeartbeat({ current_task: null, current_timer_end: null });
-    const focusedMins = Math.floor((duration * 60 - timeLeft) / 60);
-
-    if (isManual) {
-      if (allowBroadcast) {
-        try {
-          await api.post('/study/messages/', { content: t('taskAborted', { emoji: '❌', taskName, focusedMins }) });
-          fetchMessages();
-        } catch (e) { toast.error(t('sendFailed')); }
-      }
-    } else {
-      if (activePlanId) {
-        try {
-          await api.patch(`/users/plans/${activePlanId}/`, { is_completed: true });
-          fetchPlans();
-          if (allowBroadcast) {
-            await api.post('/study/messages/', { content: t('planCompleted', { emoji: '✅', plan: taskName }), related_plan_id: activePlanId });
-            fetchMessages();
-          }
-        } catch (e) { toast.error(t('sendFailed')); }
-        setActivePlanId(null);
-      } else {
-        if (allowBroadcast) {
-          try {
-            await api.post('/study/messages/', { content: t('taskCompleted', { emoji: '✅', taskName, duration }) });
-            fetchMessages();
-          } catch (e) { toast.error(t('sendFailed')); }
-        }
-      }
-      toast.success(t('focusAchieved'));
-    }
-  };
-
-  // ── Countdown interval ──
-  const completedRef = useRef(false);
-
-  useEffect(() => {
-    if (!isActive) return;
-    completedRef.current = false;
-    const id = setInterval(() => setTimeLeft(prev => {
-      if (prev <= 1) { clearInterval(id); return 0; }
-      return prev - 1;
-    }), 1000);
-    return () => clearInterval(id);
-  }, [isActive]);
-
-  useEffect(() => {
-    if (timeLeft === 0 && isActive && !completedRef.current) {
-      completedRef.current = true;
-      handleCompleteTask(false);
-    }
-  }, [timeLeft, isActive, handleCompleteTask]);
-
-  // ── Chat actions ──
   const sendMessage = async () => {
     if (!chatInput.trim()) return;
     const content = chatInput;
@@ -468,6 +415,7 @@ export const StudyRoom: React.FC = () => {
       {/* ── Right sidebar (desktop) ── */}
       <div className="hidden md:flex w-72 flex-col gap-6 shrink-0 text-foreground">
         <OnlineUsersPanel onlineUsers={onlineUsers} currentUsername={user?.username} />
+        <CoachPanel />
         <PlanList
           plans={plans}
           allowBroadcast={allowBroadcast}

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1080px; height: 1350px;
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Helvetica Neue", sans-serif;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── 顶部 ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 56px 80px 0 80px;
+  }
+  .logo-wrap img { height: 34px; }
+  .tag {
+    font-size: 16px; font-weight: 600; letter-spacing: 0.1em;
+    color: #0071E3; background: rgba(0,113,227,0.06);
+    padding: 8px 22px; border-radius: 20px;
+  }
+
+  /* ── 中部 ── */
+  .main {
+    flex: 1; display: flex; flex-direction: column;
+    padding: 0 80px; position: relative;
+  }
+
+  /* 标题 */
+  .title-block {
+    text-align: center; margin-top: 48px; margin-bottom: 36px;
+  }
+  .title-line1 {
+    font-size: 76px; font-weight: 800; color: #1D1D1F;
+    line-height: 1.15; letter-spacing: 0.03em;
+  }
+  .title-line2 {
+    font-size: 104px; font-weight: 900; color: #0071E3;
+    line-height: 1.1; letter-spacing: 0.04em;
+    margin-top: 2px;
+  }
+  .subtitle {
+    font-size: 26px; color: #6E6E73; font-weight: 400;
+    margin-top: 20px; letter-spacing: 0.02em;
+  }
+
+  /* ── 那条线 ── */
+  .the-line-wrap {
+    width: 100%; position: relative; margin-bottom: 48px;
+  }
+  .the-line {
+    width: 100%; height: 4px;
+    background: linear-gradient(90deg, #0071E3 0%, #0071E3 50%, #94a3b8 50%, #94a3b8 100%);
+    position: relative;
+  }
+  .line-label-left {
+    position: absolute; top: -52px; left: 0;
+    font-size: 24px; font-weight: 600; color: #0071E3; letter-spacing: 0.05em;
+  }
+  .line-label-right {
+    position: absolute; top: -52px; right: 0;
+    font-size: 24px; font-weight: 600; color: #94a3b8; letter-spacing: 0.05em;
+  }
+  .line-sub-left {
+    position: absolute; top: 18px; left: 0;
+    font-size: 17px; color: #0071E3; opacity: 0.65; letter-spacing: 0.04em;
+  }
+  .line-sub-right {
+    position: absolute; top: 18px; right: 0;
+    font-size: 17px; color: #94a3b8; opacity: 0.65; letter-spacing: 0.04em;
+  }
+  .divide-dot {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px; height: 20px;
+    background: #fff; border: 4px solid #0071E3; border-radius: 50%;
+  }
+
+  /* ── 两列对比 ── */
+  .compare-row {
+    display: flex; gap: 24px; margin-bottom: 40px;
+  }
+  .compare-col {
+    flex: 1; border-radius: 16px; padding: 36px 38px;
+  }
+  .col-ai {
+    background: rgba(0,113,227,0.03); border: 1px solid rgba(0,113,227,0.10);
+  }
+  .col-human {
+    background: #f8fafc; border: 1px solid rgba(15,23,42,0.06);
+  }
+  .col-label {
+    font-size: 15px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; margin-bottom: 20px;
+  }
+  .col-ai .col-label { color: #0071E3; }
+  .col-human .col-label { color: #6E6E73; }
+  .col-item {
+    font-size: 20px; color: #1D1D1F; line-height: 2.0;
+    letter-spacing: 0.02em;
+  }
+  .col-ai .col-item::before { content: "▸ "; color: #0071E3; font-size: 14px; }
+  .col-human .col-item::before { content: "▸ "; color: #94a3b8; font-size: 14px; }
+
+  /* ── 三张原则卡 ── */
+  .principle-row {
+    display: flex; gap: 20px; margin-bottom: 48px;
+  }
+  .principle-card {
+    flex: 1; background: #ffffff;
+    border: 1px solid rgba(15,23,42,0.08); border-radius: 16px;
+    padding: 30px 28px 26px 28px; text-align: center;
+  }
+  .principle-icon {
+    font-size: 34px; margin-bottom: 14px;
+  }
+  .principle-title {
+    font-size: 21px; font-weight: 700; color: #1D1D1F;
+    margin-bottom: 10px; letter-spacing: 0.03em;
+  }
+  .principle-desc {
+    font-size: 16px; color: #6E6E73; line-height: 1.6;
+    letter-spacing: 0.02em;
+  }
+  .principle-desc em {
+    font-style: normal; color: #0071E3; font-weight: 600;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 80px 52px 80px;
+  }
+  .footer-left {
+    font-size: 16px; color: #94a3b8; letter-spacing: 0.02em;
+  }
+  .footer-right {
+    font-size: 16px; color: #94a3b8; font-weight: 500; letter-spacing: 0.03em;
+  }
+
+  /* ── 装饰网格 ── */
+  .deco-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(0,113,227,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,113,227,0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 25%, transparent 70%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 25%, transparent 70%);
+  }
+</style>
+</head>
+<body>
+
+  <div class="deco-grid"></div>
+
+  <div class="header">
+    <div class="logo-wrap">
+      <img src="../../frontend/public/Unimind_logo.png" alt="UniMind">
+    </div>
+    <span class="tag">设计哲学</span>
+  </div>
+
+  <div class="main">
+    <!-- 标题 -->
+    <div class="title-block">
+      <div class="title-line1">教育 AI 最难的不是技术</div>
+      <div class="title-line2">是画一条线</div>
+      <div class="subtitle">AI 做到哪里，教师从哪里接手</div>
+    </div>
+
+    <!-- 那条线 -->
+    <div class="the-line-wrap">
+      <div class="line-label-left">AI 执行域</div>
+      <div class="line-label-right">教师判断域</div>
+      <div class="the-line"><div class="divide-dot"></div></div>
+      <div class="line-sub-left">搜索 · 生成 · 校验 · 汇总</div>
+      <div class="line-sub-right">难度 · 选题 · 节奏 · 判断</div>
+    </div>
+
+    <!-- 两列对比 -->
+    <div class="compare-row">
+      <div class="compare-col col-ai">
+        <div class="col-label">AI 做这些</div>
+        <div class="col-item">从知识库检索相关题目</div>
+        <div class="col-item">按约束条件生成候选</div>
+        <div class="col-item">校验答案和知识点覆盖</div>
+        <div class="col-item">汇总学生答题数据</div>
+      </div>
+      <div class="compare-col col-human">
+        <div class="col-label">教师来决定</div>
+        <div class="col-item">用什么难度</div>
+        <div class="col-item">选哪些题给学生</div>
+        <div class="col-item">什么时候布置</div>
+        <div class="col-item">下一步教学怎么调整</div>
+      </div>
+    </div>
+
+    <!-- 三张原则卡 -->
+    <div class="principle-row">
+      <div class="principle-card">
+        <div class="principle-icon">🔒</div>
+        <div class="principle-title">硬约束，不是可选项</div>
+        <div class="principle-desc">所有有实际后果的操作<em>入口只有一个</em>：教师点击确认。没有全自动模式，没有跳过开关。</div>
+      </div>
+      <div class="principle-card">
+        <div class="principle-icon">🔄</div>
+        <div class="principle-title">外循环进化</div>
+        <div class="principle-desc">教师反馈是<em>唯一优化信号</em>。不同机构用同一个系统，半年后行为不一样。</div>
+      </div>
+      <div class="principle-card">
+        <div class="principle-icon">⚖️</div>
+        <div class="principle-title">判断权不交割</div>
+        <div class="principle-desc">教师对学生的责任<em>不该被代理</em>。工具更快更准，但教什么始终是人在决定。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span class="footer-left">Agent 驱动的新一代智能教育基础设施</span>
+    <span class="footer-right">unimind.ai</span>
+  </div>
+
+</body>
+</html>

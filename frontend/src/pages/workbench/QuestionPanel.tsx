@@ -16,6 +16,7 @@ interface QuestionData {
   difficulty_level: string;
   kp_name?: string;
   kp_code?: string;
+  kp_id?: number;
 }
 
 interface TaskStatus {

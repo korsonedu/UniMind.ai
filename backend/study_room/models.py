@@ -9,6 +9,27 @@ class StudyTask(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class StudySession(models.Model):
+    """自习室学习会话持久化记录，权威状态在 Redis。"""
+    STATUS_CHOICES = [
+        ('active', '进行中'),
+        ('paused', '已暂停'),
+        ('ended', '已结束'),
+    ]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active', db_index=True)
+    task_name = models.CharField(max_length=200, blank=True, default='')
+    duration_minutes = models.IntegerField(default=25)
+    started_at = models.DateTimeField(auto_now_add=True)
+    paused_at = models.DateTimeField(null=True, blank=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+    total_focus_seconds = models.IntegerField(default=0)
+    metrics = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-started_at']
+
+
 from users.models import DailyPlan
 
 class ChatMessage(models.Model):

@@ -44,11 +44,14 @@ class KnowledgePointListView(generics.ListCreateAPIView):
         return [IsAdminWriteMemberRead()]
 
     def _get_tree_cache_key(self, user):
-        """返回知识树缓存 key，按机构隔离。"""
+        """返回知识树缓存 key，按机构隔离。平台管理员可按 subject 过滤。"""
         preview_inst_id = self.request.query_params.get('preview_institution')
+        subject = self.request.query_params.get('subject')
         if preview_inst_id and is_platform_admin(user):
             return f"knowledge_tree:ids:inst:{preview_inst_id}"
         if is_platform_admin(user) and user.institution is None:
+            if subject:
+                return f"knowledge_tree:ids:global:subject:{subject}"
             return "knowledge_tree:ids:global"
         if user.institution:
             return f"knowledge_tree:ids:inst:{user.institution_id}"
@@ -59,6 +62,8 @@ class KnowledgePointListView(generics.ListCreateAPIView):
         if not user.is_authenticated:
             return KnowledgePoint.objects.none()
 
+        subject = self.request.query_params.get('subject')
+
         # 预览模式：平台管理员可查看任意机构知识树
         preview_inst_id = self.request.query_params.get('preview_institution')
         if preview_inst_id:
@@ -67,8 +72,12 @@ class KnowledgePointListView(generics.ListCreateAPIView):
             cache_key = f"knowledge_tree:ids:inst:{preview_inst_id}"
             inst_filter = {'institution_id': preview_inst_id}
         elif is_platform_admin(user) and user.institution is None:
-            cache_key = "knowledge_tree:ids:global"
-            inst_filter = {'institution__isnull': True}
+            if subject:
+                cache_key = f"knowledge_tree:ids:global:subject:{subject}"
+                inst_filter = {'institution__isnull': True, 'subject': subject}
+            else:
+                cache_key = "knowledge_tree:ids:global"
+                inst_filter = {'institution__isnull': True}
         elif user.institution:
             cache_key = f"knowledge_tree:ids:inst:{user.institution_id}"
             inst_filter = {'institution': user.institution}
@@ -391,7 +400,7 @@ def _export_node_md(node, lines, depth):
 
 
 SUBJECT_CATEGORIES = {
-    '高中学科': ['高中数学', '高中物理'],
+    '高中学科': ['高中数学', '高中物理', '高中化学', '高中生物'],
     '考研专业课': ['金融431', '法学', '计算机408', '教育学311'],
     '职业资格证': ['CPA', 'CFA', '法考', '教资', 'USMLE'],
 }
@@ -419,12 +428,19 @@ class KnowledgePointSubjectsView(APIView):
             })
 
         categories = []
+        categorized_subjects = set()
         for cat_name, subjects in SUBJECT_CATEGORIES.items():
             cat_subjects = []
             for s in subjects:
+                categorized_subjects.add(s)
                 if s in subject_map:
                     cat_subjects.append(subject_map[s])
             if cat_subjects:
                 categories.append({'name': cat_name, 'subjects': cat_subjects})
+
+        # 未分类学科归入"其他"
+        other_subjects = [v for k, v in subject_map.items() if k not in categorized_subjects]
+        if other_subjects:
+            categories.append({'name': '其他', 'subjects': other_subjects})
 
         return Response({'categories': categories})

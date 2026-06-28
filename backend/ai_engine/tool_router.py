@@ -149,6 +149,33 @@ PLANNER_TOOLS_META = [
         description="获取学生成就列表和进度",
         body="查看成就/徽章。触发词：我的成就、徽章、拿到了什么、成就进度。参数: 无。返回：已解锁成就列表、全部成就及解锁状态。适用于：学生询问成就进展时。",
     ),
+    # ── F3: 答疑 ──
+    ToolMeta(
+        name="create_faq_ticket",
+        description="创建FAQ答疑工单，升级为人工解答",
+        body="将AI无法解决的问题升级为FAQ工单。触发词：人工、找老师、帮我问问、找真人、我不满意。参数: question_text(str)=问题文本, context_summary(str)=上下文摘要, reason(str)=升级原因(unresolved_after_3_rounds/out_of_scope/student_request)。适用于：学生追问3轮仍未解决、问题超出AI范围、学生明确要求人工解答。不适用于：AI可直接解答的问题。",
+    ),
+    ToolMeta(
+        name="search_similar_questions",
+        description="搜索同知识点下的相似题目，用于答疑后推荐练习",
+        body="搜索同知识点的相似题目推荐给学生。触发词：类似题、相似题、同类题、再练几道。参数: kp_code(str)=知识点编码, limit(int)=数量(默认3)。返回：题目ID、题干摘要、题型、难度。适用于：答疑后推荐巩固练习、学生要求更多同类题。不适用于：搜索知识点（用search_knowledge_tree）。",
+    ),
+    # ── F5: 督学 ──
+    ToolMeta(
+        name="get_study_status",
+        description="获取当前学习会话状态和今日累计专注数据",
+        body="获取当前学习会话状态和今日累计数据。参数: 无。返回: 当前会话（status/task_name/elapsed/remaining）、今日累计（sessions_count/total_focus_minutes/yesterday_total_minutes/trend）。适用于：学生问'学了多久''今天学了多少''还有多长时间'、学习结束时总结数据。不适用于：查看历史趋势（用get_focus_history）。",
+    ),
+    ToolMeta(
+        name="get_focus_history",
+        description="获取近期每日专注时长汇总（默认7天）",
+        body="获取近期每日专注数据。参数: days(int)=查询天数(默认7,最多30)。返回: 每日专注分钟数、每日会话数、期间总计。适用于：学生问'这周学了多少''最近状态怎么样'、查看专注趋势。不适用于：当前会话状态（用get_study_status）。",
+    ),
+    ToolMeta(
+        name="save_session_note",
+        description="保存学生的学习心得/笔记到当前会话",
+        body="记录学生的学习心得。参数: note_text(str)=心得内容。将笔记追加到当前活跃会话的 notes 中。适用于：学生说'帮我记一下''今天学会了XX'。不适用于：查询笔记、修改已保存的笔记。",
+    ),
 ]
 
 EXAM_GENERATOR_TOOLS_META = [
@@ -256,6 +283,23 @@ EXAM_GENERATOR_TOOLS_META = [
         name="save_questions_to_bank",
         description="将生成的题目存入题库",
         body="把quick_generate生成的题目正式入库。触发词：入库、保存、存入题库、确认保留。参数: 无（自动使用最近一次quick_generate生成的题目）。返回：入库数量、题目ID列表（可用于assign_practice）。调用前应先render_visual让教师确认。不适用于：从题库抽题（用list_questions）。",
+    ),
+    # ── F2: 批改助手 ──
+    ToolMeta(
+        name="bulk_grade_submissions",
+        description="批量AI评分作业提交并渲染可编辑预览卡片",
+        body="AI批量评分作业。触发词：批改作业、AI批改、自动批改、判作业、批作业#N。参数: assignment_id(int)=作业ID, action(str)=操作(preview/confirm/reject)。preview模式：AI评分所有未批改提交，渲染 grading_preview 可编辑卡片（不写DB）。confirm模式：确认编辑后批量写入DB。reject模式：驳回全部重新评分。适用于：教师需要批量批改主观题或混合题型作业。不适用于：单个学生批改（用grade_submissions）。",
+    ),
+    ToolMeta(
+        name="confirm_grades",
+        description="确认并批量写入AI评分到数据库",
+        body="将教师在grading_preview卡片中确认的评分写入数据库。触发词：确认、写入、保存评分、确认批改。参数: assignment_id(int)=作业ID, edits(list)=评分列表[{submission_id, score, feedback}]。由Agent在教师确认后自动调用，一般不需要教师直接触发。",
+    ),
+    # ── F4: 学情报告 ──
+    ToolMeta(
+        name="generate_student_report",
+        description="按需生成学生学情报告（支持时间范围和预览/PDF/发送）",
+        body="生成学生学情报告。触发词：生成报告、学情报告、学习报告、看看XXX学得怎么样、XXX最近表现、成绩单。参数: student_name(str)或student_id(int)=目标学生, date_from(str)=开始日期, date_to(str)=结束日期, action(str)=preview/export_pdf/send_to_student。preview：渲染 student_report 可视化卡片（统计+雷达图+错题+成就）。export_pdf：导出PDF文件。send_to_student：发送报告给学生端并通知。适用于：教师查看学生学习情况、家长会准备、学期总结。不适用于：查看班级整体数据（用get_class_gradebook/get_class_weak_points）。",
     ),
 ]
 
@@ -456,6 +500,23 @@ PLANNER_INTENT_MAP = {
             "grade_student_answer", "lookup_question", "render_visual",
         ],
     },
+    # ── F3: 答疑 ──
+    "qa": {
+        "keywords": ["为什么", "怎么做", "这道题", "不会", "不懂", "求解", "证明", "推导", "帮我讲", "什么意思", "解释", "理解不了"],
+        "tools": [
+            "search_knowledge_tree", "lookup_question", "search_similar_questions",
+            "render_visual", "create_faq_ticket",
+        ],
+    },
+    # ── F5: 督学 ──
+    "coach": {
+        "keywords": ["好累", "还有多久", "今天学了多久", "专注", "计时", "帮我记",
+                     "今天学了", "学会了", "心得", "休息", "困了", "学不进去",
+                     "今天状态", "加油", "无聊", "不想学", "陪我", "聊会天", "烦",
+                     "焦虑", "学不进去", "结束", "不学了", "今天就到这", "学完了",
+                     "小结", "总结", "下了", "拜拜", "再见", "感觉", "收获", "笔记"],
+        "tools": ["get_study_status", "get_focus_history", "save_session_note", "render_visual"],
+    },
 }
 
 EXAM_GENERATOR_INTENT_MAP = {
@@ -495,10 +556,10 @@ EXAM_GENERATOR_INTENT_MAP = {
     },
     "student_lookup": {
         "keywords": ["学生", "学员", "学得怎么样", "学习情况", "成绩", "表现", "看看谁",
-                     "看一下", "查一下", "某某", "错误多", "没交"],
+                     "看一下", "查一下", "某某", "错误多", "没交", "报告", "成绩单"],
         "tools": [
             "get_student_detail", "send_notification", "get_class_weak_points",
-            "get_assignment_progress", "get_class_gradebook",
+            "get_assignment_progress", "get_class_gradebook", "generate_student_report",
         ],
     },
     "assignment": {
@@ -509,7 +570,16 @@ EXAM_GENERATOR_INTENT_MAP = {
             "get_assignment_progress", "assign_practice",
             "assign_class_course", "grade_submissions",
             "list_classes", "create_teaching_plan",
+            "bulk_grade_submissions", "confirm_grades",
             "render_visual",
+        ],
+    },
+    # ── F2: 批改 ──
+    "grading": {
+        "keywords": ["批改作业", "AI批改", "自动批改", "判作业", "批作业", "改作业",
+                     "批量评分", "批量批改"],
+        "tools": [
+            "bulk_grade_submissions", "confirm_grades", "render_visual",
         ],
     },
     "browse": {

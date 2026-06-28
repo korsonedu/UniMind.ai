@@ -4,19 +4,20 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
+import { useStudyRoomWs } from '@/hooks/useStudyRoomWs';
+import { useXiaoYuEngine } from '@/hooks/useXiaoYuEngine';
+import { FEATURES } from './store/useInstitutionStore';
 const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ default: m.MainLayout })));
 import { useAuthStore } from './store/useAuthStore';
 import { useSystemStore } from './store/useSystemStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
 import { FeatureGuard } from './components/FeatureGuard';
-import { FEATURES } from './store/useInstitutionStore';
 import { Loading } from '@/components/Loading';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
 import i18n from '@/lib/i18n';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
-const WeeklyReportDialog = lazy(() => import('./components/WeeklyReportDialog').then(m => ({ default: m.WeeklyReportDialog })));
 const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
 import { FeedbackButton } from './components/FeedbackButton';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
@@ -334,16 +335,35 @@ const router = createBrowserRouter([
   { path: "*", element: lazyPage(NotFound) },
 ]);
 
+function StudyRoomWsBridge() {
+  const user = useAuthStore(s => s.user);
+  const features = useInstitutionStore(s => s.features);
+  const isPlatformAdmin = useInstitutionStore(s => s.isPlatformAdmin);
+  const enabled = !!user && (
+    isPlatformAdmin || features.includes(FEATURES.STUDY_ROOM)
+  );
+  useStudyRoomWs(enabled);
+  return null;
+}
+
+function XiaoYuEngineBridge() {
+  const user = useAuthStore(s => s.user);
+  const enabled = !!user;
+  useXiaoYuEngine({ enabled });
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <Toaster position="top-center" richColors />
         <Suspense fallback={null}>
-          <WeeklyReportDialog />
           <NPSSurvey />
         </Suspense>
         <OnboardingOverlay />
+        <XiaoYuEngineBridge />
+        <StudyRoomWsBridge />
         <RouterProvider router={router} />
         <FeedbackButton />
       </ErrorBoundary>

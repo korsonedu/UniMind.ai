@@ -739,6 +739,18 @@ def get_planner_tools():
             impl_summary="查询 ClassCourse + Course 表，通过 student→Class→ClassCourse 关联获取该班分配的课程。未加入班级时返回提示。"),
         _make_tool("get_my_achievements", "获取学生的成就列表，包括已解锁和未解锁的成就及进度。用于回答'我的成就''我拿到了什么徽章'等问题。", GET_MY_ACHIEVEMENTS_SCHEMA,
             impl_summary="查询 UserAchievement + Achievement 表，返回已解锁成就列表和全部成就的解锁状态。"),
+        # ── F3: 答疑 ──
+        _make_tool("create_faq_ticket", "创建 FAQ 答疑工单，将学生问题升级为人工解答。学生追问3轮仍未解决、问题超出AI范围、或学生明确要求人工解答时使用。", CREATE_FAQ_TICKET_SCHEMA,
+            impl_summary="在 faq_system_question 表创建工单，记录学生原始问题、对话上下文摘要和升级原因。教师端可见。"),
+        _make_tool("search_similar_questions", "搜索相同知识点下的相似题目推荐给学生。学生问'这道题怎么做'时，解答后调用此工具推荐同类题巩固练习。", SEARCH_SIMILAR_QUESTIONS_SCHEMA,
+            impl_summary="根据知识点编码查询 question 表中同知识点的题目，返回题干摘要和 ID。用于答疑后推荐相似练习题。"),
+        # ── F5: 督学工具 ──
+        _make_tool("get_study_status", "获取当前学习会话状态和今日累计专注数据。学生问'学了多久''今天学了多少'时使用。", GET_STUDY_STATUS_SCHEMA,
+            impl_summary="从 Redis (session_manager.get_session) 获取当前会话状态（进行中/暂停/无），从 DB (StudySession 表) 查询今日完成的会话数、总专注时长，计算与昨日的对比。需要 user_id。"),
+        _make_tool("get_focus_history", "获取近期每日专注时长汇总。学生问'这周学了多少''最近状态怎么样'时使用。", GET_FOCUS_HISTORY_SCHEMA,
+            impl_summary="查询 StudySession 表 WHERE user_id=current_user AND status='ended' AND ended_at >= now-days，按天 GROUP BY 汇总 total_focus_seconds。返回每日专注分钟数和会话数。"),
+        _make_tool("save_session_note", "保存学生学习心得/笔记到当前会话。学生说'帮我记一下''今天学会了XX'时使用。", SAVE_SESSION_NOTE_SCHEMA,
+            impl_summary="更新 StudySession 表的 metrics JSON 字段，追加 note 到 notes 列表中。如无活跃会话则创建一条短暂的笔记会话记录。"),
     ]
     return assistant + planner_only
 
@@ -1020,6 +1032,14 @@ def get_exam_generator_tools():
             impl_summary="查询 TeachingPlan 的 weekly_plans JSON，提取指定周（或全部周）的 kp_ids，然后从 KnowledgePoint 表查名称。返回 teaching_plan 元信息 + 每周知识点列表。"),
         _make_tool("render_visual", "在对话中渲染可视化卡片。用于向教师展示确认操作（布置作业/发送通知等）、选项选择、数据摘要等需要视觉呈现的内容。纯文字问答不需要调用。", RENDER_VISUAL_SCHEMA,
             impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到对话流中。常用 type=action_cards 用于让教师确认操作或选择选项。"),
+        # ── F2: 批改助手 ──
+        _make_tool("bulk_grade_submissions", "批量 AI 评分作业提交并渲染可编辑预览卡片。教师说'批改作业#N'时使用，返回 grading_preview 可视化卡片让教师逐题修改后确认。", BULK_GRADE_SUBMISSIONS_SCHEMA,
+            impl_summary="查询 AssignmentSubmission 表中指定作业的所有提交，对每份提交调用 GradingEngine.grade() 进行 AI 评分，汇总为 grading_preview 可视化数据返回。不写 DB，等教师 confirm 后通过 confirm_grades 写入。"),
+        _make_tool("confirm_grades", "确认 AI 评分并批量写入数据库。教师在 grading_preview 卡片中修改分数后确认时使用。", CONFIRM_GRADES_SCHEMA,
+            impl_summary="批量更新 AssignmentSubmission 的 score/feadback/graded_by/graded_at 字段。仅处理 edits 中指定的提交。"),
+        # ── F4: 学情报告 ──
+        _make_tool("generate_student_report", "按需为指定学生生成学情报告（时间范围可选）。教师说'生成XXX的报告'或'看看XXX最近学得怎么样'时使用。", GENERATE_STUDENT_REPORT_SCHEMA,
+            impl_summary="聚合学生指定时间范围内的刷题统计、知识雷达图、错题分布、趋势线、成就列表。通过 _build_report_data(user, date_from, date_to) 获取数据，渲染为 student_report 可视化卡片。"),
     ]
 
 # ── 小宇可视化工具 Schema ──────────────────────────────────────
@@ -1029,8 +1049,8 @@ RENDER_VISUAL_SCHEMA = {
     "properties": {
         "type": {
             "type": "string",
-            "enum": ["data_card", "latex_derivation", "step_solution", "knowledge_map", "action_cards"],
-            "description": "可视化类型。data_card=数据卡片，latex_derivation=数学推导，step_solution=解题步骤，knowledge_map=知识图谱，action_cards=行动引导卡片",
+            "enum": ["data_card", "latex_derivation", "step_solution", "knowledge_map", "action_cards", "grading_preview", "student_report"],
+            "description": "可视化类型。data_card=数据卡片，latex_derivation=数学推导，step_solution=解题步骤，knowledge_map=知识图谱，action_cards=行动引导卡片，grading_preview=批改预览卡片，student_report=学情报告预览卡片",
         },
         "payload": {
             "type": "object",
@@ -1041,7 +1061,9 @@ RENDER_VISUAL_SCHEMA = {
                 "• step_solution: {title: string, steps: [{text: string, latex?: string}]}\n"
                 "• knowledge_map: {title?: string, nodes: [{id: string, label: string, mastery?: 0-1}], edges: [{from: string, to: string}], highlights?: [string]}\n"
                 "• action_cards: {title?: string, cards: [{title, description, icon(video/quiz/review/course/chart/plan/exam), action: {type, url, label}, priority?(high/normal/low)}]}\n"
-                "  其中 action.type 支持：video(跳转视频)/quiz(跳转做题)/review(跳转复习)/course(跳转课程)/chart(跳转数据)/plan(跳转计划)/exam(跳转考试)/reply(发送消息)——reply 类型用于让用户确认操作或选择选项，url 字段存用户选择后发送的消息文本。"
+                "  其中 action.type 支持：video(跳转视频)/quiz(跳转做题)/review(跳转复习)/course(跳转课程)/chart(跳转数据)/plan(跳转计划)/exam(跳转考试)/reply(发送消息)——reply 类型用于让用户确认操作或选择选项，url 字段存用户选择后发送的消息文本。\n"
+                "• grading_preview: {assignment_id: int, title: string, submissions: [{submission_id, student_name, question_preview, ai_score, ai_feedback, q_type}]} — 批改预览卡片，教师可逐条修改分数和评语\n"
+                "• student_report: {student_name: string, date_from?: string, date_to?: string, stats: object, radar: array, daily_activity: array, achievements: array, exams: array} — 学情报告预览卡片"
             ),
         },
         "priority": {
@@ -1052,3 +1074,144 @@ RENDER_VISUAL_SCHEMA = {
     },
     "required": ["type", "payload"],
 }
+
+# ── F2: 批改助手工具 Schema ──────────────────────────────────────
+
+BULK_GRADE_SUBMISSIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "assignment_id": {
+            "type": "integer",
+            "description": "作业 ID。教师说'批改作业#N'时，N 即为 assignment_id。",
+        },
+        "action": {
+            "type": "string",
+            "enum": ["preview", "confirm", "reject"],
+            "description": "操作类型。preview=AI 评分预览（不写 DB）；confirm=确认全部评分写入 DB；reject=驳回全部重新评分。默认 preview。",
+        },
+        "edits": {
+            "type": "array",
+            "description": "教师修改后的评分列表（仅 confirm 时需要）。每项: {submission_id: int, score: number, feedback?: string}。",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "submission_id": {"type": "integer"},
+                    "score": {"type": "number"},
+                    "feedback": {"type": "string"},
+                },
+                "required": ["submission_id", "score"],
+            },
+        },
+    },
+    "required": ["assignment_id"],
+}
+
+CONFIRM_GRADES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "assignment_id": {
+            "type": "integer",
+            "description": "作业 ID。",
+        },
+        "edits": {
+            "type": "array",
+            "description": "教师确认的评分列表。每项: {submission_id: int, score: number, feedback?: string}。",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "submission_id": {"type": "integer"},
+                    "score": {"type": "number"},
+                    "feedback": {"type": "string"},
+                },
+                "required": ["submission_id", "score"],
+            },
+        },
+    },
+    "required": ["assignment_id", "edits"],
+}
+
+# ── F3: 答疑 Agent 工具 Schema ──────────────────────────────────────
+
+CREATE_FAQ_TICKET_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "question_text": {
+            "type": "string",
+            "description": "学生原始问题文本。",
+        },
+        "context_summary": {
+            "type": "string",
+            "description": "对话上下文摘要：学生追问了几轮、尝试了哪些解法、卡在哪里。",
+        },
+        "reason": {
+            "type": "string",
+            "enum": ["unresolved_after_3_rounds", "out_of_scope", "student_request"],
+            "description": "升级原因。unresolved_after_3_rounds=3轮未解决，out_of_scope=超出 prompt 范围，student_request=学生要求人工。",
+        },
+    },
+    "required": ["question_text", "reason"],
+}
+
+# ── F4: 学情报告工具 Schema ──────────────────────────────────────
+
+GENERATE_STUDENT_REPORT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "student_name": {
+            "type": "string",
+            "description": "学生姓名（模糊匹配）。与 student_id 二选一。",
+        },
+        "student_id": {
+            "type": "integer",
+            "description": "学生 ID（精确匹配）。与 student_name 二选一。",
+        },
+        "date_from": {
+            "type": "string",
+            "description": "开始日期（ISO 格式，可选）。不传则默认 30 天前。",
+        },
+        "date_to": {
+            "type": "string",
+            "description": "结束日期（ISO 格式，可选）。不传则默认今天。",
+        },
+        "action": {
+            "type": "string",
+            "enum": ["preview", "export_pdf", "send_to_student"],
+            "description": "输出方式。preview=渲染预览卡片；export_pdf=导出 PDF；send_to_student=发送给学生。默认 preview。",
+        },
+    },
+    "required": ["action"],
+}
+
+# ── F5: 督学 Agent 工具 Schema ──────────────────────────────────────
+
+GET_STUDY_STATUS_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": False,
+}
+
+GET_FOCUS_HISTORY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "description": "查询天数，默认 7",
+        },
+    },
+}
+
+SAVE_SESSION_NOTE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "note_text": {
+            "type": "string",
+            "description": "学习心得/笔记内容。",
+        },
+    },
+    "required": ["note_text"],
+}
+
+
+

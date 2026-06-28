@@ -1,6 +1,6 @@
 /**
  * 平台管理 — 超管统一面板。
- * 取代 Maintenance.tsx + PlatformAnalytics.tsx，按业务线组织。
+ * 仅展示平台级全局管理功能，机构级管理在机构后台。
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,32 +8,21 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Gauge, Buildings, Package, Megaphone, ChartLine, ArrowsClockwise, Spinner,
+  Gauge, Buildings, Package, Megaphone,
+  ArrowsClockwise, Spinner, Ticket, ShieldCheck,
   Users, CurrencyCircleDollar, Crown, TrendUp,
 } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
-// ── sub-panels (from maintenance) ──
-import { AlbumSection } from './maintenance/AlbumSection';
+// ── sub-panels ──
 import { BotSection } from './maintenance/BotSection';
-import { MaterialSection } from './maintenance/MaterialSection';
-import { TagSection } from './maintenance/TagSection';
 import { NotificationSection } from './maintenance/NotificationSection';
-import { NotificationConfigSection } from './maintenance/NotificationConfigSection';
-import { ClassSection } from './maintenance/ClassSection';
-import { InstitutionInviteSection } from './maintenance/InstitutionInviteSection';
-import { PipelinePanel } from './maintenance/PipelinePanel';
 import { KnowledgeSystemPanel } from './maintenance/KnowledgeSystemPanel';
-import { BusinessDashboard } from './maintenance/BusinessDashboard';
-
-// ── analytics ──
-import { AnalyticsPanel } from './maintenance/AnalyticsPanel';
-import { InsightsPanel } from './maintenance/InsightsPanel';
-
-// ── existing pages ──
 import InstitutionAdmin from './InstitutionAdmin';
+import InviteCodeAdmin from './InviteCodeAdmin';
+import AuditLogs from './AuditLogs';
 import { PromptTemplatesAdmin } from './PromptTemplatesAdmin';
 
 // ───────────────────────────────────────
@@ -59,18 +48,22 @@ const OverviewTab: React.FC = () => {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    // analytics — essential
     try {
-      const [aRes, rRes] = await Promise.all([
-        api.get('/users/admin/analytics/dashboard/'),
-        api.get('/users/admin/revenue/'),
-      ]);
+      const aRes = await api.get('/users/admin/analytics/dashboard/');
       setAnalytics(aRes.data);
-      setRevenue(rRes.data);
     } catch {
       toast.error('加载平台数据失败');
-    } finally {
-      setLoading(false);
+      setAnalytics(null);
     }
+    // revenue — optional (may fail if payments app disabled)
+    try {
+      const rRes = await api.get('/users/admin/revenue/');
+      setRevenue(rRes.data);
+    } catch {
+      setRevenue(null);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -84,10 +77,9 @@ const OverviewTab: React.FC = () => {
   }
 
   const s = analytics?.summary || {};
-  const nps = analytics?.nps || {};
 
   const fmtNum = (n: number) => n?.toLocaleString() || '0';
-  const fmtMoney = (n: number) => `¥${n?.toLocaleString() || '0'}`;
+  const fmtMoney = (n: number) => n != null ? `¥${n.toLocaleString()}` : '---';
 
   const MetricCard = ({ icon: Icon, label, value, sub, color = 'text-foreground' }: any) => (
     <Card className="p-5 rounded-2xl border border-black/[0.04] shadow-sm bg-white space-y-1.5">
@@ -102,7 +94,8 @@ const OverviewTab: React.FC = () => {
 
   return (
     <div className="space-y-8 text-left">
-      {/* ── 运行状态 ── */}
+      {analytics && (
+      <>{/* ── 运行状态 ── */}
       <div>
         <h3 className="text-[13px] font-extrabold text-foreground mb-3 flex items-center gap-2">
           <Gauge className="h-4 w-4 text-primary" /> 运行状态
@@ -121,12 +114,11 @@ const OverviewTab: React.FC = () => {
           <CurrencyCircleDollar className="h-4 w-4 text-unimind-green" /> 商业化
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MetricCard icon={CurrencyCircleDollar} label="累计营收" value={fmtMoney(revenue?.total_revenue || 0)} color="text-unimind-green" />
-          <MetricCard icon={CurrencyCircleDollar} label="MRR" value={fmtMoney(revenue?.mrr || 0)} sub={`ARR ${fmtMoney(revenue?.arr || 0)}`} color="text-unimind-green" />
-          <MetricCard icon={Crown} label="活跃订阅" value={fmtNum(revenue?.active_subscriptions || 0)} />
-          <MetricCard icon={Users} label="付费用户" value={fmtNum(revenue?.paying_users || 0)} sub={`ARPU ¥${revenue?.arpu || 0}`} />
+          <MetricCard icon={CurrencyCircleDollar} label="累计营收" value={fmtMoney(revenue?.total_revenue ?? null as any)} color="text-unimind-green" />
+          <MetricCard icon={CurrencyCircleDollar} label="MRR" value={fmtMoney(revenue?.mrr ?? null as any)} sub={revenue ? `ARR ${fmtMoney(revenue.arr)}` : undefined} color="text-unimind-green" />
+          <MetricCard icon={Crown} label="活跃订阅" value={revenue ? fmtNum(revenue.active_subscriptions) : '---'} />
+          <MetricCard icon={Users} label="付费用户" value={revenue ? fmtNum(revenue.paying_users) : '---'} sub={revenue ? `ARPU ¥${revenue.arpu}` : undefined} />
         </div>
-        {/* Plan 分布 */}
         {revenue?.subs_by_plan && Object.keys(revenue.subs_by_plan).length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {Object.entries(revenue.subs_by_plan).map(([plan, count]) => (
@@ -138,32 +130,38 @@ const OverviewTab: React.FC = () => {
         )}
       </div>
 
-      {/* ── NPS ── */}
-      {nps.total > 0 && (
-        <div>
-          <h3 className="text-[13px] font-extrabold text-foreground mb-3 flex items-center gap-2">
-            <ChartLine className="h-4 w-4 text-amber-500" /> NPS 评分
-          </h3>
-          <div className="flex items-center gap-3">
-            <span className={cn(
-              'text-[32px] font-black tabular-nums',
-              nps.score >= 50 ? 'text-unimind-green' : nps.score >= 0 ? 'text-amber-500' : 'text-red-500',
-            )}>{nps.score}</span>
-            <div className="text-[11px] text-muted-foreground">
-              <div>共 {nps.total} 份评分</div>
-              <div>推荐 {nps.distribution?.promoters || 0} · 被动 {nps.distribution?.passives || 0} · 贬损 {nps.distribution?.detractors || 0}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Refresh */}
       <Button variant="ghost" size="sm" onClick={fetchAll} className="gap-1.5 text-muted-foreground">
         <ArrowsClockwise className="h-3.5 w-3.5" /> 刷新
       </Button>
+      </>
+    )}
     </div>
   );
 };
+
+// ───────────────────────────────────────
+// Content Tab — 仅平台级全局内容
+// ───────────────────────────────────────
+
+const ContentTab: React.FC = () => (
+  <Tabs defaultValue="prompts" className="space-y-6">
+    <TabsList className="bg-white/70 backdrop-blur-xl backdrop-saturate-150 p-1 rounded-2xl border border-white/20 shadow-sm h-auto flex flex-wrap gap-0.5 w-fit">
+      <TabsTrigger value="prompts" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
+        Prompt 模板
+      </TabsTrigger>
+      <TabsTrigger value="bots" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
+        AI Bot
+      </TabsTrigger>
+      <TabsTrigger value="knowledge" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
+        知识体系
+      </TabsTrigger>
+    </TabsList>
+    <TabsContent value="prompts"><PromptTemplatesAdmin /></TabsContent>
+    <TabsContent value="bots"><BotSection /></TabsContent>
+    <TabsContent value="knowledge"><KnowledgeSystemPanel /></TabsContent>
+  </Tabs>
+);
 
 // ───────────────────────────────────────
 // Main Page
@@ -187,9 +185,6 @@ export const PlatformAdmin: React.FC = () => {
             <TabsTrigger value="ops" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
               <Megaphone className="w-3.5 h-3.5" />运营
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="rounded-xl px-4 py-2 text-xs font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white data-[state=active]:shadow-[0_1px_3px_rgba(0,113,227,0.35)] text-[#6E6E73] hover:text-[#1D1D1F] transition-[color,background-color,box-shadow] duration-200 gap-2">
-              <ChartLine className="w-3.5 h-3.5" />数据
-            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -199,66 +194,26 @@ export const PlatformAdmin: React.FC = () => {
           <ContentTab />
         </TabsContent>
         <TabsContent value="ops">
-          <OpsTab />
-        </TabsContent>
-        <TabsContent value="analytics">
-          <AnalyticsTab />
+          <Tabs defaultValue="notifications" className="space-y-6">
+            <TabsList className="bg-white/70 backdrop-blur-xl backdrop-saturate-150 p-1 rounded-2xl border border-white/20 shadow-sm h-auto flex flex-wrap gap-0.5 w-fit">
+              <TabsTrigger value="notifications" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
+                <Megaphone className="w-3 h-3 mr-1.5" />站内广播
+              </TabsTrigger>
+              <TabsTrigger value="invites" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
+                <Ticket className="w-3 h-3 mr-1.5" />邀请码管理
+              </TabsTrigger>
+              <TabsTrigger value="audit" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
+                <ShieldCheck className="w-3 h-3 mr-1.5" />审计日志
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="notifications"><NotificationSection /></TabsContent>
+            <TabsContent value="invites"><InviteCodeAdmin /></TabsContent>
+            <TabsContent value="audit"><AuditLogs /></TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
     </div>
   );
 };
-
-// ── Sub-tab: 内容配置 ──
-const ContentTab: React.FC = () => (
-  <Tabs defaultValue="albums" className="space-y-6">
-    <TabsList className="bg-white/70 backdrop-blur-xl backdrop-saturate-150 p-1 rounded-2xl border border-white/20 shadow-sm h-auto flex flex-wrap gap-0.5 w-fit">
-      <TabsTrigger value="albums" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">专辑</TabsTrigger>
-      <TabsTrigger value="tags" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">标签</TabsTrigger>
-      <TabsTrigger value="materials" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">启动物料</TabsTrigger>
-      <TabsTrigger value="bots" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">AI Bot</TabsTrigger>
-      <TabsTrigger value="prompts" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">Prompt 模板</TabsTrigger>
-      <TabsTrigger value="pipeline" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">AI 管线</TabsTrigger>
-      <TabsTrigger value="knowledge" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">知识体系</TabsTrigger>
-    </TabsList>
-    <TabsContent value="albums"><AlbumSection /></TabsContent>
-    <TabsContent value="tags"><TagSection /></TabsContent>
-    <TabsContent value="materials"><MaterialSection /></TabsContent>
-    <TabsContent value="bots"><BotSection /></TabsContent>
-    <TabsContent value="prompts"><PromptTemplatesAdmin /></TabsContent>
-    <TabsContent value="pipeline"><PipelinePanel /></TabsContent>
-    <TabsContent value="knowledge"><KnowledgeSystemPanel /></TabsContent>
-  </Tabs>
-);
-
-// ── Sub-tab: 运营 ──
-const OpsTab: React.FC = () => (
-  <Tabs defaultValue="notifications" className="space-y-6">
-    <TabsList className="bg-white/70 backdrop-blur-xl backdrop-saturate-150 p-1 rounded-2xl border border-white/20 shadow-sm h-auto flex flex-wrap gap-0.5 w-fit">
-      <TabsTrigger value="notifications" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">站内广播</TabsTrigger>
-      <TabsTrigger value="invites" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">邀请链接</TabsTrigger>
-      <TabsTrigger value="reminders" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">复习提醒</TabsTrigger>
-      <TabsTrigger value="classes" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">班级管理</TabsTrigger>
-      <TabsTrigger value="business" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">机构商业</TabsTrigger>
-    </TabsList>
-    <TabsContent value="notifications"><NotificationSection /></TabsContent>
-    <TabsContent value="invites"><InstitutionInviteSection /></TabsContent>
-    <TabsContent value="reminders"><NotificationConfigSection /></TabsContent>
-    <TabsContent value="classes"><ClassSection /></TabsContent>
-    <TabsContent value="business"><BusinessDashboard /></TabsContent>
-  </Tabs>
-);
-
-// ── Sub-tab: 数据 ──
-const AnalyticsTab: React.FC = () => (
-  <Tabs defaultValue="dashboard" className="space-y-6">
-    <TabsList className="bg-white/70 backdrop-blur-xl backdrop-saturate-150 p-1 rounded-2xl border border-white/20 shadow-sm h-auto flex flex-wrap gap-0.5 w-fit">
-      <TabsTrigger value="dashboard" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">趋势图表</TabsTrigger>
-      <TabsTrigger value="insights" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">BI 洞察</TabsTrigger>
-    </TabsList>
-    <TabsContent value="dashboard"><AnalyticsPanel /></TabsContent>
-    <TabsContent value="insights"><InsightsPanel /></TabsContent>
-  </Tabs>
-);
 
 export default PlatformAdmin;

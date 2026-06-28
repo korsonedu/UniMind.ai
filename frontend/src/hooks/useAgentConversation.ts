@@ -59,6 +59,8 @@ interface UseAgentConversationOptions {
   onAllVisuals?: (visuals: unknown[]) => void;
   /** Success message for handleReset */
   resetMessage?: string;
+  /** External conversation ID — when provided, the hook uses this instead of generating one */
+  initialConversationId?: string;
 }
 
 // ── Hook ──
@@ -93,7 +95,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const [taskList, setTaskList] = useState<TaskListData | null>(null);
   const [chatWidth, setChatWidth] = useState(() => Math.min(Math.round(window.innerWidth * 0.36), 420));
   const [dragging, setDragging] = useState(false);
-  const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
+  const [conversationId, setConversationId] = useState<string>(
+    () => options.initialConversationId || crypto.randomUUID(),
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
