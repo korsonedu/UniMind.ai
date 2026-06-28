@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, Lightning, Hourglass, Database, ClipboardText, Spinner } from '@phosphor-icons/react';
+import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, Lightning, Hourglass, Database, ClipboardText, Spinner, ClockCounterClockwise, ChatCircle } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import AgentChatLayout from '@/components/AgentChatLayout';
@@ -243,6 +243,13 @@ export default function Workbench() {
   const [pipelineTaskId, setPipelineTaskId] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('overview');
   const [hasConversation, setHasConversation] = useState<boolean | null>(null);
+  const [sessionData, setSessionData] = useState<{
+    sessions: ConversationSession[];
+    activeSessionId: number | null;
+    loadSession: (s: ConversationSession) => void;
+    deleteSession: (s: ConversationSession) => void;
+    newConversation: () => void;
+  } | null>(null);
 
   const doSendRef = useRef<((text: string) => void) | null>(null);
 

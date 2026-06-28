@@ -98,6 +98,7 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
     if (!pipelineTaskId) {
       setTaskStatus(null);
       completedHandledRef.current = false;
+      doPollRef.current = undefined;
       return;
     }
 
@@ -259,18 +260,20 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
               )}
             </div>
             <div className="flex items-center gap-1.5">
-              {selected.size > 0 && (
+              {(() => {
+                const hasNonArcSelected = selected.size > 0 && Array.from(selected).some(i => displayQuestions[i]?.q.source !== 'arc_refine');
+                return hasNonArcSelected && (
                 <Button
                   size="sm"
                   variant="outline"
                   className="text-xs h-7 gap-1"
                   onClick={handleArcRefine}
-                  disabled={saving}
+                  disabled={saving || pipelineTaskId != null}
                 >
                   <MagicWand className="h-3 w-3" />
                   ARC 精修
                 </Button>
-              )}
+              )})()}
               <Button
                 size="sm"
                 className="text-xs h-7 gap-1"
@@ -360,10 +363,17 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
 
       {/* 管线运行中但尚无题目 */}
       {displayQuestions.length === 0 && pipelineTaskId && taskStatus && (
-        <div className="flex-1 flex items-center justify-center text-unimind-text-quaternary">
-          <div className="text-center">
-            <Spinner className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-            <p className="text-sm">ARC 管线运行中，题目即将生成...</p>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center px-6">
+            <Spinner className="h-8 w-8 animate-spin text-primary mx-auto mb-3" />
+            <p className="text-sm font-bold text-foreground">
+              {taskStatus.status_text || 'ARC 管线运行中...'}
+            </p>
+            {taskStatus.progress != null && (
+              <p className="text-xs text-unimind-text-tertiary mt-1">
+                进度 {taskStatus.progress}% · {taskStatus.title || `任务 #${taskStatus.id}`}
+              </p>
+            )}
           </div>
         </div>
       )}

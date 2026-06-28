@@ -115,11 +115,15 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
     _update_task(task, 30, f"Author 生成了 {len(drafts)} 道候选题目", stage_log, "author_done")
 
     # ── Stage 2: Reviewer 评分 + 迭代 ──
-    _update_task(task, 40, "Reviewer 正在评审...", stage_log, "review_start")
+    _update_task(task, 40, f"Reviewer 准备评审 {len(drafts)} 道候选题目...", stage_log, "review_start")
     reviewed = []
     iteration_stats = {i: 0 for i in range(1, MAX_ITERATIONS + 1)}
 
     for i, draft in enumerate(drafts):
+        kp_label = draft.get("kp_name") or draft.get("kp_code", "?")
+        _update_task(task, 40 + int(25 * i / max(len(drafts), 1)),
+                     f"Reviewer 评审第 {i+1}/{len(drafts)} 题「{kp_label}」...",
+                     stage_log, "review_start")
         try:
             for iteration in range(1, MAX_ITERATIONS + 1):
                 review_result = _reviewer_evaluate(draft, institution=institution)
@@ -140,6 +144,9 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
                     iteration_stats[iteration] = iteration_stats.get(iteration, 0) + 1
                     break
                 elif iteration < MAX_ITERATIONS:
+                    _update_task(task, 40 + int(25 * i / max(len(drafts), 1)),
+                                 f"Author 修改第 {i+1}/{len(drafts)} 题「{kp_label}」（第 {iteration + 1} 轮）...",
+                                 stage_log, "review_start")
                     prev_question = draft.get("question", "")[:120]
                     prev_answer = draft.get("answer", "")[:120]
                     draft = _author_revise(draft, review_result["feedback"])
@@ -170,10 +177,14 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
 
     # ── Stage 3: Classifier 三层审计 ──
     subject_kps = _get_subject_knowledge_points(kps, institution=institution)
-    _update_task(task, 75, f"Classifier 正在逐题审计（知识标签候选: {len(subject_kps)} 个）...", stage_log, "classify_start")
+    _update_task(task, 75, f"Classifier 准备审计 {len(reviewed)} 道题目...", stage_log, "classify_start")
     difficulty_mismatches = 0
     answer_errors = 0
     for idx, q in enumerate(reviewed):
+        kp_label = q.get("kp_name") or q.get("kp_code", "?")
+        _update_task(task, 75 + int(10 * idx / max(len(reviewed), 1)),
+                     f"Classifier 审计第 {idx+1}/{len(reviewed)} 题「{kp_label}」...",
+                     stage_log, "classify_start")
         classification = _classifier_tag(q, subject_kps, target_difficulty=difficulty)
         q["detected_difficulty"] = classification.get("detected_difficulty", difficulty)
         q["difficulty_match"] = classification.get("difficulty_match", True)
@@ -295,11 +306,13 @@ def _classifier_batch_report(questions: List[Dict], kps: List[KnowledgePoint], d
 
 def _update_task(task, progress, status_text, stage_log, stage_name):
     task.progress = progress
-    payload = task.payload or {}
-    payload["stages"] = stage_log
-    payload["current_stage"] = stage_name
-    payload["status_text"] = status_text
-    task.payload = payload
+    # 创建新 dict 确保 Django JSONField 变更检测生效
+    task.payload = {
+        **(task.payload or {}),
+        "stages": stage_log,
+        "current_stage": stage_name,
+        "status_text": status_text,
+    }
     task.save(update_fields=["progress", "payload", "updated_at"])
 
 
