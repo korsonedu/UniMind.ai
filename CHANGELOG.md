@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.2 — 页面 UI 一致性 (2026-06-28)
+
+### Changed
+- **统一入场动画方向**：所有页面卡片/编辑区动画统一为 `slide-in-from-bottom`（自下而上），消除 `zoom-in`（中心扩张）和 `slide-in-from-top`（自上而下）的方向混乱
+- **统一页面边距**：Achievements / StudyPlan / ReportCard 去除多余 `px-4`，与 CourseCenter / Gradebook 对齐
+- **消除双重动画**：PageWrapper 已提供入场动画，MyAssignments / QASystem 内层不再叠加
+- **Loading 状态一致性**：TeacherAssignments / Gradebook loading 包裹 PageWrapper，与其他页面一致
+
 ## v1.2.1 — ARC 精修管线修复 (2026-06-28)
 
 ### Fixed
