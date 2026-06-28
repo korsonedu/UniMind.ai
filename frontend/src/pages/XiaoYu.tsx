@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import type { Bot, ConversationSession } from '@/hooks/useAgentConversation';
+import { useXiaoYuStore } from '@/store/useXiaoYuStore';
 
 const SKILL_ICONS = [Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle];
 
@@ -43,6 +44,7 @@ interface DashData {
 export const XiaoYu: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation('xiaoyu');
+  const sharedConversationId = useXiaoYuStore(s => s.conversationId);
   const [dash, setDash] = useState<DashData | null>(null);
   const [hasConversation, setHasConversation] = useState(false);
 
@@ -319,6 +321,7 @@ export const XiaoYu: React.FC = () => {
   return (
     <AgentChatLayout
       layout="inline"
+      inputTourClass="xiaoyu-input"
       findBot={(bots) => bots.find((b: Bot) => b.name === '小宇')}
       skills={SKILLS}
       typewriterWords={t('typewriterWords', { returnObjects: true }) as string[]}
@@ -335,6 +338,7 @@ export const XiaoYu: React.FC = () => {
       onStepDone={(step, prev) => prev.map(m =>
         m.toolStep?.call_id === step.call_id ? { ...m, toolStep: step } : m
       )}
+      initialConversationId={sharedConversationId}
     />
   );
 };

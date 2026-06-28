@@ -254,149 +254,6 @@ class BIAnalyticsView(APIView):
             }
         })
 
-class WeeklyCognitiveReportView(APIView):
-    permission_classes = [IsMember]
-
-    def get(self, request):
-        user = request.user
-        now = timezone.now()
-        
-        # 计算上周的起止时间 (周一 00:00:00 到 周日 23:59:59)
-        # weekday(): 0 是周一, 6 是周日
-        current_weekday = now.weekday()
-        # 本周一的凌晨
-        start_of_this_week = (now - datetime.timedelta(days=current_weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
-        # 上周一的凌晨
-        start_of_last_week = start_of_this_week - datetime.timedelta(days=7)
-        # 上周日的深夜
-        end_of_last_week = start_of_this_week - datetime.timedelta(seconds=1)
-
-        # 1. 认知资产转化 (基于上周数据)
-        # 统计上周复习过且稳定性提升到长期的题目 (稳定性 > 21天视为初步进入永久资产)
-        last_week_qs = UserQuestionStatus.objects.filter(user=user, last_review__range=(start_of_last_week, end_of_last_week))
-        total_attempted = last_week_qs.count()
-        permanent_assets = last_week_qs.filter(stability__gte=21).count()
-        conversion_rate = round(permanent_assets / total_attempted * 100, 1) if total_attempted > 0 else 0
-
-        # 2. ELO 战胜率（仅同机构用户排名）
-        inst = getattr(user, 'institution', None)
-        if inst:
-            all_active_users = User.objects.filter(is_active=True, institution=inst).order_by('elo_score')
-        else:
-            all_active_users = User.objects.filter(is_active=True, institution__isnull=True).order_by('elo_score')
-        total_active = all_active_users.count()
-        below_me = all_active_users.filter(elo_score__lt=user.elo_score).count()
-        percentile = round(below_me / total_active * 100, 1) if total_active > 0 else 0
-
-        # 3. 核心统计
-        week_reviews = last_week_qs.aggregate(total_reps=Sum('reps'))['total_reps'] or 0
-        
-        # 4. 行为指标（用于周趋势图）
-        last_week_attempts = QuizAttempt.objects.filter(
-            user=user,
-            created_at__range=(start_of_last_week, end_of_last_week)
-        )
-        attempts_by_day = (
-            last_week_attempts
-            .annotate(day=TruncDate('created_at'))
-            .values('day')
-            .annotate(avg_score=Avg('score'), question_count=Count('id'))
-        )
-        attempts_day_map = {}
-        for row in attempts_by_day:
-            day = row.get('day')
-            if not day:
-                continue
-            key = day.isoformat()
-            attempts_day_map[key] = {
-                'accuracy': round((row.get('avg_score') or 0) * 100, 1),
-                'question_count': int(row.get('question_count') or 0),
-            }
-
-        focus_messages = ChatMessage.objects.filter(
-            user=user,
-            timestamp__range=(start_of_last_week, end_of_last_week)
-        ).values('timestamp', 'content')
-        focus_pattern = re.compile(r'专注\s*(\d+)\s*分钟')
-        focus_day_map = {}
-        for msg in focus_messages:
-            ts = msg.get('timestamp')
-            if not ts:
-                continue
-            local_day = timezone.localtime(ts).date().isoformat()
-            text = str(msg.get('content') or '')
-            parsed = sum(int(v) for v in focus_pattern.findall(text))
-            if parsed <= 0:
-                continue
-            focus_day_map[local_day] = focus_day_map.get(local_day, 0) + parsed
-
-        lesson_by_day = (
-            VideoProgress.objects.filter(
-            user=user,
-            updated_at__range=(start_of_last_week, end_of_last_week)
-            )
-            .annotate(day=TruncDate('updated_at'))
-            .values('day')
-            .annotate(total_seconds=Sum('last_position'))
-        )
-        lesson_day_map = {}
-        for row in lesson_by_day:
-            day = row.get('day')
-            if not day:
-                continue
-            key = day.isoformat()
-            lesson_day_map[key] = round(float(row.get('total_seconds') or 0) / 60, 1)
-
-        daily_series = []
-        total_questions = 0
-        weighted_accuracy_sum = 0.0
-        total_focus_minutes = 0
-        total_lesson_minutes = 0.0
-
-        for offset in range(7):
-            day_date = (start_of_last_week + datetime.timedelta(days=offset)).date()
-            day_key = day_date.isoformat()
-            attempt_info = attempts_day_map.get(day_key, {})
-            question_count = int(attempt_info.get('question_count', 0))
-            accuracy = float(attempt_info.get('accuracy', 0))
-            focus_minutes = int(focus_day_map.get(day_key, 0))
-            lesson_minutes = float(lesson_day_map.get(day_key, 0))
-
-            total_questions += question_count
-            weighted_accuracy_sum += (accuracy / 100.0) * question_count
-            total_focus_minutes += focus_minutes
-            total_lesson_minutes += lesson_minutes
-
-            daily_series.append({
-                'date': day_key,
-                'label': day_date.strftime('%m-%d'),
-                'weekday': day_date.strftime('%a'),
-                'accuracy': round(accuracy, 1),
-                'question_count': question_count,
-                'focus_minutes': focus_minutes,
-                'lesson_minutes': round(lesson_minutes, 1),
-            })
-
-        weekly_question_count = total_questions
-        weekly_accuracy = round((weighted_accuracy_sum / total_questions) * 100, 1) if total_questions > 0 else 0
-        weekly_focus_minutes = total_focus_minutes
-        weekly_lesson_minutes = round(total_lesson_minutes, 1)
-        
-        return Response({
-            'user_nickname': user.nickname or user.username,
-            'conversion_rate': conversion_rate,
-            'permanent_count': permanent_assets,
-            'elo_percentile': percentile,
-            'week_reviews': week_reviews,
-            'current_elo': user.elo_score,
-            'report_date': f"{start_of_last_week.strftime('%Y.%m.%d')} - {end_of_last_week.strftime('%m.%d')}",
-            'week_label': f"{start_of_last_week.isocalendar()[0]}-W{start_of_last_week.isocalendar()[1]}",
-            'weekly_accuracy': weekly_accuracy,
-            'weekly_question_count': weekly_question_count,
-            'weekly_focus_minutes': weekly_focus_minutes,
-            'weekly_lesson_minutes': weekly_lesson_minutes,
-            'daily_series': daily_series,
-        })
 
 class OnlineUserListView(generics.ListAPIView):
     serializer_class = UserSerializer
@@ -703,6 +560,34 @@ class UserDetailView(generics.RetrieveAPIView):
 
         return user
 
+class TourDismissView(generics.UpdateAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+    def patch(self, request, *args, **kwargs):
+        user = self.get_object()
+        if user.tour_dismissed_at is None:
+            user.tour_dismissed_at = timezone.now()
+            user.save(update_fields=['tour_dismissed_at'])
+        return Response({'tour_dismissed_at': user.tour_dismissed_at})
+
+class TourPanelDismissView(generics.UpdateAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+    def patch(self, request, *args, **kwargs):
+        user = self.get_object()
+        if user.tour_panel_dismissed_at is None:
+            user.tour_panel_dismissed_at = timezone.now()
+            user.save(update_fields=['tour_panel_dismissed_at'])
+        return Response({'tour_panel_dismissed_at': user.tour_panel_dismissed_at})
+
 class UpdateEmailView(generics.UpdateAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -946,13 +831,33 @@ class AnalyticsDashboardView(APIView):
 
         # ── 汇总 ──
         today = stats[0] if stats else None
-        summary = {
-            'total_users': today.total_users if today else 0,
-            'total_institutions': today.total_institutions if today else 0,
-            'dau': today.dau if today else 0,
-            'mau': today.mau if today else 0,
-            'day7_retention': round(today.day7_retention, 4) if today else 0,
-        }
+        # 当 DailyPlatformStats 为空时，用实时查询兜底
+        if today is None:
+            from .models import User as UserModel
+            from users.models import Institution
+            total_users = UserModel.objects.filter(is_active=True).count()
+            total_institutions = Institution.objects.count()
+            # 近24h 活跃用户作为 DAU 近似
+            day_ago = timezone.now() - datetime.timedelta(days=1)
+            dau = UserModel.objects.filter(last_login__gte=day_ago).count()
+            # 近30天 活跃用户作为 MAU 近似
+            month_ago = timezone.now() - datetime.timedelta(days=30)
+            mau = UserModel.objects.filter(last_login__gte=month_ago).count()
+            summary = {
+                'total_users': total_users,
+                'total_institutions': total_institutions,
+                'dau': dau,
+                'mau': mau,
+                'day7_retention': 0,
+            }
+        else:
+            summary = {
+                'total_users': today.total_users,
+                'total_institutions': today.total_institutions,
+                'dau': today.dau,
+                'mau': today.mau,
+                'day7_retention': round(today.day7_retention or 0, 4),
+            }
 
         # ── 趋势 ──
         trends = [{
@@ -961,10 +866,10 @@ class AnalyticsDashboardView(APIView):
             'new_users': s.new_users,
             'new_institutions': s.new_institutions,
             'quiz_attempts': s.quiz_attempts,
-            'quiz_correct_rate': round(s.quiz_correct_rate, 4),
+            'quiz_correct_rate': round(s.quiz_correct_rate or 0, 4),
             'ai_chat_sessions': s.ai_chat_sessions,
             'course_views': s.course_views,
-            'day1_retention': round(s.day1_retention, 4),
+            'day1_retention': round(s.day1_retention or 0, 4),
         } for s in reversed(stats)]
 
         # ── 功能使用分布（近 N 天事件计数）──
@@ -978,20 +883,20 @@ class AnalyticsDashboardView(APIView):
         )
         feature_breakdown = {e['event_type']: e['count'] for e in event_counts}
 
-        # ── 机构 Top 10（按学生数）── 单次 annotate 替换 N+1 count
+        # ── 机构 Top 10（按学生数）──
         from users.models import Institution
         from django.db.models import Q
         top_insts = (
             Institution.objects
             .annotate(
-                student_count=Count('students', filter=Q(students__institution_role='student')),
+                student_cnt=Count('students', filter=Q(students__institution_role='student')),
             )
-            .order_by('-student_count')[:10]
+            .order_by('-student_cnt')[:10]
         )
         institution_top = [{
             'id': inst.id,
             'name': inst.name,
-            'student_count': inst.student_count,
+            'student_count': inst.student_cnt,
             'created_at': str(inst.created_at.date()),
         } for inst in top_insts]
 
@@ -1150,9 +1055,20 @@ class PlatformRevenueView(APIView):
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def get(self, request):
-        from payments.models import Order, Subscription
         from users.models import Institution
-        from django.db.models import Sum, Count, Case, When, Q, Value
+        from django.db.models import Count
+
+        try:
+            from payments.models import Order, Subscription
+        except ImportError:
+            # payments app 未启用时返回零值
+            return Response({
+                'total_revenue': 0, 'revenue_this_month': 0,
+                'paying_users': 0, 'arpu': 0, 'mrr': 0, 'arr': 0,
+                'active_subscriptions': 0, 'subs_by_plan': {}, 'inst_by_plan': {},
+            })
+
+        from django.db.models import Sum, Case, When, Value
 
         now = timezone.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -1775,15 +1691,34 @@ class PushSubscribeView(APIView):
 
 # ── 成绩报告卡 ──────────────────────────────────────────────
 
-def _build_report_data(user):
-    """聚合学生报告卡全部数据。供 self-report 和 teacher-view 复用。"""
+def _build_report_data(user, date_from=None, date_to=None):
+    """聚合学生报告卡全部数据。供 self-report 和 teacher-view 复用。
+
+    date_from / date_to: 可选日期范围过滤（用于教师查看指定时间段学生报告）。
+    """
     from django.db.models import Sum, Count, Avg, Q
     from quizzes.models import UserKnowledgeState, UserQuestionStatus, ReviewLog, QuizExam, KnowledgePoint
     from .models import DailyCheckIn, UserAchievement
 
     now = timezone.now()
-    total_attempted = UserQuestionStatus.objects.filter(user=user).aggregate(Sum('reps'))['reps__sum'] or 0
+    # 确保 aware datetime（兼容 naive 输入）
+    if date_from and timezone.is_naive(date_from):
+        date_from = timezone.make_aware(date_from)
+    if date_to and timezone.is_naive(date_to):
+        date_to = timezone.make_aware(date_to)
+
+    date_filter = {}
+    if date_from and date_to:
+        date_filter = {'last_review__range': (date_from, date_to)}
+
     total_qs = UserQuestionStatus.objects.filter(user=user)
+    review_logs_qs = ReviewLog.objects.filter(user=user)
+
+    if date_filter:
+        total_qs = total_qs.filter(**date_filter)
+        review_logs_qs = review_logs_qs.filter(review_time__range=(date_from, date_to))
+
+    total_attempted = total_qs.aggregate(Sum('reps'))['reps__sum'] or 0
     correct_count = total_qs.filter(last_correct=True).count()
     wrong_count = total_qs.filter(wrong_count__gt=0).count()
     mastered_count = total_qs.filter(is_mastered=True).count()
@@ -1806,20 +1741,24 @@ def _build_report_data(user):
         for m in mastery_qs
     ]
 
-    # 近 7 天每日活动
+    # 近 7 天每日活动（有日期范围时基于 range 终点往前推 7 天）
     daily = []
+    if date_to:
+        anchor = date_to if isinstance(date_to, datetime.datetime) else now
+    else:
+        anchor = now
     for i in range(6, -1, -1):
-        d = now.date() - datetime.timedelta(days=i)
-        cnt = ReviewLog.objects.filter(user=user, review_time__date=d).count()
+        d = (anchor.date() if isinstance(anchor, datetime.datetime) else anchor) - datetime.timedelta(days=i)
+        cnt = review_logs_qs.filter(review_time__date=d).count()
         daily.append({'date': d.isoformat(), 'count': cnt})
 
-    # 连续学习天数
-    review_days = (
-        ReviewLog.objects.filter(user=user, review_time__gte=now - datetime.timedelta(days=30))
-        .values_list('review_time__date', flat=True).distinct()
-    )
+    # 连续学习天数（基于 review_logs_qs）
+    review_days = review_logs_qs.values_list('review_time__date', flat=True).distinct()
     study_streak = 0
-    check_date = now.date()
+    if date_to:
+        check_date = date_to.date() if isinstance(date_to, datetime.datetime) else (date_to if isinstance(date_to, datetime.date) else now.date())
+    else:
+        check_date = now.date()
     for d in sorted(set(review_days), reverse=True):
         if d == check_date:
             study_streak += 1
@@ -1832,7 +1771,10 @@ def _build_report_data(user):
     checkin_streak = today_checkin.streak if today_checkin else 0
 
     # 最近 10 次考试
-    exams = QuizExam.objects.filter(user=user).order_by('-created_at')[:10]
+    exams_qs = QuizExam.objects.filter(user=user)
+    if date_filter:
+        exams_qs = exams_qs.filter(**date_filter)
+    exams = exams_qs.order_by('-created_at')[:10]
     exam_list = [
         {
             'id': e.id, 'total_score': e.total_score, 'max_score': e.max_score,

@@ -106,6 +106,12 @@ export interface AgentChatLayoutProps {
 
   /** Landing 页面标题下方额外内容（如数据卡片） */
   landingBanner?: React.ReactNode;
+
+  /** Guided tour: CSS class for the input container */
+  inputTourClass?: string;
+
+  /** External conversation ID — when provided, shared across pages */
+  initialConversationId?: string;
 }
 
 // ── Component ──
@@ -125,6 +131,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     layout = 'split',
     onHasConversation,
     landingBanner,
+    inputTourClass,
+    initialConversationId,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -145,6 +153,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     getExtraPayload,
     onDone: () => onDone?.(handleRefreshSessions),
     onStepDone,
+    initialConversationId,
     onStepDoneEffect: extractVisualFromStep ? (step) => {
       const v = extractVisualFromStep(step);
       if (v) pendingVisualsRef.current.push(v);
@@ -339,7 +348,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <p className="text-xs text-foreground/60">{landingDescription}</p>
               </div>
 
-              <div className="bg-card rounded-2xl border border-border/50 shadow-lg overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+              <div data-tour={inputTourClass} className="bg-card rounded-2xl border border-border/50 shadow-lg overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
                 <textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
@@ -547,7 +556,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           {/* Input */}
           <div className="shrink-0 px-4 pb-4 pt-2">
             <div className="max-w-3xl mx-auto">
-              <div className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+              <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                 <textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}

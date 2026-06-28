@@ -49,6 +49,8 @@ class User(AbstractUser):
     dashboard_config = models.JSONField(default=dict, blank=True, verbose_name="小宇 Dashboard 配置")
     agreed_to_terms = models.BooleanField(default=False, verbose_name="已同意用户协议")
     agreed_to_terms_at = models.DateTimeField(null=True, blank=True, verbose_name="同意协议时间")
+    tour_dismissed_at = models.DateTimeField(null=True, blank=True, verbose_name="引导已关闭时间")
+    tour_panel_dismissed_at = models.DateTimeField(null=True, blank=True, verbose_name="面板引导已关闭时间")
 
     @property
     def avatar_url(self):

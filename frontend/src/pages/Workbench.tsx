@@ -336,6 +336,7 @@ export default function Workbench() {
       difficulty_level: q.difficulty_level || 'normal',
       kp_name: q.kp_name || '',
       kp_code: q.kp_code || '',
+      kp_id: q.kp_id,
     }));
     setGeneratedQuestions(prev => [...prev, ...mapped]);
     setSavedIndices(new Set());
@@ -398,21 +399,40 @@ export default function Workbench() {
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex flex-1 min-h-0">
-      {/* Left: QuestionPanel or Copilot Overview — 仅对话时显示，landing 隐藏 */}
+      {/* Left: QuestionPanel or Copilot Overview — 仅对话时显示，landing 隐藏。
+          hasConversation 由 AgentChatLayout 的 useAgentConversation hook 管理：
+          发消息后立即变为 true → 左面板同步渲染，不再等待 wasResetManually / SSE done */}
       {hasConversation && (viewMode !== 'questions' || generatedQuestions.length === 0 ? (
-        !wasResetManually && instInfo && stats && (
-          <div className="flex-1 min-w-0 overflow-y-auto bg-muted/50">
+          <div data-tour="workbench-panel" className="flex-1 min-w-0 overflow-y-auto bg-muted/50">
             <div className="p-4 md:p-6">
-              <CopilotOverview
-                institution={instInfo}
-                stats={stats}
-                questionCount={remainingCount}
-                onEnterQuestions={() => setViewMode('questions')}
-                onSend={handleSystemMessage}
-              />
+              {instInfo && stats ? (
+                <CopilotOverview
+                  institution={instInfo}
+                  stats={stats}
+                  questionCount={remainingCount}
+                  onEnterQuestions={() => setViewMode('questions')}
+                  onSend={handleSystemMessage}
+                />
+              ) : (
+                /* 骨架屏：对话开始时容器立即渲染，避免左面板空白延迟 */
+                <div className="space-y-6 animate-pulse">
+                  {/* QuickStartPanel skeleton */}
+                  <div className="rounded-xl bg-muted/40 h-20" />
+                  {/* Copilot header */}
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 w-5 rounded bg-muted/40" />
+                    <div className="h-5 w-24 rounded bg-muted/40" />
+                  </div>
+                  {/* Stats grid skeleton */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="rounded-xl bg-muted/40 h-24" />
+                    <div className="rounded-xl bg-muted/40 h-24" />
+                    <div className="rounded-xl bg-muted/40 h-24" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )
       ) : (
         <div className="flex-1 min-w-0 overflow-y-auto bg-muted/50">
           <div className="h-full flex flex-col">
@@ -466,6 +486,7 @@ export default function Workbench() {
         )}
         <AgentChatLayout
           layout="inline"
+          inputTourClass="workbench-input"
           findBot={(bots) => bots.find((b: Bot) => b.bot_type === 'exam_generator')}
           skills={SKILLS}
           typewriterWords={['出题、查学生、管作业...', '根据薄弱知识点出题', '看看学员学习情况']}

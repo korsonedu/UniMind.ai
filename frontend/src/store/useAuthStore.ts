@@ -41,6 +41,8 @@ interface User {
   is_institution_admin?: boolean;
   is_institution_owner?: boolean;
   is_institution_teacher?: boolean;
+  tour_dismissed_at?: string | null;
+  tour_panel_dismissed_at?: string | null;
 }
 
 interface AuthState {

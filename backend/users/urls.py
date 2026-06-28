@@ -1,10 +1,11 @@
 from django.urls import path
 from .views import (
     RegisterView, LoginView, LoginByCodeView, UserDetailView, UpdateProfileView,
+    TourDismissView, TourPanelDismissView,
     OnlineUserListView, UpdateEmailView, UpdatePasswordView,
     DailyPlanListView, DailyPlanDetailView,
     ActivateMembershipView,
-    BIAnalyticsView, WeeklyCognitiveReportView, HeartbeatView,
+    BIAnalyticsView, HeartbeatView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
     DiagnosticGenerateView, DiagnosticSubmitView, DiagnosticReassessView,
     AnalyticsDashboardView, AnalyticsExportView, PlatformRevenueView, NPSSubmitView, NPSStatusView,
@@ -67,10 +68,12 @@ urlpatterns = [
     path('institution/me/sso-config/', SSOConfigView.as_view(), name='institution-sso-config'),
     path('me/', UserDetailView.as_view(), name='user-detail'),
     path('me/update/', UpdateProfileView.as_view(), name='user-update'),
+    path('me/tour-dismiss/', TourDismissView.as_view(), name='tour-dismiss'),
+    path('me/tour-panel-dismiss/', TourPanelDismissView.as_view(), name='tour-panel-dismiss'),
     path('me/email/', UpdateEmailView.as_view(), name='email-update'),
     path('me/password/', UpdatePasswordView.as_view(), name='password-update'),
     path('me/activate/', ActivateMembershipView.as_view(), name='activate-membership'),
-    path('me/weekly-report/', WeeklyCognitiveReportView.as_view(), name='weekly-report'),
+
     path('me/knowledge-mastery/', MyKnowledgeMasteryView.as_view(), name='knowledge-mastery'),
     path('me/diagnostic/generate/', DiagnosticGenerateView.as_view(), name='diagnostic-generate'),
     path('me/diagnostic/submit/', DiagnosticSubmitView.as_view(), name='diagnostic-submit'),

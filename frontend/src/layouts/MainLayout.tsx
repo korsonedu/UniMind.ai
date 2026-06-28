@@ -45,6 +45,7 @@ import {
 import { toast } from 'sonner';
 import UnimindLogo from '../../Unimind_logo.png';
 import { PersistentUploadToast } from '@/components/PersistentUploadToast';
+import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 
 interface SidebarItemProps {
   to: string;
@@ -116,11 +117,64 @@ const isMobileAllowedPath = (pathname: string) =>
 
 const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 4 })[p] || 1;
 
+const teacherTourSteps: TourStep[] = [
+  {
+    target: '[data-tour="workbench-input"]',
+    title: '一切从对话开始',
+    content: '出题、查数据、管学生，都从这里输入。对话试试！',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="sidebar"]',
+    title: '功能导航',
+    content: '所有的功能都在这里，试着探索一下吧',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="header-right"]',
+    title: '账号和消息',
+    content: '修改资料、系统通知，都在这里',
+    placement: 'bottom',
+  },
+];
+
+const studentTourSteps: TourStep[] = [
+  {
+    target: '[data-tour="xiaoyu-input"]',
+    title: '跟小宇对话',
+    content: '问知识点、刷题、看分析。试试「帮我复习一下三角函数」',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="sidebar"]',
+    title: '你的学习空间',
+    content: '知识图谱看掌握度、错题本自动收集做错的题、模拟考试',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="header-right"]',
+    title: '账号和消息',
+    content: '修改资料、系统通知、签到',
+    placement: 'bottom',
+  },
+];
+
+const panelTourSteps: TourStep[] = [
+  {
+    target: '[data-tour="workbench-panel"]',
+    title: '工作台面板',
+    content: '主要工作区，几乎所有内容都会在这里呈现',
+    placement: 'right',
+    width: 240,
+  },
+];
+
 export const MainLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const user = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
+  const updateUser = useAuthStore(s => s.updateUser);
   const { primaryColor, pageTitle } = useSystemStore();
   const [collapsed, setCollapsed] = useState(false);
   const [studentPreview, setStudentPreview] = useState(false);
@@ -128,6 +182,8 @@ export const MainLayout: React.FC = () => {
   const isMobile = useIsMobile();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [invitePopoverOpen, setInvitePopoverOpen] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+  const [showPanelTour, setShowPanelTour] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
 
   const { t, i18n } = useTranslation(['layout', 'common']);
@@ -179,6 +235,87 @@ export const MainLayout: React.FC = () => {
   const homePath = effectiveIsInstStudent ? '/xiaoyu' : '/workbench';
   const effectivePlan = instInfo?.plan || user?.personal_plan || user?.membership_tier || 'free';
   const myPlanLevel = planLevel(effectivePlan);
+
+  // ── Guided Tour ──
+  const isTourPage = location.pathname === '/workbench' || location.pathname === '/xiaoyu';
+  const tourSteps = effectiveIsInstStudent ? studentTourSteps : teacherTourSteps;
+
+  const handleTourDismiss = async () => {
+    setShowTour(false);
+    try {
+      await api.patch('/users/me/tour-dismiss/');
+      updateUser({ tour_dismissed_at: new Date().toISOString() });
+    } catch {
+      // silently ignore — will retry next time
+    }
+  };
+
+  // Poll for first target element, then show tour
+  useEffect(() => {
+    if (!isTourPage || isMobile) return;
+    if (user?.tour_dismissed_at) return;
+
+    const firstTarget = tourSteps[0]?.target;
+    if (!firstTarget) return;
+
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const poll = setInterval(() => {
+      const el = document.querySelector(firstTarget);
+      if (el) {
+        clearInterval(poll);
+        setShowTour(true);
+        return;
+      }
+      attempts++;
+      if (attempts >= maxAttempts) clearInterval(poll);
+    }, 300);
+
+    return () => clearInterval(poll);
+  }, [isTourPage, tourSteps, isMobile, user?.tour_dismissed_at]);
+
+  // Dismiss tour when navigating away from tour page
+  useEffect(() => {
+    if (showTour && !isTourPage) {
+      setShowTour(false);
+      handleTourDismiss();
+    }
+  }, [location.pathname, showTour, isTourPage]);
+
+  // ── Panel Tour（工作台首次对话后双栏布局）──
+  const handlePanelTourDismiss = async () => {
+    setShowPanelTour(false);
+    try {
+      await api.patch('/users/me/tour-panel-dismiss/');
+      updateUser({ tour_panel_dismissed_at: new Date().toISOString() });
+    } catch {
+      // silently ignore
+    }
+  };
+
+  // Poll for workbench panel element after layout tour is done
+  useEffect(() => {
+    if (location.pathname !== '/workbench' || isMobile) return;
+    if (user?.tour_panel_dismissed_at) return;
+    if (!user?.tour_dismissed_at) return; // wait for layout tour
+
+    const target = '[data-tour="workbench-panel"]';
+    let attempts = 0;
+
+    const poll = setInterval(() => {
+      const el = document.querySelector(target);
+      if (el) {
+        clearInterval(poll);
+        setShowPanelTour(true);
+        return;
+      }
+      attempts++;
+      if (attempts >= 120) clearInterval(poll); // 60s timeout
+    }, 500);
+
+    return () => clearInterval(poll);
+  }, [location.pathname, isMobile, user?.tour_panel_dismissed_at, user?.tour_dismissed_at]);
 
   type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string };
 
@@ -269,7 +406,7 @@ export const MainLayout: React.FC = () => {
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
-        <aside className={cn(
+        <aside data-tour="sidebar" className={cn(
           "relative border-r border-border flex-col p-2 bg-card/70 backdrop-blur-2xl transition-[width] duration-300 ease-in-out z-0 shrink-0 hidden md:flex",
           collapsed ? "w-16" : "w-48"
         )}>
@@ -325,12 +462,12 @@ export const MainLayout: React.FC = () => {
                   </button>
                 </div>
               )}
-              <EloPopover />
-              <AchievementPill />
-              <CampusSelector />
-              <NotificationBell />
-              {/* 头像下拉 */}
-              <DropdownMenu modal={false}>
+              <div data-tour="header-right" className="flex items-center gap-2">
+                <EloPopover />
+                <AchievementPill />
+                <CampusSelector />
+                <NotificationBell />
+                <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <button ref={avatarRef} id="avatar-btn" className="rounded-full border border-border p-0.5 bg-card hover:scale-105 transition-transform">
                     <Avatar className="h-7 w-7">
@@ -412,6 +549,7 @@ export const MainLayout: React.FC = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </div>
             </header>
           )}
           {!isFullPage && !isMobileImmersivePage && (
@@ -459,15 +597,6 @@ export const MainLayout: React.FC = () => {
                       >
                         <UserPlus className="h-3.5 w-3.5" />
                         <span className="font-bold text-xs">{t('layout:invite.mobileCopy')}</span>
-                      </DropdownMenuItem>
-                    )}
-                    {user?.is_member && (
-                      <DropdownMenuItem
-                        onClick={() => window.dispatchEvent(new Event('open-weekly-report'))}
-                        className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
-                      >
-                        <ChartBar className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{t('layout:nav.weeklyReport')}</span>
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator className="my-2 bg-border" />
@@ -575,6 +704,19 @@ export const MainLayout: React.FC = () => {
         )}
         {invitePopoverOpen && (
           <div className="fixed inset-0 z-40" onClick={() => setInvitePopoverOpen(false)} />
+        )}
+
+        {showTour && (
+          <GuidedTour
+            steps={tourSteps}
+            onDismiss={handleTourDismiss}
+          />
+        )}
+        {showPanelTour && (
+          <GuidedTour
+            steps={panelTourSteps}
+            onDismiss={handlePanelTourDismiss}
+          />
         )}
       </div>
     </TooltipProvider>
