@@ -41,6 +41,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 
 /** 记录卡片点击（导航类型） */
 async function trackCardClick(card: ActionCard) {
+  if (!card.action.url) return;
   try {
     await api.post('/ai/card-interactions/', {
       card_title: card.title,
@@ -55,6 +56,7 @@ async function trackCardClick(card: ActionCard) {
 
 /** 持久化 reply 卡片选择（复用 card-interactions API，completed=true 表示已选） */
 async function persistReplyChoice(card: ActionCard) {
+  if (!card.action.url) return;
   try {
     await api.post('/ai/card-interactions/', {
       card_title: card.title,
@@ -162,8 +164,11 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
         return;
       }
 
+      // input 模式：由输入框+发送按钮处理，不应走到这里
+      if (mode === 'input') return;
+
       // single（默认）：点一个全锁
-      if (onReply && !chosenUrl) {
+      if (onReply && !chosenUrl && url) {
         setChosenUrl(url);
         persistReplyChoice(card);
         onReply(url);
@@ -213,13 +218,21 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
   // ── input 发送 ──
   const handleInputSend = useCallback((card: ActionCard) => {
     if (!onReply || !inputValue.trim()) return;
-    setChosenUrl(card.action.url);
-    persistReplyChoice(card);
-    onReply(inputValue.trim());
+    const trimmed = inputValue.trim();
+    setChosenUrl(trimmed);
+    // input 模式以用户实际输入作为交互标识
+    persistReplyChoice({ ...card, action: { ...card.action, url: trimmed } });
+    onReply(trimmed);
   }, [onReply, inputValue]);
 
   const replyCards = cards.filter(c => c.action.type === 'reply');
-  const replyMode: ReplyMode = replyCards[0]?.action.reply_mode || 'single';
+  // 自动推断模式：url 为空且未显式指定 reply_mode → 视为 input（让用户自定义输入）
+  const replyMode: ReplyMode = (() => {
+    const explicit = replyCards[0]?.action.reply_mode;
+    if (explicit) return explicit;
+    if (!replyCards[0]?.action.url) return 'input';
+    return 'single';
+  })();
 
   if (!cards.length) return null;
 

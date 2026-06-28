@@ -3,7 +3,7 @@ import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle } from '@phosphor-icons/react';
+import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, Plus } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -112,6 +112,25 @@ export interface AgentChatLayoutProps {
 
   /** External conversation ID — when provided, shared across pages */
   initialConversationId?: string;
+
+  /** 当 sessions 加载/变化时通知父组件（用于外部 session 切换器） */
+  onSessionsReady?: (data: {
+    sessions: ConversationSession[];
+    activeSessionId: number | null;
+    loadSession: (session: ConversationSession) => void;
+    deleteSession: (session: ConversationSession) => void;
+    newConversation: () => void;
+  }) => void;
+
+  /** 左侧栏 render prop，传入 session 相关数据，返回 ReactNode */
+  sidebar?: (props: {
+    sessions: ConversationSession[];
+    activeSessionId: number | null;
+    onLoadSession: (session: ConversationSession) => void;
+    onDeleteSession: (session: ConversationSession) => void;
+    onNewConversation: () => void;
+    botDisplayName: string;
+  }) => React.ReactNode;
 }
 
 // ── Component ──
@@ -133,6 +152,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     landingBanner,
     inputTourClass,
     initialConversationId,
+    sidebar,
+    onSessionsReady,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
@@ -176,18 +197,31 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     doSend(value, true);
   }, [doSend]);
 
-  // 从 messages 或当前 session 中提取标题
+  // 从 messages 或当前 session 中提取标题（与侧栏保持同一来源）
   const conversationTitle = React.useMemo(() => {
-    // 优先从消息中取
+    // 新对话（无活跃会话，标题尚未生成）→ 空
+    if (activeSessionId === null) return '';
+    // 优先从消息中取（AI 刚生成的标题）
     const fromMsg = messages.find(m => m.conversation_title)?.conversation_title;
     if (fromMsg) return fromMsg;
-    // 从当前 session 取
+    // 从当前 session 取 title（Conversation 模型中的 AI 标题）
     const activeSession = sessions.find(s => s.id === activeSessionId);
     if (activeSession?.title) return activeSession.title;
-    // 从最近一条 session 取（refresh 后 id 可能变化）
-    const lastSession = sessions[sessions.length - 1];
-    return lastSession?.title || '';
+    // 取当前 session 的 label（首条用户消息截断，与侧栏一致）
+    if (activeSession?.label) return activeSession.label;
+    return '';
   }, [messages, sessions, activeSessionId]);
+
+  // 通知父组件 sessions 变化（用于外部 session 切换器）
+  useEffect(() => {
+    onSessionsReady?.({
+      sessions,
+      activeSessionId,
+      loadSession: wrappedLoadSession,
+      deleteSession: handleDeleteSession,
+      newConversation: wrappedReset,
+    });
+  }, [sessions, activeSessionId]);
 
   // Apply pending visuals after messages state updates
   const prevMsgLenRef = useRef(0);
@@ -298,9 +332,12 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   // 通知父组件 hasConversation 变化（用于控制外层容器宽度）
   // useLayoutEffect 确保在浏览器绘制前同步更新父组件，避免 landing→面板 的闪烁
+  // ⚠️ 注意：初始化阶段不回调父组件，因为此时 hook 的 hasConversation 始终为 false，
+  // 会覆盖父组件（Workbench）自己通过 API 并行获取到的正确值，导致左侧面板不显示
   useLayoutEffect(() => {
+    if (!initialized) return;
     onHasConversation?.(hasConversation);
-  }, [hasConversation, onHasConversation]);
+  }, [hasConversation, onHasConversation, initialized]);
 
   // ── Session load/reset wrappers ──
 
@@ -410,7 +447,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <div className="flex justify-center mt-6">
                   <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                     <PopoverTrigger asChild>
-                      <button className="text-sm text-muted-foreground/65 hover:text-foreground/70 transition-colors flex items-center gap-1.5">
+                      <button className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 rounded-full px-3 py-0.5 bg-muted/50 hover:bg-muted">
                         <ClockCounterClockwise className="h-3.5 w-3.5" />
                         {sessions.length} 个历史对话
                       </button>
@@ -461,7 +498,18 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full flex flex-col bg-white animate-in fade-in duration-300">
+        <div className="h-full flex animate-in fade-in duration-300">
+          {/* Session sidebar — render prop */}
+          {sidebar?.({
+            sessions,
+            activeSessionId,
+            onLoadSession: wrappedLoadSession,
+            onDeleteSession: onDeleteSession ? handleDeleteSession : (() => {}),
+            onNewConversation: wrappedReset,
+            botDisplayName,
+          })}
+
+          <div className="flex-1 min-w-0 flex flex-col bg-white">
           {/* Header */}
           <div className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2.5 border-b border-border/30">
             <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
@@ -470,10 +518,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             <span className="text-sm font-bold text-foreground flex-1 truncate">
               {conversationTitle || botDisplayName}
             </span>
-            {sessions.length > 1 && (
+            {/* 没有侧栏时保留 popover 会话切换（工作台） */}
+            {!sidebar && sessions.length > 1 && (
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                 <PopoverTrigger asChild>
-                  <button className="text-[10px] text-muted-foreground/55 hover:text-foreground/65 transition-colors shrink-0">
+                  <button className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0 rounded-full px-2.5 py-0.5 bg-muted/50 hover:bg-muted">
                     {sessions.length} 个对话
                   </button>
                 </PopoverTrigger>
@@ -502,11 +551,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 </PopoverContent>
               </Popover>
             )}
-            <Button variant="ghost" size="sm" onClick={wrappedReset}
-              className="rounded text-muted-foreground/40 hover:text-foreground/60 gap-0.5 px-1.5 h-5 shrink-0">
-              <ArrowCounterClockwise className="h-2.5 w-2.5" />
-              <span className="text-[9px] font-medium">新对话</span>
-            </Button>
+            <button onClick={wrappedReset}
+              className="shrink-0 rounded-full px-3 py-1 text-[11px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              <Plus className="h-3 w-3" />
+              新对话
+            </button>
           </div>
 
           {/* Messages — 内联视觉卡片 */}
@@ -613,6 +662,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
               </div>
             </div>
           </div>
+          </div>
         </div>
       </TooltipProvider>
     );
@@ -658,7 +708,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             {sessions.length > 1 && (
               <Popover open={sessionOpen} onOpenChange={setSessionOpen}>
                 <PopoverTrigger asChild>
-                  <button className="text-[10px] text-muted-foreground/55 hover:text-foreground/65 transition-colors shrink-0">
+                  <button className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0 rounded-full px-2.5 py-0.5 bg-muted/50 hover:bg-muted">
                     {sessions.length} 个对话
                   </button>
                 </PopoverTrigger>

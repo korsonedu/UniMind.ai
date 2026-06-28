@@ -9,8 +9,8 @@ from rest_framework import generics, permissions, serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, StudyPlan
-from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, StudyPlanSerializer
+from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation, StudyPlan
+from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer, StudyPlanSerializer
 from .utils import get_student_academic_context
 from .prompt_sync import (
     delete_bot_prompt_file,
@@ -367,12 +367,31 @@ class AIChatView(APIView):
         return Response({'status': 'pending'})
 
 
+class ConversationListView(generics.ListAPIView):
+    """轻量会话列表，返回用户的对话元数据（含消息数），供侧栏展示。"""
+    serializer_class = ConversationSerializer
+    permission_classes = [IsMember]
+
+    def get_queryset(self):
+        from django.db.models import Count, OuterRef, Subquery
+        bot_id = self.request.query_params.get('bot_id')
+        qs = Conversation.objects.filter(user=self.request.user).order_by('-updated_at')
+        if bot_id:
+            qs = qs.filter(bot_id=bot_id)
+
+        # 注解消息数：通过 conversation_id UUID 关联 AIChatMessage
+        msg_count_subquery = AIChatMessage.objects.filter(
+            conversation_id=OuterRef('conversation_id'),
+        ).values('conversation_id').annotate(cnt=Count('id')).values('cnt')
+        qs = qs.annotate(message_count=Subquery(msg_count_subquery))
+        return qs
+
+
 class AIChatListView(generics.ListAPIView):
     serializer_class = AIChatMessageSerializer
     permission_classes = [IsMember]
     def get_queryset(self):
         from django.db.models import OuterRef, Subquery
-        from .models import Conversation
 
         bot_id = self.request.query_params.get('bot_id')
         conversation_id = self.request.query_params.get('conversation_id')

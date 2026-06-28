@@ -191,7 +191,7 @@ export const MainLayout: React.FC = () => {
   const instInfo = instFromStore || user?.institution || null;
 
   const isFullPage = ['/platform'].includes(location.pathname);
-  const isEdgeToEdge = ['/workbench'].includes(location.pathname);
+  const isEdgeToEdge = ['/workbench', '/xiaoyu'].includes(location.pathname);
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && (
     location.pathname.startsWith('/tests/session') ||

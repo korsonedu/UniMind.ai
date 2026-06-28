@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle, Fire, Trophy } from '@phosphor-icons/react';
 import AgentChatLayout from '@/components/AgentChatLayout';
+import SessionSidebar from '@/components/SessionSidebar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -322,6 +323,16 @@ export const XiaoYu: React.FC = () => {
     <AgentChatLayout
       layout="inline"
       inputTourClass="xiaoyu-input"
+      sidebar={(sidebarProps) => (
+        <SessionSidebar
+          sessions={sidebarProps.sessions}
+          activeSessionId={sidebarProps.activeSessionId}
+          onSelect={sidebarProps.onLoadSession}
+          onDelete={sidebarProps.onDeleteSession}
+          onNew={sidebarProps.onNewConversation}
+          botDisplayName={sidebarProps.botDisplayName}
+        />
+      )}
       findBot={(bots) => bots.find((b: Bot) => b.name === '小宇')}
       skills={SKILLS}
       typewriterWords={t('typewriterWords', { returnObjects: true }) as string[]}

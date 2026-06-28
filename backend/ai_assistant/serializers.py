@@ -49,6 +49,14 @@ class BotSerializer(serializers.ModelSerializer):
         return None
 
 
+class ConversationSerializer(serializers.ModelSerializer):
+    message_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Conversation
+        fields = ('conversation_id', 'title', 'message_count', 'created_at', 'updated_at')
+
+
 class AIChatMessageSerializer(serializers.ModelSerializer):
     conversation_title = serializers.SerializerMethodField()
 

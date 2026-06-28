@@ -172,12 +172,45 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   const handleLoadSession = useCallback((session: ConversationSession) => {
     setMessages(session.messages);
+    setTaskList(null);
     setActiveSessionId(session.id);
     setSessionOpen(false);
     const lastMsg = session.messages[session.messages.length - 1];
     if (lastMsg?.conversation_id) {
       setConversationId(lastMsg.conversation_id);
     }
+  }, []);
+
+  /** 恢复历史消息中 metadata 的 visual 到 toolStep，确保侧栏切换时卡片不消失 */
+  const restoreVisualsFromMetadata = useCallback((msgs: Message[]): Message[] => {
+    return msgs.map((m) => {
+      const meta = (m as any).metadata;
+      const visuals = meta?.all_visuals || (meta?.visual ? [meta.visual] : null);
+      if (!visuals || visuals.length === 0) return m;
+      const v = visuals[0];
+      const msg = { ...m };
+      if (msg.toolStep) {
+        if (msg.toolStep.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual) {
+          msg.toolStep = { ...msg.toolStep, visual: v };
+        }
+      } else {
+        msg.toolStep = {
+          call_id: `hist-${m.id || 0}`,
+          step: 0,
+          name: 'render_visual',
+          status: 'done',
+          label: (v.payload as any)?.title || '可视化',
+          visual: v,
+          args_summary: '',
+          result_summary: '',
+        };
+      }
+      if (msg.metadata) {
+        delete (msg.metadata as any).visual;
+        delete (msg.metadata as any).all_visuals;
+      }
+      return msg;
+    });
   }, []);
 
   const handleRefreshSessions = useCallback(async () => {
@@ -190,12 +223,12 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
           .map((m: Record<string, unknown>) => ({
             ...m,
             content: m.content as string,
-            visible: true,  // History messages are always visible
+            visible: true,
           }));
-        setSessions(groupIntoSessions(allMsgs));
+        setSessions(groupIntoSessions(restoreVisualsFromMetadata(allMsgs)));
       }
     } catch (e) { console.error('[useAgentConversation] history fetch failed:', e); }
-  }, [bot, groupIntoSessions]);
+  }, [bot, groupIntoSessions, restoreVisualsFromMetadata]);
 
   const handleDeleteSession = useCallback(async (session: ConversationSession) => {
     if (!session.conversationId) return;
@@ -438,6 +471,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
     setMessages([]);
+    setTaskList(null);
     setActiveSessionId(null);
     setConversationId(crypto.randomUUID());
     toast.success(resetMessage);
