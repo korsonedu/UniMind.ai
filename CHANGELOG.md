@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.2.1 — ARC 精修管线修复 (2026-06-28)
+
+### Fixed
+- **ARC 管线进度轮询停止**：`setTimeout` + state 驱动模式导致只轮询一次，进度永远卡在 5%。重写为递归 setTimeout + useRef
+- **ARC 结果不展示**：管线完成后 questions 困在 `task.result`，前端无感知。状态端点 completed 时附加 questions，前端自动注入题目面板
+- **管线进度写入不可靠**：`_update_task` 原地修改 JSONField dict 导致 Django 变更检测失效，后续阶段进度不写入 DB。改为每次创建新 dict
+- **Agent 查询管线状态不同步**：小宇 `check_pipeline_status` 返回过期进度（同上 JSONField 问题）
+
+### Changed
+- **管线进度文字精细化**：Reviewer/Author/Classifier 逐题显示「评审第 2/6 题「一元二次方程」...」
+- **防重复提交**：管线运行中 ARC 精修按钮禁用
+- **精修题不再精修**：ARC 生成题目（source=arc_refine）不可再次触发 ARC
+- **题目来源徽章**：一键生成（蓝色）/ ARC 精修（紫色），按 KP 自然关联
+- **轮询空状态**：管线运行中显示实时进度文字和百分比
+
 ## v1.2.0 — 产品引导系统 (2026-06-28)
 
 ### Added
