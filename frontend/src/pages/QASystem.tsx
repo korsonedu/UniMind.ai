@@ -111,7 +111,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
         </div>
 
         {isEditing ? (
-          <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+          <div className="space-y-2 animate-in fade-in slide-in-from-bottom-1 duration-200">
             <textarea
               value={editContent}
               onChange={e => setEditContent(e.target.value)}
@@ -323,7 +323,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
       {/* Question Content */}
       <div className="pl-0 md:pl-13 mb-5 md:mb-6">
         {isEditing ? (
-             <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+             <div className="space-y-2 animate-in fade-in slide-in-from-bottom-1 duration-200">
              <textarea
                value={editContent}
                onChange={e => setEditContent(e.target.value)}
@@ -393,7 +393,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
       {hasOthers && (
         <div className="pl-2 md:pl-8 mt-2">
           {isExpanded && (
-            <div className="space-y-4 mb-4 border-l-2 border-muted ml-1 md:ml-4 pb-2 animate-in slide-in-from-top-2 duration-300">
+            <div className="space-y-4 mb-4 border-l-2 border-muted ml-1 md:ml-4 pb-2 animate-in fade-in slide-in-from-bottom-1 duration-300">
               {otherAnswers.map((ans: any) => (
                 <AnswerItem key={ans.id} answer={ans} isFirst={false} onReplyClick={triggerReply} onRefresh={onRefresh} />
               ))}
@@ -506,7 +506,7 @@ export const QASystem: React.FC = () => {
 
   return (
     <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
-      <div className="max-w-5xl mx-auto space-y-5 md:space-y-8 animate-in fade-in duration-500">
+      <div className="max-w-5xl mx-auto space-y-5 md:space-y-8">
         
         {/* Top Input Area */}
         <Card className="border-none shadow-sm bg-card rounded-2xl md:rounded-[2rem] p-4 md:p-6 border border-border/50">

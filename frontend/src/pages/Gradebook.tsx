@@ -130,9 +130,11 @@ export function Gradebook() {
 
   if (classesLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
+      <PageWrapper title="成绩册" subtitle="">
+        <div className="max-w-6xl mx-auto flex items-center justify-center py-20">
+          <Spinner className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      </PageWrapper>
     );
   }
 

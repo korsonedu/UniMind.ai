@@ -138,7 +138,13 @@ export function TeacherAssignments() {
     setGradingId(null);
   };
 
-  if (loading) return <Spinner className="h-8 w-8 animate-spin text-primary mx-auto mt-20" />;
+  if (loading) return (
+    <PageWrapper title="作业管理" subtitle="">
+      <div className="max-w-6xl mx-auto flex items-center justify-center py-20">
+        <Spinner className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    </PageWrapper>
+  );
 
   return (
     <PageWrapper title="作业管理" subtitle="">

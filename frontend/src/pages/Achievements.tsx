@@ -60,7 +60,7 @@ function AchievementCard({
     return (
       <Card
         variant="elevated"
-        className="rounded-2xl border-emerald-200/60 overflow-hidden animate-achievement-pop"
+        className="rounded-2xl border-emerald-200/60 overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-300"
         style={{ animationDelay: `${index * 80}ms` }}
       >
         <CardContent className="p-4 flex flex-col items-center text-center gap-2">
@@ -86,7 +86,7 @@ function AchievementCard({
   return (
     <Card
       variant="ghost"
-      className="rounded-2xl border-border/30 overflow-hidden animate-achievement-pop"
+      className="rounded-2xl border-border/30 overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-300"
       style={{ animationDelay: `${index * 80}ms` }}
     >
       <CardContent className="p-4 flex flex-col items-center text-center gap-2">
@@ -151,7 +151,7 @@ export function Achievements() {
   if (loading) {
     return (
       <PageWrapper title="成就勋章" subtitle="解锁成就，记录你的学习旅程">
-        <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        <div className="max-w-5xl mx-auto space-y-6">
           <Skeleton className="h-8 w-48 rounded-lg" />
           <SkeletonGrid />
         </div>
@@ -162,7 +162,7 @@ export function Achievements() {
   if (error) {
     return (
       <PageWrapper title="成就勋章" subtitle="解锁成就，记录你的学习旅程">
-        <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="max-w-5xl mx-auto">
           <InlineError message={error} onRetry={fetchData} />
         </div>
       </PageWrapper>
@@ -172,7 +172,7 @@ export function Achievements() {
   if (!data || data.length === 0) {
     return (
       <PageWrapper title="成就勋章" subtitle="解锁成就，记录你的学习旅程">
-        <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="max-w-5xl mx-auto">
           <EmptyState icon={Medal} title="暂无成就" description="成就系统尚未配置" />
         </div>
       </PageWrapper>
@@ -187,7 +187,7 @@ export function Achievements() {
 
   return (
     <PageWrapper title="成就勋章" subtitle="解锁成就，记录你的学习旅程">
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-5xl mx-auto space-y-6">
         {/* Stats header */}
         <div className="flex items-center gap-4 p-4 rounded-2xl bg-card border border-border/40">
           <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">

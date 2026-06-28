@@ -54,7 +54,7 @@ export const ReportCard: React.FC = () => {
 
   if (loading) return (
     <PageWrapper title="成绩报告" subtitle="你的学习成果总览">
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-3xl mx-auto py-8 space-y-6">
         <div className="grid grid-cols-3 gap-4">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 rounded-2xl" />)}
         </div>
@@ -89,7 +89,7 @@ export const ReportCard: React.FC = () => {
         </Button>
       }
     >
-      <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-3xl mx-auto py-8 space-y-6">
         {/* ── 统计卡 Bento Grid ── */}
         <div className="grid grid-cols-3 gap-4">
           <Card className="rounded-2xl border-border/40">

@@ -182,7 +182,7 @@ export default function MyAssignments() {
   if (view === 'list') {
     return (
       <PageWrapper title="我的作业" subtitle="">
-        <div className="max-w-2xl mx-auto space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="max-w-2xl mx-auto space-y-5">
           {!loading && assignments.length > 0 && (
             <div className="flex flex-wrap gap-2">
               <StatChip icon={Hourglass} label="待提交" count={stats.pending} variant="default" />
@@ -260,7 +260,7 @@ export default function MyAssignments() {
   if (detailLoading || !detail) {
     return (
       <PageWrapper title="作业详情" subtitle="">
-        <div className="max-w-2xl mx-auto space-y-4 animate-in fade-in duration-200">
+        <div className="max-w-2xl mx-auto space-y-4">
           <Skeleton className="h-6 w-48" />
           <Skeleton className="h-4 w-32" />
           {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 w-full rounded-xl" />)}
@@ -274,7 +274,7 @@ export default function MyAssignments() {
 
   return (
     <PageWrapper title={detail.title} subtitle="">
-      <div className="max-w-2xl mx-auto space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="max-w-2xl mx-auto space-y-4">
         <div className="flex items-center gap-3">
           <button onClick={() => { setView('list'); fetchList(); }}
             className="p-1.5 -ml-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
@@ -311,7 +311,7 @@ export default function MyAssignments() {
               const hasGrading = q.score !== undefined;
               const expanded = expandedCards.has(q.id);
               return (
-                <div key={q.id} className="rounded-xl border border-border bg-card overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-300" style={{ animationDelay: `${i * 40}ms` }}>
+                <div key={q.id} className="rounded-xl border border-border bg-card overflow-hidden">
                   <button onClick={() => toggleCard(q.id)} className="w-full flex items-center gap-2 p-4 text-left hover:bg-muted/30 transition-colors">
                     <span className="text-[11px] font-bold text-muted-foreground shrink-0">第 {i + 1} 题</span>
                     {hasGrading && (
@@ -368,7 +368,7 @@ export default function MyAssignments() {
         ) : (
           <div className="space-y-3">
             {detail.questions.map((q, i) => (
-              <div key={q.id} className="rounded-xl border border-border bg-card p-4 animate-in fade-in slide-in-from-bottom-1 duration-300" style={{ animationDelay: `${i * 40}ms` }}>
+              <div key={q.id} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-[11px] font-bold text-muted-foreground">第 {i + 1} 题</span>
                   <span className="text-[10px] text-muted-foreground/50">{q.points} 分</span>

@@ -200,7 +200,7 @@ export function StudyPlan() {
   if (selectedPlan) {
     return (
       <PageWrapper title="" subtitle="">
-        <div className="max-w-2xl mx-auto px-4 py-8 md:py-12">
+        <div className="max-w-2xl mx-auto py-8 md:py-12">
           {/* Back + Actions */}
           <div className="flex items-center justify-between mb-8">
             <button
@@ -371,7 +371,7 @@ export function StudyPlan() {
   // Plan list view
   return (
     <PageWrapper title="" subtitle="">
-      <div className="max-w-2xl mx-auto px-4 py-8 md:py-12">
+      <div className="max-w-2xl mx-auto py-8 md:py-12">
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-2">学习计划</h1>
