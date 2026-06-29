@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.3.1 — Agent 任务卡片修复 (2026-06-29)
+
+### Fixed
+- **Task 卡片死功能**：`batch_start` 后的 SSE 事件因 `return` 误退出 `doSend` 导致全部丢弃，task 永远「进行中」不更新。改为 `continue`，done 事件正常到达前端
+- **Task 依次打勾**：并行改串行执行，工具逐个完成，前端收到真实间隔的 progress 事件，自然依次打勾
+- **Task 位置**：从消息区顶部移到输入框上方紧贴，不随消息滚动
+- **DataCard 去掉 subtitle**：LLM 不再编造「高中数学 · 考研备考中」等无来由文案
+
+### Changed
+- **只读工具串行化**：原并行执行白名单工具改为串行，task 列表驱动 agent 逐步执行计划
+
 ## v1.3.0 — AI 对话页会话侧栏 (2026-06-29)
 
 ### Added
