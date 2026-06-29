@@ -78,6 +78,16 @@ export function StudyPlan() {
     }, 1500);
   };
 
+  const apiErrorMsg = (e: any, fallback: string) => {
+    const status = e?.response?.status;
+    const detail = e?.response?.data?.detail || e?.response?.data?.error || e?.response?.data?.message;
+    if (detail) return detail;
+    if (!status || status >= 500) return fallback;
+    if (status === 403) return t('error403');
+    if (status === 404) return t('error404');
+    return fallback;
+  };
+
   const fetchPlans = async () => {
     try {
       const res = await api.get('/ai/plans/');
@@ -86,8 +96,9 @@ export function StudyPlan() {
       setPlans(list);
       const active = list.find((p: StudyPlan) => p.status === 'active');
       if (active) fetchPlanDetail(active.id);
-    } catch {
-      toast.error('加载计划失败');
+    } catch (e: any) {
+      console.error('fetchPlans failed:', e?.response?.status, e?.response?.data || e?.message);
+      toast.error(apiErrorMsg(e, '加载计划失败'));
     } finally {
       setLoading(false);
     }
@@ -97,8 +108,9 @@ export function StudyPlan() {
     try {
       const res = await api.get(`/ai/plans/${id}/`);
       setSelectedPlan(res.data);
-    } catch {
-      toast.error('加载计划详情失败');
+    } catch (e: any) {
+      console.error('fetchPlanDetail failed:', e?.response?.status, e?.response?.data || e?.message);
+      toast.error(apiErrorMsg(e, '加载计划详情失败'));
     }
   };
 
@@ -111,8 +123,9 @@ export function StudyPlan() {
       setSelectedPlan(res.data);
       setPlans(prev => (Array.isArray(prev) ? prev : []).map(p => p.id === res.data.id ? { ...p, task_progress: res.data.task_progress, status: res.data.status } : p));
       flashSaved(fieldKey);
-    } catch {
-      toast.error('更新失败');
+    } catch (e: any) {
+      console.error('updateTaskField failed:', e?.response?.status, e?.response?.data || e?.message);
+      toast.error(apiErrorMsg(e, '更新失败'));
     }
   };
 
@@ -124,8 +137,9 @@ export function StudyPlan() {
       setSelectedPlan(res.data);
       setPlans(prev => (Array.isArray(prev) ? prev : []).map(p => p.id === res.data.id ? { ...p, task_progress: res.data.task_progress, status: res.data.status } : p));
       toast.success('已删除');
-    } catch {
-      toast.error('删除失败');
+    } catch (e: any) {
+      console.error('deleteTask failed:', e?.response?.status, e?.response?.data || e?.message);
+      toast.error(apiErrorMsg(e, '删除失败'));
     }
   };
 
@@ -148,8 +162,9 @@ export function StudyPlan() {
       setSelectedPlan(res.data);
       setPlans(prev => (Array.isArray(prev) ? prev : []).map(p => p.id === res.data.id ? { ...p, task_progress: res.data.task_progress, status: res.data.status } : p));
       toast.success('任务已添加');
-    } catch {
-      toast.error('添加失败');
+    } catch (e: any) {
+      console.error('addTask failed:', e?.response?.status, e?.response?.data || e?.message);
+      toast.error(apiErrorMsg(e, '添加失败'));
     }
   };
 
@@ -160,8 +175,9 @@ export function StudyPlan() {
       setPlans(prev => prev.filter(p => p.id !== id));
       if (selectedPlan?.id === id) setSelectedPlan(null);
       toast.success('已删除');
-    } catch {
-      toast.error('删除失败');
+    } catch (e: any) {
+      console.error('deletePlan failed:', e?.response?.status, e?.response?.data || e?.message);
+      toast.error(apiErrorMsg(e, '删除失败'));
     }
   };
 

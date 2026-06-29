@@ -302,7 +302,7 @@ export const TestLadder: React.FC = () => {
   if (isPageLoading) {
     return (
       <PageWrapper title={t('pages:academicLadder.title')} subtitle={t('pages:academicLadder.subtitle')}>
-        <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
+        <div className="max-w-6xl mx-auto space-y-8">
           <div className="space-y-4 max-w-2xl">
             <Skeleton className="h-10 w-64 rounded-lg" />
             <Skeleton className="h-5 w-96 rounded-md" />
@@ -321,7 +321,7 @@ export const TestLadder: React.FC = () => {
 
   return (
     <PageWrapper title={t('pages:academicLadder.title')} subtitle={t('pages:academicLadder.subtitle')}>
-      <div className="flex flex-col gap-8 md:gap-12 text-left animate-in fade-in duration-700 pb-20 max-w-6xl mx-auto">
+      <div className="flex flex-col gap-8 md:gap-12 text-left pb-20 max-w-6xl mx-auto">
         {isMobile && (
             <Popover>
               <PopoverTrigger asChild>

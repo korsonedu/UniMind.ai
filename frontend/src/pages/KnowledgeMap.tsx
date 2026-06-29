@@ -205,7 +205,7 @@ export const KnowledgeMap: React.FC = () => {
 
   return (
     <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
-      <div className="w-full text-left animate-in fade-in duration-700">
+      <div className="w-full text-left">
         {isMobile ? (
           /* ── Mobile: toggle between tree panel and grid list ── */
           <div className="space-y-3">

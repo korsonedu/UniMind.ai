@@ -342,23 +342,17 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
               // batch_start: initialize task list (UI-only, not a message)
               if (step.status === 'batch_start' && step.task_list?.items) {
-                console.log('[taskList] batch_start received:', step.task_list.task_id, step.task_list.items.map(i => i.label));
                 setTaskList({
                   task_id: step.task_list.task_id,
                   items: step.task_list.items,
                 });
-                return;
+                continue;
               }
 
               // Incremental task_list update (done events with task_list.update)
               if (step.task_list?.update) {
-                console.log('[taskList] update received:', step.task_list.update, 'task_id:', step.task_list.task_id);
                 setTaskList(prev => {
-                  if (!prev || prev.task_id !== step.task_list!.task_id) {
-                    console.log('[taskList] update SKIPPED - prev:', prev?.task_id, 'event:', step.task_list!.task_id);
-                    return prev;
-                  }
-                  console.log('[taskList] updating item:', step.task_list!.update!.id, 'to:', step.task_list!.update!.status);
+                  if (!prev || prev.task_id !== step.task_list!.task_id) return prev;
                   return {
                     ...prev,
                     items: prev.items.map(item =>

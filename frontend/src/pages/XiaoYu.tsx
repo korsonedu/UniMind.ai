@@ -47,12 +47,21 @@ export const XiaoYu: React.FC = () => {
   const { t } = useTranslation('xiaoyu');
   const sharedConversationId = useXiaoYuStore(s => s.conversationId);
   const [dash, setDash] = useState<DashData | null>(null);
+  const [dashError, setDashError] = useState(false);
   const [hasConversation, setHasConversation] = useState(false);
 
-  useEffect(() => {
+  const fetchDashboard = () => {
+    setDashError(false);
     api.get('/ai/dashboard/').then(r => {
       if (r.data) setDash(r.data);
-    }).catch(() => {});
+    }).catch((e: any) => {
+      console.error('Dashboard load failed:', e?.response?.status, e?.response?.data || e?.message);
+      setDashError(true);
+    });
+  };
+
+  useEffect(() => {
+    fetchDashboard();
   }, []);
 
   const rawSkills = t('skills', { returnObjects: true }) as Array<{ label: string; prompt: string }>;
@@ -79,7 +88,8 @@ export const XiaoYu: React.FC = () => {
       if (r.data) {
         setDash(r.data);
       }
-    } catch {
+    } catch (e: any) {
+      console.error('Checkin failed:', e?.response?.status, e?.response?.data || e?.message);
     } finally {
       setCheckingIn(false);
     }
@@ -110,7 +120,8 @@ export const XiaoYu: React.FC = () => {
     );
   };
 
-  const landingBanner = !hasConversation && stats ? (
+  const landingBanner = !hasConversation ? (
+    stats ? (
     <div className="animate-in fade-in duration-500">
       {stats.is_new_user ? (
         /* New user: diagnostic CTA + value-prop pills */
@@ -317,6 +328,28 @@ export const XiaoYu: React.FC = () => {
         </div>
       )}
     </div>
+    ) : dashError ? (
+      <div className="animate-in fade-in duration-500">
+        <div className="rounded-2xl bg-card border border-border/40 p-8 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-4">
+            <WarningCircle className="w-7 h-7 text-muted-foreground/50" />
+          </div>
+          <h3 className="text-lg font-bold text-foreground">{t('dashboardErrorTitle')}</h3>
+          <p className="text-sm text-muted-foreground mt-1.5 mb-5 max-w-sm mx-auto leading-relaxed">
+            {t('dashboardErrorHint')}
+          </p>
+          <Button size="sm" variant="outline" onClick={fetchDashboard} className="rounded-full px-6 h-9">
+            {t('retry')}
+          </Button>
+        </div>
+      </div>
+    ) : (
+      <div className="animate-in fade-in duration-500">
+        <div className="rounded-2xl bg-card border border-border/40 p-8 flex items-center justify-center">
+          <div className="w-5 h-5 border-2 border-xiaoyu-300 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    )
   ) : null;
 
   return (

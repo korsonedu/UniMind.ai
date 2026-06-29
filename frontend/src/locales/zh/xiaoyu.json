@@ -92,5 +92,8 @@
   "nextAchievement": "下一个成就",
   "achievementUnlocked": "已解锁 {{count}} 个",
   "heatmapTooltip": "{{date}}: {{count}} 道题",
-  "adjustPlan": "调整计划"
+  "adjustPlan": "调整计划",
+  "dashboardErrorTitle": "数据加载失败",
+  "dashboardErrorHint": "请检查网络连接后重试，或联系老师获取帮助",
+  "retry": "重试"
 }

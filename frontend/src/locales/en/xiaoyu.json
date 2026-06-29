@@ -92,5 +92,8 @@
   "nextAchievement": "Next Achievement",
   "achievementUnlocked": "{{count}} unlocked",
   "heatmapTooltip": "{{date}}: {{count}} questions",
-  "adjustPlan": "Adjust Plan"
+  "adjustPlan": "Adjust Plan",
+  "dashboardErrorTitle": "Failed to load data",
+  "dashboardErrorHint": "Please check your network and try again, or contact your teacher for help",
+  "retry": "Retry"
 }

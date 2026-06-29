@@ -1006,15 +1006,10 @@ class AIEngine:
             _can_parallel = _all_read_only and len(_parsed_calls) > 1
 
             if _can_parallel:
-                # ── 并行执行只读工具 ──
-                import threading as _threading
+                # ── 串行执行只读工具（带 task_list 进度）──
                 import time as _time_module
 
-                _step_lock = _threading.Lock()
-                _tool_results = [None] * len(_parsed_calls)
                 task_id, task_items = cls._generate_task_list(tool_calls, round_i)
-
-                logger.info("[taskList] batch_start task_id=%s items=%s", task_id, [i['label'] for i in task_items])
 
                 # 发送 batch_start 事件
                 if on_step:
@@ -1027,12 +1022,14 @@ class AIEngine:
                         },
                     })
 
-                def _execute_and_notify(idx, tc, name, args, call_id, label):
-                    import django.db
-                    django.db.close_old_connections()
+                for i, (tc, name, args, call_id) in enumerate(_parsed_calls):
+                    label = _labels[i]
 
                     _t0 = _time_module.monotonic()
-                    result = cls._run_tool_with_timeout(tool_executor, name, args)
+                    try:
+                        result = cls._run_tool_with_timeout(tool_executor, name, args)
+                    except Exception as e:
+                        result = {"error": str(e)}
                     _duration_ms = int((_time_module.monotonic() - _t0) * 1000)
 
                     result_str = str(result)
@@ -1066,7 +1063,7 @@ class AIEngine:
                         except Exception:
                             pass
 
-                    # quick_generate: 附加题目数据（虽然 quick_generate 不在只读白名单，保留兼容）
+                    # quick_generate: 附加题目数据
                     if name == "quick_generate" and '"error"' not in result_str:
                         try:
                             _parsed_r = json.loads(result_str) if isinstance(result_str, str) else result_str
@@ -1086,36 +1083,9 @@ class AIEngine:
                         except Exception:
                             pass
 
-                    with _step_lock:
-                        if on_step:
-                            logger.info("[taskList] done event: task_id=%s call_id=%s name=%s duration=%s",
-                                        task_id, call_id, name, _duration_ms)
-                            on_step(done_event)
+                    if on_step:
+                        on_step(done_event)
 
-                    return idx, result_str
-
-                with ThreadPoolExecutor(max_workers=min(4, len(_parsed_calls))) as executor:
-                    _future_to_idx = {
-                        executor.submit(
-                            _execute_and_notify,
-                            i, tc, name, args, call_id, _labels[i],
-                        ): i
-                        for i, (tc, name, args, call_id) in enumerate(_parsed_calls)
-                    }
-                    for future in as_completed(_future_to_idx):
-                        try:
-                            idx, result_str = future.result()
-                            _tool_results[idx] = result_str
-                        except Exception:
-                            idx = _future_to_idx[future]
-                            _tool_results[idx] = json.dumps(
-                                {"error": "parallel execution failed"},
-                                ensure_ascii=False,
-                            )
-
-                # 按原始顺序追加工具结果 + 注入 system 消息
-                for i, (tc, name, args, call_id) in enumerate(_parsed_calls):
-                    result_str = _tool_results[i]
                     all_messages.append({
                         "role": "tool",
                         "content": result_str,

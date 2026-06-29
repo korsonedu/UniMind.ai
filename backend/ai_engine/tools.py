@@ -1056,7 +1056,7 @@ RENDER_VISUAL_SCHEMA = {
             "type": "object",
             "description": (
                 "可视化内容，结构由 type 决定：\n"
-                "• data_card: {title: string, subtitle?: string, items: [{label, value, trend?: 'up'|'down'|'neutral', progress?: 0-100, emphasis?: bool, action_link?: string}], cta?: {label, link}}\n"
+                "• data_card: {title: string, items: [{label, value, trend?: 'up'|'down'|'neutral', progress?: 0-100, emphasis?: bool, action_link?: string}], cta?: {label, link}}\n"
                 "• latex_derivation: {title: string, steps: [{latex: string, note?: string}]}\n"
                 "• step_solution: {title: string, steps: [{text: string, latex?: string}]}\n"
                 "• knowledge_map: {title?: string, nodes: [{id: string, label: string, mastery?: 0-1}], edges: [{from: string, to: string}], highlights?: [string]}\n"

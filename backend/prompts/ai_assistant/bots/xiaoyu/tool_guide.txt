@@ -40,7 +40,7 @@
 **data_card** — 学习数据/统计卡片
 ```json
 {"type": "data_card", "payload": {
-  "title": "本周学习概览", "subtitle": "5.24 - 5.30",
+  "title": "本周学习概览",
   "items": [
     {"label": "刷题量", "value": "42题", "trend": "up"},
     {"label": "正确率", "value": "78%", "trend": "up", "emphasis": true},
