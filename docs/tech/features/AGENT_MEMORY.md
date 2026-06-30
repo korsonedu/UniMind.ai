@@ -1,6 +1,6 @@
 # Agent 记忆系统
 
-> 最后更新：2026-06-01
+> 最后更新：2026-06-30
 
 ## 概述
 
@@ -85,7 +85,7 @@ Agent 记忆系统让 AI 助教能够跨会话记住用户的关键信息（偏�
 | 规则引擎 | `ai_assistant/services/prompt_adapter.py` | 8 种模式检测（关键词匹配） |
 | 注入位置 | `chat_service.py` → `_build_agent_system_prompt()` | system prompt 末尾 |
 
-**LLM 分析模式（v2.10.0+）**：
+**LLM 分析模式**：
 - 用户登录时 Celery 异步预计算画像，缓存到 Redis（24h 过期）
 - 对话时优先读取缓存，未命中时 fallback 到规则匹配
 - 分析维度：learning_style、response_length、interaction_style、cognitive_state、domain_expertise
@@ -251,4 +251,4 @@ USE_MEM0=true python3 -m pytest ai_assistant/tests/test_mem0_integration.py -v -
 
 | 文档 | 内容 |
 |------|------|
-| `docs/tech/features/MULTI_TENANT_AGENT_MEMORY.md` | 多租户记忆系统完整设计（mem0+pgvector、工具权限沙箱、机构人格） |
+| `docs/tech/features/archive/multi-tenant-agent-memory.md` | 多租户记忆系统完整设计（mem0+pgvector、工具权限沙箱、机构人格） |

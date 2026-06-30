@@ -1,10 +1,10 @@
-# 命题官（ExamMaster）
+# 工作台（教师 AI 教研助手）
 
 ## 概述
 
-命题官是老师/机构主的核心工作界面，采用**对话式 Agent 架构**——教师通过自然语言描述出题需求，Agent 自主调用工具搜索知识点、快速出题、ARC 精修。结构与小宇（XiaoYu）学习规划 Agent 对齐：未对话时大片留白，对话后左右分栏。
+工作台是老师/机构主的核心工作界面，采用**对话式 Agent 架构**——教师通过自然语言描述出题需求，Agent 自主调用工具搜索知识点、快速出题、ARC 精修、管理作业、分析学情。结构与小宇（XiaoYu）学习规划 Agent 对齐：未对话时大片留白，对话后左右分栏。
 
-2026-05-31 重构：工具集精简为 5 个（search_knowledge + quick_generate + launch_arc_pipeline + check_pipeline_status + get_workbench_stats），存入题库改为前端按钮，dispatch 层通用化。
+2026-05-31 重构：核心出题流程收敛为对话式指令驱动。后续持续扩展至 20+ 工具，覆盖作业管理、学情分析、班级运营等完整教研链路。
 
 ## 页面布局
 
@@ -57,14 +57,16 @@
 | BotRegistry | `ai_assistant/bot_registry.py` | 注册表：bot_type → (Executor, tools, prompt_dir, use_intent_router) |
 | chat_dispatch | `ai_assistant/services/chat_dispatch.py` | 统一调度：3 个入口共用 |
 | Prompt 模板 | `prompts/ai_assistant/bots/exam_generator/` | system_prompt.txt + tool_guide.txt + personality.txt + intent_guide.txt |
-| ToolExecutor | `ai_assistant/services/exam_generator_tool_executor.py` | 5 个出题专用工具的执行器 |
+| ToolExecutor | `ai_assistant/services/exam_generator_tool_executor.py` | 20+ 出题专用工具的执行器 |
 | 意图路由器 | `ai_engine/tool_router.py` (`EXAM_GENERATOR_INTENT_MAP`) | 5 类意图预筛选：generate/refine/status/stats/general |
 | Prompt 自适应 | `ai_assistant/services/prompt_adapter.py` (`_TEACHING_STYLE_RULES`) | 7 条教师偏好规则（题型/难度/学科） |
 | Meta-cognition | `ai_assistant/tasks.py` (`reflect_teacher_patterns`) | 每日分析出题模式，存入 mem0 语义记忆 |
 | Dashboard | `ai_assistant/views_dashboard.py` (`ExamWorkbenchDashboardView`) | GET /api/ai/workbench/dashboard/ |
 | Seed 命令 | `ai_assistant/management/commands/seed_exam_agent.py` | 创建/更新命题官 Bot（prompt 从文件读取） |
 
-### 工具列表
+### 核心工具
+
+工作台当前拥有 20+ 工具，以下为最常用的出题相关工具：
 
 | 工具 | 用途 | 模式 |
 |------|------|------|
@@ -212,4 +214,4 @@ Agent 识别口语化指令，直接调用对应工具，不反问确认：
 
 ## ARC 管线详情
 
-见 [AI_MULTI_AGENT_PIPELINE.md](./AI_MULTI_AGENT_PIPELINE.md)
+见 `docs/tech/features/archive/ai-multi-agent-pipeline.md`
