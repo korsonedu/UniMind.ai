@@ -238,36 +238,51 @@ sudo journalctl -u unimind.service -f
 
 ## 深入文档
 
+### 常用（顶层）
+
 | 文档 | 内容 |
 |------|------|
 | `README.md` | 完整系统介绍、部署指南、环境变量全量参考 |
 | `CHANGELOG.md` | 版本更新日志 |
+| `docs/PRODUCT.md` | 产品定位、使用场景、定价方案（客户向） |
+| `docs/USER_MANUAL.md` | 用户操作手册（场景化组织） |
+| `docs/VERSIONING.md` | 版本管理规范（SemVer + Commit 规范 + 发布流程） |
+| `docs/enterprise-deployment.md` | 企业版本地部署指南 |
+
+### 技术总参考
+
+| 文档 | 内容 |
+|------|------|
 | `docs/tech/AI_SYSTEM_REFERENCE.md` | AI 系统完整参考（Schema 目录、Prompt 模板、模型路由表） |
-| `docs/tech/architecture/PERMISSION_ARCHITECTURE.md` | 三层权限模型、路由守卫、数据隔离、开发规范 |
-| `docs/tech/features/AGENT_MEMORY.md` | Agent 记忆系统（提取/检索/注入机制） |
-| `docs/tech/features/AI_CIRCUIT_BREAKER.md` | AI 熔断器（按任务粒度熔断、自动恢复） |
-| `docs/tech/features/AI_ESSAY_GRADING_ENGINE.md` | AI 主观题判分引擎（Tag-based 协议、LaTeX 保护） |
-| `docs/tech/features/AI_MULTI_AGENT_PIPELINE.md` | 4-Agent ARC 对抗出题管线（Author→Reviewer→AuthorRevise→Classifier） |
-| `docs/tech/features/DIAGNOSTIC_TEST.md` | 学生诊断测试（生成/评分/Memorix 初始化） |
-| `docs/tech/features/EXAM_WORKBENCH.md` | AI 出题工作台（对话式 Agent/快速出题/ARC 精修） |
+| `docs/tech/architecture/PERMISSION_ARCHITECTURE.md` | 权限模型、路由守卫、数据隔离、开发规范 |
+
+### 核心功能文档
+
+| 文档 | 内容 |
+|------|------|
+| `docs/tech/features/AGENT_MEMORY.md` | Agent 记忆系统（提取/检索/注入机制 + 多租户 + Memorix 联动） |
+| `docs/tech/features/EXAM_WORKBENCH.md` | AI 出题工作台（对话式 Agent/快速出题/ARC 精修管线） |
 | `docs/tech/features/INTELLIGENT_TOOL_ROUTING.md` | 智能工具路由（SkillRouter 论文落地、impl_summary、意图预筛选） |
-| `docs/tech/features/KNOWLEDGE_GRAPH_PERSONALIZATION.md` | 知识图谱个性化（D3.js 拓扑、掌握度热力图） |
 | `docs/tech/features/MEMORIX_WHITEPAPER.md` | Memorix 算法论文 |
 | `docs/tech/features/MULTI_STEP_AGENT.md` | 多步可见 Agent（逐步气泡展示 + 自定义指标卡片） |
-| `docs/tech/features/MULTI_TENANT_AGENT_MEMORY.md` | 多租户 Agent 记忆（mem0+pgvector、工具权限沙箱、机构人格） |
-| `docs/tech/features/OSS_STORAGE.md` | 阿里云 OSS 存储（分片直传、后端签名） |
-| `docs/tech/features/PERSONALIZED_PDF_MOCK_EXAM.md` | 模拟考试（AI 组卷 + 教师发布 + 提交评分） |
-| `docs/tech/features/PLATFORM_ANALYTICS.md` | 平台数据分析（事件截留/每日聚合/NPS问卷/CSV导出，仅超管可见） |
-| `docs/tech/features/PROMPT_MANAGEMENT_SYSTEM.md` | Prompt 管理系统（文件系统+数据库版本历史+回滚） |
-| `docs/tech/features/RBAC_USER_MANAGEMENT.md` | RBAC 用户管理（角色/权限组/机构隔离） |
-| `docs/tech/features/WOW_MOMENT_TECH_FLOWS.md` | 6 个核心功能技术流程图（数据流/消息协议/架构图） |
-| `docs/tech/features/MUTAR_ENGINE.md` | MUTAR 自进化：轨迹采集→自动评估→用户反馈→变体路由→优化执行 |
-| `docs/tech/features/ADAPTIVE_PROMPT_LLM.md` | LLM 驱动的自适应指令（用户画像→prompt 指令注入） |
+| `docs/tech/features/MUTAR_ENGINE.md` | MUTAR 自进化闭环 |
+| `docs/tech/features/PLATFORM_ANALYTICS.md` | 平台数据分析（仅超管可见） |
+| `docs/tech/features/COMPREHENSIVE_INTERVIEW_MODULE.md` | AI 模拟面试模块 |
+| `docs/tech/features/WOW_MOMENT_TECH_FLOWS.md` | 核心功能技术流程图 |
+
+### 归档
+
+| 文档 | 内容 |
+|------|------|
+| `docs/tech/features/archive/` | 12 篇功能细节文档（熔断、判分、诊断、OSS 等），不常访问 |
+| `docs/architecture/` | 学术论文（Field、Memorix、小宇架构）+ 研究探索 |
+| `docs/design/` | 设计规范 + 产品原则 |
 | `docs/tech/incidents/` | 历史事故记录 |
+| `docs/tech/templates/` | 文档模板 |
 | `backend/knowledge_trees/金融431_完整版.md` | 431 金融知识树（完整版） |
 
 ## Agent skills
 
 ### Domain docs
 
-Single-context — 一个全局 `CONTEXT.md` + `docs/adr/` 在 repo 根目录。详见 `docs/agents/domain.md`。
+Single-context — 一个全局 `CONTEXT.md` + `docs/adr/` 在 repo 根目录。
