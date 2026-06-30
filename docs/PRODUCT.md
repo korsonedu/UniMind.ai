@@ -1,5 +1,7 @@
 # UniMind — Agent 驱动的新一代智能教育基础设施
 
+> 本文面向潜在客户与合作伙伴，介绍 UniMind 的产品理念、使用场景与商业方案。系统架构与算法细节见上级目录 [UniMind系统介绍.md](../UniMind系统介绍.md)。
+
 UniMind 是一套面向教育培训机构的 AI 基础设施。系统部署两个自治 AI Agent——学生学习教练「小宇」与教师教研助手「工作台」——覆盖从出题、刷题、评分批改到知识追踪的全链路。底层为四层自适应学习架构，支撑 13 学科 4,486 知识点的全景知识图谱。B2B 机构部署，数据完全隔离。
 
 ---
@@ -181,11 +183,15 @@ IRT 的核心优势在于参数不变性：学生的能力估计不依赖于具�
 | 后端 | Django 6.0 + Django REST Framework |
 | 异步任务 | Celery + Redis |
 | 实时通信 | Django Channels + Daphne（WebSocket + SSE 流式） |
-| AI 引擎 | DeepSeek V4，多模型分级路由，熔断器，Embedding 本地部署 |
-| 前端 | React 19 + TypeScript + Tailwind CSS 4 + KaTeX + D3.js |
+| AI 引擎 | DeepSeek V4，多模型分级路由，熔断保护，Agent 统一运行时 + Function Calling |
+| 前端 | React 19 + TypeScript + Tailwind CSS 4 |
+| UI 组件 | shadcn/ui (Radix) |
+| 状态管理 | Zustand |
+| 数学渲染 | KaTeX |
+| 图表 | Recharts · D3.js |
 | 数据库 | PostgreSQL（生产）/ SQLite（开发） |
-| 部署 | systemd + Nginx，支持单机与分布式 |
 | 国际化 | i18next（中英双语） |
+| 部署 | systemd + Nginx，支持单机与分布式 |
 
 ---
 
