@@ -22,5 +22,7 @@
   "targetAccuracy": "目标正确率",
   "questionCount": "题目数量",
   "doubleClickToEdit": "双击编辑名称",
-  "newTaskDefaultTitle": "新任务"
+  "newTaskDefaultTitle": "新任务",
+  "error403": "当前非会员或会员已过期，无法使用此功能",
+  "error404": "未找到该资源"
 }

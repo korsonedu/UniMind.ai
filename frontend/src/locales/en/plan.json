@@ -22,5 +22,7 @@
   "targetAccuracy": "Target Accuracy",
   "questionCount": "Question Count",
   "doubleClickToEdit": "Double-click to edit name",
-  "newTaskDefaultTitle": "New Task"
+  "newTaskDefaultTitle": "New Task",
+  "error403": "Your membership may have expired. Please renew to access this feature.",
+  "error404": "Resource not found"
 }

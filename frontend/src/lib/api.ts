@@ -41,14 +41,19 @@ api.interceptors.response.use(
       }
       return Promise.reject(error);
     }
-    // 403 + 无机构 → 弹出 onboarding 引导创建/加入机构
+    // 403 → 按用户状态分流
     if (error.response?.status === 403) {
       try {
         const raw = localStorage.getItem('auth-storage');
         const stored = raw ? JSON.parse(raw) : null;
         const u = stored?.state?.user;
+        // 无机构 + 非管理员 → 弹出 onboarding 引导创建/加入机构
         if (u && !u.institution && !u.institution_id && !u.is_admin) {
           window.dispatchEvent(new Event('onboarding:required'));
+        } else if (u) {
+          // 有机构但权限不足（会员过期/角色不匹配等），不对用户做全局拦截，
+          // 由各页面 catch 块读取 error.response.data.detail 展示具体原因
+          console.warn('403 Forbidden for institution user:', u.id, 'path:', error.config?.url);
         }
       } catch { /* ignore parse errors */ }
     }

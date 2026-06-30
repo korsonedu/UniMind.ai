@@ -22,6 +22,7 @@ interface AssignmentItem {
   question_count: number;
   submitted: boolean;
   score: number | null;
+  pending_count: number | null;
   created_at: string;
 }
 
@@ -41,6 +42,8 @@ interface QuestionData {
   feedback?: string;
   analysis?: string;
   correct_answer?: string;
+  graded?: boolean;
+  user_answer?: string;
 }
 
 type View = 'list' | 'detail';
@@ -108,6 +111,7 @@ export default function MyAssignments() {
     id: number; title: string; due_date: string | null;
     questions: QuestionData[]; submitted: boolean;
     previous_answers: Record<string, string>; score: number | null;
+    pending_count: number | null;
   } | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -140,16 +144,33 @@ export default function MyAssignments() {
     try {
       const res = await api.post('/assignments/submit/', { assignment_id: detail.id, answers });
       toast.success(res.data.message);
-      // 将逐题批改结果合并到题目列表中
+      // 将逐题批改结果合并到题目列表中（客观题已判分，主观题 graded:false）
       const qrMap = new Map((res.data.question_results || []).map((r: any) => [r.question_id, r]));
       const updatedQuestions = detail.questions.map(q => {
         const qr: any = qrMap.get(q.id);
         if (qr) {
-          return { ...q, score: qr.score, max_score: qr.max_score, is_correct: qr.is_correct, feedback: qr.feedback, analysis: qr.analysis, correct_answer: qr.correct_answer };
+          return {
+            ...q,
+            score: qr.score,
+            max_score: qr.max_score,
+            is_correct: qr.is_correct,
+            feedback: qr.feedback,
+            analysis: qr.analysis,
+            correct_answer: qr.correct_answer,
+            graded: qr.graded,
+            user_answer: qr.user_answer,
+          };
         }
         return q;
       });
-      setDetail({ ...detail, submitted: true, score: res.data.score, previous_answers: answers, questions: updatedQuestions });
+      setDetail({
+        ...detail,
+        submitted: true,
+        score: res.data.score,
+        pending_count: res.data.pending_count,
+        previous_answers: answers,
+        questions: updatedQuestions,
+      });
       fetchList();
     } catch (e: any) { toast.error(e?.response?.data?.error || '提交失败'); }
     setSubmitting(false);
@@ -234,10 +255,17 @@ export default function MyAssignments() {
                             {left !== null && !overdue && <span className="ml-1 font-normal">{left <= 0 ? '(今天)' : `(${left}天后)`}</span>}
                           </span>
                         </>}
-                        {a.submitted && a.score !== null && <>
-                          <span className="text-muted-foreground/30">·</span>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400">得分 {a.score}</span>
-                        </>}
+                        {a.submitted && a.score !== null && a.pending_count ? (
+                          <>
+                            <span className="text-muted-foreground/30">·</span>
+                            <span className="font-bold text-amber-600 dark:text-amber-400">部分批改</span>
+                          </>
+                        ) : a.submitted && a.score !== null && (
+                          <>
+                            <span className="text-muted-foreground/30">·</span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400">得分 {a.score}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                     {a.submitted ? (
@@ -306,9 +334,20 @@ export default function MyAssignments() {
 
         {detail.submitted ? (
           <div className="space-y-3">
+            {/* 部分批改提示 */}
+            {detail.pending_count != null && detail.pending_count > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/30 dark:border-amber-900/30 dark:bg-amber-950/10 p-4 flex items-center gap-3">
+                <Hourglass className="h-5 w-5 text-amber-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-amber-700 dark:text-amber-400">等待老师批改</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">还有 {detail.pending_count} 道主观题待老师批改，批改完成后你将看到完整结果</p>
+                </div>
+              </div>
+            )}
             {detail.questions.map((q, i) => {
-              const userAnswer = detail.previous_answers[String(q.id)];
-              const hasGrading = q.score !== undefined;
+              const userAnswer = q.user_answer || detail.previous_answers[String(q.id)];
+              const hasGrading = q.graded !== false && q.score !== undefined;
+              const isPending = q.graded === false;
               const expanded = expandedCards.has(q.id);
               return (
                 <div key={q.id} className="rounded-xl border border-border bg-card overflow-hidden">
@@ -320,6 +359,11 @@ export default function MyAssignments() {
                         q.is_correct ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400' : 'bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400',
                       )}>
                         {q.score}/{q.max_score} 分
+                      </span>
+                    )}
+                    {isPending && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+                        待批改
                       </span>
                     )}
                     <span className="text-[10px] text-muted-foreground/40">{q.points} 分</span>
@@ -335,6 +379,12 @@ export default function MyAssignments() {
                         <span className="text-[11px] font-bold text-muted-foreground">你的答案</span>
                         <p className="text-sm mt-1 leading-relaxed">{userAnswer || <span className="text-muted-foreground/40 italic">未作答</span>}</p>
                       </div>
+                      {isPending && (
+                        <div className="p-3 rounded-lg bg-amber-50/50 border border-amber-200/50 dark:bg-amber-950/20 dark:border-amber-800/30 text-center">
+                          <Hourglass className="h-5 w-5 mx-auto text-amber-400 mb-1" />
+                          <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">等待老师批改</p>
+                        </div>
+                      )}
                       {q.correct_answer && (
                         <div className="p-3 rounded-lg bg-emerald-50/50 border border-emerald-200/50 dark:bg-emerald-950/20 dark:border-emerald-800/30">
                           <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">参考答案</span>

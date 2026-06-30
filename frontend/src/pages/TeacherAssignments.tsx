@@ -130,11 +130,11 @@ export function TeacherAssignments() {
   const aiGrade = async (submissionId: number, assignmentId: number) => {
     setGradingId(submissionId);
     try {
-      await api.post(`/assignments/submissions/${submissionId}/grade/`, { action: 'ai_grade' });
-      toast.success('AI 判分完成');
-      const res = await api.get(`/assignments/${assignmentId}/submissions/`);
-      setSubmissions(prev => ({ ...prev, [assignmentId]: res.data.submissions || res.data.results || res.data || [] }));
-    } catch { toast.error('判分失败'); }
+      const res = await api.post(`/assignments/submissions/${submissionId}/grade/`, { action: 'ai_grade' });
+      toast.success(res.data.message || 'AI 判分完成');
+      const listRes = await api.get(`/assignments/${assignmentId}/submissions/`);
+      setSubmissions(prev => ({ ...prev, [assignmentId]: listRes.data.submissions || listRes.data.results || listRes.data || [] }));
+    } catch (e: any) { toast.error(e?.response?.data?.error || '判分失败'); }
     setGradingId(null);
   };
 

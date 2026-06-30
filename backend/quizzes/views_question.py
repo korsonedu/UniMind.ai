@@ -507,6 +507,9 @@ class StudentAssignmentListView(APIView):
         result = []
         for a in assignments:
             sub = subs.get(a.id)
+            pending = None
+            if sub and sub.question_results:
+                pending = sum(1 for r in sub.question_results if not r.get('graded', True))
             result.append({
                 'id': a.id,
                 'title': a.title,
@@ -514,6 +517,7 @@ class StudentAssignmentListView(APIView):
                 'question_count': a.q_count,
                 'submitted': sub is not None,
                 'score': sub.score if sub else None,
+                'pending_count': pending,
                 'created_at': a.created_at.isoformat(),
             })
 
@@ -551,7 +555,7 @@ class StudentAssignmentDetailView(APIView):
         # Check existing submission
         sub = AssignmentSubmission.objects.filter(assignment=assignment, student=user).first()
 
-        # 已提交时注入逐题 AI 批改结果和标准答案
+        # 已提交时注入逐题批改结果；仅已批改的题注入参考答案
         if sub:
             question_results = sub.question_results or []
             qr_map = {r['question_id']: r for r in question_results}
@@ -564,7 +568,16 @@ class StudentAssignmentDetailView(APIView):
                     q_data['is_correct'] = qr.get('is_correct', False)
                     q_data['feedback'] = qr.get('feedback', '')
                     q_data['analysis'] = qr.get('analysis', '')
-                q_data['correct_answer'] = correct_answer_map.get(q_data['id'], '')
+                    q_data['graded'] = qr.get('graded', True)  # 兼容旧数据（无 graded 字段视为已批改）
+                    q_data['user_answer'] = qr.get('user_answer', '')
+                    # 仅在已批改时注入参考答案，防止学生提前看到
+                    if qr.get('graded', True):
+                        q_data['correct_answer'] = correct_answer_map.get(q_data['id'], '')
+
+        # 计算待批改题目数
+        pending_count = None
+        if sub and sub.question_results:
+            pending_count = sum(1 for r in sub.question_results if not r.get('graded', True))
 
         return Response({
             'id': assignment.id,
@@ -574,11 +587,12 @@ class StudentAssignmentDetailView(APIView):
             'submitted': sub is not None,
             'previous_answers': sub.answers if sub else {},
             'score': sub.score if sub else None,
+            'pending_count': pending_count,
         })
 
 
 class StudentAssignmentSubmitView(APIView):
-    """POST /api/quizzes/assignments/submit/ — 学生提交作业，逐题 AI 判分。"""
+    """POST /api/quizzes/assignments/submit/ — 学生提交作业，客观题自动判分，主观题仅保存答案。"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -600,12 +614,15 @@ class StudentAssignmentSubmitView(APIView):
         if assignment.due_date and timezone.now() > assignment.due_date:
             return Response({'error': '作业已截止'}, status=400)
 
-        # 逐题 AI 判分
         from .ai_workflow import grade_answer_for_user
 
         total_score = 0.0
+        graded_max = 0.0  # 仅统计已判分题的最大分
         total_max = 0.0
         question_results = []
+        auto_graded = 0
+        pending = 0
+
         for aq in assignment.assignment_questions.all():
             q = aq.question
             points = float(aq.points)
@@ -621,41 +638,85 @@ class StudentAssignmentSubmitView(APIView):
                     'feedback': '未作答',
                     'analysis': '',
                     'correct_answer': q.correct_answer or '',
+                    'graded': True,
                 })
+                graded_max += points
                 continue
 
-            result = grade_answer_for_user(user, q, user_answer)
-            actual_score = result['score']
-            total_score += actual_score
-            question_results.append({
-                'question_id': q.id,
-                'score': actual_score,
-                'max_score': result.get('max_score', points),
-                'is_correct': result.get('is_correct', False),
-                'feedback': result.get('feedback', ''),
-                'analysis': result.get('analysis', ''),
-                'correct_answer': q.correct_answer or '',
-            })
+            if q.q_type == 'objective':
+                # 客观题：直接比对标准答案判分（含 Memorix 更新）
+                result = grade_answer_for_user(user, q, user_answer)
+                actual_score = result['score']
+                total_score += actual_score
+                graded_max += points
+                auto_graded += 1
+                question_results.append({
+                    'question_id': q.id,
+                    'score': actual_score,
+                    'max_score': result.get('max_score', points),
+                    'is_correct': result.get('is_correct', False),
+                    'feedback': result.get('feedback', ''),
+                    'analysis': result.get('analysis', ''),
+                    'correct_answer': q.correct_answer or '',
+                    'graded': True,
+                })
+            else:
+                # 主观题：仅保存原始答案，等待老师批改
+                pending += 1
+                question_results.append({
+                    'question_id': q.id,
+                    'score': None,
+                    'max_score': points,
+                    'is_correct': None,
+                    'feedback': None,
+                    'analysis': None,
+                    'correct_answer': None,  # 不泄露参考答案
+                    'user_answer': user_answer,
+                    'graded': False,
+                })
+
+        # score 仅基于已判分题目计算；若全部主观题则为 None
+        score = round(total_score / graded_max * 100, 1) if graded_max > 0 else None
 
         sub, created = AssignmentSubmission.objects.update_or_create(
             assignment=assignment, student=user,
             defaults={
                 'answers': answers,
-                'score': round(total_score / total_max * 100, 1) if total_max > 0 else None,
+                'score': score,
                 'question_results': question_results,
             },
         )
 
-        graded_count = sum(1 for r in question_results if r['feedback'] != '未作答')
+        # 通知作业对应的教师
+        teacher = assignment.created_by
+        if teacher and teacher != user:
+            from notifications.models import Notification
+            Notification.objects.create(
+                recipient=teacher,
+                sender=user,
+                ntype='assignment_submit',
+                title='收到新的作业提交',
+                content=f'{user.nickname or user.username} 提交了作业「{assignment.title}」',
+                link=f'/teacher/assignments',
+            )
+
+        # 构建消息
+        parts = []
+        if auto_graded > 0:
+            parts.append(f'客观题已自动判分 {auto_graded} 题')
+        if pending > 0:
+            parts.append(f'主观题 {pending} 题等待老师批改')
+        message = '已提交，' + '，'.join(parts) if parts else '已提交'
 
         return Response({
             'id': sub.id,
             'submitted': True,
-            'graded_count': graded_count,
             'total_questions': assignment.assignment_questions.count(),
+            'auto_graded_count': auto_graded,
+            'pending_count': pending,
             'score': sub.score,
             'question_results': question_results,
-            'message': f'已提交，AI 逐题批改完成 {graded_count} 题',
+            'message': message,
         })
 
 
@@ -688,7 +749,7 @@ class AssignmentSubmissionListView(APIView):
                 'submitted_at': sub.submitted_at.isoformat(),
                 'answers': sub.answers,
                 'score': sub.score,
-                'graded': sub.score is not None,
+                'graded': all(r.get('graded', True) for r in (sub.question_results or [])) if sub.question_results else False,
                 'question_results': sub.question_results,
             })
 
@@ -719,7 +780,12 @@ class AssignmentSubmissionListView(APIView):
 
 
 class AssignmentGradeView(APIView):
-    """POST /api/quizzes/assignments/submissions/<id>/grade/ — 教师批改/评分。"""
+    """POST /api/quizzes/assignments/submissions/<id>/grade/ — 教师批改/评分。
+    支持 action:
+      - 无 / 'manual': 手动录入总分
+      - 'ai_grade': AI 逐题批改未评分主观题
+      - 'update_grade': 教师修改逐题批改结果
+    """
     permission_classes = [IsAuthenticated, IsInstitutionTeacher]
 
     def post(self, request, pk):
@@ -733,6 +799,118 @@ class AssignmentGradeView(APIView):
         except AssignmentSubmission.DoesNotExist:
             return Response({'error': '提交不存在'}, status=404)
 
+        action = request.data.get('action', 'manual')
+
+        if action == 'ai_grade':
+            return self._ai_grade(sub, user)
+        elif action == 'update_grade':
+            return self._update_grade(sub, request, user)
+        else:
+            return self._manual_grade(sub, request, user)
+
+    def _ai_grade(self, sub, user):
+        """AI 批改提交中未评分的主观题。"""
+        from .ai_workflow import grade_answer_for_user
+
+        assignment = sub.assignment
+        question_results = list(sub.question_results or [])
+        total_score = 0.0
+        graded_max = 0.0
+        graded_count = 0
+
+        for aq in assignment.assignment_questions.all():
+            q = aq.question
+            points = float(aq.points)
+
+            # 查找已有的 question_result
+            existing = next((r for r in question_results if r['question_id'] == q.id), None)
+            if existing and existing.get('graded', True):
+                # 已批改：保留现有分数
+                if existing.get('score') is not None:
+                    total_score += existing['score']
+                    graded_max += points
+                continue
+
+            user_answer = str(sub.answers.get(str(q.id), '')).strip()
+            if not user_answer:
+                # 更新或追加未作答结果
+                new_r = {
+                    'question_id': q.id, 'score': 0, 'max_score': points,
+                    'is_correct': False, 'feedback': '未作答', 'analysis': '',
+                    'correct_answer': q.correct_answer or '', 'graded': True,
+                }
+                if existing:
+                    question_results[question_results.index(existing)] = new_r
+                else:
+                    question_results.append(new_r)
+                graded_max += points
+                continue
+
+            result = grade_answer_for_user(sub.student, q, user_answer)
+            actual_score = result['score']
+            total_score += actual_score
+            graded_max += points
+            graded_count += 1
+            new_r = {
+                'question_id': q.id,
+                'score': actual_score,
+                'max_score': result.get('max_score', points),
+                'is_correct': result.get('is_correct', False),
+                'feedback': result.get('feedback', ''),
+                'analysis': result.get('analysis', ''),
+                'correct_answer': q.correct_answer or '',
+                'graded': True,
+            }
+            if existing:
+                question_results[question_results.index(existing)] = new_r
+            else:
+                question_results.append(new_r)
+
+        sub.score = round(total_score / graded_max * 100, 1) if graded_max > 0 else None
+        sub.question_results = question_results
+        sub.graded_by = user
+        sub.graded_at = timezone.now()
+        sub.save()
+
+        return Response({
+            'id': sub.id,
+            'score': sub.score,
+            'graded_at': sub.graded_at.isoformat(),
+            'question_results': question_results,
+            'graded_count': graded_count,
+            'message': f'AI 批改完成 {graded_count} 题' if graded_count > 0 else '所有题目均已批改',
+        })
+
+    def _update_grade(self, sub, request, user):
+        """教师手动修改逐题批改结果。"""
+        updated_results = request.data.get('question_results')
+        if not updated_results:
+            return Response({'error': '缺少 question_results'}, status=400)
+
+        total_score = 0.0
+        graded_max = 0.0
+        for r in updated_results:
+            if r.get('score') is not None:
+                total_score += float(r['score'])
+                graded_max += float(r.get('max_score', 0))
+            r['graded'] = True
+
+        sub.question_results = updated_results
+        sub.score = round(total_score / graded_max * 100, 1) if graded_max > 0 else None
+        sub.graded_by = user
+        sub.graded_at = timezone.now()
+        sub.save()
+
+        return Response({
+            'id': sub.id,
+            'score': sub.score,
+            'graded_at': sub.graded_at.isoformat(),
+            'question_results': sub.question_results,
+            'message': '批改结果已更新',
+        })
+
+    def _manual_grade(self, sub, request, user):
+        """手动录入总分（保留原有逻辑）。"""
         score = request.data.get('score')
         if score is not None:
             sub.score = float(score)
