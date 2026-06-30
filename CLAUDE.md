@@ -8,8 +8,8 @@ Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepS
 
 | Agent | bot_type | 工具数 | 意图路由 | 职责 |
 |-------|----------|--------|---------|------|
-| 小宇 | `planner` | 21 | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 可视化渲染 + 教练式对话 |
-| 工作台 | `exam_generator` | 15 | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 作业管理 + 资产浏览 + 通知 + 邀请管理 |
+| 小宇 | `planner` | 30+ | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 可视化渲染 + 教练式对话 |
+| 工作台 | `exam_generator` | 20+ | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 作业管理 + 资产浏览 + 通知 + 邀请管理 |
 
 运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
 意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。**自进化优化**：LLM 驱动的用户画像分析（缓存预计算 + Celery 异步）、Memorix↔Agent 联动、MUTAR 自进化全链路（Measure→Umpire→Think→Adapt→Refine：采集→评估→分析→变体→精炼，Trajectory 自动记录 + 用户反馈闭环）。
