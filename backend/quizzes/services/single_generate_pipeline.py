@@ -180,6 +180,7 @@ def run_single_generate_pipeline(
     skip_review: bool = False,
     institution=None,
     on_progress=None,
+    on_candidates=None,
 ) -> Dict[str, Any]:
     normalized_kp_ids = _normalize_kp_ids(kp_ids)
     if not normalized_kp_ids:
@@ -193,7 +194,9 @@ def run_single_generate_pipeline(
         raise AICallError("未匹配到有效考点。", status_code=400, retryable=False, error_category="bad_request")
 
     windows = max(1, safe_int(getattr(settings, "AI_SINGLE_PIPELINE_AUTHOR_WINDOWS", 2), 2))
-    max_windows = min(windows, 4)
+    # skip_review 时不需要多轮 author window——count_per_kp 已经按目标题数算好，
+    # 一轮就能出够。多窗口的意义是为 reviewer 提供更多候选，跳过 review 时纯浪费。
+    max_windows = 1 if skip_review else min(windows, 4)
     candidates: List[Dict[str, Any]] = []
 
     for author_window in range(max_windows):
@@ -210,6 +213,10 @@ def run_single_generate_pipeline(
             row = dict(item)
             row["author_window"] = author_window + 1
             candidates.append(row)
+
+        # 每轮 author window 完成后，把当前累积的候选题目推给前端
+        if on_candidates:
+            on_candidates(list(candidates), author_window + 1)
 
     candidates = _dedupe_questions(candidates)
     if not candidates:

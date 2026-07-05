@@ -395,7 +395,12 @@ class QuestionGenerator:
         if q_type == 'objective':
             grading_points = '无'
         else:
-            grading_points = str(raw.get('grading_points') or '').strip() or self.ai_service.default_grading_points(subjective_type)
+            gp_raw = raw.get('grading_points')
+            if isinstance(gp_raw, list):
+                # LLM 返回的是数组，保持 list 类型供 SSE 直传前端
+                grading_points = gp_raw
+            else:
+                grading_points = str(gp_raw or '').strip() or self.ai_service.default_grading_points(subjective_type)
 
         clean_data = {
             'q_type': q_type,

@@ -991,7 +991,7 @@ def get_exam_generator_tools():
     return [
         _make_tool("search_knowledge", "搜索知识点或知识树结构。出题前先用此工具确认知识点存在并获取 ID。", SEARCH_KNOWLEDGE_SCHEMA,
             impl_summary="合并搜索：mode=kp 时模糊匹配 knowledge_point 表的 name 和 code；mode=tree 时搜索知识树结构（sub/ch/sec 层级）；mode=auto 时先搜 kp，无结果则自动搜 tree。支持 subject 过滤。返回知识点 ID 和名称。"),
-        _make_tool("quick_generate", "快速出题（Author 单步，约 5-10 秒）。根据知识点生成候选题目，教师审阅后可选择 ARC 精修。", QUICK_GENERATE_SCHEMA,
+        _make_tool("quick_generate", "快速出题（Author 单步，首轮约 15 秒，逐题展示）。根据知识点生成候选题目，教师审阅后可选择 ARC 精修。", QUICK_GENERATE_SCHEMA,
             impl_summary="调用 single_generate_pipeline 的 Author 阶段（skip_review=True），仅做 LLM 生成 + 去重 + schema 校验 + 本地完整性检查。返回题目列表存入内存候选池，通过 metadata 传给前端 QuestionPanel 展示。"),
         _make_tool("launch_arc_pipeline", "启动 ARC 精修管线（异步，2-5 分钟）。对已出的题目进行 4-agent 对抗精修：Author→Reviewer→Revise→Classifier。", LAUNCH_ARC_PIPELINE_SCHEMA,
             impl_summary="创建 PipelineTask 记录并 dispatch Celery 异步任务。返回 task_id 用于轮询进度。前端 QuestionPanel 有进度条实时展示。"),

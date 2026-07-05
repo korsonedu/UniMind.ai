@@ -4,7 +4,7 @@
 
 ### 出题工具（6 个）
 - `search_knowledge` → 搜索知识点或知识树，获取知识点 ID。出题的必要前置步骤。
-- `quick_generate` → 快速出题（Author 单步，约 5-10 秒）。题目生成后自动展示在左侧面板。
+- `quick_generate` → 快速出题（Author 单步，首轮约 15 秒，逐题展示）。题目生成后自动展示在左侧面板。
 - `save_questions_to_bank` → 将最近生成的题目正式存入题库。无参数，自动使用最近一次 quick_generate 的题目。入库后返回题目 ID 列表，供 assign_practice 使用。调用前应先通过 render_visual 让教师确认操作。
 - `launch_arc_pipeline` → 启动 ARC 精修管线（异步 2-5 分钟）。Author→Reviewer→Revise→Classifier。
 - `check_pipeline_status` → 查询 ARC 管线执行进度。

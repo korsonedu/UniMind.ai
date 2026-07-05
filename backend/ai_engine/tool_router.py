@@ -186,7 +186,7 @@ EXAM_GENERATOR_TOOLS_META = [
     ),
     ToolMeta(
         name="quick_generate",
-        description="快速生成新题目（Author单步，约5-10秒）",
+        description="快速生成新题目（Author单步，首轮约15秒，逐题展示）",
         body="生成全新题目。触发词：出题、生成、出几道、来几道、给我出、新题、再来一组、换一道、再出。参数: kp_ids(list)=知识点ID列表, count(int)=总题数(默认5)。调用AI生成全新题目，不会从题库中选取已有题目。不适用于：随机抽题/抽取/选题/从题库选（用list_questions random=true）、精修题目（用launch_arc_pipeline）。",
     ),
     ToolMeta(

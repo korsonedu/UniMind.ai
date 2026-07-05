@@ -167,6 +167,24 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                 except Exception:
                     pass
 
+        def _on_candidates(candidates: list, window: int):
+            """每轮 author window 完成后，逐题推送到前端面板。"""
+            if _on_step:
+                try:
+                    trimmed = candidates[:count]
+                    self._last_generated = trimmed
+                    _on_step({
+                        "type": "step",
+                        "call_id": _call_id,
+                        "step": 0,
+                        "status": "calling",
+                        "name": "quick_generate",
+                        "label": f"第 {window} 轮完成（已出 {len(trimmed)} 题）",
+                        "questions": trimmed,
+                    })
+                except Exception:
+                    pass
+
         try:
             result = run_single_generate_pipeline(
                 kp_ids=kp_ids,
@@ -174,6 +192,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                 target_difficulty=difficulty,
                 institution=self.institution,
                 on_progress=_on_progress,
+                on_candidates=_on_candidates,
                 skip_review=True,
             )
             questions = result.get('questions', [])
@@ -215,13 +234,16 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         for q in self._last_generated:
             kp_id = q.get('kp_id')
             try:
+                gp = q.get('grading_points')
+                if isinstance(gp, list):
+                    gp = '\n'.join(str(p) for p in gp)
                 obj = Question.objects.create(
                     text=q.get('question', ''),
                     q_type=q.get('q_type', 'objective'),
                     subjective_type=q.get('subjective_type') or None,
                     difficulty_level=q.get('difficulty_level', 'normal'),
                     correct_answer=q.get('answer', ''),
-                    grading_points=q.get('grading_points') or None,
+                    grading_points=gp or None,
                     options=q.get('options') or None,
                     rubric=q.get('rubric') or None,
                     knowledge_point_id=kp_id,

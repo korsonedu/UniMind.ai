@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Spinner, Sparkle, Check, CheckSquareOffset, MagicWand } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import PipelineProgress from './PipelineProgress';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 interface QuestionData {
   question: string;
@@ -85,6 +87,7 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
+  const [detailQuestion, setDetailQuestion] = useState<QuestionData | null>(null);
 
   // Refs for recursive polling
   const cancelledRef = useRef(false);
@@ -158,7 +161,8 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
-  const toggleSelect = useCallback((index: number) => {
+  const toggleSelect = useCallback((index: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setSelected(prev => {
       const next = new Set(prev);
       if (next.has(index)) next.delete(index);
@@ -292,68 +296,88 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
               <div
                 key={originalIndex}
                 className={cn(
-                  "border rounded-lg p-3.5 transition-all cursor-pointer",
+                  "border rounded-lg transition-all",
                   selected.has(i) ? "border-primary bg-primary/5" : "hover:border-border/80",
                 )}
-                onClick={() => toggleSelect(i)}
               >
-                {/* 头部：序号 + 来源 + 类型 + 难度 + 知识点 */}
-                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <div className={cn(
-                    "w-5 h-5 rounded border flex items-center justify-center shrink-0",
-                    selected.has(i) ? "bg-primary border-primary" : "border-border",
-                  )}>
-                    {selected.has(i) && <Check className="h-3 w-3 text-white" />}
-                  </div>
-                  <span className="text-xs font-bold text-foreground">#{i + 1}</span>
-                  {q.source && SOURCE_BADGE[q.source] && (
+                {/* 点击卡片主体 → 打开详情弹窗 */}
+                <div
+                  className="p-3.5 cursor-pointer"
+                  onClick={() => setDetailQuestion(q)}
+                >
+                  {/* 头部：勾选框 + 序号 + 来源 + 类型 + 难度 + 知识点 */}
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <div
+                      className={cn(
+                        "w-5 h-5 rounded border flex items-center justify-center shrink-0",
+                        selected.has(i) ? "bg-primary border-primary" : "border-border",
+                      )}
+                      onClick={(e) => toggleSelect(i, e)}
+                      role="checkbox"
+                      aria-checked={selected.has(i)}
+                    >
+                      {selected.has(i) && <Check className="h-3 w-3 text-white" />}
+                    </div>
+                    <span className="text-xs font-bold text-foreground">#{i + 1}</span>
+                    {q.source && SOURCE_BADGE[q.source] && (
+                      <span className={cn(
+                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                        SOURCE_BADGE[q.source].cls,
+                      )}>
+                        {SOURCE_BADGE[q.source].label}
+                      </span>
+                    )}
                     <span className={cn(
                       "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                      SOURCE_BADGE[q.source].cls,
+                      q.q_type === 'objective' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700',
                     )}>
-                      {SOURCE_BADGE[q.source].label}
+                      {QTYPE_LABEL[q.q_type] || q.q_type}
                     </span>
-                  )}
-                  <span className={cn(
-                    "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                    q.q_type === 'objective' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700',
-                  )}>
-                    {QTYPE_LABEL[q.q_type] || q.q_type}
-                  </span>
-                  <span className={cn(
-                    "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                    DIFFICULTY_COLOR[q.difficulty_level] || 'bg-muted text-foreground',
-                  )}>
-                    {DIFFICULTY_LABEL[q.difficulty_level] || q.difficulty_level}
-                  </span>
-                  {q.kp_name && (
-                    <span className="text-[10px] text-unimind-text-quaternary truncate">
-                      {q.kp_code ? `${q.kp_code} ` : ''}{q.kp_name}
+                    <span className={cn(
+                      "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                      DIFFICULTY_COLOR[q.difficulty_level] || 'bg-muted text-foreground',
+                    )}>
+                      {DIFFICULTY_LABEL[q.difficulty_level] || q.difficulty_level}
                     </span>
-                  )}
-                </div>
-
-                {/* 题干 */}
-                <p className="text-[13px] leading-relaxed text-foreground whitespace-pre-wrap">
-                  {q.question}
-                </p>
-
-                {/* 客观题选项 */}
-                {q.q_type === 'objective' && q.options && (
-                  <div className="mt-2 space-y-1">
-                    {(Array.isArray(q.options) ? q.options : Object.entries(q.options).map(([k, v]) => `${k}. ${v}`)).map((opt: string, j: number) => (
-                      <div key={j} className="text-xs text-unimind-text-secondary pl-2">
-                        {opt}
-                      </div>
-                    ))}
+                    {q.kp_name && (
+                      <span className="text-[10px] text-unimind-text-quaternary truncate">
+                        {q.kp_code ? `${q.kp_code} ` : ''}{q.kp_name}
+                      </span>
+                    )}
                   </div>
-                )}
 
-                {/* 答案预览 */}
-                <div className="mt-2 text-xs text-unimind-text-tertiary">
-                  <span className="font-semibold">答案：</span>
-                  {(q.answer || '').substring(0, 150)}
-                  {(q.answer || '').length > 150 && '...'}
+                  {/* 题干 — 带 LaTeX 渲染 */}
+                  <div className="text-[13px] leading-relaxed text-foreground">
+                    <MarkdownContent
+                      content={q.question}
+                      className="prose-sm prose-p:my-0 prose-ul:my-1 max-w-none [&_.katex-display]:my-1 [&_.katex-display]:overflow-x-auto"
+                    />
+                  </div>
+
+                  {/* 客观题选项 */}
+                  {q.q_type === 'objective' && q.options && (
+                    <div className="mt-2 space-y-1">
+                      {(Array.isArray(q.options) ? q.options : Object.entries(q.options).map(([k, v]) => `${k}. ${v}`)).map((opt: string, j: number) => (
+                        <div key={j} className="text-xs text-unimind-text-secondary pl-2">
+                          <MarkdownContent
+                            content={opt}
+                            className="text-xs prose-p:my-0 max-w-none [&_.katex]:text-[11px]"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 答案预览 */}
+                  <div className="mt-2 text-xs text-unimind-text-tertiary">
+                    <span className="font-semibold">答案：</span>
+                    <span className="inline">
+                      <MarkdownContent
+                        content={(q.answer || '').substring(0, 150) + ((q.answer || '').length > 150 ? '...' : '')}
+                        className="text-xs prose-p:my-0 max-w-none [&_.katex]:text-[11px] inline"
+                      />
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -377,6 +401,108 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
           </div>
         </div>
       )}
+
+      {/* 题目详情弹窗 */}
+      <Dialog open={!!detailQuestion} onOpenChange={(open) => { if (!open) setDetailQuestion(null); }}>
+        <DialogContent className="sm:max-w-[720px] max-h-[85vh] overflow-y-auto rounded-2xl">
+          {detailQuestion && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-base font-bold flex items-center gap-2 flex-wrap">
+                  {detailQuestion.source && SOURCE_BADGE[detailQuestion.source] && (
+                    <span className={cn(
+                      "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                      SOURCE_BADGE[detailQuestion.source].cls,
+                    )}>
+                      {SOURCE_BADGE[detailQuestion.source].label}
+                    </span>
+                  )}
+                  <span className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                    detailQuestion.q_type === 'objective' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700',
+                  )}>
+                    {QTYPE_LABEL[detailQuestion.q_type] || detailQuestion.q_type}
+                  </span>
+                  <span className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                    DIFFICULTY_COLOR[detailQuestion.difficulty_level] || 'bg-muted text-foreground',
+                  )}>
+                    {DIFFICULTY_LABEL[detailQuestion.difficulty_level] || detailQuestion.difficulty_level}
+                  </span>
+                  {detailQuestion.kp_name && (
+                    <span className="text-[10px] text-unimind-text-quaternary">
+                      {detailQuestion.kp_code ? `${detailQuestion.kp_code} ` : ''}{detailQuestion.kp_name}
+                    </span>
+                  )}
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4 mt-2">
+                {/* 题干 */}
+                <div>
+                  <h4 className="text-xs font-bold text-unimind-text-tertiary mb-1.5 uppercase tracking-wider">题干</h4>
+                  <div className="text-sm leading-relaxed text-foreground bg-muted/30 rounded-lg p-4">
+                    <MarkdownContent
+                      content={detailQuestion.question}
+                      className="prose-sm prose-p:my-1 max-w-none [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto"
+                    />
+                  </div>
+                </div>
+
+                {/* 选项（客观题） */}
+                {detailQuestion.q_type === 'objective' && detailQuestion.options && (
+                  <div>
+                    <h4 className="text-xs font-bold text-unimind-text-tertiary mb-1.5 uppercase tracking-wider">选项</h4>
+                    <div className="space-y-1.5 bg-muted/30 rounded-lg p-4">
+                      {(Array.isArray(detailQuestion.options)
+                        ? detailQuestion.options
+                        : Object.entries(detailQuestion.options).map(([k, v]) => `${k}. ${v}`)
+                      ).map((opt: string, j: number) => (
+                        <div key={j} className="text-sm text-unimind-text-secondary">
+                          <MarkdownContent
+                            content={opt}
+                            className="prose-sm prose-p:my-0 max-w-none [&_.katex]:text-sm"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 答案 */}
+                <div>
+                  <h4 className="text-xs font-bold text-unimind-text-tertiary mb-1.5 uppercase tracking-wider">答案</h4>
+                  <div className="text-sm leading-relaxed text-foreground bg-muted/30 rounded-lg p-4">
+                    <MarkdownContent
+                      content={detailQuestion.answer || '（无）'}
+                      className="prose-sm prose-p:my-1 max-w-none [&_.katex-display]:my-2 [&_.katex-display]:overflow-x-auto"
+                    />
+                  </div>
+                </div>
+
+                {/* 评分要点（主观题） */}
+                {detailQuestion.grading_points && Array.isArray(detailQuestion.grading_points) && detailQuestion.grading_points.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-unimind-text-tertiary mb-1.5 uppercase tracking-wider">评分要点</h4>
+                    <div className="text-sm leading-relaxed text-foreground bg-muted/30 rounded-lg p-4">
+                      <ul className="list-disc pl-4 space-y-1">
+                        {detailQuestion.grading_points.map((point: string, j: number) => (
+                          <li key={j}>
+                            <MarkdownContent
+                              content={point}
+                              className="prose-sm prose-p:my-0 max-w-none [&_.katex]:text-sm"
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

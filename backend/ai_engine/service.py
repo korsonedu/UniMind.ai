@@ -220,7 +220,7 @@ class AIEngine:
             body["thinking"] = {"type": "enabled"}
         elif tool_choice == "required":
             # thinking 模式不支持 required → 关 thinking
-            # xiaoyu 用 auto 不受影响，命题官 required 走此分支
+            # xiaoyu 用 auto 不受影响，工作台 required 走此分支
             body["thinking"] = {"type": "disabled"}
         else:
             # 显式设 disabled，防止 DeepSeek 默认启用 thinking，
@@ -630,15 +630,23 @@ class AIEngine:
         return None
 
     @staticmethod
-    def _run_tool_with_timeout(tool_executor, name, args, timeout=30):
+    def _run_tool_with_timeout(tool_executor, name, args, timeout=120):
         """Execute a single tool call with a timeout. Returns the tool result
-        or a timeout error dict — never raises."""
+        as a JSON string, or a timeout error JSON string — never raises."""
+        import json as _json
         with ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(tool_executor, name, args)
             try:
                 return future.result(timeout=timeout)
             except FutureTimeoutError:
-                return {"error": "timeout", "message": f"工具 {name} 执行超时 (30s)"}
+                future.cancel()
+                return _json.dumps(
+                    {"error": "timeout", "message": f"工具 {name} 执行超时 ({timeout}s)"},
+                    ensure_ascii=False,
+                )
+            finally:
+                # Don't block on shutdown — tool already timed out
+                executor.shutdown(wait=False)
 
     @classmethod
     def call_ai_with_tools(cls, messages, tools, tool_executor,
@@ -1029,7 +1037,7 @@ class AIEngine:
                     try:
                         result = cls._run_tool_with_timeout(tool_executor, name, args)
                     except Exception as e:
-                        result = {"error": str(e)}
+                        result = json.dumps({"error": str(e)}, ensure_ascii=False)
                     _duration_ms = int((_time_module.monotonic() - _t0) * 1000)
 
                     result_str = str(result)
