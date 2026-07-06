@@ -3,7 +3,7 @@ from ai_assistant.models import Bot
 
 
 class Command(BaseCommand):
-    help = '创建或更新命题官 Bot'
+    help = '创建或更新工作台 Bot'
 
     def handle(self, *args, **options):
         from ai_assistant.prompt_sync import sync_bot_prompt

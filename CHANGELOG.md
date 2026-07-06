@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.3.2 — 工作台出题稳定性修复 (2026-07-05)
+
+### Fixed
+- **出题超时后死循环**：`_run_tool_with_timeout` 超时时返回 `json.dumps` 而非 raw dict，修复下游 `'"error"'` 双引号检测永远漏检导致 LLM 无限重试；新增 `future.cancel()` + `executor.shutdown(wait=False)` 不阻塞等待；timeout 从 30s 提升到 120s
+- **quick_generate 运行时间远超声称**：`skip_review=True` 时 `max_windows=1`，避免无意义多轮 Author 生成后被 `questions[:count]` 截断，首轮约 15s 可完成
+- **工作台题目面板不渲染 LaTeX**：题干、答案缩略、卡片选项全部改用 `MarkdownContent`（react-markdown + remark-math + rehype-katex），与聊天面板一致
+- **题目卡片不能查看详情**：卡片 `onClick` 改为打开 Dialog 详情弹窗，勾选框 `e.stopPropagation()` 保持独立行为；弹窗展示题干/选项/答案/评分要点，全部 LaTeX 渲染
+- **评分要点 `.map()` crash**：`_clean_question_data` 中 `isinstance(list)` 时保持 list 不转 string，SSE 直传前端正常 `.map()`；入库时 `'\n'.join()` 转 TextField
+- **答案含 LLM 思考过程**：`bulk_generate_prompt.txt` 新增「答案纪律」段落，禁止自我质疑/多轮试探/条件自检等草稿思维出现在 answer 中，要求最终定稿像出版物标准答案
+- **非流式路径异常处理漏修**：`call_ai_with_tools` 异常捕获也改为 `json.dumps`，与流式路径一致
+- **进度标签硬编码 /2**：`_on_candidates` 标签去掉硬编码分母，改为 `第 N 轮完成`
+
+### Changed
+- `quick_generate` 工具描述更新：从"约 5-10 秒"改为"首轮约 15 秒，逐题展示"
+- `single_generate_pipeline` 新增 `on_candidates` 回调参数，每轮 author window 完成后通过 SSE 逐步推送候选题目到前端面板
+
 ## v1.3.1 — Agent 任务卡片修复 (2026-06-29)
 
 ### Fixed

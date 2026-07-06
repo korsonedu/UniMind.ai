@@ -409,12 +409,12 @@ def _analyze_teacher(teacher, exam_bot, cutoff, now):
     if chat_count >= 30:
         insights.append({
             "type": "usage_frequency",
-            "text": f"该教师近30天高频使用命题官（{chat_count}次），是核心用户。",
+            "text": f"该教师近30天高频使用工作台（{chat_count}次），是核心用户。",
         })
     elif chat_count <= 3:
         insights.append({
             "type": "usage_frequency",
-            "text": "该教师近30天很少使用命题官，可能需要引导或遇到了问题。",
+            "text": "该教师近30天很少使用工作台，可能需要引导或遇到了问题。",
         })
 
     # 6. Active hours

@@ -244,7 +244,6 @@ export const FEATURES = {
   STUDY_ROOM: 'study.room',
   AI_ASSISTANT: 'ai.assistant',
   PDF_MOCK: 'pdf.mock',
-  INTERVIEW_MOCK: 'interview.mock',
   AI_BOT_CUSTOM: 'ai.bot.custom',
   BRAND_CUSTOM: 'brand.custom',
   API_ACCESS: 'api.access',

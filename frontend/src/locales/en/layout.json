@@ -121,11 +121,11 @@
   "upgradeModal": {
     "title": "Upgrade to unlock {{feature}}",
     "requires": "{{feature}} requires the {{plan}} plan.",
-    "starterDesc": "Only ¥499/mo — unlock the full AI-powered learning suite.",
-    "growthDesc": "¥1,299/mo — complete teaching platform for institutions.",
-    "enterpriseDesc": "Enterprise flagship — brand customization & API access.",
+    "starterDesc": "¥499/month",
+    "growthDesc": "¥1,299/month",
+    "enterpriseDesc": "Enterprise flagship",
     "coreFeatures": "{{plan}} Core Features",
-    "freeTrialNote": "All plans include a 7-day free trial",
+    "freeTrialNote": "All plans include a 14-day full-feature trial",
     "upgradeTo": "Upgrade to {{plan}}",
     "later": "Maybe Later",
     "learnMore": "Learn More"

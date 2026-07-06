@@ -13,7 +13,7 @@ _INTRO_PATH_RE = re.compile(r'^/intro/([^/]+)$')
 
 _DEFAULT_META = {
     'title': 'UniMind.ai — Agent 驱动的新一代智能教育基础设施',
-    'description': '从教师出题、学生刷题、评分批改到知识追踪，全链路 Agent 化。学生有专属 AI 教练，教师有对话式命题官。',
+    'description': 'AI 驱动的智能教育基础设施。学生端 AI 学习教练「小宇」+ 教师端 AI 教研助手「工作台」，覆盖出题、发布、练习、批改与记忆调度的完整教学闭环。',
 }
 
 

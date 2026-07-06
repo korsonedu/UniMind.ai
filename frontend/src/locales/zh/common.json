@@ -209,28 +209,29 @@
   "billingStatusRefunded": "已退款",
   "billingStatusCancelled": "已取消",
   "billingFeaturesStarter": [
-    "AI 出题无限制",
-    "Memorix 记忆复习",
-    "AI 学习助手",
-    "交互式知识图谱",
+    "AI 出题",
+    "小宇 AI 助手",
     "完整学情报告",
-    "AI 智能大纲"
+    "教学计划 · 教案"
   ],
   "billingFeaturesGrowth": [
+    "Memorix 图扩散记忆调度",
+    "知识图谱",
+    "视频 AI 大纲",
     "答疑系统",
     "多教师协作",
-    "实时自习室",
-    "模拟考试",
-    "班级对比报表",
-    "数据导出"
+    "自习室",
+    "PDF 模拟卷",
+    "班级对比 · 数据导出",
+    "学生端收费"
   ],
   "billingFeaturesEnterprise": [
-    "品牌定制 · 白标部署",
-    "私有化部署",
+    "AI Bot 自定义",
+    "品牌白标",
     "API 接入",
+    "私有化部署",
     "SSO 单点登录",
     "审计日志",
-    "学生端收费",
     "SLA 99.9%"
   ],
   "institutionCount": "{{count}} 个机构"

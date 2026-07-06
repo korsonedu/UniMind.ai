@@ -12,7 +12,6 @@ const FEATURE_LABELS: Record<string, string> = {
   'faq.system': '答疑系统',
   'study.room': '在线自习室',
   'pdf.mock': '模拟考试',
-  'interview.mock': 'AI 模拟面试',
   'course.video': '视频课程',
   'wrong.review': '错题回顾',
 };

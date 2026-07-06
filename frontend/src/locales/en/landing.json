@@ -140,7 +140,7 @@
       },
       {
         "title": "Custom Module Building",
-        "desc": "Advanced features like mock interviews, voice interaction, and AI Q&A can be activated on demand. Custom deployment available for Pro plans and above."
+        "desc": "Advanced features like voice interaction and AI Q&A can be activated on demand. Custom deployment available for Enterprise plans and above."
       }
     ]
   },
@@ -219,7 +219,7 @@
   "pricing": {
     "label": "Pricing",
     "title": "Plans for every stage of growth",
-    "subtitle": "Get a trial code for 7 days of full-feature access. No credit card required. Start free, upgrade when you're ready.",
+    "subtitle": "Get a trial code for 14 days of full-feature access. No credit card required. Start free, upgrade when you're ready.",
     "monthly": "Monthly",
     "annually": "Annual",
     "saveBadge": "Save 23-33%",
@@ -227,14 +227,14 @@
     "annualTotal": "Annual total ¥",
     "popularBadge": "Most Popular",
     "trialTitle": "One Trial, All Features — Zero Risk",
-    "trialDesc": "Use a trial code to unlock 7 days of full-feature access (Growth tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
+    "trialDesc": "Use a trial code to unlock 14 days of full-feature access (Growth tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
     "pageTitle": "Choose Your Plan",
-    "pageSubtitle": "Trial code unlocks 7-day access · No credit card · Cancel anytime",
+    "pageSubtitle": "Trial code unlocks 14-day access · No credit card · Cancel anytime",
     "backHome": "Back to Home",
     "footer": "First 20 paying customers lock in early-adopter pricing for life.",
     "freeForever": "Free forever",
     "bottomCtaTitle": "Ready to automate your tutoring business?",
-    "bottomCtaSubtitle": "Trial code unlocks 7-day access. After that, keep using Free — no card, no catch.",
+    "bottomCtaSubtitle": "Trial code unlocks 14-day access. After that, keep using Free — no card, no catch.",
     "plans": [
       {
         "label": "Free",
@@ -242,16 +242,14 @@
         "persona": "Zero-cost trial with AI question generation, question bank, and basic analytics — see if it fits your institution.",
         "cta": "Start Free",
         "features": [
-          "30 questions per month",
-          "AI auto-grading",
-          "Memorix adaptive review",
-          "Question bank · Manual",
-          "Mistake review center",
-          "Basic analytics",
-          "30 students",
-          "1 teacher · 1 subject",
-          "500 MB storage",
-          "200 questions"
+          "All Agent capabilities (XiaoYu AI, AI generation, ARC pipeline) — subject to AI call quota",
+          "100 AI calls/month",
+          "30 students · 1 teacher · 1 subject",
+          "Practice · Exams · Mistake review",
+          "Assignments · Gradebook · Diagnostic test",
+          "Course videos · Q&A system · Study rooms · PDF mock exams",
+          "5 GB storage · 200 questions",
+          "Basic analytics"
         ]
       },
       {
@@ -260,19 +258,12 @@
         "persona": "For early-stage training centers: AI gen + Memorix review + full reports — automate repetitive lesson prep.",
         "cta": "7-Day Free Trial",
         "features": [
-          "100 questions per month",
-          "AI auto-grading",
-          "Memorix adaptive review",
-          "Question bank · Manual",
-          "Mistake review center",
-          "Student reports",
-          "50 students",
-          "1 teacher · 3 subjects",
-          "XiaoYu chat 500 turns/mo",
-          "PDF export 10/mo",
-          "5 GB storage",
-          "2,000 questions",
-          "Up to 3 classes"
+          "All Agent capabilities — subject to AI call quota",
+          "500 AI calls/month",
+          "50 students · 1 teacher · 3 subjects",
+          "Everything in Free",
+          "Full learning reports · Teaching plans · Lesson plans",
+          "50 GB storage · 2,000 questions"
         ]
       },
       {
@@ -281,25 +272,14 @@
         "persona": "For growing centers: multi-teacher collaboration, knowledge graph, mock exams, Q&A — systematic teaching management.",
         "cta": "7-Day Free Trial",
         "features": [
-          "Unlimited questions",
-          "AI auto-grading",
-          "Memorix adaptive review",
-          "Question bank · Manual+Auto",
-          "Mistake review center",
-          "Class comparison · Export",
-          "200 students",
-          "5 teachers · All subjects",
-          "XiaoYu chat 3,000 turns/mo",
-          "PDF export 100/mo",
-          "Course videos · AI outlines",
-          "Interactive knowledge graph",
-          "Online Q&A system",
-          "Teacher collaboration · RBAC",
-          "Online study rooms",
-          "AI mock exams 10/mo",
-          "50 GB storage",
-          "10,000 questions",
-          "Up to 10 classes"
+          "All Agent capabilities — subject to AI call quota",
+          "3,000 AI calls/month",
+          "200 students · 5 teachers · 10 subjects",
+          "Everything in Starter",
+          "Memorix graph-diffusion scheduling · Knowledge graph",
+          "Video AI outlines · Multi-teacher collaboration",
+          "Class comparison · Data export · Student-side billing",
+          "500 GB storage · 10,000 questions"
         ]
       },
       {
@@ -308,68 +288,27 @@
         "persona": "For chains and corporate training: white-label, private deploy, API integration, SSO single sign-on.",
         "cta": "Request Demo",
         "features": [
-          "Unlimited questions",
-          "AI auto-grading",
-          "Memorix adaptive review",
-          "Question bank · Manual+Auto",
-          "Mistake review center",
-          "Advanced dashboard · AI insights",
-          "Unlimited students",
-          "Unlimited teachers & subjects",
-          "XiaoYu chat unlimited",
-          "PDF export unlimited",
-          "Course videos · AI outlines",
-          "Interactive knowledge graph",
-          "Online Q&A system",
-          "Teacher collaboration · RBAC",
-          "Online study rooms",
-          "AI mock exams 50/mo",
-          "Unlimited storage",
-          "Unlimited questions",
-          "Unlimited classes",
-          "White-label deployment",
-          "Data sovereignty",
-          "Custom knowledge trees",
-          "REST API access"
+          "Unlimited AI calls",
+          "Unlimited students · teachers · subjects",
+          "Everything in Growth",
+          "Custom AI Bots",
+          "White-label · API access · On-premise deployment",
+          "Unlimited storage · Unlimited questions"
         ]
       }
     ],
     "rows": [
       [
-        "30 questions / month",
-        "100 questions / month",
-        "Unlimited questions",
-        "Unlimited questions"
+        "All Agent capabilities",
+        "All Agent capabilities",
+        "All Agent capabilities",
+        "All Agent capabilities"
       ],
       [
-        "AI auto-grading",
-        "AI auto-grading",
-        "AI auto-grading",
-        "AI auto-grading"
-      ],
-      [
-        "Memorix adaptive review",
-        "Memorix adaptive review",
-        "Memorix adaptive review",
-        "Memorix adaptive review"
-      ],
-      [
-        "Question bank · Manual",
-        "Question bank · Manual",
-        "Question bank · Manual + Auto",
-        "Question bank · Manual + Auto"
-      ],
-      [
-        "Mistake review center",
-        "Mistake review center",
-        "Mistake review center",
-        "Mistake review center"
-      ],
-      [
-        "Basic analytics",
-        "Student reports",
-        "Class comparison · Export",
-        "Advanced dashboard · AI insights"
+        "100 AI calls/month",
+        "500 AI calls/month",
+        "3,000 AI calls/month",
+        "Unlimited AI calls"
       ],
       [
         "30 students",
@@ -380,104 +319,44 @@
       [
         "1 teacher · 1 subject",
         "1 teacher · 3 subjects",
-        "5 teachers · All subjects",
+        "5 teachers · 10 subjects",
         "Unlimited teachers & subjects"
       ],
       [
-        "—",
-        "XiaoYu chat 500 turns/mo",
-        "XiaoYu chat 3,000 turns/mo",
-        "XiaoYu chat unlimited"
+        "Practice · Exams · Mistake review",
+        "Everything in Free",
+        "Everything in Starter",
+        "Everything in Growth"
       ],
       [
-        "—",
-        "PDF export 10/mo",
-        "PDF export 100/mo",
-        "PDF export unlimited"
+        "Assignments · Gradebook",
+        "Full reports · Teaching plans",
+        "Memorix graph-diffusion scheduling",
+        "Custom AI Bots"
       ],
       [
-        "—",
-        "—",
-        "Course videos · AI outlines",
-        "Course videos · AI outlines"
+        "Course videos · Q&A system",
+        "Lesson plans",
+        "Knowledge graph · Video AI outlines",
+        "White-label · API access"
       ],
       [
+        "Study rooms · PDF mock exams",
         "—",
-        "—",
-        "Interactive knowledge graph",
-        "Interactive knowledge graph"
+        "Multi-teacher collaboration · Class comparison",
+        "On-premise deployment"
       ],
       [
+        "Basic analytics",
         "—",
-        "—",
-        "Online Q&A system",
-        "Online Q&A system"
+        "Data export · Student-side billing",
+        "—"
       ],
       [
-        "—",
-        "—",
-        "Teacher collaboration · RBAC",
-        "Teacher collaboration · RBAC"
-      ],
-      [
-        "—",
-        "—",
-        "Online study rooms",
-        "Online study rooms"
-      ],
-      [
-        "—",
-        "—",
-        "AI mock exams 10/mo",
-        "AI mock exams 50/mo"
-      ],
-      [
-        "—",
-        "2,000 questions",
-        "10,000 questions",
-        "Unlimited questions"
-      ],
-      [
-        "—",
-        "Up to 3 classes",
-        "Up to 10 classes",
-        "Unlimited classes"
-      ],
-      [
-        "500 MB storage",
-        "5 GB storage",
-        "50 GB storage",
-        "Unlimited storage"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "White-label deployment"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "Data sovereignty"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "Custom knowledge trees"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "REST API access"
-      ],
-      [
-        "—",
-        "—",
-        "—",
-        "Dedicated account manager"
+        "5 GB storage · 200 questions",
+        "50 GB storage · 2,000 questions",
+        "500 GB storage · 10,000 questions",
+        "Unlimited storage · Unlimited questions"
       ]
     ]
   },
@@ -491,7 +370,7 @@
       },
       {
         "q": "How does the free trial work?",
-        "a": "You get 7 days of full Growth-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
+        "a": "You get 14 days of full Growth-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
       },
       {
         "q": "What makes Memorix different from Anki or spaced repetition?",
@@ -515,7 +394,7 @@
       },
       {
         "q": "I run a small tutoring center. Which plan should I start with?",
-        "a": "Start with Free. 30 students and 30 AI generations per month let you validate the full workflow with a small group. When you're ready to scale, Starter (¥499/mo, ¥416/mo annual) removes the limits. Most centers upgrade within the first month once they see the time savings."
+        "a": "Start with Free. 30 students and 100 AI calls per month let you validate the full workflow with a small group. When you're ready to scale, Starter (¥499/mo, ¥416/mo annual) removes the limits. Most centers upgrade within the first month once they see the time savings."
       },
       {
         "q": "Can I integrate UniMind with my existing website or LMS?",

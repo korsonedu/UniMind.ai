@@ -244,8 +244,10 @@ sudo journalctl -u unimind.service -f
 |------|------|
 | `README.md` | 完整系统介绍、部署指南、环境变量全量参考 |
 | `CHANGELOG.md` | 版本更新日志 |
-| `docs/PRODUCT.md` | 产品定位、使用场景、定价方案（客户向） |
-| `docs/USER_MANUAL.md` | 用户操作手册（场景化组织） |
+| `docs/market/01-product-brand.md` | 产品定位、使用场景、定价方案（客户向） |
+| `docs/market/02-business-strategy.md` | 商业策略、竞争壁垒、路线图（内部/投资人向） |
+| `docs/market/03-marketing-materials.md` | 营销素材库：文案、PPT叙事、术语规范（市场/销售向） |
+| `docs/market/04-user-manual.md` | 用户操作手册（场景化组织） |
 | `docs/VERSIONING.md` | 版本管理规范（SemVer + Commit 规范 + 发布流程） |
 | `docs/enterprise-deployment.md` | 企业版本地部署指南 |
 

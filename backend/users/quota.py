@@ -7,26 +7,27 @@ from rest_framework.exceptions import ValidationError
 
 PLAN_QUOTA_LIMITS: dict[str, dict[str, int | None]] = {
     'free': {
-        'course': 5, 'question': 200, 'knowledge_point': 300,
-        'article': 5, 'ai_question': 30, 'ai_call_total': 100,
+        'course': 1, 'question': 200, 'knowledge_point': 300,
+        'article': 5, 'ai_question': None, 'ai_call_total': 100,
+        'pdf_export': 10,
         'custom_bot': 0,
     },
     'starter': {
-        'course': 30, 'question': 2000, 'knowledge_point': 1000,
-        'article': 20, 'ai_question': 100, 'ai_call_total': 500,
-        'interview': 10, 'pdf_export': 10,
-        'custom_bot': 3,
+        'course': 3, 'question': 2000, 'knowledge_point': 1000,
+        'article': 20, 'ai_question': None, 'ai_call_total': 500,
+        'pdf_export': 50,
+        'custom_bot': 0,
     },
     'growth': {
-        'course': 100, 'question': 10000, 'knowledge_point': 5000,
+        'course': 10, 'question': 10000, 'knowledge_point': 5000,
         'article': 100, 'ai_question': None, 'ai_call_total': 3000,
-        'pdf_export': 100, 'interview': 50,
-        'custom_bot': 10,
+        'pdf_export': 100,
+        'custom_bot': 0,
     },
     'enterprise': {
         'course': None, 'question': None, 'knowledge_point': None,
         'article': None, 'ai_question': None, 'ai_call_total': None,
-        'pdf_export': None, 'interview': None,
+        'pdf_export': None,
         'custom_bot': None,
     },
 }
@@ -36,7 +37,7 @@ RESOURCE_TYPE: dict[str, str] = {
     'course': 'total', 'question': 'total',
     'knowledge_point': 'total', 'article': 'total',
     'ai_question': 'monthly', 'ai_call_total': 'monthly',
-    'pdf_export': 'monthly', 'interview': 'monthly',
+    'pdf_export': 'monthly',
     'custom_bot': 'total',
 }
 
@@ -45,7 +46,6 @@ MONTHLY_FIELD_MAP: dict[str, str] = {
     'ai_question': 'ai_question_count',
     'ai_call_total': 'ai_call_total_count',
     'pdf_export': 'pdf_export_count',
-    'interview': 'interview_count',
 }
 
 # 总量型资源 → (model_cls_path, filter_field)
@@ -66,7 +66,6 @@ RESOURCE_LABELS: dict[str, str] = {
     'ai_question': 'AI 出题次数',
     'ai_call_total': 'AI 调用总次数',
     'pdf_export': '模拟考试 PDF',
-    'interview': '面试场次',
     'custom_bot': '自定义机器人数',
 }
 
@@ -242,10 +241,10 @@ def get_quota_message(institution, resource_type: str) -> str:
 # ── 存储配额 ──
 
 STORAGE_QUOTA_BYTES: dict[str, int | None] = {
-    'free': 500 * 1024 * 1024,         # 500 MB
-    'starter': 5 * 1024 * 1024 * 1024,  # 5 GB
-    'growth': 50 * 1024 * 1024 * 1024,  # 50 GB
-    'enterprise': None,                  # unlimited
+    'free': 5 * 1024 * 1024 * 1024,      # 5 GB
+    'starter': 50 * 1024 * 1024 * 1024,  # 50 GB
+    'growth': 500 * 1024 * 1024 * 1024,  # 500 GB
+    'enterprise': None,                   # unlimited
 }
 
 

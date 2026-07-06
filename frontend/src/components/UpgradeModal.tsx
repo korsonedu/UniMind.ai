@@ -17,28 +17,27 @@ const PLAN_META: Record<string, { label: string; price: string; color: string }>
 };
 
 const PLAN_UNLOCK_SUMMARY: Record<string, string> = {
-  starter:    '解锁 AI 智能出题、记忆复习、知识图谱、完整学情报告等 6 项 AI 学习能力',
-  growth:     '解锁在线答疑、多教师协作、实时自习室、模拟考试、班级对比报表与数据导出等机构教学能力',
-  enterprise: '解锁品牌定制白标、私有化部署、API 接入、SSO 单点登录、审计日志等企业旗舰能力',
+  starter:    '解锁完整学情报告、教学计划与教案等核心教学能力',
+  growth:     '解锁 Memorix 记忆调度、知识图谱、视频 AI 大纲、多教师协作、班级对比与数据导出、学生端收费等机构教学能力',
+  enterprise: '解锁 AI Bot 自定义、品牌白标、私有化部署、API 接入、SSO 单点登录、审计日志等企业旗舰能力',
 };
 
 const PLAN_FEATURES: Record<string, string[]> = {
-  starter: ['AI 出题无限制', 'Memorix 记忆复习', 'AI 学习助手 · 多 Bot', '交互式知识图谱', '完整学情报告', 'AI 智能大纲'],
-  growth: ['在线答疑系统', '多教师协作 · 权限管理', '实时自习室 · 番茄钟', '模拟考试', '班级对比报表 · 数据导出'],
+  starter: ['完整学情报告', '教学计划 · 教案'],
+  growth: ['Memorix 记忆调度', '交互式知识图谱', '视频 AI 大纲', '多教师协作 · 权限管理', '班级对比报表 · 数据导出', '学生端收费 · 自主定价'],
   enterprise: [
-    '品牌定制 · 白标部署', '私有化部署 · 数据主权', 'API 接入 · 系统集成',
-    '多语言 · 国际化支持', 'SSO · SAML 单点登录', '审计日志 · 合规就绪',
-    '专属客户成功经理', 'SLA 99.9% 保障', '学生端收费 · 自主定价',
+    'AI Bot 自定义', '品牌定制 · 白标部署', '私有化部署 · 数据主权', 'API 接入 · 系统集成',
+    'SSO · SAML 单点登录', '审计日志 · 合规就绪',
+    '专属客户成功经理', 'SLA 99.9% 保障',
     '学员数不限 · 教师数不限',
   ],
 };
 
 const FEATURE_REQUIRED_PLAN: Record<string, string> = {
-  'memorix.review': 'starter', 'ai.assistant': 'starter',
-  'full.report': 'starter', 'knowledge.graph': 'growth', 'video.outline': 'growth',
-  'faq.system': 'growth', 'multi.teacher': 'growth', 'class.compare': 'growth',
-  'data.export': 'growth', 'study.room': 'growth', 'pdf.mock': 'growth', 'interview.mock': 'growth',
-  'brand.custom': 'enterprise', 'api.access': 'enterprise', 'student.payment': 'enterprise',
+  'memorix.review': 'growth', 'knowledge.graph': 'growth', 'full.report': 'starter',
+  'video.outline': 'growth', 'multi.teacher': 'growth', 'class.compare': 'growth',
+  'data.export': 'growth', 'student.payment': 'growth', 'ai.bot.custom': 'enterprise',
+  'brand.custom': 'enterprise', 'api.access': 'enterprise',
   'private.deploy': 'enterprise', 'i18n.custom': 'enterprise', 'sso.saml': 'enterprise',
   'audit.log': 'enterprise', 'dedicated.support': 'enterprise', 'sla.99.9': 'enterprise',
 };

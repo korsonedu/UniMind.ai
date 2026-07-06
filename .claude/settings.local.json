@@ -1,10 +1,10 @@
 {
   "permissions": {
     "allow": [
-        "Bash(find /Users/eular/Desktop/UniMind/UniMindCode/**)",
-        "Bash(cat /Users/eular/Desktop/UniMind/UniMindCode/**)",
-        "Bash(ls /Users/eular/Desktop/UniMind/UniMindCode/**)",
-        "Read(/Users/eular/Desktop/UniMind/UniMindCode/**)",
+      "Bash(find /Users/eular/Desktop/UniMind/UniMindCode/**)",
+      "Bash(cat /Users/eular/Desktop/UniMind/UniMindCode/**)",
+      "Bash(ls /Users/eular/Desktop/UniMind/UniMindCode/**)",
+      "Read(/Users/eular/Desktop/UniMind/UniMindCode/**)",
       "Bash(python3 *)",
       "mcp__plugin_claude-mem_mcp-search__search",
       "Bash(pkill -f \"claude-mem\")",
@@ -28,7 +28,8 @@
       "Bash(make backend-check *)",
       "Bash(python -c \"from ai_assistant.prompt_sync import load_system_prompt, load_tool_guide, load_personality_template; print\\('OK'\\)\")",
       "Bash(DJANGO_SETTINGS_MODULE=school_system.settings /Users/eular/Desktop/UniMind/UniMindCode/backend/.venv/bin/python -c \"import django; django.setup\\(\\); from ai_assistant.management.commands.seed_xiaoyu import Command; from ai_assistant.management.commands.seed_exam_agent import Command; print\\('OK'\\)\")",
-      "Bash(ssh srv *)"
+      "Bash(ssh srv *)",
+      "Bash(rtk ls *)"
     ]
   }
 }

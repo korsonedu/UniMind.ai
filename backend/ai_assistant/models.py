@@ -36,7 +36,7 @@ class Conversation(models.Model):
 class Bot(models.Model):
     BOT_TYPE_CHOICES = (
         ('planner', '学习教练'),
-        ('exam_generator', '命题官'),
+        ('exam_generator', '工作台'),
     )
     name = models.CharField(max_length=100)
     avatar = models.ImageField(upload_to='bot_avatars/', blank=True, null=True)

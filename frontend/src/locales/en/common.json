@@ -209,28 +209,29 @@
   "billingStatusRefunded": "Refunded",
   "billingStatusCancelled": "Cancelled",
   "billingFeaturesStarter": [
-    "Unlimited AI question generation",
-    "Memorix spaced repetition",
-    "AI learning assistant",
-    "Interactive knowledge graph",
-    "Full learning analytics",
-    "AI smart syllabus"
+    "AI question generation",
+    "XiaoYu AI assistant",
+    "Full learning reports",
+    "Teaching plans · Lesson plans"
   ],
   "billingFeaturesGrowth": [
+    "Memorix graph-diffusion scheduling",
+    "Knowledge graph",
+    "Video AI outlines",
     "Q&A system",
     "Multi-teacher collaboration",
-    "Live study room",
-    "Mock exams",
-    "Class comparison reports",
-    "Data export"
+    "Study rooms",
+    "PDF mock exams",
+    "Class comparison · Data export",
+    "Student-side billing"
   ],
   "billingFeaturesEnterprise": [
-    "Branding & white-label",
-    "On-premise deployment",
+    "Custom AI Bots",
+    "White-label",
     "API access",
+    "On-premise deployment",
     "SSO single sign-on",
     "Audit logs",
-    "Student-side billing",
     "SLA 99.9%"
   ],
   "institutionCount": "{{count}} Institution(s)"

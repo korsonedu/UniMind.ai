@@ -17,17 +17,17 @@ const PLAN: Record<PlanKey, {
   starter: {
     label: 'Starter', priceM: 499, priceA: 416,
     color: 'text-primary', gradient: 'from-[#0071E3] to-[#0077ED]', ring: 'ring-primary',
-    features: ['AI 出题无限制', 'Memorix 记忆复习', 'AI 学习助手', '知识图谱', '完整学情报告', 'AI 智能大纲'],
+    features: ['完整学情报告', '教学计划 · 教案'],
   },
   growth: {
     label: 'Growth', priceM: 1299, priceA: 1083,
     color: 'text-unimind-green', gradient: 'from-[#34C759] to-[#30D158]', ring: 'ring-unimind-green',
-    features: ['答疑系统', '多教师协作', '自习室', '模拟考试', '班级报表', '数据导出'],
+    features: ['Memorix 记忆调度', '知识图谱', '视频 AI 大纲', '多教师协作', '班级报表 · 数据导出', '学生端收费'],
   },
   enterprise: {
     label: 'Enterprise', priceM: 3999, priceA: 3333,
     color: 'text-amber-500', gradient: 'from-amber-500 to-amber-400', ring: 'ring-amber-500',
-    features: ['品牌定制', '私有化部署', 'API 接入', 'SSO 单点登录', '审计日志', '专属客户成功经理', 'SLA 99.9%'],
+    features: ['AI Bot 自定义', '品牌定制 · 白标', '私有化部署', 'API 接入', 'SSO 单点登录', '审计日志', '专属客户成功经理', 'SLA 99.9%'],
   },
 };
 
