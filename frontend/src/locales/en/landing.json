@@ -219,7 +219,7 @@
   "pricing": {
     "label": "Pricing",
     "title": "Plans for every stage of growth",
-    "subtitle": "Get a trial code for 14 days of full-feature access. No credit card required. Start free, upgrade when you're ready.",
+    "subtitle": "Get a trial code for 7 days of full-feature access. No credit card required. Start free, upgrade when you're ready.",
     "monthly": "Monthly",
     "annually": "Annual",
     "saveBadge": "Save 23-33%",
@@ -227,14 +227,14 @@
     "annualTotal": "Annual total ¥",
     "popularBadge": "Most Popular",
     "trialTitle": "One Trial, All Features — Zero Risk",
-    "trialDesc": "Use a trial code to unlock 14 days of full-feature access (Growth tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
+    "trialDesc": "Use a trial code to unlock 7 days of full-feature access (Growth tier). After the trial, you keep using the Free plan forever — all data preserved. Upgrade anytime.",
     "pageTitle": "Choose Your Plan",
-    "pageSubtitle": "Trial code unlocks 14-day access · No credit card · Cancel anytime",
+    "pageSubtitle": "Trial code unlocks 7-day access · No credit card · Cancel anytime",
     "backHome": "Back to Home",
     "footer": "First 20 paying customers lock in early-adopter pricing for life.",
     "freeForever": "Free forever",
     "bottomCtaTitle": "Ready to automate your tutoring business?",
-    "bottomCtaSubtitle": "Trial code unlocks 14-day access. After that, keep using Free — no card, no catch.",
+    "bottomCtaSubtitle": "Trial code unlocks 7-day access. After that, keep using Free — no card, no catch.",
     "plans": [
       {
         "label": "Free",
@@ -370,7 +370,7 @@
       },
       {
         "q": "How does the free trial work?",
-        "a": "You get 14 days of full Growth-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
+        "a": "You get 7 days of full Growth-tier access — every feature, no restrictions, no credit card required. After the trial, your account automatically switches to your chosen plan. Upgrade or downgrade anytime. Your data stays intact regardless."
       },
       {
         "q": "What makes Memorix different from Anki or spaced repetition?",
