@@ -91,10 +91,10 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
 
   // Refs for recursive polling
   const cancelledRef = useRef(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const backoffRef = useRef(POLL_INITIAL);
   const completedHandledRef = useRef(false);
-  const doPollRef = useRef<() => void>();
+  const doPollRef = useRef<(() => void) | undefined>(undefined);
 
   // ── Polling effect ──
   useEffect(() => {
