@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Rocket, Upload, PencilSimple, Trash, Plus, FileText } from '@phosphor-icons/react';
 import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
+import { formatApiErrorToast } from '@/lib/apiError';
 import { useUploadStore } from '@/store/useUploadStore';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
@@ -75,8 +76,9 @@ export const MaterialSection: React.FC = () => {
       fetchItems();
     } catch (e: any) {
       if (e?.name !== 'AbortError' && e?.code !== 'ERR_CANCELED') {
-        toast.error(t('startupMaterial.uploadFailed'));
-        setStatus(uploadId, 'failed', t('startupMaterial.uploadFailed'));
+        const message = formatApiErrorToast(e, t('startupMaterial.uploadFailed'));
+        toast.error(message);
+        setStatus(uploadId, 'failed', message);
       }
     }
   };

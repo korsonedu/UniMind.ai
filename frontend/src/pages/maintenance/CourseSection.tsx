@@ -17,6 +17,7 @@ import { createCourseWithSmartUpload } from '@/lib/chunkedUpload';
 import { useUploadStore } from '@/store/useUploadStore';
 import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
+import { formatApiErrorToast } from '@/lib/apiError';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
@@ -116,11 +117,9 @@ export const CourseSection: React.FC = () => {
       fetchData();
     } catch (e: any) {
       if (e?.name === 'AbortError' || e?.code === 'ERR_CANCELED') return;
-      const detail = e?.response?.data?.detail || e?.response?.data?.error;
-      if (e?.response?.status === 403) toast.error(t('course.noAdminPermission'));
-      else if (typeof detail === 'string' && detail.trim()) toast.error(detail);
-      else toast.error(t('course.publishFailed'));
-      setStatus(uploadId, 'failed', t('course.publishFailed'));
+      const message = formatApiErrorToast(e, t('course.publishFailed'));
+      toast.error(message);
+      setStatus(uploadId, 'failed', message);
     }
   };
 

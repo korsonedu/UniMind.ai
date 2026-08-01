@@ -18,6 +18,35 @@ function getHeaderValue(headers: unknown, key: string): string | undefined {
   return undefined;
 }
 
+/**
+ * 从 DRF 响应 payload 中提取人类可读的错误信息。
+ * DRF 可能把 error/detail 序列化为字符串、数组、或嵌套对象。
+ */
+function extractDRFMessage(payload: Record<string, unknown> | undefined): string | null {
+  if (!payload) return null;
+
+  // 优先从 error / detail / message 字段提取（可能为 string 或 string[]）
+  for (const key of ['error', 'detail', 'message']) {
+    const val = payload[key];
+    if (typeof val === 'string' && val.trim()) return val.trim();
+    if (Array.isArray(val)) {
+      const first = val.find((v: unknown) => typeof v === 'string' && v.trim());
+      if (first) return first as string;
+    }
+  }
+
+  // 回退：从序列化器字段错误中提取第一条
+  for (const [field, msgs] of Object.entries(payload)) {
+    if (field === 'code' || field === 'request_id') continue;
+    if (Array.isArray(msgs)) {
+      const first = msgs.find((m: unknown) => typeof m === 'string' && m.trim());
+      if (first) return `${field}: ${first}`;
+    }
+  }
+
+  return null;
+}
+
 export function normalizeApiError(error: unknown, fallbackMessage = '请求失败，请检查网络后重试'): NormalizedApiError {
   if (!axios.isAxiosError(error)) {
     return {
@@ -32,12 +61,8 @@ export function normalizeApiError(error: unknown, fallbackMessage = '请求失�
   const requestId = getHeaderValue(error.response?.headers, 'x-request-id')
     || (typeof payload?.request_id === 'string' ? payload.request_id : undefined);
 
-  const message =
-    (typeof payload?.error === 'string' && payload.error)
-    || (typeof payload?.detail === 'string' && payload.detail)
-    || (typeof payload?.message === 'string' && payload.message)
-    || error.message
-    || fallbackMessage;
+  const drfMessage = extractDRFMessage(payload);
+  const message = drfMessage || error.message || fallbackMessage;
 
   const code =
     (typeof payload?.code === 'string' && payload.code)

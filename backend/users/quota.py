@@ -7,19 +7,19 @@ from rest_framework.exceptions import ValidationError
 
 PLAN_QUOTA_LIMITS: dict[str, dict[str, int | None]] = {
     'free': {
-        'course': 1, 'question': 200, 'knowledge_point': 300,
+        'course': 5, 'question': 200, 'knowledge_point': 300,
         'article': 5, 'ai_question': None, 'ai_call_total': 100,
         'pdf_export': 10,
         'custom_bot': 0,
     },
     'starter': {
-        'course': 3, 'question': 2000, 'knowledge_point': 1000,
+        'course': 30, 'question': 2000, 'knowledge_point': 1000,
         'article': 20, 'ai_question': None, 'ai_call_total': 500,
         'pdf_export': 50,
         'custom_bot': 0,
     },
     'growth': {
-        'course': 10, 'question': 10000, 'knowledge_point': 5000,
+        'course': 100, 'question': 10000, 'knowledge_point': 5000,
         'article': 100, 'ai_question': None, 'ai_call_total': 3000,
         'pdf_export': 100,
         'custom_bot': 0,
