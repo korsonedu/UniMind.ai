@@ -49,10 +49,12 @@ function extractDRFMessage(payload: Record<string, unknown> | undefined): string
 
 export function normalizeApiError(error: unknown, fallbackMessage = '请求失败，请检查网络后重试'): NormalizedApiError {
   if (!axios.isAxiosError(error)) {
+    // 原生 fetch 错误、OSS 分片上传错误等：保留 error.message
+    const nativeMessage = error instanceof Error ? error.message : null;
     return {
-      message: fallbackMessage,
+      message: nativeMessage || fallbackMessage,
       code: 'unknown_error',
-      isNetworkError: false,
+      isNetworkError: true,
     };
   }
 
