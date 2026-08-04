@@ -16,6 +16,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics, permissions
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsAdmin, HasQuota, is_institution_teacher, IsInstitutionTeacher
 
@@ -91,7 +92,12 @@ def _extract_cover_async(course_id: int) -> None:
             course = Course.objects.get(pk=course_id)
             if not course.video_file or course.cover_image:
                 return
-            frame_path = _extract_first_frame(course.video_file.path, course.title)
+            # 获取视频 URL（本地路径或 OSS 签名 URL）
+            try:
+                video_path = course.video_file.path
+            except NotImplementedError:
+                video_path = course.video_file.url
+            frame_path = _extract_first_frame(video_path, course.title)
             if not frame_path:
                 return
             try:
@@ -181,6 +187,11 @@ class OSSMultipartCompleteView(APIView):
         if not upload_id or not object_key:
             return Response({"error": "缺少 upload_id 或 object_key"}, status=400)
 
+        # 标题必填，提前校验避免无效 OSS 合并
+        title = str(request.data.get("title", "")).strip()
+        if not title:
+            return Response({"error": "课程标题必填"}, status=400)
+
         # 校验 object_key 归属当前用户机构
         user_inst_id = getattr(request.user, 'institution_id', None)
         expected_prefix = f"institutions/{user_inst_id or 'public'}/"
@@ -198,6 +209,19 @@ class OSSMultipartCompleteView(APIView):
         # 完成 OSS 分片合并
         import oss2
         bucket = _get_oss_bucket()
+
+        def _abort():
+            try:
+                bucket.abort_multipart_upload(object_key, upload_id)
+            except Exception:
+                pass
+
+        def _delete_obj():
+            try:
+                bucket.delete_object(object_key)
+            except Exception:
+                pass
+
         try:
             oss_parts = []
             for p in parts:
@@ -208,12 +232,24 @@ class OSSMultipartCompleteView(APIView):
                 oss_parts.append(oss2.models.PartInfo(part_number, etag))
             bucket.complete_multipart_upload(object_key, upload_id, oss_parts)
         except Exception as exc:
+            _abort()
             logger.error("OSS complete_multipart_upload failed: %s", exc)
             return Response({"error": f"OSS 合并失败: {exc}"}, status=500)
 
+        # 合并成功，后续失败需要删除 OSS 对象
+        try:
+            return self._create_course(request, bucket, object_key)
+        except Exception as exc:
+            _delete_obj()
+            if isinstance(exc, ValidationError):
+                return Response({"error": str(exc.detail) if hasattr(exc, 'detail') else str(exc)}, status=400)
+            logger.exception("Course creation after OSS merge failed")
+            return Response({"error": f"课程创建失败: {exc}"}, status=500)
+
+    def _create_course(self, request, bucket, object_key):
         # 验证文件确实存在
         if not bucket.object_exists(object_key):
-            return Response({"error": "文件在 OSS 上不存在"}, status=500)
+            raise ValidationError({"error": "文件在 OSS 上不存在"})
 
         # 获取实际文件大小
         obj_meta = bucket.head_object(object_key)
@@ -221,9 +257,6 @@ class OSSMultipartCompleteView(APIView):
 
         # 校验课程元数据
         title = str(request.data.get("title", "")).strip()
-        if not title:
-            return Response({"error": "课程标题必填"}, status=400)
-
         description = request.data.get("description", "")
         elo_reward = _safe_int(request.data.get("elo_reward"), 50)
         album_obj_id = request.data.get("album_obj")
@@ -258,7 +291,7 @@ class OSSMultipartCompleteView(APIView):
                 from courses.models import Album
                 album = Album.objects.filter(id=album_id).first()
                 if not album or album.institution_id != inst.id:
-                    return Response({"error": "专辑不属于当前机构"}, status=403)
+                    raise ValidationError({"error": "专辑不属于当前机构"})
             course.album_obj_id = album_id
         if str(knowledge_point_id or "").strip() and str(knowledge_point_id) != "0":
             kp_id = _safe_int(knowledge_point_id, None)
@@ -266,9 +299,9 @@ class OSSMultipartCompleteView(APIView):
                 from quizzes.models import KnowledgePoint
                 kp = KnowledgePoint.objects.filter(id=kp_id).first()
                 if not kp:
-                    return Response({"error": "知识点不存在"}, status=400)
+                    raise ValidationError({"error": "知识点不存在"})
                 if kp.institution_id and kp.institution_id != inst.id:
-                    return Response({"error": "知识点不属于当前机构"}, status=403)
+                    raise ValidationError({"error": "知识点不属于当前机构"})
             course.knowledge_point_id = kp_id
         if cover_image:
             course.cover_image = cover_image
@@ -446,7 +479,13 @@ class CourseListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = apply_institution_filter(Course.objects.all().order_by('-created_at'), user, self.request)
+        qs = apply_institution_filter(Course.objects.all(), user, self.request)
+        ordering = self.request.query_params.get('ordering', '-created_at')
+        allowed = ('sort_order', '-sort_order', 'created_at', '-created_at', 'title', '-title')
+        if ordering in allowed:
+            qs = qs.order_by(ordering)
+        else:
+            qs = qs.order_by('-created_at')
         q = self.request.query_params.get('search')
         kp = self.request.query_params.get('kp')
         if q: qs = qs.filter(title__icontains=q)
@@ -531,6 +570,42 @@ class CourseListCreateView(generics.ListCreateAPIView):
             dispatch_transcription(course.id)
         except Exception:
             pass
+
+class CourseReorderView(APIView):
+    """批量更新课程 sort_order。"""
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        items = request.data.get('items')
+        if not isinstance(items, list) or not items:
+            return Response({"error": "items 格式非法"}, status=400)
+
+        # 校验归属 + 收集更新映射
+        updates = {}
+        course_ids = [item.get('id') for item in items if isinstance(item, dict)]
+        if not course_ids:
+            return Response({"error": "items 格式非法"}, status=400)
+
+        qs = apply_institution_filter(Course.objects.all(), request.user, request)
+        courses = {c.id: c for c in qs.filter(id__in=course_ids)}
+        if len(courses) != len(course_ids):
+            return Response({"error": "部分课程不存在或无权限"}, status=400)
+
+        for item in items:
+            cid = item.get('id')
+            order = item.get('sort_order')
+            if cid not in courses or not isinstance(order, int):
+                return Response({"error": f"数据非法: {item}"}, status=400)
+            updates[cid] = order
+
+        # 批量更新
+        from django.db import transaction
+        with transaction.atomic():
+            for cid, order in updates.items():
+                Course.objects.filter(id=cid).update(sort_order=order)
+
+        return Response({"ok": True, "updated": len(updates)})
+
 
 class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Course.objects.all()

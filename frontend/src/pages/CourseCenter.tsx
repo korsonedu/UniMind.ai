@@ -28,6 +28,7 @@ export const CourseCenter: React.FC = () => {
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<string>('sort_order');
 
   useEffect(() => {
     api.get('/courses/tags/').then(r => setAllTags(r.data || [])).catch(() => {});
@@ -39,12 +40,13 @@ export const CourseCenter: React.FC = () => {
   if (search.trim()) queryParams.push(`search=${encodeURIComponent(search.trim())}`);
   if (activeTags.length > 0) activeTags.forEach(t => queryParams.push(`tag=${encodeURIComponent(t)}`));
   if (classId) queryParams.push(`class_id=${classId}`);
+  queryParams.push(`ordering=${sortBy}`);
   queryParams.push('page_size=12');
   queryParams.push(`page=${page}`);
   const tagQuery = queryParams.length > 0 ? '?' + queryParams.join('&') : '';
 
   const { data: coursesData, isLoading: loading, error: queryError, refetch } = useQuery({
-    queryKey: queryKeys.courses.list(tagQuery),
+    queryKey: queryKeys.courses.list(tagQuery + `_${sortBy}`),
     queryFn: ({ signal }) => api.get(`/courses/${tagQuery}`, { signal }).then(r => r.data),
     staleTime: 30000,
   });
@@ -119,6 +121,15 @@ export const CourseCenter: React.FC = () => {
               <ListBullets className="h-4 w-4" />
             </button>
           </div>
+          <select
+            value={sortBy}
+            onChange={e => { setSortBy(e.target.value); setPage(1); }}
+            className="h-9 px-3 rounded-lg border border-border bg-background text-xs font-medium text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="sort_order">自定义排序</option>
+            <option value="-created_at">最新优先</option>
+            <option value="created_at">最早优先</option>
+          </select>
         </div>
 
         {/* 班级筛选 */}

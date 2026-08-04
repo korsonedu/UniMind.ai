@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import (
-    CourseListCreateView, CourseDetailView,
+    CourseListCreateView, CourseDetailView, CourseReorderView,
     AlbumListCreateView, AlbumDetailView, AlbumCoursesView,
     StartupMaterialListCreateView, StartupMaterialDetailView,
     VideoProgressUpdateView,
@@ -24,6 +24,7 @@ urlpatterns = [
     path('teaching-plans/<int:pk>/analytics/', TeachingPlanAnalyticsView.as_view(), name='teaching-plan-analytics'),
     path('teaching-plans/<int:pk>/ai-generate-weeks/', AIGenerateWeeklyPlansView.as_view(), name='teaching-plan-ai-weeks'),
     path('teaching-plans/<int:pk>/pdf/', LessonPlanPDFView.as_view(), name='teaching-plan-pdf'),
+    path('reorder/', CourseReorderView.as_view(), name='course-reorder'),
     path('<int:pk>/', CourseDetailView.as_view(), name='course-detail'),
     path('<int:pk>/outline/', CourseOutlineView.as_view(), name='course-outline'),
     path('<int:pk>/transcript/', CourseTranscriptView.as_view(), name='course-transcript'),
