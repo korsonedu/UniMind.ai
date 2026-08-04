@@ -205,7 +205,7 @@ class OSSMultipartCompleteView(APIView):
             oss_parts = []
             for p in parts:
                 part_number = _safe_int(p.get("number"), 0)
-                etag = str(p.get("etag", "")).strip()
+                etag = str(p.get("etag", "")).strip().strip('"')
                 if part_number <= 0 or not etag:
                     return Response({"error": f"part 数据非法: {p}"}, status=400)
                 oss_parts.append(oss2.models.PartInfo(part_number, etag))
