@@ -111,8 +111,11 @@ def _extract_cover_async(course_id: int) -> None:
 
 def _get_oss_bucket():
     import oss2
+    endpoint = settings.OSS_ENDPOINT
+    if not endpoint.startswith(('http://', 'https://')):
+        endpoint = 'https://' + endpoint
     auth = oss2.Auth(settings.OSS_ACCESS_KEY_ID, settings.OSS_ACCESS_KEY_SECRET)
-    return oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
+    return oss2.Bucket(auth, endpoint, settings.OSS_BUCKET_NAME)
 
 
 @_upload_rl
