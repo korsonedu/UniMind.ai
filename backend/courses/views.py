@@ -206,7 +206,7 @@ class OSSMultipartCompleteView(APIView):
                 if part_number <= 0 or not etag:
                     return Response({"error": f"part 数据非法: {p}"}, status=400)
                 oss_parts.append(oss2.models.PartInfo(part_number, etag))
-            bucket.complete_multipart_upload(upload_id, object_key, oss_parts)
+            bucket.complete_multipart_upload(object_key, upload_id, oss_parts)
         except Exception as exc:
             logger.error("OSS complete_multipart_upload failed: %s", exc)
             return Response({"error": f"OSS 合并失败: {exc}"}, status=500)
