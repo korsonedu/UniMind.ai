@@ -151,9 +151,6 @@ class OSSMultipartInitView(APIView):
         for part_number in range(1, total_parts + 1):
             url = bucket.sign_url(
                 "PUT", object_key, 3600,
-                headers={
-                    "x-oss-sequential-read": "true",
-                },
                 params={
                     "uploadId": upload_id,
                     "partNumber": str(part_number),
