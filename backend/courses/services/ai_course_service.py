@@ -33,9 +33,14 @@ class AICourseService:
 
         try:
             from django.conf import settings
+            from courses.views import _get_video_local_path, _cleanup_temp_video
             provider = ASRProviderRegistry.get_default_provider()
             provider_name = getattr(settings, 'ASR_DEFAULT_PROVIDER', 'dummy')
-            result = provider.transcribe(course.video_file.path)
+            local_path = _get_video_local_path(course)
+            try:
+                result = provider.transcribe(local_path)
+            finally:
+                _cleanup_temp_video(local_path)
 
             transcript.full_text = result.full_text
             transcript.language = result.language

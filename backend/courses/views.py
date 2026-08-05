@@ -53,6 +53,34 @@ def _load_prompt(template_name: str) -> str:
         return f.read()
 
 
+def _get_video_local_path(course) -> str:
+    """获取视频的本地文件路径。OSS 存储时下载到临时文件。调用者负责清理。"""
+    try:
+        return course.video_file.path
+    except NotImplementedError:
+        pass
+    # OSS 存储：用 requests 下载到临时文件
+    import requests as _requests
+    tmp = tempfile.NamedTemporaryFile(suffix=os.path.splitext(course.video_file.name)[1] or '.mp4', delete=False)
+    tmp.close()
+    url = course.video_file.url
+    logger.info("Downloading video from OSS to %s for processing", tmp.name)
+    with _requests.get(url, stream=True, timeout=600) as r:
+        r.raise_for_status()
+        with open(tmp.name, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+    return tmp.name
+
+def _cleanup_temp_video(path: str):
+    """清理 _get_video_local_path 创建的临时文件。如果是 OSS 临时文件则删除。"""
+    if path.startswith(tempfile.gettempdir()):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
 def _extract_first_frame(video_path: str, course_title: str) -> str | None:
     """用 ffmpeg 提取视频第一帧，返回截图临时文件路径。失败返回 None。"""
     tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
@@ -92,12 +120,12 @@ def _extract_cover_async(course_id: int) -> None:
             course = Course.objects.get(pk=course_id)
             if not course.video_file or course.cover_image:
                 return
-            # 获取视频 URL（本地路径或 OSS 签名 URL）
+            # ffmpeg 可以直接处理 URL（OSS 签名链接）和本地路径
             try:
-                video_path = course.video_file.path
+                video_src = course.video_file.path
             except NotImplementedError:
-                video_path = course.video_file.url
-            frame_path = _extract_first_frame(video_path, course.title)
+                video_src = course.video_file.url
+            frame_path = _extract_first_frame(video_src, course.title)
             if not frame_path:
                 return
             try:
