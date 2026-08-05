@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Video, Image as ImageIcon, FileArrowUp, PencilSimple, Trash, Plus, Check, X, ArrowUp, ArrowDown } from '@phosphor-icons/react';
+import { BookOpen, Video, Image as ImageIcon, FileArrowUp, PencilSimple, Trash, Plus, Check, X, DotsSixVertical } from '@phosphor-icons/react';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { TagAutocomplete } from '@/components/TagAutocomplete';
 import { QuickCreateKPDialog } from './QuickCreateKPDialog';
@@ -18,6 +18,7 @@ import { useUploadStore } from '@/store/useUploadStore';
 import { Pagination } from '@/components/Pagination';
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
@@ -36,7 +37,8 @@ export const CourseSection: React.FC = () => {
   const [showNewKP, setShowNewKP] = useState(false);
   const [showNewAlbum, setShowNewAlbum] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sortBy, setSortBy] = useState<string>('sort_order');
+  const [sortBy, setSortBy] = useState<string>('-created_at');
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [form, setForm] = useState({
     title: '', album_obj: '0', desc: '', elo_reward: 50,
     knowledge_point: '0', video: null as File | null,
@@ -62,13 +64,24 @@ export const CourseSection: React.FC = () => {
 
   useEffect(() => { fetchData(page); }, [fetchData, page]);
 
-  const handleReorder = async (idx: number, direction: 'up' | 'down') => {
-    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= items.length) return;
+  const handleDragStart = (idx: number) => {
+    setDragIdx(idx);
+    if (sortBy !== 'sort_order') setSortBy('sort_order');
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx) return;
     const reordered = [...items];
-    [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
-    const updated = reordered.map((item: any, i: number) => ({ id: item.id, sort_order: i }));
+    const [moved] = reordered.splice(dragIdx, 1);
+    reordered.splice(idx, 0, moved);
     setItems(reordered);
+    setDragIdx(idx);
+  };
+
+  const handleDragEnd = async () => {
+    setDragIdx(null);
+    const updated = items.map((item: any, i: number) => ({ id: item.id, sort_order: i }));
     try {
       await api.post('/courses/reorder/', { items: updated });
     } catch { fetchData(page); }
@@ -214,13 +227,23 @@ export const CourseSection: React.FC = () => {
           <ScrollArea className="h-[560px]">
             <div className="divide-y divide-black/[0.04]">
               {items.map((item: any, idx: number) => (
-                <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
+                <div key={item.id}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDragEnd={handleDragEnd}
+                  className={cn(
+                    "p-4 hover:bg-[#F5F5F7]/50 transition-colors group",
+                    dragIdx === idx && "opacity-50 bg-[#F5F5F7]"
+                  )}
+                >
                   <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {sortBy === 'sort_order' && <span className="text-[10px] text-[#AEAEB2] font-mono w-4 shrink-0">#{idx + 1}</span>}
-                        <p className="text-sm font-semibold truncate">{item.title}</p>
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className="cursor-grab active:cursor-grabbing pt-0.5 text-[#AEAEB2] hover:text-[#6E6E73] shrink-0" title="拖动排序">
+                        <DotsSixVertical className="w-4 h-4" />
                       </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{item.title}</p>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {item.album_name && <Badge variant="secondary" className="text-[10px] rounded-lg bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">{item.album_name}</Badge>}
                         {item.knowledge_point_name && <Badge className="text-[10px] bg-[#0071E3]/10 text-[#0071E3] hover:bg-[#0071E3]/20 rounded-lg font-medium">{item.knowledge_point_name}</Badge>}
@@ -248,17 +271,8 @@ export const CourseSection: React.FC = () => {
                         {item.updated_at && item.updated_at !== item.created_at ? ` · 更新 ${new Date(item.updated_at).toLocaleDateString()}` : ''}
                       </p>
                     </div>
+                    </div>
                     <div className="flex gap-1 shrink-0 items-center">
-                      {sortBy === 'sort_order' && (
-                        <div className="flex flex-col mr-1">
-                          <button onClick={() => handleReorder(idx, 'up')} disabled={idx === 0} className="p-0.5 rounded hover:bg-[#F5F5F7] disabled:opacity-20 text-[#6E6E73]">
-                            <ArrowUp className="w-3 h-3" />
-                          </button>
-                          <button onClick={() => handleReorder(idx, 'down')} disabled={idx === items.length - 1} className="p-0.5 rounded hover:bg-[#F5F5F7] disabled:opacity-20 text-[#6E6E73]">
-                            <ArrowDown className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
                       <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
                         <PencilSimple className="w-3.5 h-3.5" />
                       </Button>
