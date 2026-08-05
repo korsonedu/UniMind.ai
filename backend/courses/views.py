@@ -113,14 +113,22 @@ def _extract_first_frame(video_path: str, course_title: str) -> str | None:
 
 
 def _extract_cover_async(course_id: int) -> None:
-    """后台线程：ffmpeg 提取视频第一帧作为封面，避免阻塞请求线程。"""
+    """Celery 异步提取视频首帧封面。Celery 不可用时回退到线程。"""
+    try:
+        from courses.tasks import extract_cover_task
+        from courses.services.task_dispatcher import _has_active_celery_worker
+        if _has_active_celery_worker():
+            extract_cover_task.delay(course_id)
+            return
+    except Exception:
+        pass
+    # 回退：daemon 线程
     def _run():
         from courses.models import Course
         try:
             course = Course.objects.get(pk=course_id)
             if not course.video_file or course.cover_image:
                 return
-            # ffmpeg 可以直接处理 URL（OSS 签名链接）和本地路径
             try:
                 video_src = course.video_file.path
             except NotImplementedError:
