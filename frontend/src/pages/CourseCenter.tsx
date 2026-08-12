@@ -126,7 +126,7 @@ export const CourseCenter: React.FC = () => {
             onChange={e => { setSortBy(e.target.value); setPage(1); }}
             className="h-9 px-3 rounded-lg border border-border bg-background text-xs font-medium text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            <option value="sort_order">自定义排序</option>
+            <option value="sort_order">默认顺序</option>
             <option value="-created_at">最新优先</option>
             <option value="created_at">最早优先</option>
           </select>

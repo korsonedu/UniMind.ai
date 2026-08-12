@@ -37,7 +37,7 @@ export const CourseSection: React.FC = () => {
   const [showNewKP, setShowNewKP] = useState(false);
   const [showNewAlbum, setShowNewAlbum] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sortBy, setSortBy] = useState<string>('-created_at');
+  const sortBy = 'sort_order';
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [form, setForm] = useState({
     title: '', album_obj: '0', desc: '', elo_reward: 50,
@@ -46,10 +46,10 @@ export const CourseSection: React.FC = () => {
     tags: [] as string[],
   });
 
-  const fetchData = useCallback(async (p = 1, ordering?: string) => {
+  const fetchData = useCallback(async (p = 1) => {
     try {
       const [c, k, a] = await Promise.all([
-        api.get('/courses/', { params: { page: p, page_size: 10, ordering: ordering || sortBy } }),
+        api.get('/courses/', { params: { page: p, page_size: 10, ordering: sortBy } }),
         api.get('/quizzes/knowledge-points/'),
         api.get('/courses/albums/'),
       ]);
@@ -66,7 +66,6 @@ export const CourseSection: React.FC = () => {
 
   const handleDragStart = (idx: number) => {
     setDragIdx(idx);
-    if (sortBy !== 'sort_order') setSortBy('sort_order');
   };
 
   const handleDragOver = (e: React.DragEvent, idx: number) => {
@@ -198,16 +197,6 @@ export const CourseSection: React.FC = () => {
           <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{total}</Badge>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={sortBy} onValueChange={(v) => { setSortBy(v); fetchData(1, v); }}>
-            <SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 text-xs font-medium w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="sort_order">自定义排序</SelectItem>
-              <SelectItem value="-created_at">最新优先</SelectItem>
-              <SelectItem value="created_at">最早优先</SelectItem>
-            </SelectContent>
-          </Select>
           <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
             <Plus className="w-4 h-4" />
             {t('sectionList.uploadCourse')}
