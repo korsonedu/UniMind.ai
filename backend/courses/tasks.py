@@ -4,7 +4,9 @@ from celery import shared_task
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=600, time_limit=660)
+# 长视频转录实测：56 分钟视频 ≈ 428s（314 chunks × GLM ASR 串行调用）。
+# 660s 硬超时会导致 78 分钟视频卡边被杀（SIGKILL 无清理，transcript 永久卡 processing）。
+@shared_task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=5100, time_limit=5400)
 def transcribe_course_task(self, course_id: int):
     from courses.models import Course
     from courses.services.ai_course_service import AICourseService
@@ -56,7 +58,7 @@ def extract_cover_task(self, course_id: int):
         raise self.retry(exc=exc)
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=120, time_limit=180)
+@shared_task(bind=True, max_retries=2, default_retry_delay=30, soft_time_limit=300, time_limit=600)
 def generate_outline_task(self, course_id: int):
     from courses.services.ai_course_service import AICourseService
 

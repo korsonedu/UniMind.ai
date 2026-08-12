@@ -46,6 +46,7 @@ class AICourseService:
             transcript.language = result.language
             transcript.asr_provider = provider_name
             transcript.asr_status = 'completed'
+            transcript.error_message = ''
             transcript.save()
 
             transcript.segments.all().delete()
