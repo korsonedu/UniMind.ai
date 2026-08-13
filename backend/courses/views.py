@@ -524,8 +524,14 @@ class CourseListCreateView(generics.ListCreateAPIView):
             qs = qs.order_by('-created_at')
         q = self.request.query_params.get('search')
         kp = self.request.query_params.get('kp')
+        album = self.request.query_params.get('album')
         if q: qs = qs.filter(title__icontains=q)
         if kp: qs = qs.filter(knowledge_point_id=kp)
+        if album:
+            try:
+                qs = qs.filter(album_obj_id=int(album))
+            except (ValueError, TypeError):
+                pass
         tag = self.request.query_params.getlist('tag')
         if tag:
             from courses.models import CourseTagRelation

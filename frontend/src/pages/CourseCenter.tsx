@@ -25,6 +25,11 @@ export const CourseCenter: React.FC = () => {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [classes, setClasses] = useState<{ id: number; name: string }[]>([]);
   const [classId, setClassId] = useState<number | null>(null);
+  const [albums, setAlbums] = useState<{ id: number; name: string }[]>([]);
+  const [albumId, setAlbumId] = useState<number | null>(null);
+  const [kps, setKps] = useState<{ id: number; name: string }[]>([]);
+  const [kpId, setKpId] = useState<number | null>(null);
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [page, setPage] = useState(1);
@@ -33,6 +38,8 @@ export const CourseCenter: React.FC = () => {
   useEffect(() => {
     api.get('/courses/tags/').then(r => setAllTags(r.data || [])).catch(() => {});
     api.get('/users/me/classes/').then(r => setClasses(r.data || [])).catch(() => {});
+    api.get('/courses/albums/').then(r => setAlbums(r.data || [])).catch(() => {});
+    api.get('/quizzes/knowledge-points/').then(r => setKps(r.data || [])).catch(() => {});
   }, []);
 
   const { t } = useTranslation('common');
@@ -40,6 +47,8 @@ export const CourseCenter: React.FC = () => {
   if (search.trim()) queryParams.push(`search=${encodeURIComponent(search.trim())}`);
   if (activeTags.length > 0) activeTags.forEach(t => queryParams.push(`tag=${encodeURIComponent(t)}`));
   if (classId) queryParams.push(`class_id=${classId}`);
+  if (albumId) queryParams.push(`album=${albumId}`);
+  if (kpId) queryParams.push(`kp=${kpId}`);
   queryParams.push(`ordering=${sortBy}`);
   queryParams.push('page_size=12');
   queryParams.push(`page=${page}`);
@@ -95,9 +104,10 @@ export const CourseCenter: React.FC = () => {
           <div className="relative flex-1 max-w-sm">
             <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1); }}
-              placeholder="搜索课程..."
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { setSearch(searchInput); setPage(1); } }}
+              placeholder="搜索课程...（回车搜索）"
               className="pl-9 h-9"
             />
           </div>
@@ -154,6 +164,60 @@ export const CourseCenter: React.FC = () => {
                 onClick={() => { setClassId(c.id); setPage(1); }}
               >
                 {c.name}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* 专辑筛选 */}
+        {albums.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <Badge
+              className={cn(
+                "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
+                !albumId ? "bg-black text-white dark:bg-white dark:text-black" : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700"
+              )}
+              onClick={() => { setAlbumId(null); setPage(1); }}
+            >
+              全部专辑
+            </Badge>
+            {albums.map((a) => (
+              <Badge
+                key={a.id}
+                className={cn(
+                  "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
+                  albumId === a.id ? "bg-black text-white dark:bg-white dark:text-black" : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700"
+                )}
+                onClick={() => { setAlbumId(a.id); setPage(1); }}
+              >
+                {a.name}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* 知识点筛选 */}
+        {kps.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            <Badge
+              className={cn(
+                "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
+                !kpId ? "bg-black text-white dark:bg-white dark:text-black" : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700"
+              )}
+              onClick={() => { setKpId(null); setPage(1); }}
+            >
+              全部知识点
+            </Badge>
+            {kps.map((k) => (
+              <Badge
+                key={k.id}
+                className={cn(
+                  "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
+                  kpId === k.id ? "bg-black text-white dark:bg-white dark:text-black" : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700"
+                )}
+                onClick={() => { setKpId(k.id); setPage(1); }}
+              >
+                {k.name}
               </Badge>
             ))}
           </div>
