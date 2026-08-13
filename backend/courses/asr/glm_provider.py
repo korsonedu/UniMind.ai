@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 import tempfile
+import time
 import requests
 from typing import List
 
@@ -150,21 +151,38 @@ class GLMChunkedASRProvider(ASRProvider):
         model: str,
         timeout: int,
     ) -> str:
-        """调用 GLM-ASR-2512，返回纯文本。"""
-        url = f"{base_url.rstrip('/')}/audio/transcriptions"
+        """调用 GLM-ASR-2512，返回纯文本。429/5xx 指数退避重试。
 
-        with open(chunk_path, "rb") as f:
-            response = requests.post(
-                url,
-                headers={"Authorization": f"Bearer {api_key}"},
-                files={"file": f},
-                data={"model": model},
-                timeout=timeout,
-            )
-        response.raise_for_status()
-        data = response.json()
-        # GLM ASR 响应格式：{"text": "转录文本", "id": "...", "model": "..."}
-        return data.get("text", "")
+        长视频 = 200-300 次连续调用，双任务并发曾触发 GLM 限流，
+        所有 chunk 失败后空结果覆盖了已有好数据。
+        """
+        url = f"{base_url.rstrip('/')}/audio/transcriptions"
+        last_error: Exception | None = None
+
+        for attempt in range(4):
+            try:
+                with open(chunk_path, "rb") as f:
+                    response = requests.post(
+                        url,
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        files={"file": f},
+                        data={"model": model},
+                        timeout=timeout,
+                    )
+            except requests.RequestException as e:
+                last_error = e
+            else:
+                if response.status_code in (429, 500, 502, 503):
+                    last_error = Exception(f"HTTP {response.status_code}")
+                else:
+                    response.raise_for_status()
+                    data = response.json()
+                    # GLM ASR 响应格式：{"text": "转录文本", "id": "...", "model": "..."}
+                    return data.get("text", "")
+            if attempt < 3:
+                time.sleep(10 * (2 ** attempt))  # 10/20/40s
+
+        raise last_error or Exception("GLM ASR chunk failed")
 
 
 ASRProviderRegistry.register("glm_asr", GLMChunkedASRProvider)

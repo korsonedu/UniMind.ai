@@ -42,6 +42,11 @@ class AICourseService:
             finally:
                 _cleanup_temp_video(local_path)
 
+            # 空结果（如 ASR 限流导致全部 chunk 失败）不得标记 completed，
+            # 更不能清掉已有 segments —— raise 让 Celery 重试，旧数据保留
+            if not result.full_text.strip() or not result.segments:
+                raise ValueError("转录结果为空（ASR 可能限流），等待重试")
+
             transcript.full_text = result.full_text
             transcript.language = result.language
             transcript.asr_provider = provider_name
@@ -106,7 +111,7 @@ class AICourseService:
     def generate_outline(self, course_id: int) -> List[Dict[str, Any]]:
         course = Course.objects.get(pk=course_id)
         transcript = getattr(course, 'transcript', None)
-        if not transcript or transcript.asr_status != 'completed':
+        if not transcript or transcript.asr_status != 'completed' or not transcript.full_text.strip():
             raise ValueError("转录不可用或尚未完成")
 
         outline, _ = CourseOutline.objects.get_or_create(course=course)
@@ -117,6 +122,8 @@ class AICourseService:
             # 构建带时间戳的分段文本，让 AI 能拿到真实的时序信息
             transcript_with_timestamps = self._format_transcript_with_timestamps(transcript)
             items = self._request_outline_items(transcript_with_timestamps)
+            if not items:
+                raise ValueError("大纲生成结果为空，等待重试")
             outline.items.all().delete()
             OutlineItem.objects.bulk_create([
                 OutlineItem(
