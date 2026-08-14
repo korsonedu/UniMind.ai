@@ -1,6 +1,5 @@
 import React from 'react';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,7 +36,6 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
   isSubmitting,
   gradingMessage
 }) => {
-  const { t } = useTranslation('testLadder');
   const isMobile = useIsMobile();
 
   if (questions.length === 0) return null;
@@ -52,14 +50,14 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
   const isFirst = currentIdx === 0;
 
   const typeLabel = currentQ.q_type === 'objective'
-    ? t('assessment.questionTypes.objective')
+    ? '客观选择'
     : currentQ.subjective_type === 'calculate'
-      ? t('assessment.questionTypes.calculate')
+      ? '主观计算'
       : currentQ.subjective_type === 'noun'
-        ? t('assessment.questionTypes.noun')
-        : t('assessment.questionTypes.subjective');
+        ? '名词解释'
+        : '主观论述';
 
-  const diffLabel = currentQ.difficulty_level_display || t('difficulty.normal');
+  const diffLabel = currentQ.difficulty_level_display || '适当';
 
   return (
     <Dialog open={open} onOpenChange={(open) => { if (!open && !isSubmitting) onOpenChange(false); }}>
@@ -67,7 +65,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
         onInteractOutside={(e) => e.preventDefault()}
         className="w-[96vw] max-w-5xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[92vh] max-h-[860px] z-[var(--z-dropdown)]"
       >
-        <DialogTitle className="sr-only">{t('assessment.title')}</DialogTitle>
+        <DialogTitle className="sr-only">学术能力评估</DialogTitle>
 
         {/* ── Header ── */}
         <div className="px-6 py-3 border-b border-stone-100 flex items-center justify-between shrink-0 bg-white">
@@ -101,7 +99,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
               )}
             >
               <CheckCircle className="h-3.5 w-3.5" />
-              {currentQ.is_mastered ? t('assessment.mastered') : t('assessment.notMastered')}
+              {currentQ.is_mastered ? '已拿捏' : '拿捏'}
             </Button>
             <Button
               variant="ghost"
@@ -136,7 +134,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
               {currentQ.is_mastered && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50/70 border border-emerald-100 rounded-lg text-xs font-medium text-emerald-700 mb-5 -mt-3">
                   <CheckCircle className="w-3.5 h-3.5" />
-                  {t('assessment.mastered')}
+                  已拿捏
                 </div>
               )}
 
@@ -194,7 +192,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
                       "placeholder:text-stone-400 resize-none transition-all",
                       currentQ.is_mastered && "opacity-50"
                     )}
-                    placeholder={currentQ.is_mastered ? t('assessment.placeholderMastered') : t('assessment.placeholderDefault')}
+                    placeholder={currentQ.is_mastered ? '该题已标记掌握，无需填写答案...' : '在此输入您的分析或计算过程...'}
                   />
                 )}
               </div>
@@ -225,7 +223,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
 
               {/* Question grid */}
               <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-2.5 w-full">
-                {t('assessment.questionMatrix')}
+                题号矩阵
               </p>
               <div className="grid grid-cols-4 gap-1.5 w-full">
                 {questions.map((q, i) => {
@@ -251,11 +249,11 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
               {/* Sidebar stats */}
               <div className="mt-auto w-full pt-4 border-t border-stone-200 space-y-1.5">
                 <div className="flex justify-between text-[10px] font-medium">
-                  <span className="text-stone-400">{t('assessment.answered')}</span>
+                  <span className="text-stone-400">已答</span>
                   <span className="text-stone-700 tabular-nums">{answeredCount}</span>
                 </div>
                 <div className="flex justify-between text-[10px] font-medium">
-                  <span className="text-stone-400">{t('assessment.notAnswered')}</span>
+                  <span className="text-stone-400">未答</span>
                   <span className="text-stone-700 tabular-nums">{totalCount - answeredCount}</span>
                 </div>
               </div>
@@ -272,7 +270,7 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
             className="h-9 px-4 rounded-xl text-sm font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100 gap-1.5 transition-colors"
           >
             <CaretLeft className="h-4 w-4" />
-            {t('assessment.prevQuestion')}
+            上一题
           </Button>
 
           {gradingMessage && (
@@ -288,14 +286,14 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
               disabled={isSubmitting}
               className="h-9 px-6 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.97]"
             >
-              {isSubmitting ? t('assessment.submitting') : t('assessment.submit')}
+              {isSubmitting ? '评分中...' : '提交评分'}
             </Button>
           ) : (
             <Button
               onClick={() => setCurrentIdx(prev => prev + 1)}
               className="h-9 px-5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold shadow-sm transition-all active:scale-[0.97] gap-1.5"
             >
-              {t('assessment.nextQuestion')}
+              下一题
               <CaretRight className="h-4 w-4" />
             </Button>
           )}

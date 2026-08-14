@@ -17,7 +17,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { PageWrapper } from '@/components/PageWrapper';
 import { toast } from "sonner";
-import { useTranslation } from 'react-i18next';
 import {
   Select,
   SelectContent,
@@ -28,8 +27,18 @@ import {
 
 const AVATAR_STYLE_IDS = ['avataaars', 'bottts', 'pixel-art', 'adventurer', 'big-smile', 'micah', 'lorelei', 'notionists'];
 
+const AVATAR_STYLES: Record<string, string> = {
+  avataaars: '简约角色',
+  bottts: '机器人',
+  'pixel-art': '像素艺术',
+  adventurer: '冒险家',
+  'big-smile': '大笑脸',
+  micah: '扁平化',
+  lorelei: '手绘风格',
+  notionists: '极简主义',
+};
+
 export const Settings: React.FC = () => {
-  const { t } = useTranslation(['settings', 'common']);
   const user = useAuthStore(s => s.user);
   const updateUser = useAuthStore(s => s.updateUser);
   const [loading, setLoading] = useState(false);
@@ -64,33 +73,33 @@ export const Settings: React.FC = () => {
         avatar_seed: avatar.seed
       });
       updateUser(res.data);
-      toast.success(t('profile.saved'));
-    } catch (err) { toast.error(t('common:failed')); }
+      toast.success('个人账户信息已同步');
+    } catch (err) { toast.error('操作失败'); }
     finally { setLoading(false); }
   };
 
   const handleUpdateEmail = async () => {
-    if (!email) return toast.error(t('security.emailEmpty'));
+    if (!email) return toast.error('请输入新邮箱');
     try {
       const res = await api.patch('/users/me/email/', { email });
       updateUser(res.data);
-      toast.success(t('security.emailSaved'));
+      toast.success('邮箱更新成功');
       setEmail('');
-    } catch (e) { toast.error(t('common:failed')); }
+    } catch (e) { toast.error('操作失败'); }
   };
 
   const handleUpdatePassword = async () => {
-    if (!passwords.old || !passwords.new) return toast.error(t('security.passwordEmpty'));
-    if (passwords.new.length < 6) return toast.error(t('security.passwordTooShort', '密码至少需要 6 个字符'));
+    if (!passwords.old || !passwords.new) return toast.error('请完善密码信息');
+    if (passwords.new.length < 6) return toast.error('密码至少需要 6 个字符');
     try {
       await api.patch('/users/me/password/', { old_password: passwords.old, new_password: passwords.new });
-      toast.success(t('security.passwordSaved'));
+      toast.success('密码重置成功');
       setPasswords({ old: '', new: '' });
-    } catch (e) { toast.error(t('security.passwordError')); }
+    } catch (e) { toast.error('原始密码错误'); }
   };
 
   return (
-    <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
+    <PageWrapper title='个人设置' subtitle='管理个人身份标识、学术简介及数字化化身。'>
       <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 text-left animate-in fade-in duration-700">
         <div className="lg:col-span-4 space-y-6">
           <Card className="border-none shadow-sm rounded-3xl bg-card p-8 flex flex-col items-center text-center border border-border/30">
@@ -102,18 +111,18 @@ export const Settings: React.FC = () => {
               <Sheet>
                 <SheetTrigger asChild><button aria-label="Change avatar" className="absolute bottom-0 right-0 bg-black text-white p-2.5 rounded-full shadow-sm border-4 border-white transition-transform hover:scale-110"><Camera className="h-4 w-4" /></button></SheetTrigger>
                 <SheetContent side="right" className="rounded-l-[2.5rem] border-none bg-white/95 backdrop-blur-2xl shadow-2xl w-[450px]">
-                  <SheetHeader className="p-8 border-b border-border/30"><SheetTitle className="text-2xl font-bold text-left">{t('avatar.lab')}</SheetTitle></SheetHeader>
+                  <SheetHeader className="p-8 border-b border-border/30"><SheetTitle className="text-2xl font-bold text-left">化身实验室</SheetTitle></SheetHeader>
                   <div className="p-8 space-y-10">
                     <div className="flex justify-center py-10 bg-muted rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-white shadow-lg"><AvatarImage src={previewUrl} /></Avatar></div>
                     <div className="space-y-6 text-left">
-                      <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('avatar.styleLabel')}</Label>
+                      <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">风格选择</Label>
                         <Select value={avatar.style} onValueChange={(v) => setAvatar({...avatar, style: v})}>
                           <SelectTrigger className="h-12 rounded-2xl bg-muted border-none font-bold"><SelectValue /></SelectTrigger>
                           <SelectContent className="rounded-2xl border-none shadow-lg">
-                            {AVATAR_STYLE_IDS.map(id => <SelectItem key={id} value={id} className="rounded-xl py-3 px-4"><div className="flex items-center gap-3 font-bold">{t(`avatar.styles.${id}` as any)}</div></SelectItem>)}
+                            {AVATAR_STYLE_IDS.map(id => <SelectItem key={id} value={id} className="rounded-xl py-3 px-4"><div className="flex items-center gap-3 font-bold">{AVATAR_STYLES[id] ?? id}</div></SelectItem>)}
                           </SelectContent>
                         </Select></div>
-                      <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('avatar.seedLabel')}</Label>
+                      <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">特征种子 (Seed)</Label>
                         <div className="flex gap-3"><Input value={avatar.seed} onChange={e => setAvatar({ ...avatar, seed: e.target.value })} className="bg-muted border-none h-12 rounded-2xl font-bold" /><Button variant="outline" onClick={() => setAvatar({...avatar, seed: Math.random().toString(36).substring(7)})} className="rounded-2xl h-12 w-12 border-black/5"><ArrowCounterClockwise className="h-4 w-4" /></Button></div></div>
                     </div>
                   </div>
@@ -121,15 +130,15 @@ export const Settings: React.FC = () => {
               </Sheet>
             </div>
             <h3 className="mt-6 text-xl font-bold text-foreground">{user?.nickname || user?.username}</h3>
-            <p className="text-xs text-muted-foreground font-bold mt-1 uppercase tracking-widest leading-none text-emerald-600">{t('profile.eloRank', { score: user?.elo_score })}</p>
+            <p className="text-xs text-muted-foreground font-bold mt-1 uppercase tracking-widest leading-none text-emerald-600">{`ELO Rank: ${user?.elo_score}`}</p>
           </Card>
 
           <Card className="border-none shadow-sm rounded-3xl bg-card p-8 space-y-6 border border-border/30">
              <div className="space-y-6 text-left">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">{t('security.title')}</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">安全与重置</h4>
                 <div className="space-y-4">
-                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.emailLabel')}</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder={t('security.emailPlaceholder')} autoComplete="email" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.emailUpdate')}</Button></div></div>
-                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">{t('security.passwordLabel')}</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder={t('security.oldPassword')} autoComplete="current-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder={t('security.newPassword')} autoComplete="new-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">{t('security.passwordReset')}</Button></div></div>
+                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">修改邮箱</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder='New Email' autoComplete="email" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">Update</Button></div></div>
+                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">安全密码</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder='Old Password' autoComplete="current-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder='New Password' autoComplete="new-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">Reset</Button></div></div>
                 </div>
              </div>
           </Card>
@@ -159,15 +168,15 @@ export const Settings: React.FC = () => {
           <Card className="border-none shadow-sm rounded-3xl bg-card overflow-hidden p-10 border border-border/30">
              <div className="space-y-8 text-left">
                <div className="space-y-3">
-                 <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.nicknameLabel')}</Label>
+                 <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">我的昵称 (公开显示)</Label>
                  <Input value={profile.nickname} onChange={e => setProfile({...profile, nickname: e.target.value})} className="bg-muted border-none h-12 rounded-2xl font-bold px-5" />
-                 <p className="text-[10px] text-muted-foreground font-bold ml-1 uppercase">{t('profile.usernameNote', { username: user?.username })}</p>
+                 <p className="text-[10px] text-muted-foreground font-bold ml-1 uppercase">{`登录账号: ${user?.username} (不可修改)`}</p>
                </div>
                <div className="space-y-3">
-                 <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">{t('profile.bioLabel')}</Label>
-                 <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-muted border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder={t('profile.bioPlaceholder')} />
+                 <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">个人履历 / Bio</Label>
+                 <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-muted border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder='写下你的学术格言与研究方向...' />
                </div>
-               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><FloppyDisk className="mr-2 h-4 w-4" /> {t('profile.saveProfile')}</Button>
+               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><FloppyDisk className="mr-2 h-4 w-4" /> 保存所有个人资料</Button>
              </div>
           </Card>
 

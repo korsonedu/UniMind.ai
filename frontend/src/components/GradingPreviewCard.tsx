@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import api from '@/lib/api';
-import { useTranslation } from 'react-i18next';
 
 interface SubmissionEntry {
   submission_id: number;
@@ -42,7 +41,6 @@ function editsReducer(state: EditsState, action: EditAction): EditsState {
 }
 
 export function GradingPreviewCard({ payload }: { payload: Record<string, unknown> }) {
-  const { t } = useTranslation('workbench');
   const assignmentId = payload.assignment_id as number;
   const title = (payload.title as string) || `作业 #${assignmentId}`;
   const submissions = (payload.submissions || []) as SubmissionEntry[];
@@ -51,7 +49,7 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
   const [confirming, setConfirming] = useState(false);
 
   if (!submissions.length) {
-    return <p className="text-muted-foreground text-sm">{t('noSubmissionsToGrade')}</p>;
+    return <p className="text-muted-foreground text-sm">暂无待评分提交</p>;
   }
 
   const handleConfirm = async () => {
@@ -76,9 +74,9 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
         message: `confirm_grades ${JSON.stringify({ assignment_id: assignmentId, edits: editList })}`,
         bot_id: 0,
       });
-      toast.success(t('gradesConfirmed'));
+      toast.success('成绩已确认');
     } catch {
-      toast.error(t('confirmFailed'));
+      toast.error('确认失败');
     } finally {
       setConfirming(false);
     }
@@ -90,9 +88,9 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
         message: `bulk_grade_submissions ${JSON.stringify({ assignment_id: assignmentId, action: 'reject' })}`,
         bot_id: 0,
       });
-      toast.success(t('gradesRejected'));
+      toast.success('已驳回 AI 评分');
     } catch {
-      toast.error(t('rejectFailed'));
+      toast.error('驳回失败');
     }
   };
 
@@ -100,7 +98,7 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
     <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold">{title}</h3>
-        <span className="text-xs text-muted-foreground">{submissions.length} {t('submissions')}</span>
+        <span className="text-xs text-muted-foreground">{submissions.length} 份提交</span>
       </div>
 
       <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -114,7 +112,7 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
               </div>
               <p className="text-xs text-muted-foreground line-clamp-2">{sub.question_preview}</p>
               <div className="flex items-center gap-2">
-                <label className="text-[10px] text-muted-foreground w-8">{t('score')}</label>
+                <label className="text-[10px] text-muted-foreground w-8">分数</label>
                 <Input
                   type="number"
                   min={0}
@@ -127,7 +125,7 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
                 />
                 <Textarea
                   className="h-7 text-xs rounded-lg flex-1 resize-none"
-                  placeholder={sub.ai_feedback || t('feedback')}
+                  placeholder={sub.ai_feedback || '评语'}
                   defaultValue={edit?.feedback ?? ''}
                   onChange={(e) =>
                     dispatch({ type: 'set_feedback', submission_id: sub.submission_id, feedback: e.target.value })
@@ -142,10 +140,10 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
 
       <div className="flex items-center gap-2 pt-2">
         <Button size="sm" className="rounded-xl" onClick={handleConfirm} disabled={confirming}>
-          {t('confirmAll')}
+          全部确认
         </Button>
         <Button size="sm" variant="outline" className="rounded-xl" onClick={handleReject}>
-          {t('rejectAll')}
+          全部驳回
         </Button>
       </div>
     </div>

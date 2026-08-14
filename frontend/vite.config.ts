@@ -88,7 +88,6 @@ export default defineConfig({
             '@tiptap/extension-underline',
           ],
           'vendor-stripe': ['@stripe/react-stripe-js', '@stripe/stripe-js'],
-          'vendor-i18n': ['i18next', 'react-i18next'],
           'vendor-tauri': ['@tauri-apps/api'],
           'vendor-axios': ['axios'],
         },

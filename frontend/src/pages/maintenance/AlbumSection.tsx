@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,6 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
 export const AlbumSection: React.FC = () => {
-  const { t } = useTranslation('maintenance');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,18 +33,18 @@ export const AlbumSection: React.FC = () => {
   const resetForm = () => setForm({ name: '', description: '', cover: null });
 
   const handleCreate = async () => {
-    if (!form.name) return toast.error(t('album.nameRequired'));
+    if (!form.name) return toast.error('专辑名称必填');
     const fd = new FormData();
     fd.append('name', form.name);
     fd.append('description', form.description);
     if (form.cover) fd.append('cover_image', form.cover);
     try {
       await api.post('/courses/albums/', fd);
-      toast.success(t('album.albumCreated'));
+      toast.success('专辑已创建');
       resetForm();
       setShowCreate(false);
       fetchItems();
-    } catch { toast.error(t('album.failed')); }
+    } catch { toast.error('失败'); }
   };
 
   const handleUpdate = async () => {
@@ -84,12 +82,12 @@ export const AlbumSection: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Stack className="h-5 w-5 text-[#6E6E73]" />
-          <h3 className="text-lg font-semibold tracking-tight">{t('tabs.albumManager')}</h3>
+          <h3 className="text-lg font-semibold tracking-tight">专辑管理</h3>
           <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{items.length}</Badge>
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
           <Plus className="w-4 h-4" />
-          {t('album.newAlbum')}
+          新建课程专辑
         </Button>
       </div>
 
@@ -97,8 +95,8 @@ export const AlbumSection: React.FC = () => {
       {items.length === 0 ? (
         <Card className="p-16 bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] text-center">
           <Stack className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
-          <p className="text-sm text-[#8E8E93] font-medium">{t('sectionList.noAlbums')}</p>
-          <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noAlbumsHint')}</p>
+          <p className="text-sm text-[#8E8E93] font-medium">暂无专辑</p>
+          <p className="text-xs text-[#AEAEB2] mt-1">点击上方按钮创建第一个专辑</p>
         </Card>
       ) : (
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
@@ -167,7 +165,7 @@ export const AlbumSection: React.FC = () => {
                     )}
                     {isExpanded && (!item.courses || item.courses.length === 0) && (
                       <div className="px-4 pb-4 pl-14">
-                        <p className="text-xs text-[#AEAEB2] font-medium py-2">{t('sectionList.noAlbums', { defaultValue: '暂无课程' })}</p>
+                        <p className="text-xs text-[#AEAEB2] font-medium py-2">暂无课程</p>
                       </div>
                     )}
                   </div>
@@ -183,30 +181,30 @@ export const AlbumSection: React.FC = () => {
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <Stack className="h-5 w-5 text-[#6E6E73]" /> {t('album.newAlbum')}
+              <Stack className="h-5 w-5 text-[#6E6E73]" /> 新建课程专辑
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[#6E6E73] ml-1">专辑名称</Label>
-              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={t('album.namePlaceholder')} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="专辑名称" className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[#6E6E73] ml-1">描述</Label>
-              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[100px] font-medium text-sm resize-none outline-none" placeholder={t('album.descPlaceholder')} />
+              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[100px] font-medium text-sm resize-none outline-none" placeholder="描述..." />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('album.uploadCover')}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">上传封面图</Label>
               <div className="relative">
                 <Button variant="outline" className="w-full h-14 rounded-xl border-dashed border-2 border-black/[0.06] hover:border-[#0071E3]/30 bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] px-4 font-medium text-xs text-[#6E6E73] hover:text-[#1D1D1F] transition-[border-color,background-color,color] justify-between">
-                  <span>{form.cover ? form.cover.name : t('album.uploadCover')}</span>
+                  <span>{form.cover ? form.cover.name : '上传封面图'}</span>
                   <Upload className="w-4 h-4 opacity-30" />
                 </Button>
                 <input type="file" onChange={e => setForm({ ...form, cover: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
               </div>
             </div>
             <Button onClick={handleCreate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('album.createAlbum')}
+              Create Album
             </Button>
           </div>
         </DialogContent>
@@ -216,7 +214,7 @@ export const AlbumSection: React.FC = () => {
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">{t('sectionList.editAlbum')}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">编辑专辑</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="space-y-1.5">
@@ -228,11 +226,11 @@ export const AlbumSection: React.FC = () => {
               <textarea value={editingItem?.description || ''} onChange={e => setEditingItem({ ...editingItem, description: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[80px] font-medium text-sm resize-none outline-none" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('sectionList.updateCover')}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">更新封面</Label>
               <Input type="file" onChange={e => setEditingItem({ ...editingItem, cover_image: e.target.files?.[0] })} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" accept="image/*" />
             </div>
             <Button onClick={handleUpdate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('editDialog.updateAndSync')}
+              Update & Sync
             </Button>
           </div>
         </DialogContent>

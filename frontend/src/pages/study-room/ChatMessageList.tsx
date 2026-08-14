@@ -2,7 +2,6 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
 import { ArrowDown, Lightning, CheckCircle, XCircle, Calendar } from '@phosphor-icons/react';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { processMathContent } from '@/lib/utils';
@@ -60,8 +59,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   lastMyMessageId, lastMyTaskMessageId, isAtBottom, isMobile,
   scrollContainerRef, onScroll, onScrollToBottom, onUndoMessage,
 }) => {
-  const { t } = useTranslation('studyRoom');
-
   return (
     <>
       <div
@@ -99,7 +96,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                         onClick={() => onUndoMessage(msg.id)}
                         className="ml-3 text-[11px] font-bold text-muted-foreground/50 hover:text-red-500 underline decoration-dotted underline-offset-2 transition-colors cursor-pointer"
                       >
-                        {t('undo')}
+                        撤销
                       </button>
                    )}
                 </div>
@@ -143,7 +140,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                         onClick={() => onUndoMessage(msg.id)}
                         className="text-[11px] font-bold text-muted-foreground/50 hover:text-red-500 underline decoration-dotted underline-offset-2 transition-colors cursor-pointer"
                       >
-                        {t('undo')}
+                        撤销
                       </button>
                     )}
                   </div>

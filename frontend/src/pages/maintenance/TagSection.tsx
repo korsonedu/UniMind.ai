@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,6 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
 export const TagSection: React.FC = () => {
-  useTranslation('maintenance');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [tags, setTags] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

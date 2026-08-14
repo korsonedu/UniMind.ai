@@ -521,7 +521,7 @@ PLAN_FEATURES: dict[str, list[str]] = {
         'multi.teacher', 'class.compare', 'data.export',
         'student.payment',
         'ai.bot.custom', 'brand.custom', 'api.access',
-        'private.deploy', 'i18n.custom', 'sso.saml', 'audit.log',
+        'private.deploy', 'sso.saml', 'audit.log',
         'dedicated.support', 'sla.99.9',
     ],
 }

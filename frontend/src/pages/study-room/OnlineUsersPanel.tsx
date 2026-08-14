@@ -8,7 +8,6 @@ import {
   HoverCardTrigger,
 } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
-import { useTranslation } from 'react-i18next';
 
 interface OnlineUsersPanelProps {
   onlineUsers: any[];
@@ -16,13 +15,11 @@ interface OnlineUsersPanelProps {
 }
 
 const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, currentUsername }) => {
-  const { t } = useTranslation('studyRoom');
-
   return (
     <Card className="border-none shadow-sm rounded-2xl md:rounded-3xl bg-card overflow-hidden p-4 md:p-6 md:flex-1 min-h-0 flex flex-col border border-border">
       <header className="mb-4 flex items-center justify-between">
         <CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">
-          {t('onlineUsers.title')}
+          实时共学
         </CardTitle>
         <Users className="h-4 w-4 text-muted-foreground opacity-20" />
       </header>
@@ -40,10 +37,10 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-foreground truncate">
                     {u.nickname || u.username}{' '}
-                    {u.username === currentUsername && t('onlineUsers.self')}
+                    {u.username === currentUsername && '(你)'}
                   </p>
                   <p className="text-[11px] text-emerald-600 font-bold truncate mt-0.5 uppercase tracking-tight">
-                    {u.current_task || t('onlineUsers.online')}
+                    {u.current_task || '在线中'}
                   </p>
                 </div>
               </div>
@@ -72,13 +69,13 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Clock className="h-3.5 w-3.5" />
                       <span className="label-apple">
-                        {t('onlineUsers.todayFocus', { minutes: u.today_focused_minutes })}
+                        {`今日专注: ${u.today_focused_minutes} min`}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <CheckCircle className="h-3.5 w-3.5" />
                       <span className="label-apple">
-                        {t('onlineUsers.todayCompleted', { count: u.today_completed_tasks?.length || 0 })}
+                        {`今日已完成: ${u.today_completed_tasks?.length || 0} tasks`}
                       </span>
                     </div>
                   </div>

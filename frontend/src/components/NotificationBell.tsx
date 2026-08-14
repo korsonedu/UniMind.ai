@@ -19,7 +19,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -38,7 +37,6 @@ export const NotificationBell = () => {
   const { notifications, unreadCount, fetchNotifications, markAsRead, clearAll } = useNotificationStore();
   const user = useAuthStore(s => s.user);
   const navigate = useNavigate();
-  const { t, i18n } = useTranslation(['notifications', 'common']);
   const [isOpen, setIsOpen] = useState(false);
   const [showClearAlert, setShowClearAlert] = useState(false);
   const [showBroadcast, setShowBroadcast] = useState(false);
@@ -104,7 +102,7 @@ export const NotificationBell = () => {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg z-[var(--z-dropdown)]">
         <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
-          <span className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{t('notifications:titleWithCount', { count: unreadCount })}</span>
+          <span className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{`通知中心 (${unreadCount})`}</span>
           <div className="flex gap-1">
             {unreadCount > 0 && (
                 <Button
@@ -113,7 +111,7 @@ export const NotificationBell = () => {
                 onClick={(e) => { e.stopPropagation(); markAsRead(); }}
                 className="h-6 px-2 text-[11px] font-bold text-indigo-600 gap-1 hover:bg-indigo-50 rounded-lg"
                 >
-                {t('notifications:markRead')}
+                已读
                 </Button>
             )}
             <Button
@@ -122,7 +120,7 @@ export const NotificationBell = () => {
               onClick={(e) => { e.stopPropagation(); setShowClearAlert(true); }}
               className="h-6 px-2 text-[11px] font-bold text-red-600 gap-1 hover:bg-red-50 rounded-lg"
             >
-              {t('notifications:clear')}
+              清除
             </Button>
           </div>
         </DropdownMenuLabel>
@@ -136,7 +134,7 @@ export const NotificationBell = () => {
                 className="w-full h-8 rounded-lg text-[11px] font-bold gap-1.5 border-dashed border-muted-foreground/20 text-muted-foreground hover:text-foreground hover:border-foreground/30"
               >
                 <PaperPlaneTilt className="h-3 w-3" />
-                {t('notifications:broadcast', { defaultValue: '发布广播' })}
+                发布广播
               </Button>
             </div>
             <DropdownMenuSeparator className="bg-border" />
@@ -144,7 +142,7 @@ export const NotificationBell = () => {
         )}
         <ScrollArea className="h-80">
           {notifications.length === 0 ? (
-            <EmptyState icon={Bell} title={t('notifications:empty')} className="py-6" />
+            <EmptyState icon={Bell} title="暂无消息通知" className="py-6" />
           ) : (
             <div className="p-1 space-y-0.5">
               {notifications.map(notif => (
@@ -165,7 +163,7 @@ export const NotificationBell = () => {
                       <p className="text-[13px] font-black text-foreground leading-tight">{notif.title}</p>
                       <p className="text-[12px] font-medium text-muted-foreground leading-relaxed mt-1 break-words whitespace-pre-wrap">{notif.content}</p>
                       <p className="text-[9px] font-bold text-muted-foreground/30 uppercase tracking-tighter mt-1.5">
-                        {new Date(notif.created_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
+                        {new Date(notif.created_at).toLocaleString('zh-CN', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
                       </p>
                     </div>
                   </div>
@@ -179,18 +177,18 @@ export const NotificationBell = () => {
       <AlertDialog open={showClearAlert} onOpenChange={setShowClearAlert}>
         <AlertDialogContent className="rounded-[2rem] border-none shadow-2xl bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-lg font-bold">{t('notifications:clearConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogTitle className="text-lg font-bold">确认清除所有通知？</AlertDialogTitle>
             <AlertDialogDescription className="text-xs font-medium text-muted-foreground">
-              {t('notifications:clearConfirmDesc')}
+              此操作将永久删除你的所有历史通知记录，不可恢复。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel className="rounded-xl font-bold h-10 text-xs">{t('common:cancel')}</AlertDialogCancel>
+            <AlertDialogCancel className="rounded-xl font-bold h-10 text-xs">取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { clearAll(); setIsOpen(false); }}
               className="rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold h-10 text-xs"
             >
-              {t('notifications:confirmClear')}
+              确认清除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -200,32 +198,32 @@ export const NotificationBell = () => {
         <DialogContent className="sm:max-w-[480px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <PaperPlaneTilt className="h-5 w-5 text-[#6E6E73]" /> {t('notifications:broadcast', { defaultValue: '发布广播' })}
+              <PaperPlaneTilt className="h-5 w-5 text-[#6E6E73]" /> 发布广播
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('notifications:broadcastTitle', { defaultValue: '标题' })}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">标题</Label>
               <Input
                 value={broadcastForm.title}
                 onChange={e => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
                 className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium"
-                placeholder={t('notifications:broadcastTitlePlaceholder', { defaultValue: '广播标题' })}
+                placeholder="广播标题"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('notifications:broadcastContent', { defaultValue: '内容' })} <span className="text-[#AEAEB2]">（最多 50 字）</span></Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">内容 <span className="text-[#AEAEB2]">（最多 50 字）</span></Label>
               <textarea
                 value={broadcastForm.content}
                 onChange={e => setBroadcastForm({ ...broadcastForm, content: e.target.value })}
                 maxLength={50}
                 className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[100px] font-medium text-sm resize-none outline-none"
-                placeholder={t('notifications:broadcastContentPlaceholder', { defaultValue: '输入广播内容...' })}
+                placeholder="输入广播内容..."
               />
               <p className="text-[11px] text-[#AEAEB2] text-right">{broadcastForm.content.length}/50</p>
             </div>
             <Button onClick={handleBroadcast} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('notifications:sendBroadcast', { defaultValue: '发送广播' })}
+              发送广播
             </Button>
           </div>
         </DialogContent>

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +15,6 @@ import { useConfirm } from '@/components/useConfirm';
 import { InstitutionBotSection } from './InstitutionBotSection';
 
 export const BotSection: React.FC = () => {
-  const { t } = useTranslation('maintenance');
   const user = useAuthStore(s => s.user);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
@@ -43,7 +41,7 @@ export const BotSection: React.FC = () => {
   const resetForm = () => setForm({ name: '', prompt: '', avatar: null, is_exclusive: false });
 
   const handleCreate = async () => {
-    if (!form.name || !form.prompt) return toast.error(t('bot.infoIncomplete'));
+    if (!form.name || !form.prompt) return toast.error('信息不完整');
     const fd = new FormData();
     fd.append('name', form.name);
     fd.append('system_prompt', form.prompt);
@@ -52,11 +50,11 @@ export const BotSection: React.FC = () => {
     try {
       const res = await api.post('/ai/bots/', fd);
       const templateName = res.data?.prompt_template_name;
-      toast.success(templateName ? t('bot.assistantOnline') + '，Prompt: ' + templateName : t('bot.assistantOnline'));
+      toast.success(templateName ? '助教已上线' + '，Prompt: ' + templateName : '助教已上线');
       resetForm();
       setShowCreate(false);
       fetchItems();
-    } catch { toast.error(t('bot.publishFailed')); }
+    } catch { toast.error('发布失败'); }
   };
 
   const handleUpdate = async () => {
@@ -93,20 +91,20 @@ export const BotSection: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Robot className="h-5 w-5 text-[#6E6E73]" />
-          <h3 className="text-lg font-semibold tracking-tight">{t('tabs.aiBot')}</h3>
+          <h3 className="text-lg font-semibold tracking-tight">AI 机器人</h3>
           <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{items.length}</Badge>
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
           <Plus className="w-4 h-4" />
-          {t('bot.deployAssistant')}
+          部署 AI 助教
         </Button>
       </div>
 
       {items.length === 0 ? (
         <Card className="p-16 bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] text-center">
           <Robot className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
-          <p className="text-sm text-[#8E8E93] font-medium">{t('sectionList.noBots')}</p>
-          <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noBotsHint')}</p>
+          <p className="text-sm text-[#8E8E93] font-medium">暂无 AI 助教</p>
+          <p className="text-xs text-[#AEAEB2] mt-1">点击上方按钮部署第一个 AI 助教</p>
         </Card>
       ) : (
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
@@ -155,7 +153,7 @@ export const BotSection: React.FC = () => {
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <Robot className="h-5 w-5 text-[#6E6E73]" /> {t('bot.deployAssistant')}
+              <Robot className="h-5 w-5 text-[#6E6E73]" /> 部署 AI 助教
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
@@ -170,17 +168,17 @@ export const BotSection: React.FC = () => {
                 </div>
               </div>
               <div className="flex-1 space-y-2">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('bot.nickname')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">昵称</Label>
                 <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
               </div>
             </div>
-            <textarea value={form.prompt} onChange={e => setForm({ ...form, prompt: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[200px] font-medium text-sm resize-none outline-none" placeholder={t('bot.promptPlaceholder')} />
+            <textarea value={form.prompt} onChange={e => setForm({ ...form, prompt: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[200px] font-medium text-sm resize-none outline-none" placeholder="引导词 (Prompt)..." />
             <div className="flex items-center gap-2">
               <input type="checkbox" id="exclusive" checked={form.is_exclusive} onChange={e => setForm({ ...form, is_exclusive: e.target.checked })} />
-              <Label htmlFor="exclusive" className="text-xs font-medium text-[#6E6E73]">{t('editDialog.exclusiveMentorPermission')}</Label>
+              <Label htmlFor="exclusive" className="text-xs font-medium text-[#6E6E73]">专属导师权限</Label>
             </div>
             <Button onClick={handleCreate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('bot.deployBot')}
+              Deploy Bot
             </Button>
           </div>
         </DialogContent>
@@ -190,7 +188,7 @@ export const BotSection: React.FC = () => {
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">{t('sectionList.editBot')}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">编辑 AI 助教</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="space-y-1.5">
@@ -199,7 +197,7 @@ export const BotSection: React.FC = () => {
                 <Input value={editingItem?.name || ''} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium flex-1" />
                 <div className="flex items-center gap-2 shrink-0">
                   <input type="checkbox" id="edit-exclusive" checked={editingItem?.is_exclusive || false} onChange={e => setEditingItem({ ...editingItem, is_exclusive: e.target.checked })} />
-                  <Label htmlFor="edit-exclusive" className="text-xs font-medium text-[#6E6E73]">{t('editDialog.exclusiveMentorPermission')}</Label>
+                  <Label htmlFor="edit-exclusive" className="text-xs font-medium text-[#6E6E73]">专属导师权限</Label>
                 </div>
               </div>
             </div>
@@ -212,7 +210,7 @@ export const BotSection: React.FC = () => {
               <textarea value={editingItem?.system_prompt || ''} onChange={e => setEditingItem({ ...editingItem, system_prompt: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[200px] font-medium text-sm resize-none outline-none" />
             </div>
             <Button onClick={handleUpdate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('editDialog.updateAndSync')}
+              Update & Sync
             </Button>
           </div>
         </DialogContent>

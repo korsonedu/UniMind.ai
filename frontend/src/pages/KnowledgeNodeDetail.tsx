@@ -9,7 +9,6 @@ import api from '@/lib/api';
 import { processMathContent } from '@/lib/utils';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { KnowledgeTrainingDialog } from './knowledge-map/TrainingDialog';
-import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 interface KnowledgePointDetail {
@@ -22,7 +21,6 @@ interface KnowledgePointDetail {
 export const KnowledgeNodeDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { t } = useTranslation('knowledgeMap');
   const [loading, setLoading] = useState(true);
   const [node, setNode] = useState<KnowledgePointDetail | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -48,7 +46,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
   }, [id]);
 
   return (
-    <PageWrapper title={t('detailPage.title')} subtitle={t('detailPage.subtitle')}>
+    <PageWrapper title="知识点详情" subtitle="知识点与关联题目">
       <div className="max-w-3xl mx-auto space-y-4 text-left">
         <Button
           variant="ghost"
@@ -57,7 +55,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
         >
           <Link to="/knowledge-map">
             <ArrowLeft className="h-4 w-4 mr-1.5" />
-            {t('detailPage.backButton')}
+            返回知识卡片
           </Link>
         </Button>
 
@@ -71,9 +69,9 @@ export const KnowledgeNodeDetail: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Badge className="bg-emerald-500 text-white border-none uppercase text-[9px] font-bold">Knowledge Point</Badge>
               </div>
-              <h1 className="text-lg font-black tracking-tight text-foreground">{node?.name || t('detailPage.nodeFallback')}</h1>
+              <h1 className="text-lg font-black tracking-tight text-foreground">{node?.name || '知识点'}</h1>
               <div className="text-sm leading-relaxed text-muted-foreground">
-                <MarkdownContent content={processMathContent(node?.description || t('detailPage.descriptionFallback'))} />
+                <MarkdownContent content={processMathContent(node?.description || '暂无描述')} />
               </div>
               <Button
                 onClick={() => {
@@ -90,7 +88,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
             <Card className="rounded-2xl border border-border/60 bg-card p-5 space-y-3">
               <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground flex items-center gap-2">
                 <Target className="h-3.5 w-3.5" />
-                {t('detailPage.questionsHeading')} ({questions.length})
+                关联题目 ({questions.length})
               </h2>
               <div className="space-y-2">
                 {questions.map((q) => (
@@ -109,7 +107,7 @@ export const KnowledgeNodeDetail: React.FC = () => {
                   </button>
                 ))}
                 {questions.length === 0 && (
-                  <div className="text-xs font-bold text-muted-foreground py-6 text-center">{t('detailPage.noQuestions')}</div>
+                  <div className="text-xs font-bold text-muted-foreground py-6 text-center">暂无关联题目</div>
                 )}
               </div>
             </Card>

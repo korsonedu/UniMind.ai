@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
-import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 import { Buildings, Plus, MagnifyingGlass, Spinner, Pencil, Power, Users, Calendar, ArrowLeft, Stack, Eye, Upload, ShieldCheck, Ticket, Key, Copy } from '@phosphor-icons/react';
 import { Label } from '@/components/ui/label';
@@ -46,7 +45,6 @@ const PLAN_COLORS: Record<string, string> = {
 export default function InstitutionAdmin() {
   const navigate = useNavigate();
   const user = useAuthStore(s => s.user);
-  const { t } = useTranslation('common');
   const enterPreview = useInstitutionStore(s => s.enterPreview);
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,35 +88,35 @@ export default function InstitutionAdmin() {
     try {
       await api.put(`/payments/coupons/${id}/`, { is_active: !isActive });
       fetchCoupons();
-    } catch { toast.error(t('updateFailed')); }
+    } catch { toast.error('更新失败'); }
   };
 
   const handleDeleteCoupon = async (id: number, code: string) => {
-    if (!(await confirm(t('deleteCouponConfirm', { code })))) return;
+    if (!(await confirm(`确认删除优惠券「${code}」？`))) return;
     try {
       await api.delete(`/payments/coupons/${id}/`);
       fetchCoupons();
-    } catch { toast.error(t('deleteFailed')); }
+    } catch { toast.error('删除失败'); }
   };
 
   const handleActivate = async (id: number) => {
     try {
       await api.post(`/users/institutions/${id}/activate/`);
       fetchInstitutions();
-    } catch { toast.error(t('activateFailed')); }
+    } catch { toast.error('激活失败'); }
   };
   const handleDeactivate = async (id: number) => {
     try {
       await api.post(`/users/institutions/${id}/deactivate/`);
       fetchInstitutions();
-    } catch { toast.error(t('deactivateFailed')); }
+    } catch { toast.error('停用失败'); }
   };
   const handleDelete = async (id: number, name: string) => {
-    if (!(await confirm(t('deleteInstitutionConfirm', { name })))) return;
+    if (!(await confirm(`确认删除机构「${name}」？该操作不可撤销。`))) return;
     try {
       await api.delete(`/users/institutions/${id}/`);
       fetchInstitutions();
-    } catch { toast.error(t('deleteFailed')); }
+    } catch { toast.error('删除失败'); }
   };
 
   // Institution owner → own settings
@@ -130,7 +128,7 @@ export default function InstitutionAdmin() {
   if (user?.is_institution_admin) {
     return (
       <div className="min-h-screen bg-muted flex items-center justify-center text-muted-foreground text-sm">
-        {t('institutionOwnerOnly')}
+        仅机构所有者可访问机构设置
       </div>
     );
   }
@@ -139,7 +137,7 @@ export default function InstitutionAdmin() {
   if (!user?.is_admin) {
     return (
       <div className="min-h-screen bg-muted flex items-center justify-center text-muted-foreground text-sm">
-        {t('platformAdminOnly')}
+        仅平台管理员可访问
       </div>
     );
   }
@@ -150,12 +148,12 @@ export default function InstitutionAdmin() {
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate('/')}>
-              <ArrowLeft className="h-4 w-4 mr-1" /> {t('backToUnimind')}
+              <ArrowLeft className="h-4 w-4 mr-1" /> 返回 UniMind
             </Button>
             <span className="text-muted-foreground/40">|</span>
             <div className="flex items-center gap-2">
               <Stack className="h-4 w-4 text-primary" strokeWidth={2.5} />
-              <span className="font-extrabold text-sm text-foreground tracking-tight">{t('institutionAdminPanel')}</span>
+              <span className="font-extrabold text-sm text-foreground tracking-tight">机构管理后台</span>
             </div>
           </div>
           <span className="text-xs text-muted-foreground">{user.nickname || user.username}</span>
@@ -167,12 +165,12 @@ export default function InstitutionAdmin() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-extrabold text-foreground tracking-tight">
-              {t('institutionCount', { count: institutions.length })}
+              {`${institutions.length} 个机构`}
             </h1>
-            <p className="text-sm text-muted-foreground/60 mt-1">{t('institutionManageDesc')}</p>
+            <p className="text-sm text-muted-foreground/60 mt-1">管理购买方、版本和服务状态</p>
           </div>
           <Button variant="apple" size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> {t('createInstitution')}
+            <Plus className="h-4 w-4" /> 新建机构
           </Button>
         </div>
 
@@ -181,7 +179,7 @@ export default function InstitutionAdmin() {
         <div className="relative flex-1 max-w-xs">
           <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={t('searchInstitution')}
+            placeholder="搜索机构名称…"
             className="pl-9"
             value={search} onChange={e => setSearch(e.target.value)}
           />
@@ -198,7 +196,7 @@ export default function InstitutionAdmin() {
                   : 'bg-muted text-muted-foreground/60 hover:bg-muted-foreground/15'
               )}
             >
-              {p === '' ? t('all') : p.charAt(0).toUpperCase() + p.slice(1)}
+              {p === '' ? '全部' : p.charAt(0).toUpperCase() + p.slice(1)}
             </button>
           ))}
         </div>
@@ -212,8 +210,8 @@ export default function InstitutionAdmin() {
       ) : institutions.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <Buildings className="h-12 w-12 mx-auto mb-3 opacity-20" />
-          <p className="text-sm font-medium">{t('noInstitutions')}</p>
-          <p className="text-xs mt-1">{t('noInstitutionsHint')}</p>
+          <p className="text-sm font-medium">暂无机构</p>
+          <p className="text-xs mt-1">点击右上角「新建机构」创建第一个购买方</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -234,15 +232,15 @@ export default function InstitutionAdmin() {
                         {inst.plan_label}
                       </Badge>
                       {!inst.is_active && (
-                        <Badge variant="outline" className="text-[10px] text-red-500 dark:text-red-400 border-red-200 dark:border-red-800/40">{t('institutionDisabled')}</Badge>
+                        <Badge variant="outline" className="text-[10px] text-red-500 dark:text-red-400 border-red-200 dark:border-red-800/40">已停用</Badge>
                       )}
                       {inst.is_active && !inst.is_plan_active && (
-                        <Badge variant="outline" className="text-[10px] text-amber-500 dark:text-amber-400 border-amber-200 dark:border-amber-800/40">{t('institutionExpired')}</Badge>
+                        <Badge variant="outline" className="text-[10px] text-amber-500 dark:text-amber-400 border-amber-200 dark:border-amber-800/40">已到期</Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Users className="h-3 w-3" />{t('studentCount', { current: inst.student_count, max: inst.max_students })}</span>
-                      <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{inst.plan_expires_at ? inst.plan_expires_at.slice(0, 10) : t('permanent')}</span>
+                      <span className="flex items-center gap-1"><Users className="h-3 w-3" />{`${inst.student_count}/${inst.max_students} 学员`}</span>
+                      <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{inst.plan_expires_at ? inst.plan_expires_at.slice(0, 10) : '永久有效'}</span>
                       <span>{inst.contact_name} · {inst.contact_email}</span>
                     </div>
                   </div>
@@ -252,22 +250,22 @@ export default function InstitutionAdmin() {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <Button variant="ghost" size="sm" className="h-8 text-xs text-primary"
                     onClick={() => enterPreview(inst.id)}>
-                    <Eye className="h-3.5 w-3.5 mr-1" />{t('preview')}
+                    <Eye className="h-3.5 w-3.5 mr-1" />预览
                   </Button>
                   <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setEditTarget(inst)}>
-                    <Pencil className="h-3.5 w-3.5 mr-1" />{t('edit')}
+                    <Pencil className="h-3.5 w-3.5 mr-1" />编辑
                   </Button>
                   {inst.is_active ? (
                     <Button variant="ghost" size="sm" className="h-8 text-xs text-amber-600" onClick={() => handleDeactivate(inst.id)}>
-                      <Power className="h-3.5 w-3.5 mr-1" />{t('deactivateInstitution')}
+                      <Power className="h-3.5 w-3.5 mr-1" />停用
                     </Button>
                   ) : (
                     <Button variant="ghost" size="sm" className="h-8 text-xs text-emerald-600" onClick={() => handleActivate(inst.id)}>
-                      <Power className="h-3.5 w-3.5 mr-1" />{t('activateInstitution')}
+                      <Power className="h-3.5 w-3.5 mr-1" />启用
                     </Button>
                   )}
                   <Button variant="ghost" size="sm" className="h-8 text-xs text-red-500" onClick={() => handleDelete(inst.id, inst.name)}>
-                    {t('delete')}
+                    删除
                   </Button>
                 </div>
               </div>
@@ -280,11 +278,11 @@ export default function InstitutionAdmin() {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-extrabold text-foreground tracking-tight">{t('couponManagement')}</h2>
-            <p className="text-sm text-muted-foreground/60 mt-1">{t('couponManagementDesc')}</p>
+            <h2 className="text-lg font-extrabold text-foreground tracking-tight">优惠券管理</h2>
+            <p className="text-sm text-muted-foreground/60 mt-1">创建和管理促销优惠码</p>
           </div>
           <Button variant="apple" size="sm" onClick={() => setCouponCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> {t('createCoupon')}
+            <Plus className="h-4 w-4" /> 创建优惠券
           </Button>
         </div>
 
@@ -295,13 +293,13 @@ export default function InstitutionAdmin() {
         ) : coupons.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Ticket className="h-10 w-10 mx-auto mb-2 opacity-20" />
-            <p className="text-sm font-medium">{t('noCoupons')}</p>
-            <p className="text-xs mt-1">{t('noCouponsHint')}</p>
+            <p className="text-sm font-medium">暂无优惠券</p>
+            <p className="text-xs mt-1">点击「创建优惠券」添加促销码</p>
           </div>
         ) : (
           <div className="space-y-2">
             {coupons.map((c: any) => {
-              const discountText = c.discount_type === 'percentage' ? t('couponPctDiscount', { value: c.discount_value }) : t('couponFixedDiscount', { value: (c.discount_value / 100).toFixed(0) });
+              const discountText = c.discount_type === 'percentage' ? `${c.discount_value}% 折扣` : `¥${(c.discount_value / 100).toFixed(0)} 减免`;
               return (
               <Card key={c.id} variant="apple" className="p-4">
                 <div className="flex items-center justify-between">
@@ -315,16 +313,16 @@ export default function InstitutionAdmin() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-extrabold text-foreground font-mono">{c.code}</span>
                         {c.is_active ? (
-                          <Badge className="text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">{t('couponActive')}</Badge>
+                          <Badge className="text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">生效中</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">{t('disabled')}</Badge>
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">已禁用</Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                         <span>{discountText}</span>
-                        {c.min_order_cents > 0 && <span>{t('couponMinOrder', { amount: (c.min_order_cents / 100).toFixed(0) })}</span>}
-                        <span>{c.current_uses || 0}/{c.max_uses || '∞'} {t('couponTimes')}</span>
-                        {c.expires_at && <span>{t('couponExpires', { date: c.expires_at.slice(0, 10) })}</span>}
+                        {c.min_order_cents > 0 && <span>{`满 ¥${(c.min_order_cents / 100).toFixed(0)}`}</span>}
+                        <span>{c.current_uses || 0}/{c.max_uses || '∞'} 次</span>
+                        {c.expires_at && <span>{`至 ${c.expires_at.slice(0, 10)}`}</span>}
                         {c.plan_restriction && (
                           <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">{c.plan_restriction}</span>
                         )}
@@ -337,7 +335,7 @@ export default function InstitutionAdmin() {
                       onCheckedChange={() => handleToggleCoupon(c.id, c.is_active)}
                     />
                     <Button variant="ghost" size="sm" className="h-8 text-xs text-red-500" onClick={() => handleDeleteCoupon(c.id, c.code)}>
-                      {t('delete')}
+                      删除
                     </Button>
                   </div>
                 </div>
@@ -383,7 +381,6 @@ function CreateInstitutionDialog({
 }: {
   open: boolean; onClose: () => void; onCreated: () => void;
 }) {
-  const { t } = useTranslation('common');
   const [form, setForm] = useState({
     name: '', slug: '', contact_name: '', contact_email: '', contact_phone: '',
     plan: 'free', plan_expires_at: '', notes: '', business_type: '',
@@ -402,7 +399,7 @@ function CreateInstitutionDialog({
       await api.post('/users/institutions/', payload);
       onCreated();
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.response?.data?.error || t('createInstitutionFailed'));
+      setError(err.response?.data?.detail || err.response?.data?.error || '创建机构失败，请检查信息后重试');
     }
     setSaving(false);
   };
@@ -410,40 +407,40 @@ function CreateInstitutionDialog({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{t('createInstitution')}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>新建机构</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <Input placeholder={t('institutionName') + ' *'} required
+          <Input placeholder="机构名称 *" required
             value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
           <div className="grid grid-cols-2 gap-2">
-            <Input placeholder={t('contactName') + ' *'} required
+            <Input placeholder="联系人 *" required
               value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} />
-            <Input placeholder={t('contactEmail') + ' *'} type="email" required
+            <Input placeholder="联系邮箱 *" type="email" required
               value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} />
           </div>
-          <Input placeholder={t('contactPhone')}
+          <Input placeholder="联系电话"
             value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
-          <Input placeholder={t('businessTypePlaceholder')}
+          <Input placeholder="主营业务，如：金融431、CPA、法考、教资等"
             value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} />
-          <p className="text-[11px] text-muted-foreground -mt-1">{t('businessTypeHint')}</p>
+          <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.plan}
               onChange={e => setForm({ ...form, plan: e.target.value })}
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium"
             >
-              <option value="free">{t('planFree')}</option>
-              <option value="starter">{t('planStarter')}</option>
-              <option value="growth">{t('planGrowth')}</option>
-              <option value="enterprise">{t('planEnterprise')}</option>
+              <option value="free">Free</option>
+              <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
+              <option value="enterprise">Enterprise</option>
             </select>
             <Input type="date"
               value={form.plan_expires_at} onChange={e => setForm({ ...form, plan_expires_at: e.target.value })} />
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" size="sm" onClick={onClose}>{t('cancel')}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>取消</Button>
             <Button type="submit" variant="apple" size="sm" disabled={saving}>
-              {saving ? t('creating') : t('create')}
+              {saving ? '创建中…' : '创建'}
             </Button>
           </DialogFooter>
         </form>
@@ -459,7 +456,6 @@ function EditInstitutionDialog({
 }: {
   institution: Institution; open: boolean; onClose: () => void; onUpdated: () => void;
 }) {
-  const { t } = useTranslation('common');
   const [form, setForm] = useState({
     name: institution.name,
     contact_name: institution.contact_name,
@@ -488,7 +484,7 @@ function EditInstitutionDialog({
       }
       onUpdated();
     } catch (err: any) {
-      setError(err.response?.data?.detail || t('saveInstitutionFailed'));
+      setError(err.response?.data?.detail || '保存机构信息失败，请重试');
     }
     setSaving(false);
   };
@@ -496,40 +492,40 @@ function EditInstitutionDialog({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{t('editInstitution')}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>编辑机构</DialogTitle></DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <Input placeholder={t('institutionName')}
+          <Input placeholder="机构名称"
             value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          <Input placeholder={t('contactName')}
+          <Input placeholder="联系人"
             value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} />
-          <Input placeholder={t('contactEmail')} type="email"
+          <Input placeholder="联系邮箱" type="email"
             value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} />
-          <Input placeholder={t('contactPhone')}
+          <Input placeholder="联系电话"
             value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
-          <Input placeholder={t('businessTypePlaceholder')}
+          <Input placeholder="主营业务，如：金融431、CPA、法考、教资等"
             value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} />
-          <p className="text-[11px] text-muted-foreground -mt-1">{t('businessTypeHint')}</p>
+          <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.plan}
               onChange={e => setForm({ ...form, plan: e.target.value })}
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium"
             >
-              <option value="free">{t('planFree')}</option>
-              <option value="starter">{t('planStarter')}</option>
-              <option value="growth">{t('planGrowth')}</option>
-              <option value="enterprise">{t('planEnterprise')}</option>
+              <option value="free">Free</option>
+              <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
+              <option value="enterprise">Enterprise</option>
             </select>
             <Input type="date"
               value={form.plan_expires_at} onChange={e => setForm({ ...form, plan_expires_at: e.target.value })} />
           </div>
-          <Input placeholder={t('institutionNotes')}
+          <Input placeholder="机构简介"
             value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
           {error && <p className="text-xs text-red-500">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" size="sm" onClick={onClose}>{t('cancel')}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>取消</Button>
             <Button type="submit" variant="apple" size="sm" disabled={saving}>
-              {saving ? t('saving') : t('save')}
+              {saving ? '保存中…' : '保存'}
             </Button>
           </DialogFooter>
         </form>
@@ -542,7 +538,6 @@ function EditInstitutionDialog({
 
 function InstitutionSelfSettings() {
   const navigate = useNavigate();
-  const { t } = useTranslation('common');
   const [form, setForm] = useState({
     name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '', business_type: '',
   });
@@ -595,7 +590,7 @@ function InstitutionSelfSettings() {
       setSlug(data.slug || '');
     }).catch((e) => {
       console.error('[InstitutionSelfSettings] fetch failed:', e);
-      toast.error(t('loadInstitutionFailed'));
+      toast.error('加载机构信息失败');
     });
   }, []);
 
@@ -635,9 +630,9 @@ function InstitutionSelfSettings() {
           .split(',').map((s: string) => s.trim()).filter(Boolean),
       };
       await api.put('/users/institution/me/sso-config/', payload);
-      toast.success(t('ssoSaved'));
+      toast.success('SSO 配置已保存');
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('ssoSaveFailed'));
+      toast.error(e.response?.data?.error || '保存 SSO 配置失败');
     } finally {
       setSsoSaving(false);
     }
@@ -657,9 +652,9 @@ function InstitutionSelfSettings() {
       const { data } = await api.put('/users/institution/me/update/', fd);
       if (data.logo_url) setLogoPreview(data.logo_url);
       setLogo(null);
-      toast.success(t('institutionUpdated'));
+      toast.success('机构信息已更新');
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('saveSettingsFailed'));
+      toast.error(e.response?.data?.error || '保存机构设置失败，请重试');
     } finally {
       setSaving(false);
     }
@@ -671,16 +666,16 @@ function InstitutionSelfSettings() {
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => navigate('/')}>
-              <ArrowLeft className="h-4 w-4 mr-1" /> {t('back')}
+              <ArrowLeft className="h-4 w-4 mr-1" /> 返回
             </Button>
             <span className="text-muted-foreground/40">|</span>
             <div className="flex items-center gap-2">
               <Buildings className="h-4 w-4 text-primary" />
-              <span className="font-extrabold text-sm text-foreground">{t('institutionSettingsTitle')}</span>
+              <span className="font-extrabold text-sm text-foreground">机构设置</span>
             </div>
           </div>
           <Badge className={cn('text-[10px] font-bold', planActive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
-            {planActive ? t('activePlan', { plan: planLabel }) : t('expiredPlan', { plan: planLabel })}
+            {planActive ? `${planLabel} · 生效中` : `${planLabel} · 已到期`}
           </Badge>
         </div>
       </header>
@@ -689,15 +684,15 @@ function InstitutionSelfSettings() {
         <Card className="p-6 rounded-2xl border-none shadow-sm bg-card">
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground">{t('currentPlan')}</p>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">当前方案</p>
               <p className="text-sm font-bold mt-1">{planLabel}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground">{t('expiresAt')}</p>
-              <p className="text-sm font-bold mt-1">{expiresAt ? new Date(expiresAt).toLocaleDateString(navigator.language || 'zh-CN') : t('permanent')}</p>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">到期时间</p>
+              <p className="text-sm font-bold mt-1">{expiresAt ? new Date(expiresAt).toLocaleDateString(navigator.language || 'zh-CN') : '永久有效'}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground">{t('studentCountLabel')}</p>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">学员数</p>
               <p className="text-sm font-bold mt-1">{studentCount} / {maxStudents}</p>
             </div>
           </div>
@@ -706,25 +701,25 @@ function InstitutionSelfSettings() {
         <Card className="p-8 rounded-2xl border-none shadow-sm bg-card space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('institutionName')}</Label>
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构名称</Label>
               <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} autoComplete="organization" className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('contactName')}</Label>
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系人</Label>
               <Input value={form.contact_name} onChange={e => setForm({ ...form, contact_name: e.target.value })} autoComplete="name" className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('contactEmail')}</Label>
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系邮箱</Label>
               <Input value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} autoComplete="email" spellCheck={false} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('contactPhone')}</Label>
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">联系电话</Label>
               <Input value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} type="tel" autoComplete="tel" className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('businessType')}</Label>
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">业务方向</Label>
             <div className="flex items-center gap-2 flex-wrap">
               {currentDirections.length > 0 ? (
                 currentDirections.map((dir: string) => (
@@ -733,7 +728,7 @@ function InstitutionSelfSettings() {
                   </Badge>
                 ))
               ) : (
-                <span className="text-sm text-muted-foreground">{t('directionNotSet')}</span>
+                <span className="text-sm text-muted-foreground">未设置方向</span>
               )}
               <Button
                 variant="outline"
@@ -749,19 +744,19 @@ function InstitutionSelfSettings() {
                   } catch { console.error('Failed to load direction subjects'); }
                 }}
               >
-                <Pencil className="h-3 w-3 mr-1" />{t('editDirection')}
+                <Pencil className="h-3 w-3 mr-1" />编辑方向
               </Button>
             </div>
-            <p className="text-[11px] text-muted-foreground">{t('directionWarning')}</p>
+            <p className="text-[11px] text-muted-foreground">业务方向决定机构的知识树结构，修改将删除旧知识点并导入新方向。</p>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('institutionNotes')}</Label>
-            <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" placeholder={t('institutionNotesPlaceholder')} />
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构简介</Label>
+            <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} className="h-10 rounded-xl bg-muted/50 border-none font-bold text-sm" placeholder="简短介绍你的机构…" />
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('institutionLogo')}</Label>
+            <Label className="text-[10px] font-bold uppercase text-muted-foreground">机构 Logo</Label>
             <div className="flex items-center gap-4">
               {logoPreview && (
                 <img src={logoPreview} alt="Logo" className="h-16 w-16 rounded-2xl object-cover border border-border" />
@@ -769,7 +764,7 @@ function InstitutionSelfSettings() {
               <div className="relative flex-1">
                 <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 font-bold text-xs">
                   <Upload className="w-4 h-4 mr-2 opacity-40" />
-                  {logo ? logo.name : logoPreview ? t('changeLogo') : t('uploadLogo')}
+                  {logo ? logo.name : logoPreview ? '更换 Logo' : '上传 Logo'}
                 </Button>
                 <input type="file" accept="image/*" onChange={e => {
                   const f = e.target.files?.[0];
@@ -781,7 +776,7 @@ function InstitutionSelfSettings() {
 
           <Button onClick={handleSave} disabled={saving} className="w-full h-12 rounded-xl bg-black text-white font-bold text-xs uppercase tracking-widest">
             {saving ? <Spinner className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-            {t('saveInstitutionSettings')}
+            保存机构设置
           </Button>
         </Card>
 
@@ -790,7 +785,7 @@ function InstitutionSelfSettings() {
           <Card className="p-8 rounded-2xl border-none shadow-sm bg-card space-y-6">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
-              <h2 className="text-base font-extrabold text-foreground">{t('ssoTitle')}</h2>
+              <h2 className="text-base font-extrabold text-foreground">企业 SSO 单点登录</h2>
             </div>
 
             {ssoLoading ? (
@@ -801,7 +796,7 @@ function InstitutionSelfSettings() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('ssoProvider')}</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">提供商</Label>
                   <select
                     value={ssoConfig.provider}
                     onChange={e => setSsoConfig({ ...ssoConfig, provider: e.target.value })}
@@ -814,7 +809,7 @@ function InstitutionSelfSettings() {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('ssoEnabled')}</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">启用</Label>
                   <Switch
                     checked={ssoConfig.enabled}
                     onCheckedChange={v => setSsoConfig({ ...ssoConfig, enabled: v })}
@@ -824,7 +819,7 @@ function InstitutionSelfSettings() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('ssoClientId')}</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Client ID</Label>
                   <Input
                     value={ssoConfig.client_id}
                     onChange={e => setSsoConfig({ ...ssoConfig, client_id: e.target.value })}
@@ -833,7 +828,7 @@ function InstitutionSelfSettings() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('ssoClientSecret')}</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">Client Secret</Label>
                   <Input
                     type="password"
                     value={ssoConfig.client_secret}
@@ -845,7 +840,7 @@ function InstitutionSelfSettings() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('ssoRedirectUri')}</Label>
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Redirect URI</Label>
                 <Input
                   value={ssoConfig.redirect_uri}
                   onChange={e => setSsoConfig({ ...ssoConfig, redirect_uri: e.target.value })}
@@ -855,7 +850,7 @@ function InstitutionSelfSettings() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('ssoDomainWhitelist')}</Label>
+                <Label className="text-[10px] font-bold uppercase text-muted-foreground">域名白名单（逗号分隔）</Label>
                 <Input
                   value={ssoConfig.domain_whitelist}
                   onChange={e => setSsoConfig({ ...ssoConfig, domain_whitelist: e.target.value })}
@@ -867,28 +862,28 @@ function InstitutionSelfSettings() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('ssoAutoJoin')}</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">自动加入</Label>
                   <Switch
                     checked={ssoConfig.auto_join}
                     onCheckedChange={v => setSsoConfig({ ...ssoConfig, auto_join: v })}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">{t('ssoDefaultRole')}</Label>
+                  <Label className="text-[10px] font-bold uppercase text-muted-foreground">默认角色</Label>
                   <select
                     value={ssoConfig.default_role}
                     onChange={e => setSsoConfig({ ...ssoConfig, default_role: e.target.value })}
                     className="h-10 rounded-xl border border-border bg-muted/50 px-3 text-sm font-medium w-full"
                   >
-                    <option value="student">{t('ssoRoleStudent')}</option>
-                    <option value="teacher">{t('ssoRoleTeacher')}</option>
+                    <option value="student">学生</option>
+                    <option value="teacher">老师</option>
                   </select>
                 </div>
               </div>
 
               {slug && (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/50 text-xs">
-                  <span className="text-muted-foreground shrink-0">{t('ssoLoginLink')}</span>
+                  <span className="text-muted-foreground shrink-0">SSO 登录链接:</span>
                   <code className="text-primary font-mono truncate">https://unimind-ai.com/api/users/sso/authorize/?institution_slug={slug}</code>
                   <Button
                     variant="ghost"
@@ -896,10 +891,10 @@ function InstitutionSelfSettings() {
                     className="h-7 text-xs shrink-0"
                     onClick={() => {
                       navigator.clipboard.writeText(`https://unimind-ai.com/api/users/sso/authorize/?institution_slug=${slug}`);
-                      toast.success(t('copiedLoginLink'));
+                      toast.success('已复制登录链接');
                     }}
                   >
-                    <Copy className="h-3 w-3 mr-1" />{t('copyText')}
+                    <Copy className="h-3 w-3 mr-1" />复制
                   </Button>
                 </div>
               )}
@@ -910,7 +905,7 @@ function InstitutionSelfSettings() {
                 className="w-full h-12 rounded-xl bg-black text-white font-bold text-xs uppercase tracking-widest"
               >
                 {ssoSaving ? <Spinner className="h-4 w-4 animate-spin mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-                {t('saveSsoConfig')}
+                保存 SSO 配置
               </Button>
             </div>
             )}
@@ -922,7 +917,7 @@ function InstitutionSelfSettings() {
           <Card className="p-8 rounded-2xl border-none shadow-sm bg-card space-y-4">
             <div className="flex items-center gap-2">
               <Key className="h-5 w-5 text-primary" />
-              <h2 className="text-base font-extrabold text-foreground">{t('apiPlatformTitle')}</h2>
+              <h2 className="text-base font-extrabold text-foreground">API 开放平台</h2>
             </div>
 
             {apiKeysLoading ? (
@@ -936,8 +931,8 @@ function InstitutionSelfSettings() {
                     <Key className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-foreground">{t('apiKeyCount', { count: apiKeysCount })}</p>
-                    <p className="text-xs text-muted-foreground">{t('apiManagement')}</p>
+                    <p className="text-sm font-bold text-foreground">{`${apiKeysCount} 个有效 API Key`}</p>
+                    <p className="text-xs text-muted-foreground">管理和监控 API 使用情况</p>
                   </div>
                 </div>
                 <Button
@@ -946,7 +941,7 @@ function InstitutionSelfSettings() {
                   className="h-9 rounded-xl text-xs font-medium"
                   onClick={() => navigate('/api-platform')}
                 >
-                  {t('goToApiPlatform')}
+                  前往 API 开放平台
                 </Button>
               </div>
             )}
@@ -968,10 +963,10 @@ function InstitutionSelfSettings() {
                 subject_names: names,
               });
               setForm(f => ({ ...f, business_type: data.business_type }));
-              toast.success(t('directionsUpdated', { deleted: data.deleted, imported: data.imported_nodes }));
+              toast.success(`已更新：删除 ${data.deleted} 个旧知识点，导入 ${data.imported_nodes} 个新知识点`);
               setDirectionOpen(false);
             } catch (err: any) {
-              setDirectionError(err.response?.data?.error || t('directionsUpdateFailed'));
+              setDirectionError(err.response?.data?.error || '更新失败');
             } finally {
               setDirectionSaving(false);
             }
@@ -1001,7 +996,6 @@ function DirectionEditDialog({
   saving: boolean;
   error: string;
 }) {
-  const { t } = useTranslation('common');
   const maxDirs = PLAN_DIRECTION_LIMITS[plan] || 1;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingNames, setPendingNames] = useState<string[]>([]);
@@ -1017,17 +1011,17 @@ function DirectionEditDialog({
     onSave(pendingNames);
   };
 
-  const planHint = plan === 'starter' ? t('directionPlanStarter') : plan === 'growth' ? t('directionPlanGrowth') : t('directionPlanDefault');
+  const planHint = plan === 'starter' ? 'Starter 方案可选择 1 个学科方向' : plan === 'growth' ? 'Growth 方案最多选择 3 个学科方向' : '选择你机构的业务方向';
 
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-[500px] rounded-2xl border-none shadow-2xl bg-card p-6">
           <DialogHeader className="space-y-1 mb-4">
-            <DialogTitle className="text-lg font-black">{t('editDirectionsTitle')}</DialogTitle>
+            <DialogTitle className="text-lg font-black">编辑业务方向</DialogTitle>
             <DialogDescription className="font-medium text-muted-foreground text-sm">
               {planHint}
-              <span className="block text-red-500 mt-1">{t('directionDangerWarning')}</span>
+              <span className="block text-red-500 mt-1">修改方向将删除现有知识点并重新导入，请谨慎操作。</span>
             </DialogDescription>
           </DialogHeader>
 
@@ -1044,12 +1038,12 @@ function DirectionEditDialog({
 
           <DialogFooter className="mt-4">
             <Button type="button" variant="outline" className="h-10 rounded-xl text-sm" onClick={onClose}>
-              {t('cancel')}
+              取消
             </Button>
             <Button type="button" variant="apple" className="h-10 rounded-xl text-sm"
               onClick={handleConfirmSave} disabled={saving}>
               {saving ? <Spinner className="h-4 w-4 animate-spin mr-1" /> : null}
-              {t('saveDirection')}
+              保存方向
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1059,17 +1053,17 @@ function DirectionEditDialog({
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-[380px] rounded-2xl border-none shadow-2xl bg-card p-6">
           <DialogHeader className="space-y-2 mb-4">
-            <DialogTitle className="text-base font-black">{t('confirmDirectionChange')}</DialogTitle>
+            <DialogTitle className="text-base font-black">确认修改业务方向</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              <span dangerouslySetInnerHTML={{ __html: t('confirmDirectionDesc') }} />
+              <span dangerouslySetInnerHTML={{ __html: '此操作将<b>删除</b>机构现有的所有知识点，并重新导入所选方向的知识树。此操作不可撤销，确定继续？' }} />
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" className="h-10 rounded-xl text-sm" onClick={() => setConfirmOpen(false)}>
-              {t('cancel')}
+              取消
             </Button>
             <Button variant="destructive" className="h-10 rounded-xl text-sm" onClick={handleConfirmed}>
-              {t('confirmChange')}
+              确认修改
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1085,7 +1079,6 @@ function CreateCouponDialog({
 }: {
   open: boolean; onClose: () => void; onCreated: () => void;
 }) {
-  const { t } = useTranslation('common');
   const [form, setForm] = useState({
     code: '',
     discount_type: 'fixed',
@@ -1122,7 +1115,7 @@ function CreateCouponDialog({
       await api.post('/payments/coupons/', payload);
       onCreated();
     } catch (err: any) {
-      setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat().join('; ') || t('couponCreateFailed'));
+      setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat().join('; ') || '创建失败');
     }
     setSaving(false);
   };
@@ -1131,11 +1124,11 @@ function CreateCouponDialog({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('createCouponTitle')}</DialogTitle>
-          <DialogDescription>{t('createCouponDesc')}</DialogDescription>
+          <DialogTitle>创建优惠券</DialogTitle>
+          <DialogDescription>设置促销码的折扣规则和使用限制</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <Input placeholder={t('couponCodeLabel')} required
+          <Input placeholder="优惠码 *" required
             value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} />
 
           <div className="grid grid-cols-2 gap-2">
@@ -1147,12 +1140,12 @@ function CreateCouponDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="percentage">{t('couponPctOption')}</SelectItem>
-                <SelectItem value="fixed">{t('couponFixedOption')}</SelectItem>
+                <SelectItem value="percentage">百分比折扣</SelectItem>
+                <SelectItem value="fixed">固定金额减免</SelectItem>
               </SelectContent>
             </Select>
             <Input
-              placeholder={form.discount_type === 'percentage' ? t('couponPctPlaceholder') : t('couponFixedPlaceholder')}
+              placeholder={form.discount_type === 'percentage' ? '折扣百分比（如 20）' : '减免金额（分）'}
               type="number" required
               value={form.discount_value}
               onChange={e => setForm({ ...form, discount_value: e.target.value })}
@@ -1161,12 +1154,12 @@ function CreateCouponDialog({
 
           <div className="grid grid-cols-2 gap-2">
             <Input
-              placeholder={t('couponMinOrderPlaceholder')} type="number"
+              placeholder="最低订单金额（分）" type="number"
               value={form.min_order_cents}
               onChange={e => setForm({ ...form, min_order_cents: e.target.value })}
             />
             <Input
-              placeholder={t('couponMaxUsesPlaceholder')} type="number"
+              placeholder="最大使用次数（0=无限制）" type="number"
               value={form.max_uses}
               onChange={e => setForm({ ...form, max_uses: e.target.value })}
             />
@@ -1174,7 +1167,7 @@ function CreateCouponDialog({
 
           <div className="grid grid-cols-2 gap-2">
             <Input
-              placeholder={t('couponMaxPerUserPlaceholder')} type="number"
+              placeholder="每人限用次数" type="number"
               value={form.max_uses_per_user}
               onChange={e => setForm({ ...form, max_uses_per_user: e.target.value })}
             />
@@ -1186,16 +1179,16 @@ function CreateCouponDialog({
           </div>
 
           <Input
-            placeholder={t('couponPlanRestrictPlaceholder')}
+            placeholder="限制方案（逗号分隔，如 starter,growth）"
             value={form.plan_restriction}
             onChange={e => setForm({ ...form, plan_restriction: e.target.value })}
           />
 
           {error && <p className="text-xs text-red-500">{error}</p>}
           <DialogFooter>
-            <Button type="button" variant="outline" size="sm" onClick={onClose}>{t('cancel')}</Button>
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>取消</Button>
             <Button type="submit" variant="apple" size="sm" disabled={saving}>
-              {saving ? t('creating') : t('create')}
+              {saving ? '创建中…' : '创建'}
             </Button>
           </DialogFooter>
         </form>

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,11 +17,10 @@ interface Props {
 }
 
 export const QuickCreateKPDialog: React.FC<Props> = ({ open, onOpenChange, kpList, onCreated, onRefresh }) => {
-  const { t } = useTranslation('maintenance');
   const [form, setForm] = useState({ name: '', description: '', parent: '0' });
 
   const handleCreate = async () => {
-    if (!form.name.trim()) return toast.error(t('quickCreate.nameRequired'));
+    if (!form.name.trim()) return toast.error('名称必填');
     try {
       const res = await api.post('/quizzes/knowledge-points/', {
         ...form,
@@ -34,7 +32,7 @@ export const QuickCreateKPDialog: React.FC<Props> = ({ open, onOpenChange, kpLis
       onOpenChange(false);
       setForm({ name: '', description: '', parent: '0' });
     } catch (e) {
-      toast.error(t('quickCreate.createFailed'));
+      toast.error('创建失败');
     }
   };
 
@@ -43,24 +41,24 @@ export const QuickCreateKPDialog: React.FC<Props> = ({ open, onOpenChange, kpLis
       <DialogContent className="sm:max-w-[500px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-            <Brain className="text-indigo-500 w-5 h-5" /> {t('quickCreate.newKnowledgePoint')}
+            <Brain className="text-indigo-500 w-5 h-5" /> 快速新建知识点
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-5 pt-4">
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-[#6E6E73]">{t('quickCreate.nodeName')}</Label>
+            <Label className="text-xs font-medium text-[#6E6E73]">节点名称</Label>
             <Input
               value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder={t('quickCreate.nodeNamePlaceholder')}
+              placeholder="例如：博弈论基础"
               className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-[#6E6E73]">{t('quickCreate.parent')}</Label>
+            <Label className="text-xs font-medium text-[#6E6E73]">隶属父级</Label>
             <Select value={form.parent} onValueChange={v => setForm({ ...form, parent: v })}>
               <SelectTrigger className="h-11 rounded-xl bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 font-medium text-xs px-4">
-                <SelectValue placeholder={t('quickCreate.topLevel')} />
+                <SelectValue placeholder="顶级节点" />
               </SelectTrigger>
               <SelectContent>
                 {kpList.map((kp: any) => (
@@ -73,14 +71,14 @@ export const QuickCreateKPDialog: React.FC<Props> = ({ open, onOpenChange, kpLis
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
             className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-xl p-4 min-h-[100px] font-medium text-xs resize-none outline-none"
-            placeholder={t('quickCreate.descPlaceholder')}
+            placeholder="描述..."
           />
           <div className="flex gap-3 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1 h-11 rounded-xl border-black/[0.06] bg-white hover:bg-[#F5F5F7] font-medium text-sm">
-              {t('quickCreate.cancel')}
+              取消
             </Button>
             <Button onClick={handleCreate} className="flex-[2] h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('quickCreate.confirmSave')}
+              确认保存
             </Button>
           </div>
         </div>

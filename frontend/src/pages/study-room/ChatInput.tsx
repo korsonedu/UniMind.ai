@@ -5,7 +5,6 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
 import { PaperPlaneTilt, Smiley, Image as ImageIcon, Camera, Timer } from '@phosphor-icons/react';
 import { Slider } from '@/components/ui/slider';
 import { GiphyPicker } from './GiphyPicker';
@@ -48,8 +47,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onTaskNameChange, onDurationChange, onEnterMobileFocus,
   formatTime,
 }) => {
-  const { t } = useTranslation('studyRoom');
-
   return (
     <footer className={cn(
       "bg-card/80 backdrop-blur-md border-t border-border z-20",
@@ -73,19 +70,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[var(--z-dropdown)]">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-muted-foreground">{t('mobile.pomodoro')}</p>
+                    <p className="text-xs font-semibold text-muted-foreground">番茄钟</p>
                     <span className="font-mono font-black text-lg tabular-nums">{formatTime(timeLeft)}</span>
                   </div>
-                  <Input value={taskName} onChange={e => onTaskNameChange(e.target.value)} placeholder={t('mobile.taskPlaceholder')} className="h-10 rounded-xl bg-muted border-none text-sm font-bold" />
+                  <Input value={taskName} onChange={e => onTaskNameChange(e.target.value)} placeholder="任务名称..." className="h-10 rounded-xl bg-muted border-none text-sm font-bold" />
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground uppercase">
-                      <span>{t('mobile.duration')}</span>
-                      <span>{t('mobile.durationFormat', { duration })}</span>
+                      <span>时长</span>
+                      <span>{`${duration} 分钟`}</span>
                     </div>
                     <Slider disabled={isActive} value={[duration]} onValueChange={v => onDurationChange(v[0])} max={120} min={1} step={1} />
                   </div>
                   <Button onClick={onEnterMobileFocus} className="w-full h-10 rounded-xl bg-slate-900 text-white font-black">
-                    {t('mobile.enterFullscreen')}
+                    进入全屏专注
                   </Button>
                 </div>
               </PopoverContent>

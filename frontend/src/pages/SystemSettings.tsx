@@ -1,5 +1,4 @@
 import React from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -18,24 +17,23 @@ const PRESET_COLORS = [
 ];
 
 export const SystemSettings: React.FC = () => {
-  const { t } = useTranslation('settings');
   const { theme, setTheme, primaryColor, setPrimaryColor } = useSystemStore();
   const user = useAuthStore(s => s.user);
   const canUseDarkMode = user?.role === 'admin';
 
   const colorName = (hex: string) => {
     const map: Record<string, string> = {
-      '#000000': t('visual.colors.minimalBlack'),
-      '#1d4ed8': t('visual.colors.academicBlue'),
-      '#059669': t('visual.colors.ivyGreen'),
-      '#991b1b': t('visual.colors.oxfordRed'),
-      '#d97706': t('visual.colors.amberOrange'),
+      '#000000': '极简黑',
+      '#1d4ed8': '学术蓝',
+      '#059669': '常春藤绿',
+      '#991b1b': '牛津红',
+      '#d97706': '果粒橙',
     };
     return map[hex] || hex;
   };
 
   return (
-    <PageWrapper title={t('pages:systemSettings.title')} subtitle={t('pages:systemSettings.subtitle')}>
+    <PageWrapper title='系统偏好设置' subtitle='官方品牌名称固定为 unimind.ai，可在此调整主题与全局视觉。'>
       <div className="max-w-4xl mx-auto space-y-8 text-left animate-in fade-in duration-700">
 
         {/* Visual Styling Card */}
@@ -46,8 +44,8 @@ export const SystemSettings: React.FC = () => {
                  <Palette className="h-6 w-6 text-muted-foreground" />
                </div>
                <div className="text-left">
-                  <CardTitle className="text-xl font-bold tracking-tight">{t('visual.title')}</CardTitle>
-                  <CardDescription className="text-sm font-medium text-muted-foreground">{t('visual.description')}</CardDescription>
+                  <CardTitle className="text-xl font-bold tracking-tight">界面视觉定制</CardTitle>
+                  <CardDescription className="text-sm font-medium text-muted-foreground">调整全站的主题模式与品牌核心色彩。</CardDescription>
                </div>
             </div>
           </CardHeader>
@@ -58,9 +56,9 @@ export const SystemSettings: React.FC = () => {
                   {theme === 'light' ? <Sun className="h-6 w-6 text-amber-500" /> : <Moon className="h-6 w-6 text-blue-500" />}
                 </div>
                 <div className="space-y-0.5 text-left">
-                  <p className="text-base font-bold text-foreground">{t('visual.darkMode')}</p>
+                  <p className="text-base font-bold text-foreground">深色模式 (Beta)</p>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                    {t('visual.darkModeAdminOnly')}
+                    仅管理员可测试
                   </p>
                 </div>
               </div>
@@ -79,7 +77,7 @@ export const SystemSettings: React.FC = () => {
             <div className="space-y-6 text-left">
               <div className="flex items-center gap-2">
                 <Sparkle className="h-4 w-4 text-muted-foreground/60" />
-                <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">{t('visual.brandAccent')}</Label>
+                <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">品牌重点色 / Brand Accent</Label>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {PRESET_COLORS.map((color) => (

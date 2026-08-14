@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowsOut, MagnifyingGlassPlus, MagnifyingGlassMinus } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { useTranslation } from 'react-i18next';
 import type { KPNode } from './types';
 import { buildStableLayout } from './useKnowledgeGraph';
 
@@ -24,8 +23,6 @@ export const KnowledgeGraph = ({
   onNodeClick: (node: KPNode) => void;
   masteryData?: Record<string, string>;
 }) => {
-  const { t } = useTranslation('knowledgeMap');
-
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasSize, setCanvasSize] = useState({ w: 1000, h: 600 });
@@ -236,7 +233,7 @@ export const KnowledgeGraph = ({
           {Object.entries(MASTERY_COLORS).map(([level, color]) => (
             <div key={level} className="flex items-center gap-1" title={level}>
               <span className="h-2.5 w-2.5 rounded-full border border-white/50" style={{ backgroundColor: color }} />
-              <span className="text-[9px] font-bold text-muted-foreground uppercase">{level === 'mastered' ? t('graph.legendMastered') : level === 'stable' ? t('graph.legendStable') : level === 'learning' ? t('graph.legendLearning') : level === 'weak' ? t('graph.legendWeak') : t('graph.legendUnknown')}</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase">{level === 'mastered' ? '掌握' : level === 'stable' ? '稳定' : level === 'learning' ? '学习' : level === 'weak' ? '薄弱' : '未知'}</span>
             </div>
           ))}
         </div>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { useTranslation } from 'react-i18next';
 import { ChatCircleText, MagnifyingGlass, Paperclip, PaperPlaneTilt, DotsThree, Star, Trash, CheckCircle, Circle, CaretUp, ArrowBendDownRight, Spinner, ChatCircle, X, PencilSimple, ThumbsUp, Eye } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,11 +25,10 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 
 const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any, isFirst: boolean, onReplyClick: () => void, onRefresh: () => void }) => {
   const user = useAuthStore(s => s.user);
-  const { t } = useTranslation('qaSystem');
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(answer.content);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // Like State
   const [likesCount, setLikesCount] = useState(answer.likes_count || 0);
   const [isLiked, setIsLiked] = useState(answer.is_liked || false);
@@ -45,20 +43,20 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
     setIsSubmitting(true);
     try {
       await api.patch(`/qa/answers/${answer.id}/`, { content: editContent });
-      toast.success(t('replyUpdated'));
+      toast.success('回复已更新');
       setIsEditing(false);
       onRefresh();
-    } catch (e) { toast.error(t('updateFailed')); }
+    } catch (e) { toast.error('更新失败'); }
     finally { setIsSubmitting(false); }
   };
 
   const handleDelete = async () => {
-    if (!(await confirm(t('deleteConfirm')))) return;
+    if (!(await confirm('确认删除这条回复？'))) return;
     try {
       await api.delete(`/qa/answers/${answer.id}/`);
-      toast.success(t('replyDeleted'));
+      toast.success('回复已删除');
       onRefresh();
-    } catch (e) { toast.error(t('deleteFailed')); }
+    } catch (e) { toast.error('删除失败'); }
   };
 
   const handleLike = async (e: React.MouseEvent) => {
@@ -67,7 +65,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
           const res = await api.patch(`/qa/answers/${answer.id}/action/`, { toggle_like: true });
           setIsLiked(res.data.is_liked);
           setLikesCount(res.data.likes_count);
-      } catch(e) { toast.error(t('operationFailed')); }
+      } catch(e) { toast.error('操作失败'); }
   };
 
   return (
@@ -100,10 +98,10 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setIsEditing(true)} className="gap-2 text-xs">
-                  <PencilSimple className="h-3 w-3" /> {t('edit')}
+                  <PencilSimple className="h-3 w-3" /> 编辑
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleDelete} className="gap-2 text-xs text-red-600 focus:text-red-700 focus:bg-red-50">
-                  <Trash className="h-3 w-3" /> {t('delete')}
+                  <Trash className="h-3 w-3" /> 删除
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -118,27 +116,27 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
               className="w-full text-xs p-3 rounded-xl border border-input bg-muted/30 focus:bg-card min-h-[80px] transition-colors resize-none"
             />
             <div className="flex justify-end gap-2">
-              <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-7 text-xs rounded-lg hover:bg-muted">{t('cancel')}</Button>
-              <Button size="sm" onClick={handleEdit} disabled={isSubmitting} className="h-7 text-xs bg-primary text-primary-foreground rounded-lg hover:opacity-90">{t('save')}</Button>
+              <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-7 text-xs rounded-lg hover:bg-muted">取消</Button>
+              <Button size="sm" onClick={handleEdit} disabled={isSubmitting} className="h-7 text-xs bg-primary text-primary-foreground rounded-lg hover:opacity-90">保存</Button>
             </div>
           </div>
         ) : (
           <div>
-            <div 
+            <div
                 onClick={onReplyClick}
                 className={cn(
-                "text-xs leading-relaxed break-words whitespace-pre-wrap rounded-2xl px-4 py-2.5 relative cursor-pointer hover:ring-2 hover:ring-indigo-100 transition-all", 
+                "text-xs leading-relaxed break-words whitespace-pre-wrap rounded-2xl px-4 py-2.5 relative cursor-pointer hover:ring-2 hover:ring-indigo-100 transition-all",
                 isFirst ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-200 font-medium border border-indigo-200/50 dark:border-indigo-300/20" : "bg-muted/30 text-foreground"
                 )}
             >
                 <MarkdownContent content={processMathContent(answer.content)} />
-                
+
                 {answer.is_teacher && (
                 <button
                     onClick={(e) => { e.stopPropagation(); onReplyClick(); }}
                     className="absolute -bottom-2 -right-2 h-6 w-6 rounded-full bg-card shadow-sm border border-border flex items-center justify-center text-muted-foreground hover:text-indigo-600 hover:border-indigo-200 transition-all cursor-pointer z-10"
-                    aria-label={t('replyToTeacher')}
-                    title={t('replyToTeacher')}
+                    aria-label="回复老师"
+                    title="回复老师"
                 >
                     <ChatCircle className="h-3 w-3" />
                 </button>
@@ -165,7 +163,6 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInput, setShowInput] = useState(false);
   const user = useAuthStore(s => s.user);
-  const { t } = useTranslation('qaSystem');
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { confirm, Dialog } = useConfirm();
 
@@ -194,8 +191,8 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
     try {
         const { data } = await api.patch(`/qa/questions/${question.id}/action/`, { toggle_follow: true });
         setIsFollowed(data.is_followed);
-        toast.success(data.is_followed ? t('followed') : t('unfollowed'));
-    } catch(e) { toast.error(t('operationFailed')); }
+        toast.success(data.is_followed ? '已关注' : '已取消关注');
+    } catch(e) { toast.error('操作失败'); }
   };
 
   const handleLike = async (e: React.MouseEvent) => {
@@ -204,31 +201,31 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
           const res = await api.patch(`/qa/questions/${question.id}/action/`, { toggle_like: true });
           setIsLiked(res.data.is_liked);
           setLikesCount(res.data.likes_count);
-      } catch(e) { toast.error(t('operationFailed')); }
+      } catch(e) { toast.error('操作失败'); }
   };
 
   const handleUpdate = async () => {
      if (!editContent.trim()) return;
      try {
         await api.patch(`/qa/questions/${question.id}/`, { content: editContent });
-        toast.success(t('updated'));
+        toast.success('已更新');
         setIsEditing(false);
         onRefresh();
-     } catch(e) { toast.error(t('updateFailed')); }
+     } catch(e) { toast.error('更新失败'); }
   };
 
   const handleAction = async (action: string) => {
     try {
       if (action === 'delete') {
-        if (!(await confirm(t('deleteQuestionConfirm')))) return;
+        if (!(await confirm('确认删除这个提问？'))) return;
         await api.delete(`/qa/questions/${question.id}/`);
-        toast.success(t('questionDeleted'));
+        toast.success('提问已删除');
       } else {
         await api.patch(`/qa/questions/${question.id}/action/`, { [action]: true });
-        toast.success(t('statusUpdated'));
+        toast.success('状态已更新');
       }
       onRefresh();
-    } catch (e) { toast.error(t('operationFailed')); }
+    } catch (e) { toast.error('操作失败'); }
   };
 
   const handleReply = async () => {
@@ -238,11 +235,11 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
       await api.post('/qa/answers/', { question: question.id, content: replyContent });
       setReplyContent('');
       onRefresh();
-      setIsExpanded(true); 
+      setIsExpanded(true);
       setShowInput(false); // Close input after sending
-      toast.success(t('replySubmitted'));
-    } catch (e: any) { 
-      toast.error(e.response?.data?.error || t('replyFailed')); 
+      toast.success('回复已提交');
+    } catch (e: any) {
+      toast.error(e.response?.data?.error || '回复失败');
     } finally {
       setIsSubmitting(false);
     }
@@ -250,7 +247,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
 
   const triggerReply = () => {
     setShowInput(true);
-    setIsExpanded(true); 
+    setIsExpanded(true);
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
@@ -268,9 +265,9 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               {question.user_detail.nickname || question.user_detail.username}
               {question.is_starred && <Star className="h-3 w-3 text-orange-500 fill-orange-500" />}
               {question.is_solved ? (
-                <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40">{t('resolved')}</Badge>
+                <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40">已解决</Badge>
               ) : (
-                <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-muted text-muted-foreground border-border">{t('pending')}</Badge>
+                <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-muted text-muted-foreground border-border">待解答</Badge>
               )}
             </h4>
             <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5 tabular-nums">
@@ -278,7 +275,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
             </p>
           </div>
         </div>
-        
+
         {!isEditing && (
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
@@ -288,19 +285,19 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-xl">
               <DropdownMenuItem onClick={handleFollow} className="gap-2 text-xs font-bold">
-                 <Eye className="h-3.5 w-3.5" /> {isFollowed ? t('unfollowQuestion') : t('followQuestion')}
+                 <Eye className="h-3.5 w-3.5" /> {isFollowed ? '取消关注' : '关注问题'}
               </DropdownMenuItem>
-              
+
               {(isAdmin || user?.username === question.user_detail.username) && <DropdownMenuSeparator />}
 
               {isAdmin && (
                 <>
                   <DropdownMenuItem onClick={() => handleAction('toggle_star')} className="gap-2 text-xs font-bold">
-                    <Star className="h-3.5 w-3.5" /> {question.is_starred ? t('unstarQuestion') : t('starQuestion')}
+                    <Star className="h-3.5 w-3.5" /> {question.is_starred ? '取消星标' : '设为精选'}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleAction('toggle_solved')} className="gap-2 text-xs font-bold">
-                    {question.is_solved ? <Circle className="h-3.5 w-3.5"/> : <CheckCircle className="h-3.5 w-3.5"/>} 
-                    {question.is_solved ? t('markUnsolved') : t('markSolved')}
+                    {question.is_solved ? <Circle className="h-3.5 w-3.5"/> : <CheckCircle className="h-3.5 w-3.5"/>}
+                    {question.is_solved ? '标记未解决' : '标记已解决'}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>
@@ -308,10 +305,10 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               {(isAdmin || user?.username === question.user_detail.username) && (
                 <>
                   <DropdownMenuItem onClick={() => setIsEditing(true)} className="gap-2 text-xs font-bold">
-                    <PencilSimple className="h-3.5 w-3.5" /> {t('editContent')}
+                    <PencilSimple className="h-3.5 w-3.5" /> 编辑内容
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleAction('delete')} className="gap-2 text-xs font-bold text-red-600 focus:text-red-700 focus:bg-red-50">
-                    <Trash className="h-3.5 w-3.5" /> {t('deleteQuestion')}
+                    <Trash className="h-3.5 w-3.5" /> 删除提问
                   </DropdownMenuItem>
                 </>
               )}
@@ -330,19 +327,19 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
                className="w-full text-sm p-4 rounded-xl border border-input bg-muted/30 focus:bg-card min-h-[120px] transition-colors resize-none leading-relaxed"
              />
              <div className="flex justify-end gap-2">
-               <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="rounded-lg">{t('cancel')}</Button>
-               <Button size="sm" onClick={handleUpdate} className="bg-primary text-primary-foreground rounded-lg hover:opacity-90">{t('save')}</Button>
+               <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="rounded-lg">取消</Button>
+               <Button size="sm" onClick={handleUpdate} className="bg-primary text-primary-foreground rounded-lg hover:opacity-90">保存</Button>
              </div>
            </div>
         ) : (
-          <div 
+          <div
             onClick={triggerReply}
             className="text-sm font-medium text-foreground leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-muted/20 rounded-xl transition-colors -m-2 p-2"
           >
             <MarkdownContent content={processMathContent(question.content)} />
           </div>
         )}
-        
+
         {/* Attachment Display */}
         {question.attachment && (
           <div className="mt-3">
@@ -355,7 +352,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               </div>
             ) : (
               <a href={question.attachment} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/50 border border-border/50 text-xs font-bold text-primary hover:bg-muted transition-colors">
-                <Paperclip className="h-3.5 w-3.5" /> {t('downloadAttachments')}
+                <Paperclip className="h-3.5 w-3.5" /> 附件下载
               </a>
             )}
           </div>
@@ -370,12 +367,12 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
                 </button>
             </div>
         )}
-        
+
         {/* Admin Reply Trigger Button */}
         {isAdmin && !firstAnswer && !showInput && !isEditing && (
           <Button onClick={() => setShowInput(true)} size="sm" className="mt-4 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold text-xs h-8">
             <ChatCircle className="w-3.5 h-3.5 mr-2" />
-            {t('answerStudent')}
+            回答学员
           </Button>
         )}
       </div>
@@ -399,13 +396,13 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               ))}
             </div>
           )}
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={() => setIsExpanded(!isExpanded)}
             className="h-8 text-[12px] font-bold text-muted-foreground uppercase tracking-widest hover:text-foreground ml-1 md:ml-4"
           >
             {isExpanded ? <CaretUp className="mr-2 h-3 w-3" /> : <ArrowBendDownRight className="mr-2 h-3 w-3" />}
-            {isExpanded ? t('collapseReplies') : t('viewReplies', { count: otherAnswers.length })}
+            {isExpanded ? '收起回复' : `查看 ${otherAnswers.length} 条追问回复`}
           </Button>
         </div>
       )}
@@ -416,9 +413,9 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
           <textarea
             autoFocus
             ref={inputRef}
-            value={replyContent} 
-            onChange={e => setReplyContent(e.target.value)} 
-            placeholder={isAdmin ? t('teacherReplyPlaceholder') : t('studentReplyPlaceholder')}
+            value={replyContent}
+            onChange={e => setReplyContent(e.target.value)}
+            placeholder={isAdmin ? '教师回复... (Enter发送，Shift+Enter换行)' : '回复... (Enter发送，Shift+Enter换行)'}
             className="w-full min-h-[40px] max-h-36 rounded-xl bg-muted/30 border border-transparent focus:bg-card transition-all text-xs font-medium px-3 py-2 resize-none leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring/30"
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -440,12 +437,12 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               disabled={isSubmitting}
               onClick={handleReply}
               size="icon"
-              aria-label={t('sendReply') || 'Send reply'}
+              aria-label="发送回复"
               className="h-10 w-10 rounded-xl bg-primary text-primary-foreground shrink-0 shadow-lg hover:opacity-90 send-button"
             >
               {isSubmitting ? <Spinner className="h-4 w-4 animate-spin"/> : <PaperPlaneTilt className="h-4 w-4" />}
             </Button>
-            <Button onClick={() => setShowInput(false)} size="icon" variant="ghost" aria-label={t('cancel') || 'Close'} className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-muted">
+            <Button onClick={() => setShowInput(false)} size="icon" variant="ghost" aria-label="取消" className="h-10 w-10 rounded-xl text-muted-foreground hover:bg-muted">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -467,10 +464,9 @@ export const QASystem: React.FC = () => {
   const [qContent, setQContent] = useState('');
   const [qFile, setQFile] = useState<File | null>(null);
   const [isPosting, setIsPosting] = useState(false);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const user = useAuthStore(s => s.user);
-  const { t } = useTranslation('qaSystem');
   const isAdmin = user?.role === 'admin';
 
   const fetchQuestions = async () => {
@@ -478,14 +474,14 @@ export const QASystem: React.FC = () => {
     try {
       const res = await api.get('/qa/questions/', { params: { filter, search } });
       setQuestions(res.data);
-    } catch (e) { toast.error(t('loadFailed')); }
+    } catch (e) { toast.error('加载失败'); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { fetchQuestions(); }, [filter, search]);
 
   const handlePost = async () => {
-    if (!qContent.trim()) return toast.error(t('enterContent'));
+    if (!qContent.trim()) return toast.error('请输入问题内容');
     setIsPosting(true);
     const fd = new FormData();
     fd.append('content', qContent);
@@ -493,34 +489,34 @@ export const QASystem: React.FC = () => {
 
     try {
       await api.post('/qa/questions/', fd);
-      toast.success(t('questionSent'));
+      toast.success('提问已发送');
       setQContent('');
       setQFile(null);
       fetchQuestions();
     } catch (e) {
-      toast.error(t('sendFailed'));
+      toast.error('发送失败');
     } finally {
       setIsPosting(false);
     }
   };
 
   return (
-    <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
+    <PageWrapper title="答疑" subtitle="学术疑问 · 权威解答 · 深度探讨">
       <div className="max-w-5xl mx-auto space-y-5 md:space-y-8">
-        
+
         {/* Top Input Area */}
         <Card className="border-none shadow-sm bg-card rounded-2xl md:rounded-[2rem] p-4 md:p-6 border border-border/50">
           <div className="space-y-4">
-            <textarea 
+            <textarea
               value={qContent}
               onChange={e => setQContent(e.target.value)}
-              placeholder={t('questionPlaceholder')}
+              placeholder="请详细描述你的疑问..."
               className="w-full min-h-[100px] p-4 rounded-2xl bg-muted/60 border border-border/50 text-sm font-medium resize-none focus:ring-2 focus:ring-ring/30 transition-all placeholder:text-muted-foreground/40"
             />
             <div className={cn(isMobile ? "flex items-center gap-2" : "flex justify-between items-center")}>
               <div className={cn("flex items-center gap-2", isMobile && "flex-1 min-w-0")}>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   className={cn(
                     "rounded-xl h-10 border-dashed border-2 gap-2 text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5",
@@ -529,7 +525,7 @@ export const QASystem: React.FC = () => {
                   )}
                 >
                   <Paperclip className="h-3.5 w-3.5" />
-                  {isMobile ? <span className="truncate">{qFile ? qFile.name : t('addAttachment')}</span> : (qFile ? qFile.name : t('addAttachment'))}
+                  {isMobile ? <span className="truncate">{qFile ? qFile.name : '添加附件 (图片/文档)'}</span> : (qFile ? qFile.name : '添加附件 (图片/文档)')}
                 </Button>
                 <input
                   type="file"
@@ -540,7 +536,7 @@ export const QASystem: React.FC = () => {
                 />
               </div>
               <Button onClick={handlePost} disabled={isPosting} className={cn("h-10 rounded-xl bg-primary text-primary-foreground font-bold shadow hover:scale-[1.02] transition-transform text-xs uppercase tracking-widest", isMobile ? "shrink-0 px-5" : "px-8")}>
-                {isPosting ? <Spinner className="h-4 w-4 animate-spin"/> : t('submitQuestion')}
+                {isPosting ? <Spinner className="h-4 w-4 animate-spin"/> : '提交问题'}
               </Button>
             </div>
           </div>
@@ -551,19 +547,19 @@ export const QASystem: React.FC = () => {
           <div className="w-full md:w-auto overflow-x-auto">
           <div className="inline-flex min-w-max bg-muted/30 p-1 rounded-2xl border border-border/50">
             {[
-              { id: 'all', label: t('filterAll') },
-              { id: 'followed', label: t('filterFollowed') },
-              { id: 'unsolved', label: t('filterUnsolved') },
-              { id: 'solved', label: t('filterSolved') },
-              { id: 'starred', label: t('filterStarred') },
+              { id: 'all', label: '全部' },
+              { id: 'followed', label: '关注' },
+              { id: 'unsolved', label: '待解答' },
+              { id: 'solved', label: '已解决' },
+              { id: 'starred', label: '精选' },
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setFilter(tab.id)}
                 className={cn(
                   "px-6 py-2 rounded-xl text-xs font-bold transition-all duration-300",
-                  filter === tab.id 
-                    ? "bg-card text-foreground shadow-sm scale-105" 
+                  filter === tab.id
+                    ? "bg-card text-foreground shadow-sm scale-105"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -574,10 +570,10 @@ export const QASystem: React.FC = () => {
           </div>
           <div className="relative w-full md:w-auto">
             <MagnifyingGlass className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/50" />
-            <Input 
+            <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder={t('searchHistory')}
+              placeholder="搜索历史问答..."
               className="pl-9 h-10 rounded-xl bg-card border-transparent hover:border-border focus:border-border shadow-sm w-full md:w-64 text-xs font-bold transition-all"
             />
           </div>
@@ -590,7 +586,7 @@ export const QASystem: React.FC = () => {
           ) : questions.length === 0 ? (
             <div className="py-20 text-center space-y-4">
               <ChatCircleText className="h-12 w-12 mx-auto text-muted-foreground/20" />
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t('noResults')}</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">暂无相关问题</p>
             </div>
           ) : (
             questions.map(q => (

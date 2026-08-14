@@ -194,7 +194,6 @@ export const FEATURES = {
   API_ACCESS: 'api.access',
   STUDENT_PAYMENT: 'student.payment',
   PRIVATE_DEPLOY: 'private.deploy',
-  I18N_CUSTOM: 'i18n.custom',
   SSO_SAML: 'sso.saml',
   AUDIT_LOG: 'audit.log',
   DEDICATED_SUPPORT: 'dedicated.support',

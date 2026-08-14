@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Brain, Target, CheckSquareOffset, Spinner } from '@phosphor-icons/react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { Card } from '@/components/ui/card';
@@ -20,7 +19,6 @@ type DrillItem = {
 };
 
 export const WrongQuestionReviewPage: React.FC = () => {
-  const { t } = useTranslation(['testLadder', 'pages']);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<any>(null);
@@ -31,7 +29,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
       const res = await api.get('/quizzes/wrong-questions/insights/');
       setPayload(res.data);
     } catch (e) {
-      toast.error(formatApiErrorToast(e, t('toast.loadWrongReviewError')));
+      toast.error(formatApiErrorToast(e, '错题复盘加载失败'));
     } finally {
       setLoading(false);
     }
@@ -48,7 +46,7 @@ export const WrongQuestionReviewPage: React.FC = () => {
 
   const startDrill = (drill: DrillItem) => {
     if (!drill.question_ids?.length) {
-      toast.info(t('wrongReview.noDrillQuestions'));
+      toast.info('当前专项暂无可训练题目');
       return;
     }
     const ids = drill.question_ids.join(',');
@@ -56,15 +54,15 @@ export const WrongQuestionReviewPage: React.FC = () => {
   };
 
   return (
-    <PageWrapper title={t('pages:wrongReview.title')} subtitle={t('pages:wrongReview.subtitle')}>
+    <PageWrapper title="错题复盘中心" subtitle="按错因与考点拆解薄弱点，快速进入下一轮专项训练。">
       <div className="max-w-6xl mx-auto pb-20 space-y-6 text-left">
         <div className="flex items-center gap-3">
           <Link to="/tests"><Button variant="outline" className="rounded-xl">
             <ArrowLeft className="h-4 w-4 mr-1" />
-            {t('wrongReview.backToTraining')}
+            返回训练页
           </Button></Link>
           <Button variant="ghost" className="rounded-xl" onClick={fetchInsights}>
-            {t('wrongReview.refreshReview')}
+            刷新复盘
           </Button>
         </div>
 
@@ -76,15 +74,15 @@ export const WrongQuestionReviewPage: React.FC = () => {
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="rounded-2xl border border-border bg-card p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('wrongReview.wrongQuestionCount')}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">错题数</p>
                 <p className="text-3xl font-black tabular-nums mt-2">{overview.wrong_questions || 0}</p>
               </Card>
               <Card className="rounded-2xl border border-border bg-card p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('wrongReview.totalWrongAttempts')}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">累计错误次数</p>
                 <p className="text-3xl font-black tabular-nums mt-2">{overview.wrong_attempts || 0}</p>
               </Card>
               <Card className="rounded-2xl border border-border bg-card p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{t('wrongReview.recommendedDrills')}</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">推荐专项</p>
                 <p className="text-3xl font-black tabular-nums mt-2">{drills.length}</p>
               </Card>
             </div>
@@ -92,10 +90,10 @@ export const WrongQuestionReviewPage: React.FC = () => {
             <Card className="rounded-2xl border border-border bg-card p-5 space-y-4">
               <div className="flex items-center gap-2">
                 <Target className="h-4 w-4 text-indigo-600" />
-                <h3 className="text-base font-bold">{t('wrongReview.drillTraining')}</h3>
+                <h3 className="text-base font-bold">一键专项训练</h3>
               </div>
               {!drills.length ? (
-                <p className="text-sm text-muted-foreground">{t('wrongReview.noDrillsAvailable')}</p>
+                <p className="text-sm text-muted-foreground">暂无可训练专项，继续做题后会自动生成。</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {drills.map((drill, idx) => (
@@ -104,15 +102,15 @@ export const WrongQuestionReviewPage: React.FC = () => {
                         <div>
                           <p className="font-bold text-foreground">{drill.drill_label}</p>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {t('wrongReview.questionCount', { count: drill.question_count, suggested: drill.recommended_questions })}
+                            {`题目 ${drill.question_count}，建议本轮 ${drill.recommended_questions} 题`}
                           </p>
                         </div>
                         <Badge variant="secondary" className="rounded-lg">
-                          {drill.drill_type === 'cause' ? t('wrongReview.cause') : t('wrongReview.knowledgePoint')}
+                          {drill.drill_type === 'cause' ? '错因' : '考点'}
                         </Badge>
                       </div>
                       <Button className="mt-3 rounded-xl w-full" onClick={() => startDrill(drill)}>
-                        {t('wrongReview.startDrill')}
+                        开始专项
                       </Button>
                     </Card>
                   ))}
@@ -124,15 +122,15 @@ export const WrongQuestionReviewPage: React.FC = () => {
               <Card className="rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <Brain className="h-4 w-4 text-indigo-600" />
-                  <h3 className="text-base font-bold">{t('wrongReview.causeBreakdown')}</h3>
+                  <h3 className="text-base font-bold">按错因复盘</h3>
                 </div>
                 <div className="space-y-2">
-                  {causeBreakdown.length === 0 && <p className="text-sm text-muted-foreground">{t('wrongReview.noCauseData')}</p>}
+                  {causeBreakdown.length === 0 && <p className="text-sm text-muted-foreground">暂无错因数据。</p>}
                   {causeBreakdown.map((item: any) => (
                     <div key={item.cause_key} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 bg-muted/20">
                       <div>
                         <p className="font-bold text-sm">{item.cause_label}</p>
-                        <p className="text-xs text-muted-foreground">{t('wrongReview.wrongQuestions', { count: item.question_count, attempts: item.wrong_attempts })}</p>
+                        <p className="text-xs text-muted-foreground">{`错题 ${item.question_count}，错误次数 ${item.wrong_attempts}`}</p>
                       </div>
                       <Badge className="rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
                         {Math.round((item.ratio || 0) * 100)}%
@@ -145,15 +143,15 @@ export const WrongQuestionReviewPage: React.FC = () => {
               <Card className="rounded-2xl border border-border bg-card p-5">
                 <div className="flex items-center gap-2 mb-3">
                   <CheckSquareOffset className="h-4 w-4 text-emerald-600" />
-                  <h3 className="text-base font-bold">{t('wrongReview.kpBreakdown')}</h3>
+                  <h3 className="text-base font-bold">按考点复盘</h3>
                 </div>
                 <div className="space-y-2">
-                  {kpBreakdown.length === 0 && <p className="text-sm text-muted-foreground">{t('wrongReview.noKpData')}</p>}
+                  {kpBreakdown.length === 0 && <p className="text-sm text-muted-foreground">暂无考点数据。</p>}
                   {kpBreakdown.map((item: any) => (
                     <div key={`${item.knowledge_point_id || 'unknown'}-${item.knowledge_point_name}`} className="rounded-xl border border-border px-3 py-2 bg-muted/20">
                       <p className="font-bold text-sm">{item.knowledge_point_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {t('wrongReview.avgWrongCount', { count: item.question_count, avg: item.avg_wrong_count })}
+                        {`错题 ${item.question_count}，平均错误次数 ${item.avg_wrong_count}`}
                       </p>
                     </div>
                   ))}

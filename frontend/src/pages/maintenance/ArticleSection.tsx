@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +17,6 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
 export const ArticleSection: React.FC = () => {
-  const { t } = useTranslation('maintenance');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,11 +54,11 @@ export const ArticleSection: React.FC = () => {
         ...form,
         knowledge_point: form.knowledge_point === '0' ? null : form.knowledge_point,
       });
-      toast.success(t('article.articlePublished'));
+      toast.success('文章已发布');
       resetForm();
       setShowCreate(false);
       fetchItems();
-    } catch { toast.error(t('article.failed')); }
+    } catch { toast.error('发布失败'); }
   };
 
   const handleUpdate = async () => {
@@ -102,15 +100,15 @@ export const ArticleSection: React.FC = () => {
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
           <Plus className="w-4 h-4" />
-          {t('sectionList.publishArticleBtn')}
+          发布文章
         </Button>
       </div>
 
       {items.length === 0 ? (
         <Card className="p-16 bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] text-center">
           <FileText className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
-          <p className="text-sm text-[#8E8E93] font-medium">{t('sectionList.noArticles')}</p>
-          <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noArticlesHint')}</p>
+          <p className="text-sm text-[#8E8E93] font-medium">暂无文章</p>
+          <p className="text-xs text-[#AEAEB2] mt-1">点击上方按钮发布第一篇文章</p>
         </Card>
       ) : (
         <>
@@ -165,53 +163,53 @@ export const ArticleSection: React.FC = () => {
         <DialogContent className="sm:max-w-[850px] max-h-[90vh] overflow-y-auto rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <FileText className="h-5 w-5 text-[#6E6E73]" /> {t('article.writeDeepArticle')}
+              <FileText className="h-5 w-5 text-[#6E6E73]" /> 撰写深度文章
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.titlePlaceholder')}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">文章标题</Label>
               <Input
                 value={form.title}
                 onChange={e => setForm({ ...form, title: e.target.value })}
                 className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium"
-                placeholder={t('article.titlePlaceholder')}
+                placeholder="文章标题"
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.knowledgePoint')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">关联知识点</Label>
                 <Select value={form.knowledge_point} onValueChange={v => v === 'NEW_KP' ? setShowNewKP(true) : setForm({ ...form, knowledge_point: v })}>
                   <SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 font-medium text-xs">
-                    <SelectValue placeholder={t('article.knowledgePoint')} />
+                    <SelectValue placeholder="关联知识点" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">{t('quiz.noMount')}</SelectItem>
-                    <SelectItem value="NEW_KP" className="text-[#0071E3] font-semibold">{t('course.newKnowledgePoint')}</SelectItem>
+                    <SelectItem value="0">不挂载</SelectItem>
+                    <SelectItem value="NEW_KP" className="text-[#0071E3] font-semibold">+ 新建知识点</SelectItem>
                     {kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()}>{kp.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.authorSignature')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">作者署名</Label>
                 <Input
                   value={form.author_display_name}
                   onChange={e => setForm({ ...form, author_display_name: e.target.value })}
                   className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-10 rounded-xl px-4 text-xs font-medium"
-                  placeholder={t('article.authorSignature')}
+                  placeholder="作者署名"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.tags')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">标签</Label>
                 <TagInput tags={form.tags} setTags={t => setForm({ ...form, tags: t })} compact />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.content')}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">内容</Label>
               <MarkdownEditor content={form.content} onChange={v => setForm({ ...form, content: v })} />
             </div>
             <Button onClick={handleCreate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('sectionList.publishArticleBtn')}
+              发布文章
             </Button>
           </div>
         </DialogContent>
@@ -221,11 +219,11 @@ export const ArticleSection: React.FC = () => {
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
         <DialogContent className="sm:max-w-[850px] max-h-[90vh] overflow-y-auto rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">{t('editDialog.title')}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">属性核心配置</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.title')}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">标题</Label>
               <Input
                 value={editingItem?.title || ''}
                 onChange={e => setEditingItem({ ...editingItem, title: e.target.value })}
@@ -234,38 +232,38 @@ export const ArticleSection: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('editDialog.signature')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">署名</Label>
                 <Input
                   value={editingItem?.author_display_name || ''}
                   onChange={e => setEditingItem({ ...editingItem, author_display_name: e.target.value })}
                   className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-10 rounded-xl px-4 text-xs font-medium"
-                  placeholder={t('editDialog.signature')}
+                  placeholder="署名"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.knowledgePoint')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">关联知识点</Label>
                 <Select value={editingItem?.knowledge_point || '0'} onValueChange={v => v === 'NEW_KP' ? setShowNewKP(true) : setEditingItem({ ...editingItem, knowledge_point: v })}>
                   <SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 font-medium text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">{t('quiz.noMount')}</SelectItem>
-                    <SelectItem value="NEW_KP" className="text-[#0071E3] font-semibold">{t('course.newKnowledgePoint')}</SelectItem>
+                    <SelectItem value="0">不挂载</SelectItem>
+                    <SelectItem value="NEW_KP" className="text-[#0071E3] font-semibold">+ 新建知识点</SelectItem>
                     {kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()}>{kp.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.tags')}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">标签</Label>
               <TagInput tags={editingItem?.tags || []} setTags={tg => setEditingItem({ ...editingItem, tags: tg })} compact />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('article.content')}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">内容</Label>
               <MarkdownEditor content={editingItem?.content || ''} onChange={v => setEditingItem({ ...editingItem, content: v })} />
             </div>
             <Button onClick={handleUpdate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('editDialog.updateAndSync')}
+              Update & Sync
             </Button>
           </div>
         </DialogContent>

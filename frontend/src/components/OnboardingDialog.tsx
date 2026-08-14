@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,12 +14,18 @@ const TEACHER_STEPS = 5;
 
 const SCALE_OPTIONS = ['1-50', '50-200', '200-500', '500+'] as const;
 
+const STEP3_OPTIONS: Record<string, string> = {
+  '1-50': '1-50 人',
+  '50-200': '50-200 人',
+  '200-500': '200-500 人',
+  '500+': '500+ 人',
+};
+
 export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean }) {
   const user = useAuthStore(s => s.user);
   const updateUser = useAuthStore(s => s.updateUser);
   const institution = useInstitutionStore(s => s.institution);
   const fetchFeatures = useInstitutionStore(s => s.fetchFeatures);
-  const { t } = useTranslation('onboarding');
 
   const [dismissed, setDismissed] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -96,7 +101,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
 
   // Step 3: Validate name
   const handleNameNext = () => {
-    if (!instName.trim()) return setError(t('step2.error_empty'));
+    if (!instName.trim()) return setError('请输入机构名称');
     goToStep(4);
   };
 
@@ -155,8 +160,8 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
               <Check className="h-7 w-7" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-xl font-black">{t('done.title')}</h2>
-              <p className="font-medium text-muted-foreground">{t('done.subtitle')}</p>
+              <h2 className="text-xl font-black">设置完成！</h2>
+              <p className="font-medium text-muted-foreground">你的机构已创建成功，现在可以邀请学员、生成题目了。</p>
             </div>
             {/* Bulk init prompt */}
             <div className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 text-left space-y-3">
@@ -186,7 +191,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
               </div>
             </div>
             <Button onClick={handleDone} variant="ghost" className="w-full text-xs text-muted-foreground">
-              {t('done.enter')}
+              进入 UniMind
             </Button>
           </div>
         ) : (
@@ -268,11 +273,11 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
               {currentStep === 3 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <h2 className="text-xl font-black">{t('step2.title')}</h2>
-                    <p className="text-sm font-medium text-muted-foreground">{t('step2.subtitle')}</p>
+                    <h2 className="text-xl font-black">给你的机构起个名字吧</h2>
+                    <p className="text-sm font-medium text-muted-foreground">这将展示在学员端和邀请链接中</p>
                   </div>
                   <Input
-                    placeholder={t('step2.placeholder')}
+                    placeholder="例如：宇艺教育"
                     value={instName}
                     onChange={e => setInstName(e.target.value)}
                     autoComplete="organization"
@@ -287,8 +292,8 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
               {currentStep === 4 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <h2 className="text-xl font-black">{t('step3.title')}</h2>
-                    <p className="text-sm font-medium text-muted-foreground">{t('step3.subtitle')}</p>
+                    <h2 className="text-xl font-black">你的机构目前有多少学生？</h2>
+                    <p className="text-sm font-medium text-muted-foreground">帮助我们为你推荐合适的方案</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     {SCALE_OPTIONS.map(scale => (
@@ -298,7 +303,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
                         onClick={() => handleScaleSelect(scale)}
                         className="p-4 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-all text-center font-bold text-sm"
                       >
-                        {t(`step3.options.${scale}`)}
+                        {STEP3_OPTIONS[scale]}
                       </button>
                     ))}
                   </div>
@@ -309,11 +314,11 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
               {currentStep === 5 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <h2 className="text-xl font-black">{t('step4.title')}</h2>
+                    <h2 className="text-xl font-black">你主要教哪些科目？</h2>
                     <p className="text-sm font-medium text-muted-foreground">
                       {plan
-                        ? t('step4.subtitle_plan', { plan: plan.toUpperCase(), count: PLAN_DIRECTION_LIMITS[plan] || 1 })
-                        : t('step4.subtitle_default')}
+                        ? `${plan.toUpperCase()} 方案最多选择 ${PLAN_DIRECTION_LIMITS[plan] || 1} 个学科方向`
+                        : '选择你机构的学科方向'}
                     </p>
                   </div>
                   <div className="max-h-[280px] overflow-y-auto pr-1 -mx-1 px-1">
@@ -331,11 +336,11 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
               {currentStep === 6 && (
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <h2 className="text-xl font-black">{t('step5.title')}</h2>
-                    <p className="text-sm font-medium text-muted-foreground">{t('step5.subtitle')}</p>
+                    <h2 className="text-xl font-black">简单介绍一下你的机构</h2>
+                    <p className="text-sm font-medium text-muted-foreground">让学员快速了解你（可选）</p>
                   </div>
                   <textarea
-                    placeholder={t('step5.placeholder')}
+                    placeholder="例如：专注金融考研辅导 10 年，累计培训 5000+ 学员"
                     value={description}
                     onChange={e => setDescription(e.target.value)}
                     rows={3}
@@ -372,7 +377,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
                 {currentStep > 2 && (
                   <Button variant="outline" className="flex-1 h-11 rounded-xl"
                     onClick={() => goToStep(currentStep - 1)}>
-                    {t('wizard.back')}
+                    返回
                   </Button>
                 )}
                 {currentStep === 2 && (
@@ -387,21 +392,21 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
                 )}
                 {currentStep === 3 && (
                   <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleNameNext}>
-                    {t('wizard.next')}
+                    下一步
                   </Button>
                 )}
                 {currentStep === 5 && (
                   <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleSubjectsNext}>
-                    {t('wizard.next')}
+                    下一步
                   </Button>
                 )}
                 {currentStep === 6 && (
                   <>
                     <Button variant="outline" className="flex-1 h-11 rounded-xl" onClick={handleCreate} disabled={loading}>
-                      {t('wizard.skip')}
+                      跳过
                     </Button>
                     <Button variant="apple" className="flex-1 h-11 rounded-xl" onClick={handleCreate} disabled={loading}>
-                      {loading ? <Spinner className="h-4 w-4 animate-spin" /> : t('wizard.finish')}
+                      {loading ? <Spinner className="h-4 w-4 animate-spin" /> : '完成'}
                     </Button>
                   </>
                 )}

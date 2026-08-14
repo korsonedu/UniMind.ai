@@ -15,7 +15,6 @@ import { FeatureGuard } from './components/FeatureGuard';
 import { Loading } from '@/components/Loading';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
-import i18n from '@/lib/i18n';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
@@ -102,14 +101,6 @@ const PageLoader = () => (
     </div>
   </div>
 );
-
-// Language redirect helper
-const LanguageRedirect = ({ lang }: { lang: string }) => {
-  useEffect(() => {
-    i18n.changeLanguage(lang);
-  }, [lang]);
-  return <Navigate to="/" replace />;
-};
 
 // Auth Guard — RootRedirect already handles auth validation; here we just gate.
 const RequireAuth = ({ children }: { children: ReactNode }) => {
@@ -305,8 +296,6 @@ const router = createBrowserRouter([
   { path: "/join/:invite_slug", element: lazyPage(JoinPage) },
   { path: "/intro/:slug", element: lazyPage(InstitutionHome) },
   { path: "/intro", element: <Navigate to="/" replace /> },
-  { path: "/en", element: <LanguageRedirect lang="en" /> },
-  { path: "/zh", element: <LanguageRedirect lang="zh" /> },
   { path: "/pricing", element: lazyPage(PricingPage) },
   { path: "/promo/plus", element: lazyPage(PromoPlus) },
   { path: "/memorix", element: lazyPage(MemorixPage) },

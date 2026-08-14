@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,12 +15,11 @@ interface Props {
 }
 
 export const QuickCreateAlbumDialog: React.FC<Props> = ({ open, onOpenChange, onCreated, onRefresh }) => {
-  const { t } = useTranslation('maintenance');
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
 
   const handleCreate = async () => {
-    if (!name.trim()) return toast.error(t('quickCreate.nameRequired'));
+    if (!name.trim()) return toast.error('名称必填');
     try {
       const res = await api.post('/courses/albums/', { name: name.trim(), description: desc.trim() });
       const newId = res.data.id.toString();
@@ -30,9 +28,9 @@ export const QuickCreateAlbumDialog: React.FC<Props> = ({ open, onOpenChange, on
       onOpenChange(false);
       setName('');
       setDesc('');
-      toast.success(t('album.albumCreated'));
+      toast.success('专辑已创建');
     } catch (e) {
-      toast.error(t('quickCreate.createFailed'));
+      toast.error('创建失败');
     }
   };
 
@@ -41,34 +39,34 @@ export const QuickCreateAlbumDialog: React.FC<Props> = ({ open, onOpenChange, on
       <DialogContent className="sm:max-w-[420px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-            <Stack className="text-emerald-500 w-5 h-5" /> {t('quickCreate.newAlbum')}
+            <Stack className="text-emerald-500 w-5 h-5" /> 快速新建专辑
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-5 pt-4">
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-[#6E6E73]">{t('quickCreate.albumName')}</Label>
+            <Label className="text-xs font-medium text-[#6E6E73]">专辑名称</Label>
             <Input
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder={t('quickCreate.albumNamePlaceholder')}
+              placeholder="例如：金融基础精讲"
               className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium"
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-[#6E6E73]">{t('quickCreate.albumDesc')}</Label>
+            <Label className="text-xs font-medium text-[#6E6E73]">专辑简介</Label>
             <textarea
               value={desc}
               onChange={e => setDesc(e.target.value)}
               className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-xl p-4 min-h-[80px] font-medium text-xs resize-none outline-none"
-              placeholder={t('quickCreate.albumDescPlaceholder')}
+              placeholder="一句话描述专辑内容..."
             />
           </div>
           <div className="flex gap-3 pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1 h-11 rounded-xl border-black/[0.06] bg-white hover:bg-[#F5F5F7] font-medium text-sm">
-              {t('quickCreate.cancel')}
+              取消
             </Button>
             <Button onClick={handleCreate} className="flex-[2] h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('quickCreate.confirmCreate')}
+              确认创建
             </Button>
           </div>
         </div>

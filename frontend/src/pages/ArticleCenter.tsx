@@ -10,7 +10,6 @@ import { InlineError } from '@/components/InlineError';
 import { useFetch } from '@/lib/useFetch';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
-import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/store/useAuthStore';
 
 type ViewMode = 'list' | 'grid';
@@ -24,8 +23,6 @@ export const ArticleCenter: React.FC = () => {
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const { t, i18n } = useTranslation('common');
 
   const params: Record<string, any> = { page };
   if (selectedTag) params.tag = selectedTag;
@@ -92,7 +89,7 @@ export const ArticleCenter: React.FC = () => {
             {article.author_display_name || 'KS Academy'}
           </span>
           <span className="text-[10px] text-muted-foreground/50 tabular-nums">
-            {new Date(article.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}
+            {new Date(article.created_at).toLocaleDateString('zh-CN')}
           </span>
         </div>
         <h3 className="font-bold text-sm leading-snug group-hover:text-primary transition-colors line-clamp-2">{article.title}</h3>
@@ -100,7 +97,7 @@ export const ArticleCenter: React.FC = () => {
           <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{article.excerpt}</p>
         )}
         <div className="flex items-center justify-between pt-1">
-          <span className="text-[10px] text-muted-foreground/40">{t('viewsCount', { count: article.views || 0 })}</span>
+          <span className="text-[10px] text-muted-foreground/40">{`${article.views || 0} 浏览`}</span>
           <CaretRight className="h-3.5 w-3.5 text-muted-foreground/20 group-hover:text-primary group-hover:translate-x-1 transition-all" />
         </div>
       </div>
@@ -111,8 +108,8 @@ export const ArticleCenter: React.FC = () => {
     <Link key={article.id} to={`/article/${article.id}`} className="hover:bg-muted/50 transition-all border-b border-border last:border-0 cursor-pointer group block">
       <div className="md:hidden px-4 py-4 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-bold text-muted-foreground tabular-nums">{new Date(article.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}</span>
-          <span className="text-[11px] font-bold text-muted-foreground/60">{t('viewsCount', { count: article.views || 0 })}</span>
+          <span className="text-[11px] font-bold text-muted-foreground tabular-nums">{new Date(article.created_at).toLocaleDateString('zh-CN')}</span>
+          <span className="text-[11px] font-bold text-muted-foreground/60">{`${article.views || 0} 浏览`}</span>
         </div>
         <h3 className="font-bold text-foreground group-hover:text-primary transition-colors text-sm leading-relaxed">
           {article.title}
@@ -123,7 +120,7 @@ export const ArticleCenter: React.FC = () => {
       </div>
       <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-5 items-center">
         <div className="col-span-2 text-[11px] font-bold text-muted-foreground tabular-nums">
-          {new Date(article.created_at).toLocaleDateString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}
+          {new Date(article.created_at).toLocaleDateString('zh-CN')}
         </div>
         <div className="col-span-2">
           <span className="inline-flex px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/30 text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-tighter truncate max-w-full">
@@ -144,15 +141,15 @@ export const ArticleCenter: React.FC = () => {
   );
 
   if (loading && articles.length === 0) return (
-    <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')} action={actionBtn}>
+    <PageWrapper title="文章中心" subtitle="沉淀学术思想，探索知识前沿。" action={actionBtn}>
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="h-9 w-48 bg-muted rounded-xl animate-pulse" />
         <div className="flex flex-col border border-border/50 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden">
           <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-muted/30 text-[11px] font-semibold tracking-wider border-b border-border/50">
-            <div className="col-span-2">{t('articleDate')}</div>
-            <div className="col-span-2">{t('articleAuthor')}</div>
-            <div className="col-span-6">{t('articleTitle')}</div>
-            <div className="col-span-2 text-right pr-4">{t('articleViews')}</div>
+            <div className="col-span-2">日期</div>
+            <div className="col-span-2">作者</div>
+            <div className="col-span-6">标题</div>
+            <div className="col-span-2 text-right pr-4">观看量</div>
           </div>
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="grid grid-cols-12 gap-4 px-8 py-5 items-center border-b border-border/50 last:border-0">
@@ -169,7 +166,7 @@ export const ArticleCenter: React.FC = () => {
   if (error) return <InlineError message={error} onRetry={refetch} />;
 
   return (
-    <PageWrapper title={t('pages:articleCenter.title')} subtitle={t('pages:articleCenter.subtitle')} action={actionBtn}>
+    <PageWrapper title="文章中心" subtitle="沉淀学术思想，探索知识前沿。" action={actionBtn}>
       <div className="max-w-6xl mx-auto flex flex-col gap-5 md:gap-6 w-full text-left">
 
         {/* 搜索 + 视图切换 */}
@@ -228,7 +225,7 @@ export const ArticleCenter: React.FC = () => {
                   : "bg-card text-muted-foreground border-border hover:border-foreground/20 hover:text-foreground"
               )}
             >
-              {t('all')} · {totalCount}
+              全部 · {totalCount}
             </button>
 
             {tagStats.map((tag: any) => {
@@ -269,10 +266,10 @@ export const ArticleCenter: React.FC = () => {
           /* 列表视图 */
           <div className="flex flex-col border border-border/50 rounded-2xl md:rounded-[2rem] bg-card overflow-hidden shadow-sm">
             <div className="hidden md:grid grid-cols-12 gap-4 px-8 py-4 bg-muted/30 text-[11px] font-semibold tracking-wider border-b border-border/50">
-              <div className="col-span-2">{t('articleDate')}</div>
-              <div className="col-span-2">{t('articleAuthor')}</div>
-              <div className="col-span-6">{t('articleTitle')}</div>
-              <div className="col-span-2 text-right pr-4">{t('articleViews')}</div>
+              <div className="col-span-2">日期</div>
+              <div className="col-span-2">作者</div>
+              <div className="col-span-6">标题</div>
+              <div className="col-span-2 text-right pr-4">观看量</div>
             </div>
             <div className="flex flex-col animate-in fade-in duration-500">
               {articles.map(article => <ListRow key={article.id} article={article} />)}

@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useTranslation } from 'react-i18next';
 
 // Sub-modules
 import type { KPNode } from './knowledge-map/types';
@@ -21,7 +20,6 @@ import { KnowledgeTrainingDialog } from './knowledge-map/TrainingDialog';
 
 export const KnowledgeMap: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation('knowledgeMap');
   const [allNodes, setAllNodes] = useState<KPNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<KPNode | null>(null);
@@ -197,14 +195,14 @@ export const KnowledgeMap: React.FC = () => {
 
   if (loading) {
     return (
-      <PageWrapper title={t('pageTitle')} subtitle={t('pageLoadingSubtitle')}>
+      <PageWrapper title="知识地图" subtitle="可视化呈现知识载体间的逻辑脉络与关联结构。">
         <div className="text-center text-[10px] font-medium text-muted-foreground/30 py-32">Mapping...</div>
       </PageWrapper>
     );
   }
 
   return (
-    <PageWrapper title={t('pageTitle')} subtitle={t('pageSubtitle')}>
+    <PageWrapper title="知识地图" subtitle="树状结构 · 关系图谱 · 资源详情，三栏联动探索知识体系。">
       <div className="w-full text-left">
         {isMobile ? (
           /* ── Mobile: toggle between tree panel and grid list ── */
@@ -224,7 +222,7 @@ export const KnowledgeMap: React.FC = () => {
                 <div className="relative flex-1">
                   <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder={t('mobile.searchPlaceholder')}
+                    placeholder="搜索知识卡片..."
                     value={treeSearch}
                     onChange={e => setTreeSearch(e.target.value)}
                     className="w-full rounded-2xl bg-card border-border shadow-sm h-11 pl-10 pr-4 font-bold"
@@ -293,10 +291,10 @@ export const KnowledgeMap: React.FC = () => {
                 <Select value={graphRootId} onValueChange={setGraphRootId}>
                   <SelectTrigger className="w-[200px] h-10 bg-card rounded-xl font-bold border-border shadow-sm text-xs">
                     <GitMerge className="w-3.5 h-3.5 mr-2 text-indigo-500" />
-                    <SelectValue placeholder={t('toolbar.allBranches')} />
+                    <SelectValue placeholder="全部分支" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
-                    <SelectItem value="all" className="font-bold text-xs">{t('toolbar.allBranches')}</SelectItem>
+                    <SelectItem value="all" className="font-bold text-xs">全部分支</SelectItem>
                     {rootOptions.map(opt => (
                       <SelectItem key={opt.id} value={opt.id.toString()} className="text-xs">
                         {opt.name}
@@ -307,7 +305,7 @@ export const KnowledgeMap: React.FC = () => {
 
                 {viewMode === 'list' && (
                   <Input
-                    placeholder={t('toolbar.searchKp')}
+                    placeholder="搜索考点..."
                     value={treeSearch}
                     onChange={e => setTreeSearch(e.target.value)}
                     className="flex-1 rounded-xl bg-card border-border shadow-sm h-10 px-4 font-bold text-xs"
@@ -320,14 +318,14 @@ export const KnowledgeMap: React.FC = () => {
                     onClick={() => setViewMode('graph')}
                     className="rounded-lg h-8 text-xs font-bold px-4"
                   >
-                    <GitMerge className="w-3.5 h-3.5 mr-1.5" /> {t('toolbar.graphView')}
+                    <GitMerge className="w-3.5 h-3.5 mr-1.5" /> 关系图
                   </Button>
                   <Button
                     variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                     onClick={() => setViewMode('list')}
                     className="rounded-lg h-8 text-xs font-bold px-3"
                   >
-                    <List className="w-3.5 h-3.5 mr-1.5" /> {t('toolbar.listView')}
+                    <List className="w-3.5 h-3.5 mr-1.5" /> 词条表
                   </Button>
                 </div>
               </div>
@@ -366,7 +364,7 @@ export const KnowledgeMap: React.FC = () => {
                         ))}
                         {listNodes.length === 0 && (
                           <div className="w-full text-center text-xs font-bold text-muted-foreground py-20">
-                            {t('toolbar.noMatch')}
+                            没有匹配到相关知识点
                           </div>
                         )}
                       </div>

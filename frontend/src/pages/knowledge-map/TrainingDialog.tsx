@@ -7,7 +7,6 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 import { cn, processMathContent } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import { useTranslation } from 'react-i18next';
 
 interface KnowledgeTrainingDialogProps {
   question: any;
@@ -45,7 +44,6 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
   onClose,
   onSuccess
 }) => {
-  const { t } = useTranslation('knowledgeMap');
   const [answer, setAnswer] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResult, setShowResult] = useState(false);
@@ -72,28 +70,28 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
     if (!showResult) return '';
     const modelAnswer = String(resultData?.analysis || '').trim();
     if (modelAnswer) return modelAnswer;
-    return String(question?.ai_answer || question?.correct_answer || t('training.fallbackStandardAnswer')).trim();
-  }, [question?.ai_answer, question?.correct_answer, resultData?.analysis, showResult, t]);
+    return String(question?.ai_answer || question?.correct_answer || '暂无标准答案。').trim();
+  }, [question?.ai_answer, question?.correct_answer, resultData?.analysis, showResult]);
 
   const rationaleText = useMemo(() => {
     if (!showResult) return '';
     const rationale = String(resultData?.feedback || '').trim();
     if (rationale) return rationale;
-    return t('training.fallbackRationale');
-  }, [resultData?.feedback, showResult, t]);
+    return '暂无判分依据，请稍后重试。';
+  }, [resultData?.feedback, showResult]);
 
   const handleSubmit = async () => {
-    if (!answer.trim()) return toast.error(t('training.emptyAnswer'));
+    if (!answer.trim()) return toast.error('请输入或选择答案');
 
     setIsSubmitting(true);
     try {
       const payload = [{ question_id: question.id, answer: answer }];
       await api.post('/quizzes/submit-exam/', { answers: payload });
-      toast.success(t('training.submitSuccess'));
+      toast.success('已提交后台判分，你可以先去做别的事。');
       if (onSuccess) onSuccess();
       onClose();
     } catch (e: any) {
-      toast.error(e.response?.data?.error || t('training.submitFailed'));
+      toast.error(e.response?.data?.error || '提交失败');
     } finally {
       setIsSubmitting(false);
     }
@@ -113,23 +111,23 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
         onInteractOutside={(e) => e.preventDefault()}
         className="max-w-3xl rounded-2xl border-stone-200 bg-white p-0 shadow-2xl overflow-hidden flex flex-col h-[min(800px,92vh)] max-h-[92vh] z-[var(--z-dropdown)]"
       >
-        <DialogTitle className="sr-only">{t('training.title')}</DialogTitle>
+        <DialogTitle className="sr-only">学术特训</DialogTitle>
 
         {/* ── Header ── */}
         <div className="px-6 py-3 border-b border-stone-100 flex items-center justify-between shrink-0 bg-white">
           <div className="flex items-center gap-2.5 min-w-0">
             <Badge className="rounded-md px-2 py-0 h-5 text-[10px] font-semibold bg-stone-100 text-stone-600 border-none hover:bg-stone-100">
               {question.q_type === 'objective'
-                ? t('training.questionType.objective')
+                ? '客观选择'
                 : question.subjective_type === 'calculate'
-                  ? t('training.questionType.calculate')
+                  ? '主观计算'
                   : question.subjective_type === 'noun'
-                    ? t('training.questionType.noun')
-                    : t('training.questionType.subjective')}
+                    ? '名词解释'
+                    : '主观论述'}
             </Badge>
             <span aria-hidden className="text-stone-300 select-none">·</span>
             <span className="text-[11px] font-medium text-stone-500 whitespace-nowrap">
-              {question.difficulty_level_display || t('training.difficultyFallback')} · ELO {question.difficulty || 1200}
+              {question.difficulty_level_display || '适当'} · ELO {question.difficulty || 1200}
             </span>
             {question.knowledge_point_detail?.name && (
               <>
@@ -193,7 +191,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                   <textarea
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
-                    placeholder={t('training.answerPlaceholder')}
+                    placeholder="在此输入您的分析或计算过程..."
                     className="w-full bg-stone-50 border border-stone-200 rounded-xl p-5 min-h-[260px] text-sm font-medium leading-relaxed focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-stone-400 placeholder:text-stone-400 resize-none transition-all text-stone-800"
                   />
                 )}
@@ -214,18 +212,18 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                     {resultData?.is_correct ? <CheckCircle className="w-5 h-5" /> : <ArrowCounterClockwise className="w-5 h-5" />}
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60">{t('training.resultLabel')}</p>
-                    <h4 className="text-lg font-bold">{resultData?.is_correct ? t('training.passed') : t('training.failed')}</h4>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60">评估结果</p>
+                    <h4 className="text-lg font-bold">{resultData?.is_correct ? '通过评估' : '需加强记忆'}</h4>
                   </div>
                   <div className="ml-auto text-right">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60">{t('training.scoreLabel')}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider opacity-60">得分</p>
                     <p className="text-xl font-bold tabular-nums">{resultData?.score} / {resultData?.max_score}</p>
                   </div>
                 </div>
 
                 {/* Standard answer */}
                 <div className="space-y-2">
-                  <h5 className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">{t('training.standardAnswer')}</h5>
+                  <h5 className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">标准答案（满分示范）</h5>
                   <div className="p-5 bg-stone-50 rounded-xl border border-stone-100 text-sm font-medium leading-relaxed text-stone-700">
                     <MarkdownContent content={processMathContent(standardAnswerText)} />
                   </div>
@@ -234,7 +232,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                 {/* Rationale */}
                 <div className="space-y-2">
                   <h5 className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 flex items-center gap-1.5">
-                    <Sparkle className="w-3 h-3" /> {t('training.rationale')}
+                    <Sparkle className="w-3 h-3" /> 判分依据与深度解析
                   </h5>
                   <div className="p-5 bg-zinc-900 text-stone-200 rounded-xl text-sm leading-relaxed">
                     <MarkdownContent content={processMathContent(rationaleText)} />
@@ -255,7 +253,7 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                 disabled={isSubmitting}
                 className="h-9 px-4 rounded-xl text-sm font-medium text-stone-500 hover:text-stone-900 hover:bg-stone-100"
               >
-                {t('training.exit')}
+                退出特训
               </Button>
               <Button
                 onClick={handleSubmit}
@@ -265,11 +263,11 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                 {isSubmitting ? (
                   <>
                     <Spinner className="w-4 h-4 animate-spin" />
-                    {t('training.submitting')}
+                    提交中...
                   </>
                 ) : (
                   <>
-                    {t('training.submit')}
+                    提交评估
                     <CaretRight className="h-4 w-4" />
                   </>
                 )}
@@ -282,13 +280,13 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
                 onClick={handleReset}
                 className="h-9 px-5 rounded-xl text-sm font-medium border-stone-200 text-stone-600 hover:bg-stone-50 hover:text-stone-900"
               >
-                {t('training.retry')}
+                再次练习
               </Button>
               <Button
                 onClick={onClose}
                 className="h-9 px-5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold"
               >
-                {t('training.complete')}
+                完成特训
               </Button>
             </div>
           )}

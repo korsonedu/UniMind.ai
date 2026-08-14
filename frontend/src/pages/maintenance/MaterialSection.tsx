@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +15,6 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
 export const MaterialSection: React.FC = () => {
-  const { t } = useTranslation('maintenance');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,7 +41,7 @@ export const MaterialSection: React.FC = () => {
   const resetForm = () => setForm({ name: '', description: '', file: null });
 
   const handleCreate = async () => {
-    if (!form.name || !form.file) return toast.error(t('startupMaterial.infoIncomplete'));
+    if (!form.name || !form.file) return toast.error('信息不全');
     setIsSubmitting(true);
 
     const file = form.file;
@@ -72,11 +70,11 @@ export const MaterialSection: React.FC = () => {
         },
       });
       setStatus(uploadId, 'completed');
-      toast.success(t('startupMaterial.materialUploaded'));
+      toast.success('资料已上传');
       fetchItems();
     } catch (e: any) {
       if (e?.name !== 'AbortError' && e?.code !== 'ERR_CANCELED') {
-        const message = formatApiErrorToast(e, t('startupMaterial.uploadFailed'));
+        const message = formatApiErrorToast(e, '上传失败');
         toast.error(message);
         setStatus(uploadId, 'failed', message);
       }
@@ -125,12 +123,12 @@ export const MaterialSection: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Rocket className="h-5 w-5 text-[#6E6E73]" />
-          <h3 className="text-lg font-semibold tracking-tight">{t('startupMaterial.uploadMaterial')}</h3>
+          <h3 className="text-lg font-semibold tracking-tight">上传启动资料</h3>
           <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{total}</Badge>
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
           <Plus className="w-4 h-4" />
-          {t('sectionList.uploadMaterial')}
+          上传资料
         </Button>
       </div>
 
@@ -138,8 +136,8 @@ export const MaterialSection: React.FC = () => {
       {items.length === 0 ? (
         <Card className="p-16 bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] text-center">
           <FileText className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
-          <p className="text-sm text-[#8E8E93] font-medium">{t('sectionList.noMaterials')}</p>
-          <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noMaterialsHint')}</p>
+          <p className="text-sm text-[#8E8E93] font-medium">暂无资料</p>
+          <p className="text-xs text-[#AEAEB2] mt-1">点击上方按钮上传第一份资料</p>
         </Card>
       ) : (
         <>
@@ -186,30 +184,30 @@ export const MaterialSection: React.FC = () => {
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <Rocket className="h-5 w-5 text-[#6E6E73]" /> {t('startupMaterial.uploadMaterial')}
+              <Rocket className="h-5 w-5 text-[#6E6E73]" /> 上传启动资料
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[#6E6E73] ml-1">名称</Label>
-              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder={t('startupMaterial.namePlaceholder')} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="资料名称" className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[#6E6E73] ml-1">简介</Label>
-              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[80px] font-medium text-sm resize-none outline-none" placeholder={t('startupMaterial.descPlaceholder')} />
+              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[80px] font-medium text-sm resize-none outline-none" placeholder="简介..." />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[#6E6E73] ml-1">文件</Label>
               <div className="relative">
                 <Button variant="outline" className="w-full h-14 rounded-xl border-dashed border-2 border-black/[0.06] hover:border-[#0071E3]/30 bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] px-4 font-medium text-xs text-[#6E6E73] hover:text-[#1D1D1F] transition-[border-color,background-color,color] justify-between">
-                  <span>{form.file ? form.file.name : t('startupMaterial.uploadFile')}</span>
+                  <span>{form.file ? form.file.name : '上传文件'}</span>
                   <Upload className="w-4 h-4 opacity-30" />
                 </Button>
                 <input type="file" onChange={e => setForm({ ...form, file: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" />
               </div>
             </div>
             <Button onClick={handleCreate} disabled={isSubmitting} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('startupMaterial.uploadMaterialBtn')}
+              Upload Material
             </Button>
           </div>
         </DialogContent>
@@ -219,7 +217,7 @@ export const MaterialSection: React.FC = () => {
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
         <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">{t('sectionList.editMaterial')}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">编辑资料</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="space-y-1.5">
@@ -231,11 +229,11 @@ export const MaterialSection: React.FC = () => {
               <textarea value={editingItem?.description || ''} onChange={e => setEditingItem({ ...editingItem, description: e.target.value })} className="w-full bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 rounded-2xl p-5 min-h-[80px] font-medium text-sm resize-none outline-none" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('sectionList.replaceFile')}</Label>
+              <Label className="text-xs font-medium text-[#6E6E73] ml-1">替换文件</Label>
               <Input type="file" onChange={e => setEditingItem({ ...editingItem, file: e.target.files?.[0] })} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
             </div>
             <Button onClick={handleUpdate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('sectionList.update')}
+              更新
             </Button>
           </div>
         </DialogContent>

@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Spinner, CaretDown, CaretUp, Sparkle } from '@phosphor-icons/react';
-import { useTranslation } from 'react-i18next';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
 import { cn, formatDuration } from '@/lib/utils';
 
@@ -10,7 +9,6 @@ interface OutlinePanelProps {
 }
 
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }) => {
-  const { t } = useTranslation('videoLesson');
   const { outlineStatus, outlineItems, fetchOutline, triggerOutlineGeneration, clearCourseTimers } = useCourseAIStore();
   const [expanded, setExpanded] = useState(true);
   const autoTriggeredRef = useRef(false);
@@ -42,7 +40,7 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }
     return (
       <div className="flex items-center gap-2 py-2 text-muted-foreground/60">
         <Spinner className="h-3 w-3 animate-spin" />
-        <span className="text-[10px] font-bold uppercase tracking-wider">{t('aiOutlineLoading')}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider">AI 正在分析课程内容…</span>
       </div>
     );
   }
@@ -58,7 +56,7 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }
         className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
       >
         <Sparkle className="h-3 w-3 text-indigo-500" />
-        {t('aiOutlineLabel', { count: outlineItems.length })}
+        {`AI 智能大纲 (${outlineItems.length} 章节)`}
         {expanded ? <CaretUp className="h-3 w-3" /> : <CaretDown className="h-3 w-3" />}
       </button>
 

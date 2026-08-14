@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -91,7 +90,6 @@ const formatDate = (value?: string | null) => {
 const toPercentText = (value: number) => `${Number(value || 0).toFixed(1)}%`;
 
 export const PipelinePanel: React.FC = () => {
-  const { t } = useTranslation('maintenance');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [tasks, setTasks] = useState<PipelineTask[]>([]);
   const [metrics, setMetrics] = useState<PipelineMetrics | null>(null);
@@ -128,33 +126,33 @@ export const PipelinePanel: React.FC = () => {
 
   const statusLabel = (s: string): string => {
     const map: Record<string, string> = {
-      all: t('pipeline.statusAll'), pending: t('pipeline.statusPending'), running: t('pipeline.statusRunning'),
-      review: t('pipeline.statusReview'), completed: t('pipeline.statusCompleted'), failed: t('pipeline.statusFailed'),
-      cancelled: t('pipeline.statusCancelled'), draft: t('pipeline.statusDraft'),
+      all: '全部状态', pending: '待执行', running: '执行中',
+      review: '待审核', completed: '已完成', failed: '失败',
+      cancelled: '已取消', draft: '草稿',
     };
     return map[s] || s;
   };
 
   const typeLabel = (s: string): string => {
     const map: Record<string, string> = {
-      all: t('pipeline.typeAll'), ai_parse: t('pipeline.typeAiParse'), ai_generate: t('pipeline.typeAiGenerate'),
-      bulk_import: t('pipeline.typeBulkImport'), other: t('pipeline.typeOther'),
+      all: '全部类型', ai_parse: 'AI 整理解析', ai_generate: 'AI 智能命题',
+      bulk_import: '批量题库导入', other: '其他任务',
     };
     return map[s] || s;
   };
 
   const getTypeLabel = (q: any): string => {
     const Q_TYPE_MAP: Record<string, string> = {
-      objective: t('pipeline.qTypeObjective'),
-      subjective: t('pipeline.qTypeSubjective'),
-      noun: t('pipeline.qTypeNoun'),
-      short: t('pipeline.qTypeShort'),
-      essay: t('pipeline.qTypeEssay'),
-      calculate: t('pipeline.qTypeCalculate'),
-      'subjective:noun': t('pipeline.qTypeNoun'),
-      'subjective:short': t('pipeline.qTypeShort'),
-      'subjective:essay': t('pipeline.qTypeEssay'),
-      'subjective:calculate': t('pipeline.qTypeCalculate'),
+      objective: '客观选择',
+      subjective: '主观题',
+      noun: '名词解释',
+      short: '简答',
+      essay: '论述',
+      calculate: '计算',
+      'subjective:noun': '名词解释',
+      'subjective:short': '简答',
+      'subjective:essay': '论述',
+      'subjective:calculate': '计算',
     };
     const sub = Q_TYPE_MAP[q.subjective_type];
     if (sub && q.q_type !== 'objective') return sub;
@@ -168,18 +166,18 @@ export const PipelinePanel: React.FC = () => {
   const diffLabel = (s?: string): string => {
     if (!s) return '?';
     const map: Record<string, string> = {
-      entry: t('pipeline.difficultyEntry'), easy: t('pipeline.difficultyEasy'),
-      normal: t('pipeline.difficultyNormal'), hard: t('pipeline.difficultyHard'),
-      extreme: t('pipeline.difficultyExtreme'), mixed: t('pipeline.difficultyMixed'),
+      entry: '入门', easy: '简单',
+      normal: '适当', hard: '困难',
+      extreme: '极限', mixed: '混合',
     };
     return map[s] || s;
   };
 
   const diffHint = (s: string): string => {
     const map: Record<string, string> = {
-      entry: t('pipeline.difficultyEntryHint'), easy: t('pipeline.difficultyEasyHint'),
-      normal: t('pipeline.difficultyNormalHint'), hard: t('pipeline.difficultyHardHint'),
-      extreme: t('pipeline.difficultyExtremeHint'),
+      entry: '概念识记，纯记忆型，单步结论', easy: '基础理解 + 1-2 步直接推理，干扰项较弱',
+      normal: '概念+情境结合，2-3 步推理，干扰项有迷惑性', hard: '跨章节或多模型联动，≥3 步严谨推理，干扰项高相似',
+      extreme: '高压综合题，模型选择/条件变化/现实约束，需严密论证',
     };
     return map[s] || '';
   };
@@ -187,20 +185,20 @@ export const PipelinePanel: React.FC = () => {
   const bloomLabel = (s?: string): string => {
     if (!s) return '?';
     const map: Record<string, string> = {
-      remember: t('pipeline.bloomRemember'), understand: t('pipeline.bloomUnderstand'),
-      apply: t('pipeline.bloomApply'), analyze: t('pipeline.bloomAnalyze'),
-      evaluate: t('pipeline.bloomEvaluate'), create: t('pipeline.bloomCreate'),
+      remember: '识记', understand: '理解',
+      apply: '应用', analyze: '分析',
+      evaluate: '评价', create: '创造',
     };
     return map[s] || s;
   };
 
   const qTypeBadgeLabel = (type: string): string => {
     const map: Record<string, string> = {
-      objective: t('pipeline.qTypeObjective'),
-      'subjective:noun': t('pipeline.qTypeNoun'),
-      'subjective:short': t('pipeline.qTypeShort'),
-      'subjective:essay': t('pipeline.qTypeEssay'),
-      'subjective:calculate': t('pipeline.qTypeCalculate'),
+      objective: '客观选择',
+      'subjective:noun': '名词解释',
+      'subjective:short': '简答',
+      'subjective:essay': '论述',
+      'subjective:calculate': '计算',
     };
     return map[type] || type;
   };
@@ -221,11 +219,11 @@ export const PipelinePanel: React.FC = () => {
       setPage(res.data?.page || targetPage);
       setTotalPages(res.data?.total_pages || 1);
     } catch (e) {
-      toast.error(formatApiErrorToast(e, t('pipeline.loadFailed')));
+      toast.error(formatApiErrorToast(e, '任务中心加载失败'));
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, typeFilter, t]);
+  }, [debouncedSearch, statusFilter, typeFilter]);
 
   // 过滤器/搜索词变化时回到第 1 页重新加载
   useEffect(() => { fetchTasks(1); }, [debouncedSearch, statusFilter, typeFilter]);
@@ -234,24 +232,24 @@ export const PipelinePanel: React.FC = () => {
     setUpdatingMap((prev) => ({ ...prev, [taskId]: true }));
     try {
       await api.post(`/quizzes/admin/pipeline-tasks/${taskId}/retry/`);
-      toast.success(t('pipeline.retryCreated'));
+      toast.success('已创建重试任务');
       fetchTasks(1);
     } catch (e) {
-      toast.error(formatApiErrorToast(e, t('pipeline.retryFailed')));
+      toast.error(formatApiErrorToast(e, '重试失败'));
     } finally {
       setUpdatingMap((prev) => ({ ...prev, [taskId]: false }));
     }
   };
 
   const handleDeleteTask = async (taskId: number) => {
-    if (!(await confirm(t('pipeline.deleteConfirm')))) return;
+    if (!(await confirm('确定删除此任务？此操作不可撤销。'))) return;
     setUpdatingMap((prev) => ({ ...prev, [taskId]: true }));
     try {
       await api.delete(`/quizzes/admin/pipeline-tasks/${taskId}/`);
-      toast.success(t('pipeline.taskDeleted'));
+      toast.success('任务已删除');
       fetchTasks(1);
     } catch (e) {
-      toast.error(formatApiErrorToast(e, t('pipeline.deleteFailed')));
+      toast.error(formatApiErrorToast(e, '删除失败'));
     } finally {
       setUpdatingMap((prev) => ({ ...prev, [taskId]: false }));
     }
@@ -282,9 +280,9 @@ export const PipelinePanel: React.FC = () => {
       // 仅保留 level='kp' 的叶子考点
       setKnowledgePoints(flat.filter((kp) => kp.level === 'kp'));
     } catch (e) {
-      toast.error(formatApiErrorToast(e, t('pipeline.loadKpFailed')));
+      toast.error(formatApiErrorToast(e, '加载知识点失败'));
     } finally { setLoadingKps(false); }
-  }, [t]);
+  }, []);
 
   const handleOpenGenerateDialog = () => {
     setSmartTaskName('');
@@ -293,7 +291,7 @@ export const PipelinePanel: React.FC = () => {
   };
 
   const handleSubmitGenerate = async () => {
-    if (smartKpIds.length === 0) return toast.error(t('pipeline.pleaseSelectKp'));
+    if (smartKpIds.length === 0) return toast.error('请选择知识点');
     setSmartSubmitting(true);
     try {
       const res = await api.post('/quizzes/admin/adversarial-pipeline/', {
@@ -303,12 +301,12 @@ export const PipelinePanel: React.FC = () => {
         title: smartTaskName.trim() || '',
         types: smartTypes,
       });
-      toast.success(t('pipeline.adversarialSubmitted', { taskId: res.data.task_id }));
+      toast.success(`对抗性出题已提交，任务 #${res.data.task_id}。完成后将进入审核队列`);
       setSmartDialogOpen(false);
       setSmartKpIds([]);
       fetchTasks(1);
     } catch (e) {
-      toast.error(formatApiErrorToast(e, t('pipeline.adversarialStartFailed')));
+      toast.error(formatApiErrorToast(e, '对抗性出题启动失败'));
     } finally {
       setSmartSubmitting(false);
     }
@@ -328,12 +326,12 @@ export const PipelinePanel: React.FC = () => {
       }
       const res = await api.post(`/quizzes/admin/pipeline-review/${taskId}/`, body);
       toast.success(action === 'approve'
-        ? t('pipeline.approvedImported', { count: (res.data as any).questions_created || 0 })
-        : t('pipeline.rejectedDone'));
+        ? `已批准入库 ${(res.data as any).questions_created || 0} 题`
+        : '已拒绝');
       setPreviewTask(null);
       fetchTasks(1);
     } catch (e) {
-      toast.error(formatApiErrorToast(e, t('pipeline.actionFailed')));
+      toast.error(formatApiErrorToast(e, '操作失败'));
     } finally {
       setReviewingMap((prev) => ({ ...prev, [taskId]: false }));
     }
@@ -343,25 +341,25 @@ export const PipelinePanel: React.FC = () => {
     <div className="space-y-6 text-left">
       <div className="flex items-center gap-3 mb-2">
         <Sparkle className="h-5 w-5 text-indigo-600" />
-        <h2 className="text-xl font-black tracking-tight">{t('pipeline.title')}</h2>
+        <h2 className="text-xl font-black tracking-tight">AI 智能出题中心</h2>
       </div>
 
       {/* ── Metrics ── */}
       <Card className="p-6 rounded-3xl border-none shadow-sm bg-card space-y-4">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">{t('pipeline.qualityOverview')}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest text-black/40">出题管线质量总览（14天）</p>
           <Badge className="bg-slate-100 text-slate-700 border-none text-[10px] font-black rounded-lg">
             Author → Reviewer → Classifier
           </Badge>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
           {[
-            { label: t('pipeline.totalTasks'), value: metrics?.overview?.total ?? 0, color: 'bg-white border-black/[0.04]', textColor: 'text-slate-900', subColor: 'text-black/40' },
-            { label: t('pipeline.completionRate'), value: toPercentText(metrics?.overview?.completion_rate ?? 0), color: 'bg-emerald-50 border-emerald-100', textColor: 'text-emerald-700', subColor: 'text-emerald-700/70' },
-            { label: t('pipeline.failRate'), value: toPercentText(metrics?.overview?.fail_rate ?? 0), color: 'bg-red-50 border-red-100', textColor: 'text-red-700', subColor: 'text-red-700/70' },
-            { label: t('pipeline.schemaOkRate'), value: toPercentText(metrics?.pipeline_quality?.schema_ok_rate ?? 0), color: 'bg-indigo-50 border-indigo-100', textColor: 'text-indigo-700', subColor: 'text-indigo-700/70' },
-            { label: t('pipeline.reviewRejectRate'), value: toPercentText(metrics?.pipeline_quality?.review_reject_rate ?? 0), color: 'bg-amber-50 border-amber-100', textColor: 'text-amber-700', subColor: 'text-amber-700/70' },
-            { label: t('pipeline.pendingReview'), value: metrics?.overview?.review ?? 0, color: 'bg-slate-100 border-slate-200', textColor: 'text-slate-800', subColor: 'text-slate-600' },
+            { label: '任务总数', value: metrics?.overview?.total ?? 0, color: 'bg-white border-black/[0.04]', textColor: 'text-slate-900', subColor: 'text-black/40' },
+            { label: '完成率', value: toPercentText(metrics?.overview?.completion_rate ?? 0), color: 'bg-emerald-50 border-emerald-100', textColor: 'text-emerald-700', subColor: 'text-emerald-700/70' },
+            { label: '失败率', value: toPercentText(metrics?.overview?.fail_rate ?? 0), color: 'bg-red-50 border-red-100', textColor: 'text-red-700', subColor: 'text-red-700/70' },
+            { label: 'Schema通过率', value: toPercentText(metrics?.pipeline_quality?.schema_ok_rate ?? 0), color: 'bg-indigo-50 border-indigo-100', textColor: 'text-indigo-700', subColor: 'text-indigo-700/70' },
+            { label: '审核拒绝率', value: toPercentText(metrics?.pipeline_quality?.review_reject_rate ?? 0), color: 'bg-amber-50 border-amber-100', textColor: 'text-amber-700', subColor: 'text-amber-700/70' },
+            { label: '待审核', value: metrics?.overview?.review ?? 0, color: 'bg-slate-100 border-slate-200', textColor: 'text-slate-800', subColor: 'text-slate-600' },
           ].map((m) => (
             <div key={m.label} className={`rounded-2xl ${m.color} border p-3`}>
               <p className={`text-[10px] font-bold uppercase ${m.subColor}`}>{m.label}</p>
@@ -375,15 +373,15 @@ export const PipelinePanel: React.FC = () => {
       <Card className="p-6 rounded-3xl border border-indigo-200 shadow-sm bg-card">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="max-w-xl">
-            <p className="text-sm font-bold">{t('pipeline.aiSmartGenerate')}</p>
+            <p className="text-sm font-bold">AI 智能出题</p>
             <p className="text-[11px] text-muted-foreground mt-1">
-              {t('pipeline.smartGenerateDesc')}
-              <b className="text-rose-600">{t('pipeline.adversarialMode')}</b>
-              {t('pipeline.adversarialModeDesc')}
+              选择知识点 → AI 自动生成题目。支持
+              <b className="text-rose-600">深度对抗</b>
+              （多轮 AI 互搏、审核后入库）两种质量等级。
             </p>
           </div>
           <Button onClick={handleOpenGenerateDialog} className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white h-11 px-6 text-xs font-bold shrink-0">
-            <Sparkle className="h-4 w-4 mr-2" />{t('pipeline.aiGenerateBtn')}
+            <Sparkle className="h-4 w-4 mr-2" />AI 智能出题
           </Button>
         </div>
       </Card>
@@ -392,8 +390,8 @@ export const PipelinePanel: React.FC = () => {
       {reviewTasks.length > 0 && (
         <Card className="p-6 rounded-3xl border border-amber-200 shadow-sm bg-card space-y-4">
           <div className="flex items-center gap-2">
-            <Badge className="bg-amber-100 text-amber-700 border-none text-[10px] font-black rounded-lg">{t('pipeline.itemsPendingReview', { count: reviewTasks.length })}</Badge>
-            <p className="text-sm font-bold">{t('pipeline.reviewQueue')}</p>
+            <Badge className="bg-amber-100 text-amber-700 border-none text-[10px] font-black rounded-lg">{`${reviewTasks.length} 项待审核`}</Badge>
+            <p className="text-sm font-bold">审核队列</p>
           </div>
           <ScrollArea className="h-64">
             <div className="space-y-2">
@@ -406,22 +404,18 @@ export const PipelinePanel: React.FC = () => {
                       <div onClick={() => { setPreviewTask(task); const qs = (task.result as any)?.questions || []; setReviewSelectedIds(new Set(qs.map((_: any, i: number) => i))); setEditedQuestions({}); }} className="min-w-0 text-left hover:text-indigo-600 transition-colors cursor-pointer">
                         <p className="text-xs font-bold truncate">{task.title}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          {t('pipeline.questionSummary', {
-                            count: questions.length,
-                            score: typeof summary.avg_quality_score === 'number' ? summary.avg_quality_score.toFixed(3) : '--',
-                            date: formatDate(task.created_at),
-                          })}
+                          {`${questions.length} 题 | 均分 ${typeof summary.avg_quality_score === 'number' ? summary.avg_quality_score.toFixed(3) : '--'} | ${formatDate(task.created_at)}`}
                         </p>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <Button onClick={() => { setPreviewTask(task); const qs = (task.result as any)?.questions || []; setReviewSelectedIds(new Set(qs.map((_: any, i: number) => i))); setEditedQuestions({}); }} variant="outline" className="h-8 rounded-lg text-[10px] font-bold px-2">{t('pipeline.preview')}</Button>
+                        <Button onClick={() => { setPreviewTask(task); const qs = (task.result as any)?.questions || []; setReviewSelectedIds(new Set(qs.map((_: any, i: number) => i))); setEditedQuestions({}); }} variant="outline" className="h-8 rounded-lg text-[10px] font-bold px-2">预览</Button>
                         <Button
                           onClick={() => handleReviewAction(task.id, 'approve')}
                           disabled={reviewingMap[task.id]}
                           className="h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-3"
                         >
                           {reviewingMap[task.id] ? <Spinner className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3 mr-1" />}
-                          {t('pipeline.approveImport')}
+                          批准入库
                       </Button>
                       <Button
                         onClick={() => handleReviewAction(task.id, 'reject')}
@@ -429,7 +423,7 @@ export const PipelinePanel: React.FC = () => {
                         variant="outline"
                         className="h-8 rounded-lg border-red-200 text-red-700 hover:bg-red-50 text-[10px] font-bold px-3"
                       >
-                        <XCircle className="h-3 w-3 mr-1" />{t('pipeline.reject')}
+                        <XCircle className="h-3 w-3 mr-1" />拒绝
                       </Button>
                     </div>
                   </div>
@@ -445,27 +439,27 @@ export const PipelinePanel: React.FC = () => {
       <Card className="p-6 rounded-3xl border-none shadow-sm bg-white space-y-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
           <div className="lg:col-span-3">
-            <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.statusFilter')}</Label>
+            <Label className="text-[11px] font-bold uppercase opacity-40">状态过滤</Label>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as TaskStatus | 'all')}
               className="w-full bg-apple-gray-50 border-none h-10 rounded-xl px-3 text-xs font-bold mt-1">
               {STATUS_OPTIONS.map((item) => (<option key={item.value} value={item.value}>{statusLabel(item.value)}</option>))}
             </select>
           </div>
           <div className="lg:col-span-3">
-            <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.typeFilter')}</Label>
+            <Label className="text-[11px] font-bold uppercase opacity-40">类型过滤</Label>
             <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as TaskType | 'all')}
               className="w-full bg-apple-gray-50 border-none h-10 rounded-xl px-3 text-xs font-bold mt-1">
               {TYPE_OPTIONS.map((item) => (<option key={item.value} value={item.value}>{typeLabel(item.value)}</option>))}
             </select>
           </div>
           <div className="lg:col-span-4">
-            <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.keyword')}</Label>
+            <Label className="text-[11px] font-bold uppercase opacity-40">关键词</Label>
             <Input value={search} onChange={(e) => setSearch(e.target.value)}
-              className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs mt-1" placeholder={t('pipeline.searchPlaceholder')} />
+              className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs mt-1" placeholder="搜索任务标题" />
           </div>
           <div className="lg:col-span-2">
             <Button onClick={() => fetchTasks(1)} variant="outline" className="h-10 rounded-xl text-xs font-bold w-full">
-              <ArrowsClockwise className={loading ? 'h-3.5 w-3.5 animate-spin mr-1' : 'h-3.5 w-3.5 mr-1'} />{t('pipeline.refresh')}
+              <ArrowsClockwise className={loading ? 'h-3.5 w-3.5 animate-spin mr-1' : 'h-3.5 w-3.5 mr-1'} />刷新
             </Button>
           </div>
         </div>
@@ -473,7 +467,7 @@ export const PipelinePanel: React.FC = () => {
         {loading ? (
           <div className="py-14 flex justify-center"><Spinner className="h-7 w-7 animate-spin text-muted-foreground/40" /></div>
         ) : tasks.length === 0 ? (
-          <EmptyState title={t('pipeline.noTasks')} className="py-6" />
+          <EmptyState title="暂无任务" className="py-6" />
         ) : (
           <div className="space-y-2">
             {tasks.map((task) => {
@@ -491,22 +485,22 @@ export const PipelinePanel: React.FC = () => {
                   </div>
                   {pipeline ? (
                     <div className="flex flex-wrap gap-1.5">
-                      <Badge className="bg-indigo-100 text-indigo-700 border-none text-[10px] font-black rounded-lg">{t('pipeline.windowLabel', { count: Number(pipeline.author_windows || 0) })}</Badge>
-                      <Badge className="bg-sky-100 text-sky-700 border-none text-[10px] font-black rounded-lg">{t('pipeline.candidateLabel', { count: Number(pipeline.author_candidates || 0) })}</Badge>
-                      <Badge className="bg-emerald-100 text-emerald-700 border-none text-[10px] font-black rounded-lg">{t('pipeline.passedLabel', { count: Number(pipeline.review_passed || 0) })}</Badge>
-                      <Badge className="bg-amber-100 text-amber-700 border-none text-[10px] font-black rounded-lg">{t('pipeline.rejectedLabel', { count: Number(pipeline.review_rejected || 0) })}</Badge>
+                      <Badge className="bg-indigo-100 text-indigo-700 border-none text-[10px] font-black rounded-lg">{`窗口 ${Number(pipeline.author_windows || 0)}`}</Badge>
+                      <Badge className="bg-sky-100 text-sky-700 border-none text-[10px] font-black rounded-lg">{`候选 ${Number(pipeline.author_candidates || 0)}`}</Badge>
+                      <Badge className="bg-emerald-100 text-emerald-700 border-none text-[10px] font-black rounded-lg">{`通过 ${Number(pipeline.review_passed || 0)}`}</Badge>
+                      <Badge className="bg-amber-100 text-amber-700 border-none text-[10px] font-black rounded-lg">{`驳回 ${Number(pipeline.review_rejected || 0)}`}</Badge>
                     </div>
                   ) : null}
                   <div className="flex justify-end gap-2">
                     {(task.status === 'failed' || task.status === 'cancelled') && (
                       <Button onClick={() => handleRetryTask(task.id)} disabled={updatingMap[task.id]}
                         variant="outline" size="sm" className="h-7 rounded-lg text-[10px] font-bold">
-                        {updatingMap[task.id] ? <Spinner className="h-3 w-3 animate-spin mr-1" /> : <ArrowCounterClockwise className="h-3 w-3 mr-1" />}{t('pipeline.retry')}
+                        {updatingMap[task.id] ? <Spinner className="h-3 w-3 animate-spin mr-1" /> : <ArrowCounterClockwise className="h-3 w-3 mr-1" />}重试
                       </Button>
                     )}
                     <Button onClick={() => handleDeleteTask(task.id)} disabled={updatingMap[task.id]}
                       variant="outline" size="sm" className="h-7 rounded-lg text-[10px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200">
-                      {updatingMap[task.id] ? <Spinner className="h-3 w-3 animate-spin mr-1" /> : <Trash className="h-3 w-3 mr-1" />}{t('pipeline.delete')}
+                      {updatingMap[task.id] ? <Spinner className="h-3 w-3 animate-spin mr-1" /> : <Trash className="h-3 w-3 mr-1" />}删除
                     </Button>
                   </div>
                 </div>
@@ -516,10 +510,10 @@ export const PipelinePanel: React.FC = () => {
         )}
 
         <div className="flex items-center justify-between pt-2">
-          <p className="text-[11px] text-muted-foreground">{t('pipeline.pageInfo', { page, total: Math.max(totalPages, 1) })}</p>
+          <p className="text-[11px] text-muted-foreground">{`第 ${page}/${Math.max(totalPages, 1)} 页`}</p>
           <div className="flex gap-2">
-            <Button variant="outline" disabled={page <= 1 || loading} onClick={() => fetchTasks(page - 1)} className="h-8 rounded-lg text-[11px] font-bold">{t('pipeline.prevPage')}</Button>
-            <Button variant="outline" disabled={page >= totalPages || loading} onClick={() => fetchTasks(page + 1)} className="h-8 rounded-lg text-[11px] font-bold">{t('pipeline.nextPage')}</Button>
+            <Button variant="outline" disabled={page <= 1 || loading} onClick={() => fetchTasks(page - 1)} className="h-8 rounded-lg text-[11px] font-bold">上一页</Button>
+            <Button variant="outline" disabled={page >= totalPages || loading} onClick={() => fetchTasks(page + 1)} className="h-8 rounded-lg text-[11px] font-bold">下一页</Button>
           </div>
         </div>
       </Card>
@@ -528,41 +522,41 @@ export const PipelinePanel: React.FC = () => {
       <Dialog open={smartDialogOpen} onOpenChange={(o) => { if (!o) { setSmartDialogOpen(false); } }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t('pipeline.deepAdversarialTitle')}</DialogTitle>
+            <DialogTitle>深度对抗出题</DialogTitle>
             <DialogDescription>
-              {t('pipeline.deepAdversarialDesc')}
+              Author ↔ Reviewer 多轮迭代博弈（异步后台执行），完成后进入审核队列。
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.taskNameLabel')}</Label>
+              <Label className="text-[11px] font-bold uppercase opacity-40">任务名称（选填）</Label>
               <Input value={smartTaskName} onChange={(e) => setSmartTaskName(e.target.value)}
-                placeholder={t('pipeline.taskNamePlaceholder')}
+                placeholder="留空则使用默认名称"
                 className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs" />
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.countPerKp')}</Label>
+                <Label className="text-[11px] font-bold uppercase opacity-40">每知识点题数</Label>
                 <Input type="number" min={1} max={10} value={smartCount}
                   onChange={(e) => setSmartCount(Math.max(1, parseInt(e.target.value) || 1))}
                   className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.targetDifficulty')}</Label>
+                <Label className="text-[11px] font-bold uppercase opacity-40">目标难度</Label>
                 <select value={smartDifficulty} onChange={(e) => setSmartDifficulty(e.target.value)}
                   className="w-full bg-apple-gray-50 border-none h-10 rounded-xl px-3 text-xs font-bold">
-                  <option value="entry">{t('pipeline.difficultyEntry')}</option>
-                  <option value="easy">{t('pipeline.difficultyEasy')}</option>
-                  <option value="normal">{t('pipeline.difficultyNormal')}</option>
-                  <option value="hard">{t('pipeline.difficultyHard')}</option>
-                  <option value="extreme">{t('pipeline.difficultyExtreme')}</option>
+                  <option value="entry">入门</option>
+                  <option value="easy">简单</option>
+                  <option value="normal">适当</option>
+                  <option value="hard">困难</option>
+                  <option value="extreme">极限</option>
                 </select>
                 <p className="text-[10px] text-slate-400 leading-relaxed">{diffHint(smartDifficulty)}</p>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.questionType')}</Label>
+                <Label className="text-[11px] font-bold uppercase opacity-40">题型</Label>
                 <div className="flex flex-wrap gap-1">
                   {['objective', 'subjective:noun', 'subjective:short', 'subjective:essay', 'subjective:calculate'].map((type) => (
                     <Badge key={type} onClick={() => setSmartTypes((prev) => prev.includes(type) ? prev.filter((x) => x !== type) : [...prev, type])}
@@ -574,7 +568,7 @@ export const PipelinePanel: React.FC = () => {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] font-bold uppercase opacity-40">{t('pipeline.selectKp')}</Label>
+              <Label className="text-[11px] font-bold uppercase opacity-40">选择知识点</Label>
               {loadingKps ? (
                 <div className="py-8 flex justify-center"><Spinner className="h-5 w-5 animate-spin text-muted-foreground/40" /></div>
               ) : (
@@ -588,21 +582,21 @@ export const PipelinePanel: React.FC = () => {
                     </label>
                   ))}
                   {knowledgePoints.length === 0 && !loadingKps && (
-                    <div className="py-8 text-center text-[11px] font-bold text-muted-foreground">{t('pipeline.noLeafKp')}</div>
+                    <div className="py-8 text-center text-[11px] font-bold text-muted-foreground">未找到叶子考点，请先在知识体系中创建 level=kp 的节点</div>
                   )}
                 </ScrollArea>
               )}
-              <p className="text-[10px] text-muted-foreground mt-1">{t('pipeline.selectedKps', { count: smartKpIds.length })}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{`已选 ${smartKpIds.length} 个知识点`}</p>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setSmartDialogOpen(false)} className="rounded-xl h-11 px-6 text-xs font-bold">{t('commonActions.cancel')}</Button>
+              <Button variant="outline" onClick={() => setSmartDialogOpen(false)} className="rounded-xl h-11 px-6 text-xs font-bold">取消</Button>
               <Button
                 onClick={handleSubmitGenerate}
                 disabled={smartKpIds.length === 0 || smartSubmitting}
                 className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white h-11 px-6 text-xs font-bold"
               >
                 {smartSubmitting ? <Spinner className="h-4 w-4 mr-2 animate-spin" /> : <Crosshair className="h-4 w-4 mr-2" />}
-                {smartSubmitting ? t('pipeline.submitting') : t('pipeline.submitToQueue')}
+                {smartSubmitting ? '提交中...' : '提交至审核队列'}
               </Button>
             </DialogFooter>
           </div>
@@ -613,17 +607,13 @@ export const PipelinePanel: React.FC = () => {
       <Dialog open={!!previewTask} onOpenChange={(o) => !o && setPreviewTask(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{previewTask?.title || t('pipeline.questionPreview')}</DialogTitle>
+            <DialogTitle>{previewTask?.title || '题目预览'}</DialogTitle>
             <DialogDescription>
               {(() => {
                 const qs = (previewTask?.result as any)?.questions || [];
                 const sm = (previewTask?.result as any)?.summary || {};
                 const st = (previewTask?.result as any)?.stages || [];
-                return t('pipeline.reviewTaskSummary', {
-                  count: qs.length,
-                  score: typeof sm.avg_quality_score === 'number' ? sm.avg_quality_score.toFixed(3) : '--',
-                  stages: st.length,
-                });
+                return `${qs.length} 道题，均分 ${typeof sm.avg_quality_score === 'number' ? sm.avg_quality_score.toFixed(3) : '--'}，共 ${st.length} 阶段`;
               })()}
             </DialogDescription>
           </DialogHeader>
@@ -635,28 +625,28 @@ export const PipelinePanel: React.FC = () => {
               if (stages.length === 0 && !summary.avg_quality_score) return null;
               return (
                 <div className="p-4 bg-slate-50 rounded-2xl space-y-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t('pipeline.pipelineFlowArc')}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">管线流程 (ARC)</p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {/* A - Author */}
                     <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
-                      <p className="text-[11px] font-black text-indigo-600">{t('pipeline.authorStage')}</p>
+                      <p className="text-[11px] font-black text-indigo-600">A · Author</p>
                       <p className="text-[10px] text-slate-500">
-                        {t('pipeline.authorGenerated', { count: summary.total_generated || stages.find((s: any) => s.stage === 'author_generated')?.count || '?' })}
+                        {`生成 ${summary.total_generated || stages.find((s: any) => s.stage === 'author_generated')?.count || '?'} 道候选`}
                       </p>
                     </div>
                     {/* R - Reviewer */}
                     <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
-                      <p className="text-[11px] font-black text-rose-600">{t('pipeline.reviewerStage')}</p>
+                      <p className="text-[11px] font-black text-rose-600">R · Reviewer</p>
                       <p className="text-[10px] text-slate-500">
-                        {t('pipeline.reviewerScore', { score: typeof summary.avg_quality_score === 'number' ? (summary.avg_quality_score * 100).toFixed(0) : '--' })}
-                        {summary.iteration_distribution ? t('pipeline.reviewerIteration', { iteration: JSON.stringify(summary.iteration_distribution) }) : ''}
+                        {`均分 ${typeof summary.avg_quality_score === 'number' ? (summary.avg_quality_score * 100).toFixed(0) : '--'} 分`}
+                        {summary.iteration_distribution ? `轮次分布: ${JSON.stringify(summary.iteration_distribution)}` : ''}
                       </p>
                     </div>
                     {/* C - Classifier */}
                     <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
-                      <p className="text-[11px] font-black text-emerald-600">{t('pipeline.classifierStage')}</p>
+                      <p className="text-[11px] font-black text-emerald-600">C · Classifier</p>
                       <p className="text-[10px] text-slate-500">
-                        {t('pipeline.classifierDesc')}
+                        难度审计 + 知识标签
                       </p>
                     </div>
                   </div>
@@ -672,13 +662,13 @@ export const PipelinePanel: React.FC = () => {
               if (!dr) return null;
               return (
                 <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-200 space-y-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">{t('pipeline.diversityReport')}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">批次多样性报告</p>
                   {dr.overall_assessment && (
                     <p className="text-[11px] text-slate-700 leading-relaxed">{dr.overall_assessment}</p>
                   )}
                   {(dr.similar_pairs || []).length > 0 && (
                     <div className="space-y-1">
-                      <p className="text-[9px] font-bold text-amber-600">{t('pipeline.similarPairs')} ({(dr.similar_pairs || []).length})</p>
+                      <p className="text-[9px] font-bold text-amber-600">相似题目 ({(dr.similar_pairs || []).length})</p>
                       {(dr.similar_pairs || []).map((sp: any, si: number) => (
                         <p key={si} className="text-[10px] text-slate-500">
                           #{sp.q1_index + 1} ↔ #{sp.q2_index + 1}: {sp.reason}
@@ -709,20 +699,20 @@ export const PipelinePanel: React.FC = () => {
                   )}>{diffLabel(q.difficulty_level) || '?'}</Badge>
                   {q.review_score != null && (
                     <Badge className={cn('text-[9px] font-bold rounded-lg border-none', q.review_score >= 0.7 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
-                      {t('pipeline.scoreLabel', { score: Number(q.review_score * 100).toFixed(0) })}
+                      {`${Number(q.review_score * 100).toFixed(0)}%`}
                     </Badge>
                   )}
-                  {q.quality_warning && <Badge className="bg-rose-100 text-rose-700 text-[9px] font-bold rounded-lg">{t('pipeline.lowQualityWarning')}</Badge>}
+                  {q.quality_warning && <Badge className="bg-rose-100 text-rose-700 text-[9px] font-bold rounded-lg">低质量警告</Badge>}
                   <Button variant="ghost" size="sm" onClick={() => {
                     setEditingQuestionIdx(editingQuestionIdx === i ? null : i);
                   }} className="ml-auto h-6 rounded-lg text-[9px] font-bold px-2">
-                    {editingQuestionIdx === i ? t('pipeline.doneEditing') : t('pipeline.edit')}
+                    {editingQuestionIdx === i ? '完成编辑' : '编辑'}
                   </Button>
                 </div>
 
                 {/* A: Author 出题内容 */}
                 <div className="pl-2 border-l-2 border-indigo-200 space-y-1.5">
-                  <p className="text-[9px] font-bold uppercase text-indigo-500">{t('pipeline.authorLabel')}</p>
+                  <p className="text-[9px] font-bold uppercase text-indigo-500">A · Author（出题）</p>
                   {editingQuestionIdx === i ? (
                     <div className="space-y-2">
                       <textarea value={editedQuestions[i]?.question ?? q.question}
@@ -744,7 +734,7 @@ export const PipelinePanel: React.FC = () => {
                         </div>
                       )}
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-emerald-600 font-bold shrink-0">{t('pipeline.answer')}:</span>
+                        <span className="text-[10px] text-emerald-600 font-bold shrink-0">答案:</span>
                         <input value={editedQuestions[i]?.answer ?? q.answer ?? ''}
                           onChange={(e) => setEditedQuestions(prev => ({...prev, [i]: {...(prev[i] || q), answer: e.target.value}}))}
                           className="flex-1 bg-slate-50 border rounded px-2 py-1 text-[10px] font-bold" />
@@ -762,8 +752,8 @@ export const PipelinePanel: React.FC = () => {
                     </div>
                   )}
                   <div className="flex gap-3 text-[10px]">
-                    {q.answer && <span className="text-emerald-600 font-bold">{t('pipeline.answer')}: {q.answer}</span>}
-                    {q.kp_name && <span className="text-slate-400">{t('pipeline.knowledgePoint')}: {q.kp_name}</span>}
+                    {q.answer && <span className="text-emerald-600 font-bold">答案: {q.answer}</span>}
+                    {q.kp_name && <span className="text-slate-400">知识点: {q.kp_name}</span>}
                   </div>
                   </>)}
                 </div>
@@ -772,8 +762,8 @@ export const PipelinePanel: React.FC = () => {
                 {(q.review_feedback || q.review_dimensions || q.iteration) && (
                   <div className="pl-2 border-l-2 border-rose-200 space-y-1.5">
                     <div className="flex items-center gap-2">
-                      <p className="text-[9px] font-bold uppercase text-rose-500">{t('pipeline.reviewerLabel')}</p>
-                      {q.iteration && <span className="text-[9px] text-rose-400">{t('pipeline.iterationPassed', { iteration: q.iteration })}</span>}
+                      <p className="text-[9px] font-bold uppercase text-rose-500">R · Reviewer（审查）</p>
+                      {q.iteration && <span className="text-[9px] text-rose-400">{`第 ${q.iteration} 轮通过`}</span>}
                     </div>
                     {q.review_dimensions && (
                       <div className="flex flex-wrap gap-1.5">
@@ -791,14 +781,14 @@ export const PipelinePanel: React.FC = () => {
                 {/* C: Classifier 审计 */}
                 {(q.knowledge_tags?.length > 0 || q.detected_difficulty || q.answer_correct !== undefined || q.bloom_level) && (
                   <div className="pl-2 border-l-2 border-emerald-200 space-y-1.5">
-                    <p className="text-[9px] font-bold uppercase text-emerald-500">{t('pipeline.classifierLabel')}</p>
+                    <p className="text-[9px] font-bold uppercase text-emerald-500">C · Classifier（审计）</p>
                     {/* 答案正确性 */}
                     {q.answer_correct !== undefined && (
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {q.answer_correct ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded-lg border-none">{t('pipeline.answerCorrect')}</Badge>
+                          <Badge className="bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded-lg border-none">答案正确</Badge>
                         ) : (
-                          <Badge className="bg-red-100 text-red-700 text-[9px] font-bold rounded-lg border-none">{t('pipeline.answerIncorrect')}</Badge>
+                          <Badge className="bg-red-100 text-red-700 text-[9px] font-bold rounded-lg border-none">答案存疑</Badge>
                         )}
                         {!q.answer_correct && q.answer_accuracy_note && (
                           <span className="text-[10px] text-red-600">{q.answer_accuracy_note}</span>
@@ -812,13 +802,13 @@ export const PipelinePanel: React.FC = () => {
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {q.bloom_level && (
                         <>
-                          <span className="text-[9px] text-slate-400">{t('pipeline.bloomLevel')}:</span>
+                          <span className="text-[9px] text-slate-400">认知层级:</span>
                           <Badge className="bg-violet-100 text-violet-700 text-[9px] font-bold rounded-lg border-none">{bloomLabel(q.bloom_level)}</Badge>
                         </>
                       )}
                       {q.detected_difficulty && (
                         <>
-                          <span className="text-[9px] text-slate-400 ml-1">{t('pipeline.detectedDifficulty')}:</span>
+                          <span className="text-[9px] text-slate-400 ml-1">检测难度:</span>
                           <Badge className={cn(
                             'text-[9px] font-bold rounded-lg border-none',
                             q.detected_difficulty === 'entry' ? 'bg-emerald-100 text-emerald-700' :
@@ -828,9 +818,9 @@ export const PipelinePanel: React.FC = () => {
                             'bg-red-100 text-red-700'
                           )}>{diffLabel(q.detected_difficulty)}</Badge>
                           {q.difficulty_match === false ? (
-                            <Badge className="bg-red-100 text-red-700 text-[9px] font-bold rounded-lg border-none">{t('pipeline.difficultyMismatch')}</Badge>
+                            <Badge className="bg-red-100 text-red-700 text-[9px] font-bold rounded-lg border-none">难度偏离</Badge>
                           ) : (
-                            <Badge className="bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded-lg border-none">{t('pipeline.difficultyMatch')}</Badge>
+                            <Badge className="bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded-lg border-none">难度合规</Badge>
                           )}
                         </>
                       )}
@@ -841,7 +831,7 @@ export const PipelinePanel: React.FC = () => {
                     {/* 知识标签 */}
                     {(q.knowledge_tags || []).length > 0 && (
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="text-[9px] text-slate-400">{t('pipeline.knowledgeTags')}:</span>
+                        <span className="text-[9px] text-slate-400">知识标签:</span>
                         {(q.knowledge_tags || []).map((tag: string) => (
                           <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{tag}</span>
                         ))}
@@ -853,9 +843,9 @@ export const PipelinePanel: React.FC = () => {
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPreviewTask(null)} className="rounded-xl text-xs font-bold">{t('pipeline.close')}</Button>
+            <Button variant="outline" onClick={() => setPreviewTask(null)} className="rounded-xl text-xs font-bold">关闭</Button>
             <Button onClick={() => { handleReviewAction(previewTask!.id, 'reject'); setPreviewTask(null); }} disabled={!previewTask || reviewingMap[previewTask.id]} variant="outline" className="rounded-xl border-red-200 text-red-700 text-xs font-bold">
-              <XCircle className="h-3.5 w-3.5 mr-1" />{t('pipeline.rejectAll')}
+              <XCircle className="h-3.5 w-3.5 mr-1" />拒绝全部
             </Button>
             <Button onClick={() => {
               const indices = Array.from(reviewSelectedIds);
@@ -863,7 +853,7 @@ export const PipelinePanel: React.FC = () => {
               handleReviewAction(previewTask!.id, 'approve', indices.length > 0 ? indices : undefined, edits);
               setPreviewTask(null); setReviewSelectedIds(new Set()); setEditedQuestions({});
             }} disabled={!previewTask || reviewingMap[previewTask.id]} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
-              <CheckCircle className="h-3.5 w-3.5 mr-1" />{reviewSelectedIds.size > 0 ? t('pipeline.importSelected', { count: reviewSelectedIds.size }) : t('pipeline.approveImport')}
+              <CheckCircle className="h-3.5 w-3.5 mr-1" />{reviewSelectedIds.size > 0 ? `导入已选 (${reviewSelectedIds.size})` : '批准入库'}
             </Button>
           </DialogFooter>
         </DialogContent>

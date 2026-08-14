@@ -4,9 +4,15 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
 import type { KPNode, TreeNodeData } from './types';
 import { LEVEL_ORDER, LEVEL_COLORS } from './types';
+
+const LEVEL_LABELS: Record<string, string> = {
+  sub: '学科',
+  ch: '篇章',
+  sec: '小节',
+  kp: '考点',
+};
 
 const MASTERY_DOT_COLORS: Record<string, string> = {
   mastered: '#34C759',
@@ -24,7 +30,6 @@ export const KnowledgeTreePanel: React.FC<{
   onSearchChange: (q: string) => void;
   masteryData?: Record<string, string>;
 }> = ({ nodes, selectedId, onSelect, searchQuery, onSearchChange, masteryData = {} }) => {
-  const { t } = useTranslation('knowledgeMap');
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
   const tree = useMemo(() => {
@@ -139,7 +144,7 @@ export const KnowledgeTreePanel: React.FC<{
               LEVEL_COLORS[tn.level] || 'bg-muted',
             )}
           >
-            {t(`levels.${tn.level}` as any) || tn.level}
+            {LEVEL_LABELS[tn.level] ?? tn.level}
           </Badge>
 
           <span
@@ -172,7 +177,7 @@ export const KnowledgeTreePanel: React.FC<{
         <div className="relative">
           <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder={t('treePanel.searchPlaceholder')}
+            placeholder="搜索知识点..."
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
             className="h-9 pl-9 pr-8 rounded-xl bg-muted/50 border-none text-xs font-medium"
@@ -190,10 +195,10 @@ export const KnowledgeTreePanel: React.FC<{
       {/* Mastery legend */}
       <div className="px-3 py-2 border-t border-border/30 flex items-center gap-3 flex-wrap">
         {[
-          { level: 'mastered', label: t('treePanel.legendMastered'), color: MASTERY_DOT_COLORS.mastered },
-          { level: 'stable', label: t('treePanel.legendStable'), color: MASTERY_DOT_COLORS.stable },
-          { level: 'learning', label: t('treePanel.legendLearning'), color: MASTERY_DOT_COLORS.learning },
-          { level: 'weak', label: t('treePanel.legendWeak'), color: MASTERY_DOT_COLORS.weak },
+          { level: 'mastered', label: '掌握', color: MASTERY_DOT_COLORS.mastered },
+          { level: 'stable', label: '稳定', color: MASTERY_DOT_COLORS.stable },
+          { level: 'learning', label: '学习', color: MASTERY_DOT_COLORS.learning },
+          { level: 'weak', label: '薄弱', color: MASTERY_DOT_COLORS.weak },
         ].map(item => (
           <div key={item.level} className="flex items-center gap-1.5">
             <span
@@ -207,7 +212,7 @@ export const KnowledgeTreePanel: React.FC<{
       <ScrollArea className="flex-1 p-2" type="always">
         <div className="space-y-0.5 min-w-max">
           {filteredTree.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8">{t('treePanel.noMatch')}</p>
+            <p className="text-xs text-muted-foreground text-center py-8">无匹配知识点</p>
           ) : (
             filteredTree.map(root => renderNode(root, 0))
           )}

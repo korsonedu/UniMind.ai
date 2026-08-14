@@ -4,11 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { X, CaretRight, CaretDown, PencilSimple, Trash } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
 
 export const TagInput = ({ tags, setTags, compact = false }: { tags: string[], setTags: (t: string[]) => void, compact?: boolean }) => {
   const [inputValue, setInputValue] = useState('');
-  const { t } = useTranslation('maintenance');
   const addTag = () => {
     const val = inputValue.trim();
     if (val && !tags.includes(val)) {
@@ -23,7 +21,7 @@ export const TagInput = ({ tags, setTags, compact = false }: { tags: string[], s
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-          placeholder={t('components.tagPlaceholder')}
+          placeholder="标签..."
           className={cn("bg-unimind-bg-secondary border-none rounded-xl font-bold text-[11px]", compact ? "h-8 px-3" : "h-9 px-4")}
         />
       </div>

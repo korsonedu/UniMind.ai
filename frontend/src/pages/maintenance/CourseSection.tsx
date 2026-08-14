@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +22,6 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
 export const CourseSection: React.FC = () => {
-  const { t } = useTranslation('maintenance');
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +37,10 @@ export const CourseSection: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const sortBy = 'sort_order';
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  // 拖拽顺序用 ref 同步维护：dragOver/dragEnd 是连续事件，React 渲染可能滞后，
+  // 直接读 state 闭包会拿到旧顺序，导致提交的排序不是用户看到的结果
+  const itemsRef = useRef<any[]>([]);
+  const dragIdxRef = useRef<number | null>(null);
   const [form, setForm] = useState({
     title: '', album_obj: '0', desc: '', elo_reward: 50,
     knowledge_point: '0', video: null as File | null,
@@ -49,11 +51,12 @@ export const CourseSection: React.FC = () => {
   const fetchData = useCallback(async (p = 1) => {
     try {
       const [c, k, a] = await Promise.all([
-        api.get('/courses/', { params: { page: p, page_size: 10, ordering: sortBy } }),
+        api.get('/courses/', { params: { page: p, page_size: 100, ordering: sortBy } }),
         api.get('/quizzes/knowledge-points/'),
         api.get('/courses/albums/'),
       ]);
       setItems(c.data.items || c.data);
+      itemsRef.current = c.data.items || c.data;
       setTotal(c.data.total ?? c.data.length ?? 0);
       setTotalPages(c.data.total_pages ?? 1);
       setKpList(k.data);
@@ -65,25 +68,33 @@ export const CourseSection: React.FC = () => {
   useEffect(() => { fetchData(page); }, [fetchData, page]);
 
   const handleDragStart = (idx: number) => {
+    dragIdxRef.current = idx;
     setDragIdx(idx);
   };
 
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    if (dragIdx === null || dragIdx === idx) return;
-    const reordered = [...items];
-    const [moved] = reordered.splice(dragIdx, 1);
+    const from = dragIdxRef.current;
+    if (from === null || from === idx) return;
+    const reordered = [...itemsRef.current];
+    const [moved] = reordered.splice(from, 1);
     reordered.splice(idx, 0, moved);
+    itemsRef.current = reordered;
+    dragIdxRef.current = idx;
     setItems(reordered);
     setDragIdx(idx);
   };
 
   const handleDragEnd = async () => {
+    dragIdxRef.current = null;
     setDragIdx(null);
-    const updated = items.map((item: any, i: number) => ({ id: item.id, sort_order: i }));
+    const updated = itemsRef.current.map((item: any, i: number) => ({ id: item.id, sort_order: i }));
     try {
       await api.post('/courses/reorder/', { items: updated });
-    } catch { fetchData(page); }
+    } catch {
+      toast.error('排序保存失败，请重试');
+      fetchData(page);
+    }
   };
 
   const resetForm = () => setForm({
@@ -98,7 +109,7 @@ export const CourseSection: React.FC = () => {
   };
 
   const handleCreate = async () => {
-    if (!form.title || !form.video) return toast.error(t('course.coreInfoIncomplete'));
+    if (!form.title || !form.video) return toast.error('核心信息不全');
     setIsSubmitting(true);
 
     const file = form.video;
@@ -138,11 +149,11 @@ export const CourseSection: React.FC = () => {
         },
       });
       setStatus(uploadId, 'completed');
-      toast.success(t('course.coursePublished'));
+      toast.success('课程已发布');
       fetchData();
     } catch (e: any) {
       if (e?.name === 'AbortError' || e?.code === 'ERR_CANCELED') return;
-      const message = formatApiErrorToast(e, t('course.publishFailed'));
+      const message = formatApiErrorToast(e, '发布失败');
       toast.error(message);
       setStatus(uploadId, 'failed', message);
     }
@@ -160,10 +171,10 @@ export const CourseSection: React.FC = () => {
     });
     try {
       await api.patch(`/courses/${editingItem.id}/`, fd);
-      toast.success(t('commonActions.coreConfigSynced'));
+      toast.success('核心配置已同步');
       setEditingItem(null);
       fetchData();
-    } catch { toast.error(t('commonActions.updateFailed')); }
+    } catch { toast.error('更新失败'); }
   };
 
   const handleDelete = async (id: number, title: string) => {
@@ -199,7 +210,7 @@ export const CourseSection: React.FC = () => {
         <div className="flex items-center gap-2">
           <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
             <Plus className="w-4 h-4" />
-            {t('sectionList.uploadCourse')}
+            上传课程
           </Button>
         </div>
       </div>
@@ -207,8 +218,8 @@ export const CourseSection: React.FC = () => {
       {items.length === 0 ? (
         <Card className="p-16 bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] text-center">
           <BookOpen className="h-10 w-10 text-[#AEAEB2] mx-auto mb-4 opacity-30" />
-          <p className="text-sm text-[#8E8E93] font-medium">{t('sectionList.noCourses')}</p>
-          <p className="text-xs text-[#AEAEB2] mt-1">{t('sectionList.noCoursesHint')}</p>
+          <p className="text-sm text-[#8E8E93] font-medium">暂无课程</p>
+          <p className="text-xs text-[#AEAEB2] mt-1">点击上方按钮上传第一门课程</p>
         </Card>
       ) : (
         <>
@@ -284,84 +295,84 @@ export const CourseSection: React.FC = () => {
         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold flex items-center gap-3">
-              <BookOpen className="h-5 w-5 text-[#6E6E73]" /> {t('sectionList.uploadCourse')}
+              <BookOpen className="h-5 w-5 text-[#6E6E73]" /> 上传课程
             </DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4">
             {/* Left column: metadata */}
             <div className="lg:col-span-8 space-y-5">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('course.title')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">课程标题</Label>
                 <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('course.album')}</Label>
+                  <Label className="text-xs font-medium text-[#6E6E73] ml-1">所属专辑</Label>
                   <Select value={form.album_obj} onValueChange={v => v === 'NEW_ALBUM' ? setShowNewAlbum(true) : setForm({ ...form, album_obj: v })}>
                     <SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 font-medium px-4 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">{t('course.noAlbum')}</SelectItem>
-                      <SelectItem value="NEW_ALBUM" className="text-[#0071E3] font-semibold">{t('course.newAlbum')}</SelectItem>
+                      <SelectItem value="0">不挂载</SelectItem>
+                      <SelectItem value="NEW_ALBUM" className="text-[#0071E3] font-semibold">+ 新建专辑</SelectItem>
                       {albumList.map(al => <SelectItem key={al.id} value={al.id.toString()}>{al.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('course.knowledgePoint')}</Label>
+                  <Label className="text-xs font-medium text-[#6E6E73] ml-1">关联知识点</Label>
                   <Select value={form.knowledge_point} onValueChange={v => v === 'NEW_KP' ? setShowNewKP(true) : setForm({ ...form, knowledge_point: v })}>
                     <SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 font-medium px-4 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">{t('course.noAlbum')}</SelectItem>
-                      <SelectItem value="NEW_KP" className="text-[#0071E3] font-semibold">{t('course.newKnowledgePoint')}</SelectItem>
+                      <SelectItem value="0">不挂载</SelectItem>
+                      <SelectItem value="NEW_KP" className="text-[#0071E3] font-semibold">+ 新建知识点</SelectItem>
                       {kpList.map(kp => <SelectItem key={kp.id} value={kp.id.toString()}>{kp.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('course.description')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">详细描述</Label>
                 <MarkdownEditor content={form.desc} onChange={v => setForm({ ...form, desc: v })} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('course.tags')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">标签</Label>
                 <TagAutocomplete tags={form.tags} setTags={(tg: string[]) => setForm({ ...form, tags: tg })} />
               </div>
             </div>
             {/* Right column: files + ELO */}
             <div className="lg:col-span-4 space-y-5">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('course.rewardSetting')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">奖励设定</Label>
                 <div className="flex items-center gap-3">
                   <Input type="number" value={form.elo_reward} onChange={e => setForm({ ...form, elo_reward: parseInt(e.target.value) || 0 })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-10 rounded-xl font-medium w-20 text-center text-sm" />
                   <span className="text-xs font-medium text-[#6E6E73]">ELO Reward</span>
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('course.mediaAttachment')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">媒体附件</Label>
                 <div className="relative">
                   <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 border-black/[0.06] hover:border-[#0071E3]/30 bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] px-4 font-medium text-xs text-[#6E6E73] hover:text-[#1D1D1F] transition-[border-color,background-color,color] justify-between" type="button">
-                    <span>{form.video ? form.video.name : t('course.uploadVideo')}</span>
+                    <span>{form.video ? form.video.name : '上传视频'}</span>
                     <Video className="w-4 h-4 opacity-30" />
                   </Button>
                   <input type="file" onChange={handleVideoChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="video/*" />
                 </div>
                 <div className="relative">
                   <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 border-black/[0.06] hover:border-[#0071E3]/30 bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] px-4 font-medium text-xs text-[#6E6E73] hover:text-[#1D1D1F] transition-[border-color,background-color,color] justify-between" type="button">
-                    <span>{form.cover ? form.cover.name : t('course.uploadCover')}</span>
+                    <span>{form.cover ? form.cover.name : '上传封面'}</span>
                     <ImageIcon className="w-4 h-4 opacity-30" />
                   </Button>
                   <input type="file" onChange={e => setForm({ ...form, cover: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
                 </div>
                 <div className="relative">
                   <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 border-black/[0.06] hover:border-[#0071E3]/30 bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] px-4 font-medium text-xs text-[#6E6E73] hover:text-[#1D1D1F] transition-[border-color,background-color,color] justify-between" type="button">
-                    <span>{form.courseware ? form.courseware.name : t('course.uploadCourseware')}</span>
+                    <span>{form.courseware ? form.courseware.name : '上传课件'}</span>
                     <FileArrowUp className="w-4 h-4 opacity-30" />
                   </Button>
                   <input type="file" onChange={e => setForm({ ...form, courseware: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" />
                 </div>
               </div>
               <Button onClick={handleCreate} disabled={isSubmitting} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-                {t('course.publishAcademy')}
+                Publish Academy
               </Button>
             </div>
           </div>
@@ -372,16 +383,16 @@ export const CourseSection: React.FC = () => {
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">{t('editDialog.title')}</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">属性核心配置</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('editDialog.titleLabel')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">标题</Label>
                 <Input value={editingItem?.title || ''} onChange={e => setEditingItem({ ...editingItem, title: e.target.value })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('editDialog.eloReward')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">ELO 奖励</Label>
                 <Input type="number" value={editingItem?.elo_reward || 0} onChange={e => setEditingItem({ ...editingItem, elo_reward: e.target.value })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
               </div>
             </div>
@@ -391,16 +402,16 @@ export const CourseSection: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('sectionList.updateVideo')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">更新视频</Label>
                 <Input type="file" onChange={e => setEditingItem({ ...editingItem, video_file: e.target.files?.[0] })} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-[#6E6E73] ml-1">{t('sectionList.updateCover')}</Label>
+                <Label className="text-xs font-medium text-[#6E6E73] ml-1">更新封面</Label>
                 <Input type="file" onChange={e => setEditingItem({ ...editingItem, cover_image: e.target.files?.[0] })} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
               </div>
             </div>
             <Button onClick={handleUpdate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
-              {t('editDialog.updateAndSync')}
+              Update & Sync
             </Button>
           </div>
         </DialogContent>
