@@ -16,13 +16,13 @@ const PLAN_META: Record<string, { label: string; price: string; color: string }>
 };
 
 const PLAN_UNLOCK_SUMMARY: Record<string, string> = {
-  starter:    '解锁完整学情报告、教学计划与教案等核心教学能力',
+  starter:    '解锁完整学情报告、诊断测试与错题洞察等核心学习能力',
   growth:     '解锁 Memorix 记忆调度、知识图谱、视频 AI 大纲、多教师协作、班级对比与数据导出、学生端收费等机构教学能力',
   enterprise: '解锁 AI Bot 自定义、品牌白标、私有化部署、API 接入、SSO 单点登录、审计日志等企业旗舰能力',
 };
 
 const PLAN_FEATURES: Record<string, string[]> = {
-  starter: ['完整学情报告', '教学计划 · 教案'],
+  starter: ['完整学情报告', '诊断测试 · 错题洞察'],
   growth: ['Memorix 记忆调度', '交互式知识图谱', '视频 AI 大纲', '多教师协作 · 权限管理', '班级对比报表 · 数据导出', '学生端收费 · 自主定价'],
   enterprise: [
     'AI Bot 自定义', '品牌定制 · 白标部署', '私有化部署 · 数据主权', 'API 接入 · 系统集成',

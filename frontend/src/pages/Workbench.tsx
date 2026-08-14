@@ -41,7 +41,7 @@ interface QuestionData {
 const SKILLS = [
   { icon: FileText, label: '出题', prompt: '帮我出5道题' },
   { icon: Lightning, label: '精修出题', prompt: '对刚才的题目启动 ARC 精修' },
-  { icon: ChartBar, label: '查薄弱点', prompt: '班级薄弱知识点有哪些' },
+  { icon: ChartBar, label: '查薄弱点', prompt: '学员的薄弱知识点有哪些' },
   { icon: Users, label: '查学生', prompt: '帮我看看学生的学习情况' },
   { icon: Hourglass, label: '管线进度', prompt: '检查出题任务进度' },
   { icon: Database, label: '题库统计', prompt: '帮我看看题库统计情况' },
@@ -426,11 +426,11 @@ export default function Workbench() {
           inputTourClass="workbench-input"
           findBot={(bots) => bots.find((b: Bot) => b.bot_type === 'exam_generator')}
           skills={SKILLS}
-          typewriterWords={['出题、查学生、管作业...', '根据薄弱知识点出题', '看看学员学习情况']}
+          typewriterWords={['出题、查学生、发通知...', '根据薄弱知识点出题', '看看学员学习情况']}
           chatPlaceholder="告诉 Agent 你要做什么..."
           resetMessage="已开始新对话"
           landingTitle="UniMind 让你的教学更高效"
-          landingDescription="出题 · 查学生数据 · 管作业资产"
+          landingDescription="出题 · 查学生数据 · 管理课程资产"
           botDisplayName="工作台"
           processContent={processMathContent}
           onHasConversation={setHasConversation}

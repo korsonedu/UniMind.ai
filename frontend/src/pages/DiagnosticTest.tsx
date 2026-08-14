@@ -150,7 +150,7 @@ export function DiagnosticTest() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-3">诊断测试</h1>
           <p className="text-muted-foreground mb-10 leading-relaxed">
-            通过 10 道题快速了解你的知识掌握情况，系统将为你制定个性化学习计划。
+            通过 10 道题快速了解你的知识掌握情况，小宇会据此为你推荐练习方向。
           </p>
 
           <div className="flex justify-center gap-8 mb-10">

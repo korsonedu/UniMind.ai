@@ -53,7 +53,7 @@ export const XiaoYu: React.FC = () => {
 
   const rawSkills = [
     { label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
-    { label: '制定学习计划', prompt: '根据我的现状制定一份学习计划' },
+    { label: '制定复习安排', prompt: '根据我的薄弱点和到期复习情况，帮我安排今天的复习' },
     { label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容' },
     { label: '学习数据总览', prompt: '帮我分析学习数据，看看整体情况' },
     { label: '推荐课程', prompt: '根据我的薄弱点推荐适合的课程' },
@@ -130,7 +130,7 @@ export const XiaoYu: React.FC = () => {
             </div>
             <h3 className="text-lg font-bold text-foreground">开始你的第一次诊断测试</h3>
             <p className="text-sm text-muted-foreground mt-1.5 mb-5 max-w-sm mx-auto leading-relaxed">
-              5 分钟了解你的学习水平，小宇会为你定制个性化学习计划
+              5 分钟了解你的学习水平，小宇会帮你定位薄弱环节、推荐练习方向
             </p>
             <Button size="sm" onClick={() => navigate('/diagnostic')} className="rounded-full px-6 h-9 bg-xiaoyu-500 hover:bg-xiaoyu-600 text-white">
               开始诊断
@@ -317,7 +317,7 @@ export const XiaoYu: React.FC = () => {
       )}
       findBot={(bots) => bots.find((b: Bot) => b.name === '小宇')}
       skills={SKILLS}
-      typewriterWords={['让小宇帮你制定学习计划', '让小宇分析薄弱知识点', '让小宇推荐适合的课程', '让小宇看看复习进度'] as string[]}
+      typewriterWords={['让小宇分析薄弱知识点', '让小宇安排今天的复习', '让小宇推荐适合的课程', '让小宇看看复习进度'] as string[]}
       chatPlaceholder="和小宇对话..."
       resetMessage="已开始新对话"
       landingTitle="小宇 Agent 让学习更具效率。对话即学习。"

@@ -21,7 +21,7 @@ const TABS = [
     label: '题目',
     icon: Brain,
     to: '/questions',
-    detail: '管理题库，AI 出题，布置作业',
+    detail: '管理题库，AI 出题，ARC 精修',
   },
   {
     key: 'article',

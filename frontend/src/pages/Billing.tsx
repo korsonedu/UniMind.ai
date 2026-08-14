@@ -47,8 +47,8 @@ export function BillingPage() {
   const currentMeta = PLAN[currentTier] || PLAN.free;
 
   const planFeatures = {
-    starter: ['AI 出题', '小宇 AI 助手', '完整学情报告', '教学计划 · 教案'] as string[],
-    growth: ['Memorix 图扩散记忆调度', '知识图谱', '视频 AI 大纲', '答疑系统', '多教师协作', '自习室', 'PDF 模拟卷', '班级对比 · 数据导出', '学生端收费'] as string[],
+    starter: ['AI 出题', '小宇 AI 助手', '完整学情报告', '诊断测试 · 错题洞察'] as string[],
+    growth: ['Memorix 图扩散记忆调度', '知识图谱', '视频 AI 大纲', '答疑系统', '多教师协作', '自习室', '机构学情 · 数据导出', '学生端收费'] as string[],
     enterprise: ['AI Bot 自定义', '品牌白标', 'API 接入', '私有化部署', 'SSO 单点登录', '审计日志', 'SLA 99.9%'] as string[],
   };
 

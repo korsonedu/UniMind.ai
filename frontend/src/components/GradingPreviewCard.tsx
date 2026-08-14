@@ -42,7 +42,7 @@ function editsReducer(state: EditsState, action: EditAction): EditsState {
 
 export function GradingPreviewCard({ payload }: { payload: Record<string, unknown> }) {
   const assignmentId = payload.assignment_id as number;
-  const title = (payload.title as string) || `作业 #${assignmentId}`;
+  const title = (payload.title as string) || `练习 #${assignmentId}`;
   const submissions = (payload.submissions || []) as SubmissionEntry[];
 
   const [edits, dispatch] = useReducer(editsReducer, {});

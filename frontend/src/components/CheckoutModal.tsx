@@ -17,7 +17,7 @@ const PLAN: Record<PlanKey, {
   starter: {
     label: 'Starter', priceM: 499, priceA: 416,
     color: 'text-primary', gradient: 'from-[#0071E3] to-[#0077ED]', ring: 'ring-primary',
-    features: ['完整学情报告', '教学计划 · 教案'],
+    features: ['完整学情报告', '诊断测试 · 错题洞察'],
   },
   growth: {
     label: 'Growth', priceM: 1299, priceA: 1083,

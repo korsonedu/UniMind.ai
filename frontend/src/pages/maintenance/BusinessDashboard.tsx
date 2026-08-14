@@ -1,6 +1,6 @@
 /**
  * 机构管理 — 业务数据看板。
- * 学生数 / 月活 / 作业数 / 留存率。
+ * 学生数 / 月活 / 留存率。
  */
 import { useEffect, useState } from 'react';
 import { Spinner, Users, UserCircle, ChartLine, TrendUp, TrendDown, CurrencyDollar, ClockCounterClockwise, CreditCard } from '@phosphor-icons/react';
