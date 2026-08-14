@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,15 +32,9 @@ interface DiagnosticResult {
     feedback: string;
     knowledge_point_name: string;
   }>;
-  study_plan: {
-    weak_kps: Array<{ kp_id: number; kp_name: string; accuracy: number }>;
-    strong_kps: Array<{ kp_id: number; kp_name: string; accuracy: number }>;
-    recommendation: string;
-  };
 }
 
 export function DiagnosticTest() {
-  const { t } = useTranslation('diagnostic');
   const navigate = useNavigate();
   const updateUser = useAuthStore(s => s.updateUser);
   const [phase, setPhase] = useState<Phase>('welcome');
@@ -83,7 +76,7 @@ export function DiagnosticTest() {
       setPhase('results');
     } catch (err: any) {
       submittedRef.current = false;
-      toast.error(err.response?.data?.error || t('errors.submitFailed'));
+      toast.error(err.response?.data?.error || '提交失败');
     } finally {
       setLoading(false);
     }
@@ -105,10 +98,10 @@ export function DiagnosticTest() {
       setPhase('testing');
     } catch (err: any) {
       if (err.response?.data?.status === 'already_completed') {
-        toast.info(t('errors.alreadyCompleted'));
+        toast.info('诊断已完成，你可以直接开始练习');
         navigate('/tests');
       } else {
-        toast.error(err.response?.data?.error || t('errors.generateFailed'));
+        toast.error(err.response?.data?.error || '生成诊断题失败');
       }
     } finally {
       setLoading(false);
@@ -155,9 +148,9 @@ export function DiagnosticTest() {
           <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
             <Brain className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-3">{t('welcome.title')}</h1>
+          <h1 className="text-3xl font-bold tracking-tight mb-3">诊断测试</h1>
           <p className="text-muted-foreground mb-10 leading-relaxed">
-            {t('welcome.subtitle')}
+            通过 10 道题快速了解你的知识掌握情况，系统将为你制定个性化学习计划。
           </p>
 
           <div className="flex justify-center gap-8 mb-10">
@@ -166,7 +159,7 @@ export function DiagnosticTest() {
                 <Hash className="w-4 h-4" />
               </div>
               <div className="text-2xl font-bold">10</div>
-              <div className="text-xs text-muted-foreground">{t('welcome.questions')}</div>
+              <div className="text-xs text-muted-foreground">道题</div>
             </div>
             <div className="w-px bg-border" />
             <div className="text-center">
@@ -174,7 +167,7 @@ export function DiagnosticTest() {
                 <Clock className="w-4 h-4" />
               </div>
               <div className="text-2xl font-bold">5</div>
-              <div className="text-xs text-muted-foreground">{t('welcome.minutes')}</div>
+              <div className="text-xs text-muted-foreground">分钟</div>
             </div>
             <div className="w-px bg-border" />
             <div className="text-center">
@@ -182,12 +175,12 @@ export function DiagnosticTest() {
                 <Brain className="w-4 h-4" />
               </div>
               <div className="text-2xl font-bold">AI</div>
-              <div className="text-xs text-muted-foreground">{t('welcome.aiAnalysis')}</div>
+              <div className="text-xs text-muted-foreground">智能分析</div>
             </div>
           </div>
 
           <Button className="w-full rounded-full py-6 text-base" size="lg" onClick={startDiagnostic}>
-            {t('welcome.startButton')}
+            开始测试
             <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         </div>
@@ -250,7 +243,7 @@ export function DiagnosticTest() {
             ) : (
               <textarea
                 className="w-full p-4 border border-border/50 rounded-xl min-h-[140px] resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                placeholder={t('testing.placeholder')}
+                placeholder="输入你的答案..."
                 value={answers[currentIndex] || ''}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAnswers(prev => ({ ...prev, [currentIndex]: e.target.value }))}
               />
@@ -267,16 +260,16 @@ export function DiagnosticTest() {
             onClick={() => setCurrentIndex(i => i - 1)}
           >
             <ArrowLeft className="w-4 h-4 mr-1" />
-            {t('testing.previous')}
+            上一题
           </Button>
           {currentIndex < questions.length - 1 ? (
             <Button className="rounded-full" onClick={() => setCurrentIndex(i => i + 1)}>
-              {t('testing.next')}
+              下一题
               <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           ) : (
             <Button className="rounded-full" onClick={handleSubmit} disabled={loading}>
-              {loading ? t('testing.submitting') : t('testing.submit')}
+              {loading ? '提交中...' : '提交答卷'}
             </Button>
           )}
         </div>
@@ -294,67 +287,23 @@ export function DiagnosticTest() {
           <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-10 h-10 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">{t('results.title')}</h1>
+          <h1 className="text-3xl font-bold tracking-tight mb-2">诊断完成</h1>
           <div className="text-5xl font-bold mt-4 mb-2">{accuracy}%</div>
           <p className="text-muted-foreground mb-4">
-            {t('results.correctOf', { score: result.total_score, total: result.total_questions })}
+            {`答对 ${result.total_score} / ${result.total_questions} 题`}
           </p>
           <Button onClick={handleReassess} variant="outline" className="rounded-full">
             重新评估（聚焦弱项）
           </Button>
         </div>
 
-        <div className="space-y-6 mb-10">
-          {/* Strong KPs */}
-          {result.study_plan.strong_kps.length > 0 && (
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="p-5">
-                <h3 className="text-sm font-semibold text-green-600 mb-3">{t('results.strongKPs')}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {result.study_plan.strong_kps.map(kp => (
-                    <Badge key={kp.kp_id} variant="outline" className="border-green-200 dark:border-green-800/40 text-green-700 dark:text-green-400 rounded-full">
-                      {kp.kp_name} ({kp.accuracy}%)
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Weak KPs */}
-          {result.study_plan.weak_kps.length > 0 && (
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="p-5">
-                <h3 className="text-sm font-semibold text-red-600 mb-3">{t('results.weakKPs')}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {result.study_plan.weak_kps.map(kp => (
-                    <Badge key={kp.kp_id} variant="outline" className="border-red-200 dark:border-red-800/40 text-red-700 dark:text-red-400 rounded-full">
-                      {kp.kp_name} ({kp.accuracy}%)
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Recommendation */}
-          {result.study_plan.recommendation && (
-            <Card className="border-border/50 shadow-sm">
-              <CardContent className="p-5">
-                <h3 className="text-sm font-semibold mb-2">{t('results.aiAdvice')}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{result.study_plan.recommendation}</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
         <div className="flex gap-3">
           <Button className="flex-1 rounded-full py-6 text-base" size="lg" onClick={() => navigate('/')}>
             <House className="w-5 h-5 mr-2" />
-            {t('results.goHome')}
+            回到首页
           </Button>
           <Button className="flex-1 rounded-full py-6 text-base" size="lg" variant="outline" onClick={() => navigate('/tests')}>
-            {t('results.startPractice')}
+            开始练习
             <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         </div>

@@ -105,7 +105,6 @@ if _APP_ON('users'):
     urlpatterns.append(path("api/users/", include("users.urls")))
 if _APP_ON('quizzes'):
     urlpatterns.append(path("api/quizzes/", include("quizzes.urls")))
-    urlpatterns.append(path("api/assignments/", include("quizzes.urls_assignments")))
 if _APP_ON('study_room'):
     urlpatterns.append(path("api/study/", include("study_room.urls")))
 if _APP_ON('courses'):
@@ -118,8 +117,6 @@ if _APP_ON('faq_system'):
     urlpatterns.append(path("api/qa/", include("faq_system.urls")))
 if _APP_ON('notifications'):
     urlpatterns.append(path("api/notifications/", include("notifications.urls")))
-if _APP_ON('interviews'):
-    urlpatterns.append(path("api/interviews/", include("interviews.urls")))
 if _APP_ON('payments'):
     urlpatterns.append(path("api/payments/", include("payments.urls")))
 # API v1 (external, API Key auth)

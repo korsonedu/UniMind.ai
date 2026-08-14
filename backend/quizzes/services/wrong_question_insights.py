@@ -2,10 +2,36 @@ from collections import defaultdict
 from typing import Dict, List
 
 from quizzes.models import ExamQuestionResult, UserQuestionStatus
-from quizzes.services.review_insights import CAUSE_LABELS, infer_primary_cause
 
 
 DEFAULT_CAUSE = "expression"
+
+# 内联自 quizzes.services.review_insights（该模块在 B2 删除）
+CAUSE_RULES = [
+    ("concept", ["概念", "定义", "术语", "本质", "含义"]),
+    ("calculation", ["计算", "公式", "运算", "推导", "数量"]),
+    ("reasoning", ["逻辑", "因果", "审题", "链条", "论证"]),
+    ("memory", ["记忆", "混淆", "遗忘", "漏写", "遗漏"]),
+]
+
+CAUSE_LABELS = {
+    "concept": "概念理解",
+    "calculation": "计算推导",
+    "reasoning": "审题与逻辑",
+    "memory": "记忆稳定性",
+    "expression": "表达完整性",
+}
+
+
+def infer_primary_cause(feedback: str, analysis: str) -> str:
+    text = f"{feedback or ''} {analysis or ''}".strip().lower()
+    if not text:
+        return "expression"
+
+    for key, keywords in CAUSE_RULES:
+        if any(kw in text for kw in keywords):
+            return key
+    return "expression"
 
 
 def _pick_latest_wrong_cause_by_question(user, question_ids: List[int]) -> Dict[int, str]:

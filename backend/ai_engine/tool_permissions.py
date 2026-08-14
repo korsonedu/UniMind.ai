@@ -21,7 +21,7 @@ PLAN_TOOL_ACCESS = {
         "planner": [
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_due_reviews", "search_knowledge_tree",
-            "get_user_weak_points", "save_study_plan", "get_active_plan",
+            "get_user_weak_points",
             "run_diagnostic",
         ],
         "exam_generator": [

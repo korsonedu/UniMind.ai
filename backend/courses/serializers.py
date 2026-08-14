@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Course, Album, StartupMaterial, CourseTag, CourseTagRelation
+from .models import Course, Album, StartupMaterial, CourseTag, CourseTagRelation, VideoProgress
 
 
 class RelativeFileField(serializers.FileField):
@@ -52,14 +52,23 @@ class CourseSerializer(serializers.ModelSerializer):
         queryset=Album.objects.all(), required=False, allow_null=True, write_only=True
     )
     tags = serializers.SerializerMethodField()
+    progress = serializers.SerializerMethodField()
 
     def get_tags(self, obj):
         relations = obj.tag_relations.select_related('tag').all()
         return CourseTagSerializer([r.tag for r in relations], many=True).data
 
+    def get_progress(self, obj):
+        """当前用户的观看进度；匿名或无记录返回 None"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        return VideoProgress.objects.filter(user=request.user, course_id=obj.id) \
+            .values('last_position', 'is_finished').first()
+
     class Meta:
         model = Course
-        fields = ('id', 'title', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'created_at', 'updated_at', 'author')
+        fields = ('id', 'title', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'progress', 'created_at', 'updated_at', 'author')
         read_only_fields = ('author', 'institution')
 
 class StartupMaterialSerializer(serializers.ModelSerializer):
@@ -87,25 +96,3 @@ class CourseTagSerializer(serializers.ModelSerializer):
         courses = Course.objects.filter(id__in=course_ids).only('id', 'title', 'cover_image')
         return AlbumCourseBriefSerializer(courses, many=True).data
 
-
-# ── Teaching Plan ──
-
-from courses.models import TeachingPlan
-
-
-class TeachingPlanSerializer(serializers.ModelSerializer):
-    class_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = TeachingPlan
-        fields = [
-            'id', 'institution', 'class_obj', 'class_name', 'title', 'description',
-            'subject', 'semester', 'week_count',
-            'goal', 'deadline', 'target_score', 'current_level', 'milestones',
-            'weekly_plans',
-            'created_by', 'created_at', 'updated_at',
-        ]
-        read_only_fields = ['created_at', 'updated_at', 'institution', 'created_by']
-
-    def get_class_name(self, obj):
-        return obj.class_obj.name

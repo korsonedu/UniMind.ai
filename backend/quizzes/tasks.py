@@ -3,7 +3,6 @@ import logging
 from celery import shared_task
 
 from quizzes.ai_workflow import run_exam_grading
-from quizzes.services.ai_parse_service import run_parse_task
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +11,6 @@ logger = logging.getLogger(__name__)
 def run_exam_grading_task(user_id: int, exam_id: int, questions_data):
     run_exam_grading(user_id, exam_id, questions_data)
 
-
-@shared_task(name='quizzes.run_ai_parse_task', soft_time_limit=60, time_limit=120)
-def run_ai_parse_task(raw_text: str, task_id: str):
-    run_parse_task(raw_text, task_id)
 
 
 @shared_task(name='quizzes.run_adversarial_pipeline_task', soft_time_limit=600, time_limit=660)
@@ -71,24 +66,6 @@ def run_bulk_pipeline_task(
         from django.utils import timezone
         task.finished_at = timezone.now()
         task.save(update_fields=['status', 'error_message', 'finished_at', 'updated_at'])
-
-
-@shared_task(name='quizzes.generate_personalized_pdf_mock_exam', soft_time_limit=300, time_limit=360)
-def generate_personalized_pdf_mock_exam(record_id: int):
-    from quizzes.models import PersonalizedMockExam
-    from quizzes.services.pdf_generator import generate_mock_exam_pdf
-
-    record = PersonalizedMockExam.objects.get(id=record_id)
-    try:
-        record.status = 'processing'
-        record.save(update_fields=['status'])
-        generate_mock_exam_pdf(record)
-        record.status = 'ready'
-        record.save(update_fields=['status'])
-    except Exception as e:
-        record.status = 'failed'
-        record.error_message = str(e)
-        record.save(update_fields=['status', 'error_message'])
 
 
 # ═══════════════════════════════════════════

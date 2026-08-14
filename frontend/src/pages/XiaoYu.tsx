@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle, Fire, Trophy } from '@phosphor-icons/react';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import SessionSidebar from '@/components/SessionSidebar';
@@ -12,16 +11,6 @@ import { useXiaoYuStore } from '@/store/useXiaoYuStore';
 
 const SKILL_ICONS = [Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle];
 
-interface DashPlan {
-  id: number; title: string;
-  total_tasks: number; completed_tasks: number;
-  progress_pct: number; expected_progress_pct?: number | null;
-  progress_delta?: number | null;
-  total_days?: number; elapsed_days?: number;
-  goal?: string; deadline?: string | null; subject?: string;
-  target_score?: number | null; current_level?: string;
-  teaching_plan_id?: number; teaching_plan_title?: string;
-}
 interface DashStats {
   streak_days: number; weekly_activity: number;
   accuracy: number; total_attempted: number;
@@ -36,7 +25,6 @@ interface DashStats {
 interface DashReviews { due_count: number; }
 interface DashExam { id: number; total_score: number; max_score: number; percentage: number; elo_change: number; created_at: string; }
 interface DashData {
-  plan: DashPlan | null;
   stats: DashStats;
   reviews: DashReviews;
   exams: DashExam[];
@@ -44,7 +32,6 @@ interface DashData {
 
 export const XiaoYu: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation('xiaoyu');
   const sharedConversationId = useXiaoYuStore(s => s.conversationId);
   const [dash, setDash] = useState<DashData | null>(null);
   const [dashError, setDashError] = useState(false);
@@ -64,11 +51,22 @@ export const XiaoYu: React.FC = () => {
     fetchDashboard();
   }, []);
 
-  const rawSkills = t('skills', { returnObjects: true }) as Array<{ label: string; prompt: string }>;
+  const rawSkills = [
+    { label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
+    { label: '制定学习计划', prompt: '根据我的现状制定一份学习计划' },
+    { label: '查看复习任务', prompt: '帮我看看今天有哪些需要复习的内容' },
+    { label: '学习数据总览', prompt: '帮我分析学习数据，看看整体情况' },
+    { label: '推荐课程', prompt: '根据我的薄弱点推荐适合的课程' },
+    { label: '解释一个概念', prompt: '请帮我讲解一个知识点' },
+    { label: '分析一道题', prompt: '帮我分析这道题的解题思路' },
+    { label: '总结知识点', prompt: '帮我总结某个知识点的核心内容' },
+    { label: '做诊断测试', prompt: '帮我做一次诊断测试，了解我的学习水平' },
+    { label: '查看错题', prompt: '帮我分析错题，找出薄弱环节' },
+    { label: '开始刷题', prompt: '帮我出几道题练习一下' },
+  ] as Array<{ label: string; prompt: string }>;
   const SKILLS = rawSkills.map((s, i) => ({ icon: SKILL_ICONS[i], label: s.label, prompt: s.prompt }));
 
   const stats = dash?.stats;
-  const plan = dash?.plan;
   const reviews = dash?.reviews;
   const lastExam = dash?.exams?.[0];
 
@@ -130,20 +128,20 @@ export const XiaoYu: React.FC = () => {
             <div className="w-14 h-14 rounded-2xl bg-xiaoyu-50 dark:bg-xiaoyu-500/20 flex items-center justify-center mx-auto mb-4">
               <Stethoscope className="w-7 h-7 text-xiaoyu-500 dark:text-xiaoyu-300" />
             </div>
-            <h3 className="text-lg font-bold text-foreground">{t('newUserTitle')}</h3>
+            <h3 className="text-lg font-bold text-foreground">开始你的第一次诊断测试</h3>
             <p className="text-sm text-muted-foreground mt-1.5 mb-5 max-w-sm mx-auto leading-relaxed">
-              {t('newUserDesc')}
+              5 分钟了解你的学习水平，小宇会为你定制个性化学习计划
             </p>
             <Button size="sm" onClick={() => navigate('/diagnostic')} className="rounded-full px-6 h-9 bg-xiaoyu-500 hover:bg-xiaoyu-600 text-white">
-              {t('startDiagnostic')}
+              开始诊断
             </Button>
           </div>
 
           <div className="flex flex-wrap justify-center gap-3">
             {[
-              { icon: Target, label: t('valuePropWeakPoints') },
-              { icon: Brain, label: t('valuePropPath') },
-              { icon: ChartBar, label: t('valuePropProgress') },
+              { icon: Target, label: '定位薄弱知识点' },
+              { icon: Brain, label: '获得个性化学习路径' },
+              { icon: ChartBar, label: '实时追踪学习进度' },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-muted/40 border border-border/30">
                 <item.icon className="w-4 h-4 text-xiaoyu-500/60 dark:text-xiaoyu-300/60" />
@@ -165,7 +163,7 @@ export const XiaoYu: React.FC = () => {
                   <div className="w-8 h-8 rounded-lg bg-xiaoyu-50 dark:bg-xiaoyu-500/20 flex items-center justify-center shrink-0">
                     <Fire className="w-4 h-4 text-xiaoyu-500 dark:text-xiaoyu-300" />
                   </div>
-                  <span className="text-[13px] font-semibold text-foreground/80">{t('streakLabel')}</span>
+                  <span className="text-[13px] font-semibold text-foreground/80">连续学习</span>
                 </div>
                 <button
                   onClick={handleCheckIn}
@@ -178,22 +176,22 @@ export const XiaoYu: React.FC = () => {
                     checkingIn && 'opacity-60 pointer-events-none',
                   )}
                 >
-                  {checkingIn ? t('checkingIn') : checkedIn ? t('checkedIn') : t('checkInToday')}
+                  {checkingIn ? '签到中...' : checkedIn ? '✓ 已打卡' : '今日打卡'}
                 </button>
               </div>
               <p className="text-4xl font-black tracking-tighter tabular-nums text-xiaoyu-500 dark:text-xiaoyu-300">
-                {stats.streak_days}<span className="text-base font-normal text-muted-foreground ml-1">{t('daysUnit')}</span>
+                {stats.streak_days}<span className="text-base font-normal text-muted-foreground ml-1">天</span>
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
                 <span className="text-muted-foreground/60">
-                  {t('thisWeek')} <span className="font-semibold text-foreground/70">{stats.weekly_activity}</span> {t('questionsUnit')}
+                  本周 <span className="font-semibold text-foreground/70">{stats.weekly_activity}</span> 题
                 </span>
                 {reviews && reviews.due_count > 0 ? (
                   <span className="text-muted-foreground/60">
-                    {t('pendingReview')} <span className="font-semibold text-amber-600">{reviews.due_count}</span> {t('questionsUnit')}
+                    待复习 <span className="font-semibold text-amber-600">{reviews.due_count}</span> 题
                   </span>
                 ) : (
-                  <span className="text-muted-foreground/40">{t('noPendingReview')}</span>
+                  <span className="text-muted-foreground/40">暂无待复习</span>
                 )}
               </div>
             </div>
@@ -204,18 +202,18 @@ export const XiaoYu: React.FC = () => {
                 <div className="w-8 h-8 rounded-lg bg-xiaoyu-50 dark:bg-xiaoyu-500/20 flex items-center justify-center shrink-0">
                   <Trophy className="w-4 h-4 text-xiaoyu-500 dark:text-xiaoyu-300" />
                 </div>
-                <span className="text-[13px] font-semibold text-foreground/80">{t('accuracyLabel')}</span>
+                <span className="text-[13px] font-semibold text-foreground/80">正确率</span>
               </div>
               <p className="text-4xl font-black tracking-tighter tabular-nums text-xiaoyu-500 dark:text-xiaoyu-300">
                 {stats.accuracy}<span className="text-base font-normal text-muted-foreground ml-0.5">%</span>
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
                 <span className="text-muted-foreground/60">
-                  {t('totalQuestions')} <span className="font-semibold text-foreground/70">{stats.total_attempted}</span> {t('questionsUnit')}
+                  累计 <span className="font-semibold text-foreground/70">{stats.total_attempted}</span> 题
                 </span>
                 {lastExam ? (
                   <span className="text-muted-foreground/60">
-                    {t('recentExam')} <span className="font-semibold text-foreground/70">{lastExam.total_score}/{lastExam.max_score}</span>
+                    最近 <span className="font-semibold text-foreground/70">{lastExam.total_score}/{lastExam.max_score}</span>
                     {lastExam.elo_change !== 0 && (
                       <span className={cn('ml-1 font-semibold', lastExam.elo_change >= 0 ? 'text-emerald-600' : 'text-red-500')}>
                         {lastExam.elo_change >= 0 ? '+' : ''}{lastExam.elo_change}
@@ -223,81 +221,32 @@ export const XiaoYu: React.FC = () => {
                     )}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground/40">{t('noExamYet')}</span>
+                  <span className="text-muted-foreground/40">暂无考试</span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Row 2: Learning plan - full width */}
-          <div className="rounded-2xl bg-card border border-border/40 p-5">
-            {plan ? (
-              <div>
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-xiaoyu-50 dark:bg-xiaoyu-500/20 flex items-center justify-center shrink-0">
-                    <CalendarCheck className="w-4 h-4 text-xiaoyu-500 dark:text-xiaoyu-300" />
-                  </div>
-                  <span className="text-[13px] font-semibold text-foreground/80 truncate">{plan.title}</span>
-                  {plan.progress_delta != null && !Number.isNaN(plan.progress_delta) && plan.progress_delta !== 0 && (
-                    <span className={cn('text-[11px] font-semibold ml-auto shrink-0', plan.progress_delta > 0 ? 'text-emerald-600' : 'text-red-500')}>
-                      {plan.progress_delta > 0 ? t('ahead') : t('behind')} {Math.abs(plan.progress_delta).toFixed(0)}%
-                    </span>
-                  )}
-                </div>
-                {plan.goal && (
-                  <p className="text-[12px] text-muted-foreground/60 mb-2">
-                    🎯 {plan.goal}
-                    {plan.deadline && <span className="ml-2">· 截止 {plan.deadline}</span>}
-                  </p>
-                )}
-                {plan.teaching_plan_title && (
-                  <p className="text-[11px] text-muted-foreground/40 mb-2">📋 来自 {plan.teaching_plan_title}</p>
-                )}
-                <div className="w-full h-1.5 bg-muted/50 rounded-full mb-2 overflow-hidden">
-                  <div className="h-full bg-xiaoyu-400 rounded-full transition-all" style={{ width: `${Math.min(plan.progress_pct, 100)}%` }} />
-                </div>
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[12px] text-muted-foreground/60">
-                  <span>{t('tasksCompleted')} <span className="font-semibold text-foreground/70">{plan.completed_tasks}/{plan.total_tasks}</span> {t('tasksUnit')}</span>
-                  <span>{t('progressLabel')} <span className="font-semibold text-xiaoyu-500 dark:text-xiaoyu-300">{plan.progress_pct}%</span></span>
-                  {plan.total_days != null && plan.total_days > 0 && (
-                    <span>{t('dayLabel')} <span className="font-semibold text-foreground/70">{plan.elapsed_days}/{plan.total_days}</span> {t('daysLabel')}</span>
-                  )}
-                </div>
-                <div className="mt-3 pt-3 border-t border-border/30 flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => navigate('/plan')} className="h-8 text-[12px] gap-1">
-                    {t('adjustPlan')}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <CalendarCheck className="w-6 h-6 text-muted-foreground/15 mb-2" />
-                <p className="text-[12px] text-muted-foreground/50">{t('noPlan')}</p>
-                <p className="text-[10px] text-muted-foreground/30 mt-0.5">{t('noPlanHint')}</p>
-              </div>
-            )}
-          </div>
-
           {/* Row 3: Activity heatmap */}
           <div className="rounded-2xl bg-card border border-border/40 p-5">
             <p className="text-[12px] font-semibold text-foreground/70 mb-3">
-              {stats.heatmap_days && stats.heatmap_days.length > 0 ? t('heatmapActive') : t('heatmapDefault')}
+              {stats.heatmap_days && stats.heatmap_days.length > 0 ? '28 天学习活跃度' : '学习活跃度'}
             </p>
             {stats.heatmap_days && stats.heatmap_days.length > 0 ? (
               <>
                 {renderHeatmap(stats.heatmap_days)}
                 <div className="flex items-center justify-end gap-1 mt-3 text-[10px] text-muted-foreground/40">
-                  <span>{t('heatmapLess')}</span>
+                  <span>少</span>
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-muted/40 border border-border/20" />
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-xiaoyu-100" />
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-xiaoyu-200" />
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-xiaoyu-400" />
                   <div className="w-[10px] h-[10px] rounded-[2px] bg-xiaoyu-500" />
-                  <span>{t('heatmapMore')}</span>
+                  <span>多</span>
                 </div>
               </>
             ) : (
-              <p className="text-[12px] text-muted-foreground/40 py-3 text-center">{t('heatmapEmpty')}</p>
+              <p className="text-[12px] text-muted-foreground/40 py-3 text-center">开始学习后这里将显示你的每日活跃情况</p>
             )}
           </div>
 
@@ -306,9 +255,9 @@ export const XiaoYu: React.FC = () => {
             <div className="rounded-2xl bg-card border border-border/40 p-5">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[12px] font-semibold text-foreground/70">
-                  {t('nextAchievement')}
+                  下一个成就
                   {stats.unlocked_achievement_count > 0 && (
-                    <span className="text-muted-foreground/40 ml-1">({t('achievementUnlocked', { count: stats.unlocked_achievement_count })})</span>
+                    <span className="text-muted-foreground/40 ml-1">({`已解锁 ${stats.unlocked_achievement_count} 个`})</span>
                   )}
                 </p>
               </div>
@@ -334,12 +283,12 @@ export const XiaoYu: React.FC = () => {
           <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto mb-4">
             <WarningCircle className="w-7 h-7 text-muted-foreground/50" />
           </div>
-          <h3 className="text-lg font-bold text-foreground">{t('dashboardErrorTitle')}</h3>
+          <h3 className="text-lg font-bold text-foreground">数据加载失败</h3>
           <p className="text-sm text-muted-foreground mt-1.5 mb-5 max-w-sm mx-auto leading-relaxed">
-            {t('dashboardErrorHint')}
+            请检查网络连接后重试，或联系老师获取帮助
           </p>
           <Button size="sm" variant="outline" onClick={fetchDashboard} className="rounded-full px-6 h-9">
-            {t('retry')}
+            重试
           </Button>
         </div>
       </div>
@@ -368,12 +317,12 @@ export const XiaoYu: React.FC = () => {
       )}
       findBot={(bots) => bots.find((b: Bot) => b.name === '小宇')}
       skills={SKILLS}
-      typewriterWords={t('typewriterWords', { returnObjects: true }) as string[]}
-      chatPlaceholder={t('chatPlaceholder')}
-      resetMessage={t('resetMessage')}
-      landingTitle={t('landingTitle')}
-      landingDescription={t('landingDesc')}
-      botDisplayName={t('botDisplayName')}
+      typewriterWords={['让小宇帮你制定学习计划', '让小宇分析薄弱知识点', '让小宇推荐适合的课程', '让小宇看看复习进度'] as string[]}
+      chatPlaceholder="和小宇对话..."
+      resetMessage="已开始新对话"
+      landingTitle="小宇 Agent 让学习更具效率。对话即学习。"
+      landingDescription="最懂你的学习agent，从数据分析到知识讲解，一个入口搞定"
+      botDisplayName="小宇"
       landingBanner={landingBanner}
       onHasConversation={setHasConversation}
       onDeleteSession={() => {}}

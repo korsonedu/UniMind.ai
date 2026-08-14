@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import api from '@/lib/api';
 import { Spinner, WarningCircle, Ticket } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,6 @@ const PLAN_LABELS: Record<string, string> = {
 };
 
 export function Checkout() {
-  const { t } = useTranslation('common');
   const [searchParams] = useSearchParams();
   const [error, setError] = useState('');
   const [paying, setPaying] = useState(false);
@@ -37,9 +35,9 @@ export function Checkout() {
       });
       setCouponResult(data);
     } catch (err: any) {
-      setCouponResult({ valid: false, error: err.response?.data?.error || t('checkoutCouponError') });
+      setCouponResult({ valid: false, error: err.response?.data?.error || '验证失败' });
     } finally { setValidatingCoupon(false); }
-  }, [plan, cycle, t]);
+  }, [plan, cycle]);
 
   useEffect(() => {
     const timer = setTimeout(() => validateCoupon(couponCode), 500);
@@ -60,14 +58,14 @@ export function Checkout() {
         const allowedHosts = ['mapi.alipay.com', 'openapi.alipay.com'];
         if (!allowedHosts.some(h => url.hostname === h || url.hostname.endsWith('.' + h))) {
           if (url.origin !== window.location.origin && url.hostname !== 'localhost') {
-            setError(t('checkoutGatewayError'));
+            setError('支付网关地址异常，请联系客服');
             setPaying(false);
             return;
           }
         }
         window.location.href = data.checkout_url;
       } else {
-        setError(t('checkoutNoUrl'));
+        setError('支付网关未返回结算地址');
         setPaying(false);
       }
     } catch (e: any) {
@@ -75,14 +73,14 @@ export function Checkout() {
         e?.response?.data?.error ||
         e?.response?.data?.detail ||
         e?.message ||
-        t('checkoutFailed');
+        '创建订单失败，请重试';
       setError(msg);
       setPaying(false);
     }
   };
 
   const planLabel = PLAN_LABELS[plan] || plan;
-  const cycleLabel = cycle === 'annual' ? t('billingAnnual') : cycle === 'monthly' ? t('billingMonthly') : cycle;
+  const cycleLabel = cycle === 'annual' ? '年付' : cycle === 'monthly' ? '月付' : cycle;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-unimind-bg-secondary">
@@ -93,7 +91,7 @@ export function Checkout() {
               <WarningCircle className="h-6 w-6 text-red-500" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">{t('checkoutFailedTitle')}</h2>
+              <h2 className="text-lg font-bold text-foreground">支付启动失败</h2>
               <p className="mt-1.5 text-sm text-muted-foreground">{error}</p>
             </div>
             <button
@@ -103,14 +101,14 @@ export function Checkout() {
               }}
               className="text-sm font-bold text-primary hover:underline"
             >
-              {t('retry')}
+              重试
             </button>
           </div>
         ) : (
           <>
             {/* Plan Summary */}
             <div>
-              <h2 className="text-lg font-extrabold text-foreground">{t('checkoutConfirmTitle')}</h2>
+              <h2 className="text-lg font-extrabold text-foreground">确认订阅</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {planLabel} · {cycleLabel}
               </p>
@@ -122,7 +120,7 @@ export function Checkout() {
                 <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder={t('checkoutCouponPlaceholder')}
+                  placeholder="输入优惠码"
                   value={couponCode}
                   onChange={e => setCouponCode(e.target.value)}
                   className="w-full h-10 pl-9 pr-3 rounded-xl border border-border bg-background text-sm font-medium placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -135,7 +133,7 @@ export function Checkout() {
               {couponResult?.valid && (
                 <div className="flex items-center gap-2 px-1">
                   <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                    {'\u2713'} {t('checkoutCouponSaved', { amount: (couponResult.discount / 100).toFixed(2) })}
+                    {'\u2713'} {`已优惠 ¥${(couponResult.discount / 100).toFixed(2)}`}
                   </span>
                   {couponResult.original_amount != null && (
                     <span className="text-xs text-muted-foreground line-through">
@@ -165,10 +163,10 @@ export function Checkout() {
               {paying ? (
                 <>
                   <Spinner className="h-4 w-4 animate-spin mr-2" />
-                  {t('checkoutCreatingOrder')}
+                  正在创建订单…
                 </>
               ) : (
-                t('checkoutPayNow')
+                '立即支付'
               )}
             </Button>
           </>

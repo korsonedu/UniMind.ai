@@ -5,14 +5,13 @@ from .views import (
     OnlineUserListView, UpdateEmailView, UpdatePasswordView,
     DailyPlanListView, DailyPlanDetailView,
     ActivateMembershipView,
-    BIAnalyticsView, HeartbeatView,
+    BIAnalyticsView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
     DiagnosticGenerateView, DiagnosticSubmitView, DiagnosticReassessView,
     AnalyticsDashboardView, AnalyticsExportView, PlatformRevenueView, NPSSubmitView, NPSStatusView,
-    AccountDeleteView, DataExportView, FeedbackSubmitView, AdminFeedbackListView,
+    AccountDeleteView, DataExportView, FeedbackSubmitView,
     AvatarProxyView,
     UserCheckInView, AchievementListView, UserAchievementView,
-    UserClassListView,
     StudentReportCardView, StudentReportCardPDFView,
     PushSubscribeView,
 )
@@ -31,19 +30,12 @@ from .views_institution import (
     InstitutionSelfUpdateView,
     CheckInviteView, RegenerateInviteSlugView,
     PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
-    InstitutionPaymentConfigView,
-    ValidateInviteCodeView,
     UpdateDirectionsView,
     PublicInstitutionView, InstitutionJoinBySlugView, InstitutionJoinByInviteSlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
-    InstitutionClassPerformanceView, InstitutionSuggestedTopicsView,
     InstitutionAuditLogView, InstitutionNotificationConfigView,
-    ClassListCreateView, ClassDetailView, ClassStudentView,
     InstitutionBulkInitView,
-    ClassCourseManageView, StudentClassCourseView, ClassGradebookView,
     InstitutionBusinessDashboardView, InstitutionDataExportView,
-    InstitutionStudentReportCardView,
-    InstitutionChildListView, InstitutionChildDetailView, InstitutionChildContextView,
     InstitutionStudentHealthView,
     InstitutionInviteListView, InstitutionInviteDetailView,
     InstitutionJoinRequestListView, InstitutionJoinRequestReviewView,
@@ -78,7 +70,6 @@ urlpatterns = [
     path('me/diagnostic/generate/', DiagnosticGenerateView.as_view(), name='diagnostic-generate'),
     path('me/diagnostic/submit/', DiagnosticSubmitView.as_view(), name='diagnostic-submit'),
     path('me/diagnostic/reassess/', DiagnosticReassessView.as_view(), name='diagnostic-reassess'),
-    path('heartbeat/', HeartbeatView.as_view(), name='heartbeat'),
     path('nps/submit/', NPSSubmitView.as_view(), name='nps-submit'),
     path('nps/status/', NPSStatusView.as_view(), name='nps-status'),
 
@@ -126,35 +117,20 @@ urlpatterns = [
     path('institution/me/students/<int:pk>/', InstitutionStudentDetailView.as_view(), name='institution-student-detail'),
     path('institution/me/students/<int:pk>/stats/', InstitutionStudentStatsView.as_view(), name='institution-student-stats'),
     path('institution/me/students/<int:pk>/reset-password/', InstitutionStudentResetPasswordView.as_view(), name='institution-student-reset-password'),
-    path('institution/me/students/<int:pk>/report-card/', InstitutionStudentReportCardView.as_view(), name='institution-student-report-card'),
 
     # Institution — members (owner + teacher management)
     path('institution/me/members/', InstitutionMemberListView.as_view(), name='institution-member-list'),
     path('institution/me/members/<int:pk>/role/', InstitutionMemberRoleView.as_view(), name='institution-member-role'),
 
-    # Institution — analytics
-    path('institution/me/analytics/class-performance/', InstitutionClassPerformanceView.as_view(), name='institution-class-performance'),
-    path('institution/me/analytics/suggested-topics/', InstitutionSuggestedTopicsView.as_view(), name='institution-suggested-topics'),
 
     # Institution — audit log
     path('institution/me/audit-logs/', InstitutionAuditLogView.as_view(), name='institution-audit-logs'),
 
     # Institution — notification config
     path('institution/me/notification-config/', InstitutionNotificationConfigView.as_view(), name='institution-notification-config'),
-    path('institution/me/classes/', ClassListCreateView.as_view(), name='institution-class-list'),
-    path('institution/me/classes/<int:pk>/', ClassDetailView.as_view(), name='institution-class-detail'),
-    path('institution/me/classes/<int:pk>/students/', ClassStudentView.as_view(), name='institution-class-students'),
-    path('institution/me/class-courses/', ClassCourseManageView.as_view(), name='institution-class-course-manage'),
-    path('institution/me/class-courses/<int:pk>/', ClassCourseManageView.as_view(), name='institution-class-course-delete'),
-    path('me/class-courses/', StudentClassCourseView.as_view(), name='student-class-courses'),
-    path('institution/me/gradebook/', ClassGradebookView.as_view(), name='institution-gradebook'),
     path('institution/me/business-dashboard/', InstitutionBusinessDashboardView.as_view(), name='institution-business-dashboard'),
     path('institution/me/data-export/', InstitutionDataExportView.as_view(), name='institution-data-export'),
 
-    # Institution — children / campuses
-    path('institution/me/children/', InstitutionChildListView.as_view(), name='institution-child-list'),
-    path('institution/me/children/<int:pk>/', InstitutionChildDetailView.as_view(), name='institution-child-detail'),
-    path('institution/me/children/<int:pk>/context/', InstitutionChildContextView.as_view(), name='institution-child-context'),
 
     # Institution — student health (churn risk)
     path('institution/me/student-health/', InstitutionStudentHealthView.as_view(), name='institution-student-health'),
@@ -165,22 +141,17 @@ urlpatterns = [
     path('institution/me/join-requests/', InstitutionJoinRequestListView.as_view(), name='institution-join-request-list'),
     path('institution/me/join-requests/<int:pk>/review/', InstitutionJoinRequestReviewView.as_view(), name='institution-join-request-review'),
 
-    # Institution — payment config (Pro)
-    path('institution/me/payment-config/', InstitutionPaymentConfigView.as_view(), name='institution-payment-config'),
 
     # Plan invite codes
     path('admin/plan-invite-codes/', PlanInviteCodeListView.as_view(), name='plan-invite-codes'),
     path('admin/plan-invite-codes/generate/', PlanInviteCodeGenerateView.as_view(), name='plan-invite-codes-generate'),
     path('admin/plan-invite-codes/<int:pk>/deactivate/', PlanInviteCodeDeactivateView.as_view(), name='plan-invite-codes-deactivate'),
 
-    # Validate invite code (for onboarding flow)
-    path('institutions/validate-invite-code/', ValidateInviteCodeView.as_view(), name='validate-invite-code'),
 
     # Account management (P0: 个保法合规)
     path('me/delete/', AccountDeleteView.as_view(), name='account-delete'),
     path('me/data-export/', DataExportView.as_view(), name='data-export'),
     path('feedback/', FeedbackSubmitView.as_view(), name='feedback-submit'),
-    path('admin/feedback/', AdminFeedbackListView.as_view(), name='admin-feedback-list'),
 
     # Avatar proxy
     path('avatar/<str:style>/<str:seed>/', AvatarProxyView.as_view(), name='avatar-proxy'),
@@ -189,7 +160,6 @@ urlpatterns = [
     path('me/checkin/', UserCheckInView.as_view(), name='user-checkin'),
     path('achievements/', AchievementListView.as_view(), name='achievement-list'),
     path('me/achievements/', UserAchievementView.as_view(), name='user-achievements'),
-    path('me/classes/', UserClassListView.as_view(), name='user-classes'),
 
     # Report card
     path('me/report-card/', StudentReportCardView.as_view(), name='student-report-card'),

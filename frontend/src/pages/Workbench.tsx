@@ -1,21 +1,17 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { FileText, CheckSquareOffset, Users, ChartBar, Brain, ArrowLeft, Files, Lightning, Hourglass, Database, ClipboardText, Spinner } from '@phosphor-icons/react';
+import { FileText, Users, ChartBar, Brain, ArrowLeft, Files, Lightning, Hourglass, Database, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import QuestionPanel from '@/pages/workbench/QuestionPanel';
 import { BulkInitCard } from '@/pages/workbench/BulkInitCard';
 import { QuickStartPanel } from '@/pages/workbench/QuickStartPanel';
-import { useInstitutionStore } from '@/store/useInstitutionStore';
 import type { Bot, Message, ConversationSession } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/hooks/useAgentChat';
 
 interface InstitutionStats {
   weekly_active_students: number;
   top_weak_points: { label: string; weak_count: number }[];
-  pending_grading?: number;
-  active_assignments?: number;
 }
 
 interface InstitutionInfo {
@@ -47,11 +43,9 @@ const SKILLS = [
   { icon: Lightning, label: '精修出题', prompt: '对刚才的题目启动 ARC 精修' },
   { icon: ChartBar, label: '查薄弱点', prompt: '班级薄弱知识点有哪些' },
   { icon: Users, label: '查学生', prompt: '帮我看看学生的学习情况' },
-  { icon: CheckSquareOffset, label: '查作业', prompt: '作业提交情况' },
   { icon: Hourglass, label: '管线进度', prompt: '检查出题任务进度' },
   { icon: Database, label: '题库统计', prompt: '帮我看看题库统计情况' },
   { icon: Files, label: '浏览题目', prompt: '帮我看看题库里有什么题目' },
-  { icon: ClipboardText, label: '布置作业', prompt: '帮我把题目布置给学生' },
 ];
 
 type ViewMode = 'overview' | 'questions' | 'landing';
@@ -103,22 +97,6 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
           {institution.plan_label} · {institution.student_count}/{institution.max_students} 学员
         </span>
       </div>
-
-      {stats.pending_grading ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-50/50 p-4 flex items-center gap-3">
-          <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
-          <div className="flex-1 min-w-0">
-            <span className="text-sm font-bold text-amber-700">{stats.pending_grading} 份作业待批改</span>
-            <span className="text-xs text-amber-600/70 ml-2">学生正在等待反馈</span>
-          </div>
-          <button
-            onClick={() => onSend('帮我看看待批改的作业')}
-            className="text-xs font-bold text-amber-700 hover:text-amber-900 transition-colors shrink-0"
-          >
-            查看 →
-          </button>
-        </div>
-      ) : null}
 
       <BulkInitCard />
 
@@ -176,27 +154,8 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
             <Brain className="h-3.5 w-3.5" />
             Agent
           </div>
-          {stats.pending_grading ? (
-            <>
-              <div className="text-sm font-bold text-amber-500">{stats.pending_grading} 份待批改</div>
-              <button
-                onClick={() => onSend(`帮我看看待批改的作业`)}
-                className="mt-2 text-xs font-bold text-primary hover:text-primary/80 transition-colors flex items-center gap-0.5"
-              >
-                <Lightning className="h-3 w-3" /> 查看详情
-              </button>
-            </>
-          ) : stats.active_assignments ? (
-            <>
-              <div className="text-sm font-bold">{stats.active_assignments} 个作业进行中</div>
-              <div className="text-xs text-muted-foreground mt-0.5 flex-1">学生正在完成中</div>
-            </>
-          ) : (
-            <>
-              <div className="text-sm font-bold">随时待命</div>
-              <div className="text-xs text-muted-foreground mt-0.5 flex-1">对话中直接告诉我需求</div>
-            </>
-          )}
+          <div className="text-sm font-bold">随时待命</div>
+          <div className="text-xs text-muted-foreground mt-0.5 flex-1">对话中直接告诉我需求</div>
         </div>
       </div>
 
@@ -227,7 +186,6 @@ function CopilotOverview({ institution, stats, questionCount, onEnterQuestions, 
 // ── Main Component ──
 
 export default function Workbench() {
-  const currentClassId = useInstitutionStore(s => s.currentClassId);
   const [instInfo, setInstInfo] = useState<InstitutionInfo | null>(null);
   const [stats, setStats] = useState<InstitutionStats | null>(null);
   const [bot, setBot] = useState<Bot | null>(null);
@@ -281,49 +239,6 @@ export default function Workbench() {
         setHasConversation(false);
       });
   }, []);
-
-  // ── 从 LessonPlans 页面带入的教学计划上下文 ──
-  const [searchParams] = useSearchParams();
-  const teachingPlanId = searchParams.get('teaching_plan_id');
-  const teachingPlanWeek = searchParams.get('week_number');
-  const teachingPlanMessageRef = useRef<string | null>(null);
-  const teachingPlanSentRef = useRef(false);
-
-  useEffect(() => {
-    if (!teachingPlanId || !teachingPlanWeek || teachingPlanSentRef.current) return;
-    const planId = Number(teachingPlanId);
-    const weekNum = Number(teachingPlanWeek);
-    if (!planId || !weekNum) return;
-
-    api.get(`/courses/teaching-plans/${planId}/`)
-      .then(res => {
-        const plan = res.data;
-        const wp = (plan.weekly_plans || []).find((w: any) => w.week === weekNum);
-        const topic = wp?.topic || '';
-        const kpIds = wp?.kp_ids || [];
-        const subject = plan.subject || '';
-
-        let msg = `基于教学计划「${plan.title}」第 ${weekNum} 周`;
-        if (topic) msg += `（${topic}）`;
-        msg += '出题';
-
-        if (kpIds.length > 0) {
-          msg += `，涉及 ${kpIds.length} 个知识点`;
-          if (subject) msg += `，学科：${subject}`;
-          msg += `\n知识点 ID：${kpIds.join(', ')}`;
-        } else if (topic || wp?.objectives) {
-          // 无知识点时，让 Agent 根据主题和目标自行搜索
-          msg += '。';
-          if (topic) msg += `主题：${topic}。`;
-          if (wp?.objectives) msg += `目标：${wp.objectives}。`;
-          msg += '请先搜索相关知识点的 ID，然后出题。';
-        }
-        teachingPlanMessageRef.current = msg;
-      })
-      .catch(() => {
-        // 教学计划不存在或无权限，静默忽略
-      });
-  }, [teachingPlanId, teachingPlanWeek]);
 
   const handleQuestionsGenerated = useCallback((questions: AgentStep['questions']) => {
     if (!questions?.length) return;
@@ -521,11 +436,6 @@ export default function Workbench() {
           onHasConversation={setHasConversation}
           onSendReady={(fn) => {
             doSendRef.current = fn;
-            // 如果有来自教学计划的待发送消息，立即发送
-            if (teachingPlanMessageRef.current && !teachingPlanSentRef.current) {
-              teachingPlanSentRef.current = true;
-              fn(teachingPlanMessageRef.current!);
-            }
           }}
           toolbarAction={{
             icon: Brain,
@@ -547,7 +457,6 @@ export default function Workbench() {
             setHasConversation(false);
             defaultHandler();
           }}
-          getExtraPayload={() => currentClassId ? { class_id: currentClassId } : {}}
           onDone={(refreshSessions) => {
             refreshSessions();
           }}

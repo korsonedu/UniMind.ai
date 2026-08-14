@@ -169,22 +169,6 @@ def initialize_memorix_from_diagnostic(user, kp_scores):
         )
 
 
-def build_study_plan(kp_scores):
-    """根据诊断结果生成结构化学习计划（使用 study_plan_builder）。"""
-    # 转换为 structured builder 所需格式
-    diagnostic_results = []
-    for kp_id, scores in kp_scores.items():
-        accuracy = scores['correct'] / max(scores['total'], 1)
-        diagnostic_results.append({
-            'kp_id': kp_id,
-            'kp_name': scores['kp_name'],
-            'accuracy': accuracy,
-        })
-
-    from .study_plan_builder import build_structured_plan
-    return build_structured_plan(None, diagnostic_results)
-
-
 def generate_reassessment(user, previous_diagnostic_id=None):
     """生成重新评估题目 — 聚焦之前薄弱的知识点，排除已掌握内容。"""
     from quizzes.models import Question, UserKnowledgeState

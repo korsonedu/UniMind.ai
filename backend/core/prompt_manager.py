@@ -42,9 +42,6 @@ class PromptManager:
         "AI_QUESTION_GENERATOR": ("pipeline", "author_generate.txt"),
         "AI_REVIEWER": ("pipeline", "reviewer_adversarial.txt"),
         "AI_TAXONOMIST": ("pipeline", "classifier.txt"),
-        "AI_RESUME_TUNER": ("interviews", "resume_tuner.txt"),
-        "AI_INTERVIEW_ANALYZER": ("interviews", "interview_analyzer.txt"),
-        "AI_INTERVIEW_TURN_FEEDBACK": ("interviews", "turn_feedback.txt"),
     }
 
     # ── 核心方法 ────────────────────────────────────────────────

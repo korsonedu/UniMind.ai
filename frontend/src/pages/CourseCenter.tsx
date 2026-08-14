@@ -18,13 +18,17 @@ import { cn } from '@/lib/utils';
 
 type ViewMode = 'grid' | 'list';
 
+const formatTime = (s: number) => {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+};
+
 export const CourseCenter: React.FC = () => {
   const user = useAuthStore(s => s.user);
   const navigate = useNavigate();
   const [allTags, setAllTags] = useState<any[]>([]);
   const [activeTags, setActiveTags] = useState<string[]>([]);
-  const [classes, setClasses] = useState<{ id: number; name: string }[]>([]);
-  const [classId, setClassId] = useState<number | null>(null);
   const [albums, setAlbums] = useState<{ id: number; name: string }[]>([]);
   const [albumId, setAlbumId] = useState<number | null>(null);
   const [kps, setKps] = useState<{ id: number; name: string }[]>([]);
@@ -37,7 +41,6 @@ export const CourseCenter: React.FC = () => {
 
   useEffect(() => {
     api.get('/courses/tags/').then(r => setAllTags(r.data || [])).catch(() => {});
-    api.get('/users/me/classes/').then(r => setClasses(r.data || [])).catch(() => {});
     api.get('/courses/albums/').then(r => setAlbums(r.data || [])).catch(() => {});
     api.get('/quizzes/knowledge-points/').then(r => setKps(r.data || [])).catch(() => {});
   }, []);
@@ -46,7 +49,6 @@ export const CourseCenter: React.FC = () => {
   const queryParams: string[] = [];
   if (search.trim()) queryParams.push(`search=${encodeURIComponent(search.trim())}`);
   if (activeTags.length > 0) activeTags.forEach(t => queryParams.push(`tag=${encodeURIComponent(t)}`));
-  if (classId) queryParams.push(`class_id=${classId}`);
   if (albumId) queryParams.push(`album=${albumId}`);
   if (kpId) queryParams.push(`kp=${kpId}`);
   queryParams.push(`ordering=${sortBy}`);
@@ -141,33 +143,6 @@ export const CourseCenter: React.FC = () => {
             <option value="created_at">最早优先</option>
           </select>
         </div>
-
-        {/* 班级筛选 */}
-        {classes.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-            <Badge
-              className={cn(
-                "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
-                !classId ? "bg-black text-white dark:bg-white dark:text-black" : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700"
-              )}
-              onClick={() => { setClassId(null); setPage(1); }}
-            >
-              全部班级
-            </Badge>
-            {classes.map((c) => (
-              <Badge
-                key={c.id}
-                className={cn(
-                  "cursor-pointer px-3 py-1 rounded-full text-[11px] font-bold shrink-0 transition-colors",
-                  classId === c.id ? "bg-black text-white dark:bg-white dark:text-black" : "bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700"
-                )}
-                onClick={() => { setClassId(c.id); setPage(1); }}
-              >
-                {c.name}
-              </Badge>
-            ))}
-          </div>
-        )}
 
         {/* 专辑筛选 */}
         {albums.length > 0 && (
@@ -278,6 +253,11 @@ export const CourseCenter: React.FC = () => {
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-muted-foreground font-bold uppercase tracking-widest text-[11px]">No Preview</div>
                     )}
+                    {course.progress?.is_finished ? (
+                      <span className="absolute bottom-2 left-2 z-10 rounded-md bg-emerald-600/90 px-2 py-0.5 text-[10px] font-bold text-white">已看完</span>
+                    ) : course.progress && course.progress.last_position > 10 ? (
+                      <span className="absolute bottom-2 left-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white">上次看到 {formatTime(course.progress.last_position)}</span>
+                    ) : null}
                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <div className="h-8 w-8 rounded-full bg-background border border-border flex items-center justify-center shadow-lg scale-75 group-hover:scale-100 transition-transform">
                         <PlayCircle className="h-4 w-4 text-foreground" />
@@ -337,6 +317,11 @@ export const CourseCenter: React.FC = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors truncate">{course.title}</h3>
+                  {course.progress?.is_finished ? (
+                    <p className="text-[10px] font-bold mt-1 text-emerald-600 dark:text-emerald-400">✓ 已看完</p>
+                  ) : course.progress && course.progress.last_position > 10 ? (
+                    <p className="text-[10px] font-bold mt-1 text-muted-foreground">上次看到 {formatTime(course.progress.last_position)}</p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-1 leading-relaxed">{course.description}</p>
                   {course.tags && course.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">

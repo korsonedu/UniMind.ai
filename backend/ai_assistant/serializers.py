@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation, StudyPlan
+from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation
 from .prompt_sync import get_bot_prompt_path, get_bot_prompt_template_name
 
 
@@ -67,26 +67,6 @@ class AIChatMessageSerializer(serializers.ModelSerializer):
     def get_conversation_title(self, obj):
         title = getattr(obj, '_conversation_title', None)
         return title or ''
-
-
-class StudyPlanSerializer(serializers.ModelSerializer):
-    task_progress = serializers.SerializerMethodField()
-
-    class Meta:
-        model = StudyPlan
-        fields = (
-            'id', 'title', 'summary', 'status', 'plan_data',
-            'auto_generated', 'completed_at', 'created_at', 'updated_at',
-            'task_progress',
-        )
-        read_only_fields = ('id', 'auto_generated', 'completed_at', 'created_at', 'updated_at', 'task_progress')
-
-    def get_task_progress(self, obj):
-        tasks = (obj.plan_data or {}).get('tasks', [])
-        total = len(tasks)
-        completed = sum(1 for t in tasks if t.get('status') == 'completed')
-        skipped = sum(1 for t in tasks if t.get('status') == 'skipped')
-        return {'total': total, 'completed': completed, 'skipped': skipped}
 
 
 class AgentMemorySerializer(serializers.ModelSerializer):

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ChatMessage, StudyTask
+from .models import ChatMessage
 from users.serializers import UserSerializer
 
 class ChatMessageSerializer(serializers.ModelSerializer):

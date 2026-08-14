@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, CalendarCheck, Globe, Robot, TreeStructure, ClipboardText, Storefront, Code } from '@phosphor-icons/react';
+import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront, Code } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -14,9 +14,7 @@ import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
 import { AchievementPill } from '@/components/AchievementPill';
 import { InvitePopover } from '@/pages/workbench/InvitePopover';
-import { CampusSelector } from '@/components/CampusSelector';
 
-import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '@/lib/useIsMobile';
 import {
   DropdownMenu,
@@ -108,11 +106,9 @@ const isMobileAllowedPath = (pathname: string) =>
   pathname === '/xiaoyu' ||
   pathname.startsWith('/xiaoyu/practice') ||
   pathname === '/achievements' ||
-  pathname === '/my-assignments' ||
   pathname === '/report-card' ||
   pathname === '/workbench' ||
   pathname === '/parent' ||
-  pathname === '/plan' ||
   pathname.startsWith('/institution');
 
 const planLevel = (p: string) => ({ free: 1, starter: 2, growth: 3, enterprise: 4 })[p] || 1;
@@ -186,7 +182,6 @@ export const MainLayout: React.FC = () => {
   const [showPanelTour, setShowPanelTour] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
 
-  const { t, i18n } = useTranslation(['layout', 'common']);
   const { institution: instFromStore, fetchFeatures, hasFeature, loading: featuresLoading, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
   const instInfo = instFromStore || user?.institution || null;
 
@@ -202,7 +197,6 @@ export const MainLayout: React.FC = () => {
     location.pathname.startsWith('/tests/session') ||
     location.pathname.startsWith('/xiaoyu/practice') ||
     location.pathname.startsWith('/course/') ||
-    location.pathname.startsWith('/exam/') ||
     location.pathname === '/study'
   );
 
@@ -212,9 +206,9 @@ export const MainLayout: React.FC = () => {
 
   useEffect(() => {
     document.title = instInfo?.name
-      ? t('layout:docTitle.withInstitution', { name: instInfo.name })
-      : t('layout:docTitle.default');
-  }, [instInfo?.name, t]);
+      ? `${instInfo.name} - UniMind.ai - 新一代AI教育基础设施`
+      : 'UniMind.ai - 新一代AI教育基础设施';
+  }, [instInfo?.name]);
 
   useEffect(() => {
     if (!studentPreview) fetchFeatures();
@@ -324,10 +318,7 @@ export const MainLayout: React.FC = () => {
     '/tests': 'quiz.exam',
     '/knowledge-map': 'knowledge.graph',
     '/qa': 'faq.system',
-    '/plan': 'ai.assistant',
     '/study': 'study.room',
-    '/interviews': 'interview.mock',
-    '/mock-exam': 'pdf.mock',
   };
 
   // 功能可见性：有 feature 要求的项，必须 hasFeature 通过才显示
@@ -343,33 +334,28 @@ export const MainLayout: React.FC = () => {
 
   // ── 教师端 ──
   const teacherNavItems: NavItem[] = [
-    { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
-    { to: '/teacher-assignments', icon: CalendarCheck, label: t('layout:nav.assignments') },
-    { to: '/lesson-plans', icon: ClipboardText, label: t('layout:nav.lessonPlans') },
-    { to: '/questions', icon: Brain, label: t('layout:nav.questionBank') },
-    { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
-    { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
-    { to: '/knowledge-tree', icon: TreeStructure, label: t('layout:nav.knowledgeTree') },
-    { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
-    { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplace') },
+    { to: '/workbench', icon: Robot, label: '工作台' },
+    { to: '/questions', icon: Brain, label: '题库' },
+    { to: '/courses', icon: BookOpen, label: '课程' },
+    { to: '/articles', icon: FileText, label: '文章' },
+    { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
+    { to: '/qa', icon: ChatCircleText, label: '答疑' },
+    { to: '/marketplace', icon: Storefront, label: '内容市场' },
     ...(isPlatformAdmin ? [platformAdminItem] : []),
-    ...(user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: t('layout:nav.maintenance') } as NavItem] : []),
+    ...(user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: '维护中心' } as NavItem] : []),
   ];
 
   // ── 学生端 9 套件 ──
   const studentNavItems: NavItem[] = [
-    { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyu') },
-    { to: '/my-assignments', icon: CalendarCheck, label: t('layout:nav.myAssignments') },
-    { to: '/achievements', icon: Trophy, label: t('layout:nav.achievements') },
-    { to: '/report-card', icon: FileText, label: t('layout:nav.reportCard') },
-    { to: '/courses', icon: BookOpen, label: t('layout:nav.courses') },
-    { to: '/tests', icon: Trophy, label: t('layout:nav.tests') },
-    { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeMap') },
-    { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
-    { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qa') },
-    { to: '/plan', icon: CalendarCheck, label: t('layout:nav.plan') },
-    { to: '/study', icon: Clock, label: t('layout:nav.studyRoom') },
-    { to: '/mock-exam', icon: FileText, label: t('layout:nav.mockExams') },
+    { to: '/xiaoyu', icon: Robot, label: '小宇' },
+    { to: '/achievements', icon: Trophy, label: '成就' },
+    { to: '/report-card', icon: FileText, label: '成绩报告' },
+    { to: '/courses', icon: BookOpen, label: '课程中心' },
+    { to: '/tests', icon: Trophy, label: '习题训练' },
+    { to: '/knowledge-map', icon: Brain, label: '知识地图' },
+    { to: '/articles', icon: FileText, label: '文章' },
+    { to: '/qa', icon: ChatCircleText, label: '答疑' },
+    { to: '/study', icon: Clock, label: '自习室' },
     ...(isPlatformAdmin ? [platformAdminItem] : []),
   ];
 
@@ -378,26 +364,23 @@ export const MainLayout: React.FC = () => {
   const visibleNavItems = navItems.filter(itemVisible);
 
   const mobileNavItems: NavItem[] = effectiveIsInstStudent ? [
-        { to: '/xiaoyu', icon: Robot, label: t('layout:nav.xiaoyuShort') },
-        { to: '/my-assignments', icon: CalendarCheck, label: t('layout:nav.myAssignments') },
-        { to: '/achievements', icon: Trophy, label: t('layout:nav.achievements') },
-        { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
-        { to: '/tests', icon: Trophy, label: t('layout:nav.testsShort') },
-        { to: '/knowledge-map', icon: Brain, label: t('layout:nav.knowledgeShort') },
-        { to: '/articles', icon: FileText, label: t('layout:nav.articlesShort') },
-        { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
+        { to: '/xiaoyu', icon: Robot, label: '小宇' },
+        { to: '/achievements', icon: Trophy, label: '成就' },
+        { to: '/courses', icon: BookOpen, label: '课程' },
+        { to: '/tests', icon: Trophy, label: '做题' },
+        { to: '/knowledge-map', icon: Brain, label: '知识' },
+        { to: '/articles', icon: FileText, label: '文章' },
+        { to: '/qa', icon: ChatCircleText, label: '答疑' },
         ...(isPlatformAdmin ? [{ to: '/platform', icon: Gauge, label: '平台' } as NavItem] : []),
       ]
     : [
-        { to: '/workbench', icon: Robot, label: t('layout:nav.workbench') },
-        { to: '/teacher-assignments', icon: CalendarCheck, label: t('layout:nav.assignments') },
-        { to: '/lesson-plans', icon: ClipboardText, label: t('layout:nav.lessonPlans') },
-        { to: '/questions', icon: Brain, label: t('layout:nav.questionBank') },
-        { to: '/courses', icon: BookOpen, label: t('layout:nav.coursesShort') },
-        { to: '/articles', icon: FileText, label: t('layout:nav.articles') },
-        { to: '/knowledge-tree', icon: TreeStructure, label: t('layout:nav.knowledgeTree') },
-        { to: '/qa', icon: ChatCircleText, label: t('layout:nav.qaShort') },
-        { to: '/marketplace', icon: Storefront, label: t('layout:nav.marketplaceShort') },
+        { to: '/workbench', icon: Robot, label: '工作台' },
+        { to: '/questions', icon: Brain, label: '题库' },
+        { to: '/courses', icon: BookOpen, label: '课程' },
+        { to: '/articles', icon: FileText, label: '文章' },
+        { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
+        { to: '/qa', icon: ChatCircleText, label: '答疑' },
+        { to: '/marketplace', icon: Storefront, label: '市场' },
         ...(isPlatformAdmin ? [{ to: '/platform', icon: Gauge, label: '平台' } as NavItem] : []),
       ];
 
@@ -456,16 +439,15 @@ export const MainLayout: React.FC = () => {
               {studentPreview && (
                 <div className="flex items-center gap-1.5 text-xs text-primary font-bold mr-auto">
                   <Eye className="h-3 w-3" />
-                  <span className="opacity-70">{t('layout:studentView')}</span>
+                  <span className="opacity-70">{'学生视角'}</span>
                   <button onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="ml-1 px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-bold">
-                    {t('layout:exitPreview')}
+                    {'退出预览'}
                   </button>
                 </div>
               )}
               <div data-tour="header-right" className="flex items-center gap-2">
                 <EloPopover />
                 <AchievementPill />
-                <CampusSelector />
                 <NotificationBell />
                 <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
@@ -483,69 +465,64 @@ export const MainLayout: React.FC = () => {
                   </DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                     <UserIcon className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">{t('layout:userMenu.personalSettings')}</span>
+                    <span className="font-bold text-xs">{'个人设置'}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                     <CreditCard className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">{t('layout:nav.billing')}</span>
+                    <span className="font-bold text-xs">{'方案与账单'}</span>
                   </DropdownMenuItem>
                   {!isPlatformAdmin && instInfo && user?.is_institution_owner && (
                     <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Gear className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:userMenu.institutionSettings')}</span>
+                      <span className="font-bold text-xs">{'机构设置'}</span>
                     </DropdownMenuItem>
                   )}
                   {!isPlatformAdmin && instInfo && user?.is_institution_admin && (
                     <DropdownMenuItem id="invite-menu-item" onClick={() => setInvitePopoverOpen(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <UserPlus className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:invite.trigger')}</span>
+                      <span className="font-bold text-xs">{'邀请学员'}</span>
                     </DropdownMenuItem>
                   )}
                   {!isPlatformAdmin && instInfo && !isInstStudent && !studentPreview && (
                     <>
                       <DropdownMenuItem onClick={() => navigate('/institution/students')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Users className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{t("layout:nav.students")}</span>
+                        <span className="font-bold text-xs">{'学员管理'}</span>
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setStudentPreview(true); navigate('/xiaoyu'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Eye className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{t('layout:previewStudent')}</span>
+                        <span className="font-bold text-xs">{'预览学生端'}</span>
                       </DropdownMenuItem>
                     </>
                   )}
                   {studentPreview && (
                     <DropdownMenuItem onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <EyeSlash className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:exitStudentPreview')}</span>
+                      <span className="font-bold text-xs">{'退出学生端预览'}</span>
                     </DropdownMenuItem>
                   )}
                   {user?.role === 'admin' && (
                     <DropdownMenuItem onClick={() => navigate('/system-settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Gear className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:userMenu.appearanceSettings')}</span>
+                      <span className="font-bold text-xs">{'外观与系统'}</span>
                     </DropdownMenuItem>
                   )}
                   {user?.is_member && (
                     <DropdownMenuItem onClick={() => window.dispatchEvent(new Event('open-weekly-report'))} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <ChartBar className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:nav.weeklyReport')}</span>
+                      <span className="font-bold text-xs">{'周报'}</span>
                     </DropdownMenuItem>
                   )}
                   {!isInstStudent && myPlanLevel < 3 && (
                     <DropdownMenuItem onClick={() => setShowUpgradeModal(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <Sparkle className="h-3.5 w-3.5 text-amber-500" />
-                      <span className="font-bold text-xs">{t('layout:upgradePlan')}</span>
+                      <span className="font-bold text-xs">{'升级方案'}</span>
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator className="my-2 bg-border" />
-                  <DropdownMenuItem onClick={() => i18n.changeLanguage(i18n.language?.startsWith('zh') ? 'en' : 'zh')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                    <Globe className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">{i18n.language?.startsWith('zh') ? 'English' : '中文'}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="my-2 bg-border" />
                   <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
                     <SignOut className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">{t('layout:userMenu.logout')}</span>
+                    <span className="font-bold text-xs">{'退出登录'}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -571,23 +548,23 @@ export const MainLayout: React.FC = () => {
                   <DropdownMenuContent align="end" className="w-48 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg">
                     <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <UserIcon className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:userMenu.personalSettings')}</span>
+                      <span className="font-bold text-xs">{'个人设置'}</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                       <CreditCard className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:nav.billing')}</span>
+                      <span className="font-bold text-xs">{'方案与账单'}</span>
                     </DropdownMenuItem>
                     {!isPlatformAdmin && instInfo && user?.is_institution_owner && (
                       <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <Gear className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{t('layout:userMenu.institutionSettings')}</span>
+                        <span className="font-bold text-xs">{'机构设置'}</span>
                       </DropdownMenuItem>
                     )}
                     {/* 机构看板：管理员可见 */}
                     {!isPlatformAdmin && instInfo && !isInstStudent && (
                       <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
                         <ChartBar className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{t('layout:userMenu.institutionDashboard')}</span>
+                        <span className="font-bold text-xs">{'机构看板'}</span>
                       </DropdownMenuItem>
                     )}
                     {!isPlatformAdmin && instInfo && user?.is_institution_admin && (
@@ -596,13 +573,13 @@ export const MainLayout: React.FC = () => {
                         className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
                       >
                         <UserPlus className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{t('layout:invite.mobileCopy')}</span>
+                        <span className="font-bold text-xs">{'复制邀请链接'}</span>
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator className="my-2 bg-border" />
                     <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-2 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
                       <SignOut className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{t('layout:userMenu.logout')}</span>
+                      <span className="font-bold text-xs">{'退出登录'}</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -624,11 +601,11 @@ export const MainLayout: React.FC = () => {
               <div className="flex items-center justify-between bg-primary text-white px-4 py-2.5 rounded-xl mb-3">
                 <div className="flex items-center gap-2 text-sm font-bold">
                   <Eye className="h-4 w-4" />
-                  <span>{t('layout:previewMode', { name: previewInstitution.name, plan: previewInstitution.plan_label })}</span>
+                  <span>{`预览模式：${previewInstitution.name}（${previewInstitution.plan_label}）`}</span>
                 </div>
                 <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 text-xs"
                   onClick={exitPreview}>
-                  <EyeSlash className="h-3.5 w-3.5 mr-1" /> {t('layout:exitPreview')}
+                  <EyeSlash className="h-3.5 w-3.5 mr-1" /> {'退出预览'}
                 </Button>
               </div>
             )}
@@ -680,12 +657,12 @@ export const MainLayout: React.FC = () => {
         <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}>
           <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl bg-card">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-xl font-bold text-foreground">{t('layout:logout.title')}</AlertDialogTitle>
-              <AlertDialogDescription className="font-medium text-muted-foreground">{t('layout:logout.description')}</AlertDialogDescription>
+              <AlertDialogTitle className="text-xl font-bold text-foreground">{'确认退出登录？'}</AlertDialogTitle>
+              <AlertDialogDescription className="font-medium text-muted-foreground">{'退出后你将需要重新验证身份以访问网校资源。'}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="rounded-xl font-bold border-border text-foreground hover:bg-muted">{t('layout:logout.cancel')}</AlertDialogCancel>
-              <AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch (err) { console.error('Logout API failed:', err); } logout(); navigate('/login'); }} className="rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90">{t('layout:logout.confirm')}</AlertDialogAction>
+              <AlertDialogCancel className="rounded-xl font-bold border-border text-foreground hover:bg-muted">{'返回'}</AlertDialogCancel>
+              <AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch (err) { console.error('Logout API failed:', err); } logout(); navigate('/login'); }} className="rounded-xl bg-primary text-primary-foreground font-bold hover:opacity-90">{'确认退出'}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

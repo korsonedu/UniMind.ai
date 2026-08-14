@@ -286,15 +286,6 @@ class AIService:
         )
 
     @classmethod
-    def generate_questions_from_text(cls, text, num_obj=3, num_short=1,
-                                     num_essay=1, num_calc=0, kp_id=None) -> List[Dict[str, Any]]:
-        gen = QuestionGenerator(cls)
-        return gen.generate_questions_from_text(
-            text=text, num_obj=num_obj, num_short=num_short,
-            num_essay=num_essay, num_calc=num_calc, kp_id=kp_id,
-        )
-
-    @classmethod
     def parse_questions_from_text(cls, raw_text: str) -> List[Dict[str, Any]]:
         gen = QuestionGenerator(cls)
         return gen.parse_questions_from_text(raw_text=raw_text)

@@ -26,78 +26,29 @@ class XiaoYuDashboardView(APIView):
         institution = getattr(user, 'institution', None)
         data = {}
 
-        # 1. Active Study Plan
-        data['plan'] = self._get_plan(user)
-
-        # 2. Learning Stats
+        # 1. Learning Stats
         data['stats'] = self._get_stats(user, institution)
 
-        # 3. Knowledge Mastery
+        # 2. Knowledge Mastery
         data['mastery'] = self._get_mastery(user, institution)
 
-        # 4. Due Reviews
+        # 3. Due Reviews
         data['reviews'] = self._get_reviews(user, institution)
 
-        # 5. Exam History
+        # 4. Exam History
         data['exams'] = self._get_exams(user)
 
-        # 6. Dashboard layout config (legacy, from user.dashboard_config)
+        # 5. Dashboard layout config (legacy, from user.dashboard_config)
         default_config = {
-            'section_order': ['plan', 'stats', 'mastery', 'reviews', 'exams', 'custom_cards'],
+            'section_order': ['stats', 'mastery', 'reviews', 'exams', 'custom_cards'],
             'highlight': 'stats',
         }
         data['dashboard_config'] = user.dashboard_config or default_config
 
-        # 7. Custom data cards (legacy, from user.dashboard_config)
+        # 6. Custom data cards (legacy, from user.dashboard_config)
         data['custom_cards'] = (user.dashboard_config or {}).get('custom_cards', [])
 
         return Response(data)
-
-    # ── Plan ──────────────────────────────────────────────
-    def _get_plan(self, user):
-        from ai_assistant.models import StudyPlan
-        plan = StudyPlan.objects.filter(user=user, status='active').first()
-        if not plan:
-            return None
-        data = plan.plan_data or {}
-        tasks = data.get('tasks', [])
-        completed = sum(1 for t in tasks if t.get('status') == 'completed')
-
-        plan_result = {
-            'id': plan.id,
-            'title': plan.title,
-            'summary': plan.summary,
-            'total_tasks': len(tasks),
-            'completed_tasks': completed,
-            'progress_pct': round(completed / len(tasks) * 100, 1) if tasks else 0,
-            'tasks': tasks,
-            'created_at': plan.created_at.isoformat(),
-            'subjects_covered': data.get('subjects_covered', []),
-        }
-
-        # 目标信息来自关联的 TeachingPlan
-        if plan.teaching_plan_id:
-            tp = plan.teaching_plan
-            total_days = (tp.deadline - plan.created_at.date()).days if tp.deadline and plan.created_at else (tp.week_count * 7)
-            elapsed_days = max((timezone.now().date() - plan.created_at.date()).days, 0) if plan.created_at else 0
-            expected_progress_pct = round(min(elapsed_days / total_days * 100, 100), 1) if total_days > 0 else None
-            progress_delta = round(plan_result['progress_pct'] - expected_progress_pct, 1) if expected_progress_pct is not None else None
-
-            plan_result.update({
-                'goal': tp.goal or '',
-                'deadline': tp.deadline.isoformat() if tp.deadline else None,
-                'subject': tp.subject or '',
-                'target_score': tp.target_score,
-                'current_level': tp.current_level or '',
-                'expected_progress_pct': expected_progress_pct,
-                'progress_delta': progress_delta,
-                'total_days': total_days,
-                'elapsed_days': elapsed_days,
-                'teaching_plan_id': tp.id,
-                'teaching_plan_title': tp.title,
-            })
-
-        return plan_result
 
     # ── Stats ─────────────────────────────────────────────
     def _get_stats(self, user, institution=None):

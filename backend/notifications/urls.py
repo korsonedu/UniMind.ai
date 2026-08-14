@@ -5,10 +5,6 @@ from .views import (
     AdminBroadcastView,
     UnreadCountView,
     NotificationClearView,
-    AnnouncementListCreateView,
-    AnnouncementDetailView,
-    AnnouncementMarkReadView,
-    AnnouncementUnreadCountView,
 )
 
 urlpatterns = [
@@ -19,10 +15,4 @@ urlpatterns = [
     path('read/<int:pk>/', MarkAsReadView.as_view(), name='mark-read'),
     path('broadcast/', AdminBroadcastView.as_view(), name='admin-broadcast'),
     path('clear/', NotificationClearView.as_view(), name='notification-clear'),
-
-    # 公告系统
-    path('announcements/', AnnouncementListCreateView.as_view(), name='announcement-list'),
-    path('announcements/<int:pk>/', AnnouncementDetailView.as_view(), name='announcement-detail'),
-    path('announcements/<int:pk>/read/', AnnouncementMarkReadView.as_view(), name='announcement-mark-read'),
-    path('announcements/unread-count/', AnnouncementUnreadCountView.as_view(), name='announcement-unread-count'),
 ]

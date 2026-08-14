@@ -2,7 +2,6 @@
  * 学生端 - 成绩报告
  */
 import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -29,7 +28,6 @@ interface ReportData {
 
 export const ReportCard: React.FC = () => {
   const user = useAuthStore(s => s.user);
-  const { t } = useTranslation('common');
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -785,6 +785,68 @@ def apply_experience_decay_task():
     return affected
 
 
+def _get_downstream_kps(kp_id: int, institution_id=None, max_depth: int = 5) -> list:
+    """沿 KnowledgeEdge 有向图，从 kp_id 出发 BFS 找到所有下游 KP。
+
+    内联自 quizzes.services.knowledge_graph_traversal.get_downstream_kps
+    （该模块在 B2 删除）。
+
+    Returns:
+        list[dict]: {'kp_id', 'depth', 'path_weight', 'edge_type'}
+    """
+    from collections import defaultdict, deque
+    from django.core.cache import cache
+    from django.db.models import Q
+    from quizzes.models import KnowledgeEdge
+
+    cache_key = f'exp:downstream:{institution_id or 0}'
+    adj = cache.get(cache_key)
+    if adj is None:
+        adj = defaultdict(list)
+        q = Q(is_active=True) & Q(institution__isnull=True)
+        if institution_id is not None:
+            q |= Q(institution_id=institution_id)
+        edges = KnowledgeEdge.objects.filter(q).only(
+            'source_id', 'target_id', 'weight', 'edge_type'
+        )
+        for edge in edges:
+            adj[edge.source_id].append((edge.target_id, float(edge.weight), edge.edge_type))
+        adj = dict(adj)
+        cache.set(cache_key, adj, 3600)  # 1 小时
+
+    if kp_id not in adj:
+        return []
+
+    # BFS
+    visited = {kp_id: (0, 1.0, '')}  # kp_id → (depth, path_weight, edge_type)
+    queue = deque([kp_id])
+    while queue:
+        current = queue.popleft()
+        depth = visited[current][0]
+        if depth >= max_depth:
+            continue
+        for neighbor_id, weight, edge_type in adj.get(current, []):
+            if neighbor_id in visited:
+                continue
+            new_weight = visited[current][1] * weight
+            visited[neighbor_id] = (depth + 1, new_weight, edge_type)
+            queue.append(neighbor_id)
+
+    # 排除起始 KP 自身
+    result = []
+    for kp, (depth, path_weight, edge_type) in visited.items():
+        if kp == kp_id:
+            continue
+        result.append({
+            'kp_id': kp,
+            'depth': depth,
+            'path_weight': round(path_weight, 4),
+            'edge_type': edge_type,
+        })
+    result.sort(key=lambda x: (x['depth'], -x['path_weight']))
+    return result
+
+
 @shared_task(
     soft_time_limit=30,
     time_limit=60,
@@ -798,7 +860,6 @@ def experience_verify_on_answer(user_id: int, kp_id: int, score: float, max_scor
     触发时机：学生提交任意题目答案后。
     当前阶段：只记录数据，不自动更新经验置信度（数据积累后开启）。
     """
-    from quizzes.services.knowledge_graph_traversal import get_downstream_kps
     from .models import Experience, ExperienceVerification
 
     # 1. 找到 scope 匹配当前 KP 的经验
@@ -818,7 +879,7 @@ def experience_verify_on_answer(user_id: int, kp_id: int, score: float, max_scor
             # 检查当前 KP 是否在该经验的 kp_chain 下游
             upstream_id = (exp.scope_value or {}).get('kp_id')
             if upstream_id:
-                downstream = get_downstream_kps(upstream_id)
+                downstream = _get_downstream_kps(upstream_id)
                 downstream_ids = {d['kp_id'] for d in downstream}
                 if kp_id in downstream_ids:
                     match = True

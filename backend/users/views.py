@@ -268,54 +268,6 @@ class OnlineUserListView(generics.ListAPIView):
         return qs.order_by('-last_active', '-elo_score')
 
 
-class HeartbeatView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        now = timezone.now()
-
-        user.last_active = now
-        update_fields = ["last_active"]
-
-        if "current_task" in request.data:
-            task = request.data.get("current_task")
-            if task is None:
-                normalized_task = None
-            else:
-                normalized_task = str(task).strip() or None
-                if normalized_task and len(normalized_task) > 200:
-                    return Response({"error": "current_task cannot exceed 200 characters."}, status=400)
-            user.current_task = normalized_task
-            update_fields.append("current_task")
-
-        if "current_timer_end" in request.data:
-            raw_timer_end = request.data.get("current_timer_end")
-            if raw_timer_end in (None, ""):
-                normalized_timer_end = None
-            elif isinstance(raw_timer_end, str):
-                normalized_timer_end = parse_datetime(raw_timer_end)
-                if normalized_timer_end is None:
-                    return Response({"error": "current_timer_end must be a valid ISO datetime."}, status=400)
-                if timezone.is_naive(normalized_timer_end):
-                    normalized_timer_end = timezone.make_aware(
-                        normalized_timer_end,
-                        timezone.get_current_timezone(),
-                    )
-            else:
-                return Response({"error": "current_timer_end must be a string or null."}, status=400)
-
-            user.current_timer_end = normalized_timer_end
-            update_fields.append("current_timer_end")
-
-        user.save(update_fields=update_fields)
-        return Response({
-            "status": "ok",
-            "last_active": user.last_active,
-            "current_task": user.current_task,
-            "current_timer_end": user.current_timer_end,
-        })
-
 class LoginView(APIView):
     permission_classes = (AllowAny,)
 
@@ -765,12 +717,11 @@ class DiagnosticSubmitView(APIView):
                 return Response({'error': '诊断已完成'}, status=400)
 
             from quizzes.services.diagnostic_service import (
-                grade_diagnostic_answers, initialize_memorix_from_diagnostic, build_study_plan,
+                grade_diagnostic_answers, initialize_memorix_from_diagnostic,
             )
 
             results, kp_scores = grade_diagnostic_answers(user, answers)
             initialize_memorix_from_diagnostic(user, kp_scores)
-            study_plan = build_study_plan(kp_scores)
 
             # 标记诊断完成
             user.has_completed_initial_assessment = True
@@ -785,7 +736,6 @@ class DiagnosticSubmitView(APIView):
             'total_score': total_correct,
             'total_questions': len(results),
             'results': results,
-            'study_plan': study_plan,
         })
 
 
@@ -1229,11 +1179,10 @@ class AccountDeleteView(APIView):
 
             # 3. 匿名化关联数据
             # AI 对话历史
-            from ai_assistant.models import ChatMessage, AgentMemory, StudyPlan, CardInteraction
+            from ai_assistant.models import ChatMessage, AgentMemory, ActionCardInteraction
             ChatMessage.objects.filter(user=user).delete()
             AgentMemory.objects.filter(user=user).delete()
-            StudyPlan.objects.filter(user=user).delete()
-            CardInteraction.objects.filter(user=user).delete()
+            ActionCardInteraction.objects.filter(user=user).delete()
 
             # 学习数据
             from quizzes.models import (
@@ -1321,7 +1270,6 @@ class DataExportView(APIView):
             ),
             'quiz_history': [],
             'ai_conversations': [],
-            'study_plans': [],
             'notifications': [],
         }
 
@@ -1363,19 +1311,6 @@ class DataExportView(APIView):
                 'created_at': m.created_at.isoformat(),
             }
             for m in messages
-        ]
-
-        # 学习计划
-        from ai_assistant.models import StudyPlan
-        plans = StudyPlan.objects.filter(user=user)
-        data['study_plans'] = [
-            {
-                'title': p.title,
-                'content': p.content,
-                'status': p.status,
-                'created_at': p.created_at.isoformat(),
-            }
-            for p in plans
         ]
 
         # 通知
@@ -1447,49 +1382,6 @@ class FeedbackSubmitView(APIView):
             user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
         )
         return Response({'status': 'ok', 'message': '感谢您的反馈！'})
-
-
-class AdminFeedbackListView(APIView):
-    """管理端查看所有用户反馈。
-
-    GET /api/users/admin/feedback/?category=bug
-    """
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
-
-    def get(self, request):
-        from core.models import Feedback
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-
-        qs = Feedback.objects.select_related('user').order_by('-created_at')
-
-        category = request.query_params.get('category')
-        if category:
-            qs = qs.filter(category=category)
-
-        page = int(request.query_params.get('page', 1))
-        page_size = min(int(request.query_params.get('page_size', 20)), 100)
-        total = qs.count()
-        offset = (page - 1) * page_size
-        paged = qs[offset:offset + page_size]
-
-        data = [{
-            'id': f.id,
-            'category': f.category,
-            'content': f.content,
-            'contact': f.contact or '',
-            'page_url': f.page_url or '',
-            'user_name': f.user.nickname or f.user.username,
-            'user_email': f.user.email,
-            'created_at': f.created_at.isoformat(),
-        } for f in paged]
-
-        return Response({
-            'items': data,
-            'total': total,
-            'page': page,
-            'total_pages': max(1, (total + page_size - 1) // page_size),
-        })
 
 
 # ──────────────────────────────────────────────
@@ -1644,18 +1536,6 @@ class UserAchievementView(APIView):
         from .serializers import UserAchievementSerializer
         qs = UserAchievement.objects.filter(user=request.user).select_related('achievement').order_by('-unlocked_at')
         return Response(UserAchievementSerializer(qs, many=True).data)
-
-
-class UserClassListView(APIView):
-    """GET /api/users/me/classes/ — 当前用户所在班级列表。"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        qs = request.user.classes.all()
-        return Response([
-            {'id': c.id, 'name': c.name}
-            for c in qs
-        ])
 
 
 # ── PWA Push 订阅 ──────────────────────────────────────────
@@ -1822,6 +1702,56 @@ class StudentReportCardView(APIView):
         return Response(_build_report_data(request.user))
 
 
+
+def _html_to_pdf(html_string: str, output_path: str):
+    """使用 Playwright Chromium headless 将 HTML 渲染为 PDF。
+
+    通过独立子进程运行 Playwright，完全隔离 Python 解释器生命周期，
+    避免 Python 3.14+ 在解释器 shutdown 时 ThreadPoolExecutor 拒绝新任务的问题。
+    """
+    import sys
+    import subprocess as _sp
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as f:
+        f.write(html_string)
+        html_path = f.name
+
+    try:
+        script = (
+            "import sys, json\n"
+            "from playwright.sync_api import sync_playwright\n"
+            f"with open({html_path!r}, 'r', encoding='utf-8') as f:\n"
+            "    content = f.read()\n"
+            "with sync_playwright() as p:\n"
+            "    browser = p.chromium.launch(headless=True)\n"
+            "    page = browser.new_page()\n"
+            "    page.set_content(content, wait_until='networkidle')\n"
+            "    page.pdf(\n"
+            f"        path={output_path!r},\n"
+            "        format='A4',\n"
+            "        margin={'top': '15mm', 'bottom': '15mm', 'left': '15mm', 'right': '15mm'},\n"
+            "        print_background=True,\n"
+            "    )\n"
+            "    browser.close()\n"
+            "print('OK')\n"
+        )
+        result = _sp.run(
+            [sys.executable, '-c', script],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Playwright 子进程渲染失败 (exit={result.returncode}): {result.stderr.strip()}")
+        if 'OK' not in result.stdout:
+            raise RuntimeError(f"Playwright 子进程异常: {result.stderr.strip() or result.stdout.strip()}")
+    finally:
+        try:
+            os.unlink(html_path)
+        except OSError:
+            pass
+
+
+
 class StudentReportCardPDFView(APIView):
     """GET /api/users/me/report-card/pdf/ — 成绩报告卡 PDF。"""
     permission_classes = [permissions.IsAuthenticated]
@@ -1832,7 +1762,6 @@ class StudentReportCardPDFView(APIView):
         with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
             output_path = f.name
         try:
-            from quizzes.services.pdf_generator import _html_to_pdf
             _html_to_pdf(html, output_path)
             with open(output_path, 'rb') as f:
                 pdf_bytes = f.read()

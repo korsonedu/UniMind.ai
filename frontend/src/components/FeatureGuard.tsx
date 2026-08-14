@@ -6,12 +6,10 @@ import { Button } from '@/components/ui/button';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
 const FEATURE_LABELS: Record<string, string> = {
-  'ai.assistant': 'AI 助教',
   'quiz.exam': '智能刷题',
   'knowledge.graph': '知识地图',
   'faq.system': '答疑系统',
   'study.room': '在线自习室',
-  'pdf.mock': '模拟考试',
   'course.video': '视频课程',
   'wrong.review': '错题回顾',
 };

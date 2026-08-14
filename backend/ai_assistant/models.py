@@ -123,37 +123,6 @@ class AgentMemory(models.Model):
         return f"[{self.memory_type}] {self.key}: {self.value[:30]}"
 
 
-class StudyPlan(models.Model):
-    STATUS_CHOICES = (
-        ('active', '进行中'),
-        ('completed', '已完成'),
-        ('archived', '已归档'),
-    )
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='study_plans')
-    bot = models.ForeignKey('Bot', on_delete=models.SET_NULL, null=True, blank=True, related_name='plans')
-    title = models.CharField(max_length=200, verbose_name="计划标题")
-    summary = models.TextField(blank=True, verbose_name="AI 生成的计划摘要")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
-    plan_data = models.JSONField(default=dict, help_text="AI 生成的完整计划 JSON，包含 tasks 数组")
-    auto_generated = models.BooleanField(default=False, help_text="是否由 AI 自动生成")
-
-    # 关联教师端的教学计划（可选，有班级的学生自动关联）
-    teaching_plan = models.ForeignKey(
-        'courses.TeachingPlan', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='student_plans', verbose_name="关联教学计划"
-    )
-
-    completed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f"{self.user} - {self.title}"
-
-
 class ActionCardInteraction(models.Model):
     """追踪学生通过 Action Card 的交互行为（点击、完成）。
 

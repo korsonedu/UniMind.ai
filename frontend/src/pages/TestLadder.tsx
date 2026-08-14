@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { ArrowRight, Brain, ChartLine, CaretDown, Bell, Target, Info, Funnel } from '@phosphor-icons/react';
 import { cn, normalizeOptions } from '@/lib/utils';
@@ -20,7 +19,7 @@ import { PageWrapper } from '@/components/PageWrapper';
 import { toast } from "sonner";
 import api from '@/lib/api';
 import { useSystemStore } from '@/store/useSystemStore';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Dialog,
@@ -44,7 +43,6 @@ import { queryKeys } from '@/lib/queryKeys';
 
 // Modularized Components
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
-import { ResultReportDialog } from './test-ladder/ResultReportDialog';
 
 type MemorixCurvePoint = { date: string; predicted: number; actual: number; count: number };
 type MemorixCurvePayload = {
@@ -76,10 +74,7 @@ type MemorixOptimizationHistory = {
 };
 
 export const TestLadder: React.FC = () => {
-  const { t, i18n } = useTranslation(['testLadder', 'pages']);
-
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
   const [selectedSubIds, setSelectedSubIds] = useState<number[]>([]);
@@ -108,11 +103,6 @@ export const TestLadder: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gradingMessage] = useState("");
 
-  // Report UI State
-  const [results, setResults] = useState<any[]>([]);
-  const [showResultDialog, setShowResultDialog] = useState(false);
-  const [currentReportIdx, setCurrentReportIdx] = useState(0);
-  const [examSummary, setExamSummary] = useState<any>(null);
   const [memorixCurve, setMemorixCurve] = useState<MemorixCurvePayload | null>(null);
   const [memorixHistory, setMemorixHistory] = useState<MemorixOptimizationHistory[]>([]);
 
@@ -140,40 +130,6 @@ export const TestLadder: React.FC = () => {
     if (!Number.isFinite(suggested) || suggested <= 0) return;
     setQCount(String(Math.max(1, Math.min(50, suggested))));
   }, [goals.recommended_questions, isCustomCount]);
-
-  useEffect(() => {
-    const action = searchParams.get('action');
-    const examId = searchParams.get('exam_id');
-    if (action === 'view_report' && examId) {
-      fetchExamReport(examId);
-      setSearchParams({});
-    }
-  }, [searchParams, setSearchParams]);
-
-  const fetchExamReport = async (examId: string) => {
-    try {
-      const res = await api.get(`/quizzes/exams/${examId}/`);
-      setExamSummary({
-        total_score: res.data.total_score,
-        max_score: res.data.max_score,
-        elo_change: res.data.elo_change,
-        created_at: res.data.created_at_fmt,
-        summary: res.data.summary || ''
-      });
-      const mappedResults = res.data.results.map((r: any) => ({
-        question: r.question_detail,
-        user_answer: r.user_answer,
-        score: r.score,
-        max_score: r.max_score,
-        feedback: r.feedback,
-        analysis: r.analysis,
-        is_correct: r.is_correct
-      }));
-      setResults(mappedResults);
-      setCurrentReportIdx(0);
-      setShowResultDialog(true);
-    } catch (e) { toast.error(formatApiErrorToast(e, t('toast.loadReportError'))); }
-  };
 
   const fetchGoals = async () => {
     try {
@@ -203,8 +159,8 @@ export const TestLadder: React.FC = () => {
     try {
       const res = await api.post('/quizzes/favorite/toggle/', { question_id: qId });
       setQuestions(questions.map(q => q.id === qId ? { ...q, is_favorite: res.data.is_favorite } : q));
-      toast.success(res.data.is_favorite ? t('toast.addedToFavorites') : t('toast.removedFromFavorites'));
-    } catch (e) { toast.error(formatApiErrorToast(e, t('toast.operationFailed'))); }
+      toast.success(res.data.is_favorite ? '已加入收藏' : '已取消收藏');
+    } catch (e) { toast.error(formatApiErrorToast(e, '操作失败')); }
   };
 
   const toggleMastered = async (qId: number) => {
@@ -216,9 +172,9 @@ export const TestLadder: React.FC = () => {
         const newAnswers = { ...answers };
         delete newAnswers[qId];
         setAnswers(newAnswers);
-        toast.success(t('toast.mastered'));
+        toast.success('稳稳拿捏！');
       }
-    } catch (e) { toast.error(formatApiErrorToast(e, t('toast.operationFailed'))); }
+    } catch (e) { toast.error(formatApiErrorToast(e, '操作失败')); }
   };
 
   const startTest = async () => {
@@ -241,34 +197,33 @@ export const TestLadder: React.FC = () => {
         params.set('difficulty_level', difficulty);
       }
       const res = await api.get(`/quizzes/questions/?${params.toString()}`);
-      if (res.data.length === 0) return toast.error(t('toast.noQuestions'));
+      if (res.data.length === 0) return toast.error('题库暂无可用题目');
       setQuestions(res.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
       setIsTestOpen(true);
       setAnswers({});
       setCurrentIdx(0);
-      setResults([]);
-    } catch (e) { toast.error(formatApiErrorToast(e, t('toast.loadQuestionsError'))); }
+    } catch (e) { toast.error(formatApiErrorToast(e, '题目加载失败')); }
   };
 
   const handleSubmit = async () => {
     const unmasteredQuestions = questions.filter(q => !q.is_mastered);
     const answeredCount = Object.keys(answers).length;
     if (unmasteredQuestions.length > 0 && answeredCount < unmasteredQuestions.length) {
-      return toast.error(t('toast.notAllAnswered', { answered: answeredCount, total: unmasteredQuestions.length }));
+      return toast.error(`请完成所有题目 (${answeredCount}/${unmasteredQuestions.length})`);
     }
     if (unmasteredQuestions.length === 0) {
       setIsTestOpen(false);
-      return toast.info(t('toast.exerciseCompleted'));
+      return toast.info('练习已结束');
     }
     setIsSubmitting(true);
     try {
       const payload = unmasteredQuestions.map(q => ({ question_id: q.id, answer: answers[q.id] }));
       await api.post('/quizzes/submit-exam/', { answers: payload });
-      toast.success(t('toast.submissionSent'), { description: t('toast.submissionSentDesc') });
+      toast.success('试卷已提交 AI 批改', { description: '完成后请在通知中心点击查看报告。' });
       setIsTestOpen(false);
       fetchGoals();
     } catch (e: any) {
-      toast.error(formatApiErrorToast(e, t('toast.submissionFailed')));
+      toast.error(formatApiErrorToast(e, '提交失败'));
     } finally { setIsSubmitting(false); }
   };
 
@@ -301,7 +256,7 @@ export const TestLadder: React.FC = () => {
   // 全部数据未就绪时渲染骨架屏
   if (isPageLoading) {
     return (
-      <PageWrapper title={t('pages:academicLadder.title')} subtitle={t('pages:academicLadder.subtitle')}>
+      <PageWrapper title="学术天梯" subtitle="基于 Memorix 记忆算法的智能评估，精准量化学术成长路径。">
         <div className="max-w-6xl mx-auto space-y-8">
           <div className="space-y-4 max-w-2xl">
             <Skeleton className="h-10 w-64 rounded-lg" />
@@ -320,7 +275,7 @@ export const TestLadder: React.FC = () => {
   }
 
   return (
-    <PageWrapper title={t('pages:academicLadder.title')} subtitle={t('pages:academicLadder.subtitle')}>
+    <PageWrapper title="学术天梯" subtitle="基于 Memorix 记忆算法的智能评估，精准量化学术成长路径。">
       <div className="flex flex-col gap-8 md:gap-12 text-left pb-20 max-w-6xl mx-auto">
         {isMobile && (
             <Popover>
@@ -331,9 +286,9 @@ export const TestLadder: React.FC = () => {
               </PopoverTrigger>
               <PopoverContent side="bottom" align="end" className="w-64 rounded-2xl p-4 bg-card border-border">
                 <div className="space-y-3 text-left">
-                  <p className="text-xs font-semibold text-muted-foreground">{t('reminder.title')}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">提醒设置</p>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold">{t('reminder.questionType')}</Label>
+                    <Label className="text-xs font-bold">题型提醒</Label>
                     <Switch
                       checked={reminderSettings.questionType}
                       onCheckedChange={(enabled) => {
@@ -342,7 +297,7 @@ export const TestLadder: React.FC = () => {
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold">{t('reminder.testResult')}</Label>
+                    <Label className="text-xs font-bold">做题结果提醒</Label>
                     <Switch
                       checked={reminderSettings.testResult}
                       onCheckedChange={(enabled) => {
@@ -370,15 +325,15 @@ export const TestLadder: React.FC = () => {
               <div className={cn("max-w-2xl text-left", isMobile ? "space-y-4" : "space-y-6")}>
                 <div className="flex items-start gap-2">
                   <h2 className={cn("font-black tracking-tighter text-foreground leading-[1.1]", isMobile ? "text-2xl" : "text-4xl md:text-5xl")}>
-                    {t('hero.title1')}
+                    Memorix-Field
                     <br />
-                    {t('hero.title2')}
+                    第二代智能评估系统
                   </h2>
                   <Dialog>
                     <DialogTrigger asChild>
                       <button
                         type="button"
-                        aria-label={t('memorix.curveTitle')}
+                        aria-label="Memorix 拟合曲线"
                         className={cn(
                           "shrink-0 rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors",
                           isMobile ? "h-6 w-6 mt-1" : "h-7 w-7 mt-2"
@@ -389,26 +344,26 @@ export const TestLadder: React.FC = () => {
                     </DialogTrigger>
                     <DialogContent className="max-w-xl rounded-2xl">
                       <DialogHeader>
-                        <DialogTitle>{t('memorixDialog.title')}</DialogTitle>
+                        <DialogTitle>Memorix-Field：第二代智能评估系统</DialogTitle>
                         <DialogDescription>
-                          {t('memorixDialog.description')}
+                          Memorix-Field 在间隔重复的基础上引入了知识图谱全局诊断。不是替代，是补全——从「单题维度的记忆管理」扩展到「知识结构维度的诊断」。
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
-                        <p>{t('memorixDialog.p1')}</p>
-                        <p>{t('memorixDialog.p2')}</p>
-                        <p>{t('memorixDialog.p3')}</p>
+                        <p>记忆引擎 — 题级遗忘建模。持续拟合每道题的记忆衰减曲线，以题为单位做个体化参数估计。在临界遗忘点精准介入，减少无效重复，提高单位时间的记忆留存率。这是 Memorix 第一代的核心能力，在第二代中继续作为调度基础。</p>
+                        <p>图诊断引擎 — 知识图谱全局推断。将学科知识建模为高斯马尔可夫随机场（GMRF），利用图结构上相邻知识点的掌握度相似性，从部分观测外推全部知识点的掌握度。一场覆盖 10% 知识点的考试，就能输出全域掌握度热力图。</p>
+                        <p>双引擎协同。记忆引擎输出「何时复习哪道题」，图诊断引擎输出「哪些知识群存在结构薄弱」。前者优化时间分配，后者优化知识建构。两者共享同一个学生模型，调度结果受诊断结果加权。</p>
                       </div>
                     </DialogContent>
                   </Dialog>
                 </div>
                 <p className={cn("font-medium leading-relaxed text-muted-foreground max-w-lg", isMobile ? "text-sm" : "text-base")}>
                   {isMobile
-                    ? t('hero.mobileSubtitle')
-                    : t('hero.desktopSubtitle')}
+                    ? '记忆调度与知识图谱诊断的联合引擎。从你的做题记录出发，在单题层面调度复习，在知识结构层面定位薄弱群。'
+                    : 'Memorix-Field 由两个协同模块构成：记忆引擎追踪每道题的遗忘曲线，决定何时复习；图诊断引擎建模整个学科的知识图谱，从稀疏的考试结果推断全部知识点的掌握度。'}
                 </p>
                 <p className={cn("font-bold text-indigo-600/80", isMobile ? "text-[12px]" : "text-sm")}>
-                  {t('suggestion', { recommended: goals.recommended_questions, estimated: goals.estimated_minutes, weakFocus: goals.weak_focus_count })}
+                  {`本轮建议：${goals.recommended_questions} 题，预计 ${goals.estimated_minutes} 分钟（薄弱强化 ${goals.weak_focus_count} 题）`}
                 </p>
 
                 {/* ── 三连选行 ── */}
@@ -416,24 +371,24 @@ export const TestLadder: React.FC = () => {
                   {/* 题数选择 */}
                   {isMobile ? (
                     <div className="space-y-1.5 flex-1 w-full">
-                      <span className="text-[10px] font-bold text-muted-foreground ml-1">{t('questionCountMobile')}</span>
+                      <span className="text-[10px] font-bold text-muted-foreground ml-1">抽题数量</span>
                       <Input type="number" min="1" value={qCount} onChange={(e) => setQCount(e.target.value)} onBlur={() => { if (!qCount || parseInt(qCount) < 1) setQCount("1"); }} className="w-full h-9 rounded-xl bg-muted border-border font-bold text-center" />
                     </div>
                   ) : (
                     <div className="flex flex-col gap-1.5">
-                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em] ml-1">{t('questionCount')}</span>
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em] ml-1">题数</span>
                       <div className="flex items-center gap-2">
                         <DropdownMenu modal={false}>
                           <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="h-11 px-4 rounded-xl bg-card border-border text-foreground font-bold text-sm hover:bg-muted/80 transition-all flex items-center gap-2 shadow-sm">
-                              {isCustomCount ? t('custom') : t('questionsWithCount', { count: qCount })}<CaretDown className="h-3.5 w-3.5 opacity-50" />
+                              {isCustomCount ? '自定义' : `${qCount} 道题`}<CaretDown className="h-3.5 w-3.5 opacity-50" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className="w-32 rounded-xl border-border bg-card shadow-lg p-1.5" align="start">
                             {["3", "5", "10", "20"].map(v => (
-                              <DropdownMenuItem key={v} onClick={() => { setIsCustomCount(false); setQCount(v); }} className="rounded-lg font-bold py-2 cursor-pointer text-sm">{t('questionsWithCount', { count: v })}</DropdownMenuItem>
+                              <DropdownMenuItem key={v} onClick={() => { setIsCustomCount(false); setQCount(v); }} className="rounded-lg font-bold py-2 cursor-pointer text-sm">{`${v} 道题`}</DropdownMenuItem>
                             ))}
-                            <DropdownMenuItem onClick={() => setIsCustomCount(true)} className="rounded-lg font-bold py-2 text-indigo-600 cursor-pointer text-sm">{t('custom')}</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setIsCustomCount(true)} className="rounded-lg font-bold py-2 text-indigo-600 cursor-pointer text-sm">自定义</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                         {isCustomCount && <Input type="number" min="1" value={qCount} onChange={(e) => setQCount(e.target.value)} onBlur={() => { if (!qCount || parseInt(qCount) < 1) setQCount("1"); }} className="w-20 h-11 rounded-xl bg-card border-border font-bold text-center shadow-sm" />}
@@ -443,26 +398,26 @@ export const TestLadder: React.FC = () => {
 
                   {/* 难度选择 */}
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em] ml-1">{t('difficulty.label')}</span>
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em] ml-1">难度</span>
                     <Select value={difficulty} onValueChange={setDifficulty}>
                       <SelectTrigger className="h-11 px-4 rounded-xl bg-card border-border text-foreground font-bold text-sm shadow-sm w-[130px]"><SelectValue /></SelectTrigger>
                       <SelectContent className="rounded-xl border-border">
-                        <SelectItem value="mixed">{t('difficulty.mixed')}</SelectItem>
-                        <SelectItem value="entry">{t('difficulty.entry')}</SelectItem>
-                        <SelectItem value="easy">{t('difficulty.easy')}</SelectItem>
-                        <SelectItem value="normal">{t('difficulty.normal')}</SelectItem>
-                        <SelectItem value="hard">{t('difficulty.hard')}</SelectItem>
+                        <SelectItem value="mixed">混合难度</SelectItem>
+                        <SelectItem value="entry">入门</SelectItem>
+                        <SelectItem value="easy">简单</SelectItem>
+                        <SelectItem value="normal">适当</SelectItem>
+                        <SelectItem value="hard">困难</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   {/* 抽题偏好 */}
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em] ml-1">{t('preference.label')}</span>
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em] ml-1">偏好</span>
                     <div className="flex rounded-xl bg-muted p-1 gap-0.5 h-11 items-center">
                       {([
-                        { value: 'balanced', label: t('preference.balanced') },
-                        { value: 'new_first', label: t('preference.newFirst') },
-                        { value: 'review_first', label: t('preference.reviewFirst') },
+                        { value: 'balanced', label: '智能混合' },
+                        { value: 'new_first', label: '偏新题' },
+                        { value: 'review_first', label: '偏复习' },
                       ] as const).map(({ value, label }) => (
                         <button
                           key={value}
@@ -489,14 +444,14 @@ export const TestLadder: React.FC = () => {
                     <PopoverTrigger asChild>
                       <Button variant="outline" className={cn("rounded-xl bg-card border-border text-foreground font-bold transition-all flex items-center gap-2 shadow-sm h-11 px-4 text-sm")}>
                         <Funnel className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{selectedSubIds.length > 0 ? t('subjectFilter') : t('allSubjects')}</span>
+                        <span className="truncate">{selectedSubIds.length > 0 ? '学科筛选' : '全部学科'}</span>
                         <Badge variant="outline" className={cn("ml-0.5 h-5 min-w-[1.25rem] px-1 rounded-full text-[10px] font-bold", selectedSubIds.length > 0 ? "bg-indigo-600 text-white border-indigo-600" : "bg-muted text-muted-foreground border-border")}>{selectedSubIds.length}</Badge>
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent side="bottom" align="start" className="w-56 rounded-2xl p-3 bg-card border-border">
                       <div className="space-y-1">
-                        <p className="text-xs font-semibold text-muted-foreground mb-2 pb-1 border-b border-border">{t('subjectFilter')}</p>
-                        {subjectList.length === 0 ? (<p className="text-xs text-muted-foreground py-2">{t('loading')}</p>) : (
+                        <p className="text-xs font-semibold text-muted-foreground mb-2 pb-1 border-b border-border">学科筛选</p>
+                        {subjectList.length === 0 ? (<p className="text-xs text-muted-foreground py-2">加载中...</p>) : (
                           subjectList.map((subject: { id: number; name: string; code: string }) => (
                             <div key={subject.id} className="flex items-center gap-2 py-1.5 px-1 rounded-lg hover:bg-muted/60 transition-colors">
                               <Checkbox id={`subject-${subject.id}`} checked={selectedSubIds.includes(subject.id)} onCheckedChange={(checked) => { checked ? setSelectedSubIds(prev => [...prev, subject.id]) : setSelectedSubIds(prev => prev.filter(id => id !== subject.id)); }} />
@@ -504,7 +459,7 @@ export const TestLadder: React.FC = () => {
                             </div>
                           ))
                         )}
-                        {subjectList.length > 0 && selectedSubIds.length > 0 && (<button onClick={() => setSelectedSubIds([])} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 pt-1 w-full text-left">{t('clearFilter')}</button>)}
+                        {subjectList.length > 0 && selectedSubIds.length > 0 && (<button onClick={() => setSelectedSubIds([])} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 pt-1 w-full text-left">清除筛选</button>)}
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -513,10 +468,10 @@ export const TestLadder: React.FC = () => {
                 {/* ── CTA 按钮行 ── */}
                 <div className={cn("flex flex-wrap items-center gap-3 pt-2 w-full", isMobile && "flex-col")}>
                   <Button onClick={startTest} className={cn("text-white rounded-xl font-bold shadow-lg transition-all active:scale-95 bg-primary hover:opacity-90 border-0 flex-1", isMobile ? "h-12 px-6 text-sm" : "h-14 px-12 text-lg")}>
-                    <Brain className="mr-2 h-5 w-5" />{t('startTraining')}<ArrowRight className="ml-2 h-5 w-5" />
+                    <Brain className="mr-2 h-5 w-5" />开启训练<ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                   <Button variant="outline" onClick={() => navigate('/tests/review')} className={cn("rounded-xl font-bold border-border shadow-sm hover:shadow-md transition-all", isMobile ? "h-10 text-sm flex-1" : "h-14 px-6 text-sm")}>
-                    <Target className="mr-2 h-4 w-4" />{t('wrongQuestionReview')}
+                    <Target className="mr-2 h-4 w-4" />错题复盘
                   </Button>
                 </div>
               </div>
@@ -532,11 +487,11 @@ export const TestLadder: React.FC = () => {
                 )}>
                   <div className="flex items-center gap-3 mb-2">
                     <div className={cn("bg-card shadow-sm flex items-center justify-center text-indigo-500", isMobile ? "h-8 w-8 rounded-xl" : "h-9 w-9 rounded-2xl")}><Brain className="h-4 w-4" /></div>
-                    <p className={cn("font-bold text-muted-foreground uppercase tracking-widest leading-none", isMobile ? "text-[11px]" : "text-[14px]")}>{t('stats.todayReview')}</p>
+                    <p className={cn("font-bold text-muted-foreground uppercase tracking-widest leading-none", isMobile ? "text-[11px]" : "text-[14px]")}>今日复习</p>
                   </div>
                   <div className="flex items-baseline gap-1">
                     <p className={cn("font-black text-foreground tabular-nums", isMobile ? "text-3xl" : "text-4xl")}>{goals.review_goal}</p>
-                    <span className="text-[12px] font-bold text-muted-foreground uppercase">{t('stats.due')}</span>
+                    <span className="text-[12px] font-bold text-muted-foreground uppercase">Due</span>
                   </div>
                 </div>
                 <div className={cn(
@@ -545,11 +500,11 @@ export const TestLadder: React.FC = () => {
                 )}>
                   <div className="flex items-center gap-3 mb-2">
                     <div className={cn("bg-card shadow-sm flex items-center justify-center text-muted-foreground", isMobile ? "h-8 w-8 rounded-xl" : "h-9 w-9 rounded-2xl")}><ChartLine className="h-4 w-4" /></div>
-                    <p className={cn("font-bold text-muted-foreground uppercase tracking-widest leading-none", isMobile ? "text-[11px]" : "text-[14px]")}>{t('stats.atRisk')}</p>
+                    <p className={cn("font-bold text-muted-foreground uppercase tracking-widest leading-none", isMobile ? "text-[11px]" : "text-[14px]")}>记忆临界</p>
                   </div>
                   <div className="flex items-baseline gap-1">
                     <p className={cn("font-black text-foreground tabular-nums", isMobile ? "text-3xl" : "text-4xl")}>{goals.at_risk_count || 0}</p>
-                    <span className="text-[12px] font-bold text-muted-foreground uppercase">{t('stats.atRiskUnit')}</span>
+                    <span className="text-[12px] font-bold text-muted-foreground uppercase">At Risk</span>
                   </div>
                 </div>
               </div>
@@ -564,34 +519,34 @@ export const TestLadder: React.FC = () => {
           )}>
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
-                <p className="label-meta">{t('memorix.curveTitle')}</p>
-                <p className="text-sm font-bold text-foreground mt-1">{t('memorix.curveSubtitle', { days: memorixCurve?.window_days || 90 })}</p>
+                <p className="label-meta">Memorix 拟合曲线</p>
+                <p className="text-sm font-bold text-foreground mt-1">{`记忆预测 vs 实际掌握（近 ${memorixCurve?.window_days || 90} 天）`}</p>
               </div>
               <Button variant="outline" className="h-8 rounded-lg text-xs font-bold" onClick={() => { fetchMemorixCurve(); fetchMemorixHistory(); }}>
-                {t('refresh')}
+                刷新
               </Button>
             </div>
             {(memorixCurve?.time_series || []).length > 0 ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.sampleCount')}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">样本量</p>
                     <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.review_count ?? 0}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.predictionAccuracy')}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">预测准确度</p>
                     <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.rmse ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.avgError')}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">平均误差</p>
                     <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.mae ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.predictedMastery')}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">预测掌握度</p>
                     <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.avg_predicted ?? '--'}</p>
                   </div>
                   <div className="rounded-xl bg-muted px-3 py-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('memorix.actualMastery')}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">实际掌握度</p>
                     <p className="text-sm font-bold text-foreground">{memorixCurve?.metrics?.avg_actual ?? '--'}</p>
                   </div>
                 </div>
@@ -602,24 +557,24 @@ export const TestLadder: React.FC = () => {
                     <path d={memorixChart.actualPath} fill="none" stroke="#10b981" strokeWidth="2.5" />
                   </svg>
                   <div className="mt-2 flex items-center gap-4 text-[11px] font-bold">
-                    <span className="text-indigo-600">{t('memorix.predictedCurve')}</span>
-                    <span className="text-emerald-600">{t('memorix.actualCurve')}</span>
-                    <span className="text-muted-foreground">{t('memorix.lastOptimized', { date: memorixCurve?.profile?.last_optimized_at ? new Date(memorixCurve.profile.last_optimized_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US') : t('memorix.notOptimized') })}</span>
+                    <span className="text-indigo-600">预测曲线</span>
+                    <span className="text-emerald-600">实际曲线</span>
+                    <span className="text-muted-foreground">{`最近优化：${memorixCurve?.profile?.last_optimized_at ? new Date(memorixCurve.profile.last_optimized_at).toLocaleString('zh-CN') : '尚未优化'}`}</span>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-border bg-card p-3">
-                  <p className="text-[10px] font-bold uppercase text-muted-foreground">{t('memorix.tuningHistory')}</p>
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground">最近调优记录</p>
                   {memorixHistory.length === 0 ? (
-                    <p className="text-xs font-bold text-muted-foreground mt-2">{t('memorix.noTuningHistory')}</p>
+                    <p className="text-xs font-bold text-muted-foreground mt-2">暂无调优记录</p>
                   ) : (
                     <div className="space-y-1.5 mt-2">
                       {memorixHistory.slice(0, 3).map((item) => (
                         <div key={item.id} className="rounded-lg border border-border px-2.5 py-2 text-[11px]">
                           <p className="font-bold">
-                            {item.accepted ? t('memorix.accepted') : t('memorix.notAccepted')} · {t('memorix.improvementRate')} {(Number(item.improvement_ratio || 0) * 100).toFixed(2)}%
+                            {item.accepted ? '已采纳' : '未采纳'} · 改善率 {(Number(item.improvement_ratio || 0) * 100).toFixed(2)}%
                           </p>
                           <p className="text-muted-foreground mt-1">
-                            {t('memorix.samples')} {item.reviews_used} · {new Date(item.created_at).toLocaleString(i18n.language?.startsWith('zh') ? 'zh-CN' : 'en-US')}
+                            样本 {item.reviews_used} · {new Date(item.created_at).toLocaleString('zh-CN')}
                           </p>
                         </div>
                       ))}
@@ -629,7 +584,7 @@ export const TestLadder: React.FC = () => {
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-border p-6 text-xs font-bold text-muted-foreground">
-                {t('memorix.emptyCurve')}
+                当前复习记录不足，完成几轮训练后这里会显示你的 Memorix 个性化拟合曲线。
               </div>
             )}
           </Card>
@@ -647,17 +602,8 @@ export const TestLadder: React.FC = () => {
           toggleMastered={toggleMastered} 
           toggleFavorite={toggleFavorite} 
           handleSubmit={handleSubmit} 
-          isSubmitting={isSubmitting} 
-          gradingMessage={gradingMessage} 
-        />
-
-        <ResultReportDialog 
-          open={showResultDialog} 
-          onOpenChange={setShowResultDialog} 
-          examSummary={examSummary} 
-          results={results} 
-          currentReportIdx={currentReportIdx} 
-          setCurrentReportIdx={setCurrentReportIdx} 
+          isSubmitting={isSubmitting}
+          gradingMessage={gradingMessage}
         />
       </div>
     </PageWrapper>

@@ -66,7 +66,7 @@ if IS_PROD and not ALLOWED_HOSTS:
 # ── 模块开关 ──
 # 企业版可裁剪不需要的模块。留空表示全部启用。
 # 例: ENABLED_APPS=users,courses,quizzes,ai_assistant,core
-# 可选模块: payments,study_room,faq_system,notifications,interviews,articles
+# 可选模块: payments,study_room,faq_system,notifications,articles
 _ENABLED_RAW = os.getenv('ENABLED_APPS', '')
 ENABLED_APPS = [a.strip() for a in _ENABLED_RAW.split(',') if a.strip()] if _ENABLED_RAW else None
 
@@ -91,7 +91,6 @@ INSTALLED_APPS = [
     "ai_assistant",
     "faq_system",
     "notifications",
-    "interviews",
     "core",
     "payments",
 ]

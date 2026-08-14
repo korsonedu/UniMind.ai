@@ -4,11 +4,11 @@
 
 ### planning（学习规划）
 触发：规划、安排、计划、复习、备考、学习计划、日程、每周、今天做什么
-工具：get_learning_stats, get_knowledge_mastery_map, get_due_reviews, save_study_plan, get_active_plan, update_plan_task, render_visual
+工具：get_learning_stats, get_knowledge_mastery_map, get_due_reviews, render_visual
 
 ### analysis（数据分析）
 触发：分析、掌握率、薄弱、趋势、成绩、正确率、统计、报告、难度
-工具：get_learning_stats, get_knowledge_mastery_map, get_class_weak_points, get_class_performance_summary, get_exam_history, get_knowledge_difficulty_analysis, render_visual
+工具：get_learning_stats, get_knowledge_mastery_map, get_exam_history, get_knowledge_difficulty_analysis, render_visual
 
 ### quiz（出题练习）
 触发：出题、做题、练习、测试、考试、刷题、模拟、真题

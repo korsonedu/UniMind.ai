@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import api, { setPreviewInstitutionId, setCampusContextId } from '@/lib/api';
+import api, { setPreviewInstitutionId } from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 
@@ -33,7 +33,6 @@ export interface UsageInfo {
   ai_question: QuotaItem;
   ai_call_total: QuotaItem;
   pdf_export: QuotaItem;
-  interview: QuotaItem;
   custom_bot: QuotaItem;
   // backward compat
   used: number;
@@ -48,7 +47,6 @@ export const QUOTA_LABELS: Record<string, string> = {
   ai_question: 'AI 出题次数',
   ai_call_total: 'AI 调用总次数',
   pdf_export: '模拟考试 PDF',
-  interview: '面试场次',
   custom_bot: '自定义机器人数',
 };
 
@@ -61,17 +59,6 @@ export function quotaStatus(resource: QuotaItem): 'normal' | 'warning' | 'exhaus
 
 export function quotaLabel(key: string): string {
   return QUOTA_LABELS[key] || key;
-}
-
-export interface CampusInfo {
-  id: number;
-  name: string;
-  slug: string;
-  plan: string;
-  inherit_plan: boolean;
-  is_active: boolean;
-  student_count: number;
-  staff_count: number;
 }
 
 interface InstitutionState {
@@ -88,16 +75,6 @@ interface InstitutionState {
   enterPreview: (institutionId: number) => Promise<void>;
   exitPreview: () => Promise<void>;
 
-  // Campus / sub-institution
-  currentCampusId: number | null;
-  children: CampusInfo[];
-  fetchChildren: () => Promise<void>;
-  switchCampus: (campusId: number | null) => Promise<void>;
-
-  // Class selector
-  currentClassId: number | null;
-  setCurrentClassId: (id: number | null) => void;
-
   fetchFeatures: () => Promise<void>;
   hasFeature: (feature: string) => boolean;
   clear: () => void;
@@ -112,30 +89,6 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
   featuresError: false,
   previewMode: false,
   previewInstitution: null,
-
-  // Campus / sub-institution
-  currentCampusId: null,
-  children: [],
-  fetchChildren: async () => {
-    try {
-      const { data } = await api.get('/users/institution/me/children/');
-      set({ children: Array.isArray(data) ? data : [] });
-    } catch {
-      set({ children: [] });
-    }
-  },
-  switchCampus: async (campusId: number | null) => {
-    setCampusContextId(campusId);
-    set({ currentCampusId: campusId });
-    // Re-fetch features to reflect the new campus context
-    if (campusId !== null) {
-      get().fetchFeatures();
-    }
-  },
-
-  // Class selector
-  currentClassId: null,
-  setCurrentClassId: (id: number | null) => set({ currentClassId: id }),
 
   fetchFeatures: async () => {
     const state = get();
@@ -210,7 +163,6 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
 
   clear: () => {
     setPreviewInstitutionId(null);
-    setCampusContextId(null);
     set({
       isPlatformAdmin: false,
       institution: null,
@@ -218,9 +170,6 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
       loading: false,
       previewMode: false,
       previewInstitution: null,
-      currentCampusId: null,
-      currentClassId: null,
-      children: [],
     });
   },
 }));
@@ -238,12 +187,8 @@ export const FEATURES = {
   VIDEO_OUTLINE: 'video.outline',
   KNOWLEDGE_GRAPH: 'knowledge.graph',
   FAQ_SYSTEM: 'faq.system',
-  MULTI_TEACHER: 'multi.teacher',
-  CLASS_COMPARE: 'class.compare',
   DATA_EXPORT: 'data.export',
   STUDY_ROOM: 'study.room',
-  AI_ASSISTANT: 'ai.assistant',
-  PDF_MOCK: 'pdf.mock',
   AI_BOT_CUSTOM: 'ai.bot.custom',
   BRAND_CUSTOM: 'brand.custom',
   API_ACCESS: 'api.access',
@@ -254,5 +199,4 @@ export const FEATURES = {
   AUDIT_LOG: 'audit.log',
   DEDICATED_SUPPORT: 'dedicated.support',
   SLA_99_9: 'sla.99.9',
-  TEACHING_PLANS: 'teaching_plans',
 } as const;

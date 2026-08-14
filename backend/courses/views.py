@@ -8,17 +8,13 @@ import uuid
 
 from django.conf import settings
 from django.core.files import File
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
-from django.template.loader import render_to_string
-from django.utils import timezone
 from django.utils.decorators import method_decorator
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import generics, permissions
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
-from users.permissions import IsAdmin, HasQuota, is_institution_teacher, IsInstitutionTeacher
+from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
 
@@ -44,13 +40,6 @@ OSS_PART_SIZE = 10 * 1024 * 1024  # 10MB per part
 
 
 logger = logging.getLogger(__name__)
-
-
-def _load_prompt(template_name: str) -> str:
-    """从 prompts/courses/ 目录加载 prompt 模板文件。"""
-    path = os.path.join(settings.BASE_DIR, 'prompts', 'courses', template_name)
-    with open(path, 'r', encoding='utf-8') as f:
-        return f.read()
 
 
 def _get_video_local_path(course) -> str:
@@ -502,7 +491,7 @@ class AlbumCoursesView(APIView):
             return Response({'error': '专辑不存在'}, status=404)
 
         courses = album.courses.all().order_by('sort_order', '-created_at')
-        return Response(CourseSerializer(courses, many=True).data)
+        return Response(CourseSerializer(courses, many=True, context={'request': request}).data)
 
 class CourseListCreateView(generics.ListCreateAPIView):
     serializer_class = CourseSerializer
@@ -541,16 +530,6 @@ class CourseListCreateView(generics.ListCreateAPIView):
                 tag__institution=self.request.user.institution,
             ).values('course_id').annotate(n=Count('id')).filter(n=len(tag))
             qs = qs.filter(id__in=[m['course_id'] for m in matching_qs])
-        class_id = self.request.query_params.get('class_id')
-        if class_id:
-            try:
-                from users.models import ClassCourse
-                course_ids = ClassCourse.objects.filter(
-                    class_obj_id=int(class_id)
-                ).values_list('course_id', flat=True)
-                qs = qs.filter(id__in=course_ids)
-            except (ValueError, TypeError):
-                pass
         return qs
 
     def list(self, request, *args, **kwargs):
@@ -727,262 +706,3 @@ class CourseTranscriptView(APIView):
         dispatch_transcription(course.id)
         return Response({'status': 'processing'})
 
-
-# ── Teaching Plan ──
-
-from courses.models import TeachingPlan
-from courses.serializers import TeachingPlanSerializer
-
-
-class TeachingPlanListCreateView(APIView):
-    """GET/POST /api/courses/teaching-plans/ — 教学计划列表+创建。"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        role = getattr(user, 'institution_role', '')
-        if role == 'student':
-            # 学生只看自己班级的教学计划
-            student_classes = user.classes.all()
-            qs = TeachingPlan.objects.filter(class_obj__in=student_classes).select_related('class_obj')
-        elif is_institution_teacher(user):
-            qs = TeachingPlan.objects.filter(institution=institution).select_related('class_obj')
-        else:
-            return Response({'error': '无权限'}, status=403)
-
-        class_id = request.query_params.get('class_id')
-        if class_id:
-            qs = qs.filter(class_obj_id=int(class_id))
-
-        data = TeachingPlanSerializer(qs.order_by('-created_at'), many=True).data
-        return Response(data)
-
-    def post(self, request):
-        user = request.user
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return Response({'error': '无机构归属'}, status=403)
-
-        if not is_institution_teacher(user):
-            return Response({'error': '仅教师/机构主可创建'}, status=403)
-
-        serializer = TeachingPlanSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        plan = serializer.save(institution=institution, created_by=user)
-        return Response(TeachingPlanSerializer(plan).data, status=201)
-
-
-class TeachingPlanDetailView(APIView):
-    """GET/PUT/DELETE /api/courses/teaching-plans/<id>/ — 教学计划详情。"""
-    permission_classes = [IsAuthenticated]
-
-    def _get_plan(self, pk, user):
-        institution = getattr(user, 'institution', None)
-        if not institution:
-            return None
-        try:
-            plan = TeachingPlan.objects.get(id=pk)
-        except TeachingPlan.DoesNotExist:
-            return None
-        if plan.institution_id != institution.id:
-            return None
-        return plan
-
-    def get(self, request, pk):
-        plan = self._get_plan(pk, request.user)
-        if not plan:
-            return Response({'error': '教学计划不存在'}, status=404)
-        return Response(TeachingPlanSerializer(plan).data)
-
-    def put(self, request, pk):
-        plan = self._get_plan(pk, request.user)
-        if not plan:
-            return Response({'error': '教学计划不存在'}, status=404)
-        serializer = TeachingPlanSerializer(plan, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-    def delete(self, request, pk):
-        plan = self._get_plan(pk, request.user)
-        if not plan:
-            return Response({'error': '教学计划不存在'}, status=404)
-        plan.delete()
-        return Response({'deleted': True})
-
-
-class AIGenerateWeeklyPlansView(APIView):
-    """POST /api/courses/teaching-plans/<id>/ai-generate-weeks/ — AI 生成整学期周计划。"""
-    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
-
-    def post(self, request, pk):
-        user = request.user
-        institution = user.institution
-
-        try:
-            plan = TeachingPlan.objects.get(id=pk, institution=institution)
-        except TeachingPlan.DoesNotExist:
-            return Response({'error': '教学计划不存在'}, status=404)
-
-        from ai_engine import AIService
-
-        system_prompt = _load_prompt('weekly_plans_generate.txt')
-        user_prompt = (
-            f'学科：{plan.subject}\n'
-            f'学期：{plan.semester}\n'
-            f'总周数：{plan.week_count}\n'
-            f'计划名称：{plan.title}\n'
-            f'描述：{plan.description}\n'
-            f'请为这 {plan.week_count} 周逐一设计主题和教学目标。'
-        )
-
-        # ── Memorix 学情注入 ──
-        try:
-            from .services.analytics_service import get_class_kp_analytics, format_analytics_for_ai_prompt
-            analytics = get_class_kp_analytics(plan)
-            context = format_analytics_for_ai_prompt(analytics)
-            if context:
-                user_prompt += '\n\n' + context
-                system_prompt += '\n教学顺序必须遵循前驱关系，薄弱知识点需分配更多周数，学期中段和末尾各留1-2周复习。'
-        except Exception:
-            pass
-
-        try:
-            result = AIService.chat(
-                messages=[
-                    {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': user_prompt},
-                ],
-                temperature=0.8,
-                max_tokens=4096,
-                response_format={'type': 'json_object'},
-            )
-            content = result.get('content', '{}')
-            import json as _json
-            ai_data = _json.loads(content)
-            weekly_plans = ai_data.get('weekly_plans', [])
-        except Exception:
-            logger.exception('AI weekly plan generation failed')
-            return Response({'error': 'AI 生成失败，请稍后重试'}, status=500)
-
-        # Merge with existing manual entries — AI only fills empty weeks
-        existing = {w['week']: w for w in (plan.weekly_plans or [])}
-        for wp in weekly_plans:
-            week_num = wp.get('week', 0)
-            if week_num and week_num not in existing:
-                existing[week_num] = {
-                    'week': week_num,
-                    'topic': wp.get('topic', ''),
-                    'objectives': wp.get('objectives', ''),
-                    'materials': wp.get('materials', ''),
-                    'kp_ids': wp.get('kp_ids', []),
-                }
-
-        plan.weekly_plans = sorted(existing.values(), key=lambda w: w['week'])
-        plan.save(update_fields=['weekly_plans'])
-
-        return Response({
-            'weekly_plans': plan.weekly_plans,
-            'message': f'已生成 {len(weekly_plans)} 周计划',
-        })
-
-
-class LessonPlanPDFView(APIView):
-    """GET /api/courses/teaching-plans/<pk>/pdf/ — 导出教学计划为 PDF。"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, pk):
-        plan = get_object_or_404(TeachingPlan, pk=pk)
-        # Check institution access
-        inst = getattr(request.user, 'institution', None)
-        if inst and plan.institution_id != inst.id:
-            return Response({'error': '无权访问'}, status=403)
-
-        html = render_to_string('lesson_plan_pdf.html', {
-            'plan': plan,
-            'weekly_plans': plan.weekly_plans or [],
-            'generated_at': timezone.now(),
-        })
-
-        from quizzes.services.pdf_generator import _html_to_pdf
-        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
-            pdf_path = tmp.name
-        try:
-            _html_to_pdf(html, pdf_path)
-            with open(pdf_path, 'rb') as f:
-                pdf_bytes = f.read()
-        finally:
-            os.unlink(pdf_path)
-
-        filename = f'教学计划-{plan.title}-{plan.semester}.pdf'
-        response = HttpResponse(pdf_bytes, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
-
-
-class TeachingPlanAnalyticsView(APIView):
-    """GET /api/courses/teaching-plans/<id>/analytics/ — 班级学情分析 + AI 教学建议。"""
-    permission_classes = [IsAuthenticated, IsInstitutionTeacher]
-
-    def get(self, request, pk):
-        user = request.user
-        institution = user.institution
-
-        try:
-            plan = TeachingPlan.objects.select_related('class_obj').get(id=pk, institution=institution)
-        except TeachingPlan.DoesNotExist:
-            return Response({'error': '教学计划不存在'}, status=404)
-
-        # 获取 Memorix 学情数据
-        from .services.analytics_service import get_class_kp_analytics
-        analytics = get_class_kp_analytics(plan)
-
-        # AI 生成教学建议
-        ai_suggestions = None
-        if analytics['student_count'] > 0 and (analytics['weak_kps'] or analytics['prerequisite_chains']):
-            try:
-                from ai_engine import AIService
-                prompt = (
-                    f'学科：{plan.subject}\n'
-                    f'班级：{plan.class_obj.name}，{analytics["student_count"]}名学生\n'
-                    f'教学周数：{plan.week_count}\n\n'
-                )
-                if analytics['weak_kps']:
-                    prompt += '薄弱知识点：\n'
-                    for kp in analytics['weak_kps']:
-                        prompt += f'- {kp["kp_name"]}: 正确率{kp["correct_rate"]}%\n'
-                if analytics['prerequisite_chains']:
-                    prompt += '\n知识点前驱关系（必须按先后顺序教学）：\n'
-                    for pc in analytics['prerequisite_chains'][:3]:
-                        prompt += '- ' + ' → '.join(n['kp_name'] for n in pc['chain']) + '\n'
-                if analytics['forgetting_risk']:
-                    prompt += '\n高遗忘风险知识点：\n'
-                    for r in analytics['forgetting_risk'][:5]:
-                        prompt += f'- {r["kp_name"]}: 遗忘风险{r["avg_retrievability"]}\n'
-
-                result = AIService.chat(
-                    messages=[
-                        {'role': 'system', 'content': '你是教学分析专家。根据班级学情数据，给出简明的教学建议。'},
-                        {'role': 'user', 'content': prompt + '\n请给出：1) 应优先安排哪些知识点 2) 建议的教学顺序调整 3) 是否需要插入复习周'},
-                    ],
-                    temperature=0.5,
-                    max_tokens=1024,
-                )
-                ai_suggestions = result.get('content', '')
-            except Exception:
-                logger.exception('AI suggestions generation failed')
-
-        return Response({
-            'subject': plan.subject,
-            'class_name': plan.class_obj.name,
-            'student_count': analytics['student_count'],
-            'performance': analytics['performance'],
-            'weak_kps': analytics['weak_kps'],
-            'prerequisite_chains': analytics['prerequisite_chains'],
-            'forgetting_risk': analytics['forgetting_risk'],
-            'ai_suggestions': ai_suggestions,
-        })

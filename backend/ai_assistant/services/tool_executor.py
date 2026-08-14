@@ -8,7 +8,6 @@ import json
 import logging
 from typing import Any, Dict, List
 from django.db import models
-from users.permissions import is_institution_teacher
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +47,11 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'search_knowledge_tree': lambda a: f"检索「{a.get('query', '')}」相关知识点",
         'get_user_weak_points': lambda a: "分析你的薄弱知识点",
         'get_user_wrong_questions': lambda a: f"查看{a.get('topic', '')}错题" if a.get('topic') else "查看你的错题记录",
-        'get_class_weak_points': lambda a: "分析班级薄弱知识点",
-        'get_class_performance_summary': lambda a: "获取班级表现概览",
         'lookup_question': lambda a: f"查找题目（ID: {a.get('question_id', '')}）",
         'get_learning_stats': lambda a: "获取学习统计数据",
         'get_knowledge_mastery_map': lambda a: f"生成{a.get('subject', '')}知识掌握图谱" if a.get('subject') else "生成知识掌握图谱",
         'get_due_reviews': lambda a: "查询到期待复习的题目",
         'get_exam_history': lambda a: "查询考试历史",
-        'save_study_plan': lambda a: "保存学习计划",
-        'get_active_plan': lambda a: "获取当前学习计划",
-        'update_plan_task': lambda a: f"更新计划任务「{a.get('task_id', '')}」",
         'search_courses': lambda a: f"搜索课程「{a.get('query', '')}」",
         'search_asr': lambda a: f"搜索视频字幕「{a.get('query', '')}」",
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
@@ -71,23 +65,12 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'check_pipeline_status': lambda a: "检查管线执行进度",
         'get_workbench_stats': lambda a: "获取题库统计",
         'get_student_detail': lambda a: f"查看「{a.get('student_name', a.get('student_id', '学生'))}」学习数据",
-        'get_assignment_progress': lambda a: f"查询作业 #{a.get('assignment_id', '')} 进度",
-        'assign_practice': lambda a: f"布置作业「{a.get('title', '课后练习')}」",
         'send_notification': lambda a: f"发送提醒给「{a.get('student_name', a.get('student_id', '学生'))}」",
         'list_courses': lambda a: "浏览课程库" + (f"（{a.get('subject', '')}）" if a.get('subject') else ""),
         'list_questions': lambda a: "浏览题库" + (f"（{a.get('kp_name', '')}）" if a.get('kp_name') else ""),
         'list_articles': lambda a: "浏览文章库" + (f"（搜索: {a.get('query', '')}）" if a.get('query') else ""),
         'get_report_card': lambda a: "生成学习报告",
-        'get_my_courses': lambda a: "查询我的课程",
         'get_my_achievements': lambda a: "查看我的成就",
-        'get_teaching_plan_kps': lambda a: (
-            "浏览教学计划列表" if not a.get('teaching_plan_id')
-            else f"查询教学计划 #{a.get('teaching_plan_id', '')} 知识点"
-        ),
-        'create_teaching_plan': lambda a: f"创建教学计划「{a.get('title', '')}」",
-        # ── F2: 批改助手 ──
-        'bulk_grade_submissions': lambda a: f"AI 批量评分作业 #{a.get('assignment_id', '')}",
-        'confirm_grades': lambda a: f"确认批改作业 #{a.get('assignment_id', '')}",
         # ── F3: 答疑 ──
         'create_faq_ticket': lambda a: f"创建答疑工单「{a.get('question_text', '')[:30]}」",
         # ── F4: 学情报告 ──
@@ -136,11 +119,6 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'get_knowledge_mastery_map': lambda r: f"覆盖 {len(r.get('mastery_map', {}))} 个学科",
         'get_due_reviews': lambda r: f"{r.get('due_count', 0)} 个待复习",
         'get_exam_history': lambda r: f"共 {len(r.get('exams', []))} 次考试",
-        'get_active_plan': lambda r: (
-            f"「{r.get('title', '')}」进度 {r.get('progress_pct', 0):.0f}%"
-            if r.get('has_active_plan') else "无活跃计划"
-        ),
-        'save_study_plan': lambda r: f"已保存「{r.get('title', '')}」共 {r.get('task_count', 0)} 个任务",
         'search_courses': lambda r: f"找到 {len(r.get('courses', []))} 门课程",
         'search_articles': lambda r: f"找到 {len(r.get('articles', []))} 篇文章",
         'quick_generate': lambda r: f"生成 {r.get('count', len(r.get('questions', [])))} 道题",
@@ -156,29 +134,15 @@ def summarize_tool_result(tool_name: str, result) -> str:
                 r.get('error_analysis', {}).get('type', ''), ''
             ) if r.get('error_analysis', {}).get('type') else ''
         ) + (f" · 推荐{len(r.get('remediation_questions', []))}道变式题" if r.get('remediation_questions') else ''),
-        'update_plan_task': lambda r: f"任务已更新为 {r.get('new_status', 'unknown')}",
         'run_diagnostic': lambda r: f"诊断完成，答对 {r.get('total_correct', 0)}/{r.get('total_questions', 0)}" if 'total_correct' in r else f"已生成 {len(r.get('questions', []))} 道诊断题",
         'get_student_detail': lambda r: f"{r.get('name', '')} 正确率 {r.get('accuracy', 0)}%" + (
             f"，{len(r.get('weak_points', []))} 个薄弱点" if r.get('weak_points') else ""),
-        'get_assignment_progress': lambda r: f"「{r.get('title', '')}」提交 {r.get('submitted', 0)}/{r.get('total_students', 0)}" + (
-            f"，{r.get('pending_grade', 0)} 份待批改" if r.get('pending_grade', 0) else "，全部已批改"),
-        'assign_practice': lambda r: f"已发布「{r.get('title', '')}」{r.get('question_count', 0)} 题给 {r.get('class_count', 0)} 个班",
         'send_notification': lambda r: f"已发送提醒给 {r.get('count', 0)} 人",
         'list_courses': lambda r: f"共 {r.get('total', 0)} 门课程",
         'list_questions': lambda r: f"共 {r.get('total', 0)} 道题",
         'list_articles': lambda r: f"共 {r.get('total', 0)} 篇文章",
         'get_report_card': lambda r: f"正确率 {r.get('accuracy', 0)}%，掌握 {r.get('mastered_count', 0)} 个知识点",
-        'get_my_courses': lambda r: f"共 {len(r.get('courses', []))} 门课程",
         'get_my_achievements': lambda r: f"已解锁 {r.get('unlocked_count', len(r.get('unlocked', [])))} 个成就",
-        'get_teaching_plan_kps': lambda r: (
-            f"共 {r.get('total', 0)} 个教学计划" if 'plans' in r
-            else f"教学计划「{r.get('title', '')}」，{r.get('total_kps', 0)} 个知识点"
-        ),
-        'create_teaching_plan': lambda r: f"{'已更新' if r.get('created') == False else '已创建'}「{r.get('title', '')}」",
-        # ── F2: 批改助手 ──
-        'bulk_grade_submissions': lambda r: f"AI 已完成 {r.get('graded_count', 0)} 份评分" + (
-            " · 已驳回" if r.get('rejected') else ""),
-        'confirm_grades': lambda r: f"已确认 {r.get('confirmed_count', 0)} 份批改",
         # ── F3: 答疑 ──
         'create_faq_ticket': lambda r: f"工单 #{r.get('ticket_id', '')} 已创建 · {r.get('message', '')[:30]}",
         # ── F4: 学情报告 ──
@@ -211,7 +175,6 @@ class BaseToolExecutor:
         self.user = user
         self._allowed_tool_names = None
         self.institution = institution or getattr(user, 'institution', None)
-        self.class_id: int | None = None  # 由 chat_dispatch 注入，当前选中的班级 ID
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
         self.tool_call_log: list = []     # MUTAR 轨迹：工具调用序列
@@ -345,23 +308,6 @@ class BaseToolExecutor:
         limit = min(int(args.get('limit', 5)), 10)
         return MemorySystem.query_user_wrong_questions(self.user, limit, self.institution)
 
-    def _handle_get_class_weak_points(self, args: Dict) -> Dict:
-        """获取班级最薄弱的知识点（仅 teacher/owner 可用）。"""
-        if not self.institution or not is_institution_teacher(self.user):
-            return {"error": "仅教师/机构主可使用班级分析功能"}
-
-        from ai_assistant.services.memory_system import MemorySystem
-        limit = min(int(args.get('limit', 5)), 10)
-        return MemorySystem.query_class_weak_points(self.institution, limit)
-
-    def _handle_get_class_performance_summary(self, args: Dict) -> Dict:
-        """获取班级整体学习数据概览（仅 teacher/owner 可用）。"""
-        if not self.institution or not is_institution_teacher(self.user):
-            return {"error": "仅教师/机构主可使用班级分析功能"}
-
-        from ai_assistant.services.memory_system import MemorySystem
-        return MemorySystem.query_class_performance(self.institution)
-
     def _handle_lookup_question(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
         qid = int(args.get('question_id', 0))
@@ -399,39 +345,6 @@ class BaseToolExecutor:
         except Exception as e:
             logger.exception("get_report_card failed")
             return {"error": f"获取报告失败: {str(e)}"}
-
-    def _handle_get_my_courses(self, args: Dict) -> Dict:
-        """获取学生当前班级分配的课程列表。"""
-        from courses.models import Course
-        from users.models import Class, ClassCourse
-
-        member_class = None
-        class_id = None
-        if self.user.institution:
-            member_class = Class.objects.filter(
-                students=self.user, institution=self.user.institution
-            ).first()
-            if member_class:
-                class_id = member_class.id
-
-        if not class_id:
-            return {"courses": [], "message": "你尚未加入任何班级，请联系老师"}
-
-        course_ids = ClassCourse.objects.filter(
-            class_obj_id=class_id,
-        ).values_list('course_id', flat=True)
-
-        courses = Course.objects.filter(
-            id__in=course_ids,
-        ).order_by('title')[:20]
-
-        return {
-            'courses': [
-                {'id': c.id, 'title': c.title, 'subject': c.subject or ''}
-                for c in courses
-            ],
-            'class_name': member_class.name if member_class else '',
-        }
 
     def _handle_get_my_achievements(self, args: Dict) -> Dict:
         """获取学生已解锁的成就列表。"""
@@ -572,139 +485,6 @@ class PlannerToolExecutor(BaseToolExecutor):
         from ai_assistant.services.memory_system import MemorySystem
         limit = min(int(args.get('limit', 10)), 20)
         return MemorySystem.query_exam_history(self.user, limit, self.institution)
-
-    def _handle_save_study_plan(self, args: Dict) -> Dict:
-        from ai_assistant.models import StudyPlan
-
-        title = args.get('title', '学习计划')
-        summary = args.get('summary', '')
-        tasks = args.get('tasks', [])
-        total_days = args.get('total_days', max((t.get('day', 1) for t in tasks), default=1))
-
-        for i, task in enumerate(tasks):
-            if 'id' not in task:
-                task['id'] = f"task_{i + 1}"
-            task.setdefault('status', 'pending')
-            task.setdefault('completed_at', None)
-            if 'task' in task and 'title' not in task:
-                task['title'] = task.pop('task')
-            task.setdefault('title', task.get('description', f'任务 {i + 1}'))
-            task.setdefault('day', 1)
-            task.setdefault('subject', '')
-            task.setdefault('description', '')
-
-        # Archive any existing active plan
-        StudyPlan.objects.filter(user=self.user, status='active').update(status='archived')
-
-        # 关联教学计划（有班级的学生自动关联）
-        teaching_plan_id = args.get('teaching_plan_id')
-
-        # 如果有教学计划，提取知识点范围约束
-        teaching_plan_kp_ids = None
-        if teaching_plan_id:
-            try:
-                from courses.models import TeachingPlan
-                tp = TeachingPlan.objects.filter(id=int(teaching_plan_id)).first()
-                if tp and tp.weekly_plans:
-                    teaching_plan_kp_ids = list({
-                        kp_id
-                        for wp in tp.weekly_plans
-                        for kp_id in (wp.get('kp_ids') or [])
-                    })
-            except Exception:
-                pass
-
-        plan = StudyPlan.objects.create(
-            user=self.user,
-            title=title,
-            summary=summary,
-            plan_data={
-                "tasks": tasks,
-                "total_days": total_days,
-                "subjects_covered": list({t.get('subject', '') for t in tasks if t.get('subject')}),
-                "diagnostic_suggested": args.get('diagnostic_suggested', False),
-                **({"teaching_plan_kp_ids": teaching_plan_kp_ids} if teaching_plan_kp_ids else {}),
-            },
-            teaching_plan_id=teaching_plan_id,
-            auto_generated=True,
-        )
-        return {"plan_id": plan.id, "title": plan.title, "task_count": len(tasks), "status": "active"}
-
-    def _handle_get_active_plan(self, args: Dict) -> Dict:
-        from ai_assistant.models import StudyPlan
-
-        plan = StudyPlan.objects.filter(user=self.user, status='active').first()
-        if not plan:
-            return {"has_active_plan": False, "message": "当前没有进行中的学习计划。"}
-        data = plan.plan_data or {}
-        tasks = data.get('tasks', [])
-        completed = sum(1 for t in tasks if t.get('status') == 'completed')
-        result = {
-            "has_active_plan": True,
-            "plan_id": plan.id,
-            "title": plan.title,
-            "summary": plan.summary,
-            "total_tasks": len(tasks),
-            "completed_tasks": completed,
-            "progress_pct": round(completed / len(tasks) * 100, 1) if tasks else 0,
-            "tasks": tasks,
-            "created_at": plan.created_at.isoformat(),
-        }
-        # 如果关联了教学计划，返回目标信息
-        if plan.teaching_plan:
-            tp = plan.teaching_plan
-            result["teaching_plan"] = {
-                "id": tp.id, "title": tp.title,
-                "goal": tp.goal or '', "deadline": tp.deadline.isoformat() if tp.deadline else None,
-                "subject": tp.subject or '', "current_week": None,
-            }
-        return result
-
-    def _handle_update_plan_task(self, args: Dict) -> Dict:
-        from ai_assistant.models import StudyPlan
-        from django.utils import timezone
-
-        plan_id = int(args.get('plan_id', 0))
-        task_id = args.get('task_id', '')
-        new_status = args.get('status', 'pending')
-        if new_status not in ('pending', 'completed', 'skipped'):
-            return {"error": f"无效的状态值: {new_status}，支持: pending, completed, skipped"}
-
-        try:
-            plan = StudyPlan.objects.get(id=plan_id, user=self.user)
-        except StudyPlan.DoesNotExist:
-            return {"error": f"Plan #{plan_id} not found"}
-
-        data = plan.plan_data or {}
-        tasks = data.get('tasks', [])
-        updated = False
-        for task in tasks:
-            if task.get('id') == task_id:
-                task['status'] = new_status
-                task['completed_at'] = timezone.now().isoformat() if new_status == 'completed' else None
-                updated = True
-                break
-
-        if not updated:
-            return {"error": f"Task '{task_id}' not found in plan #{plan_id}"}
-
-        all_done = all(t.get('status') in ('completed', 'skipped') for t in tasks)
-        if all_done:
-            plan.status = 'completed'
-            plan.completed_at = timezone.now()
-
-        plan.plan_data = data
-        plan.save()
-
-        completed = sum(1 for t in tasks if t.get('status') == 'completed')
-        return {
-            "plan_id": plan.id,
-            "task_id": task_id,
-            "new_status": new_status,
-            "total_tasks": len(tasks),
-            "completed_tasks": completed,
-            "plan_status": plan.status,
-        }
 
     def _handle_search_courses(self, args: Dict) -> Dict:
         """搜索课程库，推荐学习资源。"""
@@ -990,7 +770,6 @@ class PlannerToolExecutor(BaseToolExecutor):
 
             from quizzes.services.diagnostic_service import (
                 grade_diagnostic_answers, initialize_memorix_from_diagnostic,
-                build_study_plan,
             )
             from ai_assistant.services.memory_system import MemorySystem
             from django.db import transaction
@@ -1021,7 +800,6 @@ class PlannerToolExecutor(BaseToolExecutor):
             with transaction.atomic():
                 results, kp_scores = grade_diagnostic_answers(self.user, formatted_answers)
                 initialize_memorix_from_diagnostic(self.user, kp_scores)
-                study_plan = build_study_plan(kp_scores)
 
                 self.user.has_completed_initial_assessment = True
                 self.user.save(update_fields=['has_completed_initial_assessment'])
@@ -1031,7 +809,6 @@ class PlannerToolExecutor(BaseToolExecutor):
                 "total_correct": total_correct,
                 "total_questions": len(results),
                 "accuracy": round(total_correct / len(results) * 100, 1) if results else 0,
-                "study_plan": study_plan,
                 "message": f"诊断完成！答对 {total_correct}/{len(results)} 题",
             }
 

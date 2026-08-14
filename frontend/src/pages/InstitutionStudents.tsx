@@ -79,9 +79,9 @@ type PlatformUser = {
 const ALL_CAPS = [
   'learning.access', 'member.access', 'admin.panel', 'content.manage', 'users.manage', 'system.manage',
   'ai.generate', 'quiz.manual', 'quiz.exam', 'memorix.review', 'wrong.review',
-  'basic.stats', 'full.report', 'class.compare', 'data.export',
+  'basic.stats', 'full.report', 'data.export',
   'course.video', 'video.outline', 'knowledge.graph', 'faq.system',
-  'multi.teacher', 'study.room', 'ai.assistant', 'pdf.mock', 'brand.custom', 'api.access',
+  'study.room', 'brand.custom', 'api.access',
 ];
 
 function PlatformUserManagement() {
@@ -638,7 +638,7 @@ function AddStudentDialog({ onAdded, disabled }: { onAdded: () => void; disabled
 type StudentStats = {
   student: { id: number; username: string; nickname: string; email: string; elo_score: number; last_active: string };
   questions: { total_answered: number; total_correct: number; total_wrong: number; correct_rate: number; mastered: number; total: number; due_review: number };
-  activity: { reviews_this_week: number; exams_this_week: number };
+  activity: { reviews_this_week: number };
   mastery: { mastered: number; stable: number; learning: number; weak: number; unknown: number };
   recent_scores: { total_score: number; max_score: number; created_at: string }[];
   daily_reviews: { day: string; count: number }[];
@@ -684,7 +684,7 @@ function StudentDetailPanel({ studentId }: { studentId: number }) {
           { id: 'totalAnswered', label: t('institution.totalAnswered'), value: questions.total_answered, sub: t('institution.correctRate', { rate: questions.correct_rate }) },
           { id: 'mastered', label: t('institution.mastered'), value: questions.mastered, sub: t('institution.totalQuestions', { count: questions.total }) },
           { id: 'dueReview', label: t('institution.dueReview'), value: questions.due_review, sub: t('institution.memoryThreshold') },
-          { id: 'weeklyStudy', label: t('institution.weeklyStudy'), value: activity.reviews_this_week, sub: t('institution.mockExams', { count: activity.exams_this_week }) },
+          { id: 'weeklyStudy', label: t('institution.weeklyStudy'), value: activity.reviews_this_week },
         ].map(s => (
           <div key={s.id} className="bg-muted rounded-xl p-3 text-center space-y-0.5">
             <p className="text-2xl font-extrabold text-foreground tracking-tightest">{s.value}</p>

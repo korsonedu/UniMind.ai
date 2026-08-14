@@ -1,41 +1,21 @@
 import datetime
 import logging
 import math
-import os
 from collections import defaultdict
 from django.conf import settings
 from django.db.models import F
-from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import (
-    UserQuestionStatus, PersonalizedMockExam, ReviewLog, MemorixProfile,
+    UserQuestionStatus, ReviewLog, MemorixProfile,
 )
 from quizzes.serializers import QuizExamSerializer
 from users.views import IsMember
-from users.permissions import HasQuota
-from users.quota import increment_quota
 from quizzes.services.wrong_question_insights import build_wrong_question_insights
 from quizzes.services.memorix_scheduler import get_memorix_session_plan, build_adaptive_question_ids
-from quizzes.tasks import generate_personalized_pdf_mock_exam
 
 logger = logging.getLogger(__name__)
-
-
-def _build_media_abs_url(request, raw_path: str) -> str:
-    text = str(raw_path or "").strip()
-    if not text:
-        return ""
-    if text.startswith("http://") or text.startswith("https://"):
-        return text
-    normalized = text.replace("\\", "/")
-    marker = "/media/"
-    if marker in normalized:
-        rel = normalized.split(marker, 1)[1]
-    else:
-        rel = normalized.lstrip("/")
-    return request.build_absolute_uri(f"/media/{rel}")
 
 
 class ToggleFavoriteView(APIView):
@@ -259,60 +239,3 @@ class MemorixOptimizationHistoryView(APIView):
         )
 
 
-class PersonalizedMockExamView(APIView):
-    permission_classes = [IsMember, HasQuota]
-    quota_resource = 'pdf_export'
-
-    def get(self, request):
-        rows = PersonalizedMockExam.objects.filter(user=request.user).order_by("-created_at")[:20]
-        data = []
-        for row in rows:
-            data.append(
-                {
-                    "id": row.id,
-                    "status": row.status,
-                    "question_count": row.question_count,
-                    "weak_coverage": row.weak_coverage,
-                    "error_message": row.error_message,
-                    "created_at": row.created_at,
-                    "exam_pdf_url": _build_media_abs_url(request, row.exam_pdf),
-                    "answer_pdf_url": _build_media_abs_url(request, row.answer_pdf),
-                }
-            )
-        return Response({"results": data})
-
-    def post(self, request):
-        record = PersonalizedMockExam.objects.create(
-            user=request.user,
-            status='processing',
-        )
-        generate_personalized_pdf_mock_exam.delay(record_id=record.id)
-        # 计入 PDF 导出配额
-        if request.user.institution:
-            increment_quota(request.user.institution, 'pdf_export')
-
-        payload = {
-            "id": record.id,
-            "status": record.status,
-            "question_count": record.question_count,
-            "weak_coverage": record.weak_coverage,
-            "error_message": record.error_message,
-            "created_at": record.created_at,
-            "exam_pdf_url": "",
-            "answer_pdf_url": "",
-        }
-        return Response(payload, status=201)
-
-    def delete(self, request):
-        exam_id = request.query_params.get('id')
-        if not exam_id:
-            return Response({"error": "缺少 id 参数"}, status=400)
-        row = get_object_or_404(PersonalizedMockExam, id=exam_id, user=request.user)
-        for path_str in (row.exam_pdf, row.answer_pdf):
-            if path_str and os.path.isfile(path_str):
-                try:
-                    os.remove(path_str)
-                except OSError:
-                    pass
-        row.delete()
-        return Response({"status": "deleted"})

@@ -1,4 +1,8 @@
-"""冒烟测试：关键 API 端点是否可 import 且不报错。"""
+"""冒烟测试：关键 API 模块是否可 import 且不报错。
+
+B1 收敛后版本：只覆盖存活功能（登录/答疑/刷题/课程/Agent 工具链/机构管理/支付/内容市场），
+不再引用已删除功能（试卷/作业/学习计划/教学计划/班级成绩册等）的端点。
+"""
 import os, sys, django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'school_system.settings')
 
@@ -16,79 +20,86 @@ django.setup()
 def check_import():
     """验证所有关键模块可导入"""
     modules = [
-        # 学生流
+        # 登录/用户
         ('users.views', '用户视图'),
-        ('users.views', '_build_report_data'),
-        ('quizzes.views_online_exam', '在线考试'),
-        ('quizzes.views_question', '作业题目'),
-        ('quizzes.ai_workflow', 'AI判分'),
+        # 答疑
+        ('faq_system.views', '答疑系统'),
+        # 刷题/诊断
+        ('quizzes.views_memorix', '刷题/错题/收藏'),
         ('quizzes.services.diagnostic_service', '诊断服务'),
-        # 教师流
+        # 课程
+        ('courses.views', '课程'),
+        # Agent 工具链
         ('ai_assistant.services.exam_generator_tool_executor', '出题Agent'),
         ('ai_assistant.services.tool_executor', '规划Agent'),
         ('ai_engine.tools', '工具定义'),
         ('ai_engine.tool_router', '工具路由'),
-        # 机构流
+        # 机构管理
         ('users.views_institution', '机构管理'),
-        ('courses.views', '课程'),
-        # 新增
+        # 支付/内容市场
         ('payments.views', '支付'),
         ('quizzes.views_marketplace', '内容市场'),
-        ('courses.services.analytics_service', '教案分析'),
     ]
     for mod, desc in modules:
         try:
-            if len(mod) == 2:
-                __import__(mod[0])
-                print(f"  ✅ {desc} ({mod[0]})")
-            else:
-                m = __import__(mod[0], fromlist=[''])
-                print(f"  ✅ {desc} ({mod[0]})")
+            __import__(mod)
+            print(f"  ✅ {desc} ({mod})")
         except Exception as e:
             print(f"  ❌ {desc}: {e}")
 
 def check_tool_registry():
-    """验证新增工具已在工具列表中"""
-    from ai_engine.tools import get_planner_tools
-    tools = get_planner_tools()
+    """验证存活工具已注册，且已删除工具不在工具列表中"""
+    from ai_engine.tools import get_planner_tools, get_exam_generator_tools
+    tools = get_planner_tools() + get_exam_generator_tools()
     names = [t['function']['name'] for t in tools]
-    new_tools = ['get_report_card', 'get_my_courses', 'get_my_achievements']
-    print("\n  Planner 工具总数:", len(tools))
-    for t in new_tools:
+    print(f"\n  Planner+ExamGenerator 工具总数: {len(tools)}")
+
+    kept_tools = ['get_report_card', 'get_my_achievements', 'run_diagnostic',
+                  'get_practice_questions', 'grade_student_answer',
+                  'generate_student_report', 'send_notification', 'get_student_detail']
+    for t in kept_tools:
         if t in names:
             print(f"  ✅ {t}")
         else:
             print(f"  ❌ {t} 未注册")
 
+    removed_tools = ['save_study_plan', 'get_active_plan', 'update_plan_task',
+                     'get_class_weak_points', 'get_class_performance_summary',
+                     'get_assignment_progress', 'assign_practice', 'list_classes',
+                     'assign_class_course', 'get_class_gradebook', 'grade_submissions',
+                     'create_teaching_plan', 'get_teaching_plan_kps',
+                     'bulk_grade_submissions', 'confirm_grades', 'get_my_courses']
+    leaked = [t for t in removed_tools if t in names]
+    if leaked:
+        print(f"  ❌ 已删除工具仍在注册: {leaked}")
+    else:
+        print(f"  ✅ 已删除工具全部摘除（{len(removed_tools)} 个）")
+
 def check_views():
     """验证关键 view 类存在"""
-    from quizzes.views_online_exam import (
-        OnlineExamCreateView, OnlineExamStartView,
-        OnlineExamSubmitView, OnlineExamResultView,
-    )
-    print(f"\n  ✅ 在线考试 4 个 View")
-    
     from users.views_institution import (
-        ClassGradebookView, ClassCourseManageView,
-        StudentClassCourseView, InstitutionInviteListView,
+        InstitutionInviteListView,
         InstitutionBusinessDashboardView, InstitutionDataExportView,
     )
-    print(f"  ✅ 机构管理 6 个 View")
-    
+    print(f"\n  ✅ 机构管理 3 个 View")
+
     from quizzes.views_marketplace import (
         MarketplaceListView, MarketplaceDetailView,
         MarketplacePublishView, MarketplacePurchaseView,
     )
     print(f"  ✅ 内容市场 4 个 View")
-    
-    from payments.views import WebhookView, SubscriptionStatusView
-    print(f"  ✅ 支付 2 个 View")
+
+    from faq_system.views import QuestionListCreateView, QuestionDetailView
+    print(f"  ✅ 答疑 2 个 View")
+
+    from payments.views import WebhookView
+    print(f"  ✅ 支付 Webhook View")
 
 def check_tool_executors():
     """验证 tool executor handler 存在"""
     from ai_assistant.services.tool_executor import BaseToolExecutor
     handlers = [m for m in dir(BaseToolExecutor) if m.startswith('_handle_')]
-    new_handlers = ['_handle_get_report_card', '_handle_get_my_courses', '_handle_get_my_achievements']
+    new_handlers = ['_handle_get_report_card', '_handle_get_my_achievements']
     print(f"\n  ToolExecutor handlers 总数: {len(handlers)}")
     for h in new_handlers:
         if h in handlers:

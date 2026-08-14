@@ -1,17 +1,15 @@
 /**
- * 题库管理 — 题目列表 + 布置作业 dialog。
+ * 题库管理 — 题目列表。
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageWrapper } from '@/components/PageWrapper';
-import { MagnifyingGlass, MagicWand, PaperPlaneTilt } from '@phosphor-icons/react';
+import { MagnifyingGlass, MagicWand } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface QuestionItem {
@@ -21,11 +19,6 @@ interface QuestionItem {
   difficulty_level: string;
   knowledge_point_name?: string;
   subject?: string;
-}
-
-interface ClassItem {
-  id: number;
-  name: string;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -44,15 +37,6 @@ export default function TeacherQuestions() {
   const [data, setData] = useState<{ total: number; results: QuestionItem[] }>({ total: 0, results: [] });
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-
-  // ── Assignment dialog state ──
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [assignTitle, setAssignTitle] = useState('');
-  const [assignDueDate, setAssignDueDate] = useState('');
-  const [assignPoints, setAssignPoints] = useState(1);
-  const [assignClassIds, setAssignClassIds] = useState<number[]>([]);
-  const [assignSubmitting, setAssignSubmitting] = useState(false);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
 
   const fetchQuestions = async (p = page) => {
     setLoading(true);
@@ -82,50 +66,12 @@ export default function TeacherQuestions() {
     });
   };
 
-  const openAssignDialog = async () => {
-    // 拉取班级列表
-    try {
-      const res = await api.get('/quizzes/classes/');
-      setClasses(res.data || []);
-    } catch { setClasses([]); }
-    setAssignTitle('');
-    setAssignDueDate('');
-    setAssignPoints(1);
-    setAssignClassIds([]);
-    setAssignOpen(true);
-  };
-
-  const handleAssign = async () => {
-    if (!assignTitle.trim()) { toast.error('请输入作业标题'); return; }
-    setAssignSubmitting(true);
-    try {
-      await api.post('/assignments/create/', {
-        title: assignTitle.trim(),
-        question_ids: Array.from(selected),
-        class_ids: assignClassIds,
-        due_date: assignDueDate || null,
-        points_per_question: assignPoints,
-      });
-      toast.success(`已发布「${assignTitle.trim()}」共 ${selected.size} 题`);
-      setAssignOpen(false);
-      setSelected(new Set());
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || '发布失败');
-    }
-    setAssignSubmitting(false);
-  };
-
   return (
     <PageWrapper title="题目管理" subtitle="">
       <div className="flex flex-col h-full max-w-6xl mx-auto w-full space-y-4 md:space-y-6">
         {/* Header */}
         <div className="flex items-center justify-end">
           <div className="flex items-center gap-2">
-          {selected.size > 0 && (
-            <Button size="sm" onClick={openAssignDialog}>
-              <PaperPlaneTilt className="h-4 w-4 mr-1" /> 布置作业 ({selected.size})
-            </Button>
-          )}
           <Button size="sm" variant="outline" onClick={() => navigate('/workbench')}>
             <MagicWand className="h-4 w-4 mr-1" /> AI 出题
           </Button>
@@ -209,78 +155,6 @@ export default function TeacherQuestions() {
               </Button>
             </div>
           )}
-
-      {/* ── 布置作业 Dialog ── */}
-      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>布置作业 · 已选 {selected.size} 题</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-foreground/80">作业标题</label>
-              <Input
-                placeholder="如：第三章课后练习"
-                value={assignTitle}
-                onChange={e => setAssignTitle(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-foreground/80">目标班级</label>
-              {classes.length === 0 ? (
-                <p className="text-xs text-muted-foreground">暂无班级，请在维护中心创建</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {classes.map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => setAssignClassIds(prev =>
-                        prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                      )}
-                      className={cn(
-                        'px-2.5 py-1 rounded-md text-xs font-bold transition-colors border',
-                        assignClassIds.includes(c.id)
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-card text-foreground/70 border-border hover:border-primary/30'
-                      )}
-                    >
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground/80">截止日期</label>
-                <Input
-                  type="date"
-                  value={assignDueDate}
-                  onChange={e => setAssignDueDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground/80">每题分值</label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={assignPoints}
-                  onChange={e => setAssignPoints(Math.max(1, parseInt(e.target.value) || 1))}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignOpen(false)} disabled={assignSubmitting}>
-              取消
-            </Button>
-            <Button onClick={handleAssign} disabled={assignSubmitting || !assignTitle.trim()}>
-              {assignSubmitting ? '发布中...' : '发布作业'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       </div>
     </PageWrapper>
   );

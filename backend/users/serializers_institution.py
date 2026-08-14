@@ -94,20 +94,6 @@ class JoinRequestSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'invite', 'reviewed_by', 'created_at', 'reviewed_at']
 
 
-class InstitutionChildSerializer(serializers.ModelSerializer):
-    """子校区列表用轻量序列化器。"""
-    student_count = serializers.IntegerField(read_only=True)
-    staff_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Institution
-        fields = ['id', 'name', 'slug', 'plan', 'inherit_plan', 'is_active',
-                  'student_count', 'staff_count', 'created_at']
-
-    def get_staff_count(self, obj):
-        return obj.students.filter(institution_role__in=('owner', 'teacher')).count()
-
-
 class APICredentialSerializer(serializers.ModelSerializer):
     class Meta:
         model = APICredential

@@ -170,7 +170,16 @@ export const VideoLesson: React.FC = () => {
   };
 
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    setDuration(e.currentTarget.duration || 0);
+    const video = e.currentTarget;
+    const dur = video.duration || 0;
+    setDuration(dur);
+    // 续播：从上次位置继续（已完成、接近开头或结尾则不跳）
+    const p = course?.progress;
+    if (p && !p.is_finished && p.last_position > 10 && dur > 0 && p.last_position < dur - 10) {
+      video.currentTime = p.last_position;
+      setCurrentTime(p.last_position);
+      toast.info('已从上次位置继续播放');
+    }
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -213,7 +222,12 @@ export const VideoLesson: React.FC = () => {
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
               onPlay={() => { setIsPlaying(true); scheduleHideControls(); }}
-              onPause={() => { setIsPlaying(false); setShowControls(true); }}
+              onPause={() => {
+                setIsPlaying(false);
+                setShowControls(true);
+                // 暂停时补存进度，避免最后 10 秒内的位置丢失
+                api.post(`/courses/${courseId}/progress/`, { position: videoRef.current?.currentTime ?? 0 }).catch(() => {});
+              }}
               onClick={() => { videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause(); }}
               src={course.video_file}
               className={isFullscreen ? 'absolute inset-0 w-full h-full object-contain' : 'w-full lg:max-h-[70vh] cursor-pointer'}

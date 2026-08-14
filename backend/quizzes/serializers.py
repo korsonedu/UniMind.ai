@@ -1,9 +1,8 @@
 from rest_framework import serializers
 from .models import (
     Question, QuizAttempt, KnowledgePoint, UserQuestionStatus, QuizExam, ExamQuestionResult,
-    ContentPipelineTask, TeacherExam, StudentExamSubmission, KnowledgePointAnnotation,
-    PersonalizedMockExam, ExamTemplate, KnowledgeEdge,
-    ExamQuestion, OnlineExamAttempt, MarketplaceListing,
+    ContentPipelineTask, KnowledgePointAnnotation, KnowledgeEdge,
+    MarketplaceListing,
 )
 from users.serializers import UserSerializer
 
@@ -144,58 +143,10 @@ class ContentPipelineTaskSerializer(serializers.ModelSerializer):
         fields = ('id', 'task_type', 'status', 'title', 'description', 'progress', 'payload', 'result', 'error_message', 'request_id', 'assignee', 'created_by', 'institution', 'started_at', 'finished_at', 'created_at', 'updated_at', 'created_by_username', 'task_type_display', 'status_display')
 
 
-class TeacherExamSerializer(serializers.ModelSerializer):
-    question_count = serializers.SerializerMethodField()
-    attempt_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = TeacherExam
-        fields = (
-            'id', 'title', 'description', 'exam_pdf',
-            'exam_type', 'duration_minutes', 'start_time', 'end_time',
-            'shuffle_questions', 'shuffle_options', 'max_attempts', 'passing_score',
-            'created_at', 'created_by', 'institution',
-            'question_count', 'attempt_count',
-        )
-        read_only_fields = ('id', 'created_at', 'created_by', 'institution')
-
-    def get_question_count(self, obj):
-        return obj.exam_questions.count() if hasattr(obj, 'exam_questions') else 0
-
-    def get_attempt_count(self, obj):
-        return obj.attempts.count() if hasattr(obj, 'attempts') else 0
-
-
-class StudentExamSubmissionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = StudentExamSubmission
-        fields = ('id', 'user', 'exam', 'answer_pdf', 'score', 'feedback', 'graded_pdf', 'created_at')
-
-
 class KnowledgePointAnnotationSerializer(serializers.ModelSerializer):
     class Meta:
         model = KnowledgePointAnnotation
         fields = ('id', 'user', 'knowledge_point', 'mastery_level', 'priority', 'confidence_score', 'tags', 'note', 'source', 'created_at', 'updated_at')
-
-
-class PersonalizedMockExamSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PersonalizedMockExam
-        fields = ('id', 'user', 'status', 'exam_pdf', 'answer_pdf', 'question_count', 'weak_coverage', 'error_message', 'created_at')
-
-
-class ExamTemplateSerializer(serializers.ModelSerializer):
-    created_by_name = serializers.CharField(source='created_by.username', read_only=True, default=None)
-
-    class Meta:
-        model = ExamTemplate
-        fields = (
-            'id', 'name', 'description', 'subject', 'difficulty',
-            'question_types', 'type_ratio', 'question_count',
-            'knowledge_point_ids', 'is_system', 'created_by',
-            'created_by_name', 'institution', 'created_at', 'updated_at',
-        )
-        read_only_fields = ('id', 'is_system', 'created_by', 'institution', 'created_at', 'updated_at')
 
 
 class KnowledgeEdgeSerializer(serializers.ModelSerializer):
@@ -213,29 +164,6 @@ class KnowledgeEdgeSerializer(serializers.ModelSerializer):
             'institution', 'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'institution', 'created_at', 'updated_at')
-
-
-class ExamQuestionSerializer(serializers.ModelSerializer):
-    question_text = serializers.CharField(source='question.question_text', read_only=True)
-    question_type = serializers.CharField(source='question.question_type', read_only=True)
-    options = serializers.JSONField(source='question.options', read_only=True)
-    correct_answer = serializers.CharField(source='question.correct_answer', read_only=True)
-
-    class Meta:
-        model = ExamQuestion
-        fields = ('id', 'exam', 'question', 'order', 'points',
-                  'question_text', 'question_type', 'options', 'correct_answer')
-
-
-class OnlineExamAttemptSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source='user.nickname', read_only=True, default='')
-
-    class Meta:
-        model = OnlineExamAttempt
-        fields = ('id', 'user', 'student_name', 'exam', 'status',
-                  'started_at', 'submitted_at', 'score', 'max_score',
-                  'question_results', 'question_order')
-        read_only_fields = ('id', 'user', 'started_at', 'question_order')
 
 
 class MarketplaceListingSerializer(serializers.ModelSerializer):

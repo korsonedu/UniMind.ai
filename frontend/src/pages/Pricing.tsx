@@ -4,14 +4,73 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, ArrowRight, Check, Sparkle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { APP_VERSION, COPYRIGHT_YEAR, COPYRIGHT_ENTITY } from '@/constants/version';
-import { useTranslation } from 'react-i18next';
 
 const PricingPage: React.FC = () => {
-  const { t } = useTranslation('landing');
   const navigate = useNavigate();
   const [annual, setAnnual] = useState(true);
 
-  const plans = t('pricing.plans', { returnObjects: true }) as Array<{ label: string; desc: string; persona?: string; cta: string; features: string[] }>;
+  const plans = [
+    {
+      label: 'Free',
+      desc: '体验版 · 验证 AI 教学效果',
+      persona: '零成本体验 AI 出题、题库管理、基础学情统计，快速验证产品是否适合你的机构。',
+      cta: '免费注册',
+      features: [
+        '全部 Agent 能力（小宇 AI 助手、AI 出题、ARC 管线）— 受 AI 调用配额限制',
+        '100 次/月 AI 调用',
+        '30 名学员 · 1 名教师 · 1 门学科',
+        '习题训练 · 考试 · 错题复盘',
+        '作业管理 · 成绩册 · 诊断测试',
+        '课程视频 · 答疑系统 · 自习室 · PDF 模拟卷',
+        '5 GB 存储 · 题库 200 题',
+        '基础统计',
+      ],
+    },
+    {
+      label: 'Starter',
+      desc: '成长型机构 · 1-2 名教师 · AI 提效',
+      persona: '适合起步期培训机构，AI 出题 + Memorix 复习 + 完整学情报告，用 AI 替代重复性教研工作。',
+      cta: '7 天免费试用',
+      features: [
+        '全部 Agent 能力 — 受 AI 调用配额限制',
+        '500 次/月 AI 调用',
+        '50 名学员 · 1 名教师 · 3 门学科',
+        'Free 全部功能',
+        '完整学情报告 · 教学计划 · 教案',
+        '50 GB 存储 · 题库 2,000 题',
+      ],
+    },
+    {
+      label: 'Growth',
+      desc: '规模化机构 · 多教师协作 · 系统化管理',
+      persona: '适合成长中的培训机构，多教师协作、知识图谱、模拟考试、在线答疑，系统化提升教学管理效率。',
+      cta: '7 天免费试用',
+      features: [
+        '全部 Agent 能力 — 受 AI 调用配额限制',
+        '3,000 次/月 AI 调用',
+        '200 名学员 · 5 名教师 · 10 门学科',
+        'Starter 全部功能',
+        'Memorix 图扩散记忆调度 · 知识图谱',
+        '视频 AI 大纲 · 多教师协作',
+        '班级对比 · 数据导出 · 学生端收费',
+        '500 GB 存储 · 题库 10,000 题',
+      ],
+    },
+    {
+      label: 'Enterprise',
+      desc: '连锁品牌 · 数据主权 · 深度定制',
+      persona: '适合连锁机构或企业培训，白标部署、数据私有化、API 对接、SSO 单点登录。',
+      cta: '预约演示',
+      features: [
+        'AI 调用无限制',
+        '学员 · 教师 · 学科均不限',
+        'Growth 全部功能',
+        'AI Bot 自定义',
+        '品牌白标 · API 接入 · 私有化部署',
+        '存储 · 题库均不限',
+      ],
+    },
+  ] as Array<{ label: string; desc: string; persona?: string; cta: string; features: string[] }>;
   const prices = [
     { monthly: '¥0', yearly: '¥0' },
     { monthly: '¥499', yearly: '¥416' },
@@ -37,17 +96,17 @@ const PricingPage: React.FC = () => {
           </button>
           <button onClick={() => navigate('/')} className="inline-flex items-center gap-1.5 text-sm font-medium text-white/60 hover:text-white transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" />
-            {t('pricing.backHome')}
+            回首页
           </button>
         </nav>
 
         {/* Header */}
         <section className="py-16 md:py-24 text-center px-6">
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-[1.08]">
-            {t('pricing.pageTitle')}
+            选择适合你的方案
           </h1>
           <p className="mt-5 text-base md:text-lg max-w-xl mx-auto leading-relaxed text-white/65">
-            {t('pricing.pageSubtitle')}
+            试用码解锁 7 天全功能 · 无需绑定信用卡 · 随时取消
           </p>
 
           {/* Trial banner removed — moved below pricing grid */}
@@ -57,7 +116,7 @@ const PricingPage: React.FC = () => {
         <section className="max-w-6xl mx-auto px-6 pb-8">
           <div className="flex items-center justify-center gap-3">
             <span className={cn('text-sm font-semibold', annual ? 'text-white/50' : 'text-white')}>
-              {t('pricing.monthly')}
+              月付
             </span>
             <button
               onClick={() => setAnnual(!annual)}
@@ -67,8 +126,8 @@ const PricingPage: React.FC = () => {
               <div className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all', annual ? 'left-[22px]' : 'left-0.5')} />
             </button>
             <span className={cn('text-sm font-semibold flex items-center gap-1.5', annual ? 'text-white' : 'text-white/50')}>
-              {t('pricing.annually')}
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>{t('pricing.saveBadge')}</span>
+              年付
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>省 23-33%</span>
             </span>
           </div>
         </section>
@@ -97,7 +156,7 @@ const PricingPage: React.FC = () => {
                       <h3 className="font-bold text-base text-white">{plan.label}</h3>
                       {isPopular && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: '#5b5fef' }}>
-                          {t('pricing.popularBadge')}
+                          最受欢迎
                         </span>
                       )}
                     </div>
@@ -110,10 +169,10 @@ const PricingPage: React.FC = () => {
                       <span className="text-3xl font-bold tracking-tight text-white" style={{ fontFamily: '"DM Mono", monospace' }}>
                         {price}
                       </span>
-                      {!isFree && <span className="text-sm text-white/55">{t('pricing.perMonth')}</span>}
+                      {!isFree && <span className="text-sm text-white/55">/月</span>}
                     </div>
                     <p className="text-[11px] mt-1 h-4" style={{ color: isFree ? '#4ade80' : 'rgba(255,255,255,0.45)' }}>
-                      {!isFree && annual ? `${t('pricing.annualTotal')}${parseInt(prices[pi].yearly.replace('¥', '').replace(',', '')) * 12}` : isFree ? t('pricing.freeForever') : ''}
+                      {!isFree && annual ? `年付总计 ¥${parseInt(prices[pi].yearly.replace('¥', '').replace(',', '')) * 12}` : isFree ? '永久免费' : ''}
                     </p>
                   </div>
 
@@ -149,20 +208,30 @@ const PricingPage: React.FC = () => {
               );
             })}
           </div>
-          <p className="text-center mt-8 text-xs text-white/40">{t('pricing.footer')}</p>
+          <p className="text-center mt-8 text-xs text-white/40">前 20 个付费客户锁定早期用户价格，终身不涨价。</p>
 
           {/* Trial info — plain text, no card */}
           <div className="max-w-2xl mx-auto mt-8 text-center space-y-2">
-            <p className="text-sm font-semibold text-white/80">{t('pricing.trialTitle')}</p>
-            <p className="text-[13px] leading-relaxed text-white/50">{t('pricing.trialDesc')}</p>
+            <p className="text-sm font-semibold text-white/80">统一试用策略 — 零风险体验</p>
+            <p className="text-[13px] leading-relaxed text-white/50">获取试用码即可解锁 7 天全功能体验（Growth 级别）。试用期内无任何限制。到期后自动切换至初始版（永久免费），数据全部保留。随时可升级。</p>
           </div>
         </section>
 
         {/* FAQ */}
         <section id="pricing-faq" className="max-w-3xl mx-auto px-6 pb-24">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-center mb-10 text-white">{t('faq.label')}</h2>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-center mb-10 text-white">FAQ</h2>
           <div className="space-y-2">
-            {(t('faq.items', { returnObjects: true }) as Array<{ q: string; a: string }>).filter((_, i) => [0, 4, 5, 7].includes(i)).map((faq, i) => (
+            {([
+              { q: '免费版有什么限制？', a: '免费版支持 30 名学员、每月 100 次 AI 调用。你能完整地体验出题→学生做题→看学情数据的闭环，足够一个小班验证产品效果。当需要更多学生或更多 AI 调用次数时，升级到 Starter 版即可解锁全部功能。' },
+              { q: 'AI 出的题质量能保证吗？', a: '我们采用三智能体对抗机制——一个出题、一个审题、一个分类。质量不达标的题目会自动打回重做。建议机构教研负责人对 AI 生成的题目做最终审阅——AI 帮你省掉 90% 的初稿时间，最后 10% 的审核仍需你的专业判断。' },
+              { q: '支持哪些学科和题型？', a: '平台本身不限制学科。我们预置了考研专业课（金融/法学/医学/计算机等）、职业资格证（CPA/CFA/法考/USMLE/教资等）、中学学科（数学/物理/化学/生物）、公考等方向的知识点框架。题型支持选择题、填空题、计算题、案例分析、作文等。你也可以自定义学科和知识点树。' },
+              { q: '学生怎么使用？需要下载 App 吗？', a: '不需要。学生通过你分享的链接或扫码就能做题，手机/电脑均可。我们提供的是 Web/H5 体验，学生端零门槛。' },
+              { q: '试用到期后数据还在吗？', a: '在。你所有的题目、学生数据、学习记录都会保留。续费后立即恢复访问。不续费的话数据只读，你不会丢失任何东西。' },
+              { q: '可以月付吗？', a: '可以。月付和年付都支持。年付有 23-33% 的折扣。建议先月付一个月深度体验，确认产品适合你的机构后再转年付省钱。' },
+              { q: '和通用考试工具有什么区别？', a: '通用考试工具是「把纸质考试搬到线上」。UniMind 是「AI 帮你生产和优化教学内容」——出题是 AI 自动生成的、复习是算法个性化的、学情是实时可视化的。我们解决的不是「怎么考」，而是「怎么教和怎么学」。' },
+              { q: '我是个人教师，适合哪个版本？', a: '建议从 Free 版开始。30 个学生、每月 100 次 AI 调用足够日常使用。当你需要更多配额或高级功能时，升级到 Starter 版（¥499/月）。' },
+              { q: '可以和我的网站或 LMS 系统集成吗？', a: 'Enterprise 方案包含 REST API 对接权限，你可以将 UniMind 的出题引擎和复习系统嵌入现有的平台中。如需超出 API 范围的自定义集成，请联系我们的解决方案团队——通过预约演示即可对接。' },
+            ] as Array<{ q: string; a: string }>).filter((_, i) => [0, 4, 5, 7].includes(i)).map((faq, i) => (
               <div key={i} className="rounded-xl border p-5" style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
                 <p className="font-semibold text-sm text-white mb-2">{faq.q}</p>
                 <p className="text-sm leading-relaxed text-white/65">{faq.a}</p>
@@ -173,15 +242,15 @@ const PricingPage: React.FC = () => {
 
         {/* Bottom CTA */}
         <section className="max-w-3xl mx-auto px-6 pb-24 text-center space-y-6">
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white leading-[1.12]">{t('pricing.bottomCtaTitle')}</h2>
-          <p className="text-base max-w-xl mx-auto leading-relaxed text-white/60">{t('pricing.bottomCtaSubtitle')}</p>
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white leading-[1.12]">让你的机构，今天就 AI 接管</h2>
+          <p className="text-base max-w-xl mx-auto leading-relaxed text-white/60">7 天全功能试用。到期可继续使用初始版。不绑卡。</p>
           <Button
             size="lg"
             className="h-12 px-8 text-sm font-bold rounded-xl text-white border-0"
             style={{ background: '#5b5fef' }}
             onClick={() => navigate('/register')}
           >
-            {t('cta.button')}
+            免费开始
             <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
         </section>

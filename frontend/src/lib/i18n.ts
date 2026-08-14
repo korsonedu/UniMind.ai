@@ -18,12 +18,9 @@ import zhStudyRoom from '@/locales/zh/studyRoom.json';
 import zhKnowledgeMap from '@/locales/zh/knowledgeMap.json';
 import zhAiAssistant from '@/locales/zh/aiAssistant.json';
 import zhQaSystem from '@/locales/zh/qaSystem.json';
-import zhPdfMockExam from '@/locales/zh/pdfMockExam.json';
-import zhInterviews from '@/locales/zh/interviews.json';
 import zhVideoLesson from '@/locales/zh/videoLesson.json';
 import zhTestSession from '@/locales/zh/testSession.json';
 import zhMaintenance from '@/locales/zh/maintenance.json';
-import zhPlan from '@/locales/zh/plan.json';
 import zhDiagnostic from '@/locales/zh/diagnostic.json';
 import zhXiaoyu from '@/locales/zh/xiaoyu.json';
 
@@ -43,12 +40,9 @@ import enStudyRoom from '@/locales/en/studyRoom.json';
 import enKnowledgeMap from '@/locales/en/knowledgeMap.json';
 import enAiAssistant from '@/locales/en/aiAssistant.json';
 import enQaSystem from '@/locales/en/qaSystem.json';
-import enPdfMockExam from '@/locales/en/pdfMockExam.json';
-import enInterviews from '@/locales/en/interviews.json';
 import enVideoLesson from '@/locales/en/videoLesson.json';
 import enTestSession from '@/locales/en/testSession.json';
 import enMaintenance from '@/locales/en/maintenance.json';
-import enPlan from '@/locales/en/plan.json';
 import enDiagnostic from '@/locales/en/diagnostic.json';
 import enXiaoyu from '@/locales/en/xiaoyu.json';
 
@@ -73,12 +67,9 @@ i18n
         knowledgeMap: zhKnowledgeMap,
         aiAssistant: zhAiAssistant,
         qaSystem: zhQaSystem,
-        pdfMockExam: zhPdfMockExam,
-        interviews: zhInterviews,
         videoLesson: zhVideoLesson,
         testSession: zhTestSession,
         maintenance: zhMaintenance,
-        plan: zhPlan,
         diagnostic: zhDiagnostic,
         xiaoyu: zhXiaoyu,
       },
@@ -98,12 +89,9 @@ i18n
         knowledgeMap: enKnowledgeMap,
         aiAssistant: enAiAssistant,
         qaSystem: enQaSystem,
-        pdfMockExam: enPdfMockExam,
-        interviews: enInterviews,
         videoLesson: enVideoLesson,
         testSession: enTestSession,
         maintenance: enMaintenance,
-        plan: enPlan,
         diagnostic: enDiagnostic,
         xiaoyu: enXiaoyu,
       },

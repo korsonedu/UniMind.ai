@@ -4,12 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { useTranslation } from 'react-i18next';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import api from '@/lib/api';
-import { Buildings, Users, Calendar, Check, Minus, GraduationCap, TrendUp, Sparkle, TreeStructure } from '@phosphor-icons/react';
-import ClassPerformancePanel from '@/components/ClassPerformancePanel';
+import { Buildings, Users, Calendar, Check, Minus, GraduationCap, TrendUp, Sparkle } from '@phosphor-icons/react';
 import { StudentHealthPanel } from '@/components/StudentHealthPanel';
 import { BusinessDashboard } from '@/pages/maintenance/BusinessDashboard';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface DashboardData {
@@ -44,24 +42,21 @@ export default function InstitutionDashboard() {
     'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
     'ai.generate', 'memorix.review', 'full.report', 'knowledge.graph',
     'ai.assistant', 'course.video', 'video.outline', 'faq.system',
-    'pdf.mock', 'study.room', 'multi.teacher', 'class.compare',
+    'study.room',
     'data.export', 'brand.custom', 'api.access', 'student.payment',
     'private.deploy', 'i18n.custom', 'sso.saml', 'audit.log',
     'dedicated.support', 'sla.99.9',
   ];
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [includeChildren, setIncludeChildren] = useState(false);
-  const [hasChildren, setHasChildren] = useState(false);
 
-  const fetchDashboard = useCallback(async (include: boolean) => {
+  const fetchDashboard = useCallback(async () => {
     setLoading(true);
     const endpoint = isPlatformAdmin && !institution
       ? '/users/institutions/overview/'
       : '/users/institution/me/';
-    const params = include ? { include_children: 'true' } : {};
     try {
-      const res = await api.get(endpoint, { params });
+      const res = await api.get(endpoint);
       setData(res.data);
     } catch {
       // redirect handled by RequireAuth
@@ -70,15 +65,7 @@ export default function InstitutionDashboard() {
     }
   }, [isPlatformAdmin, institution]);
 
-  useEffect(() => { fetchDashboard(includeChildren); }, [fetchDashboard, includeChildren]);
-
-  // Check if institution has children
-  useEffect(() => {
-    if (!institution) return;
-    api.get('/users/institution/me/children/').then(({ data: ch }) => {
-      setHasChildren(Array.isArray(ch) && ch.length > 0);
-    }).catch(() => {});
-  }, [institution]);
+  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
   if (loading) {
     return (
@@ -158,16 +145,6 @@ export default function InstitutionDashboard() {
             <span className="text-sm text-unimind-text-tertiary">{inst.plan_expires_at?.slice(0, 10) || t('stats.permanent')}</span>
           </div>
         </div>
-        {hasChildren && (
-          <Button
-            variant={includeChildren ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setIncludeChildren(v => !v)}
-          >
-            <TreeStructure className="mr-1 h-4 w-4" />
-            {includeChildren ? '聚合视图' : '仅本校区'}
-          </Button>
-        )}
       </div>
 
       {/* Stats cards */}
@@ -193,9 +170,6 @@ export default function InstitutionDashboard() {
           </Card>
         ))}
       </div>
-
-      {/* Class Performance Analytics */}
-      <ClassPerformancePanel />
 
       {/* Student Health — churn risk */}
       <StudentHealthPanel />

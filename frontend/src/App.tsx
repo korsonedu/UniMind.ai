@@ -45,7 +45,6 @@ const QASystem = lazyNamed(() => import('./pages/QASystem'), 'QASystem');
 const TestSessionPage = lazyNamed(() => import('./pages/TestSessionPage'), 'TestSessionPage');
 const PromptTemplatesAdmin = lazyNamed(() => import('./pages/PromptTemplatesAdmin'), 'PromptTemplatesAdmin');
 
-const PdfMockExam = lazyNamed(() => import('./pages/PdfMockExam'), 'PdfMockExam');
 const WrongQuestionReviewPage = lazyNamed(() => import('./pages/WrongQuestionReviewPage'), 'WrongQuestionReviewPage');
 const ReportCard = lazyNamed(() => import('./pages/ReportCard'), 'ReportCard');
 const Achievements = lazyNamed(() => import('./pages/Achievements'), 'Achievements');
@@ -54,7 +53,6 @@ const BillingPage = lazyNamed(() => import('./pages/Billing'), 'BillingPage');
 const PaymentResult = lazyNamed(() => import('./pages/PaymentResult'), 'PaymentResult');
 const Checkout = lazyNamed(() => import('./pages/Checkout'), 'Checkout');
 const DiagnosticTest = lazyNamed(() => import('./pages/DiagnosticTest'), 'DiagnosticTest');
-const StudyPlan = lazyNamed(() => import('./pages/StudyPlan'), 'StudyPlan');
 const XiaoYu = lazyNamed(() => import('./pages/XiaoYu'), 'XiaoYu');
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
@@ -72,19 +70,14 @@ const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
 const PlatformAdmin = lazy(() => import('./pages/PlatformAdmin'));
 const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
 const NotFound = lazy(() => import('./pages/NotFound'));
-const OnlineExam = lazyNamed(() => import('./pages/OnlineExam'), 'OnlineExam');
-const Gradebook = lazyNamed(() => import('./pages/Gradebook'), 'Gradebook');
-const TeacherAssignments = lazyNamed(() => import('./pages/TeacherAssignments'), 'TeacherAssignments');
 const Marketplace = lazyNamed(() => import('./pages/Marketplace'), 'Marketplace');
 const APIPlatform = lazyNamed(() => import('./pages/APIPlatform'), 'APIPlatform');
-const MyAssignments = lazy(() => import('./pages/MyAssignments'));
 const CourseManage = lazy(() => import('./pages/CourseManage'));
 const ArticleManage = lazy(() => import('./pages/ArticleManage'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const Legal = lazy(() => import('./pages/Legal'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
 const PromoPlus = lazy(() => import('./pages/PromoPlus'));
-const LessonPlans = lazy(() => import('./pages/LessonPlans'));
 
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -279,7 +272,6 @@ const router = createBrowserRouter([
           { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
           { path: "xiaoyu", element: lazyPage(XiaoYu) },
           { path: "xiaoyu/practice/:sessionId", element: lazyPage(PracticeSession) },
-          { path: "plan", element: <FeatureGuard feature={FEATURES.AI_ASSISTANT}>{lazyPage(StudyPlan)}</FeatureGuard> },
           { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeMap)}</FeatureGuard> },
           { path: "knowledge-map/node/:id", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeNodeDetail)}</FeatureGuard> },
           { path: "settings", element: lazyPage(Settings) },
@@ -288,12 +280,9 @@ const router = createBrowserRouter([
           { path: "management", element: <RequireAdmin>{lazyPage(Maintenance)}</RequireAdmin> },
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(VideoLesson)}</FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
-          { path: "my-assignments", element: lazyPage(MyAssignments) },
           { path: "achievements", element: lazyPage(Achievements) },
 
           { path: "report-card", element: lazyPage(ReportCard) },
-          { path: "mock-exam", element: <FeatureGuard feature={FEATURES.PDF_MOCK}>{lazyPage(PdfMockExam)}</FeatureGuard> },
-          { path: "exam/:examId", element: lazyPage(OnlineExam) },
 
           { path: "workbench", element: <RequireInstitution>{lazyPage(Workbench)}</RequireInstitution> },
           { path: "assets", element: <RequireInstitution>{lazyPage(AssetHub)}</RequireInstitution> },
@@ -301,9 +290,6 @@ const router = createBrowserRouter([
           { path: "questions", element: <RequireInstitution>{lazyPage(TeacherQuestions)}</RequireInstitution> },
           { path: "institution", element: <RequireInstitution>{lazyPage(InstitutionDashboard)}</RequireInstitution> },
           { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
-          { path: "gradebook", element: <RequireInstitution>{lazyPage(Gradebook)}</RequireInstitution> },
-          { path: "teacher-assignments", element: <RequireInstitution>{lazyPage(TeacherAssignments)}</RequireInstitution> },
-          { path: "lesson-plans", element: <RequireInstitution><FeatureGuard feature={FEATURES.TEACHING_PLANS}>{lazyPage(LessonPlans)}</FeatureGuard></RequireInstitution> },
           { path: "marketplace", element: <RequireInstitution>{lazyPage(Marketplace)}</RequireInstitution> },
           { path: "api-platform", element: <RequireInstitution><FeatureGuard feature={FEATURES.API_ACCESS}>{lazyPage(APIPlatform)}</FeatureGuard></RequireInstitution> },
           { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },

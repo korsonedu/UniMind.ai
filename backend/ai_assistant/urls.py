@@ -4,7 +4,6 @@ from .views import (
     AgentMemoryListCreateView, AgentMemoryDetailView,
     BotListCreateView, BotDetailView, BotVisibilityView,
     ConversationListView,
-    StudyPlanListView, StudyPlanDetailView, StudyPlanTaskUpdateView,
     SemanticMemoryListView, SemanticMemoryDeleteView,
     ActionCardInteractionView,
 )
@@ -32,9 +31,6 @@ urlpatterns = [
     path('bots/', BotListCreateView.as_view(), name='bot-list'),
     path('bots/<int:pk>/', BotDetailView.as_view(), name='bot-detail'),
     path('bots/visibility/', BotVisibilityView.as_view(), name='bot-visibility'),
-    path('plans/', StudyPlanListView.as_view(), name='study-plan-list'),
-    path('plans/<int:pk>/', StudyPlanDetailView.as_view(), name='study-plan-detail'),
-    path('plans/<int:plan_id>/tasks/<str:task_id>/', StudyPlanTaskUpdateView.as_view(), name='study-plan-task-update'),
     path('card-interactions/', ActionCardInteractionView.as_view(), name='card-interactions'),
 
     # Phase 5: Grading & Memory API

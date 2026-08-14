@@ -6,9 +6,6 @@ from .views import (
     VideoProgressUpdateView,
     CourseOutlineView, CourseTranscriptView,
     OSSMultipartInitView, OSSMultipartCompleteView,
-    TeachingPlanListCreateView, TeachingPlanDetailView,
-    AIGenerateWeeklyPlansView,
-    TeachingPlanAnalyticsView, LessonPlanPDFView,
 )
 from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
 
@@ -19,11 +16,6 @@ urlpatterns = [
     path('tags/', TagListCreateView.as_view(), name='tag-list'),
     path('tags/batch-assign/', BatchAssignTagsView.as_view(), name='tag-batch-assign'),
     path('tags/<int:pk>/', TagDetailView.as_view(), name='tag-detail'),
-    path('teaching-plans/', TeachingPlanListCreateView.as_view(), name='teaching-plan-list'),
-    path('teaching-plans/<int:pk>/', TeachingPlanDetailView.as_view(), name='teaching-plan-detail'),
-    path('teaching-plans/<int:pk>/analytics/', TeachingPlanAnalyticsView.as_view(), name='teaching-plan-analytics'),
-    path('teaching-plans/<int:pk>/ai-generate-weeks/', AIGenerateWeeklyPlansView.as_view(), name='teaching-plan-ai-weeks'),
-    path('teaching-plans/<int:pk>/pdf/', LessonPlanPDFView.as_view(), name='teaching-plan-pdf'),
     path('reorder/', CourseReorderView.as_view(), name='course-reorder'),
     path('<int:pk>/', CourseDetailView.as_view(), name='course-detail'),
     path('<int:pk>/outline/', CourseOutlineView.as_view(), name='course-outline'),

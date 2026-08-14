@@ -104,66 +104,8 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             logger.warning("agent_push failed", exc_info=True)
 
     def _collect_push_data(self):
-        """同步查询 DB，收集推送事件。"""
-        events = []
-        try:
-            from django.utils import timezone
-            from datetime import timedelta
-            from quizzes.models import AssignmentSubmission, Assignment
-
-            inst = self.institution
-            if not inst:
-                return events
-
-            now = timezone.now()
-
-            # 1. 待批改作业提交
-            pending_grading = AssignmentSubmission.objects.filter(
-                assignment__institution=inst,
-                score__isnull=True,
-            ).count()
-            if pending_grading > 0:
-                events.append({
-                    "type": "agent_push",
-                    "push_type": "pending_grading",
-                    "title": f"{pending_grading} 份作业待批改",
-                    "summary": f"学生已提交 {pending_grading} 份作业，建议尽快批改",
-                    "action_label": "查看作业",
-                    "action_route": "/questions",
-                })
-
-            # 2. 最近 24h 新提交
-            recent = AssignmentSubmission.objects.filter(
-                assignment__institution=inst,
-                submitted_at__gte=now - timedelta(hours=24),
-            ).count()
-            if recent > 0:
-                events.append({
-                    "type": "agent_push",
-                    "push_type": "recent_activity",
-                    "title": f"最近 24 小时 {recent} 次提交",
-                    "summary": f"学生近一天活跃度正常，共提交 {recent} 次作业",
-                })
-
-            # 3. 即将到期/刚发布的作业
-            active_assignments = Assignment.objects.filter(
-                institution=inst,
-                status='published',
-            ).count()
-            if active_assignments > 0:
-                events.append({
-                    "type": "agent_push",
-                    "push_type": "active_assignments",
-                    "title": f"{active_assignments} 个作业进行中",
-                    "summary": "当前有进行中的作业，可查看学生完成进度",
-                    "action_label": "查看进度",
-                    "action_route": "/institution/students",
-                })
-
-        except Exception:
-            logger.warning("collect_push_data failed", exc_info=True)
-
-        return events
+        """同步查询 DB，收集推送事件。作业相关推送已随产品删除下线，暂无事件源。"""
+        return []
 
     async def receive(self, text_data):
         try:

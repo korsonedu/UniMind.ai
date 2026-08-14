@@ -1,14 +1,6 @@
 from django.db import models
 from django.conf import settings
 
-class StudyTask(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    task_name = models.CharField(max_length=200)
-    duration_minutes = models.IntegerField(default=25)
-    is_completed = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-
 class StudySession(models.Model):
     """自习室学习会话持久化记录，权威状态在 Redis。"""
     STATUS_CHOICES = [

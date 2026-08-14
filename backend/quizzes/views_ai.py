@@ -7,124 +7,9 @@ from quizzes.models import KnowledgePoint, ContentPipelineTask
 from quizzes.serializers import ContentPipelineTaskSerializer
 from users.permissions import HasPlanFeature, HasQuota, IsAdmin
 from users.quota import increment_ai_quota
-from quizzes.services.ai_parse_service import (
-    build_parse_task_id, extract_raw_text, get_parse_task, init_parse_task,
-)
-from quizzes.services.task_dispatcher import dispatch_ai_parse_task
 
 logger = logging.getLogger(__name__)
 
-
-class AIPreviewParseView(APIView):
-    """
-    整理功能：改用高性能异步模式
-    """
-    permission_classes = [HasPlanFeature, HasQuota]
-    required_feature = 'ai.generate'
-    quota_resource = 'ai_question'
-    def post(self, request):
-        upload_file = request.FILES.get('file')
-        if upload_file:
-            from core.file_validation import validate_upload_file
-            validate_upload_file(upload_file, allowed_extensions={'.pdf', '.doc', '.docx', '.txt', '.md'})
-
-        raw_text = extract_raw_text(
-            request.data.get('raw_text', ''),
-            upload_file,
-        )
-
-        if not raw_text.strip(): return Response({'error': '内容为空'}, status=400)
-        payload = {
-            "raw_text_chars": len(raw_text),
-            "has_file": bool(upload_file),
-            "file_name": getattr(upload_file, "name", "") if upload_file else "",
-        }
-        pipeline_task = ContentPipelineTask.objects.create(
-            task_type="ai_parse",
-            status="running",
-            title="AI 语料解析任务",
-            description="维护中心发起的原始语料 AI 结构化整理任务",
-            payload=payload,
-            progress=0,
-            created_by=request.user,
-            assignee=request.user,
-            request_id=getattr(request, "request_id", ""),
-            started_at=timezone.now(),
-        )
-
-        task_id = build_parse_task_id()
-        init_parse_task(task_id, pipeline_task_id=pipeline_task.id)
-
-        try:
-            dispatch_ai_parse_task(raw_text, task_id)
-        except Exception as exc:  # noqa: BLE001
-            pipeline_task.status = "failed"
-            pipeline_task.progress = 100
-            pipeline_task.error_message = str(exc)
-            pipeline_task.finished_at = timezone.now()
-            pipeline_task.save(update_fields=["status", "progress", "error_message", "finished_at", "updated_at"])
-            raise
-
-        return Response({
-            'task_id': task_id,
-            'status': 'processing',
-            'pipeline_task_id': pipeline_task.id,
-        })
-
-    def get(self, request):
-        """前端轮询此接口获取结果"""
-        task_id = request.query_params.get('task_id')
-        result = get_parse_task(task_id)
-        if not result: return Response({'error': '任务不存在'}, status=404)
-
-        pipeline_task_id = result.get("pipeline_task_id")
-        if pipeline_task_id:
-            task_obj = ContentPipelineTask.objects.filter(id=pipeline_task_id).first()
-            if task_obj:
-                parse_status = str(result.get("status", "")).strip()
-                parse_progress = int(result.get("progress", 0) or 0)
-                update_fields = []
-
-                if parse_status == "processing":
-                    if task_obj.status != "running":
-                        task_obj.status = "running"
-                        update_fields.append("status")
-                    if task_obj.progress != parse_progress:
-                        task_obj.progress = max(0, min(parse_progress, 99))
-                        update_fields.append("progress")
-                elif parse_status == "completed":
-                    if task_obj.status != "completed":
-                        task_obj.status = "completed"
-                        update_fields.append("status")
-                    if task_obj.progress != 100:
-                        task_obj.progress = 100
-                        update_fields.append("progress")
-                    parsed_data = result.get("data") or []
-                    task_obj.result = {"parsed_count": len(parsed_data)}
-                    update_fields.append("result")
-                    if not task_obj.finished_at:
-                        task_obj.finished_at = timezone.now()
-                        update_fields.append("finished_at")
-                elif parse_status == "failed":
-                    if task_obj.status != "failed":
-                        task_obj.status = "failed"
-                        update_fields.append("status")
-                    if task_obj.progress != 100:
-                        task_obj.progress = 100
-                        update_fields.append("progress")
-                    err = str(result.get("error") or "解析失败")
-                    if task_obj.error_message != err:
-                        task_obj.error_message = err
-                        update_fields.append("error_message")
-                    if not task_obj.finished_at:
-                        task_obj.finished_at = timezone.now()
-                        update_fields.append("finished_at")
-
-                if update_fields:
-                    update_fields.append("updated_at")
-                    task_obj.save(update_fields=update_fields)
-
-        return Response(result)
 
 
 class AdversarialPipelineView(APIView):
@@ -299,19 +184,6 @@ class PipelineReviewActionView(APIView):
         task.save(update_fields=['status', 'finished_at', 'description'])
         return Response({'status': 'rejected'})
 
-
-class WorkbenchTaskListView(APIView):
-    """当前教师的出题任务列表（工作台用）。"""
-    permission_classes = [IsAdmin, HasPlanFeature]
-    required_feature = 'ai.generate'
-
-    def get(self, request):
-        qs = ContentPipelineTask.objects.filter(
-            created_by=request.user,
-            task_type='ai_generate',
-        ).order_by('-created_at')[:20]
-        serializer = ContentPipelineTaskSerializer(qs, many=True)
-        return Response({'results': serializer.data})
 
 
 class WorkbenchTaskStatusView(APIView):

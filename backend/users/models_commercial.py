@@ -52,31 +52,6 @@ class InstitutionAuditLog(models.Model):
 
 # ── Layer 2: 机构自有收款配置（Pro 版）──
 
-class InstitutionPaymentConfig(models.Model):
-    """机构自有收款配置 — Pro 版可在后台绑定微信/支付宝商户号，学生付款直进机构账户"""
-    institution = models.OneToOneField(
-        'Institution', on_delete=models.CASCADE, related_name='payment_config',
-        verbose_name='所属机构',
-    )
-    # 微信支付
-    wechat_merchant_id = models.CharField(max_length=32, blank=True, verbose_name='微信商户号')
-    wechat_api_v3_key = EncryptedCharField(max_length=255, blank=True, verbose_name='微信 APIv3 Key')
-    wechat_cert_serial = models.CharField(max_length=40, blank=True, verbose_name='证书序列号')
-    # 支付宝
-    alipay_app_id = models.CharField(max_length=32, blank=True, verbose_name='支付宝 App ID')
-    alipay_private_key = EncryptedTextField(blank=True, verbose_name='支付宝私钥')
-    # 开关
-    is_enabled = models.BooleanField(default=False, verbose_name='启用学生端收费')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = '机构收款配置'
-        verbose_name_plural = '机构收款配置'
-
-    def __str__(self):
-        return f'{self.institution.name} 收款配置'
-
 
 class InstitutionNotificationConfig(models.Model):
     """机构通知配置 — 到期复习提醒的渠道和频率设置"""

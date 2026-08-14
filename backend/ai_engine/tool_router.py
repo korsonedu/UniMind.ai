@@ -50,21 +50,6 @@ PLANNER_TOOLS_META = [
         body="获取用户今日到期的复习任务。参数: user_id(int)=用户ID。返回：待复习题目列表，含知识点、上次正确率、到期时间。适用于：提醒复习、规划今日学习、了解复习压力。不适用于：查看新题、查看历史成绩。",
     ),
     ToolMeta(
-        name="save_study_plan",
-        description="保存用户学习计划（自动归档旧计划）",
-        body="为用户创建新的学习计划。参数: title(str)=计划标题, tasks(list)=任务列表, total_days(int)=总天数。每次调用会将旧计划标记为archived。适用于：制定学习计划、安排复习日程、设置学习目标。不适用于：修改现有计划（用update_plan_task）、查看计划（用get_active_plan）。",
-    ),
-    ToolMeta(
-        name="get_active_plan",
-        description="获取用户当前生效的学习计划",
-        body="获取用户当前活跃的学习计划。参数: user_id(int)=用户ID。返回：计划详情含tasks列表及各task完成状态。适用于：查看当前计划进度、确认计划内容。不适用于：创建新计划、修改计划。",
-    ),
-    ToolMeta(
-        name="update_plan_task",
-        description="更新学习计划中单个任务的状态",
-        body="更新计划中某个任务的完成状态。参数: user_id(int)=用户ID, task_id(str)=任务ID, status(str)=completed/skipped/pending。适用于：标记任务完成、更新进度。不适用于：创建计划、删除计划。",
-    ),
-    ToolMeta(
         name="get_user_wrong_questions",
         description="获取用户最近的错题列表",
         body="获取用户最近做错的题目。参数: user_id(int)=用户ID, limit(int)=返回数量(默认5,最大10)。返回：题目内容、知识点、错误次数、上次作答。适用于：错题回顾、分析错误模式、针对性练习。不适用于：查看正确题、查找知识点。",
@@ -78,16 +63,6 @@ PLANNER_TOOLS_META = [
         name="lookup_question",
         description="查询具体题目的详情和解析",
         body="查询指定题目的完整信息。参数: question_id(int)=题目ID。返回：题干、选项、正确答案、解析、知识点。适用于：查看题目详情、讲解题目、核对答案。不适用于：批量查找、搜索题目。",
-    ),
-    ToolMeta(
-        name="get_class_weak_points",
-        description="获取班级知识点薄弱分析（仅教师/机构主）",
-        body="分析班级整体知识点掌握情况。参数: institution_id(int)=机构ID, class_name(str)=班级名(可选)。返回：班级各知识点正确率、最薄弱知识点。需要teacher/owner角色。适用于：班级学情分析、教学调整。不适用于：查看单个学生、查看个人统计。",
-    ),
-    ToolMeta(
-        name="get_class_performance_summary",
-        description="获取班级整体表现摘要（仅教师/机构主）",
-        body="获取班级整体学习表现。参数: institution_id(int)=机构ID。返回：平均正确率、活跃学生数、学习时长分布。需要teacher/owner角色。适用于：班级整体评估、教学效果分析。不适用于：查看单个学生详情。",
     ),
     ToolMeta(
         name="get_exam_history",
@@ -138,11 +113,6 @@ PLANNER_TOOLS_META = [
         name="get_report_card",
         description="获取学生学习报告/成绩单",
         body="查看完整学习报告。触发词：学习报告、成绩单、我学得怎么样、我的学习数据、学习统计。参数: 无。返回：打卡天数、总答题量、正确率、已掌握知识点、ELO分数、最近考试、已解锁成就。适用于：学生主动询问学习进展时。",
-    ),
-    ToolMeta(
-        name="get_my_courses",
-        description="获取学生当前班级的课程列表",
-        body="查看我的课程。触发词：我的课程、我在学什么、有什么课、课程列表。参数: 无。返回：课程标题、学科、班级名称。适用于：学生询问课程相关问题时。未加入班级时提示联系老师。",
     ),
     ToolMeta(
         name="get_my_achievements",
@@ -207,17 +177,7 @@ EXAM_GENERATOR_TOOLS_META = [
     ToolMeta(
         name="get_student_detail",
         description="获取指定学生的详细学习数据（仅教师/机构主）",
-        body="查询学生个人学习数据。触发词：学生、学员、学得怎么样、学习情况、成绩、表现、某某的数据、看一下谁、查一下谁。参数: student_name(str)=学生姓名模糊匹配, student_id(int)=学生ID精确匹配。需要teacher/owner角色。不适用于：查看全班数据（用get_class_weak_points或get_class_gradebook）。",
-    ),
-    ToolMeta(
-        name="get_assignment_progress",
-        description="查询指定作业的提交和批改进度（仅教师/机构主）",
-        body="查询作业提交和批改情况。触发词：作业交了没、还有谁没交、提交进度、批改进度、作业#N进度。参数: assignment_id(int)=作业ID。返回：提交数/总人数、已批改数、待批改数、作业标题和截止日期。需要teacher/owner角色。不适用于：批改作业（用grade_submissions）。",
-    ),
-    ToolMeta(
-        name="assign_practice",
-        description="创建作业并布置给学生（仅教师/机构主）",
-        body="创建作业记录并发布给学生。触发词：布置、发布、发下去、分配、下发、布置给、发给、安排练习。参数: title(str)=作业标题, question_ids(list)=题目ID列表（需先从list_questions获取或save_questions_to_bank入库）, class_names(list)=目标班级名, due_date(str)=截止日期(ISO), points_per_question(int)=每题分值。需要teacher/owner角色。不适用于：出题（先用list_questions抽题或quick_generate生成）。",
+        body="查询学生个人学习数据。触发词：学生、学员、学得怎么样、学习情况、成绩、表现、某某的数据、看一下谁、查一下谁。参数: student_name(str)=学生姓名模糊匹配, student_id(int)=学生ID精确匹配。需要teacher/owner角色。",
     ),
     ToolMeta(
         name="send_notification",
@@ -232,47 +192,12 @@ EXAM_GENERATOR_TOOLS_META = [
     ToolMeta(
         name="list_questions",
         description="从题库中浏览或随机抽题",
-        body="从机构已有题库中选取题目。触发词：随机抽、抽取、抽几道、选题、选几道、从题库选、看看题库、有没有题、找题、浏览题库。这是从已有题库检索，不会生成新题目。参数: kp_name(str)=知识点搜索(可选), subject(str)=学科筛选(可选), q_type(str)=题型筛选(可选), difficulty(str)=难度筛选(可选), random(bool)=是否随机排列(默认false), limit(int)=数量上限(默认20)。返回：题目ID、题干摘要、题型、难度、知识点。教师说随机或抽取时必须传random=true。返回的题目ID可直接用于assign_practice。不适用于：生成新题（用quick_generate）、精修题目（用launch_arc_pipeline）。",
+        body="从机构已有题库中选取题目。触发词：随机抽、抽取、抽几道、选题、选几道、从题库选、看看题库、有没有题、找题、浏览题库。这是从已有题库检索，不会生成新题目。参数: kp_name(str)=知识点搜索(可选), subject(str)=学科筛选(可选), q_type(str)=题型筛选(可选), difficulty(str)=难度筛选(可选), random(bool)=是否随机排列(默认false), limit(int)=数量上限(默认20)。返回：题目ID、题干摘要、题型、难度、知识点。教师说随机或抽取时必须传random=true。不适用于：生成新题（用quick_generate）、精修题目（用launch_arc_pipeline）。",
     ),
     ToolMeta(
         name="list_articles",
         description="浏览或查找机构文章库",
         body="从已有文章库中查找文章。触发词：看看文章、找文章、选文章、浏览文章、有没有文章。参数: query(str)=关键词搜索(可选), limit(int)=数量上限(默认10)。返回：标题、摘要、发布日期。从机构已有文章中检索，不会创建新文章。不适用于：搜索知识点（用search_knowledge）。",
-    ),
-    ToolMeta(
-        name="get_class_weak_points",
-        description="获取班级知识点薄弱分析",
-        body="分析班级整体薄弱知识点。触发词：薄弱、弱项、薄弱点、薄弱知识、学情、正确率低、哪些知识点弱。参数: institution_id(int)=机构ID, class_name(str)=班级名(可选)。返回：班级各知识点正确率、最薄弱知识点。需要teacher/owner角色。不适用于：查看单个学生（用get_student_detail）。",
-    ),
-    ToolMeta(
-        name="list_classes",
-        description="获取机构下的所有班级列表，可按名称筛选",
-        body="查询机构班级。触发词：有哪些班、班级列表、找XX班、查班级、看看班级。参数: name(str)=班级名称筛选(可选，模糊匹配)。返回：班级ID、名称、学生数。仅用于查找/列出班级，不会修改班级。不适用于：查看班级成绩（用get_class_gradebook）、搜索知识点（用search_knowledge）。",
-    ),
-    ToolMeta(
-        name="assign_class_course",
-        description="将课程分配给指定班级",
-        body="建立班级与课程的关联。触发词：分配课程、给XX班加课、把XX课给XX班。参数: class_id(int)=班级ID, course_id(int)=课程ID。返回：分配结果。需要teacher/owner角色。不适用于：查看班级课程列表。",
-    ),
-    ToolMeta(
-        name="get_class_gradebook",
-        description="获取班级成绩册（学生×作业矩阵）",
-        body="查看班级成绩。触发词：成绩册、看看X班成绩、班级成绩、X班学得怎么样。参数: class_id(int)=班级ID。返回：学生列表、作业列表、每个学生在每项作业的得分及统计。需要teacher/owner角色。不适用于：查看单个学生详情（用get_student_detail）。",
-    ),
-    ToolMeta(
-        name="grade_submissions",
-        description="批改学生作业提交",
-        body="为学生作业打分。触发词：批改、判分、给XX分、批作业、判作业。参数: submission_id(int)=提交ID, score(number)=评分, feedback(str)=评语(可选)。返回：更新后的提交信息。需要teacher/owner角色。不适用于：查看作业进度（用get_assignment_progress）。",
-    ),
-    ToolMeta(
-        name="create_teaching_plan",
-        description="创建或更新班级教学计划",
-        body="为班级设定教学目标并规划周进度。触发词：制定教学计划、设定目标、教学规划、XX班XX学科教学计划。参数: class_id(int)=班级ID(必填), subject(str)=学科, semester(str)=学期, week_count(int)=周数, goal(str)=目标(如'1年内高考130分'), deadline(str)=截止日期, target_score(int)=目标分数, current_level(str)=当前水平。返回：教学计划ID和目标信息。需要teacher/owner角色。",
-    ),
-    ToolMeta(
-        name="get_teaching_plan_kps",
-        description="查询教学计划列表或某周的知识点",
-        body="不传 teaching_plan_id 时浏览机构所有教学计划。传入 teaching_plan_id 时查询该计划指定周的知识点。触发词：按教学计划出题、教案出题、有哪些教学计划、第X周出题。参数: teaching_plan_id(int)=教学计划ID(可选), week_number(int)=周号(可选)。",
     ),
     ToolMeta(
         name="render_visual",
@@ -282,24 +207,13 @@ EXAM_GENERATOR_TOOLS_META = [
     ToolMeta(
         name="save_questions_to_bank",
         description="将生成的题目存入题库",
-        body="把quick_generate生成的题目正式入库。触发词：入库、保存、存入题库、确认保留。参数: 无（自动使用最近一次quick_generate生成的题目）。返回：入库数量、题目ID列表（可用于assign_practice）。调用前应先render_visual让教师确认。不适用于：从题库抽题（用list_questions）。",
-    ),
-    # ── F2: 批改助手 ──
-    ToolMeta(
-        name="bulk_grade_submissions",
-        description="批量AI评分作业提交并渲染可编辑预览卡片",
-        body="AI批量评分作业。触发词：批改作业、AI批改、自动批改、判作业、批作业#N。参数: assignment_id(int)=作业ID, action(str)=操作(preview/confirm/reject)。preview模式：AI评分所有未批改提交，渲染 grading_preview 可编辑卡片（不写DB）。confirm模式：确认编辑后批量写入DB。reject模式：驳回全部重新评分。适用于：教师需要批量批改主观题或混合题型作业。不适用于：单个学生批改（用grade_submissions）。",
-    ),
-    ToolMeta(
-        name="confirm_grades",
-        description="确认并批量写入AI评分到数据库",
-        body="将教师在grading_preview卡片中确认的评分写入数据库。触发词：确认、写入、保存评分、确认批改。参数: assignment_id(int)=作业ID, edits(list)=评分列表[{submission_id, score, feedback}]。由Agent在教师确认后自动调用，一般不需要教师直接触发。",
+        body="把quick_generate生成的题目正式入库。触发词：入库、保存、存入题库、确认保留。参数: 无（自动使用最近一次quick_generate生成的题目）。返回：入库数量、题目ID列表。调用前应先render_visual让教师确认。不适用于：从题库抽题（用list_questions）。",
     ),
     # ── F4: 学情报告 ──
     ToolMeta(
         name="generate_student_report",
         description="按需生成学生学情报告（支持时间范围和预览/PDF/发送）",
-        body="生成学生学情报告。触发词：生成报告、学情报告、学习报告、看看XXX学得怎么样、XXX最近表现、成绩单。参数: student_name(str)或student_id(int)=目标学生, date_from(str)=开始日期, date_to(str)=结束日期, action(str)=preview/export_pdf/send_to_student。preview：渲染 student_report 可视化卡片（统计+雷达图+错题+成就）。export_pdf：导出PDF文件。send_to_student：发送报告给学生端并通知。适用于：教师查看学生学习情况、家长会准备、学期总结。不适用于：查看班级整体数据（用get_class_gradebook/get_class_weak_points）。",
+        body="生成学生学情报告。触发词：生成报告、学情报告、学习报告、看看XXX学得怎么样、XXX最近表现、成绩单。参数: student_name(str)或student_id(int)=目标学生, date_from(str)=开始日期, date_to(str)=结束日期, action(str)=preview/export_pdf/send_to_student。preview：渲染 student_report 可视化卡片（统计+雷达图+错题+成就）。export_pdf：导出PDF文件。send_to_student：发送报告给学生端并通知。适用于：教师查看学生学习情况、家长会准备、学期总结。",
     ),
 ]
 
@@ -452,15 +366,13 @@ PLANNER_INTENT_MAP = {
         "keywords": ["规划", "安排", "计划", "复习", "备考", "学习计划", "日程", "每周", "今天做什么"],
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
-            "get_due_reviews", "save_study_plan", "get_active_plan",
-            "update_plan_task", "get_user_weak_points", "render_visual",
+            "get_due_reviews", "get_user_weak_points", "render_visual",
         ],
     },
     "analysis": {
         "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告", "难度", "成就", "徽章", "学习报告", "学得怎么样"],
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
-            "get_class_weak_points", "get_class_performance_summary",
             "get_exam_history", "get_knowledge_difficulty_analysis",
             "get_user_weak_points", "get_user_wrong_questions", "render_visual",
             "get_report_card", "get_my_achievements",
@@ -478,7 +390,6 @@ PLANNER_INTENT_MAP = {
         "keywords": ["课程", "视频", "文章", "资料", "推荐", "学习资源", "我的课程", "有什么课", "我在学什么"],
         "tools": [
             "search_courses", "search_asr", "search_articles", "render_visual",
-            "get_my_courses",
         ],
     },
     "error_review": {
@@ -521,10 +432,9 @@ PLANNER_INTENT_MAP = {
 
 EXAM_GENERATOR_INTENT_MAP = {
     "weak_points": {
-        "keywords": ["薄弱", "弱项", "薄弱点", "薄弱知识", "针对薄弱", "班级", "学情", "正确率低"],
+        "keywords": ["薄弱", "弱项", "薄弱点", "薄弱知识", "针对薄弱", "学情", "正确率低"],
         "tools": [
-            "get_class_weak_points", "search_knowledge", "quick_generate",
-            "get_class_gradebook",
+            "search_knowledge", "quick_generate",
         ],
     },
     "refine": {
@@ -538,7 +448,6 @@ EXAM_GENERATOR_INTENT_MAP = {
                      "再来", "换", "调整", "改", "不同", "其他", "再难", "更难", "简单"],
         "tools": [
             "search_knowledge", "quick_generate", "launch_arc_pipeline",
-            "get_teaching_plan_kps", "get_class_weak_points",
             "render_visual",
         ],
     },
@@ -558,34 +467,12 @@ EXAM_GENERATOR_INTENT_MAP = {
         "keywords": ["学生", "学员", "学得怎么样", "学习情况", "成绩", "表现", "看看谁",
                      "看一下", "查一下", "某某", "错误多", "没交", "报告", "成绩单"],
         "tools": [
-            "get_student_detail", "send_notification", "get_class_weak_points",
-            "get_assignment_progress", "get_class_gradebook", "generate_student_report",
-        ],
-    },
-    "assignment": {
-        "keywords": ["作业", "提交", "进度", "交了没", "批改", "交作业", "布置", "发布",
-                     "分配", "下发", "发下去", "布置给", "安排练习", "选", "选题",
-                     "教学计划", "教学规划", "设定目标", "制定计划", "学期规划"],
-        "tools": [
-            "get_assignment_progress", "assign_practice",
-            "assign_class_course", "grade_submissions",
-            "list_classes", "create_teaching_plan",
-            "bulk_grade_submissions", "confirm_grades",
-            "render_visual",
-        ],
-    },
-    # ── F2: 批改 ──
-    "grading": {
-        "keywords": ["批改作业", "AI批改", "自动批改", "判作业", "批作业", "改作业",
-                     "批量评分", "批量批改"],
-        "tools": [
-            "bulk_grade_submissions", "confirm_grades", "render_visual",
+            "get_student_detail", "send_notification", "generate_student_report",
         ],
     },
     "browse": {
         "keywords": ["课程", "视频", "看看课程", "有什么课", "文章", "看看文章",
-                     "看看题库", "有什么题", "搜索题", "浏览", "资产", "有没有", "有哪些",
-                     "教案", "教学计划", "看看教案"],
+                     "看看题库", "有什么题", "搜索题", "浏览", "资产", "有没有", "有哪些"],
         "tools": [
             "list_courses", "list_questions", "list_articles",
         ],
@@ -701,7 +588,6 @@ def _keyword_fallback(user_message: str, all_tools: List[dict],
 # 工作流延续信号：AI 上一轮在等用户回复来完成某工作流时，
 # 当前消息的语义路由可能遗漏该工作流的关键工具。
 _WORKFLOW_SIGNALS = {
-    "assignment": ["作业", "标题", "截止", "班级", "布置", "发下去", "发"],
     "generate":   ["出题", "题目", "生成", "精修", "调整", "换"],
     "student_lookup": ["学生", "学得", "数据", "成绩"],
 }

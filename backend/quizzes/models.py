@@ -249,7 +249,7 @@ class UserKnowledgeState(models.Model):
         unique_together = ("user", "knowledge_point")
 
 
-# ── 0020 MemorixOptimizationLog / PersonalizedMockExam ──
+# ── 0020 MemorixOptimizationLog ──
 class MemorixOptimizationLog(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memorix_optimization_logs")
     previous_loss = models.FloatField(null=True, blank=True)
@@ -314,173 +314,6 @@ class MemorixFieldConfig(models.Model):
         verbose_name_plural = "Memorix Field 机构配置"
 
 
-class PersonalizedMockExam(models.Model):
-    STATUS_CHOICES = [
-        ("processing", "生成中"), ("ready", "可下载"), ("failed", "生成失败"),
-    ]
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="personalized_mock_exams")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="ready")
-    exam_pdf = models.CharField(max_length=500, blank=True, help_text="试卷版绝对路径")
-    answer_pdf = models.CharField(max_length=500, blank=True, help_text="解析版绝对路径")
-    question_count = models.IntegerField(default=0)
-    weak_coverage = models.IntegerField(default=0, help_text="命中的薄弱点题目数")
-    error_message = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-
-# ── 0021 TeacherExam / StudentExamSubmission ──
-class TeacherExam(models.Model):
-    title = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
-    exam_pdf = models.FileField(upload_to="teacher_exams/", blank=True, null=True, help_text="PDF 模式试卷文件，online 模式可空")
-    # ── 在线考试字段 ──
-    EXAM_TYPES = (
-        ('pdf', 'PDF试卷'),
-        ('online', '在线考试'),
-    )
-    exam_type = models.CharField(max_length=10, choices=EXAM_TYPES, default='pdf', verbose_name='考试类型')
-    duration_minutes = models.PositiveIntegerField(null=True, blank=True, verbose_name='考试时长(分钟)')
-    start_time = models.DateTimeField(null=True, blank=True, verbose_name='开考时间')
-    end_time = models.DateTimeField(null=True, blank=True, verbose_name='截止时间')
-    shuffle_questions = models.BooleanField(default=True, verbose_name='题目乱序')
-    shuffle_options = models.BooleanField(default=True, verbose_name='选项乱序')
-    max_attempts = models.PositiveIntegerField(default=1, verbose_name='最大尝试次数')
-    passing_score = models.FloatField(null=True, blank=True, verbose_name='及格分数')
-    # ── 原有字段 ──
-    created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="teacher_exams")
-    institution = models.ForeignKey("users.Institution", on_delete=models.SET_NULL, null=True, blank=True, related_name="teacher_exams", verbose_name="所属机构")
-
-
-class StudentExamSubmission(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    exam = models.ForeignKey(TeacherExam, on_delete=models.CASCADE, related_name="submissions")
-    answer_pdf = models.FileField(upload_to="student_answers/")
-    score = models.FloatField(null=True, blank=True)
-    feedback = models.TextField(blank=True)
-    graded_pdf = models.FileField(upload_to="graded_answers/", blank=True, help_text="教师批改后带笔迹的PDF")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-
-class Assignment(models.Model):
-    """作业：教师选题后定向布置给班级。"""
-    STATUS_CHOICES = (
-        ('draft', '草稿'),
-        ('published', '已发布'),
-        ('closed', '已关闭'),
-    )
-    title = models.CharField(max_length=500)
-    description = models.TextField(blank=True)
-    institution = models.ForeignKey("users.Institution", on_delete=models.CASCADE, related_name="assignments")
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="created_assignments")
-    target_classes = models.ManyToManyField("users.Class", related_name="assignments")
-    due_date = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-
-
-class AssignmentQuestion(models.Model):
-    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="assignment_questions")
-    question = models.ForeignKey("Question", on_delete=models.CASCADE)
-    order = models.IntegerField(default=0)
-    points = models.IntegerField(default=1)
-
-    class Meta:
-        ordering = ['order']
-        unique_together = [('assignment', 'question')]
-
-
-class AssignmentSubmission(models.Model):
-    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="submissions")
-    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="assignment_submissions")
-    submitted_at = models.DateTimeField(auto_now_add=True)
-    answers = models.JSONField(default=dict)
-    score = models.FloatField(null=True, blank=True)
-    question_results = models.JSONField(null=True, blank=True)
-    graded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="graded_submissions")
-    graded_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ['-submitted_at']
-        unique_together = [('assignment', 'student')]
-
-
-class ExamQuestion(models.Model):
-    """在线考试的题目关联（带排序和分值）"""
-    exam = models.ForeignKey('TeacherExam', on_delete=models.CASCADE, related_name='exam_questions')
-    question = models.ForeignKey('Question', on_delete=models.CASCADE)
-    order = models.PositiveIntegerField(default=0)
-    points = models.FloatField(default=1.0, verbose_name='本题分值')
-
-    class Meta:
-        ordering = ['order']
-        unique_together = [('exam', 'question')]
-
-
-class OnlineExamAttempt(models.Model):
-    """学生在线考试作答记录"""
-    STATUS_CHOICES = (
-        ('in_progress', '作答中'),
-        ('submitted', '已提交'),
-        ('graded', '已批改'),
-    )
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='online_exam_attempts')
-    exam = models.ForeignKey('TeacherExam', on_delete=models.CASCADE, related_name='attempts')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in_progress')
-    started_at = models.DateTimeField(auto_now_add=True)
-    submitted_at = models.DateTimeField(null=True, blank=True)
-    answers = models.JSONField(default=dict, help_text='{question_id: user_answer}')
-    question_order = models.JSONField(default=list, help_text='该学生看到的题目顺序 [question_id, ...]')
-    score = models.FloatField(null=True, blank=True)
-    max_score = models.FloatField(null=True, blank=True)
-    # 逐题结果（判分后填充）
-    question_results = models.JSONField(default=list, blank=True, help_text='[{question_id, score, max_score, is_correct, feedback}]')
-
-    class Meta:
-        ordering = ['-started_at']
-        unique_together = [('user', 'exam')]
-
-
-class ExamTemplate(models.Model):
-    """出题模板：保存常用出题配置，支持系统预设和机构自定义。"""
-    DIFFICULTY_LEVELS = (
-        ('entry', '入门'),
-        ('easy', '简单'),
-        ('normal', '适当'),
-        ('hard', '困难'),
-        ('extreme', '极限'),
-        ('mixed', '混合'),
-    )
-    name = models.CharField(max_length=100, verbose_name="模板名称")
-    description = models.TextField(blank=True, verbose_name="模板说明")
-    subject = models.CharField(max_length=100, blank=True, verbose_name="适用学科")
-    difficulty = models.CharField(max_length=20, choices=DIFFICULTY_LEVELS, default='normal')
-    question_types = models.JSONField(default=list, help_text='["objective","subjective"]')
-    type_ratio = models.JSONField(default=dict, help_text='{"objective": 0.7, "short": 0.2, "essay": 0.1}')
-    question_count = models.IntegerField(default=10)
-    knowledge_point_ids = models.JSONField(default=list, blank=True, help_text="预选知识点ID列表")
-    is_system = models.BooleanField(default=False, verbose_name="系统预设")
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    institution = models.ForeignKey('users.Institution', on_delete=models.CASCADE, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-is_system', '-updated_at']
-
-    def __str__(self):
-        prefix = '[系统]' if self.is_system else ''
-        return f"{prefix}{self.name}"
-
-
-# ── 0038 GradingRecord ──
 class GradingRecord(models.Model):
     """记录每次评分的完整历史，用于追溯和分析。"""
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -494,8 +327,6 @@ class GradingRecord(models.Model):
     analysis = models.TextField(blank=True)
     graded_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
-
-# ── Phase 6: IRT ItemParameter ──
 class ItemParameter(models.Model):
     """IRT 项目参数模型 - 存储每道题的三参数 Logistic 模型参数。机构隔离：同一道题在不同机构有不同参数。"""
     question = models.ForeignKey(

@@ -677,27 +677,6 @@ class QuestionGenerator:
             subjective_type=subjective_type,
         )
 
-    def generate_questions_from_text(
-        self,
-        text: str,
-        num_obj: int = 3,
-        num_short: int = 1,
-        num_essay: int = 1,
-        num_calc: int = 0,
-        kp_id: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
-        from quizzes.services.ai_task_service import QuizAITaskService
-
-        return QuizAITaskService.generate_questions_from_text(
-            self.ai_service,
-            text=text,
-            num_obj=num_obj,
-            num_short=num_short,
-            num_essay=num_essay,
-            num_calc=num_calc,
-            kp_id=kp_id,
-        )
-
     def parse_questions_from_text(self, raw_text: str) -> List[Dict[str, Any]]:
         from quizzes.services.ai_task_service import QuizAITaskService
 

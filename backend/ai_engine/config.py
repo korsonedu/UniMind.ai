@@ -12,7 +12,6 @@ _TASK_MODEL_MAP = {
     # ── Chat / interview ──
     # 前缀匹配规则：'assistant.chat.planner' 精确匹配小宇，其他 agent 操作 fallback 到默认 flash
     'assistant.chat.planner': ('AI_MODEL_CHAT', 'pro'),
-    'interviews': ('AI_MODEL_CHAT',            'fast'),
     # ── Question generation pipeline ──
     'pipeline.author':    ('AI_MODEL_GENERATE_AUTHOR',    'fast'),
     'quizzes.bulk_generate': ('AI_MODEL_GENERATE_AUTHOR', 'fast'),

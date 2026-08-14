@@ -3,7 +3,7 @@
  * 学生数 / 月活 / 作业数 / 留存率。
  */
 import { useEffect, useState } from 'react';
-import { Spinner, Users, UserCircle, ClipboardText, ChartLine, TrendUp, TrendDown, CurrencyDollar, ClockCounterClockwise, CreditCard } from '@phosphor-icons/react';
+import { Spinner, Users, UserCircle, ChartLine, TrendUp, TrendDown, CurrencyDollar, ClockCounterClockwise, CreditCard } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -13,7 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 interface BusinessDashboardData {
   student_count: number;
   active_students_this_month: number;
-  total_assignments: number;
   retention_rate: number | null;
   revenue: number;
   revenue_this_month: number;
@@ -27,7 +26,6 @@ interface BusinessDashboardData {
   trends?: {
     students_trend?: 'up' | 'down' | 'flat';
     active_trend?: 'up' | 'down' | 'flat';
-    assignments_trend?: 'up' | 'down' | 'flat';
     retention_trend?: 'up' | 'down' | 'flat';
   };
 }
@@ -38,7 +36,6 @@ const STAT_CARDS = [
   { key: 'mrr' as const, label: 'MRR (月经常收入)', icon: CurrencyDollar, prefix: '¥', isCurrency: true },
   { key: 'arr' as const, label: 'ARR (年经常收入)', icon: ChartLine, prefix: '¥', isCurrency: true },
   { key: 'active_subscriptions' as const, label: '活跃订阅', icon: CreditCard },
-  { key: 'total_assignments' as const, label: '作业总数', icon: ClipboardText, trendKey: 'assignments_trend' as const },
   { key: 'retention_rate' as const, label: '留存率', icon: ClockCounterClockwise, trendKey: 'retention_trend' as const, suffix: '%' },
   { key: 'renewal_rate' as const, label: '续费率', icon: TrendUp, suffix: '%' },
 ];
