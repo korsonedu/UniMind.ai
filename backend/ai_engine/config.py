@@ -9,7 +9,7 @@ DEFAULT_BASE_URL = 'https://api.deepseek.com/v1/chat/completions'
 # Per-task model routing table.
 # Each task → (per_task_env_key, tier) where tier ∈ {'fast', 'pro'}.
 _TASK_MODEL_MAP = {
-    # ── Chat / interview ──
+    # ── Chat ──
     # 前缀匹配规则：'assistant.chat.planner' 精确匹配小宇，其他 agent 操作 fallback 到默认 flash
     'assistant.chat.planner': ('AI_MODEL_CHAT', 'pro'),
     # ── Question generation pipeline ──
@@ -24,7 +24,6 @@ _TASK_MODEL_MAP = {
     'knowledge_edge_analyze': ('AI_MODEL_GENERATE_KNOWLEDGE_TREE', 'pro'),
     # ── Grading ──
     'quizzes.grade':  ('AI_MODEL_GRADE_SUBJECTIVE',   'pro'),
-    'quizzes.mock_exam_generate': ('AI_MODEL_GENERATE_AUTHOR', 'pro'),
     # ── Single pipeline reviewer ──
     'quizzes.single_pipeline.reviewer': ('AI_MODEL_GENERATE_REVIEWER', 'pro'),
     # ── Light tasks ──

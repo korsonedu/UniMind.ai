@@ -1,6 +1,21 @@
+import os
+
+import django
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'school_system.settings')
+django.setup()
+
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
+
+
+@pytest.fixture(autouse=True)
+def _locmem_cache(settings):
+    """测试环境统一使用内存缓存，避免依赖外部 Redis。"""
+    settings.CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+    }
 
 User = get_user_model()
 

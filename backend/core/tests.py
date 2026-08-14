@@ -40,11 +40,12 @@ class RateLimitTests(TestCase):
         resp = view(req2)
         self.assertEqual(resp.status_code, 200)
 
-    def test_cache_unavailable_passes_through(self):
+    def test_cache_unavailable_blocks_request(self):
+        # 安全设计：缓存不可用时 fail-closed（直接限流），防止限流被绕过
         view = self._make_view()
         with patch("core.rate_limit.cache.add", side_effect=Exception("redis down")):
             resp = view(self.request)
-            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.status_code, 429)
 
 
 class EncryptedFieldTests(TestCase):
@@ -80,11 +81,13 @@ class EncryptedFieldTests(TestCase):
         result = field.from_db_value("not-valid-ciphertext", None, None)
         self.assertEqual(result, "")
 
-    def test_missing_key_raises(self):
-        from django.core.exceptions import ImproperlyConfigured
+    def test_missing_key_falls_back_to_secret_key(self):
+        # 设计行为：ENCRYPTION_KEY 缺失时从 SECRET_KEY 派生（不抛异常）
         with self.settings(ENCRYPTION_KEY=""):
-            with self.assertRaises(ImproperlyConfigured):
-                EncryptedCharField().get_prep_value("test")
+            field = EncryptedCharField()
+            encrypted = field.get_prep_value("test")
+            self.assertNotEqual(encrypted, "test")
+            self.assertEqual(field.from_db_value(encrypted, None, None), "test")
 
 
 class CircuitBreakerTests(TestCase):

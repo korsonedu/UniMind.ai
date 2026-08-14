@@ -1179,30 +1179,30 @@ class AccountDeleteView(APIView):
 
             # 3. 匿名化关联数据
             # AI 对话历史
-            from ai_assistant.models import ChatMessage, AgentMemory, ActionCardInteraction
-            ChatMessage.objects.filter(user=user).delete()
+            from ai_assistant.models import AIChatMessage, AgentMemory, ActionCardInteraction
+            AIChatMessage.objects.filter(user=user).delete()
             AgentMemory.objects.filter(user=user).delete()
             ActionCardInteraction.objects.filter(user=user).delete()
 
             # 学习数据
             from quizzes.models import (
-                UserQuestionStatus, UserExam, ReviewLog,
-                KnowledgeState, MemorixProfile, KnowledgeAnnotation,
+                UserQuestionStatus, QuizExam, ReviewLog,
+                UserKnowledgeState, MemorixProfile, KnowledgePointAnnotation,
             )
             UserQuestionStatus.objects.filter(user=user).delete()
-            UserExam.objects.filter(user=user).delete()
+            QuizExam.objects.filter(user=user).delete()
             ReviewLog.objects.filter(user=user).delete()
-            KnowledgeState.objects.filter(user=user).delete()
+            UserKnowledgeState.objects.filter(user=user).delete()
             MemorixProfile.objects.filter(user=user).delete()
-            KnowledgeAnnotation.objects.filter(user=user).delete()
+            KnowledgePointAnnotation.objects.filter(user=user).delete()
 
             # 其他关联
             from notifications.models import Notification
             Notification.objects.filter(recipient=user).delete()
 
-            from study_room.models import StudySession, StudyMessage
+            from study_room.models import StudySession, ChatMessage
             StudySession.objects.filter(user=user).delete()
-            StudyMessage.objects.filter(user=user).delete()
+            ChatMessage.objects.filter(user=user).delete()
 
             from faq_system.models import Question
             Question.objects.filter(user=user).delete()
@@ -1216,7 +1216,7 @@ class AccountDeleteView(APIView):
             from core.models import SecurityAuditLog
             SecurityAuditLog.objects.create(
                 user=None,  # user 已匿名化
-                action='account_deletion',
+                event_type='admin_action',
                 ip_address=_get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
                 detail=f'Account {user.id} deleted and anonymized',
@@ -1274,7 +1274,7 @@ class DataExportView(APIView):
         }
 
         # 答题记录
-        from quizzes.models import UserQuestionStatus, UserExam
+        from quizzes.models import UserQuestionStatus, QuizExam
         uqs = UserQuestionStatus.objects.filter(user=user).select_related('question')
         data['quiz_history'] = [
             {
@@ -1289,26 +1289,26 @@ class DataExportView(APIView):
         ]
 
         # 考试记录
-        exams = UserExam.objects.filter(user=user)
+        exams = QuizExam.objects.filter(user=user)
         data['exam_history'] = [
             {
                 'exam_id': e.id,
-                'score': e.score,
                 'total_score': e.total_score,
-                'submitted_at': str(e.submitted_at) if e.submitted_at else None,
+                'max_score': e.max_score,
+                'created_at': e.created_at.isoformat(),
             }
             for e in exams[:1000]
         ]
 
         # AI 对话（最近 200 条）
-        from ai_assistant.models import ChatMessage
-        messages = ChatMessage.objects.filter(user=user).order_by('-created_at')[:200]
+        from ai_assistant.models import AIChatMessage
+        messages = AIChatMessage.objects.filter(user=user).order_by('-timestamp')[:200]
         data['ai_conversations'] = [
             {
                 'role': m.role,
                 'content': m.content[:500],  # 截断防止过大
                 'bot_type': m.bot_type,
-                'created_at': m.created_at.isoformat(),
+                'created_at': m.timestamp.isoformat(),
             }
             for m in messages
         ]

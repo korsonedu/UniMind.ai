@@ -58,7 +58,7 @@ if IS_PROD and DEBUG:
 
 ALLOWED_HOSTS = _get_list(
     "ALLOWED_HOSTS",
-    default=["127.0.0.1", "localhost", "0.0.0.0"] if DEBUG else [],
+    default=["127.0.0.1", "localhost", "0.0.0.0", "testserver"] if DEBUG else [],
 )
 if IS_PROD and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("ALLOWED_HOSTS must be configured in production.")

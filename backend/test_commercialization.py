@@ -8,6 +8,7 @@ User = get_user_model()
 
 
 @pytest.mark.django_db
+@pytest.mark.django_db
 class TestAccountDeletion:
     def test_delete_requires_auth(self, api_client):
         resp = api_client.post('/api/users/me/delete/', {'password': 'x'})
@@ -23,6 +24,9 @@ class TestAccountDeletion:
         assert resp.status_code == 400
 
     def test_delete_success(self, auth_client, user):
+        from rest_framework.authtoken.models import Token
+        Token.objects.create(user=user)
+
         resp = auth_client.post('/api/users/me/delete/', {'password': 'TestPass123!'})
         assert resp.status_code == 200
         assert resp.data['status'] == 'ok'
@@ -32,11 +36,6 @@ class TestAccountDeletion:
         assert user.email == ''
         assert user.username.startswith('deleted_')
         assert not user.has_usable_password()
-
-    def test_delete_clears_token(self, auth_client, user):
-        from rest_framework.authtoken.models import Token
-        Token.objects.create(user=user)
-        auth_client.post('/api/users/me/delete/', {'password': 'TestPass123!'})
         assert Token.objects.filter(user=user).count() == 0
 
 
@@ -67,6 +66,7 @@ class TestDataExport:
 
 
 @pytest.mark.django_db
+@pytest.mark.django_db
 class TestFeedback:
     def test_submit_requires_auth(self, api_client):
         resp = api_client.post('/api/users/feedback/', {'content': 'test'})
@@ -89,6 +89,7 @@ class TestFeedback:
         assert Feedback.objects.filter(user=user, content='测试反馈').exists()
 
 
+@pytest.mark.django_db
 @pytest.mark.django_db
 class TestLegalAPI:
     def test_list_legal_docs(self, api_client):
@@ -126,6 +127,7 @@ class TestHealthCheck:
     def test_health_ok(self, api_client):
         resp = api_client.get('/health/')
         assert resp.status_code == 200
-        assert resp.data['status'] == 'ok'
-        assert resp.data['database'] is True
-        assert resp.data['cache'] is True
+        body = resp.json()
+        assert body['status'] == 'ok'
+        assert body['database'] is True
+        assert body['cache'] is True
