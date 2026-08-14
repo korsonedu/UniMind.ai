@@ -89,8 +89,8 @@ free (6):
 solo (11 = free + 5):
   + memorix.review  full.report  knowledge.graph  ai.assistant  video.outline
 
-plus (18 = solo + 7):
-  + faq.system  pdf.mock  study.room  multi.teacher  class.compare  data.export  interview.mock
+plus (12 = solo + 4):
+  + faq.system  study.room  data.export
 
 pro (27 = plus + 9):
   + brand.custom  api.access  student.payment  private.deploy  i18n.custom
@@ -211,7 +211,6 @@ quota_resource = 'ai_question'
 | ai_assistant | AI 对话 | IsMember + HasQuota('ai_call_total') |
 | ai_assistant | 结构化记忆 CRUD | IsMember（仅操作自己的记忆） |
 | ai_assistant | 语义记忆 GET/DELETE | IsMember（含所有权验证） |
-| interviews | 全部 | IsMember + HasPlanFeature('interview.mock') |
 | faq_system | 全部 | IsMember（内联教师/管理员检查用于写操作） |
 | study_room | 全部 | IsMember |
 | notifications | 全部 | IsAuthenticated（广播=IsAdmin） |
@@ -237,7 +236,6 @@ quota_resource = 'ai_question'
 /courses, /tests, /articles, /settings    RequireAuth（无 FeatureGuard）
 /qa, /tests/*, /study, /ai, /knowledge-map/*
 /knowledge-map, /course/:id, /tests/review,
-/mock-exam, /interviews                    RequireAuth + FeatureGuard
 /system-settings, /management,
 /institution/admin                         RequireAuth + RequireAdmin
 /institution, /institution/students        RequireAuth + RequireInstitution
@@ -271,7 +269,7 @@ atLeast(lvl)  = myPlanLevel >= lvl
 
 ```
 solo:  memorix.review, ai.assistant, full.report, knowledge.graph, video.outline
-plus:  faq.system, multi.teacher, class.compare, data.export, study.room, pdf.mock, interview.mock
+plus:  faq.system, data.export, study.room
 pro:   brand.custom, api.access, student.payment, private.deploy, i18n.custom, sso.saml, audit.log, dedicated.support, sla.99.9
 ```
 

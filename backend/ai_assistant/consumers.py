@@ -57,9 +57,6 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         # Start application-level heartbeat (ping every 30s)
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
 
-        # 主动推送：连接建立后检查是否有值得推送的事件
-        if bot.bot_type == 'exam_generator' and self.institution:
-            asyncio.create_task(self._push_agent_analysis())
 
     async def disconnect(self, code):
         logger.info("WS disconnect: user=%s, code=%s — cancelling agent thread", self.user, code)
@@ -90,22 +87,6 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 await self.send(text_data=json.dumps({"type": "ping"}))
             except Exception:
                 break
-
-    async def _push_agent_analysis(self):
-        """连接建立后异步检查推送条件，通过 agent_push 事件推送到前端。"""
-        try:
-            loop = asyncio.get_event_loop()
-            push_data = await loop.run_in_executor(None, self._collect_push_data)
-
-            if push_data:
-                for event in push_data:
-                    await self.send(text_data=json.dumps(event, ensure_ascii=False))
-        except Exception:
-            logger.warning("agent_push failed", exc_info=True)
-
-    def _collect_push_data(self):
-        """同步查询 DB，收集推送事件。作业相关推送已随产品删除下线，暂无事件源。"""
-        return []
 
     async def receive(self, text_data):
         try:

@@ -8,8 +8,8 @@ Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepS
 
 | Agent | bot_type | 工具数 | 意图路由 | 职责 |
 |-------|----------|--------|---------|------|
-| 小宇 | `planner` | 30+ | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 可视化渲染 + 教练式对话 |
-| 工作台 | `exam_generator` | 20+ | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 作业管理 + 资产浏览 + 通知 + 邀请管理 |
+| 小宇 | `planner` | 23 | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 可视化渲染 + 教练式对话 |
+| 工作台 | `exam_generator` | 12 | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 资产浏览 + 通知 + 邀请管理 |
 
 运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
 意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。**自进化优化**：LLM 驱动的用户画像分析（缓存预计算 + Celery 异步）、Memorix↔Agent 联动、MUTAR 自进化全链路（Measure→Umpire→Think→Adapt→Refine：采集→评估→分析→变体→精炼，Trajectory 自动记录 + 用户反馈闭环）。
@@ -42,7 +42,7 @@ UniMindCode/                  ← git 仓库根目录
 │   │   ├── services/           #   chat_dispatch, memory_analyzer, trajectory_recorder, prompt_adapter
 │   │   └── tasks.py            #   Celery tasks: record_trajectory_async, precompute_user_profile
 │   ├── quizzes/                # 核心刷题
-│   │   ├── services/           #   出题管线、评分、解析、PDF
+│   │   ├── services/           #   出题管线、评分、Memorix 调度
 │   │   ├── memorix/            #   Memorix 自进化记忆调度算法
 │   │   ├── management/         #   import_knowledge_tree, seed_questions/demo
 │   │   └── views_*.py          #   views 已拆分为 6 个文件（原始 views.py 已删除）
@@ -50,19 +50,18 @@ UniMindCode/                  ← git 仓库根目录
 │   │   └── services/           #   会员服务 (membership.py)
 │   ├── courses/                # 课程/专辑/AI大纲/ASR/OSS分片直传
 │   ├── articles/               # 深度文章
-│   ├── interviews/             # AI 模拟面试
 │   ├── study_room/             # 在线自习室
 │   ├── faq_system/             # 答疑系统
 │   ├── notifications/          # 站内通知
 │   ├── payments/               # 支付网关 (gateway_router 统一分发: stub/stripe/alipay/wechat/airwallex)
 │   ├── core/                   # 基础设施 (加密字段、Cookie认证、邮件、限流、文件校验、安全审计)
 │   └── prompts/                # 统一 Prompt 模板目录
-│       ├── quizzes/  ai_assistant/  courses/  pipeline/  grading/  interviews/
+│       ├── quizzes/  ai_assistant/  courses/  pipeline/  grading/
 │       └── ai_assistant/bots/  # Bot prompt（每个 bot 一个目录：system_prompt.txt + tool_guide.txt + personality.txt + intent_guide.txt）
 │           ├── xiaoyu/           #   小宇学习教练
 │           └── exam_generator/   #   工作台教研助手
 ├── frontend/
-│   ├── src/pages/              # 37 页面组件
+│   ├── src/pages/              # 页面组件（学生/教师/机构/平台四侧）
 │   ├── src/components/         # 通用组件 + shadcn/ui
 │   ├── src/lib/                # API 客户端、权限、hooks
 │   └── src/store/              # Zustand 状态管理
@@ -74,13 +73,13 @@ UniMindCode/                  ← git 仓库根目录
 
 ## Django Apps (11)
 
-`ai_engine` `ai_assistant` `quizzes` `users` `courses` `articles` `interviews` `study_room` `faq_system` `notifications` `core`
+`ai_engine` `ai_assistant` `quizzes` `users` `courses` `articles` `study_room` `faq_system` `notifications` `core`
 
 ## 关键路由
 
 | 路径 | 说明 |
 |------|------|
-| `/` | Landing（未登录）/ HomeRedirect（已登录：学生未诊断→/diagnostic, 老师/机构主→/workbench, 其他→/courses） |
+| `/` | Landing（未登录）/ HomeRedirect（已登录：老师/机构主→/workbench, enterprise 机构成员→/institution, 学生→/xiaoyu） |
 | `/login` `/register` | 邮箱验证码登录注册 |
 | `/diagnostic` | 学生诊断测试（首次登录强制） |
 | `/workbench` | 工作台 — 教师 AI 助手：出题 + 查数据 + 管资产（老师/机构主） |
@@ -100,8 +99,7 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/ai/memories/` | GET/POST Agent 记忆 CRUD（结构化） |
 | `/api/ai/memories/semantics/` | GET 语义记忆列表（mem0，需 USE_MEM0=true） |
 | `/api/ai/bots/` | GET Bot 列表（按机构过滤） |
-| `/api/ai/plans/` | GET/POST 学习计划 CRUD |
-| `/api/users/` | 用户/会员/ELO API（52 条路由） |
+| `/api/users/` | 用户/会员/ELO API |
 | `/api/users/me/diagnostic/generate/` | POST 生成诊断题目 |
 | `/api/users/me/diagnostic/submit/` | POST 提交诊断答案 |
 | `/api/users/me/achievements/` | GET 已解锁成就列表 + GET/POST /api/users/achievements/ 全部成就（含进度） |
@@ -109,24 +107,18 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/users/me/push-subscribe/` | POST/DELETE PWA 推送订阅 |
 | `/api/users/institution/me/invites/` | GET/POST 邀请链接管理（支持审批流+角色分配） |
 | `/api/users/institution/me/join-requests/` | GET 加入申请列表 + PATCH 审批（通过/拒绝） |
-| `/api/users/institution/me/analytics/class-performance/` | GET 班级 KP 正确率分析 |
-| `/api/users/institution/me/analytics/suggested-topics/` | GET Top 5 薄弱知识点建议 |
 | `/api/users/admin/analytics/dashboard/` | GET 平台数据分析 Dashboard（仅超管） |
 | `/api/users/admin/analytics/export/` | GET CSV 导出（trends/events/nps，仅超管） |
 | `/api/users/nps/submit/` | POST 提交 NPS 问卷 |
-| `/api/quizzes/` | 题库/考试 API（37 条路由） |
-| `/api/quizzes/templates/` | GET/POST 出题模板（系统预设+机构自定义） |
+| `/api/quizzes/` | 题库/考试 API |
 | `/api/quizzes/admin/adversarial-pipeline/` | POST 启动 ARC 对抗出题管线 |
 | `/api/courses/` | 课程/视频 API |
 | `/api/courses/oss/multipart/init/` | POST 初始化 OSS 分片上传（返回签名 URL 列表） |
 | `/api/courses/oss/multipart/complete/` | POST 确认 OSS 分片完成 + 创建课程 |
-| `/api/courses/teaching-plans/` | GET/POST 教学计划（班级-学科-周进度）+ analytics/ + ai-generate-weeks/lessons/ |
-| `/api/courses/lesson-plans/` | GET/POST 教案（AI 生成 + 活动编辑）+ ai-generate/ |
 | `/api/qa/` | 答疑系统 API |
 | `/api/study/` | 自习室 API |
-| `/api/interviews/` | AI 模拟面试 API |
 | `/api/notifications/` | 站内通知 API |
-| `/api/payments/` | 支付 API（订单/订阅/Stripe Billing webhook） |
+| `/api/payments/` | 支付 API（订单/Stripe Billing webhook） |
 | `/health` | GET 健康检查 |
 | `/ws/ai/chat/<bot_id>/` | WS Agent 对话（工作台/小宇，多步可见） |
 
@@ -269,7 +261,7 @@ sudo journalctl -u unimind.service -f
 | `docs/tech/features/MULTI_STEP_AGENT.md` | 多步可见 Agent（逐步气泡展示 + 自定义指标卡片） |
 | `docs/tech/features/MUTAR_ENGINE.md` | MUTAR 自进化闭环 |
 | `docs/tech/features/PLATFORM_ANALYTICS.md` | 平台数据分析（仅超管可见） |
-| `docs/tech/features/COMPREHENSIVE_INTERVIEW_MODULE.md` | AI 模拟面试模块 |
+| `docs/tech/features/archive/mock-interview-simulator.md` | AI 模拟面试（已删除，归档） |
 | `docs/tech/features/WOW_MOMENT_TECH_FLOWS.md` | 核心功能技术流程图 |
 
 ### 归档

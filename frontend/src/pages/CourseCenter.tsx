@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +44,6 @@ export const CourseCenter: React.FC = () => {
     api.get('/quizzes/knowledge-points/').then(r => setKps(r.data || [])).catch(() => {});
   }, []);
 
-  const { t } = useTranslation('common');
   const queryParams: string[] = [];
   if (search.trim()) queryParams.push(`search=${encodeURIComponent(search.trim())}`);
   if (activeTags.length > 0) activeTags.forEach(t => queryParams.push(`tag=${encodeURIComponent(t)}`));
@@ -72,12 +70,12 @@ export const CourseCenter: React.FC = () => {
       onClick={() => navigate('/courses/manage')}
       className="bg-primary text-primary-foreground hover:opacity-90 rounded-2xl px-6 h-11 font-bold shadow-lg transition-all hover:scale-[1.02]"
     >
-      <PlusCircle className="mr-2 h-4 w-4" /> {t('publishCourse')}
+      <PlusCircle className="mr-2 h-4 w-4" /> 发布新课程
     </Button>
   ) : null;
 
   if (loading) return (
-    <PageWrapper title={t('pages:courseCenter.title')} subtitle={t('pages:courseCenter.subtitle')}>
+    <PageWrapper title="课程中心" subtitle="精品课程助你构建完整的专业知识体系。">
       <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="rounded-2xl overflow-hidden bg-card border border-border/50">
@@ -96,8 +94,8 @@ export const CourseCenter: React.FC = () => {
 
   return (
     <PageWrapper
-      title={t('pages:courseCenter.title')}
-      subtitle={t('pages:courseCenter.subtitle')}
+      title="课程中心"
+      subtitle="精品课程助你构建完整的专业知识体系。"
       action={ActionBtn}
     >
       <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
@@ -236,7 +234,7 @@ export const CourseCenter: React.FC = () => {
 
         {/* 内容区 */}
         {!courses.length ? (
-          <EmptyState icon={BookOpen} title={t('noCourses')} description={t('noCoursesHint')} className="h-[40vh]" />
+          <EmptyState icon={BookOpen} title="暂无课程" description="管理员发布课程后将在此显示" className="h-[40vh]" />
         ) : viewMode === 'grid' ? (
           /* 网格视图 */
           <>

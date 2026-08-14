@@ -18,7 +18,6 @@ import { useSystemStore } from '@/store/useSystemStore';
 import { useStudyRoomStore } from '@/store/useStudyRoomStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import { useTranslation } from 'react-i18next';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { FocusTimer } from '@/pages/study-room/FocusTimer';
@@ -51,7 +50,6 @@ export const StudyRoom: React.FC = () => {
   const user = useAuthStore(s => s.user);
   const updateUser = useAuthStore(s => s.updateUser);
   const { setPageHeader } = useSystemStore();
-  const { t } = useTranslation('studyRoom');
 
   // ── Timer state (from server via WS store) ──
   const timeLeft = useStudyRoomStore(s => s.timeLeft);
@@ -64,7 +62,7 @@ export const StudyRoom: React.FC = () => {
   const resumeSession = useStudyRoomStore(s => s.resumeSession);
   const endSession = useStudyRoomStore(s => s.endSession);
   const [duration, setDuration] = useState(25);
-  const [taskName, setTaskName] = useState(t('deepFocus'));
+  const [taskName, setTaskName] = useState('深度专注学习');
 
   // ── Chat & plans state ──
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
@@ -100,8 +98,8 @@ export const StudyRoom: React.FC = () => {
 
   // ── Page header ──
   useEffect(() => {
-    setPageHeader(t('pageTitle'), t('pageSubtitle'));
-  }, [setPageHeader, t]);
+    setPageHeader('自习室', '保持专注，学术进化');
+  }, [setPageHeader]);
 
   // ── API calls ──
   const fetchOnline = async () => { try { const res = await api.get('/users/online/'); setOnlineUsers(res.data); } catch (e) { console.error('fetchOnline failed', e); } };
@@ -112,16 +110,16 @@ export const StudyRoom: React.FC = () => {
   useEffect(() => {
     if (!coachEvent) return;
     if (coachEvent.event === 'timer_expired') {
-      toast.success(t('focusAchieved'));
+      toast.success('专注已达成！');
       if (allowBroadcast) {
         api.post('/study/messages/', {
-          content: t('taskCompleted', { emoji: '✅', taskName: coachEvent.task_name || taskName, duration: coachEvent.duration || duration }),
+          content: `✅ 完成了「${coachEvent.task_name || taskName}」任务 (专注 ${coachEvent.duration || duration} 分钟)`,
         }).then(() => fetchMessages()).catch(() => {});
       }
     } else if (coachEvent.event === 'idle_warning') {
-      toast.warning(t('idleWarning'), { duration: 5000 });
+      toast.warning('你已经学习很久了，起来活动一下吧！', { duration: 5000 });
     } else if (coachEvent.event === 'milestone') {
-      toast.success(t('milestoneReached', { minutes: coachEvent.total_minutes }), { duration: 4000 });
+      toast.success(`已专注 ${coachEvent.total_minutes} 分钟，继续保持！`, { duration: 4000 });
     }
     setCoachEvent(null);
   }, [coachEvent]);
@@ -130,7 +128,7 @@ export const StudyRoom: React.FC = () => {
   useEffect(() => {
     if (!lastSummary) return;
     const mins = Math.floor(lastSummary.total_focus_seconds / 60);
-    toast.success(t('sessionSummary', { taskName: lastSummary.task_name, minutes: mins }));
+    toast.success(`「${lastSummary.task_name}」已专注 ${mins} 分钟`);
   }, [lastSummary]);
 
   // ── Initial load + polling (chat & online only, timer is WS) ──
@@ -182,13 +180,13 @@ export const StudyRoom: React.FC = () => {
   };
 
   const handleStartTask = async () => {
-    if (!taskName.trim()) return toast.error(t('enterTaskName'));
+    if (!taskName.trim()) return toast.error('请输入任务名称');
     startSession(taskName.trim(), duration);
     if (allowBroadcast) {
       try {
-        await api.post('/study/messages/', { content: t('taskStarted', { emoji: '💪', taskName, duration }) });
+        await api.post('/study/messages/', { content: `💪 开始了「${taskName}」任务 (计划 ${duration} 分钟)` });
         fetchMessages();
-      } catch (e) { toast.error(t('sendFailed')); }
+      } catch (e) { toast.error('发送失败，请重试'); }
     }
   };
 
@@ -199,9 +197,9 @@ export const StudyRoom: React.FC = () => {
     const focusedMins = Math.floor((duration * 60 - timeLeft) / 60);
     if (allowBroadcast) {
       try {
-        await api.post('/study/messages/', { content: t('taskAborted', { emoji: '❌', taskName, focusedMins }) });
+        await api.post('/study/messages/', { content: `❌ 中止了「${taskName}」任务 (专注 ${focusedMins} 分钟)` });
         fetchMessages();
-      } catch (e) { toast.error(t('sendFailed')); }
+      } catch (e) { toast.error('发送失败，请重试'); }
     }
   };
 
@@ -216,20 +214,20 @@ export const StudyRoom: React.FC = () => {
       setTimeout(() => scrollToBottom(true), 100);
     } catch (e) {
       setChatInput(content);
-      toast.error(t('sendFailed'));
+      toast.error('发送失败');
     }
   };
 
   const uploadImage = async (file: File) => {
     const formData = new FormData();
     formData.append('image', file);
-    const tid = toast.loading(t('imageProcessing'));
+    const tid = toast.loading('正在处理图片...');
     try {
       const res = await api.post('/study/upload-image/', formData);
       setChatInput(prev => (prev ? prev + '\n' : '') + `![image](${res.data.url})`);
-      toast.success(t('imageReady'), { id: tid });
+      toast.success('图片已就绪，点击发送即可', { id: tid });
     } catch (e) {
-      toast.error(t('imageProcessFailed'), { id: tid });
+      toast.error('图片处理失败', { id: tid });
     }
   };
 
@@ -245,7 +243,7 @@ export const StudyRoom: React.FC = () => {
       setIsAtBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
     } catch (e) {
-      toast.error(t('gifSendFailed'));
+      toast.error('发送 GIF 失败');
     }
   };
 
@@ -263,11 +261,11 @@ export const StudyRoom: React.FC = () => {
   const undoMessage = async (messageId: number) => {
     try {
       await api.post(`/study/messages/${messageId}/undo/`);
-      toast.success(t('undoSuccess'));
+      toast.success('已撤回');
       fetchMessages();
       fetchPlans();
     } catch (e: any) {
-      toast.error(e?.response?.data?.error || t('undoFailed'));
+      toast.error(e?.response?.data?.error || '撤回失败');
     }
   };
 
@@ -277,12 +275,12 @@ export const StudyRoom: React.FC = () => {
       if (field === 'allow_broadcast') setAllowBroadcast(val);
       if (field === 'show_others_broadcast') setShowOthersBroadcast(val);
       updateUser({ ...user, [field]: val } as any);
-      toast.success(t('preferencesUpdated'));
-    } catch (e) { toast.error(t('updateFailed')); }
+      toast.success('偏好已更新');
+    } catch (e) { toast.error('更新失败'); }
   };
 
   const handleEnterMobileFocus = async () => {
-    if (!taskName.trim()) return toast.error(t('enterTaskName'));
+    if (!taskName.trim()) return toast.error('请输入任务名称');
     if (!isActive) await handleStartTask();
     setShowMobileTimerSetup(false);
     setShowMobileTimerFullscreen(true);
@@ -327,7 +325,7 @@ export const StudyRoom: React.FC = () => {
             <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shadow-lg text-primary-foreground">
               <Chat className="h-4 w-4" />
             </div>
-            <h2 className="text-sm font-bold tracking-tight">{t('chatRoomTitle')}</h2>
+            <h2 className="text-sm font-bold tracking-tight">学习咖啡厅</h2>
           </div>
           <div className="flex items-center gap-2">
             {!isMobile && (
@@ -352,16 +350,16 @@ export const StudyRoom: React.FC = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64 rounded-2xl p-4 space-y-4 bg-card border-border shadow-lg">
                 <div className="space-y-1">
-                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{t('privacy.title')}</h4>
-                  <p className="text-[11px] text-muted-foreground/50">{t('privacy.description')}</p>
+                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">隐私与模式</h4>
+                  <p className="text-[11px] text-muted-foreground/50">控制任务状态在共学区的可见性</p>
                 </div>
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold">{t('privacy.broadcastTasks')}</Label>
+                    <Label className="text-xs font-bold">广播我的任务</Label>
                     <Switch checked={allowBroadcast} onCheckedChange={(v) => updateSettings('allow_broadcast', v)} />
                   </div>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold">{t('privacy.receiveBroadcasts')}</Label>
+                    <Label className="text-xs font-bold">接收他人广播</Label>
                     <Switch checked={showOthersBroadcast} onCheckedChange={(v) => updateSettings('show_others_broadcast', v)} />
                   </div>
                 </div>
@@ -434,9 +432,9 @@ export const StudyRoom: React.FC = () => {
         <button onClick={() => setShowMobileTimerFullscreen(false)} className="absolute top-6 right-6 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
           <XCircle className="h-5 w-5" />
         </button>
-        <p className="text-xs font-semibold text-white/40">{t('focusMode.title')}</p>
+        <p className="text-xs font-semibold text-white/40">Focus Mode</p>
         <p className="font-mono font-black text-[72px] leading-none tabular-nums">{formatTime(timeLeft)}</p>
-        <p className="text-base font-bold text-white/80 px-8 text-center">{taskName || t('deepFocus')}</p>
+        <p className="text-base font-bold text-white/80 px-8 text-center">{taskName || '深度专注学习'}</p>
         <div className="flex items-center gap-3">
           <Button
             size="lg"
@@ -447,14 +445,14 @@ export const StudyRoom: React.FC = () => {
             )}
           >
             {isActive ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-            {isActive ? t('focusMode.pause') : t('focusMode.start')}
+            {isActive ? '暂停' : '开始'}
           </Button>
           <Button
             size="lg" variant="ghost"
             onClick={() => setShowStopAlert(true)}
             className="rounded-2xl px-6 h-12 font-black text-white border border-white/20 hover:bg-white/10"
           >
-            {t('focusMode.end')}
+            结束
           </Button>
         </div>
       </div>
@@ -463,18 +461,18 @@ export const StudyRoom: React.FC = () => {
       <AlertDialog open={showStopAlert} onOpenChange={setShowStopAlert}>
         <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">{t('focusMode.confirmTitle')}</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">{t('focusMode.confirmDesc')}</AlertDialogDescription>
+            <AlertDialogTitle className="text-foreground">确定要中止任务吗？</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">离开当前页面将视为一次未完成的任务，并向讨论区广播。确定离开吗？</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setShowStopAlert(false)} className="rounded-xl border-border text-foreground hover:bg-muted">
-              {t('focusMode.keepFocusing')}
+              继续专注
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { handleAbort(); setShowStopAlert(false); setShowMobileTimerFullscreen(false); }}
               className="rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold"
             >
-              {t('focusMode.abortAndLeave')}
+              中止并离开
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowRight, Check } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
 import { ContactAdminModal } from './ContactAdminModal';
 
 const PLAN_ORDER = ['free', 'starter', 'growth', 'enterprise'] as const;
@@ -35,10 +34,10 @@ const PLAN_FEATURES: Record<string, string[]> = {
 
 const FEATURE_REQUIRED_PLAN: Record<string, string> = {
   'memorix.review': 'growth', 'knowledge.graph': 'growth', 'full.report': 'starter',
-  'video.outline': 'growth', 'multi.teacher': 'growth', 'class.compare': 'growth',
+  'video.outline': 'growth',
   'data.export': 'growth', 'student.payment': 'growth', 'ai.bot.custom': 'enterprise',
   'brand.custom': 'enterprise', 'api.access': 'enterprise',
-  'private.deploy': 'enterprise', 'i18n.custom': 'enterprise', 'sso.saml': 'enterprise',
+  'private.deploy': 'enterprise', 'sso.saml': 'enterprise',
   'audit.log': 'enterprise', 'dedicated.support': 'enterprise', 'sla.99.9': 'enterprise',
 };
 
@@ -51,7 +50,6 @@ interface UpgradeModalProps {
 
 export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free' }: UpgradeModalProps) {
   const [contactOpen, setContactOpen] = useState(false);
-  const { t } = useTranslation('layout');
 
   // Determine target plan
   const requiredPlan = feature ? FEATURE_REQUIRED_PLAN[feature] : null;
@@ -75,7 +73,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
                 {meta.label}
               </Badge>
               <DialogTitle className="text-xl font-black tracking-tight">
-                {t('upgradeModal.upgradeTo', { plan: meta.label })}
+                {`升级到 ${meta.label} 方案`}
               </DialogTitle>
               <DialogDescription className="font-medium text-muted-foreground leading-relaxed text-sm">
                 {unlockSummary}
@@ -86,7 +84,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
           {/* Features */}
           <div className="px-8 py-4 space-y-3">
             <p className="text-[11px] font-extrabold text-muted-foreground uppercase tracking-[0.2em]">
-              {t('upgradeModal.coreFeatures', { plan: meta.label })}
+              {`${meta.label} 版核心功能`}
             </p>
             <div className="bg-unimind-bg-secondary rounded-2xl p-4 space-y-2">
               {features.map((f, i) => (
@@ -106,7 +104,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
               className="flex-1 h-11 rounded-xl text-sm font-bold"
               onClick={() => onOpenChange(false)}
             >
-              {t('upgradeModal.later')}
+              稍后再说
             </Button>
             <Button
               variant="apple"
@@ -116,7 +114,7 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
                 setContactOpen(true);
               }}
             >
-              {t('upgradeModal.learnMore')}
+              了解详情
               <ArrowRight className="ml-1.5 h-4 w-4" />
             </Button>
           </div>

@@ -3,7 +3,6 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CheckCircle, Circle, ListChecks, Plus, Trash } from '@phosphor-icons/react';
-import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -22,12 +21,11 @@ interface PlanListProps {
 const PlanList: React.FC<PlanListProps> = (props) => {
   const { plans, allowBroadcast, onRefresh, onStartPlan, onPlanCompleted, onPlanDeleted } = props;
   const [newPlan, setNewPlan] = useState('');
-  const { t } = useTranslation('studyRoom');
   const { confirm, Dialog } = useConfirm();
 
   return (
     <Card className="border-none shadow-sm rounded-2xl md:rounded-3xl bg-card overflow-hidden p-4 md:p-6 md:flex-1 min-h-0 flex flex-col border border-border">
-      <header className="mb-4 flex items-center justify-between border-b border-border pb-4"><CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{t('planList.title')}</CardTitle><ListChecks className="h-4 w-4 text-muted-foreground opacity-20" /></header>
+      <header className="mb-4 flex items-center justify-between border-b border-border pb-4"><CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">计划清单</CardTitle><ListChecks className="h-4 w-4 text-muted-foreground opacity-20" /></header>
       <div className="flex-1 overflow-y-auto space-y-1.5 pr-2 scrollbar-none">
         {plans.map(p => (
           <div key={p.id} className={cn("group flex items-center gap-3 p-2 rounded-2xl transition-all border border-transparent", p.is_completed ? "bg-muted/30 opacity-60" : "hover:bg-muted hover:border-border")}>
@@ -41,7 +39,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
                   onRefresh();
                   if (allowBroadcast) {
                     await api.post('/study/messages/', {
-                      content: t('planCompleted', { emoji: '✅', plan: p.content }),
+                      content: `✅ 完成了计划：${p.content}`,
                       related_plan_id: p.id
                     });
                   }
@@ -56,16 +54,16 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             <button
               onClick={async (e) => {
                 e.stopPropagation();
-                if (!(await confirm(t('planList.deleteConfirm')))) return;
+                if (!(await confirm('确定删除此计划？'))) return;
                 try {
                   await api.delete(`/users/plans/${p.id}/`);
                   onRefresh();
-                  toast.success(t('planList.planDeleted'));
+                  toast.success('计划已删除');
                   onPlanDeleted(p.id);
-                } catch (e) { toast.error(formatApiErrorToast(e, t('planList.deleteFailed'))); }
+                } catch (e) { toast.error(formatApiErrorToast(e, '删除失败')); }
               }}
               className="opacity-100 transition-all p-1.5 hover:bg-red-100 rounded-lg text-muted-foreground/50 hover:text-red-500 cursor-pointer"
-              title={t('planList.deletePlan')}
+              title="删除计划"
             >
               <Trash className="h-3.5 w-3.5" />
             </button>
@@ -82,7 +80,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
               const res = await api.post('/users/plans/', { content: newPlan });
               if (allowBroadcast) {
                 await api.post('/study/messages/', {
-                  content: t('planList.planCreated', { emoji: '📅', plan: newPlan }),
+                  content: `📅 制定了计划：${newPlan}`,
                   related_plan_id: res.data.id
                 });
               }
@@ -90,7 +88,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
               setNewPlan('');
             }
           }}
-          placeholder={t('planList.addTarget')}
+          placeholder="ADD TARGET..."
           className="bg-muted border-none h-8 rounded-lg text-[11px] font-bold px-3 text-foreground focus-visible:ring-1 focus-visible:ring-primary/20"
         />
         <Button
@@ -99,7 +97,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             const res = await api.post('/users/plans/', { content: newPlan });
             if (allowBroadcast) {
               await api.post('/study/messages/', {
-                content: t('planList.planCreated', { emoji: '📅', plan: newPlan }),
+                content: `📅 制定了计划：${newPlan}`,
                 related_plan_id: res.data.id
               });
             }
