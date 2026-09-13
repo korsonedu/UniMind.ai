@@ -61,7 +61,16 @@ def _incr_cache(cache_key: str, window_seconds: int) -> int | None:
         return 999999  # 触发限流，阻止请求
 
 
+def _decr_cache(cache_key: str) -> None:
+    """被拒绝的请求不占用额度，否则用户越重试计数越高，越难等到恢复。"""
+    try:
+        cache.incr(cache_key, -1)
+    except Exception:
+        pass
+
+
 def _rate_limit_response(cache_key: str, window_seconds: int):
+    _decr_cache(cache_key)
     try:
         ttl = cache.ttl(cache_key) or window_seconds
     except AttributeError:

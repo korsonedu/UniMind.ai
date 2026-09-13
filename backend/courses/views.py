@@ -34,7 +34,7 @@ from core.analytics import record_event
 from users.quota import check_and_add_storage_usage
 
 # 上传限流：20 次/小时/用户
-_upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
+_upload_rl = method_decorator(user_rate_limit("upload", 100, 3600), name="dispatch")
 
 OSS_PART_SIZE = 10 * 1024 * 1024  # 10MB per part
 
@@ -394,6 +394,47 @@ class OSSMultipartAbortView(APIView):
             # 上传可能已完成或已被清理，前端只是尽力通知，不视为失败
             logger.info("abort_multipart_upload skipped for %s: %s", object_key, exc)
         return Response({"ok": True})
+
+
+@_upload_rl
+class OSSMultipartResignView(APIView):
+    """为已存在的分片上传重新签发分片 URL，并返回已上传的分片（断点续传用）。"""
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        upload_id = str(request.data.get("upload_id", "")).strip()
+        object_key = str(request.data.get("object_key", "")).strip()
+        total_parts = _safe_int(request.data.get("total_parts"), 0)
+        if not upload_id or not object_key or total_parts <= 0:
+            return Response({"error": "缺少 upload_id / object_key / total_parts"}, status=400)
+
+        # 校验 object_key 归属当前用户机构
+        user_inst_id = getattr(request.user, 'institution_id', None)
+        expected_prefix = f"institutions/{user_inst_id or 'public'}/"
+        if not object_key.startswith(expected_prefix):
+            return Response({"error": "无权操作此文件"}, status=403)
+
+        bucket = _get_oss_bucket()
+        try:
+            # 已传分片以 OSS 为准，前端本地记录不作为分片依据
+            result = bucket.list_parts(object_key, upload_id, max_parts=1000)
+        except Exception as exc:
+            # NoSuchUpload：上传已完成或已被 OSS 清理
+            if getattr(exc, 'code', '') == 'NoSuchUpload':
+                return Response({"error": "上传已失效，请重新上传"}, status=404)
+            logger.warning("list_parts failed for %s: %s", object_key, exc)
+            return Response({"error": "查询上传状态失败"}, status=500)
+
+        # 重新签发：原 init 签的 URL 只有 1 小时有效期
+        signed_urls = [
+            bucket.sign_url("PUT", object_key, 3600, params={
+                "uploadId": upload_id,
+                "partNumber": str(n),
+            })
+            for n in range(1, total_parts + 1)
+        ]
+        uploaded_parts = [{"number": p.part_number, "etag": p.etag} for p in result.parts]
+        return Response({"signed_urls": signed_urls, "uploaded_parts": uploaded_parts})
 
 
 class VideoProgressUpdateView(APIView):

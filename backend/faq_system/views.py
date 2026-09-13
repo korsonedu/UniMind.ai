@@ -12,7 +12,7 @@ from core.rate_limit import user_rate_limit
 from core.utils import apply_institution_filter
 from users.quota import check_and_add_storage_usage
 
-_upload_rl = method_decorator(user_rate_limit("upload", 20, 3600), name="dispatch")
+_upload_rl = method_decorator(user_rate_limit("upload", 100, 3600), name="dispatch")
 
 class QuestionListCreateView(generics.ListCreateAPIView):
     serializer_class = QuestionSerializer
