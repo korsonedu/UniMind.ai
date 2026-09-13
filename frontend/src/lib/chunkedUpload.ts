@@ -40,7 +40,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 async function uploadPartWithRetry(
   signedUrl: string,
   chunk: Blob,
-  retries = 2,
+  retries = 4,
   signal?: AbortSignal,
 ): Promise<string> {
   let lastError: unknown;
@@ -51,12 +51,15 @@ async function uploadPartWithRetry(
         body: chunk,
         signal,
       });
-      if (!resp.ok) throw new Error(`Part upload failed: ${resp.status}`);
+      if (!resp.ok) throw new Error(`分片上传失败（HTTP ${resp.status}）`);
       const etag = resp.headers.get('ETag') || '';
       return etag;
     } catch (err) {
-      lastError = err;
-      if (attempt < retries) await sleep(400 * 2 ** attempt);
+      // fetch 网络中断抛的是 TypeError("Failed to fetch")，对用户没有意义，换成可读提示
+      lastError = err instanceof TypeError
+        ? new Error('视频上传中断，请检查网络后重试')
+        : err;
+      if (attempt < retries) await sleep(500 * 2 ** attempt);
     }
   }
   throw lastError;
