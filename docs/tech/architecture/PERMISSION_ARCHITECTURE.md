@@ -318,7 +318,7 @@ def get_queryset(self):
 
 ### 7.1.1 服务层同样需要隔离
 
-视图层的 queryset 过滤只覆盖 API 入口。**服务层代码**（QuestionGenerator、AdversarialPipeline、DiagnosticService、MemorixScheduler 等）如果直接查询 Question / KnowledgePoint，也必须加同样的 `Q(institution=inst) | Q(institution__isnull=True)` 过滤，否则会出现：视图层正确隔离但服务层全局抽题的不一致。
+视图层的 queryset 过滤只覆盖 API 入口。**服务层代码**（QuestionGenerator、AdversarialPipeline、DiagnosticService、MemorixScheduler 等）如果直接查询 Question / KnowledgePoint，也必须加机构过滤：机构用户只查本机构（`institution=inst`），无机构用户只查全局（`institution__isnull=True`）。否则会出现：视图层正确隔离但服务层全局抽题的不一致。
 
 **规则**：任何在服务层查询 Question 或 KnowledgePoint 的地方，如果调用方能拿到 `institution`，查询时必须加机构过滤。
 
