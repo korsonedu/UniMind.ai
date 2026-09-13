@@ -256,6 +256,23 @@ class FileValidationTests(TestCase):
             allowed_extensions=DOCUMENT_EXTENSIONS,
         )
 
+    def test_image_extensions_reject_video(self):
+        # 课程封面只接受图片：要么上传图片，要么由系统从视频截取首帧
+        from rest_framework.exceptions import ValidationError
+
+        from core.file_validation import IMAGE_EXTENSIONS, validate_upload_file
+
+        with self.assertRaises(ValidationError):
+            validate_upload_file(self._file("cover.mp4", "video/mp4"), allowed_extensions=IMAGE_EXTENSIONS)
+
+    def test_image_extensions_accept_jpg(self):
+        from core.file_validation import IMAGE_EXTENSIONS, validate_upload_file
+
+        validate_upload_file(
+            self._file("cover.jpg", "image/jpeg", magic=b"\xff\xd8\xff"),
+            allowed_extensions=IMAGE_EXTENSIONS,
+        )
+
     def test_unknown_extension_still_rejected(self):
         from rest_framework.exceptions import ValidationError
 

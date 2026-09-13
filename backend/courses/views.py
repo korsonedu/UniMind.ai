@@ -30,7 +30,7 @@ from users.views import IsMember
 from quizzes.utils import safe_int as _safe_int
 from core.file_validation import (
     validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES,
-    DANGEROUS_EXTENSIONS, VIDEO_EXTENSIONS, DOCUMENT_EXTENSIONS,
+    DANGEROUS_EXTENSIONS, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, DOCUMENT_EXTENSIONS,
 )
 from core.rate_limit import user_rate_limit
 from core.analytics import record_event
@@ -299,7 +299,7 @@ class OSSMultipartCompleteView(APIView):
         courseware = request.FILES.get("courseware")
         reference_materials = request.FILES.get("reference_materials")
 
-        validate_upload_file(cover_image, max_size_bytes=IMAGE_MAX_BYTES)
+        validate_upload_file(cover_image, allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
         validate_upload_file(courseware, allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
         validate_upload_file(reference_materials, allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
 
@@ -625,7 +625,7 @@ class CourseListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         files = self.request.FILES
-        validate_upload_file(files.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
+        validate_upload_file(files.get("cover_image"), allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
         validate_upload_file(files.get("video_file"), max_size_bytes=VIDEO_MAX_BYTES)
         validate_upload_file(files.get("courseware"), allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
         validate_upload_file(files.get("reference_materials"), allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
