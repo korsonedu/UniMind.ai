@@ -14,6 +14,7 @@ ALLOWED_UPLOAD_TYPES = {
     ".webp": ["image/webp"],
     # 视频
     ".mp4": ["video/mp4"],
+    ".m4v": ["video/x-m4v", "video/mp4"],
     ".webm": ["video/webm"],
     ".mov": ["video/quicktime"],
     # 文档
@@ -37,7 +38,7 @@ VIDEO_MAX_BYTES = 500 * 1024 * 1024      # 500 MB
 DEFAULT_MAX_BYTES = 50 * 1024 * 1024     # 50 MB
 
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-_VIDEO_EXTS = {".mp4", ".webm", ".mov"}
+_VIDEO_EXTS = {".mp4", ".m4v", ".webm", ".mov"}
 _DOC_EXTS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
 
 # 文件 magic bytes（用于内容校验，防止伪造扩展名）
@@ -50,6 +51,7 @@ MAGIC_BYTES = {
     ".webp": [b"RIFF"],
     # 视频
     ".mp4": [b"\x00\x00\x00", b"ftyp"],  # ISO BM4 / ftyp box
+    ".m4v": [b"\x00\x00\x00", b"ftyp"],  # 与 mp4 同为 ISO BM4 容器
     ".webm": [b"\x1a\x45\xdf\xa3"],  # EBML header
     # 文档
     ".pdf": [b"%PDF"],

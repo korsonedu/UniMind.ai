@@ -198,3 +198,37 @@ class InstitutionFilterTests(TestCase):
         qs = apply_institution_filter(Album.objects.all(), self.admin)
         self.assertEqual(set(qs), {self.global_album, self.own_album})
 
+
+class FileValidationTests(TestCase):
+    """.m4v 与 mp4 同为 ISO BM4 容器，应被视频白名单按视频规格接受。"""
+
+    @staticmethod
+    def _file(name, content_type):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(name, b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, content_type=content_type)
+
+    def test_m4v_accepted(self):
+        from core.file_validation import validate_upload_file
+
+        validate_upload_file(self._file("a.m4v", "video/x-m4v"))  # 不应抛异常
+
+    def test_m4v_with_mp4_content_type_accepted(self):
+        # 部分系统把 .m4v 报成 video/mp4（容器相同）
+        from core.file_validation import validate_upload_file
+
+        validate_upload_file(self._file("a.m4v", "video/mp4"))
+
+    def test_m4v_uses_video_size_limit(self):
+        from core.file_validation import VIDEO_MAX_BYTES, _get_default_max_bytes
+
+        self.assertEqual(_get_default_max_bytes(".m4v"), VIDEO_MAX_BYTES)
+
+    def test_unknown_extension_still_rejected(self):
+        from rest_framework.exceptions import ValidationError
+
+        from core.file_validation import validate_upload_file
+
+        with self.assertRaises(ValidationError):
+            validate_upload_file(self._file("a.xyz", "application/octet-stream"))
+
