@@ -268,10 +268,11 @@ def _create_or_update_knowledge_tree(nodes: list, parent=None, prefix='', instit
         description = node.get('description', '')
         prefix_category = node.get('prefix_category', prefix)
 
-        # Try to find existing by code, strictly scoped to same institution bucket
+        # Try to find existing by code, strictly scoped to same institution bucket and parent
+        # （必须带 parent：同一机构内不同分支可能复用相同 code，只按 code 匹配会更新错节点）
         existing = None
         if code:
-            qs = KnowledgePoint.objects.filter(code=code)
+            qs = KnowledgePoint.objects.filter(code=code, parent=parent)
             if institution:
                 qs = qs.filter(institution=institution)
             else:
