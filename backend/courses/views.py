@@ -25,6 +25,14 @@ def _get_course_for_user(pk, user, request=None):
     """按机构隔离获取课程，无权限返回 None。"""
     qs = apply_institution_filter(Course.objects.all(), user, request)
     return qs.filter(pk=pk).first()
+
+
+def _next_course_sort_order(institution):
+    """新课程追加到列表末尾。sort_order 默认值是 0，不赋值会让新课插到最前面。"""
+    from django.db.models import Max
+
+    current = Course.objects.filter(institution=institution).aggregate(m=Max('sort_order'))['m']
+    return (current or 0) + 1
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.views import IsMember
 from quizzes.utils import safe_int as _safe_int
@@ -318,6 +326,7 @@ class OSSMultipartCompleteView(APIView):
             elo_reward=elo_reward,
             author=request.user,
             institution=inst,
+            sort_order=_next_course_sort_order(inst),
         )
         if str(album_obj_id or "").strip() and str(album_obj_id) != "0":
             album_id = _safe_int(album_obj_id, None)
@@ -542,7 +551,7 @@ class AlbumListCreateView(generics.ListCreateAPIView):
         return [permissions.AllowAny()]
 
     def perform_create(self, serializer):
-        validate_upload_file(self.request.FILES.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
+        validate_upload_file(self.request.FILES.get("cover_image"), allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
         check_and_add_storage_usage(inst, total_size)
@@ -584,7 +593,8 @@ class CourseListCreateView(generics.ListCreateAPIView):
         ordering = self.request.query_params.get('ordering', '-created_at')
         allowed = ('sort_order', '-sort_order', 'created_at', '-created_at', 'title', '-title')
         if ordering in allowed:
-            qs = qs.order_by(ordering)
+            # 次级按 id：sort_order 相同时保证顺序稳定
+            qs = qs.order_by(ordering, 'id')
         else:
             qs = qs.order_by('-created_at')
         q = self.request.query_params.get('search')
@@ -637,15 +647,16 @@ class CourseListCreateView(generics.ListCreateAPIView):
         video_file_url = self.request.data.get('video_file_url')
         video_object_key = self.request.data.get('video_object_key')
 
+        next_order = _next_course_sort_order(inst)
         if video_file_url and video_object_key:
             # OSS 直传模式：URL 已经在 OSS 上
-            course = serializer.save(author=self.request.user, institution=inst)
+            course = serializer.save(author=self.request.user, institution=inst, sort_order=next_order)
             # 更新视频文件字段为 OSS URL
             course.video_file = video_file_url
             course.save(update_fields=['video_file'])
         else:
             # 传统上传模式：文件通过后端上传
-            course = serializer.save(author=self.request.user, institution=inst)
+            course = serializer.save(author=self.request.user, institution=inst, sort_order=next_order)
 
         # 未上传封面 → 后台线程提取第一帧
         if not course.cover_image and course.video_file:

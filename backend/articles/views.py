@@ -6,7 +6,7 @@ from django.db.models import Count, F
 from django.utils.decorators import method_decorator
 from users.views import IsMember
 from users.permissions import IsAdmin, IsAdminWriteMemberRead, HasQuota
-from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES
+from core.file_validation import validate_upload_file, IMAGE_EXTENSIONS, IMAGE_MAX_BYTES
 from core.rate_limit import user_rate_limit
 from users.quota import check_and_add_storage_usage
 from core.utils import apply_institution_filter
@@ -70,7 +70,7 @@ class ArticleListCreateView(generics.ListCreateAPIView):
         })
 
     def perform_create(self, serializer):
-        validate_upload_file(self.request.FILES.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
+        validate_upload_file(self.request.FILES.get("cover_image"), allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
         inst = self.request.user.institution
         check_and_add_storage_usage(inst, total_size)

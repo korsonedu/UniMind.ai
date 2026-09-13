@@ -123,3 +123,40 @@ class OSSMultipartResignTests(TestCase):
         mock_bucket.return_value = self._bucket(exc=RuntimeError('boom'))
         resp = self._post({'upload_id': 'uid-1', 'object_key': self.object_key, 'total_parts': 1})
         self.assertEqual(resp.status_code, 500)
+
+
+class CourseSortOrderTests(TestCase):
+    """新课程应追加到列表末尾（sort_order 默认 0 会让新课插到最前）。"""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        from users.models import Institution
+
+        User = get_user_model()
+        self.inst = Institution.objects.create(
+            name='机构A', slug='sort-a', contact_name='A', contact_email='a@example.com',
+        )
+        self.other = Institution.objects.create(
+            name='机构B', slug='sort-b', contact_name='B', contact_email='b@example.com',
+        )
+        self.user = User.objects.create_user(
+            username='sort_user', email='s@example.com', password='pw', institution=self.inst,
+        )
+
+    def test_appends_to_end(self):
+        from courses.models import Course
+        from courses.views import _next_course_sort_order
+
+        self.assertEqual(_next_course_sort_order(self.inst), 1)  # 空列表
+
+        Course.objects.create(title='A', institution=self.inst, author=self.user, sort_order=1)
+        Course.objects.create(title='B', institution=self.inst, author=self.user, sort_order=2)
+        self.assertEqual(_next_course_sort_order(self.inst), 3)
+
+    def test_scoped_by_institution(self):
+        from courses.models import Course
+        from courses.views import _next_course_sort_order
+
+        Course.objects.create(title='X', institution=self.other, author=self.user, sort_order=99)
+        self.assertEqual(_next_course_sort_order(self.inst), 1)  # 不受其他机构影响
