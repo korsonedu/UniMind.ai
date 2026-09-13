@@ -28,7 +28,10 @@ def _get_course_for_user(pk, user, request=None):
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
 from users.views import IsMember
 from quizzes.utils import safe_int as _safe_int
-from core.file_validation import validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES, DANGEROUS_EXTENSIONS, ALLOWED_UPLOAD_TYPES
+from core.file_validation import (
+    validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES,
+    DANGEROUS_EXTENSIONS, VIDEO_EXTENSIONS, DOCUMENT_EXTENSIONS,
+)
 from core.rate_limit import user_rate_limit
 from core.analytics import record_event
 from users.quota import check_and_add_storage_usage
@@ -166,8 +169,8 @@ class OSSMultipartInitView(APIView):
         ext = os.path.splitext(file_name)[1].lower()
         if ext in DANGEROUS_EXTENSIONS:
             return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
-        if ext not in ALLOWED_UPLOAD_TYPES:
-            return Response({"error": f"不允许上传 {ext} 类型的文件"}, status=400)
+        if ext not in VIDEO_EXTENSIONS:
+            return Response({"error": f"视频上传仅支持视频格式，不支持 {ext}"}, status=400)
 
         institution_id = request.user.institution_id or "public"
         unique_name = f"{uuid.uuid4().hex}{ext}"
@@ -297,8 +300,8 @@ class OSSMultipartCompleteView(APIView):
         reference_materials = request.FILES.get("reference_materials")
 
         validate_upload_file(cover_image, max_size_bytes=IMAGE_MAX_BYTES)
-        validate_upload_file(courseware, max_size_bytes=DOC_MAX_BYTES)
-        validate_upload_file(reference_materials, max_size_bytes=DOC_MAX_BYTES)
+        validate_upload_file(courseware, allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
+        validate_upload_file(reference_materials, allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
 
         # 存储配额（原子化）
         inst = request.user.institution
@@ -624,8 +627,8 @@ class CourseListCreateView(generics.ListCreateAPIView):
         files = self.request.FILES
         validate_upload_file(files.get("cover_image"), max_size_bytes=IMAGE_MAX_BYTES)
         validate_upload_file(files.get("video_file"), max_size_bytes=VIDEO_MAX_BYTES)
-        validate_upload_file(files.get("courseware"), max_size_bytes=DOC_MAX_BYTES)
-        validate_upload_file(files.get("reference_materials"), max_size_bytes=DOC_MAX_BYTES)
+        validate_upload_file(files.get("courseware"), allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
+        validate_upload_file(files.get("reference_materials"), allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
         total_size = sum(f.size for f in files.values() if f)
         inst = self.request.user.institution
         check_and_add_storage_usage(inst, total_size)

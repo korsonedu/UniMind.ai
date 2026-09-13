@@ -354,7 +354,7 @@ export const CourseSection: React.FC = () => {
                     <span>{form.video ? form.video.name : '上传视频'}</span>
                     <Video className="w-4 h-4 opacity-30" />
                   </Button>
-                  <input type="file" onChange={handleVideoChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="video/*" />
+                  <input type="file" onChange={handleVideoChange} className="absolute inset-0 opacity-0 cursor-pointer" accept="video/*,.mkv,.avi,.flv,.wmv,.m4v,.mpg,.mpeg,.rmvb" />
                 </div>
                 <div className="relative">
                   <Button variant="outline" className="w-full h-12 rounded-xl border-dashed border-2 border-black/[0.06] hover:border-[#0071E3]/30 bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] px-4 font-medium text-xs text-[#6E6E73] hover:text-[#1D1D1F] transition-[border-color,background-color,color] justify-between" type="button">
@@ -368,7 +368,7 @@ export const CourseSection: React.FC = () => {
                     <span>{form.courseware ? form.courseware.name : '上传课件'}</span>
                     <FileArrowUp className="w-4 h-4 opacity-30" />
                   </Button>
-                  <input type="file" onChange={e => setForm({ ...form, courseware: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" />
+                  <input type="file" onChange={e => setForm({ ...form, courseware: e.target.files?.[0] || null })} className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx" />
                 </div>
               </div>
               <Button onClick={handleCreate} disabled={isSubmitting} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">

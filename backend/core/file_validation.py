@@ -17,6 +17,13 @@ ALLOWED_UPLOAD_TYPES = {
     ".m4v": ["video/x-m4v", "video/mp4"],
     ".webm": ["video/webm"],
     ".mov": ["video/quicktime"],
+    ".mkv": ["video/x-matroska", "video/mkv"],
+    ".avi": ["video/x-msvideo", "video/avi", "video/msvideo"],
+    ".flv": ["video/x-flv", "video/flv"],
+    ".wmv": ["video/x-ms-wmv", "video/wmv"],
+    ".mpeg": ["video/mpeg"],
+    ".mpg": ["video/mpeg"],
+    ".rmvb": ["application/vnd.rn-realmedia-vbr", "video/vnd.rn-realmedia-vbr"],
     # 文档
     ".pdf": ["application/pdf"],
     ".doc": ["application/msword"],
@@ -37,9 +44,13 @@ DOC_MAX_BYTES = 50 * 1024 * 1024         # 50 MB
 VIDEO_MAX_BYTES = 500 * 1024 * 1024      # 500 MB
 DEFAULT_MAX_BYTES = 50 * 1024 * 1024     # 50 MB
 
-_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-_VIDEO_EXTS = {".mp4", ".m4v", ".webm", ".mov"}
-_DOC_EXTS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+# 注意：mkv/avi/flv/wmv/rmvb 浏览器无法直接播放，上传后需转码或改封装才能在线观看
+VIDEO_EXTENSIONS = {
+    ".mp4", ".m4v", ".webm", ".mov",
+    ".mkv", ".avi", ".flv", ".wmv", ".mpeg", ".mpg", ".rmvb",
+}
+DOCUMENT_EXTENSIONS = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
 
 # 文件 magic bytes（用于内容校验，防止伪造扩展名）
 MAGIC_BYTES = {
@@ -53,6 +64,13 @@ MAGIC_BYTES = {
     ".mp4": [b"\x00\x00\x00", b"ftyp"],  # ISO BM4 / ftyp box
     ".m4v": [b"\x00\x00\x00", b"ftyp"],  # 与 mp4 同为 ISO BM4 容器
     ".webm": [b"\x1a\x45\xdf\xa3"],  # EBML header
+    ".mkv": [b"\x1a\x45\xdf\xa3"],  # Matroska 同用 EBML
+    ".avi": [b"RIFF"],
+    ".flv": [b"FLV"],
+    ".wmv": [b"\x30\x26\xb2\x75\x8e\x66\xcf\x11"],  # ASF header
+    ".mpeg": [b"\x00\x00\x01"],
+    ".mpg": [b"\x00\x00\x01"],
+    ".rmvb": [b".RMF"],
     # 文档
     ".pdf": [b"%PDF"],
     ".doc": [b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"],  # OLE2
@@ -64,7 +82,7 @@ MAGIC_BYTES = {
 }
 
 # 保留旧名称兼容
-IMAGE_MAGIC_BYTES = {k: v for k, v in MAGIC_BYTES.items() if k in _IMAGE_EXTS}
+IMAGE_MAGIC_BYTES = {k: v for k, v in MAGIC_BYTES.items() if k in IMAGE_EXTENSIONS}
 
 # 危险扩展名黑名单（优先于白名单）
 DANGEROUS_EXTENSIONS = {
@@ -76,11 +94,11 @@ DANGEROUS_EXTENSIONS = {
 
 def _get_default_max_bytes(ext: str) -> int:
     """根据扩展名返回对应类别的默认大小上限。"""
-    if ext in _IMAGE_EXTS:
+    if ext in IMAGE_EXTENSIONS:
         return IMAGE_MAX_BYTES
-    if ext in _VIDEO_EXTS:
+    if ext in VIDEO_EXTENSIONS:
         return VIDEO_MAX_BYTES
-    if ext in _DOC_EXTS:
+    if ext in DOCUMENT_EXTENSIONS:
         return DOC_MAX_BYTES
     return DEFAULT_MAX_BYTES
 

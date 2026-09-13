@@ -200,13 +200,13 @@ class InstitutionFilterTests(TestCase):
 
 
 class FileValidationTests(TestCase):
-    """.m4v 与 mp4 同为 ISO BM4 容器，应被视频白名单按视频规格接受。"""
+    """视频白名单与课件文档限制。"""
 
     @staticmethod
-    def _file(name, content_type):
+    def _file(name, content_type, magic=b"\x00\x00\x00\x18ftypmp42"):
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        return SimpleUploadedFile(name, b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64, content_type=content_type)
+        return SimpleUploadedFile(name, magic + b"\x00" * 64, content_type=content_type)
 
     def test_m4v_accepted(self):
         from core.file_validation import validate_upload_file
@@ -223,6 +223,38 @@ class FileValidationTests(TestCase):
         from core.file_validation import VIDEO_MAX_BYTES, _get_default_max_bytes
 
         self.assertEqual(_get_default_max_bytes(".m4v"), VIDEO_MAX_BYTES)
+
+    def test_extended_video_formats_registered_in_both_tables(self):
+        # 白名单与类别集合必须同时登记，漏登记会让大小上限退回默认的 50MB
+        from core.file_validation import (
+            ALLOWED_UPLOAD_TYPES, VIDEO_EXTENSIONS, VIDEO_MAX_BYTES, _get_default_max_bytes,
+        )
+
+        for ext in [".mkv", ".avi", ".flv", ".wmv", ".mpeg", ".mpg", ".rmvb"]:
+            self.assertIn(ext, VIDEO_EXTENSIONS, f"{ext} 未登记到 VIDEO_EXTENSIONS")
+            self.assertIn(ext, ALLOWED_UPLOAD_TYPES, f"{ext} 未登记到 ALLOWED_UPLOAD_TYPES")
+            self.assertEqual(_get_default_max_bytes(ext), VIDEO_MAX_BYTES)
+
+    def test_mkv_accepted_with_matching_magic(self):
+        from core.file_validation import validate_upload_file
+
+        validate_upload_file(self._file("a.mkv", "video/x-matroska", magic=b"\x1a\x45\xdf\xa3"))
+
+    def test_document_extensions_reject_video(self):
+        from rest_framework.exceptions import ValidationError
+
+        from core.file_validation import DOCUMENT_EXTENSIONS, validate_upload_file
+
+        with self.assertRaises(ValidationError):
+            validate_upload_file(self._file("a.mp4", "video/mp4"), allowed_extensions=DOCUMENT_EXTENSIONS)
+
+    def test_document_extensions_accept_docx(self):
+        from core.file_validation import DOCUMENT_EXTENSIONS, validate_upload_file
+
+        validate_upload_file(
+            self._file("a.docx", "application/octet-stream", magic=b"PK"),
+            allowed_extensions=DOCUMENT_EXTENSIONS,
+        )
 
     def test_unknown_extension_still_rejected(self):
         from rest_framework.exceptions import ValidationError
