@@ -43,3 +43,55 @@ class AIServiceBatchingTests(TestCase):
         self.assertEqual(result["score"], 8.0)
         self.assertEqual(result["memorix_rating"], 3)
         self.assertIn("要点较完整", result["feedback"])
+
+
+class KnowledgeTreeImportMatchTests(TestCase):
+    """导入匹配：同 code 必须同 parent 才算同一节点，否则跨分支错配（历史事故：重复长树）。"""
+
+    def setUp(self):
+        from users.models import Institution
+
+        self.inst = Institution.objects.create(
+            name="导入测试机构", slug="import-test", contact_name="T", contact_email="t@example.com",
+        )
+
+    @staticmethod
+    def _tree(sub_name="模块A", kp_name="考点1"):
+        return [{
+            "code": "SUB-01", "name": sub_name, "level": "sub",
+            "children": [{"code": "KP-01", "name": kp_name, "level": "kp", "children": []}],
+        }]
+
+    def test_reimport_updates_instead_of_creating(self):
+        from .views_knowledge import _create_or_update_knowledge_tree
+
+        created, updated = _create_or_update_knowledge_tree(self._tree(), institution=self.inst)
+        self.assertEqual((created, updated), (2, 0))
+
+        created2, updated2 = _create_or_update_knowledge_tree(
+            self._tree(sub_name="模块A改名", kp_name="考点1改名"), institution=self.inst,
+        )
+        self.assertEqual((created2, updated2), (0, 2))
+        self.assertEqual(KnowledgePoint.objects.filter(institution=self.inst).count(), 2)
+
+    def test_same_code_under_different_parent_creates_separate_nodes(self):
+        from .views_knowledge import _create_or_update_knowledge_tree
+
+        tree = [{
+            "code": "SUB-01", "name": "模块A", "level": "sub",
+            "children": [
+                {"code": "SEC-01", "name": "小节1", "level": "sec", "children": [
+                    {"code": "KP-01", "name": "考点甲", "level": "kp", "children": []}]},
+                {"code": "SEC-02", "name": "小节2", "level": "sec", "children": [
+                    {"code": "KP-01", "name": "考点乙", "level": "kp", "children": []}]},
+            ],
+        }]
+        created, updated = _create_or_update_knowledge_tree(tree, institution=self.inst)
+        self.assertEqual((created, updated), (5, 0))
+
+        kps = KnowledgePoint.objects.filter(code="KP-01", institution=self.inst)
+        self.assertEqual(kps.count(), 2)
+        self.assertEqual({k.name for k in kps}, {"考点甲", "考点乙"})
+
+        created2, updated2 = _create_or_update_knowledge_tree(tree, institution=self.inst)
+        self.assertEqual((created2, updated2), (0, 5))
