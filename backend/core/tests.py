@@ -151,3 +151,50 @@ class CircuitBreakerTests(TestCase):
             AICircuitBreaker.record_success("test_svc")
             self.assertFalse(AICircuitBreaker.is_open("test_svc"))
 
+
+class InstitutionFilterTests(TestCase):
+    """apply_institution_filter：机构用户只看本机构，无机构用户只看全局，超管看全部。"""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        from courses.models import Album
+        from users.models import Institution
+
+        User = get_user_model()
+        self.inst = Institution.objects.create(
+            name="机构A", slug="inst-a", contact_name="联系人A", contact_email="a@example.com",
+        )
+        self.global_album = Album.objects.create(name="全局专辑")
+        self.own_album = Album.objects.create(name="本机构专辑", institution=self.inst)
+        self.inst_user = User.objects.create_user(
+            username="inst_user", email="inst@example.com", password="pw", institution=self.inst,
+        )
+        self.plain_user = User.objects.create_user(
+            username="plain_user", email="plain@example.com", password="pw",
+        )
+        self.admin = User.objects.create_superuser(
+            username="platform_admin", email="admin@example.com", password="pw",
+        )
+
+    def test_institution_user_sees_only_own(self):
+        from courses.models import Album
+        from core.utils import apply_institution_filter
+
+        qs = apply_institution_filter(Album.objects.all(), self.inst_user)
+        self.assertEqual(list(qs), [self.own_album])
+
+    def test_user_without_institution_sees_only_global(self):
+        from courses.models import Album
+        from core.utils import apply_institution_filter
+
+        qs = apply_institution_filter(Album.objects.all(), self.plain_user)
+        self.assertEqual(list(qs), [self.global_album])
+
+    def test_platform_admin_sees_all(self):
+        from courses.models import Album
+        from core.utils import apply_institution_filter
+
+        qs = apply_institution_filter(Album.objects.all(), self.admin)
+        self.assertEqual(set(qs), {self.global_album, self.own_album})
+

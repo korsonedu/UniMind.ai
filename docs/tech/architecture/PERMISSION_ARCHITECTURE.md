@@ -279,34 +279,37 @@ pro:   brand.custom, api.access, student.payment, private.deploy, i18n.custom, s
 
 ### 7.1 后端 queryset 过滤模式
 
-所有涉及多机构数据的视图统一使用 `_apply_institution_filter` 函数（`courses/views.py`、`articles/views.py` 各有一份）：
+所有涉及多机构数据的视图统一使用 `core/utils.py` 的 `apply_institution_filter`：
 
 ```python
-def _apply_institution_filter(qs, user, request=None):
-    """按机构过滤查询集。支持 preview_institution 参数覆盖超管权限。"""
+def apply_institution_filter(qs, user, request=None, institution_field='institution'):
+    """按机构过滤查询集：机构用户只看本机构数据，无机构用户只看全局数据，
+    平台管理员看全部（可用 preview_institution 预览指定机构）。"""
     preview_inst_id = None
     if request:
         preview_inst_id = request.query_params.get('preview_institution')
     if preview_inst_id:
-        return qs.filter(Q(institution_id=preview_inst_id) | Q(institution__isnull=True))
+        if not is_platform_admin(user):
+            raise PermissionDenied("仅平台管理员可预览其他机构数据")
+        return qs.filter(**{f'{institution_field}_id': preview_inst_id})
     if is_platform_admin(user):
         return qs
     inst = getattr(user, 'institution', None)
     if inst:
-        return qs.filter(Q(institution=inst) | Q(institution__isnull=True))
-    return qs.filter(institution__isnull=True)
+        return qs.filter(**{institution_field: inst})
+    return qs.filter(**{f'{institution_field}__isnull': True})
 ```
 
 **调用方式**：
 ```python
 def get_queryset(self):
-    return _apply_institution_filter(Model.objects.all(), self.request.user, self.request)
+    return apply_institution_filter(Model.objects.all(), self.request.user, self.request)
 ```
 
 **过滤逻辑**：
 - `preview_institution` 参数：超管预览模式下，只看指定机构数据
 - 平台管理员（无 preview 参数）：看到全局数据
-- 机构用户：看到本机构数据 + 全局数据（`institution__isnull=True`）
+- 机构用户：只看到本机构数据（2026-09-13 起不再包含全局数据）
 - 无机构用户：只看到全局数据
 
 **超管预览模式**：前端进入预览时自动给所有 API 请求附加 `?preview_institution=<id>`，后端识别后覆盖超管的"看全部"逻辑。前端实现在 `api.ts` 的 request interceptor + `useInstitutionStore` 的 `setPreviewInstitutionId`。

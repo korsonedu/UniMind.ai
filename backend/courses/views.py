@@ -267,7 +267,13 @@ class OSSMultipartCompleteView(APIView):
         except Exception as exc:
             _delete_obj()
             if isinstance(exc, ValidationError):
-                return Response({"error": str(exc.detail) if hasattr(exc, 'detail') else str(exc)}, status=400)
+                # exc.detail 可能是 dict/list，直接 str() 会把 ErrorDetail 的 repr 吐给前端
+                detail = exc.detail
+                if isinstance(detail, dict) and detail:
+                    detail = next(iter(detail.values()))
+                if isinstance(detail, (list, tuple)) and detail:
+                    detail = detail[0]
+                return Response({"error": str(detail)}, status=400)
             logger.exception("Course creation after OSS merge failed")
             return Response({"error": f"课程创建失败: {exc}"}, status=500)
 
