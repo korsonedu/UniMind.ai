@@ -5,7 +5,7 @@ from .views import (
     StartupMaterialListCreateView, StartupMaterialDetailView,
     VideoProgressUpdateView,
     CourseOutlineView, CourseTranscriptView,
-    OSSMultipartInitView, OSSMultipartCompleteView,
+    OSSMultipartInitView, OSSMultipartCompleteView, OSSMultipartAbortView,
 )
 from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
 
@@ -13,6 +13,7 @@ urlpatterns = [
     path('', CourseListCreateView.as_view(), name='course-list'),
     path('oss/multipart/init/', OSSMultipartInitView.as_view(), name='oss-multipart-init'),
     path('oss/multipart/complete/', OSSMultipartCompleteView.as_view(), name='oss-multipart-complete'),
+    path('oss/multipart/abort/', OSSMultipartAbortView.as_view(), name='oss-multipart-abort'),
     path('tags/', TagListCreateView.as_view(), name='tag-list'),
     path('tags/batch-assign/', BatchAssignTagsView.as_view(), name='tag-batch-assign'),
     path('tags/<int:pk>/', TagDetailView.as_view(), name='tag-detail'),

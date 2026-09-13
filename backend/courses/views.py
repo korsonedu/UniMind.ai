@@ -370,6 +370,32 @@ class OSSMultipartCompleteView(APIView):
         return Response(CourseSerializer(course).data, status=201)
 
 
+@_upload_rl
+class OSSMultipartAbortView(APIView):
+    """取消未完成的分片上传，释放 OSS 上的残留分片（前端分片失败或用户取消时调用）。"""
+    permission_classes = [IsAdmin]
+
+    def post(self, request):
+        upload_id = str(request.data.get("upload_id", "")).strip()
+        object_key = str(request.data.get("object_key", "")).strip()
+        if not upload_id or not object_key:
+            return Response({"error": "缺少 upload_id 或 object_key"}, status=400)
+
+        # 校验 object_key 归属当前用户机构
+        user_inst_id = getattr(request.user, 'institution_id', None)
+        expected_prefix = f"institutions/{user_inst_id or 'public'}/"
+        if not object_key.startswith(expected_prefix):
+            return Response({"error": "无权操作此文件"}, status=403)
+
+        bucket = _get_oss_bucket()
+        try:
+            bucket.abort_multipart_upload(object_key, upload_id)
+        except Exception as exc:
+            # 上传可能已完成或已被清理，前端只是尽力通知，不视为失败
+            logger.info("abort_multipart_upload skipped for %s: %s", object_key, exc)
+        return Response({"ok": True})
+
+
 class VideoProgressUpdateView(APIView):
     permission_classes = [IsMember]
 

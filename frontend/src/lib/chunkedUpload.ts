@@ -65,9 +65,44 @@ async function uploadPartWithRetry(
   throw lastError;
 }
 
+// ── Screen Wake Lock（上传期间阻止屏幕自动休眠，避免长时间传输被中断）──
+
+type WakeLockSentinelLike = { release: () => Promise<void> };
+let wakeLock: WakeLockSentinelLike | null = null;
+
+async function acquireWakeLock() {
+  try {
+    const wl = (navigator as unknown as {
+      wakeLock?: { request: (type: string) => Promise<WakeLockSentinelLike> };
+    }).wakeLock;
+    if (!wl?.request) return;
+    wakeLock = await wl.request('screen');
+  } catch {
+    // 浏览器不支持或被拒绝，忽略
+  }
+}
+
+function releaseWakeLock() {
+  try {
+    wakeLock?.release?.();
+  } catch {
+    // ignore
+  }
+  wakeLock = null;
+}
+
 // ── Main ──
 
 export async function createCourseWithSmartUpload(params: CreateCourseParams) {
+  await acquireWakeLock();
+  try {
+    return await runUpload(params);
+  } finally {
+    releaseWakeLock();
+  }
+}
+
+async function runUpload(params: CreateCourseParams) {
   const {
     title, description, eloReward, albumObj, knowledgePoint, tags,
     video, cover, courseware, referenceMaterials,
@@ -116,7 +151,11 @@ export async function createCourseWithSmartUpload(params: CreateCourseParams) {
 
   const workers = Array.from({ length: Math.min(CONCURRENCY, total_parts) }, () => worker());
   await Promise.all(workers);
-  if (firstError) throw firstError;
+  if (firstError) {
+    // 分片没传完就退出（网络中断/用户取消），通知后端 abort，避免在 OSS 上留下残留分片
+    await api.post('/courses/oss/multipart/abort/', { upload_id, object_key }).catch(() => {});
+    throw firstError;
+  }
 
   // Step 3: Complete — send all metadata + other files to backend
   if (onStatus) onStatus({ phase: 'completing', totalParts: total_parts });
