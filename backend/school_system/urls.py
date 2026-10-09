@@ -2,7 +2,7 @@ import re
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
-from django.conf.urls.static import static
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.http import HttpResponse, JsonResponse
 from django.utils.html import escape
 from pathlib import Path
@@ -130,4 +130,6 @@ urlpatterns.append(path("api/", include("core.urls")))
 urlpatterns += [
     re_path(r'^media/(?P<path>.*)$', media_serve, name='media-serve'),
     re_path(r'^(?!api/|admin/|media/|static/|accounts/|account-api/).*$', serve_spa, name='spa-catchall'),
-] + static(settings.STATIC_URL, document_root=settings.BASE_DIR / 'static')
+]
+if settings.DEBUG:
+    urlpatterns += staticfiles_urlpatterns()
