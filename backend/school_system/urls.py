@@ -102,6 +102,7 @@ urlpatterns = [
     path("api/redoc/", SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
 if _APP_ON('users'):
+    urlpatterns.append(path("", include("users.accounts.urls")))
     urlpatterns.append(path("api/users/", include("users.urls")))
 if _APP_ON('quizzes'):
     urlpatterns.append(path("api/quizzes/", include("quizzes.urls")))
@@ -128,5 +129,5 @@ urlpatterns += [
 urlpatterns.append(path("api/", include("core.urls")))
 urlpatterns += [
     re_path(r'^media/(?P<path>.*)$', media_serve, name='media-serve'),
-    re_path(r'^(?!api/|admin/|media/|static/).*$', serve_spa, name='spa-catchall'),
+    re_path(r'^(?!api/|admin/|media/|static/|accounts/|account-api/).*$', serve_spa, name='spa-catchall'),
 ] + static(settings.STATIC_URL, document_root=settings.BASE_DIR / 'static')

@@ -1,0 +1,9 @@
+{% extends 'users/accounts/base.html' %}
+{% block content %}
+<h1>请选择继续使用的账号</h1>
+<p class="form-description">当前科晟账号与 UniMind 账号不同。确认后，本浏览器的科晟账号和 UniMind 将切换为所选账号。其他设备和学习记录不受影响。</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next_path }}">
+<button class="primary-button" name="selection" value="account" type="submit">科晟账号：{{ request.user.nickname|default:request.user.username }}</button>
+<button class="primary-button" name="selection" value="platform" type="submit">UniMind 账号：{{ platform.nickname|default:platform.username }}</button>
+</form>
+{% endblock %}

@@ -55,3 +55,8 @@ sentry-sdk>=2.0
 pytest>=8.0
 pytest-django>=4.8
 drf-spectacular>=0.27
+# Unified accounts (compatible with the existing cryptography/pyOpenSSL pins)
+django-oauth-toolkit==3.4.1
+Authlib==1.8.0
+jwcrypto==1.5.6
+joserfc==1.6.8

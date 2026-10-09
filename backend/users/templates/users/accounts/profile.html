@@ -1,0 +1,9 @@
+{% extends 'users/accounts/base.html' %}
+{% block content %}
+<h1>{{ request.user.nickname|default:request.user.username }}</h1>
+<p class="form-description">你的账号信息</p>
+<dl class="account-details"><div><dt>邮箱</dt><dd>{{ request.user.email|default:'未绑定' }}</dd></div><div><dt>学习服务</dt><dd>{% if learning_available %}可进入 UniMind{% else %}暂未开通{% endif %}</dd></div></dl>
+{% if learning_available %}<a class="primary-button" href="/accounts/unimind/">进入 UniMind <span>↗</span></a>{% else %}<p class="account-note">账号注册不会自动开通学习服务。如需了解课程或服务，请联系我们。</p><a class="primary-button" href="{{ website }}/contact">联系我们 <span>↗</span></a>{% endif %}
+<div class="account-links"><a href="{{ website }}/account">返回官网账号页</a><a href="/accounts/reset-password/">重置密码</a></div>
+<form action="/accounts/logout-all/" method="post" class="logout-form">{% csrf_token %}<button class="text-button" type="submit">退出全部服务</button></form>
+{% endblock %}

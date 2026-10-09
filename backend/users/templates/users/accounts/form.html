@@ -1,0 +1,47 @@
+{% extends 'users/accounts/base.html' %}
+{% block content %}
+<h1>{% if purpose == 'register' %}注册{% elif purpose == 'reset_password' %}找回密码{% else %}登录{% endif %}</h1>
+{% if request.GET.reset %}<p class="account-notice">密码已重置，请使用新密码登录。</p>{% endif %}
+<form method="post" class="account-form">
+  {% csrf_token %}<input type="hidden" name="next" value="{{ next_path }}">
+  {{ form.non_field_errors }}
+  {% for field in form %}<div class="form-field{% if field.name == 'agreed_to_terms' %} form-check{% endif %}">
+    {% if field.name == 'agreed_to_terms' %}<label>{{ field }}<span>我已阅读并同意<a href="/terms" target="_blank" rel="noopener">用户协议</a>与<a href="/privacy" target="_blank" rel="noopener">隐私政策</a></span></label>
+    {% else %}{{ field.label_tag }}<div class="field-control">{{ field }}{% if field.name == 'code' %}<button type="button" class="send-code" data-purpose="{{ purpose }}">发送验证码</button>{% endif %}</div>{% endif %}
+    {{ field.errors }}
+    {% if field.name == 'password' and purpose %}<small>至少 8 位，包含大写字母和数字。</small>{% endif %}
+  </div>{% endfor %}
+  <p class="code-feedback" role="status" aria-live="polite"></p><button type="submit" class="primary-button">{{ submit_label }}</button>
+</form>
+<div class="account-links">
+  {% if purpose == 'register' %}<a href="/accounts/login/?{{ next_query }}">已有账号？登录</a>
+  {% elif purpose == 'reset_password' %}<a href="/accounts/login/?{{ next_query }}">返回登录</a>
+  {% else %}<a href="/accounts/register/?{{ next_query }}">注册账号</a><a href="/accounts/reset-password/?{{ next_query }}">忘记密码？</a>{% endif %}
+</div>
+<script>
+const form = document.querySelector('.account-form');
+const send = document.querySelector('.send-code');
+if (send) send.addEventListener('click', async () => {
+  const email = form.querySelector('[name=email]');
+  const feedback = document.querySelector('.code-feedback');
+  if (!email.value || !email.reportValidity()) return;
+  send.disabled = true; feedback.textContent = '正在发送…';
+  try {
+    const response = await fetch('/accounts/send-code/', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value },
+      body: new URLSearchParams({ email: email.value, purpose: send.dataset.purpose }),
+    });
+    const data = await response.json();
+    feedback.textContent = data.message || data.error || '发送失败，请重试。';
+    if (!response.ok) { send.disabled = false; return; }
+    let seconds = 60; send.textContent = seconds + ' 秒后重发';
+    const timer = setInterval(() => {
+      seconds -= 1; send.textContent = seconds ? seconds + ' 秒后重发' : '重新发送';
+      if (!seconds) { clearInterval(timer); send.disabled = false; }
+    }, 1000);
+  } catch { feedback.textContent = '暂时无法发送，请稍后重试。'; send.disabled = false; }
+});
+form.addEventListener('submit', () => { const submit = form.querySelector('[type=submit]'); submit.disabled = true; submit.textContent = '正在提交…'; });
+</script>
+{% endblock %}

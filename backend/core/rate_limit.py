@@ -9,12 +9,14 @@ from django.http import JsonResponse
 logger = logging.getLogger(__name__)
 
 
-def rate_limit(key_prefix: str, max_requests: int, window_seconds: int):
+def rate_limit(key_prefix: str, max_requests: int, window_seconds: int, methods: set[str] | None = None):
     """固定窗口速率限制装饰器，基于 Django cache 原子递增。"""
 
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
+            if methods is not None and request.method not in methods:
+                return view_func(request, *args, **kwargs)
             client_ip = _get_client_ip(request)
             cache_key = f"rl:{key_prefix}:{client_ip}"
 
@@ -77,7 +79,7 @@ def _rate_limit_response(cache_key: str, window_seconds: int):
         ttl = window_seconds
     return JsonResponse(
         {
-            "error": "上传过于频繁，请稍后再试。",
+            "error": "操作过于频繁，请稍后再试。",
             "code": "rate_limited",
             "retry_after_seconds": max(0, ttl),
         },

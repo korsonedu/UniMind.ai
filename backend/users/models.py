@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
+from django.db.models.functions import Lower
 
 class User(AbstractUser):
     ROLE_CHOICES = (
@@ -31,6 +32,7 @@ class User(AbstractUser):
     bio = models.TextField(blank=True, null=True)
     is_member = models.BooleanField(default=False, verbose_name="是否会员")
     email_verified = models.BooleanField(default=False, verbose_name="邮箱已验证")
+    account_session_version = models.PositiveIntegerField(default=0, editable=False)
     email_notifications = models.BooleanField(default=True, verbose_name="接收邮件通知")
     membership_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="会员到期时间")
     membership_tier = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="会员等级（已弃用，迁移至 personal_plan）")
@@ -65,10 +67,32 @@ class User(AbstractUser):
         if self.role == 'admin':
             self.is_staff = True
             self.is_member = True
-        super().save(*args, **kwargs)
+        fields = kwargs.get('update_fields')
+        if (getattr(settings, 'ACCOUNT_ENABLED', False) and not self._state.adding
+                and (fields is None or {'password', 'is_active'}.intersection(fields))):
+            from django.db import transaction
+            from .accounts.services import revoke_account_sessions
+            with transaction.atomic():
+                previous = type(self).objects.select_for_update().only('password', 'is_active', 'account_session_version').get(pk=self.pk)
+                changed = ((fields is None or 'password' in fields) and previous.password != self.password
+                           or (fields is None or 'is_active' in fields) and previous.is_active and not self.is_active)
+                self.account_session_version = previous.account_session_version
+                super().save(*args, **kwargs)
+                if changed:
+                    revoke_account_sessions(self.pk)
+                    self.account_session_version += 1
+        else:
+            super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['-elo_score']
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                condition=models.Q(email_verified=True) & ~models.Q(email=''),
+                name='users_verified_email_ci_unique',
+            ),
+        ]
 
 
 class ActivationCode(models.Model):

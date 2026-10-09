@@ -4,7 +4,7 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.utils.decorators import method_decorator
 from django.contrib.auth import authenticate
 from django.http import HttpResponse
@@ -81,7 +81,15 @@ class RegisterView(generics.CreateAPIView):
 
     @method_decorator(rate_limit(key_prefix="register", max_requests=5, window_seconds=3600))
     def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
+        try:
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except IntegrityError as exc:
+            from .accounts.services import is_verified_email_conflict
+            if not is_verified_email_conflict(exc):
+                raise
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError({'error': '该邮箱已有账号，请直接登录'}) from exc
 
     def perform_create(self, serializer):
         email = str(self.request.data.get('email', '')).strip().lower()
@@ -424,15 +432,22 @@ class LoginByCodeView(APIView):
             while User.objects.filter(username=username).exists():
                 username = f"{username_base}{counter}"
                 counter += 1
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=None,
-            )
-            user.set_unusable_password()
-            user.nickname = username_base
-            user.email_verified = True
-            user.save()
+            try:
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        username=username,
+                        email=email,
+                        password=None,
+                    )
+                    user.set_unusable_password()
+                    user.nickname = username_base
+                    user.email_verified = True
+                    user.save()
+            except IntegrityError as exc:
+                from .accounts.services import is_verified_email_conflict
+                if not is_verified_email_conflict(exc):
+                    raise
+                return Response({'error': '该邮箱已有账号，请直接登录'}, status=400)
 
         # 账号锁定检查
         if user.locked_until and user.locked_until > timezone.now():

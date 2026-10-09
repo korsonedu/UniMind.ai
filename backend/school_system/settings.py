@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework.authtoken",
+    "oauth2_provider",
     "drf_spectacular",
     "corsheaders",
     "channels",
@@ -99,7 +100,7 @@ if ENABLED_APPS is not None:
     _PRESERVED = {'daphne', 'django.contrib.admin', 'django.contrib.auth',
                   'django.contrib.contenttypes', 'django.contrib.sessions',
                   'django.contrib.messages', 'django.contrib.staticfiles',
-                  'rest_framework', 'rest_framework.authtoken', 'drf_spectacular',
+                  'rest_framework', 'rest_framework.authtoken', 'oauth2_provider', 'drf_spectacular',
                   'corsheaders', 'channels'}
     INSTALLED_APPS = [a for a in INSTALLED_APPS
                       if a in _PRESERVED or a in ENABLED_APPS]
@@ -110,10 +111,11 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "school_system.middleware.SecurityHeadersMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "users.accounts.middleware.AccountSessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "users.accounts.middleware.AccountBoundaryMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "school_system.middleware.APIAccessLogMiddleware",
@@ -161,6 +163,8 @@ CACHES = {
         "TIMEOUT": 300,
     }
 }
+if DEBUG and not IS_PROD and _get_bool('ACCOUNT_DEV_LOCAL_CACHE'):
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 
 AUTH_USER_MODEL = "users.User"
 
@@ -191,6 +195,45 @@ CORS_ALLOWED_ORIGINS = _get_list("CORS_ALLOWED_ORIGINS")
 CORS_ALLOWED_ORIGIN_REGEXES = _get_list("CORS_ALLOWED_ORIGIN_REGEXES")
 CORS_ALLOW_CREDENTIALS = _get_bool("CORS_ALLOW_CREDENTIALS", default=True)
 CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS")
+
+# The account rollout is opt-in. No credentials are stored in the frontend.
+ACCOUNT_ENABLED = _get_bool("ACCOUNT_ENABLED")
+ACCOUNT_CENTER_ORIGIN = os.getenv("ACCOUNT_CENTER_ORIGIN", "http://localhost:8000" if DEBUG else "https://unimind-ai.com").rstrip('/')
+ACCOUNT_WEBSITE_ORIGINS = _get_list("ACCOUNT_WEBSITE_ORIGINS", ["http://127.0.0.1:4321", "http://localhost:4321"] if DEBUG else ["https://www.korsonedu.com"])
+ACCOUNT_UNIMIND_ORIGIN = os.getenv("ACCOUNT_UNIMIND_ORIGIN", "http://localhost:5173" if DEBUG else "https://unimind-ai.com").rstrip('/')
+ACCOUNT_WEBSITE_CLIENT_ID = os.getenv("ACCOUNT_WEBSITE_CLIENT_ID", "korson-website")
+ACCOUNT_WEBSITE_CLIENT_SECRET = os.getenv("ACCOUNT_WEBSITE_CLIENT_SECRET", "")
+ACCOUNT_ISSUER_URL = ACCOUNT_CENTER_ORIGIN + "/accounts/o"
+ACCOUNT_DISCOVERY_URL = ACCOUNT_ISSUER_URL + "/.well-known/openid-configuration"
+ACCOUNT_RSA_KEY_PATH = os.getenv("ACCOUNT_RSA_KEY_PATH", "")
+ACCOUNT_RSA_PRIVATE_KEY = Path(ACCOUNT_RSA_KEY_PATH).read_text() if ACCOUNT_RSA_KEY_PATH else ""
+if ACCOUNT_ENABLED:
+    from urllib.parse import urlsplit
+    if not ACCOUNT_RSA_PRIVATE_KEY or len(ACCOUNT_WEBSITE_CLIENT_SECRET) < 32:
+        raise ImproperlyConfigured("Unified accounts require ACCOUNT_RSA_KEY_PATH and a client secret of at least 32 characters.")
+    for origin in [ACCOUNT_CENTER_ORIGIN, ACCOUNT_UNIMIND_ORIGIN, *ACCOUNT_WEBSITE_ORIGINS]:
+        parsed = urlsplit(origin)
+        if not parsed.netloc or parsed.path or parsed.query or parsed.fragment or parsed.username:
+            raise ImproperlyConfigured("Account origins must be exact origins without paths or credentials.")
+        if parsed.scheme != 'https' and (IS_PROD or parsed.scheme != 'http' or parsed.hostname not in {'localhost', '127.0.0.1'}):
+            raise ImproperlyConfigured("Account origins require HTTPS, except local development.")
+        ALLOWED_HOSTS = list(dict.fromkeys([*ALLOWED_HOSTS, parsed.hostname]))
+    CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([*CSRF_TRUSTED_ORIGINS, *ACCOUNT_WEBSITE_ORIGINS, ACCOUNT_CENTER_ORIGIN]))
+    if IS_PROD and CACHES['default']['BACKEND'] != 'django.core.cache.backends.redis.RedisCache':
+        raise ImproperlyConfigured("Unified accounts require a shared Redis cache in production.")
+OAUTH2_PROVIDER = {
+    "OIDC_ENABLED": ACCOUNT_ENABLED,
+    "OIDC_RSA_PRIVATE_KEY": ACCOUNT_RSA_PRIVATE_KEY,
+    "OIDC_ISS_ENDPOINT": ACCOUNT_ISSUER_URL,
+    "OAUTH2_VALIDATOR_CLASS": "users.accounts.oidc.KorsonOAuth2Validator",
+    "PKCE_REQUIRED": True,
+    "COMPLIANT_BCP_RFC9700_PKCE_METHOD": True,
+    "SCOPES": {"openid": "账号身份", "profile": "账号基础信息", "email": "邮箱"},
+    "AUTHORIZATION_CODE_EXPIRE_SECONDS": 60,
+    "ACCESS_TOKEN_EXPIRE_SECONDS": 300,
+    "ID_TOKEN_EXPIRE_SECONDS": 300,
+    "ALLOWED_REDIRECT_URI_SCHEMES": ["https"] if IS_PROD else ["https", "http"],
+}
 CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 
@@ -578,4 +621,3 @@ if SENTRY_DSN:
         attach_stacktrace=True,
         before_send=lambda event, hint: event if IS_PROD else None,
     )
-
