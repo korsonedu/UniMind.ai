@@ -1,0 +1,96 @@
+/*
+ * UniMind design v1 — approved accent: teal #0F766E.
+ * Course workspace uses these tokens; other features migrate separately.
+ * Spec: docs/design/frontend-design-v1.md
+ */
+:root {
+  --um-color-accent: #0f766e;
+  --um-color-accent-hover: #115e59;
+  --um-color-on-accent: #ffffff;
+  --um-color-accent-subtle: #f0fdfa;
+  --um-color-rail: #f3f3f5;
+  --um-color-context: #f8f8fa;
+  --um-color-canvas: #f2f3f5;
+  --um-color-surface: #ffffff;
+  --um-color-text: #1d1d1f;
+  --um-color-text-muted: #646469;
+  --um-color-border: #e3e4e8;
+  --um-color-hover: #eaecef;
+  --um-color-selected: #e4e7ea;
+  --um-color-toolbar: rgb(248 248 250 / 90%);
+  --um-heat-0: #e8ebed;
+  --um-heat-1: #b9ddd7;
+  --um-heat-2: #72b7ac;
+  --um-heat-3: #368f82;
+  --um-heat-4: #0f766e;
+  --um-color-focus: var(--um-color-accent);
+  --um-color-success: #166534;
+  --um-color-warning: #92400e;
+  --um-color-danger: #b91c1c;
+  --um-color-on-danger: #ffffff;
+
+  --um-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --um-font-body: 14px;
+  --um-font-reading: 16px;
+  --um-font-caption: 12px;
+  --um-font-heading: 20px;
+  --um-font-reading-heading: 28px;
+  --um-line-body: 1.5;
+  --um-line-reading: 1.75;
+  --um-space-1: 4px;
+  --um-space-2: 8px;
+  --um-space-3: 12px;
+  --um-space-4: 16px;
+  --um-space-6: 24px;
+  --um-space-8: 32px;
+  --um-radius-control: 8px;
+  --um-radius-panel: 14px;
+  --um-radius-dialog: 12px;
+  --um-width-rail: 192px;
+  --um-width-rail-collapsed: 64px;
+  --um-width-context: 208px;
+  --um-width-context-min: 192px;
+  --um-width-context-max: 320px;
+  --um-width-reading: 760px;
+  --um-width-chat: 800px;
+  --um-height-header: 52px;
+  --um-height-row: 36px;
+  --um-height-touch-target: 44px;
+  --um-motion-fast: 150ms;
+  --um-shadow-overlay: 0 8px 24px rgb(36 39 36 / 10%);
+  --um-shadow-panel: 0 1px 3px rgb(20 25 30 / 4%), 0 3px 12px rgb(20 25 30 / 2%);
+}
+
+.dark {
+  --um-color-accent: #5eead4;
+  --um-color-accent-hover: #99f6e4;
+  --um-color-on-accent: #10201d;
+  --um-color-accent-subtle: #15312d;
+  --um-color-rail: #181918;
+  --um-color-context: #1d1f1e;
+  --um-color-canvas: #181a1c;
+  --um-color-toolbar: rgb(29 31 30 / 90%);
+  --um-color-surface: #202321;
+  --um-color-text: #ecefec;
+  --um-color-text-muted: #a4aca5;
+  --um-color-border: #363b37;
+  --um-color-hover: #292e2a;
+  --um-color-selected: #313832;
+  --um-color-success: #86efac;
+  --um-color-warning: #fcd34d;
+  --um-color-danger: #fca5a5;
+  --um-color-on-danger: #451a1a;
+  --um-shadow-overlay: 0 8px 24px rgb(0 0 0 / 24%);
+  --um-shadow-panel: 0 1px 6px rgb(0 0 0 / 16%);
+  --um-heat-0: #303638;
+  --um-heat-1: #27534d;
+  --um-heat-2: #397c70;
+  --um-heat-3: #55ae9c;
+  --um-heat-4: #86dccc;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --um-motion-fast: 0ms;
+  }
+}

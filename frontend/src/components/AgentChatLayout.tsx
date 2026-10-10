@@ -23,6 +23,7 @@ import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/ActionCardsRenderer';
 import { TaskList } from '@/components/TaskList';
+import { NativeAgentShell } from '@/components/NativeAgentShell';
 
 // ── Types ──
 
@@ -46,6 +47,7 @@ export interface RightPanelProps {
 }
 
 export interface AgentChatLayoutProps {
+  appearance?: 'native';
   // Bot & skills
   findBot: (bots: Bot[]) => Bot | undefined;
   skills: Skill[];
@@ -126,7 +128,7 @@ export interface AgentChatLayoutProps {
     sessions: ConversationSession[];
     activeSessionId: number | null;
     onLoadSession: (session: ConversationSession) => void;
-    onDeleteSession: (session: ConversationSession) => void;
+    onDeleteSession?: (session: ConversationSession) => void;
     onNewConversation: () => void;
     botDisplayName: string;
   }) => React.ReactNode;
@@ -153,12 +155,14 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     initialConversationId,
     sidebar,
     onSessionsReady,
+    appearance,
   } = props;
 
   const setPageHeader = useSystemStore(state => state.setPageHeader);
   const [visual, setVisual] = useState<VisualData | VisualData[] | null>(null);
   const pendingVisualsRef = useRef<VisualData[]>([]);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const nativeInputRef = useRef<HTMLTextAreaElement>(null);
 
   const {
     bot, messages, input, loading, isComposing, initialized, skillOpen,
@@ -369,6 +373,32 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   // ── Landing state ──
 
+  const sessionDirectory = sidebar?.({
+    sessions, activeSessionId, onLoadSession: wrappedLoadSession,
+    onDeleteSession: onDeleteSession ? handleDeleteSession : undefined,
+    onNewConversation: wrappedReset, botDisplayName,
+  });
+
+  if (!hasConversation && appearance === 'native') {
+    return <TooltipProvider delayDuration={300}>
+      <NativeAgentShell native sidebar={sessionDirectory} title={botDisplayName} onNew={wrappedReset}>
+        <div className="um-agent-landing-scroll"><div className="um-agent-landing-content">
+          {landingBanner}
+          <section className="um-agent-start" aria-label="开始对话">
+            <div data-tour={inputTourClass} className="um-agent-composer">
+              <textarea ref={nativeInputRef} value={input} onChange={event => setInput(event.target.value)}
+                onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
+                onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
+                placeholder={chatPlaceholder} aria-label="和小宇对话" disabled={loading || !bot} />
+              <footer><button className="um-agent-button um-agent-button-primary" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label="发送消息"><PaperPlaneTilt size={16} /></button></footer>
+            </div>
+            <div className="um-agent-panel"><h2>快捷任务</h2><div className="um-agent-skills">{skills.map(skill => <button key={skill.label} disabled={loading || !bot} onClick={() => { handleSkillSelect(skill.prompt); nativeInputRef.current?.focus(); }}><skill.icon size={16} />{skill.label}</button>)}</div></div>
+          </section>
+        </div></div>
+      </NativeAgentShell>
+    </TooltipProvider>;
+  }
+
   if (!hasConversation) {
     return (
       <TooltipProvider delayDuration={300}>
@@ -496,20 +526,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full flex animate-in fade-in duration-300">
-          {/* Session sidebar — render prop */}
-          {sidebar?.({
-            sessions,
-            activeSessionId,
-            onLoadSession: wrappedLoadSession,
-            onDeleteSession: onDeleteSession ? handleDeleteSession : (() => {}),
-            onNewConversation: wrappedReset,
-            botDisplayName,
-          })}
+        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} title={conversationTitle || botDisplayName} onNew={wrappedReset}>
 
-          <div className="flex-1 min-w-0 flex flex-col bg-white">
+          <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
           {/* Header */}
-          <div className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2.5 border-b border-border/30">
+          <div className={cn("shrink-0 px-4 pt-3 pb-2 flex items-center gap-2.5 border-b border-border/30", appearance === 'native' && 'um-agent-legacy-header')}>
             <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
               <Sparkle className="h-3.5 w-3.5 text-primary-foreground" />
             </div>
@@ -588,10 +609,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
                   }
                   // 普通消息 → ChatBubble
-                  return <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} />;
+                  return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} />;
                 })}
                 {loading && (
-                  <ChatBubble msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
+                  <ChatBubble native={appearance === 'native'} msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
                 )}
               </div>
             </div>
@@ -607,7 +628,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           )}
 
           {/* Input */}
-          <div className="shrink-0 px-4 pb-4 pt-2">
+          <div className={cn("shrink-0 px-4 pb-4 pt-2", appearance === 'native' && 'um-agent-chat-input')}>
             <div className="max-w-3xl mx-auto">
               <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                 <textarea
@@ -615,8 +636,9 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   onChange={e => setInput(e.target.value)}
                   onCompositionStart={() => setIsComposition(true)}
                   onCompositionEnd={() => setIsComposition(false)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !isComposing) { e.preventDefault(); doSend(input); } }}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !isComposing && !e.nativeEvent.isComposing && !loading && input.trim() && bot) { e.preventDefault(); doSend(input); } }}
                   placeholder={chatPlaceholder}
+                  aria-label={`和${botDisplayName}对话`}
                   autoComplete="off"
                   className="w-full bg-transparent border-none resize-none text-sm px-4 py-2 placeholder:text-muted-foreground/55 focus:outline-none min-h-[36px]"
                   disabled={loading}
@@ -626,14 +648,14 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
-                          <button className={cn("p-1.5 rounded-lg transition-colors", skillOpen ? "text-primary/60" : "text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted")}>
+                          <button aria-label="快捷任务" className={cn("p-1.5 rounded-lg transition-colors", skillOpen ? "text-primary/60" : "text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted")}>
                             <Lightbulb className="h-3.5 w-3.5" />
                           </button>
                         </PopoverTrigger>
                       </TooltipTrigger>
                       <TooltipContent side="top" className="text-[10px]">{skillTooltip}</TooltipContent>
                     </Tooltip>
-                    <PopoverContent align="start" side="top" className="w-48 p-1 rounded-xl border-border/60 shadow-lg">
+                    <PopoverContent align="start" side="top" className={cn("w-48 p-1 rounded-xl border-border/60 shadow-lg", appearance === 'native' && 'um-native-menu')}>
                       <div className="space-y-0.5">
                         {skills.map(skill => (
                           <button key={skill.label} onClick={() => handleSkillSelect(skill.prompt)}
@@ -657,7 +679,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </Tooltip>
                   )}
                   <div className="flex-1" />
-                  <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
+                  <Button aria-label="发送消息" onClick={() => doSend(input)} disabled={loading || !input.trim() || !bot} size="icon"
                     className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
                     {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <PaperPlaneTilt className="h-4 w-4" />}
                   </Button>
@@ -666,7 +688,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             </div>
           </div>
           </div>
-        </div>
+        </NativeAgentShell>
       </TooltipProvider>
     );
   }

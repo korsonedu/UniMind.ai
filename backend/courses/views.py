@@ -34,7 +34,7 @@ def _next_course_sort_order(institution):
     current = Course.objects.filter(institution=institution).aggregate(m=Max('sort_order'))['m']
     return (current or 0) + 1
 from .serializers import CourseSerializer, AlbumSerializer, StartupMaterialSerializer
-from users.views import IsMember
+from users.permissions import IsMember
 from quizzes.utils import safe_int as _safe_int
 from core.file_validation import (
     validate_upload_file, IMAGE_MAX_BYTES, VIDEO_MAX_BYTES, DOC_MAX_BYTES,
@@ -453,52 +453,49 @@ class VideoProgressUpdateView(APIView):
     permission_classes = [IsMember]
 
     def post(self, request, pk):
-        try:
-            course = _get_course_for_user(pk, request.user, request)
-            if not course:
-                return Response({'error': 'Course not found'}, status=404)
-            pos = request.data.get('position', 0)
-            finished = request.data.get('is_finished', False)
-            
-            from django.db import transaction
-            elo_added = 0
-            with transaction.atomic():
-                progress, created = VideoProgress.objects.get_or_create(
-                    user=request.user,
-                    course=course
-                )
-                if created:
-                    record_event('course_view', user=request.user, properties={'course_id': course.id})
-
-                # 如果之前没完成，现在标记为完成，则发放奖励
-                if finished and not progress.is_finished:
-                    from django.db.models import F
-                    user = request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
-                    # 双重检查：atomic 内再次确认未完成，防止并发重复发放
-                    progress_check = VideoProgress.objects.select_for_update().get(pk=progress.pk)
-                    if not progress_check.is_finished:
-                        progress_check.is_finished = True
-                        progress_check.save(update_fields=['is_finished'])
-                        user.elo_score = F('elo_score') + course.elo_reward
-                        user.save(update_fields=['elo_score'])
-                        elo_added = course.elo_reward
-                        record_event('course_complete', user=request.user, properties={'course_id': course.id})
-                # refresh to get actual value instead of F expression
-                request.user.refresh_from_db(fields=['elo_score'])
-                if finished:
-                    progress.is_finished = True
-            
-            progress.last_position = pos
-            progress.save()
-            
-            return Response({
-                'status': 'ok', 
-                'is_finished': progress.is_finished,
-                'elo_added': elo_added,
-                'new_score': request.user.elo_score
-            })
-        except Course.DoesNotExist:
+        from django.db import transaction
+        from django.utils import timezone
+        from .models import LearningActivity
+        from .portal import ProgressInput, ProgressSerializer
+        payload = ProgressInput(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        course = _get_course_for_user(pk, request.user, request)
+        if not course:
             return Response({'error': 'Course not found'}, status=404)
+        with transaction.atomic():
+            # Serialize per-user progress updates and completion awards.
+            user = request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
+            progress, created = VideoProgress.objects.get_or_create(user=user, course=course)
+            if data.get('event_id'):
+                prior = LearningActivity.objects.filter(user=user, event_id=data['event_id']).first()
+                if prior:
+                    if prior.course_id != pk:
+                        return Response({'error': '活动编号已用于其他课程'}, status=400)
+                    return Response({'status': 'ok', 'is_finished': progress.is_finished, 'elo_added': 0, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
+            if created:
+                record_event('course_view', user=user, properties={'course_id': course.id})
+            completed = data['is_finished'] and not progress.is_finished
+            elo_added = 0
+            if completed:
+                progress.is_finished = True
+                if not progress.elo_claimed_at:
+                    user.elo_score += course.elo_reward
+                    user.save(update_fields=['elo_score'])
+                    progress.elo_claimed_at = timezone.now()
+                    elo_added = course.elo_reward
+                record_event('course_complete', user=user, properties={'course_id': course.id})
+            if 'position' in data:
+                progress.last_position = data['position']
+            if data.get('duration', 0) > 0:
+                progress.duration = data['duration']
+            progress.save()
+            if data['watched_seconds'] > 0 or completed:
+                event = dict(user=user, course=course, watched_seconds=data['watched_seconds'], completed=completed, elo_earned=elo_added)
+                if data.get('event_id'):
+                    event['event_id'] = data['event_id']
+                LearningActivity.objects.create(**event)
+        return Response({'status': 'ok', 'is_finished': progress.is_finished, 'elo_added': elo_added, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
 
 class StartupMaterialListCreateView(generics.ListCreateAPIView):
     serializer_class = StartupMaterialSerializer

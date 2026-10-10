@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+import uuid
 
 from quizzes.models import KnowledgePoint
 
@@ -148,6 +149,7 @@ class VideoProgress(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='progress_records')
     last_position = models.FloatField(default=0, help_text="上次观看位置（秒）")
+    duration = models.FloatField(default=0, help_text="视频时长（秒）")
     is_finished = models.BooleanField(default=False, verbose_name="是否观看完成")
     elo_claimed_at = models.DateTimeField(null=True, blank=True, verbose_name="ELO 奖励领取时间")
     updated_at = models.DateTimeField(auto_now=True)
@@ -185,3 +187,26 @@ class CourseTagRelation(models.Model):
 
     class Meta:
         unique_together = ('course', 'tag')
+
+
+class LearningActivity(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    event_id = models.UUIDField(default=uuid.uuid4)
+    watched_seconds = models.FloatField(default=0)
+    completed = models.BooleanField(default=False)
+    elo_earned = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'event_id'], name='unique_course_learning_event')]
+
+
+class WatchLater(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    course = models.ForeignKey(Course, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'course'], name='unique_course_watch_later')]
+        ordering = ['created_at', 'pk']

@@ -9,8 +9,13 @@ from .views import (
     OSSMultipartResignView,
 )
 from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
+from .portal import LearningProgressView, LearningActivityView, WatchLaterListView, WatchLaterDetailView
 
 urlpatterns = [
+    path('learning-progress/', LearningProgressView.as_view(), name='course-learning-progress'),
+    path('learning-activity/', LearningActivityView.as_view(), name='course-learning-activity'),
+    path('watch-later/', WatchLaterListView.as_view(), name='course-watch-later'),
+    path('<int:pk>/watch-later/', WatchLaterDetailView.as_view(), name='course-watch-later-detail'),
     path('', CourseListCreateView.as_view(), name='course-list'),
     path('oss/multipart/init/', OSSMultipartInitView.as_view(), name='oss-multipart-init'),
     path('oss/multipart/complete/', OSSMultipartCompleteView.as_view(), name='oss-multipart-complete'),

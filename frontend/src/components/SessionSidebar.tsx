@@ -14,7 +14,7 @@ export interface SessionSidebarProps {
 }
 
 const COLLAPSED_W = 48;
-const EXPANDED_W = 224;
+const EXPANDED_W = 176;
 const SNAP_THRESHOLD = 100; // 低于此宽度自动吸附到收起状态
 
 function formatTime(iso: string): string {

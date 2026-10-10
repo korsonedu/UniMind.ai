@@ -40,6 +40,41 @@ export const VideoLesson: React.FC = () => {
   const progressRef = useRef<HTMLDivElement | null>(null);
   const courseId = Number(id);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !course?.video_file) return;
+    let lastTick = performance.now();
+    let watched = 0;
+    let saving = false;
+    const pending: { position: number; duration: number; watched_seconds: number; event_id: string }[] = [];
+    const tick = () => {
+      const now = performance.now();
+      const delta = (now - lastTick) / 1000;
+      if (!video.paused && !video.seeking && !video.ended && video.readyState >= 2 && delta <= 5) watched += delta;
+      lastTick = now;
+    };
+    const flush = async () => {
+      tick();
+      if (watched > 0) {
+        pending.push({ position: video.currentTime, duration: Number.isFinite(video.duration) ? video.duration : 0, watched_seconds: Math.min(120, watched), event_id: crypto.randomUUID() });
+        watched = 0;
+      }
+      if (saving) return;
+      saving = true;
+      try { while (pending.length) { await api.post(`/courses/${courseId}/progress/`, pending[0]); pending.shift(); } }
+      catch { /* Keep the same event ID for the next retry. */ }
+      finally { saving = false; }
+    };
+    const syncPosition = () => { lastTick = performance.now(); };
+    const onPause = () => { void flush(); };
+    video.addEventListener('play', syncPosition);
+    video.addEventListener('seeking', syncPosition);
+    video.addEventListener('pause', onPause);
+    const clock = window.setInterval(tick, 1000);
+    const save = window.setInterval(() => { void flush(); }, 10000);
+    return () => { clearInterval(clock); clearInterval(save); video.removeEventListener('play', syncPosition); video.removeEventListener('seeking', syncPosition); video.removeEventListener('pause', onPause); void flush(); };
+  }, [courseId, course?.video_file, loading]);
+
   const SPEEDS = [1, 1.25, 1.5, 2];
 
   useEffect(() => {
@@ -126,20 +161,25 @@ export const VideoLesson: React.FC = () => {
   }, [course?.video_file]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setCourse(null);
+        setRelatedCourses([]);
         setHasAwarded(false);
-        const res = await api.get(`/courses/${courseId}/`);
+        const res = await api.get(`/courses/${courseId}/`, { signal: controller.signal });
         setCourse(res.data);
 
         if (res.data.album) {
-          const albumRes = await api.get(`/courses/albums/${res.data.album.id}/courses/`);
+          const albumRes = await api.get(`/courses/albums/${res.data.album.id}/courses/`, { signal: controller.signal });
           setRelatedCourses(albumRes.data.filter((c: any) => c.id !== res.data.id));
         }
-      } catch (e) { console.error('fetchCourse failed', e); }
-      finally { setLoading(false); }
+      } catch (e) { if (!controller.signal.aborted) console.error('fetchCourse failed', e); }
+      finally { if (!controller.signal.aborted) setLoading(false); }
     };
     fetchData();
+    return () => controller.abort();
   }, [courseId]);
 
   const handleVideoEnd = async () => {
@@ -162,15 +202,13 @@ export const VideoLesson: React.FC = () => {
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget;
     if (!seeking) setCurrentTime(video.currentTime);
-    if (Math.floor(video.currentTime) % 10 === 0) {
-      api.post(`/courses/${courseId}/progress/`, { position: video.currentTime }).catch(() => {});
-    }
   };
 
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget;
     const dur = video.duration || 0;
     setDuration(dur);
+    if (Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
     // 续播：从上次位置继续（已完成、接近开头或结尾则不跳）
     const p = course?.progress;
     if (p && !p.is_finished && p.last_position > 10 && dur > 0 && p.last_position < dur - 10) {
@@ -335,7 +373,6 @@ export const VideoLesson: React.FC = () => {
                <div className="space-y-6">
                   <Card className="border-none shadow-sm rounded-3xl bg-card p-8 space-y-6 text-left">
                      <div className="space-y-1"><h4 className="text-xs font-bold uppercase tracking-widest text-foreground">学习奖励</h4><p className="text-2xl font-bold text-green-700">+{course.elo_reward} ELO</p></div>
-                     <p className="text-xs font-medium text-muted-foreground leading-relaxed">完整观看后自动结算并同步至您的学术分位。</p>
                   </Card>
                </div>
             </div>

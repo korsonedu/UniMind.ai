@@ -35,7 +35,6 @@ const Login = lazyNamed(() => import('./pages/Login'), 'Login');
 const AccountCallback = lazyNamed(() => import('./pages/AccountCallback'), 'AccountCallback');
 const Register = lazyNamed(() => import('./pages/Register'), 'Register');
 const VerifyCode = lazyNamed(() => import('./pages/VerifyCode'), 'VerifyCode');
-const VideoLesson = lazyNamed(() => import('./pages/VideoLesson'), 'VideoLesson');
 const ArticleDetail = lazyNamed(() => import('./pages/ArticleDetail'), 'ArticleDetail');
 const ArticleCenter = lazyNamed(() => import('./pages/ArticleCenter'), 'ArticleCenter');
 const SystemSettings = lazyNamed(() => import('./pages/SystemSettings'), 'SystemSettings');
@@ -270,7 +269,7 @@ const router = createBrowserRouter([
           { path: "billing", element: lazyPage(BillingPage) },
           { path: "system-settings", element: <RequireAdmin>{lazyPage(SystemSettings)}</RequireAdmin> },
           { path: "management", element: <RequireAdmin>{lazyPage(Maintenance)}</RequireAdmin> },
-          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(VideoLesson)}</FeatureGuard> },
+          { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "achievements", element: lazyPage(Achievements) },
 

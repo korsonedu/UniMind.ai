@@ -12,6 +12,7 @@ export interface ChatBubbleMessage {
 }
 
 interface ChatBubbleProps {
+  native?: boolean;
   msg: ChatBubbleMessage;
   isUser: boolean;
   isThinking?: boolean;
@@ -30,6 +31,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
   botGradient = 'from-violet-500 to-indigo-500',
   botAvatar,
   compact = false,
+  native = false,
 }) => {
   const [feedback, setFeedback] = useState<boolean | null | undefined>(msg.feedback);
   const [hover, setHover] = useState(false);
@@ -56,12 +58,12 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
 
   return (
     <div
-      className={cn("flex w-full group", compact ? "gap-0" : "gap-2", isUser ? "flex-row-reverse" : "flex-row")}
+      className={cn("flex w-full group", native && 'um-native-chat-bubble', compact ? "gap-0" : "gap-2", isUser ? "flex-row-reverse" : "flex-row")}
       style={{ animationDelay: `${Math.min(index * 40, 200)}ms` }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      {!isUser && !compact && (
+      {!isUser && !compact && !native && (
         <div className={cn("h-6 w-6 rounded-full overflow-hidden shrink-0 mt-0.5", botAvatar ? "" : `bg-gradient-to-br ${botGradient} flex items-center justify-center`)}>
           {botAvatar ? (
             <img src={botAvatar} alt="" className="w-full h-full object-cover" />
@@ -71,7 +73,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
         </div>
       )}
       <div className={cn("flex flex-col max-w-[85%]", isUser ? "items-end" : "items-start")}>
-        <div className={cn(
+        <div data-native-message={native ? (isUser ? 'user' : 'assistant') : undefined} className={cn(
           "w-fit animate-in fade-in slide-in-from-bottom-1 duration-300",
           compact
             ? "px-2.5 py-1 text-[12px] leading-relaxed"
@@ -110,6 +112,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
         <div className={cn(
           "flex items-center gap-0.5 mt-0.5 h-5 transition-opacity duration-150",
           showFeedback && hover ? "opacity-100" : "opacity-0 pointer-events-none",
+          native && showFeedback && 'um-agent-feedback',
         )}>
           <button
             onClick={() => handleFeedback(true)}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, CaretLeft, CaretRight, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront, Code } from '@phosphor-icons/react';
+import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront, Code } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -53,40 +54,25 @@ interface SidebarItemProps {
   collapsed: boolean;
 }
 
-const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: SidebarItemProps) => {
-  const content = (
-    <div className="px-1">
-      <Button
-        variant="ghost"
-        asChild
-        className={cn(
-          "w-full justify-start gap-3 h-10 px-3 overflow-hidden rounded-lg cursor-pointer",
-          active
-            ? "bg-card text-foreground shadow-sm border border-border"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground",
-        )}
-      >
-        <Link to={to} className="flex items-center gap-3 w-full h-full">
-          <Icon className={cn("h-4 w-4 shrink-0", active ? "text-foreground" : "text-muted-foreground")} />
-          <span className={cn(
-            "font-bold text-[13px] tracking-tight whitespace-nowrap transition-all duration-200 overflow-hidden",
-            collapsed ? "opacity-0 max-w-0" : "opacity-100 max-w-[176px]"
-          )}>{label}</span>
-        </Link>
-      </Button>
-    </div>
-  );
-
-  return collapsed ? (
-    <TooltipProvider delayDuration={0}>
-      <Tooltip>
-        <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="right" className="font-bold border-none shadow">{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  ) : content;
-};
-
+const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: SidebarItemProps) => (
+  <div className="px-1">
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" asChild className={cn(
+          "w-full h-10 rounded-lg cursor-pointer",
+          collapsed ? "justify-center p-0" : "justify-start gap-3 px-3",
+          active ? "bg-card text-foreground shadow-sm border border-border" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )}>
+          <Link to={to} aria-label={label} aria-current={active ? 'page' : undefined}>
+            <Icon className={cn("h-[18px] w-[18px] shrink-0", active ? "text-foreground" : "text-muted-foreground")} aria-hidden="true" />
+            <span className={collapsed ? "sr-only" : "font-medium text-[13px] truncate"}>{label}</span>
+          </Link>
+        </Button>
+      </TooltipTrigger>
+      {collapsed && <TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{label}</TooltipContent></TooltipPortal>}
+    </Tooltip>
+  </div>
+);
 // ── Module-level pure helpers ──
 
 const isMobileAllowedPath = (pathname: string) =>
@@ -172,7 +158,7 @@ export const MainLayout: React.FC = () => {
   const logout = useAuthStore(s => s.logout);
   const updateUser = useAuthStore(s => s.updateUser);
   const { primaryColor, pageTitle } = useSystemStore();
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = true;
   const [studentPreview, setStudentPreview] = useState(false);
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const isMobile = useIsMobile();
@@ -186,7 +172,7 @@ export const MainLayout: React.FC = () => {
   const instInfo = instFromStore || user?.institution || null;
 
   const isFullPage = ['/platform'].includes(location.pathname);
-  const isEdgeToEdge = ['/workbench', '/xiaoyu'].includes(location.pathname);
+  const isEdgeToEdge = ['/workbench', '/xiaoyu', '/courses'].includes(location.pathname) || /^\/course\/\d+/.test(location.pathname);
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && (
     location.pathname.startsWith('/tests/session') ||
@@ -406,25 +392,18 @@ export const MainLayout: React.FC = () => {
             </Link>
           </div>
 
-          <nav className="flex-1 space-y-0.5">
+          <nav aria-label="功能导航" className="flex-1 min-h-0 overflow-y-auto space-y-0.5">
             {visibleNavItems.map(item => (
               <SidebarItem
                 key={item.to}
                 {...item}
-                active={location.pathname === item.to}
+                active={location.pathname === item.to || location.pathname.startsWith(item.to + '/') || (item.to === '/courses' && location.pathname.startsWith('/course/'))}
                 collapsed={collapsed}
               />
             ))}
 
           </nav>
 
-          {/* Collapse/expand toggle */}
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center justify-center h-10 w-full rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors mt-1"
-          >
-            {collapsed ? <CaretRight className="h-4 w-4" /> : <CaretLeft className="h-4 w-4" />}
-          </button>
         </aside>
 
         <main className={cn(
