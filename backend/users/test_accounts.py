@@ -26,6 +26,7 @@ class AccountTests(TestCase):
         original = self.client.cookies["sessionid"].value
         response = self.client.get("/account-api/session/")
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Referrer-Policy"], "no-referrer")
         self.assertIsNone(response.json()["user"])
         self.assertEqual(self.client.cookies["sessionid"].value, original)
 

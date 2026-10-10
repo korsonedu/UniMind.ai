@@ -83,7 +83,7 @@ class SecurityHeadersMiddleware:
             "frame-ancestors 'none'"
         )
         response["X-Content-Type-Options"] = "nosniff"
-        response["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         return response
 
