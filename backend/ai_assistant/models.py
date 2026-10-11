@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 import uuid
 
 class AIChatMessage(models.Model):
@@ -19,18 +21,36 @@ class AIChatMessage(models.Model):
         ]
 
 
+class ConversationProject(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    name = models.CharField(max_length=60)
+    instructions = models.TextField(max_length=4000, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+
+
 class Conversation(models.Model):
     """会话元数据：LLM 生成的标题等。"""
     conversation_id = models.UUIDField(unique=True, db_index=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     bot = models.ForeignKey('Bot', on_delete=models.CASCADE)
     title = models.CharField(max_length=120, blank=True, default='')
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, null=True, blank=True, related_name='conversations')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-updated_at']
         unique_together = [('user', 'conversation_id')]
+
+
+@receiver(pre_delete, sender=Conversation)
+def delete_conversation_messages(sender, instance, using, **kwargs):
+    AIChatMessage.objects.using(using).filter(
+        user_id=instance.user_id, conversation_id=instance.conversation_id,
+    ).delete()
 
 
 class Bot(models.Model):

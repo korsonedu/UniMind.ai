@@ -21,6 +21,7 @@ export interface Message {
   feedback?: boolean | null;  // 用户反馈：true=赞 false=踩 null=未评价
   conversation_id?: string;
   conversation_title?: string;
+  conversation_project?: number | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -31,6 +32,7 @@ export interface ConversationSession {
   messages: Message[];
   lastTime: string;
   conversationId?: string;
+  projectId?: number | null;
 }
 
 export interface Bot {
@@ -43,6 +45,7 @@ export interface Bot {
 // ── Hook options ──
 
 interface UseAgentConversationOptions {
+  enableProjects?: boolean;
   /** Find the target bot from the bots list */
   findBot: (bots: Bot[]) => Bot | undefined;
   /** Extra SSE payload fields (appended by doSend automatically) */
@@ -91,6 +94,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const [skillOpen, setSkillOpen] = useState(false);
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const projectIdRef = useRef(projectId);
+  projectIdRef.current = projectId;
   const [sessionOpen, setSessionOpen] = useState(false);
   const [taskList, setTaskList] = useState<TaskListData | null>(null);
   const [chatWidth, setChatWidth] = useState(() => Math.min(Math.round(window.innerWidth * 0.36), 420));
@@ -164,7 +170,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       const firstUser = msgs.find(m => m.role === 'user');
       const label = title || (firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : '对话');
       const lastMsg = msgs[msgs.length - 1];
-      return { id: i, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id };
+      return { id: i, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id, projectId: lastMsg.conversation_project ?? null };
     });
   }, []);
 
@@ -174,6 +180,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     setMessages(session.messages);
     setTaskList(null);
     setActiveSessionId(session.id);
+    setProjectId(session.projectId ?? null);
     setSessionOpen(false);
     const lastMsg = session.messages[session.messages.length - 1];
     if (lastMsg?.conversation_id) {
@@ -234,8 +241,13 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     if (!session.conversationId) return;
     try {
       await api.post('/ai/delete-conversation/', { conversation_id: session.conversationId });
-      setSessions(prev => prev.filter(s => s.id !== session.id));
-      if (activeSessionId === session.id) {
+      setSessions(prev => prev.filter(s => s.conversationId !== session.conversationId));
+      if (conversationIdRef.current === session.conversationId) {
+        abortRef.current?.abort();
+        timersRef.current.forEach(clearTimeout);
+        timersRef.current = [];
+        setLoading(false);
+        setProjectId(session.projectId ?? null);
         setMessages([]);
         setTaskList(null);
         setActiveSessionId(null);
@@ -245,7 +257,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     } catch {
       toast.error('删除失败，请重试');
     }
-  }, [activeSessionId]);
+  }, []);
 
   // ── Auto-scroll ──
 
@@ -285,6 +297,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         message: text,
         bot_id: bot.id,
         conversation_id: conversationIdRef.current,
+        ...(options.enableProjects ? { project_id: projectIdRef.current } : {}),
         ...(getExtraPayloadRef.current?.() ?? {}),
       }, controller.signal);
       const res = await fetch(url, init);
@@ -465,7 +478,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // ── Handlers ──
 
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback((notify = true) => {
+    setProjectId(null);
     if (!bot) return;
     if (abortRef.current) abortRef.current.abort();
     timersRef.current.forEach(clearTimeout);
@@ -474,7 +488,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     setTaskList(null);
     setActiveSessionId(null);
     setConversationId(crypto.randomUUID());
-    toast.success(resetMessage);
+    if (notify) toast.success(resetMessage);
   }, [bot, resetMessage]);
 
   const handleSkillSelect = useCallback((prompt: string) => {
@@ -493,6 +507,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   }, []);
 
   return {
+    projectId, setProjectId,
     // State
     bot,
     messages,

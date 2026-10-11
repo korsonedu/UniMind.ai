@@ -3,7 +3,7 @@ import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, Plus } from '@phosphor-icons/react';
+import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, Plus, ArrowUp, MagnifyingGlass, Folder, Check } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { processMathContent, cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -24,6 +24,7 @@ import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/ActionCardsRenderer';
 import { TaskList } from '@/components/TaskList';
 import { NativeAgentShell } from '@/components/NativeAgentShell';
+import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
 
 // ── Types ──
 
@@ -125,6 +126,8 @@ export interface AgentChatLayoutProps {
 
   /** 左侧栏 render prop，传入 session 相关数据，返回 ReactNode */
   sidebar?: (props: {
+    projectControls: ConversationProjectControls;
+    onNewInProject: (id: number) => void;
     sessions: ConversationSession[];
     activeSessionId: number | null;
     onLoadSession: (session: ConversationSession) => void;
@@ -163,16 +166,20 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const pendingVisualsRef = useRef<VisualData[]>([]);
   const dashboardRef = useRef<HTMLDivElement>(null);
   const nativeInputRef = useRef<HTMLTextAreaElement>(null);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectQuery, setProjectQuery] = useState('');
 
   const {
     bot, messages, input, loading, isComposing, initialized, skillOpen,
     sessions, activeSessionId, sessionOpen, chatWidth, dragging, hasConversation, conversationId, taskList,
     scrollRef, inputRef,
+    projectId, setProjectId,
     setMessages, setInput, setBot, setInitialized, setSkillOpen, setSessionOpen,
     setIsComposition, setActiveSessionId, setSessions, setConversationId,
     handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleReset,
     handleSkillSelect, groupIntoSessions, doSend,
   } = useAgentConversation({
+    enableProjects: appearance === 'native',
     findBot,
     getExtraPayload,
     onDone: () => onDone?.(handleRefreshSessions),
@@ -189,6 +196,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     onStepQuestions: onQuestionsGenerated,
     resetMessage,
   });
+  const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions);
+  const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
 
   // Expose doSend to parent
   useEffect(() => {
@@ -251,6 +260,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
+      if (appearance === 'native' && new URLSearchParams(window.location.search).get('practiceDone') !== '1') setConversationId(crypto.randomUUID());
       try {
         const bRes = await api.get('/ai/bots/');
         if (cancelled) return;
@@ -302,14 +312,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             setSessions(grouped);
             const lastMsg = hRes.data[hRes.data.length - 1];
             const isRecent = lastMsg && Date.now() - new Date(lastMsg.timestamp).getTime() < RECENT_SESSION_MS;
-            if (isRecent && lastMsg.conversation_id) {
+            if (appearance !== 'native' && isRecent && lastMsg.conversation_id) {
               setConversationId(lastMsg.conversation_id);
             }
             // 有历史对话时，自动加载最新 session（不限制时间窗口）
-            if (grouped.length > 0) {
+            if (appearance !== 'native' && grouped.length > 0) {
               const latest = grouped[grouped.length - 1];
               setMessages(latest.messages);
               setActiveSessionId(latest.id);
+              setProjectId(latest.projectId ?? null);
             }
           }
         }
@@ -333,6 +344,18 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     }
   }, [initialized]);
 
+  useEffect(() => {
+    const textarea = nativeInputRef.current;
+    if (appearance !== 'native' || !textarea) return;
+    const resize = () => {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 176)}px`;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [input, appearance, hasConversation, initialized]);
+
   // 通知父组件 hasConversation 变化（用于控制外层容器宽度）
   // useLayoutEffect 确保在浏览器绘制前同步更新父组件，避免 landing→面板 的闪烁
   // ⚠️ 注意：初始化阶段不回调父组件，因为此时 hook 的 hasConversation 始终为 false，
@@ -353,12 +376,20 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     setSessionOpen(false);
   };
 
-  const wrappedReset = () => {
+  const wrappedReset = (notify = true, nextProjectId = projectId) => {
     if (onReset) {
-      onReset(handleReset);
+      onReset(() => handleReset(notify));
     } else {
-      handleReset();
+      handleReset(notify);
     }
+    if (appearance === 'native') setProjectId(nextProjectId);
+    setVisual(null);
+  };
+
+  const selectNewProject = (id: number | null) => {
+    wrappedReset(false, id);
+    setProjectPickerOpen(false);
+    setProjectQuery('');
   };
 
   // ── Loading ──
@@ -374,6 +405,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   // ── Landing state ──
 
   const sessionDirectory = sidebar?.({
+    projectControls: { ...projectControls, remove: async id => {
+      const removed = await projectControls.remove(id);
+      if (removed && projectId === id) wrappedReset(false, null);
+      return removed;
+    } }, onNewInProject: id => wrappedReset(false, id),
     sessions, activeSessionId, onLoadSession: wrappedLoadSession,
     onDeleteSession: onDeleteSession ? handleDeleteSession : undefined,
     onNewConversation: wrappedReset, botDisplayName,
@@ -381,20 +417,35 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell native sidebar={sessionDirectory} title={botDisplayName} onNew={wrappedReset}>
-        <div className="um-agent-landing-scroll"><div className="um-agent-landing-content">
-          {landingBanner}
+      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset}>
+        <div className="um-agent-landing">
           <section className="um-agent-start" aria-label="开始对话">
+            <h2 className="um-agent-start-title">{selectedProjectName ? <>我们要在 <Popover open={projectPickerOpen} onOpenChange={open => { setProjectPickerOpen(open); if (!open) setProjectQuery(''); }}>
+              <PopoverTrigger asChild><button className="um-agent-project-picker-trigger" aria-label={`切换项目，当前为${selectedProjectName}`}>{selectedProjectName}</button></PopoverTrigger>
+              <PopoverContent side="top" align="center" sideOffset={12} className="um-native-agent um-native-menu um-agent-project-picker" onCloseAutoFocus={event => { event.preventDefault(); nativeInputRef.current?.focus(); }}>
+                <label className="um-agent-project-picker-search"><MagnifyingGlass size={16} /><input autoFocus aria-label="搜索项目" placeholder="搜索项目" value={projectQuery} onChange={event => setProjectQuery(event.target.value)} /></label>
+                <div className="um-agent-project-picker-list" role="group" aria-label="切换学习项目">{projectControls.projects.filter(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())).map(project => <button key={project.id} aria-pressed={project.id === projectId} onClick={() => selectNewProject(project.id)}><Folder size={16} /><span>{project.name}</span>{project.id === projectId && <Check size={16} />}</button>)}</div>
+                {!projectControls.projects.some(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())) && <p className="um-agent-project-picker-empty">没有匹配的项目</p>}
+                <button className="um-agent-project-picker-none" onClick={() => selectNewProject(null)}>未分类</button>
+              </PopoverContent>
+            </Popover> 中做些什么？</> : '我们要做些什么？'}</h2>
             <div data-tour={inputTourClass} className="um-agent-composer">
               <textarea ref={nativeInputRef} value={input} onChange={event => setInput(event.target.value)}
                 onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
                 onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
                 placeholder={chatPlaceholder} aria-label="和小宇对话" disabled={loading || !bot} />
-              <footer><button className="um-agent-button um-agent-button-primary" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label="发送消息"><PaperPlaneTilt size={16} /></button></footer>
+              <footer>
+                <Popover open={skillOpen} onOpenChange={setSkillOpen}>
+                  <PopoverTrigger asChild><button className="um-agent-button um-agent-task-trigger" aria-label="快捷任务" disabled={loading || !bot}><Plus size={16} />快捷任务</button></PopoverTrigger>
+                  <PopoverContent align="start" side="top" className="um-native-menu w-56 p-1 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto" onCloseAutoFocus={event => { event.preventDefault(); nativeInputRef.current?.focus(); }}>
+                    {skills.map(skill => <button key={skill.label} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted text-left" onClick={() => handleSkillSelect(skill.prompt)}><skill.icon size={16} />{skill.label}</button>)}
+                  </PopoverContent>
+                </Popover>
+                <button className="um-agent-button um-agent-button-primary um-agent-send" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label="发送消息"><ArrowUp size={18} /></button>
+              </footer>
             </div>
-            <div className="um-agent-panel"><h2>快捷任务</h2><div className="um-agent-skills">{skills.map(skill => <button key={skill.label} disabled={loading || !bot} onClick={() => { handleSkillSelect(skill.prompt); nativeInputRef.current?.focus(); }}><skill.icon size={16} />{skill.label}</button>)}</div></div>
           </section>
-        </div></div>
+        </div>
       </NativeAgentShell>
     </TooltipProvider>;
   }
@@ -526,7 +577,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} title={conversationTitle || botDisplayName} onNew={wrappedReset}>
+        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset}>
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
           {/* Header */}
@@ -570,7 +621,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 </PopoverContent>
               </Popover>
             )}
-            <button onClick={wrappedReset}
+            <button onClick={() => wrappedReset()}
               className="shrink-0 rounded-full px-3 py-1 text-[11px] font-medium bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
               <Plus className="h-3 w-3" />
               新对话
@@ -631,7 +682,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           <div className={cn("shrink-0 px-4 pb-4 pt-2", appearance === 'native' && 'um-agent-chat-input')}>
             <div className="max-w-3xl mx-auto">
               <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
-                <textarea
+                <textarea ref={nativeInputRef} rows={1}
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onCompositionStart={() => setIsComposition(true)}
@@ -649,7 +700,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       <TooltipTrigger asChild>
                         <PopoverTrigger asChild>
                           <button aria-label="快捷任务" className={cn("p-1.5 rounded-lg transition-colors", skillOpen ? "text-primary/60" : "text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted")}>
-                            <Lightbulb className="h-3.5 w-3.5" />
+                            <Plus className="h-4 w-4" />
                           </button>
                         </PopoverTrigger>
                       </TooltipTrigger>
@@ -680,8 +731,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   )}
                   <div className="flex-1" />
                   <Button aria-label="发送消息" onClick={() => doSend(input)} disabled={loading || !input.trim() || !bot} size="icon"
-                    className="rounded-xl h-9 w-9 bg-primary text-primary-foreground shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
-                    {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <PaperPlaneTilt className="h-4 w-4" />}
+                    className="um-agent-send rounded-full h-9 w-9 bg-primary text-primary-foreground shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
+                    {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
@@ -762,7 +813,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 </PopoverContent>
               </Popover>
             )}
-            <Button variant="ghost" size="sm" onClick={wrappedReset}
+            <Button variant="ghost" size="sm" onClick={() => wrappedReset()}
               className="rounded text-muted-foreground/40 hover:text-foreground/60 gap-0.5 px-1.5 h-5 shrink-0">
               <ArrowCounterClockwise className="h-2.5 w-2.5" />
               <span className="text-[9px] font-medium">新对话</span>

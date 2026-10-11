@@ -210,3 +210,10 @@ class WatchLater(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=['user', 'course'], name='unique_course_watch_later')]
         ordering = ['created_at', 'pk']
+
+
+class LearningGoal(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=120)
+    deadline = models.DateField()
+    courses = models.ManyToManyField(Course)

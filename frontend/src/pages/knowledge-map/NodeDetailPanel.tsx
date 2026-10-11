@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, ArrowsOut, FileText, Video, X, Stack, Lightning } from '@phosphor-icons/react';
+import { Target, ArrowsOut, Video, X, Stack, Lightning } from '@phosphor-icons/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ const LEVEL_LABELS: Record<string, string> = {
 
 export const NodeDetailPanel: React.FC<{
   node: KPNode | null;
-  details: { courses: any[]; articles: any[]; questions: any[] };
+  details: { courses: any[]; questions: any[] };
   loading: boolean;
   onQuestionClick: (q: any) => void;
   onClear: () => void;
@@ -125,23 +125,6 @@ export const NodeDetailPanel: React.FC<{
                     <div key={c.id} className="p-3 bg-emerald-50/50 rounded-xl flex items-center gap-2 border border-emerald-100">
                       <Video className="w-3 h-3 text-emerald-500 shrink-0" />
                       <p className="text-[11px] font-medium truncate">{c.title}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section>
-                <h5 className="text-[10px] font-semibold tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <FileText className="w-3 h-3" /> 参考文章 ({details.articles.length})
-                </h5>
-                <div className="space-y-1.5">
-                  {details.articles.length === 0 && (
-                    <p className="text-[10px] text-muted-foreground/50">暂无文章</p>
-                  )}
-                  {details.articles.map((a: any) => (
-                    <div key={a.id} className="p-3 bg-orange-50/50 rounded-xl flex items-center gap-2 border border-orange-100">
-                      <FileText className="w-3 h-3 text-orange-500 shrink-0" />
-                      <p className="text-[11px] font-medium truncate">{a.title}</p>
                     </div>
                   ))}
                 </div>

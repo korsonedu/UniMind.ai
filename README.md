@@ -258,6 +258,9 @@ source .venv/bin/activate
 # 安装依赖
 pip install -r requirements.txt
 
+# 成绩报告和试卷 PDF 的浏览器运行依赖，保留其他项目的浏览器缓存
+PLAYWRIGHT_SKIP_BROWSER_GC=1 python -m playwright install chromium-headless-shell
+
 # 配置环境变量
 cp .env.example .env
 # 编辑 .env，填入 LLM_API_KEY

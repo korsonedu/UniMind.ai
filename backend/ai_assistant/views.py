@@ -12,6 +12,8 @@ from rest_framework.views import APIView
 from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
+from .views_projects import add_project_context, save_new_conversation_project
+from django.db import transaction
 from .prompt_sync import (
     delete_bot_prompt_file,
     get_bot_prompt_template_name,
@@ -47,6 +49,8 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
     history_msgs = [{"role": h.role, "content": h.content} for h in reversed(history_objs)
                     if h.content != "[Thinking...]" and not (h.role == 'user' and h.content == user_message)]
 
+    project_history = add_project_context(user, conversation_id, history_msgs)
+
     student_context = ""
     if bot and bot.is_exclusive:
         student_context = get_student_academic_context(user)
@@ -63,7 +67,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
                 bot=bot,
                 user=user,
                 message=user_message,
-                history=history_msgs,
+                history=project_history,
                 institution=getattr(user, 'institution', None),
                 student_context=student_context,
                 memory_context=memory_context,
@@ -351,6 +355,8 @@ class AIChatView(APIView):
             sync_bot_prompt(bot)
 
         # 1. Save User Message
+        if bot:
+            save_new_conversation_project(request, bot, conversation_id)
         AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot, conversation_id=conversation_id)
         record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
@@ -406,6 +412,8 @@ class AIChatListView(generics.ListAPIView):
             conversation_id=OuterRef('conversation_id'),
         ).values('title')[:1]
         qs = qs.annotate(_conversation_title=Subquery(title_subquery))
+        project_subquery = Conversation.objects.filter(user=self.request.user, conversation_id=OuterRef('conversation_id')).values('project_id')[:1]
+        qs = qs.annotate(_conversation_project=Subquery(project_subquery))
         return qs
 
 
@@ -429,9 +437,11 @@ class AIChatDeleteConversationView(APIView):
         conversation_id = request.data.get('conversation_id')
         if not conversation_id:
             return Response({'error': 'conversation_id is required'}, status=400)
-        deleted, _ = AIChatMessage.objects.filter(
-            user=request.user, conversation_id=conversation_id
-        ).delete()
+        with transaction.atomic():
+            deleted, _ = AIChatMessage.objects.filter(
+                user=request.user, conversation_id=conversation_id
+            ).delete()
+            Conversation.objects.filter(user=request.user, conversation_id=conversation_id).delete()
         return Response({'status': 'deleted', 'count': deleted})
 
 
@@ -472,6 +482,7 @@ class AIChatStreamView(APIView):
         sync_bot_prompt(bot)
 
         # Save user message
+        save_new_conversation_project(request, bot, conversation_id)
         AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot, conversation_id=conversation_id)
         
         # Create pending assistant message (for refresh recovery)
@@ -491,6 +502,8 @@ class AIChatStreamView(APIView):
                 if h.content != "[Thinking...]" and h.content != user_message
             ]
 
+            project_history = add_project_context(request.user, conversation_id, history_msgs)
+
             student_context = ""
             if bot.is_exclusive:
                 student_context = get_student_academic_context(request.user)
@@ -504,7 +517,7 @@ class AIChatStreamView(APIView):
                 bot=bot,
                 user=request.user,
                 message=user_message,
-                history=history_msgs,
+                history=project_history,
                 institution=getattr(request.user, 'institution', None),
                 student_context=student_context,
                 memory_context=memory_context,

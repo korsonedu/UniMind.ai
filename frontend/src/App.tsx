@@ -35,8 +35,6 @@ const Login = lazyNamed(() => import('./pages/Login'), 'Login');
 const AccountCallback = lazyNamed(() => import('./pages/AccountCallback'), 'AccountCallback');
 const Register = lazyNamed(() => import('./pages/Register'), 'Register');
 const VerifyCode = lazyNamed(() => import('./pages/VerifyCode'), 'VerifyCode');
-const ArticleDetail = lazyNamed(() => import('./pages/ArticleDetail'), 'ArticleDetail');
-const ArticleCenter = lazyNamed(() => import('./pages/ArticleCenter'), 'ArticleCenter');
 const SystemSettings = lazyNamed(() => import('./pages/SystemSettings'), 'SystemSettings');
 const KnowledgeMap = lazyNamed(() => import('./pages/KnowledgeMap'), 'KnowledgeMap');
 const KnowledgeNodeDetail = lazyNamed(() => import('./pages/KnowledgeNodeDetail'), 'KnowledgeNodeDetail');
@@ -72,7 +70,6 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const Marketplace = lazyNamed(() => import('./pages/Marketplace'), 'Marketplace');
 const APIPlatform = lazyNamed(() => import('./pages/APIPlatform'), 'APIPlatform');
 const CourseManage = lazy(() => import('./pages/CourseManage'));
-const ArticleManage = lazy(() => import('./pages/ArticleManage'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const Legal = lazy(() => import('./pages/Legal'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
@@ -254,10 +251,10 @@ const router = createBrowserRouter([
         children: [
           { path: "courses", element: lazyPage(CourseCenter) },
           { path: "courses/manage", element: <RequireInstitution>{lazyPage(CourseManage)}</RequireInstitution> },
-          { path: "articles", element: lazyPage(ArticleCenter) },
-          { path: "articles/manage", element: <RequireInstitution>{lazyPage(ArticleManage)}</RequireInstitution> },
+          { path: "articles", element: <Navigate to="/xiaoyu" replace /> },
+          { path: "articles/manage", element: <Navigate to="/xiaoyu" replace /> },
           { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QASystem)}</FeatureGuard> },
-          { path: "article/:id", element: lazyPage(ArticleDetail) },
+          { path: "article/:id", element: <Navigate to="/xiaoyu" replace /> },
           { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
           { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },

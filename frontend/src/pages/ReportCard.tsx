@@ -1,21 +1,11 @@
-/**
- * 学生端 - 成绩报告
- */
-import React, { useEffect, useState } from 'react';
-import {
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-} from 'recharts';
-import { PageWrapper } from '@/components/PageWrapper';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { Download } from '@phosphor-icons/react';
+import { toast } from 'sonner';
+import { LearningRecordLayout } from '@/components/LearningRecordLayout';
 import { Skeleton } from '@/components/ui/skeleton';
-import { EmptyState } from '@/components/EmptyState';
-import { InlineError } from '@/components/InlineError';
-import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
-import { Download, FileText, Trophy, Target, Fire, GraduationCap, Medal } from '@phosphor-icons/react';
 
 interface ReportData {
   student: { id: number; nickname: string; elo_score: number; date_joined: string };
@@ -26,235 +16,85 @@ interface ReportData {
   achievements: { key: string; name: string; description: string; icon: string; category: string; unlocked_at: string }[];
 }
 
-export const ReportCard: React.FC = () => {
-  const user = useAuthStore(s => s.user);
+export const ReportCard = () => {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [downloading, setDownloading] = useState(false);
-
-  useEffect(() => {
-    api.get('/users/me/report-card/')
-      .then(r => { setData(r.data); setLoading(false); })
-      .catch(err => { setError(err.message || '加载失败'); setLoading(false); });
-  }, []);
+  const fetchData = () => {
+    setLoading(true);
+    setError(false);
+    api.get<ReportData>('/users/me/report-card/')
+      .then(res => setData(res.data))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { fetchData(); }, []);
 
   const handleDownloadPDF = async () => {
+    if (downloading) return;
     setDownloading(true);
     try {
       const res = await api.get('/users/me/report-card/pdf/', { responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `report_${data?.student?.nickname || 'student'}.pdf`;
+      a.download = `report_${data?.student.nickname || 'student'}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      // ignore
-    } finally {
-      setDownloading(false);
-    }
+    } catch { toast.error('报告下载失败，请重试'); }
+    finally { setDownloading(false); }
   };
 
-  if (loading) return (
-    <PageWrapper title="成绩报告" subtitle="">
-      <div className="max-w-3xl mx-auto py-8 space-y-6">
-        <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-28 rounded-2xl" />)}
-        </div>
-        <Skeleton className="h-64 rounded-2xl" />
-        <Skeleton className="h-48 rounded-2xl" />
-      </div>
-    </PageWrapper>
-  );
-
-  if (error) return (
-    <PageWrapper title="成绩报告" subtitle="">
-      <InlineError message={error} onRetry={() => window.location.reload()} />
-    </PageWrapper>
-  );
-
-  if (!data) return (
-    <PageWrapper title="成绩报告" subtitle="">
-      <EmptyState icon={FileText} title="暂无数据" description="开始学习后这里将显示你的成绩报告" />
-    </PageWrapper>
-  );
-
-  const { student, stats, radar, exams, achievements } = data;
-
-  return (
-    <PageWrapper
-      title="成绩报告"
-      subtitle=""
-      action={
-        <Button onClick={handleDownloadPDF} disabled={downloading} variant="outline" size="sm" className="rounded-lg gap-2">
-          <Download className="w-4 h-4" weight="bold" />
-          {downloading ? '生成中...' : '下载 PDF'}
-        </Button>
-      }
-    >
-      <div className="max-w-3xl mx-auto space-y-8 pb-8">
-        {/* Student identity */}
-        <div className="flex items-center gap-3 pt-2">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-            <GraduationCap className="h-5 w-5 text-primary" weight="fill" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold truncate">{student.nickname}</h2>
-            <p className="text-xs text-muted-foreground">ELO {student.elo_score}</p>
-          </div>
-        </div>
-
-        {/* Stats overview */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-2xl bg-card border border-border/60 p-4 text-center">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center mx-auto mb-2.5">
-              <Target className="w-4 h-4 text-blue-600 dark:text-blue-400" weight="fill" />
-            </div>
-            <p className="text-[28px] font-bold tabular-nums leading-none">{stats.total_attempted}</p>
-            <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">累计答题</p>
-          </div>
-          <div className="rounded-2xl bg-card border border-border/60 p-4 text-center">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center mx-auto mb-2.5">
-              <Trophy className="w-4 h-4 text-emerald-600 dark:text-emerald-400" weight="fill" />
-            </div>
-            <p className="text-[28px] font-bold tabular-nums leading-none">{stats.accuracy}%</p>
-            <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">正确率</p>
-          </div>
-          <div className="rounded-2xl bg-card border border-border/60 p-4 text-center">
-            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center mx-auto mb-2.5">
-              <Fire className="w-4 h-4 text-amber-600 dark:text-amber-400" weight="fill" />
-            </div>
-            <p className="text-[28px] font-bold tabular-nums leading-none">{stats.study_streak}</p>
-            <p className="text-[11px] text-muted-foreground mt-1.5 font-medium">连续学习</p>
-          </div>
-        </div>
-
-        {/* Knowledge radar */}
-        {radar.length > 0 && (
-          <section>
-            <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary/60" />
-              知识点掌握度
-            </h3>
-            <div className="rounded-2xl border border-border/60 bg-card p-5">
-              <div className="w-full h-64">
-                <ResponsiveContainer>
-                  <RadarChart data={radar.map(r => ({ ...r, fullMark: 100 }))}>
-                    <PolarGrid stroke="currentColor" strokeWidth={0.5} className="text-border/60" />
-                    <PolarAngleAxis
-                      dataKey="subject"
-                      tick={{ fontSize: 11, fontWeight: 600, fill: 'currentColor' }}
-                      className="text-muted-foreground"
-                    />
-                    <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
-                    <Radar
-                      name="掌握度"
-                      dataKey="avg_mastery"
-                      stroke="hsl(var(--primary))"
-                      fill="hsl(var(--primary))"
-                      fillOpacity={0.1}
-                      strokeWidth={2}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-4">
-                {radar.map(r => (
-                  <div key={r.subject} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted/40 text-[11px] font-medium">
-                    <span>{r.subject}</span>
-                    <span className="text-muted-foreground">{r.avg_mastery}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Exam scores */}
-        {exams.length > 0 && (
-          <section>
-            <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-primary/60" />
-              考试成绩趋势
-            </h3>
-            <div className="rounded-2xl border border-border/60 bg-card p-5">
-              <div className="w-full h-48">
-                <ResponsiveContainer>
-                  <BarChart data={exams.slice().reverse()}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border/40" />
-                    <XAxis
-                      dataKey="created_at"
-                      tickFormatter={(v: string) => v.slice(5, 10)}
-                      tick={{ fontSize: 11, fontWeight: 500, fill: 'currentColor' }}
-                      className="text-muted-foreground"
-                    />
-                    <YAxis
-                      domain={[0, 100]}
-                      tick={{ fontSize: 11, fontWeight: 500, fill: 'currentColor' }}
-                      className="text-muted-foreground"
-                    />
-                    <Tooltip
-                      formatter={(val: any) => [`${val}%`, '得分率']}
-                      labelFormatter={(l: any) => `考试 ${l}`}
-                    />
-                    <Bar dataKey="percentage" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Detail stats */}
-        <div className="grid grid-cols-2 gap-3">
+  return <LearningRecordLayout action={<button className="um-record-button" onClick={handleDownloadPDF} disabled={downloading || loading || error || !data}><Download size={16} />{downloading ? '生成中…' : '下载 PDF'}</button>}>
+    {loading ? <div className="um-record-loading" aria-label="加载成绩报告" aria-busy="true"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>
+      : error ? <div className="um-record-empty" role="alert"><p>成绩报告加载失败。</p><button className="um-record-button" onClick={fetchData}>重试</button></div>
+      : !data ? <div className="um-record-empty"><p>暂无成绩报告</p><Link to="/xiaoyu">开始学习</Link></div>
+      : <>
+        <div className="um-record-identity"><span>{data.student.nickname || '学习者'}</span><span>累计学习记录</span></div>
+        <dl className="um-record-metrics">
           {[
-            { icon: GraduationCap, label: '已掌握', value: stats.mastered_count, unit: '道题', color: 'text-emerald-600 dark:text-emerald-400' },
-            { icon: Fire, label: '签到', value: stats.checkin_streak, unit: '天', color: 'text-amber-600 dark:text-amber-400' },
-            { icon: Medal, label: '成就', value: achievements.length, unit: '个', color: 'text-blue-600 dark:text-blue-400' },
-            { icon: Target, label: '总做题', value: stats.total_attempted, unit: '次', color: 'text-primary' },
-          ].map(item => (
-            <div key={item.label} className="rounded-2xl border border-border/60 bg-card p-4 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-muted/40 flex items-center justify-center shrink-0">
-                <item.icon className={cn('h-4 w-4', item.color)} weight="fill" />
-              </div>
-              <div>
-                <p className="text-xl font-bold tabular-nums leading-none">
-                  {item.value}
-                  <span className="text-xs text-muted-foreground font-normal ml-0.5">{item.unit}</span>
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{item.label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Achievements */}
-        {achievements.length > 0 && (
-          <section>
-            <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-amber-400/80" />
-              已解锁成就
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {achievements.map(a => (
-                <div
-                  key={a.key}
-                  className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-card border border-border/60 hover:border-border transition-colors"
-                >
-                  <span className="text-lg leading-none">{a.icon}</span>
-                  <div className="min-w-0">
-                    <p className="text-[12px] font-semibold truncate">{a.name}</p>
-                    <p className="text-[10px] text-muted-foreground/50 truncate">{a.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            { label: '累计答题', value: data.stats.total_attempted, unit: '次' },
+            { label: '最近作答正确率', value: data.stats.accuracy, unit: '%' },
+            { label: '连续学习', value: data.stats.study_streak, unit: '天' },
+            { label: 'ELO', value: data.student.elo_score, unit: '' },
+          ].map(item => <div key={item.label}><dt>{item.label}</dt><dd>{item.value}<small>{item.unit}</small></dd></div>)}
+        </dl>
+        <dl className="um-record-details">
+          {[
+            ['练习题目', data.stats.total_distinct, '道'], ['最近答对', data.stats.correct_count, '道'],
+            ['曾答错', data.stats.wrong_count, '道'], ['已掌握', data.stats.mastered_count, '道题'],
+            ['连续打卡', data.stats.checkin_streak, '天'], ['已解锁成就', data.achievements.length, '个'],
+          ].map(([label, value, unit]) => <div key={label}><dt>{label}</dt><dd>{value} {unit}</dd></div>)}
+        </dl>
+        <div className="um-record-charts">
+          <section aria-label="知识点掌握度"><h2>知识点掌握度</h2>
+            {data.radar.length ? <>
+              <div className="um-record-chart"><ResponsiveContainer width="100%" height="100%"><RadarChart data={data.radar}>
+                <PolarGrid stroke="var(--um-color-border)" />
+                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12, fill: 'var(--um-color-text-muted)' }} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} />
+                <Radar name="掌握度" dataKey="avg_mastery" stroke="var(--um-color-accent)" fill="var(--um-color-accent)" fillOpacity={0.12} strokeWidth={2} />
+              </RadarChart></ResponsiveContainer></div>
+              <ul className="um-record-subjects">{data.radar.map(item => <li key={item.subject}><span>{item.subject}</span><strong>{item.avg_mastery}%</strong></li>)}</ul>
+            </> : <p className="um-record-chart-empty">完成练习后查看知识点掌握度。</p>}
           </section>
-        )}
-      </div>
-    </PageWrapper>
-  );
+          <section aria-label="考试成绩趋势"><h2>考试成绩趋势</h2>
+            {data.exams.length ? <div className="um-record-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.exams.slice().reverse()} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+              <CartesianGrid vertical={false} stroke="var(--um-color-border)" strokeDasharray="3 3" />
+              <XAxis dataKey="created_at" tickFormatter={(value: string) => value.slice(5, 10)} tick={{ fontSize: 12, fill: 'var(--um-color-text-muted)' }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: 'var(--um-color-text-muted)' }} axisLine={false} tickLine={false} />
+              <Tooltip formatter={(value: any) => [`${value}%`, '得分率']} labelFormatter={(label: any) => `考试 ${label}`} contentStyle={{ background: 'var(--um-color-surface)', borderColor: 'var(--um-color-border)', borderRadius: 8, fontSize: 12 }} />
+              <Bar dataKey="percentage" fill="var(--um-color-accent)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+            </BarChart></ResponsiveContainer></div> : <p className="um-record-chart-empty">完成考试后查看成绩变化。</p>}
+          </section>
+        </div>
+        <section className="um-record-section"><header><h2>考试记录</h2><Link to="/tests">进入习题训练</Link></header>
+          {data.exams.length ? <div className="um-record-table-scroll"><table><thead><tr><th scope="col">日期</th><th scope="col">得分</th><th scope="col">得分率</th><th scope="col">ELO 变化</th></tr></thead><tbody>{data.exams.map(item => <tr key={item.id}><td><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleDateString('zh-CN')}</time></td><td>{item.total_score} / {item.max_score}</td><td>{item.percentage}%</td><td>{item.elo_change >= 0 ? '+' : ''}{item.elo_change}</td></tr>)}</tbody></table></div> : <p className="um-record-muted">暂无考试记录。</p>}
+        </section>
+        {!!data.achievements.length && <section className="um-record-section"><header><h2>已解锁成就</h2><Link to="/achievements">查看全部成就</Link></header><ul className="um-record-unlocked">{data.achievements.map(item => <li key={item.key}><span>{item.name}</span><span>{item.description}</span></li>)}</ul></section>}
+      </>}
+  </LearningRecordLayout>;
 };
 
 export default ReportCard;

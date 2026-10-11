@@ -17,9 +17,9 @@ export const PageWrapper = ({ children, title, subtitle, action }: PageWrapperPr
   }, [title, subtitle, setPageHeader]);
 
   return (
-    <div className="w-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="um-page-wrapper w-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {action && (
-        <div className="flex justify-end pb-2">
+        <div className="um-page-actions flex justify-end pb-2">
           {action}
         </div>
       )}

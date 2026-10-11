@@ -3,7 +3,7 @@ import './previewApi';
 /** Controls surround the real App; routes and pages are never substituted. */
 export function PreviewControls() {
   return <div className="um-full-preview-bar">
-    <span>UniMind.ai · 完整应用 · 本地示例数据</span>
+    <span><span className="um-preview-name">UniMind.ai · 完整应用 · </span>本地示例数据</span>
     <label>身份 <select aria-label="调试身份" defaultValue={sessionStorage.getItem('unimind-preview-role') || 'student'} onChange={event => {
       sessionStorage.setItem('unimind-preview-role', event.target.value);
       location.assign('/?preview=1');

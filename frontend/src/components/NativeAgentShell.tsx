@@ -1,20 +1,28 @@
-import { useState, type ReactNode } from 'react';
-import { List, Plus, X } from '@phosphor-icons/react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
+import { SidebarSimple, Plus, X } from '@phosphor-icons/react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { useOutletContext } from 'react-router-dom';
+import { DirectoryResizeHandle, useDirectoryWidth } from './DirectoryResizeHandle';
 
-interface Props { native?: boolean; sidebar?: ReactNode; title: string; onNew: () => void; children: ReactNode; }
+interface Props { native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; }
 
 /** Opt-in presentation; the existing Agent runtime and workbench keep their behavior. */
-export function NativeAgentShell({ native, sidebar, title, onNew, children }: Props) {
+export function NativeAgentShell({ native, sidebar, onNew, children }: Props) {
   const [open, setOpen] = useState(false);
+  const directory = useDirectoryWidth();
+  const { workspaceHeader } = useOutletContext<{ workspaceHeader?: ReactNode }>() || {};
   if (!native) return <div className="h-full flex animate-in fade-in duration-300">{sidebar}{children}</div>;
-  return <div className="um-native-agent um-agent-workspace">
-    <div className="um-agent-directory">{sidebar}</div>
+  return <div className="um-native-agent um-agent-workspace" data-directory-hidden={!directory.width} data-directory-animated={directory.animated || undefined}>
+    <div className="um-agent-directory" style={{ width: directory.width, '--um-directory-content-width': `${directory.contentWidth}px` } as CSSProperties}>
+      <div aria-hidden={!directory.width || undefined} inert={!directory.width} className="um-agent-directory-content um-directory-content">{sidebar}</div>
+      <DirectoryResizeHandle width={directory.width} onChange={directory.changeWidth} label="调整历史对话宽度" />
+    </div>
     <section className="um-agent-main" aria-label="小宇工作区">
       <header className="um-agent-toolbar">
         <div>
+          <button className="um-agent-icon-button um-agent-directory-toggle" onClick={directory.toggle} aria-label={directory.width ? '收起历史对话' : '展开历史对话'} title={directory.width ? '收起历史对话' : '展开历史对话'}><SidebarSimple size={18} /></button>
           <Dialog.Root open={open} onOpenChange={setOpen}>
-            <Dialog.Trigger asChild><button className="um-agent-history-button" aria-label="打开历史对话"><List size={18} /></button></Dialog.Trigger>
+            <Dialog.Trigger asChild><button className="um-agent-history-button" aria-label="打开历史对话"><SidebarSimple size={18} /></button></Dialog.Trigger>
             <Dialog.Portal><Dialog.Overlay className="um-agent-drawer-overlay" /><Dialog.Content className="um-native-agent um-agent-drawer">
               <Dialog.Title className="sr-only">历史对话</Dialog.Title>
               <Dialog.Description className="sr-only">搜索、切换或删除历史对话。</Dialog.Description>
@@ -22,9 +30,8 @@ export function NativeAgentShell({ native, sidebar, title, onNew, children }: Pr
               <div onClick={event => { if ((event.target as HTMLElement).closest('[data-session-select], [data-session-new]')) setOpen(false); }}>{sidebar}</div>
             </Dialog.Content></Dialog.Portal>
           </Dialog.Root>
-          <h1>{title}</h1>
         </div>
-        <button className="um-agent-button" onClick={onNew}><Plus size={16} />新对话</button>
+        <div className="um-agent-toolbar-actions"><button className="um-agent-icon-button um-agent-toolbar-new" onClick={onNew} aria-label="新对话" title="新对话"><Plus size={17} /></button>{workspaceHeader}</div>
       </header>
       {children}
     </section>

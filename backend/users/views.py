@@ -1463,6 +1463,7 @@ class UserCheckInView(APIView):
         if existing:
             return Response({
                 'message': '今日已签到',
+                'created': False,
                 'record': DailyCheckInSerializer(existing).data,
             })
 
@@ -1477,6 +1478,7 @@ class UserCheckInView(APIView):
 
         return Response({
             'message': f'签到成功！连续 {streak} 天',
+            'created': True,
             'record': DailyCheckInSerializer(record).data,
         })
 

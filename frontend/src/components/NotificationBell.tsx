@@ -82,9 +82,9 @@ export const NotificationBell = () => {
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'qa_reply': return <ChatCircle className="h-3 w-3 text-indigo-500" />;
-      case 'memorix_reminder': return <Brain className="h-3 w-3 text-emerald-500" />;
-      default: return <Info className="h-3 w-3 text-blue-500" />;
+      case 'qa_reply': return <ChatCircle className="h-3 w-3 text-muted-foreground" />;
+      case 'memorix_reminder': return <Brain className="h-3 w-3 text-muted-foreground" />;
+      default: return <Info className="h-3 w-3 text-muted-foreground" />;
     }
   };
 
@@ -92,24 +92,24 @@ export const NotificationBell = () => {
     <DropdownMenu open={isOpen} onOpenChange={handleOpen} modal={false}>
       <DropdownMenuTrigger asChild>
         <div className="relative cursor-pointer group">
-          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground relative" aria-label="Notifications">
-            <Bell className={cn("h-4 w-4 transition-[transform]", unreadCount > 0 && "animate-pulse")} />
+          <Button variant="ghost" size="icon" className="um-app-notification-button h-9 w-9 text-muted-foreground hover:bg-muted hover:text-foreground relative" aria-label={unreadCount ? `通知，${unreadCount} 条未读` : '通知'}>
+            <Bell className="h-4 w-4" />
             {unreadCount > 0 && (
               <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 border-2 border-background" />
             )}
           </Button>
         </div>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg z-[var(--z-dropdown)]">
+      <DropdownMenuContent align="end" className="um-app-notifications w-80 p-2 z-[var(--z-dropdown)]">
         <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">
-          <span className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">{`通知中心 (${unreadCount})`}</span>
+          <span className="text-[13px] font-semibold text-muted-foreground">{`通知中心 (${unreadCount})`}</span>
           <div className="flex gap-1">
             {unreadCount > 0 && (
                 <Button
                 variant="ghost"
                 size="sm"
                 onClick={(e) => { e.stopPropagation(); markAsRead(); }}
-                className="h-6 px-2 text-[11px] font-bold text-indigo-600 gap-1 hover:bg-indigo-50 rounded-lg"
+                className="h-6 px-2 text-xs font-medium text-primary gap-1 hover:bg-accent rounded-lg"
                 >
                 已读
                 </Button>
@@ -160,9 +160,9 @@ export const NotificationBell = () => {
                       {getIcon(notif.ntype)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-black text-foreground leading-tight">{notif.title}</p>
+                      <p className="text-[13px] font-medium text-foreground leading-tight">{notif.title}</p>
                       <p className="text-[12px] font-medium text-muted-foreground leading-relaxed mt-1 break-words whitespace-pre-wrap">{notif.content}</p>
-                      <p className="text-[9px] font-bold text-muted-foreground/30 uppercase tracking-tighter mt-1.5">
+                      <p className="text-xs text-muted-foreground mt-1.5">
                         {new Date(notif.created_at).toLocaleString('zh-CN', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
                       </p>
                     </div>

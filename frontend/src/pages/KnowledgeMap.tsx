@@ -23,9 +23,8 @@ export const KnowledgeMap: React.FC = () => {
   const [allNodes, setAllNodes] = useState<KPNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<KPNode | null>(null);
-  const [nodeDetails, setNodeDetails] = useState<{ courses: any[]; articles: any[]; questions: any[] }>({
+  const [nodeDetails, setNodeDetails] = useState<{ courses: any[]; questions: any[] }>({
     courses: [],
-    articles: [],
     questions: [],
   });
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -145,14 +144,12 @@ export const KnowledgeMap: React.FC = () => {
     setSelectedNode(node);
     setDetailsLoading(true);
     try {
-      const [cRes, aRes, qRes] = await Promise.all([
+      const [cRes, qRes] = await Promise.all([
         api.get('/courses/', { params: { kp: node.id } }),
-        api.get('/articles/', { params: { kp: node.id } }),
         api.get('/quizzes/questions/', { params: { kp: node.id } }),
       ]);
       setNodeDetails({
         courses: cRes.data.items ?? cRes.data ?? [],
-        articles: aRes.data.articles || aRes.data || [],
         questions: qRes.data || [],
       });
     } catch (e) { console.debug('[KnowledgeMap] node detail fetch failed:', e);
@@ -163,7 +160,7 @@ export const KnowledgeMap: React.FC = () => {
 
   const handleClearSelection = useCallback(() => {
     setSelectedNode(null);
-    setNodeDetails({ courses: [], articles: [], questions: [] });
+    setNodeDetails({ courses: [], questions: [] });
   }, []);
 
   // Branch filter: subjects for the toolbar dropdown

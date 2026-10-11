@@ -86,6 +86,9 @@ class QuestionListView(generics.ListCreateAPIView):
         if q: qs = qs.filter(text__icontains=q)
         if kp_id: qs = qs.filter(knowledge_point_id=kp_id)
         if q_type: qs = qs.filter(q_type=q_type)
+        difficulty_level = self.request.query_params.get('difficulty_level')
+        if difficulty_level in dict(Question.DIFFICULTY_LEVELS):
+            qs = qs.filter(difficulty_level=difficulty_level)
 
         # 按知识点名称模糊匹配（小宇 action_cards 传的是 kp_name 而非 ID）
         kp_name = self.request.query_params.get('kp_name')

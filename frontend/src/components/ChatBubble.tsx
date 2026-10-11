@@ -123,6 +123,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
                 : "text-muted-foreground/30 hover:text-green-500/70",
             )}
             title="有帮助"
+            aria-label="有帮助"
+            aria-pressed={feedback === true}
           >
             <ThumbsUp className="h-3 w-3" weight={feedback === true ? "fill" : "regular"} />
           </button>
@@ -135,6 +137,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
                 : "text-muted-foreground/30 hover:text-red-400/70",
             )}
             title="不满意"
+            aria-label="不满意"
+            aria-pressed={feedback === false}
           >
             <ThumbsDown className="h-3 w-3" weight={feedback === false ? "fill" : "regular"} />
           </button>

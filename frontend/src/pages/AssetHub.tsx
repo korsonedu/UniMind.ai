@@ -3,7 +3,7 @@
  */
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Brain, ArrowRight, Spinner } from '@phosphor-icons/react';
+import { BookOpen, Brain, ArrowRight, Spinner } from '@phosphor-icons/react';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { quotaStatus } from '@/store/useInstitutionStore';
 import { cn } from '@/lib/utils';
@@ -23,13 +23,7 @@ const TABS = [
     to: '/questions',
     detail: '管理题库，AI 出题，ARC 精修',
   },
-  {
-    key: 'article',
-    label: '文章',
-    icon: FileText,
-    to: '/articles',
-    detail: '发布与管理长文',
-  },
+
 ] as const;
 
 export default function AssetHub() {

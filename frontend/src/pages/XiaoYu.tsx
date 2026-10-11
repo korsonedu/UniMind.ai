@@ -1,12 +1,8 @@
-import { useState, useEffect } from 'react';
 import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle } from '@phosphor-icons/react';
-import { toast } from 'sonner';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import NativeSessionSidebar from '@/components/NativeSessionSidebar';
-import api from '@/lib/api';
 import type { Bot } from '@/hooks/useAgentConversation';
 import { useXiaoYuStore } from '@/store/useXiaoYuStore';
-import { LearningOverview, type DashData } from './xiaoyu/LearningOverview';
 
 const SKILLS = [
   { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
@@ -24,38 +20,15 @@ const SKILLS = [
 
 export const XiaoYu = () => {
   const sharedConversationId = useXiaoYuStore(state => state.conversationId);
-  const [dash, setDash] = useState<DashData | null>(null);
-  const [dashError, setDashError] = useState(false);
-  const [checkingIn, setCheckingIn] = useState(false);
-  const [dashboardVersion, setDashboardVersion] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    api.get<DashData>('/ai/dashboard/', { signal: controller.signal })
-      .then(response => { setDash(response.data); setDashError(false); })
-      .catch(() => { if (!controller.signal.aborted) setDashError(true); });
-    return () => controller.abort();
-  }, [dashboardVersion]);
-  const handleCheckIn = async () => {
-    if (checkingIn || dash?.stats.today_checked_in) return;
-    setCheckingIn(true);
-    try {
-      await api.post('/users/me/checkin/');
-      setDash(previous => previous ? { ...previous, stats: { ...previous.stats, today_checked_in: true } } : previous);
-      setDashboardVersion(value => value + 1);
-    } catch { toast.error('打卡失败，请重试'); }
-    finally { setCheckingIn(false); }
-  };
   return <AgentChatLayout
     appearance="native" layout="inline" inputTourClass="xiaoyu-input"
-    sidebar={props => <NativeSessionSidebar sessions={props.sessions} activeSessionId={props.activeSessionId} onSelect={props.onLoadSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} />}
+    sidebar={props => <NativeSessionSidebar sessions={props.sessions} activeSessionId={props.activeSessionId} onSelect={props.onLoadSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
     findBot={bots => bots.find((bot: Bot) => bot.name === '小宇')}
     skills={SKILLS} typewriterWords={['让小宇分析薄弱知识点', '让小宇安排今天的复习', '让小宇推荐适合的课程', '让小宇看看复习进度']}
     chatPlaceholder="和小宇对话…" resetMessage="已开始新对话"
     landingTitle="小宇" landingDescription="" botDisplayName="小宇"
-    landingBanner={<LearningOverview data={dash} error={dashError} onRetry={() => setDashboardVersion(value => value + 1)} checkingIn={checkingIn} onCheckIn={handleCheckIn} />}
     onDeleteSession={() => {}}
     onLoadSession={(session, handler) => handler(session)}
-    onDone={refresh => { refresh(); setDashboardVersion(value => value + 1); }}
     onStepDone={(step, previous) => previous.map(message => message.toolStep?.call_id === step.call_id ? { ...message, toolStep: step } : message)}
     initialConversationId={sharedConversationId}
   />;

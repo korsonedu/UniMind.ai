@@ -10,8 +10,10 @@ from .views import (
 )
 from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
 from .portal import LearningProgressView, LearningActivityView, WatchLaterListView, WatchLaterDetailView
+from .goal import LearningGoalView
 
 urlpatterns = [
+    path('learning-goal/', LearningGoalView.as_view(), name='course-learning-goal'),
     path('learning-progress/', LearningProgressView.as_view(), name='course-learning-progress'),
     path('learning-activity/', LearningActivityView.as_view(), name='course-learning-activity'),
     path('watch-later/', WatchLaterListView.as_view(), name='course-watch-later'),

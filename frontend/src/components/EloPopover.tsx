@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkle, Trophy, Medal, Spinner, Buildings } from '@phosphor-icons/react';
+import { Trophy, Medal, Spinner, Buildings } from '@phosphor-icons/react';
 import {
   Popover,
   PopoverContent,
@@ -24,7 +24,7 @@ const rankBadge = (rank: number) => {
   if (rank === 1) return <Trophy className="h-4 w-4 text-amber-500 fill-amber-500" aria-hidden="true" />;
   if (rank === 2) return <Medal className="h-4 w-4 text-slate-400 fill-slate-400" aria-hidden="true" />;
   if (rank === 3) return <Medal className="h-4 w-4 text-orange-600 fill-orange-600" aria-hidden="true" />;
-  return <span className="text-[11px] font-black text-muted-foreground tabular-nums w-4 text-center">{rank}</span>;
+  return <span className="text-xs font-semibold text-muted-foreground tabular-nums w-4 text-center">{rank}</span>;
 };
 
 export const EloPopover: React.FC = () => {
@@ -63,39 +63,31 @@ export const EloPopover: React.FC = () => {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          aria-label="ELO score and ranking"
-          className={cn(
-            "flex items-center gap-2 px-3.5 py-1.5 bg-card rounded-full shadow-sm border border-border",
-            "hover:bg-muted hover:border-primary/30 transition-colors duration-200 cursor-pointer",
-            "focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:outline-none",
-            open && "border-primary/40 bg-muted"
-          )}
+          aria-label={`ELO ${user?.elo_score ?? '暂无'}，查看评分与排名`}
+          className="um-app-elo"
         >
-          <Sparkle className="h-3.5 w-3.5 text-amber-500 fill-amber-500" aria-hidden="true" />
-          <span className="text-xs font-bold text-foreground">{user?.elo_score}</span>
+          <span className="um-app-elo-label">ELO</span>
+          <span>{user?.elo_score ?? '暂无'}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="w-[360px] rounded-2xl p-0 bg-card/95 backdrop-blur-xl border-border shadow-lg overflow-hidden"
+        className="um-app-elo-panel w-[360px] p-0 border-border overflow-hidden"
       >
         <div className="px-5 pt-5 pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">ELO 评分</p>
-              <p className="text-2xl font-black text-foreground tracking-tight">{user?.elo_score}</p>
-            </div>
-            <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center">
-              <Sparkle className="h-6 w-6 text-amber-500 fill-amber-500" />
+              <p className="text-xs font-medium text-muted-foreground">ELO 评分</p>
+              <p className="text-[26px] font-semibold text-foreground tabular-nums">{user?.elo_score}</p>
             </div>
           </div>
           {currentUserInList && (
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {`本机构排名第 ${currentUserRank} / ${ranking.length} 人`}
             </p>
           )}
-          <p className="text-[11px] text-muted-foreground leading-relaxed mt-2">
+          <p className="text-xs text-muted-foreground leading-relaxed mt-2">
             ELO 评分根据答题正确率、题目难度动态计算，反应你的真实学术水平。
           </p>
         </div>
@@ -105,14 +97,14 @@ export const EloPopover: React.FC = () => {
         <div className="px-1 py-2">
           <div className="flex items-center gap-2 px-4 pb-2">
             <Buildings className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.15em]">机构排名</span>
+            <span className="text-xs font-medium text-muted-foreground">机构排名</span>
           </div>
 
           {!hasInstitution && (
             <div className="px-4 py-6 text-center">
               <Buildings className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-xs font-bold text-muted-foreground">暂未加入机构</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">加入机构后可查看内部排名</p>
+              <p className="text-xs font-medium text-muted-foreground">暂未加入机构</p>
+              <p className="text-xs text-muted-foreground mt-1">加入机构后可查看内部排名</p>
             </div>
           )}
 
@@ -144,17 +136,17 @@ export const EloPopover: React.FC = () => {
                     <div className="w-6 flex justify-center">{rankBadge(rank)}</div>
                     <Avatar className="h-7 w-7 border border-border">
                       <AvatarImage src={u.avatar_url} />
-                      <AvatarFallback className="text-[9px] font-bold">{(u.nickname || u.username)[0]}</AvatarFallback>
+                      <AvatarFallback className="text-xs font-medium">{(u.nickname || u.username)[0]}</AvatarFallback>
                     </Avatar>
                     <span className={cn(
-                      "flex-1 text-xs font-bold truncate",
+                      "flex-1 text-xs font-medium truncate",
                       isMe ? "text-primary" : "text-foreground"
                     )}>
                       {u.nickname || u.username}
-                      {isMe && <span className="text-[10px] text-muted-foreground ml-1">(你)</span>}
+                      {isMe && <span className="text-xs text-muted-foreground ml-1">(你)</span>}
                     </span>
                     <span className={cn(
-                      "text-xs font-black tabular-nums",
+                      "text-xs font-semibold tabular-nums",
                       isMe ? "text-primary" : "text-muted-foreground"
                     )}>
                       {u.elo_score}
@@ -165,20 +157,20 @@ export const EloPopover: React.FC = () => {
 
               {!currentUserInList && (
                 <div className="px-4 py-3 text-center">
-                  <div className="text-[10px] text-muted-foreground/60 mb-1">…</div>
+                  <div className="text-xs text-muted-foreground/60 mb-1">…</div>
                   <div className="flex items-center gap-3 px-4 py-2 mx-1 rounded-xl bg-primary/5 border border-primary/10">
                     <div className="w-6 flex justify-center">
-                      <span className="text-[11px] font-black text-muted-foreground tabular-nums">-</span>
+                      <span className="text-xs font-semibold text-muted-foreground tabular-nums">-</span>
                     </div>
                     <Avatar className="h-7 w-7 border border-border">
                       <AvatarImage src={user?.avatar_url} />
-                      <AvatarFallback className="text-[9px] font-bold">{user?.username?.[0]}</AvatarFallback>
+                      <AvatarFallback className="text-xs font-medium">{user?.username?.[0]}</AvatarFallback>
                     </Avatar>
-                    <span className="flex-1 text-xs font-bold text-primary truncate">
+                    <span className="flex-1 text-xs font-medium text-primary truncate">
                       {user?.nickname || user?.username}
-                      <span className="text-[10px] text-muted-foreground ml-1">(你)</span>
+                      <span className="text-xs text-muted-foreground ml-1">(你)</span>
                     </span>
-                    <span className="text-xs font-black tabular-nums text-primary">{user?.elo_score}</span>
+                    <span className="text-xs font-semibold tabular-nums text-primary">{user?.elo_score}</span>
                   </div>
                 </div>
               )}

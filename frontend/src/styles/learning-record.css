@@ -1,0 +1,88 @@
+@import './design-tokens.css';
+
+.um-learning-record { max-width: 1120px; margin: 0 auto; font-family: var(--um-font-family); font-size: 13px; line-height: 1.5; color: var(--um-color-text); }
+.um-record-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.um-record-header h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.4px; }
+.um-record-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 5px 10px; font: inherit; border: 1px solid var(--um-color-border); border-radius: 8px; background: var(--um-color-surface); transition: background-color var(--um-motion-fast); }
+.um-record-button:hover:not(:disabled) { background: var(--um-color-hover); }
+.um-record-button:disabled { color: var(--um-color-text-muted); cursor: default; }
+.um-record-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--um-color-border); margin-bottom: 20px; }
+.um-record-tabs a { padding: 0 0 10px; border-bottom: 2px solid transparent; color: var(--um-color-text-muted); }
+.um-record-tabs a[aria-current='page'] { color: var(--um-color-accent); border-bottom-color: var(--um-color-accent); font-weight: 500; }
+.um-record-loading { display: grid; gap: 20px; }
+.um-record-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 16px; color: var(--um-color-text-muted); }
+.um-record-empty a { color: var(--um-color-accent); text-decoration: underline; }
+.um-record-identity { display: flex; gap: 12px; align-items: baseline; margin-bottom: 16px; }
+.um-record-identity span:first-child { font-weight: 500; }
+.um-record-identity span:last-child { color: var(--um-color-text-muted); font-size: 12px; }
+.um-record-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0; padding-bottom: 16px; }
+.um-record-metrics > div { padding: 0 20px; border-left: 1px solid var(--um-color-border); }
+.um-record-metrics > div:first-child { padding-left: 0; border-left: 0; }
+.um-record-metrics dt { color: var(--um-color-text-muted); font-size: 12px; }
+.um-record-metrics dd { margin: 6px 0 0; font-size: 28px; line-height: 1.3; font-weight: 600; font-variant-numeric: tabular-nums; }
+.um-record-metrics small { margin-left: 4px; font-size: 13px; font-weight: 400; color: var(--um-color-text-muted); }
+.um-record-details { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 12px 0; border-block: 1px solid var(--um-color-border); margin: 0; font-size: 12px; }
+.um-record-details > div { display: flex; gap: 8px; }
+.um-record-details dt { color: var(--um-color-text-muted); }
+.um-record-details dd { font-variant-numeric: tabular-nums; }
+.um-record-charts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; padding: 20px 0; border-bottom: 1px solid var(--um-color-border); }
+.um-record-charts > section { min-width: 0; }
+.um-record-charts > section + section { border-left: 1px solid var(--um-color-border); padding-left: 24px; }
+.um-learning-record h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.um-record-chart { height: 210px; margin-top: 12px; }
+.um-record-chart-empty { min-height: 210px; display: flex; align-items: center; justify-content: center; color: var(--um-color-text-muted); }
+.um-record-subjects { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 8px; padding: 0; list-style: none; font-size: 12px; }
+.um-record-subjects li { display: flex; gap: 8px; color: var(--um-color-text-muted); }
+.um-record-subjects strong { color: var(--um-color-text); font-weight: 500; }
+.um-record-section { padding: 16px 0; border-bottom: 1px solid var(--um-color-border); }
+.um-record-section header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.um-record-section a { color: var(--um-color-accent); font-size: 12px; }
+.um-record-section a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.um-record-table-scroll { overflow-x: auto; }
+.um-learning-record table { width: 100%; text-align: left; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.um-learning-record th { color: var(--um-color-text-muted); font-weight: 400; }
+.um-learning-record :is(th,td) { padding: 8px 12px; white-space: nowrap; border-bottom: 1px solid var(--um-color-border); }
+.um-learning-record :is(th,td):first-child { padding-left: 0; }
+.um-learning-record :is(th,td):not(:first-child) { text-align: right; }
+.um-learning-record tbody tr:last-child td { border-bottom: 0; }
+.um-record-unlocked { display: flex; flex-wrap: wrap; gap: 10px 32px; list-style: none; padding: 0; }
+.um-record-unlocked li { display: flex; flex-direction: column; gap: 2px; }
+.um-record-unlocked li span:last-child, .um-record-muted { font-size: 12px; color: var(--um-color-text-muted); }
+.um-achievement-summary { display: flex; align-items: center; gap: 32px; padding-bottom: 18px; }
+.um-achievement-summary > div { min-width: 100px; flex-shrink: 0; }
+.um-achievement-summary strong { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.um-achievement-summary strong span { font-size: 14px; font-weight: 400; color: var(--um-color-text-muted); }
+.um-achievement-summary p { margin: 2px 0 0; font-size: 12px; color: var(--um-color-text-muted); }
+.um-learning-record progress { display: block; width: 100%; height: 4px; border: 0; border-radius: 4px; overflow: hidden; background: var(--um-color-hover); accent-color: var(--um-color-accent); }
+.um-learning-record progress::-webkit-progress-bar { background: var(--um-color-hover); }
+.um-learning-record progress::-webkit-progress-value { background: var(--um-color-accent); }
+.um-learning-record progress::-moz-progress-bar { background: var(--um-color-accent); }
+.um-achievement-summary > progress { max-width: 240px; flex: 1; min-width: 0; }
+.um-learning-record .um-achievement-filters { display: flex; flex-wrap: wrap; justify-content: flex-start; width: auto; gap: 4px; height: auto; padding: 0 0 12px; background: transparent; }
+.um-achievement-filters [role='tab'] { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 400; color: var(--um-color-text-muted); box-shadow: none; }
+.um-achievement-filters [role='tab'][data-state='active'] { background: var(--um-color-selected); color: var(--um-color-accent); font-weight: 500; box-shadow: none; }
+.um-achievement-list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--um-color-border); }
+.um-achievement-list li { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--um-color-border); }
+.um-achievement-status { display: flex; justify-content: center; align-items: center; width: 28px; height: 28px; flex-shrink: 0; color: var(--um-color-accent); }
+.um-achievement-status > span { width: 6px; height: 6px; border: 1px solid var(--um-color-text-muted); border-radius: 50%; }
+.um-achievement-description { flex: 1; min-width: 0; }
+.um-achievement-description h2 { font-size: 13px; font-weight: 500; }
+.um-achievement-description p { margin: 3px 0 0; color: var(--um-color-text-muted); font-size: 12px; }
+.um-achievement-progress { width: 112px; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.um-achievement-progress time { color: var(--um-color-text-muted); }
+.um-achievement-list li[data-unlocked='true'] .um-achievement-progress > span { color: var(--um-color-accent); }
+@media(max-width:700px) {
+  .um-record-header { margin-bottom: 12px; }
+  .um-record-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px 0; }
+  .um-record-metrics > div:nth-child(3) { border-left: 0; padding-left: 0; }
+  .um-record-metrics dd { font-size: 24px; }
+  .um-record-charts { grid-template-columns: minmax(0,1fr); gap: 20px; }
+  .um-record-charts > section + section { border-left: 0; padding-left: 0; border-top: 1px solid var(--um-color-border); padding-top: 20px; }
+  .um-record-button, .um-record-tabs a, .um-achievement-filters [role='tab'] { min-height: 44px; }
+  .um-record-tabs a { display: inline-flex; align-items: center; padding-bottom: 0; }
+  .um-achievement-summary { gap: 20px; }
+  .um-achievement-list li { gap: 8px; flex-wrap: wrap; }
+  .um-achievement-progress { width: 100%; margin-left: 36px; text-align: left; flex-direction: row; align-items: center; gap: 12px; }
+  .um-achievement-progress > progress { flex: 1; max-width: 120px; }
+  .um-record-section header a { display: inline-flex; align-items: center; min-height: 44px; }
+}

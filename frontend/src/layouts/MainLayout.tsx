@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, FileText, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront, Code } from '@phosphor-icons/react';
+import { BookOpen, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront, Code } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,6 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { TrialBanner } from '@/components/TrialBanner';
 import { EloPopover } from '@/components/EloPopover';
-import { AchievementPill } from '@/components/AchievementPill';
 import { InvitePopover } from '@/pages/workbench/InvitePopover';
 
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -44,6 +43,7 @@ import {
 import { toast } from 'sonner';
 import UnimindLogo from '../../Unimind_logo.png';
 import { PersistentUploadToast } from '@/components/PersistentUploadToast';
+import '@/styles/app-shell.css';
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 
 interface SidebarItemProps {
@@ -61,10 +61,10 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: SidebarItemPr
         <Button variant="ghost" asChild className={cn(
           "w-full h-10 rounded-lg cursor-pointer",
           collapsed ? "justify-center p-0" : "justify-start gap-3 px-3",
-          active ? "bg-card text-foreground shadow-sm border border-border" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}>
           <Link to={to} aria-label={label} aria-current={active ? 'page' : undefined}>
-            <Icon className={cn("h-[18px] w-[18px] shrink-0", active ? "text-foreground" : "text-muted-foreground")} aria-hidden="true" />
+            <Icon className={cn("h-[18px] w-[18px] shrink-0", active ? "text-primary" : "text-muted-foreground")} aria-hidden="true" />
             <span className={collapsed ? "sr-only" : "font-medium text-[13px] truncate"}>{label}</span>
           </Link>
         </Button>
@@ -77,8 +77,6 @@ const SidebarItem = ({ to, icon: Icon, label, active, collapsed }: SidebarItemPr
 
 const isMobileAllowedPath = (pathname: string) =>
   pathname === '/' ||
-  pathname === '/articles' ||
-  pathname.startsWith('/article/') ||
   pathname === '/qa' ||
   pathname.startsWith('/qa/') ||
   pathname === '/study' ||
@@ -157,7 +155,7 @@ export const MainLayout: React.FC = () => {
   const user = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
   const updateUser = useAuthStore(s => s.updateUser);
-  const { primaryColor, pageTitle } = useSystemStore();
+  const { primaryColor } = useSystemStore();
   const collapsed = true;
   const [studentPreview, setStudentPreview] = useState(false);
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
@@ -173,6 +171,7 @@ export const MainLayout: React.FC = () => {
 
   const isFullPage = ['/platform'].includes(location.pathname);
   const isEdgeToEdge = ['/workbench', '/xiaoyu', '/courses'].includes(location.pathname) || /^\/course\/\d+/.test(location.pathname);
+  const isIntegratedWorkspace = ['/xiaoyu', '/courses'].includes(location.pathname) || /^\/course\/\d+/.test(location.pathname);
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && (
     location.pathname.startsWith('/tests/session') ||
@@ -323,7 +322,6 @@ export const MainLayout: React.FC = () => {
     { to: '/workbench', icon: Robot, label: '工作台' },
     { to: '/questions', icon: Brain, label: '题库' },
     { to: '/courses', icon: BookOpen, label: '课程' },
-    { to: '/articles', icon: FileText, label: '文章' },
     { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
     { to: '/qa', icon: ChatCircleText, label: '答疑' },
     { to: '/marketplace', icon: Storefront, label: '内容市场' },
@@ -331,15 +329,13 @@ export const MainLayout: React.FC = () => {
     ...(user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: '维护中心' } as NavItem] : []),
   ];
 
-  // ── 学生端 9 套件 ──
+  // ── 学生学习功能 ──
   const studentNavItems: NavItem[] = [
     { to: '/xiaoyu', icon: Robot, label: '小宇' },
-    { to: '/achievements', icon: Trophy, label: '成就' },
-    { to: '/report-card', icon: FileText, label: '成绩报告' },
+    { to: '/report-card', icon: ChartBar, label: '学习记录' },
     { to: '/courses', icon: BookOpen, label: '课程中心' },
     { to: '/tests', icon: Trophy, label: '习题训练' },
     { to: '/knowledge-map', icon: Brain, label: '知识地图' },
-    { to: '/articles', icon: FileText, label: '文章' },
     { to: '/qa', icon: ChatCircleText, label: '答疑' },
     { to: '/study', icon: Clock, label: '自习室' },
     ...(isPlatformAdmin ? [platformAdminItem] : []),
@@ -351,11 +347,10 @@ export const MainLayout: React.FC = () => {
 
   const mobileNavItems: NavItem[] = effectiveIsInstStudent ? [
         { to: '/xiaoyu', icon: Robot, label: '小宇' },
-        { to: '/achievements', icon: Trophy, label: '成就' },
+        { to: '/report-card', icon: ChartBar, label: '学习记录' },
         { to: '/courses', icon: BookOpen, label: '课程' },
         { to: '/tests', icon: Trophy, label: '做题' },
         { to: '/knowledge-map', icon: Brain, label: '知识' },
-        { to: '/articles', icon: FileText, label: '文章' },
         { to: '/qa', icon: ChatCircleText, label: '答疑' },
         ...(isPlatformAdmin ? [{ to: '/platform', icon: Gauge, label: '平台' } as NavItem] : []),
       ]
@@ -363,7 +358,6 @@ export const MainLayout: React.FC = () => {
         { to: '/workbench', icon: Robot, label: '工作台' },
         { to: '/questions', icon: Brain, label: '题库' },
         { to: '/courses', icon: BookOpen, label: '课程' },
-        { to: '/articles', icon: FileText, label: '文章' },
         { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
         { to: '/qa', icon: ChatCircleText, label: '答疑' },
         { to: '/marketplace', icon: Storefront, label: '市场' },
@@ -372,15 +366,119 @@ export const MainLayout: React.FC = () => {
 
   const visibleMobileNavItems = mobileNavItems.filter(itemVisible);
 
+  const workspaceHeader = user ? <>
+              {/* 学生预览指示 */}
+              {studentPreview && (
+                <div className="um-app-preview-indicator flex items-center gap-1.5 text-xs text-primary font-medium mr-auto">
+                  <Eye className="h-3 w-3" />
+                  <span className="opacity-70">{'学生视角'}</span>
+                  <button onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="ml-1 px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-bold">
+                    {'退出预览'}
+                  </button>
+                </div>
+              )}
+              <div data-tour="header-right" className="um-app-header-actions">
+                <EloPopover />
+                <NotificationBell />
+                <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <button ref={avatarRef} id="avatar-btn" aria-label="账户菜单" className="um-app-avatar-button">
+                    <Avatar className="h-7 w-7">
+                      <AvatarImage src={user?.avatar_url} />
+                      <AvatarFallback className="text-[10px] font-bold">{user?.username?.[0]}</AvatarFallback>
+                    </Avatar>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom" className="um-app-menu w-52 p-1">
+                  <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-muted-foreground">
+                    {user?.nickname || user?.username}
+                    {user.is_member && <ShieldCheck className="h-3 w-3 text-amber-500 inline ml-1" />}
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                    <UserIcon className="h-3.5 w-3.5" />
+                    <span className="font-medium text-[13px]">{'个人设置'}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span className="font-medium text-[13px]">{'方案与账单'}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/achievements')} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                    <Trophy className="h-3.5 w-3.5" />
+                    <span className="font-medium text-[13px]">成就</span>
+                  </DropdownMenuItem>
+                  {!isPlatformAdmin && instInfo && !isInstStudent && (
+                    <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                      <Buildings className="h-3.5 w-3.5" />
+                      <span className="font-medium text-[13px]">机构看板</span>
+                    </DropdownMenuItem>
+                  )}
+                  {!isPlatformAdmin && instInfo && user?.is_institution_owner && (
+                    <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                      <Gear className="h-3.5 w-3.5" />
+                      <span className="font-medium text-[13px]">{'机构设置'}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {!isPlatformAdmin && instInfo && user?.is_institution_admin && (
+                    <DropdownMenuItem id="invite-menu-item" onClick={() => setInvitePopoverOpen(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                      <UserPlus className="h-3.5 w-3.5" />
+                      <span className="font-medium text-[13px]">{'邀请学员'}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {!isPlatformAdmin && instInfo && !isInstStudent && !studentPreview && (
+                    <>
+                      <DropdownMenuItem onClick={() => navigate('/institution/students')} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                        <Users className="h-3.5 w-3.5" />
+                        <span className="font-medium text-[13px]">{'学员管理'}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { setStudentPreview(true); navigate('/xiaoyu'); }} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                        <Eye className="h-3.5 w-3.5" />
+                        <span className="font-medium text-[13px]">{'预览学生端'}</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {studentPreview && (
+                    <DropdownMenuItem onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                      <EyeSlash className="h-3.5 w-3.5" />
+                      <span className="font-medium text-[13px]">{'退出学生端预览'}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {user?.role === 'admin' && (
+                    <DropdownMenuItem onClick={() => navigate('/system-settings')} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                      <Gear className="h-3.5 w-3.5" />
+                      <span className="font-medium text-[13px]">{'外观与系统'}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {user?.is_member && (
+                    <DropdownMenuItem onClick={() => window.dispatchEvent(new Event('open-weekly-report'))} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                      <ChartBar className="h-3.5 w-3.5" />
+                      <span className="font-medium text-[13px]">{'周报'}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {!isInstStudent && myPlanLevel < 3 && (
+                    <DropdownMenuItem onClick={() => setShowUpgradeModal(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer focus:bg-accent focus:text-accent-foreground transition-colors">
+                      <Sparkle className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="font-medium text-[13px]">{'升级方案'}</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator className="my-2 bg-border" />
+                  <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
+                    <SignOut className="h-3.5 w-3.5" />
+                    <span className="font-medium text-[13px]">{'退出登录'}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              </div>
+  </> : null;
+
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
-        <aside data-tour="sidebar" className={cn(
-          "relative border-r border-border flex-col p-2 bg-card/70 backdrop-blur-2xl transition-[width] duration-300 ease-in-out z-0 shrink-0 hidden md:flex",
+      <div className="um-app-shell flex h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
+        <aside data-tour="sidebar" aria-label="应用导航" className={cn(
+          "um-app-rail relative border-r border-border flex-col p-2 z-0 shrink-0 hidden md:flex",
           collapsed ? "w-16" : "w-48"
         )}>
           {/* Logo — simple, clickable */}
-          <div className="mb-6 mt-2 flex justify-center">
+          <div className="um-app-brand flex justify-center">
             <Link to={homePath} className="shrink-0">
               {collapsed ? (
                 <div className="h-10 w-10 rounded-xl overflow-hidden">
@@ -397,7 +495,7 @@ export const MainLayout: React.FC = () => {
               <SidebarItem
                 key={item.to}
                 {...item}
-                active={location.pathname === item.to || location.pathname.startsWith(item.to + '/') || (item.to === '/courses' && location.pathname.startsWith('/course/'))}
+                active={location.pathname === item.to || location.pathname.startsWith(item.to + '/') || (item.to === '/courses' && location.pathname.startsWith('/course/')) || (item.to === '/report-card' && location.pathname === '/achievements')}
                 collapsed={collapsed}
               />
             ))}
@@ -407,173 +505,32 @@ export const MainLayout: React.FC = () => {
         </aside>
 
         <main className={cn(
-          "flex-1 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background",
+          "um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background",
           (isMobileImmersivePage || isMobileStudyPage)
             ? "overflow-hidden pb-0"
+            : isIntegratedWorkspace
+              ? hideMobileBottomNav ? "overflow-hidden pb-0" : "overflow-hidden pb-[calc(61px+env(safe-area-inset-bottom))] md:pb-0"
             : "overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"
         )}>
-          {!isFullPage && !isMobileImmersivePage && user && (
-            <header className="sticky top-0 shrink-0 z-[var(--z-sticky)] hidden md:flex items-center justify-end gap-2 px-6 py-2 border-b border-border bg-background/90 backdrop-blur-xl">
-              {/* 学生预览指示 */}
-              {studentPreview && (
-                <div className="flex items-center gap-1.5 text-xs text-primary font-bold mr-auto">
-                  <Eye className="h-3 w-3" />
-                  <span className="opacity-70">{'学生视角'}</span>
-                  <button onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="ml-1 px-2 py-0.5 rounded-md bg-primary/10 hover:bg-primary/20 transition-colors text-[11px] font-bold">
-                    {'退出预览'}
-                  </button>
-                </div>
-              )}
-              <div data-tour="header-right" className="flex items-center gap-2">
-                <EloPopover />
-                <AchievementPill />
-                <NotificationBell />
-                <DropdownMenu modal={false}>
-                <DropdownMenuTrigger asChild>
-                  <button ref={avatarRef} id="avatar-btn" className="rounded-full border border-border p-0.5 bg-card hover:scale-105 transition-transform">
-                    <Avatar className="h-7 w-7">
-                      <AvatarImage src={user?.avatar_url} />
-                      <AvatarFallback className="text-[10px] font-bold">{user?.username?.[0]}</AvatarFallback>
-                    </Avatar>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="bottom" className="w-52 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg">
-                  <DropdownMenuLabel className="px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                    {user?.nickname || user?.username}
-                    {user.is_member && <ShieldCheck className="h-3 w-3 text-amber-500 inline ml-1" />}
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                    <UserIcon className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">{'个人设置'}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                    <CreditCard className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">{'方案与账单'}</span>
-                  </DropdownMenuItem>
-                  {!isPlatformAdmin && instInfo && user?.is_institution_owner && (
-                    <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <Gear className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{'机构设置'}</span>
-                    </DropdownMenuItem>
-                  )}
-                  {!isPlatformAdmin && instInfo && user?.is_institution_admin && (
-                    <DropdownMenuItem id="invite-menu-item" onClick={() => setInvitePopoverOpen(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <UserPlus className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{'邀请学员'}</span>
-                    </DropdownMenuItem>
-                  )}
-                  {!isPlatformAdmin && instInfo && !isInstStudent && !studentPreview && (
-                    <>
-                      <DropdownMenuItem onClick={() => navigate('/institution/students')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                        <Users className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{'学员管理'}</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { setStudentPreview(true); navigate('/xiaoyu'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                        <Eye className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{'预览学生端'}</span>
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  {studentPreview && (
-                    <DropdownMenuItem onClick={() => { setStudentPreview(false); navigate('/workbench'); }} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <EyeSlash className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{'退出学生端预览'}</span>
-                    </DropdownMenuItem>
-                  )}
-                  {user?.role === 'admin' && (
-                    <DropdownMenuItem onClick={() => navigate('/system-settings')} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <Gear className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{'外观与系统'}</span>
-                    </DropdownMenuItem>
-                  )}
-                  {user?.is_member && (
-                    <DropdownMenuItem onClick={() => window.dispatchEvent(new Event('open-weekly-report'))} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <ChartBar className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{'周报'}</span>
-                    </DropdownMenuItem>
-                  )}
-                  {!isInstStudent && myPlanLevel < 3 && (
-                    <DropdownMenuItem onClick={() => setShowUpgradeModal(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <Sparkle className="h-3.5 w-3.5 text-amber-500" />
-                      <span className="font-bold text-xs">{'升级方案'}</span>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator className="my-2 bg-border" />
-                  <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-3 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
-                    <SignOut className="h-3.5 w-3.5" />
-                    <span className="font-bold text-xs">{'退出登录'}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              </div>
+          {!isFullPage && !isMobileImmersivePage && !isIntegratedWorkspace && user && (
+            <header className="um-app-global-header sticky top-0 shrink-0 z-[var(--z-sticky)] hidden md:flex items-center justify-end gap-2 px-6">
+              {workspaceHeader}
             </header>
           )}
-          {!isFullPage && !isMobileImmersivePage && (
-            <header className="sticky top-0 h-14 shrink-0 border-b border-border bg-background/90 backdrop-blur-xl z-[var(--z-sticky)] px-4 flex items-center justify-between md:hidden">
-              <div className="flex items-center gap-2 min-w-0">
-                <img src={UnimindLogo} alt="Unimind.ai" className="w-20 h-5 object-contain shrink-0 brand-logo-invert" />
-                {pageTitle && <span className="text-xs font-black tracking-tight truncate">{pageTitle}</span>}
-              </div>
-              {user && (
-                <DropdownMenu modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <button className="rounded-full border border-border p-0.5 bg-card">
-                      <Avatar className="h-7 w-7">
-                        <AvatarImage src={user?.avatar_url} />
-                        <AvatarFallback className="text-[10px] font-bold">{user?.username?.[0]}</AvatarFallback>
-                      </Avatar>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 rounded-2xl p-2 bg-card/95 backdrop-blur-xl border-border shadow-lg">
-                    <DropdownMenuItem onClick={() => navigate('/settings')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <UserIcon className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{'个人设置'}</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/billing')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                      <CreditCard className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{'方案与账单'}</span>
-                    </DropdownMenuItem>
-                    {!isPlatformAdmin && instInfo && user?.is_institution_owner && (
-                      <DropdownMenuItem onClick={() => navigate('/institution/admin')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                        <Gear className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{'机构设置'}</span>
-                      </DropdownMenuItem>
-                    )}
-                    {/* 机构看板：管理员可见 */}
-                    {!isPlatformAdmin && instInfo && !isInstStudent && (
-                      <DropdownMenuItem onClick={() => navigate('/institution')} className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors">
-                        <ChartBar className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{'机构看板'}</span>
-                      </DropdownMenuItem>
-                    )}
-                    {!isPlatformAdmin && instInfo && user?.is_institution_admin && (
-                      <DropdownMenuItem
-                        onClick={() => setInvitePopoverOpen(true)}
-                        className="rounded-xl px-3 py-2 gap-2 cursor-pointer focus:bg-primary focus:text-primary-foreground transition-colors"
-                      >
-                        <UserPlus className="h-3.5 w-3.5" />
-                        <span className="font-bold text-xs">{'复制邀请链接'}</span>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator className="my-2 bg-border" />
-                    <DropdownMenuItem onClick={() => setShowLogoutAlert(true)} className="rounded-xl px-3 py-2 gap-2 cursor-pointer text-destructive focus:bg-destructive focus:text-destructive-foreground transition-colors">
-                      <SignOut className="h-3.5 w-3.5" />
-                      <span className="font-bold text-xs">{'退出登录'}</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+          {!isFullPage && !isMobileImmersivePage && !isIntegratedWorkspace && (
+            <header className="um-app-global-header sticky top-0 h-12 shrink-0 z-[var(--z-sticky)] px-3 flex items-center justify-end gap-2 md:hidden">
+              {workspaceHeader}
             </header>
           )}
           <TrialBanner />
           <div className={cn(
-            "flex-1 w-full relative min-h-0",
+            "um-app-page-content flex-1 w-full relative min-h-0",
             (isMobileImmersivePage || isMobileStudyPage)
               ? "px-0 py-0 h-full overflow-hidden"
               : isMobileVideoPage
-                ? "px-0 py-4"
+                ? "px-0 py-0"
                 : !isFullPage && !isEdgeToEdge && "px-4 py-4 md:px-8 md:py-6",
-            isMobile && !hideMobileBottomNav && "pb-20",
+            isMobile && !hideMobileBottomNav && !isIntegratedWorkspace && "pb-20",
           )}>
             {/* Preview mode banner */}
             {previewMode && previewInstitution && (
@@ -588,7 +545,7 @@ export const MainLayout: React.FC = () => {
                 </Button>
               </div>
             )}
-            <Outlet />
+            <Outlet context={{ workspaceHeader }} />
           </div>
         </main>
 
@@ -596,14 +553,14 @@ export const MainLayout: React.FC = () => {
           "md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]",
           hideMobileBottomNav && "hidden"
         )}>
-          <div className="flex items-center justify-around px-1 py-2">
+          <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">
             {visibleMobileNavItems.map((item) => {
               const isActive = (() => {
                 const p = location.pathname;
                 if (item.to === '/courses') return p.startsWith('/courses') || p.startsWith('/course');
                 if (item.to === '/tests') return p.startsWith('/tests');
                 if (item.to === '/knowledge-map') return p.startsWith('/knowledge-map');
-                if (item.to === '/articles') return p === '/articles' || p.startsWith('/article/');
+                if (item.to === '/report-card') return p === '/report-card' || p === '/achievements';
                 if (item.to === '/qa') return p.startsWith('/qa');
                 return p === item.to || p.startsWith(`${item.to}/`);
               })();
@@ -611,8 +568,9 @@ export const MainLayout: React.FC = () => {
                 <Link
                   key={item.to}
                   to={item.to}
+                  aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                    "relative flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-lg transition-colors min-h-[44px] min-w-[44px]",
+                    "relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]",
                     isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
                   )}
                 >

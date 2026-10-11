@@ -1,8 +1,8 @@
+import '@/styles/practice.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft, Bell, CheckCircle, CaretLeft, CaretRight, Spinner, Star } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ import {
   type LearningReminderSettings,
 } from '@/lib/learningReminders';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { AssessmentDialog } from './test-ladder/AssessmentDialog';
 
 const hasAnswer = (val: any) => {
   if (typeof val === 'string') return val.trim().length > 0;
@@ -46,44 +47,40 @@ export const TestSessionPage: React.FC = () => {
     return ['balanced', 'new_first', 'review_first'].includes(p) ? p : 'balanced';
   }, [searchParams]);
 
-  const kpId = useMemo(() => {
-    const kp = searchParams.get('kp_name') || searchParams.get('kp');
-    return kp || undefined;
-  }, [searchParams]);
-
-  const returnPath = searchParams.get('source') === 'xiaoyu' ? '/xiaoyu' : '/tests';
+  const requestParams = useMemo(() => {
+    const params = new URLSearchParams({ limit: String(questionLimit), preference });
+    for (const key of ['kp', 'kp_name', 'sub_ids', 'difficulty_level', 'ids']) {
+      const value = searchParams.get(key);
+      if (value) params.set(key, value);
+    }
+    return params.toString();
+  }, [searchParams, questionLimit, preference]);
+  const returnPath = searchParams.get('source') === 'xiaoyu' ? '/xiaoyu' : searchParams.has('ids') ? '/tests/review' : '/tests';
   const practiceDone = searchParams.get('source') === 'xiaoyu' && searchParams.get('practiceDone') === '1';
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchQuestions = async () => {
       setLoading(true);
+      setEmpty(false);
       try {
-        const res = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=${preference}${kpId ? `&kp_name=${kpId}` : ''}`);
-        if (!res.data?.length) {
-          // 任意 preference 无题目时 fallback 到 balanced
-          if (preference !== 'balanced') {
-            const fallback = await api.get(`/quizzes/questions/?limit=${questionLimit}&preference=balanced${kpId ? `&kp_name=${kpId}` : ''}`);
-            if (fallback.data?.length) {
-              setQuestions(fallback.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
-              setLoading(false);
-              return;
-            }
-          }
-          setEmpty(true);
-          setLoading(false);
-          return;
+        let response = await api.get(`/quizzes/questions/?${requestParams}`, { signal: controller.signal });
+        if (!response.data?.length && preference !== 'balanced' && !searchParams.has('ids')) {
+          const fallback = new URLSearchParams(requestParams);
+          fallback.set('preference', 'balanced');
+          response = await api.get(`/quizzes/questions/?${fallback}`, { signal: controller.signal });
         }
-        setQuestions(res.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
-      } catch (e) {
-        toast.error('题目加载失败');
-        navigate(returnPath, { replace: true });
-      } finally {
-        setLoading(false);
-      }
+        setEmpty(!response.data?.length);
+        setQuestions((response.data || []).map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
+        setAnswers({});
+        setCurrentIdx(0);
+      } catch {
+        if (!controller.signal.aborted) { toast.error('题目加载失败'); navigate(returnPath, { replace: true }); }
+      } finally { if (!controller.signal.aborted) setLoading(false); }
     };
-
     fetchQuestions();
-  }, [navigate, questionLimit]);
+    return () => controller.abort();
+  }, [navigate, requestParams, preference, returnPath, searchParams]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -135,7 +132,7 @@ export const TestSessionPage: React.FC = () => {
           delete next[qId];
           return next;
         });
-        toast.success('稳稳拿捏');
+        toast.success('已标记掌握');
       }
     } catch (e) {
       toast.error('操作失败');
@@ -194,11 +191,30 @@ export const TestSessionPage: React.FC = () => {
     return null;
   }
 
+  if (!isMobile) {
+    return (
+      <AssessmentDialog
+        open
+        onOpenChange={() => navigate(returnPath, { replace: true })}
+        questions={questions}
+        currentIdx={currentIdx}
+        setCurrentIdx={setCurrentIdx}
+        answers={answers}
+        handleSelect={(id, value) => setAnswers(prev => ({ ...prev, [id]: value }))}
+        toggleMastered={toggleMastered}
+        toggleFavorite={toggleFavorite}
+        handleSubmit={handleSubmit}
+        isSubmitting={isSubmitting}
+        gradingMessage={isSubmitting ? '正在提交…' : ''}
+      />
+    );
+  }
+
   return (
-    <div className="h-full min-h-0 bg-background text-foreground flex flex-col overflow-hidden">
+    <div className="um-practice-session h-full min-h-0 bg-background text-foreground flex flex-col overflow-hidden">
       {/* ── Header ── */}
       <header className="h-11 shrink-0 border-b border-border px-3 flex items-center justify-between bg-card">
-        <Link to="/tests">
+        <Link to={returnPath}>
           <Button variant="ghost" size="sm" className="h-8 px-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted">
             <ArrowLeft className="h-4 w-4 mr-1" />
             返回
@@ -208,7 +224,7 @@ export const TestSessionPage: React.FC = () => {
           {isMobile && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground/60 hover:text-muted-foreground">
+                <Button variant="ghost" size="icon" aria-label="提醒设置" className="h-8 w-8 rounded-lg text-muted-foreground/60 hover:text-muted-foreground">
                   <Bell className="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
@@ -249,7 +265,7 @@ export const TestSessionPage: React.FC = () => {
           <div className="bg-card border border-border rounded-xl p-4 space-y-4">
             {/* Metadata row */}
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className="rounded-md px-2 py-0 h-5 text-[10px] font-semibold bg-muted text-muted-foreground border-none hover:bg-muted">
+              <span className="text-xs text-muted-foreground">
                 {currentQ.q_type === 'objective'
                   ? '客观选择'
                   : currentQ.subjective_type === 'calculate'
@@ -257,14 +273,14 @@ export const TestSessionPage: React.FC = () => {
                     : currentQ.subjective_type === 'noun'
                       ? '名词解释'
                       : '主观论述'}
-              </Badge>
+              </span>
               <span className="text-[10px] font-medium text-muted-foreground">
                 {currentQ.difficulty_level_display || '适当'} · ELO {currentQ.difficulty || 1200}
               </span>
             </div>
 
             {/* Question text */}
-            <div className="text-sm font-medium text-foreground leading-relaxed">
+            <div className="text-[15px] font-normal text-foreground leading-relaxed">
               <MarkdownContent content={processMathContent(currentQ.text)} />
             </div>
 
@@ -273,24 +289,25 @@ export const TestSessionPage: React.FC = () => {
               <Button
                 variant="ghost"
                 size="sm"
+                aria-pressed={!!currentQ.is_mastered}
                 onClick={() => toggleMastered(currentQ.id)}
                 className={cn(
                   'h-7.5 px-2.5 rounded-lg text-[11px] font-medium gap-1.5 transition-colors',
-                  currentQ.is_mastered
-                    ? 'text-emerald-600 bg-emerald-50'
-                    : 'text-muted-foreground/60 hover:text-emerald-600 hover:bg-emerald-50/50'
+                  currentQ.is_mastered ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-muted'
                 )}
               >
                 <CheckCircle className="h-3.5 w-3.5" />
-                {currentQ.is_mastered ? '已拿捏' : '拿捏'}
+                {currentQ.is_mastered ? '已掌握' : '标记掌握'}
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={currentQ.is_favorite ? '取消收藏' : '收藏题目'}
+                aria-pressed={!!currentQ.is_favorite}
                 onClick={() => toggleFavorite(currentQ.id)}
                 className={cn(
                   'h-7.5 w-7.5 rounded-lg transition-colors',
-                  currentQ.is_favorite ? 'text-amber-500 bg-amber-50' : 'text-muted-foreground/60 hover:text-amber-500 hover:bg-amber-50/50'
+                  currentQ.is_favorite ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-muted'
                 )}
               >
                 <Star className={cn('h-3.5 w-3.5', currentQ.is_favorite && 'fill-current')} />
@@ -299,8 +316,8 @@ export const TestSessionPage: React.FC = () => {
 
             {/* Mastered banner */}
             {currentQ.is_mastered && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 rounded-lg text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                <CheckCircle className="w-3.5 h-3.5" /> 已拿捏
+              <div className="flex items-center gap-2 py-2 text-xs text-primary">
+                <CheckCircle className="w-3.5 h-3.5" /> 已掌握
               </div>
             )}
 
@@ -313,33 +330,32 @@ export const TestSessionPage: React.FC = () => {
                     return (
                       <button
                         key={i}
-                        disabled={currentQ.is_mastered}
+                        disabled={currentQ.is_mastered || isSubmitting}
+                        aria-pressed={selected}
                         onClick={() => setAnswers((prev) => ({ ...prev, [currentQ.id]: opt }))}
                         className={cn(
-                          'w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all duration-200 active:scale-[0.995]',
+                          'w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-colors duration-150',
                           selected
                             ? 'bg-primary border-primary text-primary-foreground shadow-sm'
                             : 'bg-card border-border hover:border-primary/40 active:bg-muted/50',
                           currentQ.is_mastered && 'opacity-50'
                         )}
                       >
-                        <span className={cn(
-                          'font-display text-base font-bold italic w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors',
-                          selected ? 'bg-primary-foreground/10 text-primary-foreground' : 'bg-muted text-muted-foreground'
-                        )}>
+                        <span className="um-practice-option-letter">
                           {String.fromCharCode(65 + i)}
                         </span>
-                        <span className={cn('text-[13px] leading-snug', selected ? 'text-white' : 'text-foreground/80')}>
+                        <div className="min-w-0 flex-1 text-[13px] leading-relaxed">
                           <MarkdownContent content={processMathContent(opt)} />
-                        </span>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
               ) : (
                 <textarea
+                  aria-label="作答内容"
                   value={answers[currentQ.id] || ''}
-                  disabled={currentQ.is_mastered}
+                  disabled={currentQ.is_mastered || isSubmitting}
                   onChange={(e) => setAnswers((prev) => ({ ...prev, [currentQ.id]: e.target.value }))}
                   className={cn(
                     'w-full bg-muted/50 border border-border rounded-xl p-4 min-h-[180px] text-sm font-medium leading-relaxed',
