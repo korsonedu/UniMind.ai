@@ -65,8 +65,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
         ref={scrollContainerRef}
         onScroll={onScroll}
         className={cn(
-          "flex-1 overflow-y-auto space-y-4 scrollbar-thin scrollbar-thumb-primary/10 relative",
-          isMobile ? "min-h-0 p-3" : "p-8"
+          "um-study-messages flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/10 relative",
+          isMobile ? "min-h-0 p-3" : "p-5"
         )}
       >
         <div className="max-w-4xl mx-auto space-y-4 pb-4">
@@ -76,18 +76,15 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             if (isTask && !showOthersBroadcast && !isMe) return null;
             if (isTask) return (
               <div key={msg.id} className="flex flex-col items-center py-0.5 animate-in fade-in zoom-in-95 duration-300">
-                <div className={cn("px-6 py-1.5 rounded-2xl border flex items-center gap-3 shadow-sm relative group/task",
-                  msg.content.includes('💪') ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" :
-                  msg.content.includes('✅') ? "bg-blue-500/10 text-blue-600 border-blue-500/20" :
-                  msg.content.includes('📅') ? "bg-orange-500/10 text-orange-600 border-orange-500/20" :
-                  "bg-red-500/10 text-red-600 border-red-500/20"
+                <div className={cn("um-study-event px-3 py-1.5 flex items-center gap-2 relative group/task",
+                  msg.content.includes('❌') && "is-danger"
                 )}>
                    {msg.content.includes('💪') ? <Lightning className="h-3 w-3 fill-emerald-500 text-emerald-500" /> :
                     msg.content.includes('✅') ? <CheckCircle className="h-3 w-3 text-blue-500" /> :
                     msg.content.includes('📅') ? <Calendar className="h-3 w-3 text-orange-500" /> :
                     <XCircle className="h-3 w-3 text-red-500" />
                    }
-                   <span className="text-[11px] font-bold tracking-tight text-foreground">
+                   <span className="text-xs text-foreground">
                      <span className="opacity-70">{msg.user_detail.nickname || msg.user_detail.username}</span>
                      {' '}{msg.content}
                    </span>
@@ -104,21 +101,20 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             );
             const isMediaOnly = msg.content.trim().startsWith('![') && msg.content.trim().endsWith(')');
             return (
-              <div key={msg.id} className={cn("flex gap-4 group animate-in fade-in slide-in-from-bottom-2 duration-300", isMe ? "flex-row-reverse text-right" : "flex-row text-left")}>
-                <Avatar className="h-9 w-9 border border-border shadow-sm shrink-0 group-hover:scale-105 transition-transform">
+              <div key={msg.id} className={cn("um-study-message flex gap-3 group animate-in fade-in slide-in-from-bottom-2 duration-300", isMe ? "flex-row-reverse text-right" : "flex-row text-left")}>
+                <Avatar className="h-8 w-8 border border-border shrink-0">
                   <AvatarImage src={msg.user_detail.avatar_url} />
                   <AvatarFallback className="text-[11px] font-bold bg-muted">{(msg.user_detail.nickname || msg.user_detail.username)[0]}</AvatarFallback>
                 </Avatar>
                 <div className={cn("flex flex-col gap-1 max-w-[70%] w-fit", isMe ? "items-end" : "items-start")}>
                   <div className="flex items-center gap-2 px-1 text-muted-foreground">
-                    <span className="text-[11px] font-bold uppercase tracking-widest">{msg.user_detail.nickname || msg.user_detail.username}</span>
+                    <span className="text-xs font-medium">{msg.user_detail.nickname || msg.user_detail.username}</span>
                   </div>
                   <div
                     className={cn(
-                      "text-[13px] leading-relaxed break-words overflow-hidden text-left w-fit h-fit",
-                      !isMediaOnly && (isMe ? "p-2 px-3 bg-slate-900 text-white rounded-2xl rounded-tr-none shadow-sm font-medium" : "p-2 px-3 rounded-2xl rounded-tl-none shadow-sm font-medium")
+                      "um-study-message-bubble text-sm leading-relaxed break-words overflow-hidden text-left w-fit h-fit",
+                      !isMediaOnly && (isMe ? "is-own p-2.5 px-3.5" : "is-other p-2.5 px-3.5")
                     )}
-                    style={!isMediaOnly && !isMe ? { backgroundColor: '#ffb0b3', color: '#0f172a' } : {}}
                   >
                     <MarkdownContent
                       content={processMathContent(msg.content)}
@@ -152,7 +148,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       </div>
 
       {!isAtBottom && (
-        <Button onClick={() => onScrollToBottom(true)} size="icon" className="absolute bottom-24 right-8 rounded-full h-10 w-10 shadow-lg bg-primary text-primary-foreground z-50 hover:scale-110 transition-transform opacity-80 hover:opacity-100 border border-white/10">
+        <Button onClick={() => onScrollToBottom(true)} size="icon" className="um-study-scroll-bottom absolute bottom-24 right-8 h-10 w-10 bg-primary text-primary-foreground z-50">
           <ArrowDown className="h-5 w-5"/>
         </Button>
       )}

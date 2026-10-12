@@ -49,11 +49,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   return (
     <footer className={cn(
-      "bg-card/80 backdrop-blur-md border-t border-border z-20",
+      "um-study-input border-t border-border z-20",
       isMobile ? "p-2 pb-[calc(4.9rem+env(safe-area-inset-bottom))] shrink-0" : "p-4"
     )}>
       <div className="max-w-4xl mx-auto space-y-3">
-        <div className="flex gap-2 px-1">
+        <div className="um-study-input-tools flex gap-1 px-1">
           {isMobile && (
             <Popover open={showMobileTimerSetup} onOpenChange={setShowMobileTimerSetup}>
               <PopoverTrigger asChild>
@@ -120,7 +120,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
 
         {/* Text input area */}
-        <div className="flex gap-3 bg-muted rounded-2xl p-1.5 focus-within:bg-card focus-within:ring-2 focus-within:ring-primary/5 transition-all shadow-inner border border-border">
+        <div className="um-study-composer flex gap-2 p-1.5 transition-colors border border-border">
           <textarea
             ref={chatTextareaRef}
             value={chatInput}
@@ -135,12 +135,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             }}
             placeholder=""
             className={cn(
-              "flex-1 bg-transparent border-none shadow-none focus:outline-none focus-visible:ring-0 text-[13px] px-4 py-2.5 text-foreground placeholder:text-muted-foreground/50 resize-none leading-5",
+              "flex-1 bg-transparent border-none shadow-none focus:outline-none focus-visible:ring-0 text-sm px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 resize-none leading-5",
               isMobile ? "h-10 min-h-10 max-h-10" : "min-h-10 max-h-32"
             )}
             rows={1}
           />
-          <Button onClick={onSendMessage} size="icon" className="rounded-xl h-10 w-10 bg-primary text-primary-foreground shadow shrink-0 hover:opacity-90 active:scale-95 transition-transform">
+          <Button onClick={onSendMessage} size="icon" aria-label="发送消息" className="um-study-send h-10 w-10 bg-primary text-primary-foreground shrink-0 transition-colors">
             <PaperPlaneTilt className="h-4 w-4" />
           </Button>
         </div>

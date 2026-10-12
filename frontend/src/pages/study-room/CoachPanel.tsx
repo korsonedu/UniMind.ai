@@ -50,19 +50,19 @@ export const CoachPanel: React.FC<CoachPanelProps> = ({ className }) => {
   const botReady = !!botId;
 
   return (
-    <div className={cn('flex flex-col bg-card rounded-3xl shadow-sm border border-border overflow-hidden', className)}>
+    <div className={cn('um-study-coach flex flex-col bg-transparent overflow-hidden', className)}>
       {/* Header */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center justify-between px-5 py-3 hover:bg-muted/50 transition-colors"
+        className="um-study-coach-header flex items-center justify-between px-4 py-3 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-xl bg-xiaoyu-500 flex items-center justify-center shadow">
-            <Robot className="h-4 w-4 text-white" />
+          <div className="um-study-coach-icon h-8 w-8 flex items-center justify-center">
+            <Robot className="h-4 w-4" />
           </div>
           <div className="text-left">
-            <p className="text-sm font-bold">小宇</p>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[13px] font-semibold">小宇</p>
+            <p className="text-xs text-muted-foreground">
               {botReady ? '学习中，我一直陪着你' : '加载中...'}
             </p>
           </div>
@@ -82,15 +82,15 @@ export const CoachPanel: React.FC<CoachPanelProps> = ({ className }) => {
             {messages.map((msg, i) => (
               <div key={i} className={cn('flex gap-2', msg.role === 'user' && 'flex-row-reverse')}>
                 {msg.role === 'assistant' && (
-                  <div className="h-6 w-6 rounded-lg bg-xiaoyu-100 dark:bg-xiaoyu-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <Robot className="h-3 w-3 text-xiaoyu-500" />
+                  <div className="um-study-coach-avatar h-6 w-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                    <Robot className="h-3 w-3" />
                   </div>
                 )}
                 <div className={cn(
-                  'text-xs leading-relaxed rounded-2xl px-3 py-2 max-w-[80%]',
+                  'um-study-coach-message text-xs leading-relaxed px-3 py-2 max-w-[80%]',
                   msg.role === 'assistant'
-                    ? 'bg-muted/50 text-foreground/80 rounded-tl-sm'
-                    : 'bg-xiaoyu-100 dark:bg-xiaoyu-500/20 text-foreground rounded-tr-sm'
+                    ? 'is-assistant text-foreground'
+                    : 'is-user text-foreground'
                 )}>
                   {msg.content}
                 </div>
@@ -98,8 +98,8 @@ export const CoachPanel: React.FC<CoachPanelProps> = ({ className }) => {
             ))}
             {storeLoading && (
               <div className="flex gap-2">
-                <div className="h-6 w-6 rounded-lg bg-xiaoyu-100 dark:bg-xiaoyu-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                  <Robot className="h-3 w-3 text-xiaoyu-500 animate-pulse" />
+                <div className="um-study-coach-avatar h-6 w-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                  <Robot className="h-3 w-3 animate-pulse" />
                 </div>
                 <div className="text-xs text-muted-foreground bg-muted/50 rounded-2xl rounded-tl-sm px-3 py-2">
                   正在思考...
@@ -111,13 +111,13 @@ export const CoachPanel: React.FC<CoachPanelProps> = ({ className }) => {
 
           {/* Input */}
           <div className="px-3 pb-3 pt-1">
-            <div className="flex items-center gap-2 bg-muted/50 rounded-2xl px-3 py-1.5">
+            <div className="um-study-coach-composer flex items-center gap-2 px-3 py-1.5">
               <input
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="和小宇聊聊..."
-                className="flex-1 bg-transparent text-xs border-0 outline-none placeholder:text-muted-foreground/50"
+                className="flex-1 bg-transparent text-[13px] border-0 outline-none placeholder:text-muted-foreground/50"
                 disabled={storeLoading || !botReady}
               />
               <Button

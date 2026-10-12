@@ -44,8 +44,8 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
         <PopoverTrigger asChild>
           <Button
             className={cn(
-              "rounded-2xl h-10 px-5 gap-3 transition-all duration-500 shadow border border-black/5",
-              isActive ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground hover:opacity-90",
+              "um-study-timer-button h-9 px-3 gap-2 transition-colors",
+              isActive ? "is-active" : "",
             )}
           >
             <Timer className="h-4 w-4" />
@@ -53,17 +53,17 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-80 rounded-[2.5rem] p-8 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[var(--z-dropdown)]"
+          className="um-study-timer-popover w-80 p-5 z-[var(--z-dropdown)]"
           side="bottom" align="end"
         >
           <div className="space-y-5 text-center">
-            <div className="text-5xl font-mono font-bold tracking-tighter text-foreground tabular-nums">
+              <div className="text-4xl font-mono font-semibold tracking-tight text-foreground tabular-nums">
               {formatTime(timeLeft)}
             </div>
             <div className="space-y-4 text-left">
               <div className="space-y-2">
                 <div className="flex justify-between items-center mb-1">
-                  <label className="text-[11px] font-bold uppercase tracking-widest opacity-30 text-foreground">
+                  <label className="text-xs font-medium text-muted-foreground">
                     时长设定
                   </label>
                   <div className="flex items-center gap-1">
@@ -73,19 +73,19 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
                       onChange={e => onDurationChange(parseInt(e.target.value) || 0)}
                       className="w-12 h-6 p-0 text-center border-none bg-muted rounded-md text-[11px] font-bold text-foreground"
                     />
-                    <span className="text-[11px] font-bold opacity-30 uppercase text-foreground">Min</span>
+                    <span className="text-xs text-muted-foreground">分钟</span>
                   </div>
                 </div>
                 <Slider disabled={isActive} value={[duration]} onValueChange={v => onDurationChange(v[0])} max={120} min={1} step={1} />
               </div>
               <div className="space-y-2">
-                <label className="text-[11px] font-bold uppercase tracking-widest opacity-30 ml-1 text-foreground">
+                <label className="text-xs font-medium text-muted-foreground">
                   任务目标
                 </label>
                 <Input
                   value={taskName} onChange={e => onTaskNameChange(e.target.value)}
                   placeholder="你想完成什么？"
-                  className="bg-muted border-none h-11 rounded-xl text-center font-bold text-sm text-foreground"
+                  className="h-10 rounded-lg text-sm text-foreground"
                 />
               </div>
             </div>
@@ -94,8 +94,8 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
                 size="lg"
                 onClick={isActive ? () => { onPause(); } : () => { onStart(); setIsOpen(false); }}
                 className={cn(
-                  "rounded-2xl flex-1 font-bold h-12 shadow-lg",
-                  isActive ? "bg-muted text-foreground" : "bg-primary text-primary-foreground shadow-primary/10",
+                  "rounded-lg flex-1 font-medium h-10 shadow-none",
+                  isActive ? "bg-muted text-foreground" : "bg-primary text-primary-foreground",
                 )}
               >
                 {isActive ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
@@ -105,7 +105,7 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
                 <Button
                   variant="destructive"
                   onClick={() => setShowStopAlert(true)}
-                  className="rounded-2xl h-12 w-12 shadow"
+                  className="rounded-lg h-10 w-10 shadow-none"
                 >
                   <XCircle className="h-5 w-5" />
                 </Button>
@@ -116,7 +116,7 @@ export const FocusTimer: React.FC<FocusTimerProps> = ({
       </Popover>
 
       <AlertDialog open={showStopAlert} onOpenChange={setShowStopAlert}>
-        <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl bg-card">
+        <AlertDialogContent className="um-study-dialog bg-card">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">确定要中止任务吗？</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">离开当前页面将视为一次未完成的任务，并向讨论区广播。确定离开吗？</AlertDialogDescription>

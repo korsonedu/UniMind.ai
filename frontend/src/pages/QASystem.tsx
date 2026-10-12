@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 import { cn, processMathContent } from '@/lib/utils';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import '@/styles/qa.css';
 
 // --- Sub-Components ---
 
@@ -69,7 +70,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
   };
 
   return (
-    <div className={cn("flex gap-3 text-left group/answer relative", isFirst ? "mb-2" : "mt-3 ml-2 md:ml-4")}>
+    <div className={cn("um-qa-answer flex gap-3 text-left group/answer relative", isFirst ? "mb-2" : "mt-3 ml-2 md:ml-4")}>
       <Avatar className={cn("border border-border shadow-sm", isFirst ? "h-8 w-8" : "h-7 w-7")}>
         <AvatarImage src={answer.user_detail.avatar_url} />
         <AvatarFallback className={cn("font-bold", answer.is_teacher ? "bg-indigo-100 text-indigo-700" : "bg-muted")}>
@@ -125,8 +126,8 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
             <div
                 onClick={onReplyClick}
                 className={cn(
-                "text-xs leading-relaxed break-words whitespace-pre-wrap rounded-2xl px-4 py-2.5 relative cursor-pointer hover:ring-2 hover:ring-indigo-100 transition-all",
-                isFirst ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-200 font-medium border border-indigo-200/50 dark:border-indigo-300/20" : "bg-muted/30 text-foreground"
+                "um-qa-answer-bubble text-sm leading-relaxed break-words whitespace-pre-wrap relative cursor-pointer transition-colors",
+                isFirst ? "um-qa-answer-bubble-teacher" : "text-foreground"
                 )}
             >
                 <MarkdownContent content={processMathContent(answer.content)} />
@@ -144,7 +145,7 @@ const AnswerItem = ({ answer, isFirst, onReplyClick, onRefresh }: { answer: any,
             </div>
             {/* Like Button */}
             <div className="flex items-center gap-2 mt-1 ml-1">
-                <button onClick={handleLike} className={cn("flex items-center gap-1.5 text-[11px] font-bold transition-all px-2 py-0.5 rounded-full hover:bg-muted/50", isLiked ? "text-pink-500" : "text-muted-foreground/40 hover:text-pink-500/70")}>
+                <button onClick={handleLike} className={cn("um-qa-like flex items-center gap-1.5 text-xs transition-colors px-2 py-1 rounded-lg", isLiked ? "is-active" : "text-muted-foreground")}>
                     <ThumbsUp className={cn("h-3 w-3", isLiked && "fill-current")} />
                     {likesCount > 0 && <span>{likesCount}</span>}
                 </button>
@@ -252,7 +253,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
   };
 
   return (
-    <Card className="border-none shadow-sm bg-card rounded-2xl md:rounded-3xl p-4 md:p-6 transition-all hover:shadow-md border border-border/40 group">
+    <Card className="um-qa-thread border-0 bg-transparent rounded-none p-4 md:px-6 md:py-5 shadow-none group">
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
@@ -265,12 +266,12 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
               {question.user_detail.nickname || question.user_detail.username}
               {question.is_starred && <Star className="h-3 w-3 text-orange-500 fill-orange-500" />}
               {question.is_solved ? (
-                <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40">已解决</Badge>
+                <Badge variant="outline" className="um-qa-status is-solved text-[11px] h-5 px-1.5">已解决</Badge>
               ) : (
-                <Badge variant="outline" className="text-[11px] h-4 px-1.5 bg-muted text-muted-foreground border-border">待解答</Badge>
+                <Badge variant="outline" className="um-qa-status text-[11px] h-5 px-1.5">待解答</Badge>
               )}
             </h4>
-            <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5 tabular-nums">
+            <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">
               {new Date(question.created_at).toLocaleString('zh-CN', {month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit'})}
             </p>
           </div>
@@ -334,7 +335,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
         ) : (
           <div
             onClick={triggerReply}
-            className="text-sm font-medium text-foreground leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-muted/20 rounded-xl transition-colors -m-2 p-2"
+            className="um-qa-question-body text-sm text-foreground leading-relaxed whitespace-pre-wrap cursor-pointer transition-colors -m-2 p-2"
           >
             <MarkdownContent content={processMathContent(question.content)} />
           </div>
@@ -361,7 +362,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
         {/* Like Button */}
         {!isEditing && (
             <div className="flex items-center gap-2 mt-4">
-                <button onClick={handleLike} className={cn("flex items-center gap-1.5 text-[11px] font-bold transition-all px-2 py-0.5 rounded-full hover:bg-muted/50 border border-transparent hover:border-border/50", isLiked ? "text-pink-500 bg-pink-50 hover:bg-pink-100 border-pink-100" : "text-muted-foreground hover:text-pink-500/70")}>
+                <button onClick={handleLike} className={cn("um-qa-like flex items-center gap-1.5 text-xs transition-colors px-2 py-1 rounded-lg", isLiked ? "is-active" : "text-muted-foreground")}>
                     <ThumbsUp className={cn("h-3 w-3", isLiked && "fill-current")} />
                     {likesCount > 0 && <span>{likesCount}</span>}
                 </button>
@@ -370,7 +371,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
 
         {/* Admin Reply Trigger Button */}
         {isAdmin && !firstAnswer && !showInput && !isEditing && (
-          <Button onClick={() => setShowInput(true)} size="sm" className="mt-4 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 font-bold text-xs h-8">
+          <Button onClick={() => setShowInput(true)} size="sm" variant="outline" className="um-qa-answer-action mt-4 text-xs h-8">
             <ChatCircle className="w-3.5 h-3.5 mr-2" />
             回答学员
           </Button>
@@ -379,7 +380,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin }: { question: any, onRefresh
 
       {/* First Answer (Teacher) */}
       {firstAnswer && (
-        <div className="pl-2 md:pl-4 border-l-2 border-indigo-100 ml-1 md:ml-4 mb-2">
+        <div className="um-qa-teacher-answer pl-2 md:pl-4 ml-1 md:ml-4 mb-2">
           <div className="relative">
             <AnswerItem answer={firstAnswer} isFirst={true} onReplyClick={triggerReply} onRefresh={onRefresh} />
           </div>
@@ -502,24 +503,24 @@ export const QASystem: React.FC = () => {
 
   return (
     <PageWrapper title="答疑" subtitle="学术疑问 · 权威解答 · 深度探讨">
-      <div className="max-w-5xl mx-auto space-y-5 md:space-y-8">
+      <div className="um-qa max-w-4xl mx-auto">
 
         {/* Top Input Area */}
-        <Card className="border-none shadow-sm bg-card rounded-2xl md:rounded-[2rem] p-4 md:p-6 border border-border/50">
+        <Card className="um-qa-composer p-4 md:p-5">
           <div className="space-y-4">
             <textarea
               value={qContent}
               onChange={e => setQContent(e.target.value)}
               placeholder="请详细描述你的疑问..."
-              className="w-full min-h-[100px] p-4 rounded-2xl bg-muted/60 border border-border/50 text-sm font-medium resize-none focus:ring-2 focus:ring-ring/30 transition-all placeholder:text-muted-foreground/40"
+              className="um-qa-composer-input w-full min-h-[112px] p-4 text-sm resize-none transition-colors"
             />
-            <div className={cn(isMobile ? "flex items-center gap-2" : "flex justify-between items-center")}>
+            <div className={cn("um-qa-composer-actions", isMobile ? "flex items-center gap-2" : "flex justify-between items-center")}>
               <div className={cn("flex items-center gap-2", isMobile && "flex-1 min-w-0")}>
                 <Button
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   className={cn(
-                    "rounded-xl h-10 border-dashed border-2 gap-2 text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5",
+                    "um-qa-attachment-button h-10 gap-2 text-xs text-muted-foreground",
                     isMobile ? "w-full justify-start px-3 min-w-0" : "px-4",
                     qFile && "border-solid border-primary text-primary bg-primary/5"
                   )}
@@ -535,7 +536,7 @@ export const QASystem: React.FC = () => {
                   accept="image/*,application/pdf,.doc,.docx,.txt"
                 />
               </div>
-              <Button onClick={handlePost} disabled={isPosting} className={cn("h-10 rounded-xl bg-primary text-primary-foreground font-bold shadow hover:scale-[1.02] transition-transform text-xs uppercase tracking-widest", isMobile ? "shrink-0 px-5" : "px-8")}>
+              <Button onClick={handlePost} disabled={isPosting} className={cn("um-qa-submit h-10 text-[13px] font-medium", isMobile ? "shrink-0 px-5" : "px-6")}>
                 {isPosting ? <Spinner className="h-4 w-4 animate-spin"/> : '提交问题'}
               </Button>
             </div>
@@ -543,9 +544,9 @@ export const QASystem: React.FC = () => {
         </Card>
 
         {/* Filter Bar */}
-        <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+        <div className="um-qa-toolbar flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
           <div className="w-full md:w-auto overflow-x-auto">
-          <div className="inline-flex min-w-max bg-muted/30 p-1 rounded-2xl border border-border/50">
+          <div className="um-qa-filters inline-flex min-w-max">
             {[
               { id: 'all', label: '全部' },
               { id: 'followed', label: '关注' },
@@ -557,9 +558,9 @@ export const QASystem: React.FC = () => {
                 key={tab.id}
                 onClick={() => setFilter(tab.id)}
                 className={cn(
-                  "px-6 py-2 rounded-xl text-xs font-bold transition-all duration-300",
+                  "um-qa-filter px-4 py-2 text-[13px] font-medium transition-colors",
                   filter === tab.id
-                    ? "bg-card text-foreground shadow-sm scale-105"
+                    ? "is-active text-primary"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -574,13 +575,13 @@ export const QASystem: React.FC = () => {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="搜索历史问答..."
-              className="pl-9 h-10 rounded-xl bg-card border-transparent hover:border-border focus:border-border shadow-sm w-full md:w-64 text-xs font-bold transition-all"
+              className="um-qa-search pl-9 h-10 w-full md:w-64 text-[13px] transition-colors"
             />
           </div>
         </div>
 
         {/* List */}
-        <div className="space-y-4 pb-10">
+        <div className="um-qa-list pb-10">
           {loading ? (
             <div className="py-20 text-center flex justify-center"><Spinner className="h-8 w-8 animate-spin text-muted-foreground/20"/></div>
           ) : questions.length === 0 ? (

@@ -24,11 +24,11 @@ const PlanList: React.FC<PlanListProps> = (props) => {
   const { confirm, Dialog } = useConfirm();
 
   return (
-    <Card className="border-none shadow-sm rounded-2xl md:rounded-3xl bg-card overflow-hidden p-4 md:p-6 md:flex-1 min-h-0 flex flex-col border border-border">
-      <header className="mb-4 flex items-center justify-between border-b border-border pb-4"><CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">计划清单</CardTitle><ListChecks className="h-4 w-4 text-muted-foreground opacity-20" /></header>
+    <Card className="um-study-plans border-0 shadow-none rounded-none bg-transparent overflow-hidden p-4 md:flex-1 min-h-0 flex flex-col">
+      <header className="um-study-section-header mb-3 flex items-center justify-between"><CardTitle className="text-[13px] font-semibold text-foreground">计划清单</CardTitle><ListChecks className="h-4 w-4 text-muted-foreground" /></header>
       <div className="flex-1 overflow-y-auto space-y-1.5 pr-2 scrollbar-none">
         {plans.map(p => (
-          <div key={p.id} className={cn("group flex items-center gap-3 p-2 rounded-2xl transition-all border border-transparent", p.is_completed ? "bg-muted/30 opacity-60" : "hover:bg-muted hover:border-border")}>
+          <div key={p.id} className={cn("um-study-plan group flex items-center gap-3 p-2 rounded-lg transition-colors", p.is_completed && "is-complete")}>
             <button
               disabled={p.is_completed}
               className={cn("transition-colors", p.is_completed ? "cursor-not-allowed" : "cursor-pointer")}
@@ -49,7 +49,7 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             >
               {p.is_completed ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <Circle className="h-4 w-4 text-muted-foreground/20 group-hover:text-emerald-500" />}
             </button>
-            <span onClick={() => { if(!p.is_completed) { onStartPlan(p.content, p.id); } }} className={cn("text-xs font-bold truncate flex-1", p.is_completed ? "line-through text-muted-foreground cursor-default" : "text-foreground cursor-pointer")}>{p.content}</span>
+            <span onClick={() => { if(!p.is_completed) { onStartPlan(p.content, p.id); } }} className={cn("text-[13px] font-normal truncate flex-1", p.is_completed ? "line-through text-muted-foreground cursor-default" : "text-foreground cursor-pointer")}>{p.content}</span>
 
             <button
               onClick={async (e) => {
@@ -88,8 +88,8 @@ const PlanList: React.FC<PlanListProps> = (props) => {
               setNewPlan('');
             }
           }}
-          placeholder="ADD TARGET..."
-          className="bg-muted border-none h-8 rounded-lg text-[11px] font-bold px-3 text-foreground focus-visible:ring-1 focus-visible:ring-primary/20"
+          placeholder="添加学习计划…"
+          className="um-study-plan-input h-9 rounded-lg text-[13px] px-3 text-foreground"
         />
         <Button
           onClick={async () => {
@@ -105,7 +105,8 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             setNewPlan('');
           }}
           size="icon"
-          className="h-8 w-8 bg-primary text-primary-foreground rounded-lg shrink-0 hover:opacity-90 active:scale-95 transition-all"
+          className="um-study-plan-add h-9 w-9 bg-primary text-primary-foreground rounded-lg shrink-0 transition-colors"
+          aria-label="添加学习计划"
         >
           <Plus className="h-3.5 w-3.5"/>
         </Button>

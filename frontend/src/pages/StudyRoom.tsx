@@ -26,6 +26,7 @@ import { ChatInput } from '@/pages/study-room/ChatInput';
 import { OnlineUsersPanel } from '@/pages/study-room/OnlineUsersPanel';
 import { PlanList } from '@/pages/study-room/PlanList';
 import { CoachPanel } from '@/pages/study-room/CoachPanel';
+import '@/styles/study-room.css';
 
 interface Message {
   id: number;
@@ -295,15 +296,15 @@ export const StudyRoom: React.FC = () => {
   // ── Render ──
   return (
     <div className={cn(
-      "overflow-hidden animate-in fade-in duration-300 text-left text-foreground",
-      isMobile ? "h-full min-h-0 flex flex-col gap-0" : "h-[calc(100vh-6.5rem)] flex gap-6"
+      "um-study-room overflow-hidden animate-in fade-in duration-300 text-left text-foreground",
+      isMobile ? "h-full min-h-0 flex flex-col gap-0" : "h-[calc(100vh-6.5rem)] flex"
     )}>
       {/* ── Main chat area ── */}
       <div
         className={cn(
           isMobile
-            ? "flex-1 min-h-0 flex flex-col bg-background overflow-hidden relative transition-all duration-300"
-            : "flex-1 flex flex-col bg-card rounded-3xl shadow-sm border border-border overflow-hidden relative transition-all duration-300",
+            ? "um-study-chat flex-1 min-h-0 flex flex-col bg-background overflow-hidden relative transition-all duration-300"
+            : "um-study-chat flex-1 flex flex-col bg-card overflow-hidden relative transition-all duration-300",
           isDragging && "ring-4 ring-primary/20 bg-primary/5 border-primary border-dashed z-50",
         )}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
@@ -313,8 +314,8 @@ export const StudyRoom: React.FC = () => {
       >
         {/* Header */}
         <header className={cn(
-          "border-b border-border flex items-center justify-between bg-card/80 backdrop-blur-md sticky top-0 z-20",
-          isMobile ? "px-3 py-2.5" : "px-8 py-3"
+          "um-study-header flex items-center justify-between sticky top-0 z-20",
+          isMobile ? "px-3 py-2" : "px-5 py-2"
         )}>
           <div className="flex items-center gap-4">
             {isMobile && (
@@ -322,10 +323,10 @@ export const StudyRoom: React.FC = () => {
                 <CaretLeft className="h-4 w-4" />
               </Button>
             )}
-            <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shadow-lg text-primary-foreground">
+            <div className="um-study-header-icon h-8 w-8 flex items-center justify-center">
               <Chat className="h-4 w-4" />
             </div>
-            <h2 className="text-sm font-bold tracking-tight">学习咖啡厅</h2>
+            <h2 className="text-sm font-semibold tracking-tight">学习咖啡厅</h2>
           </div>
           <div className="flex items-center gap-2">
             {!isMobile && (
@@ -348,18 +349,18 @@ export const StudyRoom: React.FC = () => {
                   <DotsThree className="h-4 w-4"/>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 rounded-2xl p-4 space-y-4 bg-card border-border shadow-lg">
+              <DropdownMenuContent align="end" className="um-study-menu w-64 p-4 space-y-4">
                 <div className="space-y-1">
-                  <h4 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">隐私与模式</h4>
+                  <h4 className="text-[13px] font-semibold text-foreground">隐私与模式</h4>
                   <p className="text-[11px] text-muted-foreground/50">控制任务状态在共学区的可见性</p>
                 </div>
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold">广播我的任务</Label>
+                    <Label className="text-[13px] font-normal">广播我的任务</Label>
                     <Switch checked={allowBroadcast} onCheckedChange={(v) => updateSettings('allow_broadcast', v)} />
                   </div>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-bold">接收他人广播</Label>
+                    <Label className="text-[13px] font-normal">接收他人广播</Label>
                     <Switch checked={showOthersBroadcast} onCheckedChange={(v) => updateSettings('show_others_broadcast', v)} />
                   </div>
                 </div>
@@ -411,7 +412,7 @@ export const StudyRoom: React.FC = () => {
       </div>
 
       {/* ── Right sidebar (desktop) ── */}
-      <div className="hidden md:flex w-72 flex-col gap-6 shrink-0 text-foreground">
+      <aside className="um-study-context hidden md:flex w-72 flex-col shrink-0 text-foreground" aria-label="自习室上下文">
         <OnlineUsersPanel onlineUsers={onlineUsers} currentUsername={user?.username} />
         <CoachPanel />
         <PlanList
@@ -422,7 +423,7 @@ export const StudyRoom: React.FC = () => {
           onPlanCompleted={() => fetchMessages()}
           onPlanDeleted={() => fetchPlans()}
         />
-      </div>
+      </aside>
 
       {/* ── Mobile fullscreen timer ── */}
       <div className={cn(
@@ -459,7 +460,7 @@ export const StudyRoom: React.FC = () => {
 
       {/* ── Stop alert (mobile fullscreen) ── */}
       <AlertDialog open={showStopAlert} onOpenChange={setShowStopAlert}>
-        <AlertDialogContent className="rounded-[2.5rem] border-none shadow-2xl bg-card">
+        <AlertDialogContent className="um-study-dialog bg-card">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">确定要中止任务吗？</AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground">离开当前页面将视为一次未完成的任务，并向讨论区广播。确定离开吗？</AlertDialogDescription>

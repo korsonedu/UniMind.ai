@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
-import { Users, Clock, CheckCircle } from '@phosphor-icons/react';
+import { Clock, CheckCircle } from '@phosphor-icons/react';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import {
   HoverCard,
@@ -16,30 +16,30 @@ interface OnlineUsersPanelProps {
 
 const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, currentUsername }) => {
   return (
-    <Card className="border-none shadow-sm rounded-2xl md:rounded-3xl bg-card overflow-hidden p-4 md:p-6 md:flex-1 min-h-0 flex flex-col border border-border">
-      <header className="mb-4 flex items-center justify-between">
-        <CardTitle className="text-[13px] font-bold uppercase tracking-widest text-muted-foreground">
+    <Card className="um-study-online border-0 shadow-none rounded-none bg-transparent overflow-hidden p-4 min-h-0 flex flex-col">
+      <header className="um-study-section-header mb-3 flex items-center justify-between">
+        <CardTitle className="text-[13px] font-semibold text-foreground">
           实时共学
         </CardTitle>
-        <Users className="h-4 w-4 text-muted-foreground opacity-20" />
+        <span className="text-xs tabular-nums text-muted-foreground">{onlineUsers.length}</span>
       </header>
       <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-none">
         {onlineUsers.map((u: any) => (
           <HoverCard key={u.id || u.username}>
             <HoverCardTrigger asChild>
-              <div className="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-muted transition-all cursor-pointer border border-transparent hover:border-border group">
+              <div className="um-study-online-user flex items-center gap-3 p-2 rounded-lg transition-colors cursor-pointer group">
                 <div className="relative shrink-0">
-                  <Avatar className="h-9 w-9 border border-border shadow-sm group-hover:ring-2 ring-emerald-500/20 transition-all">
+                  <Avatar className="h-8 w-8 border border-border transition-colors">
                     <AvatarImage src={u.avatar_url} />
                   </Avatar>
                   <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 border-2 border-background shadow-sm" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-foreground truncate">
+                  <p className="text-[13px] font-medium text-foreground truncate">
                     {u.nickname || u.username}{' '}
                     {u.username === currentUsername && '(你)'}
                   </p>
-                  <p className="text-[11px] text-emerald-600 font-bold truncate mt-0.5 uppercase tracking-tight">
+                  <p className="text-xs text-muted-foreground truncate mt-0.5">
                     {u.current_task || '在线中'}
                   </p>
                 </div>
@@ -47,7 +47,7 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
             </HoverCardTrigger>
             <HoverCardContent
               side="left"
-              className="w-80 rounded-apple-2xl p-6 border-none shadow-lg bg-card/95 backdrop-blur-xl z-50 text-left text-foreground"
+              className="um-study-hover-card w-80 p-5 z-50 text-left text-foreground"
             >
               <div className="flex space-x-4">
                 <Avatar className="h-12 w-12 border border-border shadow-sm">

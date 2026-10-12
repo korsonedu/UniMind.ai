@@ -1,0 +1,219 @@
+.um-qa {
+  display: grid;
+  gap: var(--um-space-6);
+  padding: var(--um-space-6);
+  color: var(--um-color-text);
+}
+
+.um-qa > *,
+.um-qa-toolbar > * {
+  min-width: 0;
+}
+
+.um-qa-composer {
+  border: 1px solid var(--um-color-border);
+  border-radius: var(--um-radius-composer);
+  background: var(--um-color-context);
+  box-shadow: none;
+}
+
+.um-qa-composer-input,
+.um-qa-search,
+.um-qa-answer textarea,
+.um-qa-thread textarea {
+  border: 1px solid var(--um-color-border);
+  border-radius: var(--um-radius-control);
+  background: var(--um-color-surface);
+  color: var(--um-color-text);
+  outline: none;
+}
+
+.um-qa-composer-input::placeholder,
+.um-qa-search::placeholder {
+  color: var(--um-color-text-muted);
+}
+
+.um-qa-composer-input:focus,
+.um-qa-search:focus,
+.um-qa-answer textarea:focus,
+.um-qa-thread textarea:focus {
+  border-color: var(--um-color-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--um-color-focus) 18%, transparent);
+}
+
+.um-qa-attachment-button {
+  border: 1px solid var(--um-color-border);
+  border-radius: var(--um-radius-control);
+  background: var(--um-color-surface);
+  font-weight: 400;
+}
+
+.um-qa-attachment-button:hover {
+  border-color: var(--um-color-accent);
+  background: var(--um-color-hover);
+  color: var(--um-color-accent);
+}
+
+.um-qa-submit {
+  border-radius: var(--um-radius-control);
+  background: var(--um-color-accent);
+  color: var(--um-color-on-accent);
+  box-shadow: none;
+}
+
+.um-qa-submit:hover {
+  background: var(--um-color-accent-hover);
+}
+
+.um-qa-toolbar {
+  min-height: var(--um-height-header);
+  padding-bottom: var(--um-space-3);
+  border-bottom: 1px solid var(--um-color-border);
+}
+
+.um-qa-filters {
+  gap: var(--um-space-1);
+  padding: 2px;
+  border-radius: var(--um-radius-control);
+  background: var(--um-color-context);
+}
+
+.um-qa-filter {
+  min-height: 34px;
+  border-radius: 6px;
+}
+
+.um-qa-filter:hover {
+  background: var(--um-color-hover);
+}
+
+.um-qa-filter.is-active {
+  background: var(--um-color-selected);
+}
+
+.um-qa-list {
+  border-top: 1px solid var(--um-color-border);
+}
+
+.um-qa-thread {
+  border-bottom: 1px solid var(--um-color-border);
+  color: var(--um-color-text);
+}
+
+.um-qa-thread:last-child {
+  border-bottom: 0;
+}
+
+.um-qa-question-body {
+  border-radius: var(--um-radius-control);
+  font-weight: 400;
+  line-height: 1.65;
+}
+
+.um-qa-question-body:hover {
+  background: var(--um-color-hover);
+}
+
+.um-qa-status {
+  border-color: var(--um-color-border);
+  border-radius: 6px;
+  background: var(--um-color-context);
+  color: var(--um-color-text-muted);
+  font-weight: 500;
+}
+
+.um-qa-status.is-solved {
+  border-color: color-mix(in srgb, var(--um-color-success) 28%, var(--um-color-border));
+  background: color-mix(in srgb, var(--um-color-success) 8%, var(--um-color-surface));
+  color: var(--um-color-success);
+}
+
+.um-qa-answer {
+  color: var(--um-color-text);
+}
+
+.um-qa-answer-bubble {
+  padding: 10px 12px;
+  border-radius: var(--um-radius-control);
+  background: var(--um-color-context);
+}
+
+.um-qa-answer-bubble:hover {
+  background: var(--um-color-hover);
+}
+
+.um-qa-answer-bubble-teacher {
+  border-left: 2px solid var(--um-color-accent);
+  background: var(--um-color-accent-subtle);
+  color: var(--um-color-text);
+}
+
+.um-qa-teacher-answer {
+  border-left: 1px solid var(--um-color-border);
+}
+
+.um-qa-like {
+  min-height: 28px;
+  font-weight: 400;
+}
+
+.um-qa-like:hover,
+.um-qa-like.is-active {
+  background: var(--um-color-hover);
+  color: var(--um-color-accent);
+}
+
+.um-qa-answer-action {
+  border-color: var(--um-color-border);
+  border-radius: var(--um-radius-control);
+  color: var(--um-color-accent);
+  font-weight: 500;
+}
+
+@media (max-width: 767px) {
+  .um-qa {
+    gap: var(--um-space-4);
+    padding: var(--um-space-4);
+  }
+
+  .um-qa-toolbar {
+    align-items: stretch;
+  }
+
+  .um-qa-filter,
+  .um-qa-attachment-button,
+  .um-qa-submit,
+  .um-qa-search {
+    min-height: var(--um-height-touch-target);
+  }
+
+  .um-qa-composer-input,
+  .um-qa-answer textarea,
+  .um-qa-thread textarea {
+    font-size: 16px;
+  }
+
+  .um-qa-thread {
+    padding-right: 0;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .um-qa-composer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .um-qa-composer-actions > div,
+  .um-qa-composer-actions .um-qa-submit {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .um-qa * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
