@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, Trophy, Clock, User as UserIcon, SignOut, ShieldCheck, CreditCard, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront, Code } from '@phosphor-icons/react';
+import { BookOpen, Trophy, User as UserIcon, SignOut, ShieldCheck, CreditCard, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront, Code } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -80,6 +80,7 @@ const isMobileAllowedPath = (pathname: string) =>
   pathname === '/qa' ||
   pathname.startsWith('/qa/') ||
   pathname === '/study' ||
+  pathname === '/community' ||
   pathname === '/knowledge-map' ||
   pathname.startsWith('/knowledge-map/') ||
   pathname === '/tests' ||
@@ -170,8 +171,9 @@ export const MainLayout: React.FC = () => {
   const instInfo = instFromStore || user?.institution || null;
 
   const isFullPage = ['/platform'].includes(location.pathname);
-  const isEdgeToEdge = ['/workbench', '/xiaoyu', '/courses'].includes(location.pathname) || /^\/course\/\d+/.test(location.pathname);
-  const isIntegratedWorkspace = ['/xiaoyu', '/courses'].includes(location.pathname) || /^\/course\/\d+/.test(location.pathname);
+  const isCommunityWorkspace = ['/community', '/qa', '/study'].includes(location.pathname) || location.pathname.startsWith('/qa/');
+  const isEdgeToEdge = isCommunityWorkspace || ['/workbench', '/xiaoyu', '/courses'].includes(location.pathname) || /^\/course\/\d+/.test(location.pathname);
+  const isIntegratedWorkspace = isCommunityWorkspace || ['/xiaoyu', '/courses'].includes(location.pathname) || /^\/course\/\d+/.test(location.pathname);
   const isMobileStudyPage = isMobile && location.pathname === '/study';
   const isMobileImmersivePage = isMobile && (
     location.pathname.startsWith('/tests/session') ||
@@ -302,12 +304,11 @@ export const MainLayout: React.FC = () => {
   const NAV_FEATURE_MAP: Record<string, string> = {
     '/tests': 'quiz.exam',
     '/knowledge-map': 'knowledge.graph',
-    '/qa': 'faq.system',
-    '/study': 'study.room',
   };
 
   // 功能可见性：有 feature 要求的项，必须 hasFeature 通过才显示
   const itemVisible = (item: NavItem) => {
+    if (item.to === '/community') return !featuresLoading && (hasFeature('faq.system') || hasFeature('study.room'));
     const feat = NAV_FEATURE_MAP[item.to];
     if (!feat) return true;
     if (featuresLoading) return false;
@@ -323,7 +324,7 @@ export const MainLayout: React.FC = () => {
     { to: '/questions', icon: Brain, label: '题库' },
     { to: '/courses', icon: BookOpen, label: '课程' },
     { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
-    { to: '/qa', icon: ChatCircleText, label: '答疑' },
+    { to: '/community', icon: ChatCircleText, label: '学习社区' },
     { to: '/marketplace', icon: Storefront, label: '内容市场' },
     ...(isPlatformAdmin ? [platformAdminItem] : []),
     ...(user?.is_institution_admin ? [{ to: '/management', icon: Wrench, label: '维护中心' } as NavItem] : []),
@@ -336,8 +337,7 @@ export const MainLayout: React.FC = () => {
     { to: '/courses', icon: BookOpen, label: '课程中心' },
     { to: '/tests', icon: Trophy, label: '习题训练' },
     { to: '/knowledge-map', icon: Brain, label: '知识地图' },
-    { to: '/qa', icon: ChatCircleText, label: '答疑' },
-    { to: '/study', icon: Clock, label: '自习室' },
+    { to: '/community', icon: ChatCircleText, label: '学习社区' },
     ...(isPlatformAdmin ? [platformAdminItem] : []),
   ];
 
@@ -351,7 +351,7 @@ export const MainLayout: React.FC = () => {
         { to: '/courses', icon: BookOpen, label: '课程' },
         { to: '/tests', icon: Trophy, label: '做题' },
         { to: '/knowledge-map', icon: Brain, label: '知识' },
-        { to: '/qa', icon: ChatCircleText, label: '答疑' },
+        { to: '/community', icon: ChatCircleText, label: '社区' },
         ...(isPlatformAdmin ? [{ to: '/platform', icon: Gauge, label: '平台' } as NavItem] : []),
       ]
     : [
@@ -359,7 +359,7 @@ export const MainLayout: React.FC = () => {
         { to: '/questions', icon: Brain, label: '题库' },
         { to: '/courses', icon: BookOpen, label: '课程' },
         { to: '/knowledge-tree', icon: TreeStructure, label: '知识树' },
-        { to: '/qa', icon: ChatCircleText, label: '答疑' },
+        { to: '/community', icon: ChatCircleText, label: '社区' },
         { to: '/marketplace', icon: Storefront, label: '市场' },
         ...(isPlatformAdmin ? [{ to: '/platform', icon: Gauge, label: '平台' } as NavItem] : []),
       ];
@@ -495,7 +495,7 @@ export const MainLayout: React.FC = () => {
               <SidebarItem
                 key={item.to}
                 {...item}
-                active={location.pathname === item.to || location.pathname.startsWith(item.to + '/') || (item.to === '/courses' && location.pathname.startsWith('/course/')) || (item.to === '/report-card' && location.pathname === '/achievements')}
+                active={location.pathname === item.to || location.pathname.startsWith(item.to + '/') || (item.to === '/community' && isCommunityWorkspace) || (item.to === '/courses' && location.pathname.startsWith('/course/')) || (item.to === '/report-card' && location.pathname === '/achievements')}
                 collapsed={collapsed}
               />
             ))}
@@ -561,7 +561,7 @@ export const MainLayout: React.FC = () => {
                 if (item.to === '/tests') return p.startsWith('/tests');
                 if (item.to === '/knowledge-map') return p.startsWith('/knowledge-map');
                 if (item.to === '/report-card') return p === '/report-card' || p === '/achievements';
-                if (item.to === '/qa') return p.startsWith('/qa');
+                if (item.to === '/community') return isCommunityWorkspace;
                 return p === item.to || p.startsWith(`${item.to}/`);
               })();
               return (

@@ -50,21 +50,44 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   return (
     <footer className={cn(
       "um-study-input border-t border-border z-20",
-      isMobile ? "p-2 pb-[calc(4.9rem+env(safe-area-inset-bottom))] shrink-0" : "p-4"
+      isMobile ? "px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shrink-0" : "px-5 py-3"
     )}>
-      <div className="max-w-4xl mx-auto space-y-3">
-        <div className="um-study-input-tools flex gap-1 px-1">
+      <div className="max-w-4xl mx-auto">
+        <div className="um-study-composer transition-colors border border-border overflow-hidden">
+          <textarea
+            ref={chatTextareaRef}
+            value={chatInput}
+            onChange={e => onChatInputChange(e.target.value)}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={onCompositionEnd}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+                e.preventDefault();
+                onSendMessage();
+              }
+            }}
+            placeholder="发送消息到学习咖啡厅"
+            className={cn(
+              "um-study-composer-textarea block w-full bg-transparent border-none shadow-none focus:outline-none focus-visible:ring-0 text-sm px-3.5 pt-2.5 pb-1 text-foreground placeholder:text-muted-foreground/55 resize-none leading-5",
+              isMobile ? "h-9 min-h-9 max-h-9" : "min-h-9 max-h-24"
+            )}
+            rows={1}
+          />
+
+          <div className="um-study-composer-bar flex items-center justify-between px-1.5 pb-1.5">
+            <div className="um-study-input-tools flex items-center gap-0.5">
           {isMobile && (
             <Popover open={showMobileTimerSetup} onOpenChange={setShowMobileTimerSetup}>
               <PopoverTrigger asChild>
                 <Button
                   variant="ghost" size="icon"
                   className={cn(
-                    "h-8 w-8 rounded-lg transition-colors",
+                    "h-8 w-8 rounded-md transition-colors",
                     isActive ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   )}
+                  aria-label="设置专注时钟"
                 >
-                  <Timer className="h-4 w-4" />
+                  <Timer className="h-5 w-5" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent side="top" align="start" className="w-[82vw] max-w-72 rounded-2xl p-4 border-none shadow-lg bg-card/95 backdrop-blur-xl z-[var(--z-dropdown)]">
@@ -92,8 +115,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           {/* Emoji picker */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Emoji">
-                <Smiley className="h-4 w-4"/>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="选择表情">
+                <Smiley className="h-5 w-5"/>
               </Button>
             </PopoverTrigger>
             <PopoverContent side="top" className="w-64 p-2 rounded-2xl border-border shadow-lg bg-card">
@@ -107,41 +130,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
           <GiphyPicker onGifSent={onSendGif} />
 
-          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Upload image">
-            <ImageIcon className="h-4 w-4"/>
+          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="上传图片">
+            <ImageIcon className="h-5 w-5"/>
           </Button>
           {isMobile && (
-            <Button variant="ghost" size="icon" onClick={() => cameraInputRef.current?.click()} className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Take photo">
-              <Camera className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={() => cameraInputRef.current?.click()} className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="拍照">
+              <Camera className="h-5 w-5" />
             </Button>
           )}
           <input type="file" ref={fileInputRef} onChange={onFileUpload} className="hidden" accept="image/*" />
           <input type="file" ref={cameraInputRef} onChange={onFileUpload} className="hidden" accept="image/*" capture="environment" />
-        </div>
+            </div>
+          </div>
 
-        {/* Text input area */}
-        <div className="um-study-composer flex gap-2 p-1.5 transition-colors border border-border">
-          <textarea
-            ref={chatTextareaRef}
-            value={chatInput}
-            onChange={e => onChatInputChange(e.target.value)}
-            onCompositionStart={onCompositionStart}
-            onCompositionEnd={onCompositionEnd}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
-                e.preventDefault();
-                onSendMessage();
-              }
-            }}
-            placeholder=""
-            className={cn(
-              "flex-1 bg-transparent border-none shadow-none focus:outline-none focus-visible:ring-0 text-sm px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 resize-none leading-5",
-              isMobile ? "h-10 min-h-10 max-h-10" : "min-h-10 max-h-32"
-            )}
-            rows={1}
-          />
-          <Button onClick={onSendMessage} size="icon" aria-label="发送消息" className="um-study-send h-10 w-10 bg-primary text-primary-foreground shrink-0 transition-colors">
-            <PaperPlaneTilt className="h-4 w-4" />
+          <Button
+            onClick={onSendMessage}
+            size="icon"
+            aria-label="发送消息"
+            disabled={!chatInput.trim()}
+            className="um-study-send absolute right-2 bottom-2 h-8 w-8 bg-primary text-primary-foreground shrink-0 transition-colors"
+          >
+            <PaperPlaneTilt className="h-[18px] w-[18px]" weight="fill" />
           </Button>
         </div>
       </div>

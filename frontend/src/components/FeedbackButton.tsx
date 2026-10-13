@@ -117,7 +117,7 @@ export function FeedbackButton() {
 
   const floatingStyle: React.CSSProperties = position
     ? { position: 'fixed', left: position.x, top: position.y, zIndex: 50 }
-    : { position: 'fixed', bottom: '1.5rem', right: '1.5rem', zIndex: 50 };
+    : { position: 'fixed', bottom: 'var(--um-feedback-bottom, 1.5rem)', right: '1.5rem', zIndex: 50 };
 
   if (!open) {
     return (

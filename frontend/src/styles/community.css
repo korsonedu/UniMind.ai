@@ -1,0 +1,64 @@
+.um-community { display: grid; grid-template-columns: 184px minmax(0, 1fr); height: 100%; min-height: 0; color: var(--um-color-text); font-family: var(--um-font-family); }
+.um-community-directory { min-width: 0; padding: 24px 12px; background: color-mix(in srgb, var(--um-color-rail) 55%, var(--um-color-surface)); }
+.um-community-heading { padding: 0 12px 30px; }
+.um-community-heading h1 { margin: 0 0 7px; font-size: 17px; font-weight: 600; letter-spacing: -.025em; }
+.um-community-heading p { margin: 0; font-size: 11px; line-height: 1.6; color: var(--um-color-text-muted); }
+.um-community-directory nav { display: grid; gap: 6px; }
+.um-community-channel { display: grid; gap: 5px; padding: 12px; border-radius: 9px; color: var(--um-color-text-muted); transition: background-color var(--um-motion-fast), color var(--um-motion-fast); }
+.um-community-channel span { font-size: 13px; font-weight: 500; }
+.um-community-channel small { font-size: 10px; line-height: 1.5; }
+.um-community-channel:hover { background: var(--um-color-hover); color: var(--um-color-text); }
+.um-community-channel.is-active { background: var(--um-color-selected); color: var(--um-color-accent); }
+.um-community-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.um-community-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; min-height: 72px; gap: 12px; padding: 12px 24px; }
+.um-community-header-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.um-community-header h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.um-community-header p { margin: 3px 0 0; font-size: 11px; color: var(--um-color-text-muted); }
+.um-community-account { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.um-community-back, .um-community-mobile-title { display: none; }
+.um-community-content { flex: 1; min-width: 0; min-height: 0; padding: 0 24px 24px; overflow-y: auto; }
+.um-community-content.is-study { padding: 0; overflow: hidden; }
+.um-community .um-qa { padding-top: 12px; }
+.um-community .um-study-room { height: 100%; min-height: 0; margin-top: 0; gap: 0; }
+.um-community .um-study-chat, .um-community .um-study-context { border: 0; border-radius: 0; box-shadow: none; }
+.um-community .um-study-context { width: 248px; padding: 14px 20px 24px 12px; gap: 28px; overflow-y: auto; background: transparent; }
+.um-community .um-study-context > * + * { border-top: 0; }
+.um-community .um-study-online { padding: 0; max-height: 36%; flex: 0 0 auto; }
+.um-community .um-study-plans { padding: 0; flex: 0 0 auto; }
+.um-community .um-study-section-header { margin-bottom: 8px; }
+.um-community .um-study-section-header > div { font-size: 12px; font-weight: 500; color: var(--um-color-text-muted); }
+.um-community .um-study-header { border-bottom: 0; }
+.um-community .um-study-messages { background: var(--um-color-surface); }
+.um-community .um-study-input { border-top: 0; }
+.um-community .um-study-composer { border-color: transparent; box-shadow: none; }
+.um-community .um-study-composer:focus-within { border-color: var(--um-color-focus); }
+body:has(.um-community-content.is-study) { --um-feedback-bottom: 120px; }
+
+@media (max-width: 1100px) and (min-width: 768px) {
+  .um-community { grid-template-columns: 164px minmax(0, 1fr); }
+  .um-community .um-study-context { width: 220px; }
+}
+
+@media (max-width: 900px) and (min-width: 768px) {
+  .um-community { grid-template-columns: 148px minmax(0, 1fr); }
+  .um-community .um-study-context { width: 200px; }
+  .um-community-heading, .um-community-channel { padding-inline: 8px; }
+  .um-community-channel small { font-size: 9px; }
+}
+
+@media (max-width: 767px) {
+  .um-community { display: flex; flex-direction: column; }
+  .um-community-main { display: contents; }
+  .um-community-header { order: 0; min-height: 56px; padding: 6px 10px; gap: 4px; }
+  .um-community-header h2 { font-size: 13px; white-space: nowrap; }
+  .um-community-header p, .um-community-desktop-title, .um-community-heading { display: none; }
+  .um-community-mobile-title { display: inline; }
+  .um-community-back { display: flex; width: 28px; min-height: 44px; flex: 0 0 auto; align-items: center; justify-content: center; border-radius: 8px; color: var(--um-color-text-muted); }
+  .um-community-directory { order: 1; flex: 0 0 auto; padding: 0 16px 12px; background: transparent; }
+  .um-community-directory nav { display: flex; gap: 4px; }
+  .um-community-channel { padding: 8px 14px; min-height: 40px; align-content: center; border-radius: 999px; }
+  .um-community-channel small { display: none; }
+  .um-community-content { order: 2; padding: 0 16px 20px; }
+  .um-community .um-qa { padding-top: 0; }
+  .um-community .um-study-header-icon { display: none; }
+}

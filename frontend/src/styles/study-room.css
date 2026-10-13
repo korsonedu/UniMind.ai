@@ -1,5 +1,5 @@
 .um-study-room {
-  gap: var(--um-space-4);
+  gap: var(--um-space-3);
   font-family: var(--um-font-family);
 }
 
@@ -8,7 +8,7 @@
   border: 1px solid var(--um-color-border);
   border-radius: var(--um-radius-panel);
   background: var(--um-color-surface);
-  box-shadow: none;
+  box-shadow: var(--um-shadow-panel);
 }
 
 .um-study-context {
@@ -21,7 +21,7 @@
 }
 
 .um-study-header {
-  min-height: var(--um-height-header);
+  min-height: 60px;
   border-bottom: 1px solid var(--um-color-border);
   background: var(--um-color-toolbar);
 }
@@ -60,7 +60,9 @@
 }
 
 .um-study-messages {
-  background: var(--um-color-surface);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--um-color-context) 42%, transparent), transparent 112px),
+    var(--um-color-surface);
 }
 
 .um-study-event {
@@ -113,6 +115,20 @@
   background: var(--um-color-context);
 }
 
+.um-study-composer {
+  position: relative;
+  padding-right: 42px;
+  box-shadow: 0 1px 2px rgb(20 25 30 / 3%);
+}
+
+.um-study-composer-textarea {
+  scrollbar-width: thin;
+}
+
+.um-study-composer-bar {
+  min-height: 36px;
+}
+
 .um-study-composer:focus-within,
 .um-study-coach-composer:focus-within {
   border-color: var(--um-color-focus);
@@ -124,8 +140,13 @@
   box-shadow: none;
 }
 
-.um-study-send:hover,
-.um-study-plan-add:hover {
+.um-study-send:disabled {
+  background: var(--um-color-disabled);
+  color: var(--um-color-text-muted);
+  opacity: 1;
+}
+
+.um-study-send:hover {
   background: var(--um-color-accent-hover);
 }
 
@@ -142,16 +163,6 @@
 .um-study-plan.is-complete {
   opacity: .58;
   background: transparent;
-}
-
-.um-study-plan-input {
-  border: 1px solid var(--um-color-border);
-  background: var(--um-color-surface);
-}
-
-.um-study-plan-input:focus-visible {
-  border-color: var(--um-color-focus);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--um-color-focus) 18%, transparent);
 }
 
 .um-study-coach-message {
@@ -176,7 +187,7 @@
   }
 
   .um-study-header {
-    min-height: var(--um-height-touch-target);
+    min-height: 56px;
   }
 
   .um-study-input textarea,
@@ -185,10 +196,22 @@
     font-size: 16px;
   }
 
-  .um-study-input-tools button,
-  .um-study-send {
-    min-width: var(--um-height-touch-target);
-    min-height: var(--um-height-touch-target);
+  .um-study-composer {
+    padding-right: 42px;
+    border-radius: 14px;
+  }
+
+  .um-study-composer-bar {
+    min-height: 38px;
+  }
+
+}
+
+@media (min-width: 768px) {
+  .um-study-room {
+    height: calc(100dvh - 9.5rem);
+    min-height: 520px;
+    margin-top: var(--um-height-header);
   }
 }
 

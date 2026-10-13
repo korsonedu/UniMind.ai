@@ -52,8 +52,8 @@ export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
   return (
     <Popover onOpenChange={(open) => open && giphyResults.length === 0 && fetchGiphy('')}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-          <FileVideo className="h-4 w-4" />
+        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="选择 GIF">
+          <FileVideo className="h-5 w-5" />
         </Button>
       </PopoverTrigger>
       <PopoverContent side="top" className="w-80 p-3 rounded-2xl border-border shadow-lg space-y-3 bg-card z-[var(--z-dropdown)]">

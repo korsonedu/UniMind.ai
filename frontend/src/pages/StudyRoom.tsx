@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, Chat, DotsThree, XCircle, CaretLeft } from '@phosphor-icons/react';
+import { Play, Pause, Chat, DotsThree, XCircle } from '@phosphor-icons/react';
 import {
   DropdownMenu, DropdownMenuContent,
   DropdownMenuTrigger,
@@ -25,7 +24,6 @@ import { ChatMessageList } from '@/pages/study-room/ChatMessageList';
 import { ChatInput } from '@/pages/study-room/ChatInput';
 import { OnlineUsersPanel } from '@/pages/study-room/OnlineUsersPanel';
 import { PlanList } from '@/pages/study-room/PlanList';
-import { CoachPanel } from '@/pages/study-room/CoachPanel';
 import '@/styles/study-room.css';
 
 interface Message {
@@ -75,7 +73,6 @@ export const StudyRoom: React.FC = () => {
   // ── UI state ──
   const [showStopAlert, setShowStopAlert] = useState(false);
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
   const [showMobileTimerSetup, setShowMobileTimerSetup] = useState(false);
   const [showMobileTimerFullscreen, setShowMobileTimerFullscreen] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -290,14 +287,14 @@ export const StudyRoom: React.FC = () => {
   // ── Derived data ──
   const myMessages = messages.filter(m => m.user_detail?.username === user?.username);
   const myTaskMessages = myMessages.filter(m => isTaskStateMessage(m.content));
-  const lastMyMessageId = myMessages.length > 0 ? myMessages[myMessages.length - 1].id : null;
   const lastMyTaskMessageId = myTaskMessages.length > 0 ? myTaskMessages[myTaskMessages.length - 1].id : null;
+  const fellowLearnersCount = onlineUsers.filter(u => u.username !== user?.username).length;
 
   // ── Render ──
   return (
     <div className={cn(
       "um-study-room overflow-hidden animate-in fade-in duration-300 text-left text-foreground",
-      isMobile ? "h-full min-h-0 flex flex-col gap-0" : "h-[calc(100vh-6.5rem)] flex"
+      isMobile ? "h-full min-h-0 flex flex-col gap-0" : "flex"
     )}>
       {/* ── Main chat area ── */}
       <div
@@ -317,16 +314,16 @@ export const StudyRoom: React.FC = () => {
           "um-study-header flex items-center justify-between sticky top-0 z-20",
           isMobile ? "px-3 py-2" : "px-5 py-2"
         )}>
-          <div className="flex items-center gap-4">
-            {isMobile && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 -ml-1 rounded-lg" onClick={() => navigate(-1)}>
-                <CaretLeft className="h-4 w-4" />
-              </Button>
-            )}
-            <div className="um-study-header-icon h-8 w-8 flex items-center justify-center">
-              <Chat className="h-4 w-4" />
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="um-study-header-icon h-9 w-9 flex items-center justify-center shrink-0">
+              <Chat className="h-[18px] w-[18px]" />
             </div>
-            <h2 className="text-sm font-semibold tracking-tight">学习咖啡厅</h2>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold tracking-tight truncate">学习咖啡厅</h2>
+              <p className="text-[11px] leading-4 text-muted-foreground truncate">
+                {`${fellowLearnersCount}人正在和你一起学习`}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {!isMobile && (
@@ -374,7 +371,6 @@ export const StudyRoom: React.FC = () => {
           messages={messages}
           currentUsername={user?.username || ''}
           showOthersBroadcast={showOthersBroadcast}
-          lastMyMessageId={lastMyMessageId}
           lastMyTaskMessageId={lastMyTaskMessageId}
           isAtBottom={isAtBottom}
           isMobile={isMobile}
@@ -414,7 +410,6 @@ export const StudyRoom: React.FC = () => {
       {/* ── Right sidebar (desktop) ── */}
       <aside className="um-study-context hidden md:flex w-72 flex-col shrink-0 text-foreground" aria-label="自习室上下文">
         <OnlineUsersPanel onlineUsers={onlineUsers} currentUsername={user?.username} />
-        <CoachPanel />
         <PlanList
           plans={plans}
           allowBroadcast={allowBroadcast}

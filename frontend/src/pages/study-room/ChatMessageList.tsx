@@ -44,7 +44,6 @@ interface ChatMessageListProps {
   messages: Message[];
   currentUsername: string;
   showOthersBroadcast: boolean;
-  lastMyMessageId: number | null;
   lastMyTaskMessageId: number | null;
   isAtBottom: boolean;
   isMobile: boolean;
@@ -56,7 +55,7 @@ interface ChatMessageListProps {
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   messages, currentUsername, showOthersBroadcast,
-  lastMyMessageId, lastMyTaskMessageId, isAtBottom, isMobile,
+  lastMyTaskMessageId, isAtBottom, isMobile,
   scrollContainerRef, onScroll, onScrollToBottom, onUndoMessage,
 }) => {
   return (
@@ -131,14 +130,6 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                     <span className="text-[11px] text-muted-foreground/40 font-medium">
                       {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </span>
-                    {isMe && msg.id === lastMyMessageId && (
-                      <button
-                        onClick={() => onUndoMessage(msg.id)}
-                        className="text-[11px] font-bold text-muted-foreground/50 hover:text-red-500 underline decoration-dotted underline-offset-2 transition-colors cursor-pointer"
-                      >
-                        撤销
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>

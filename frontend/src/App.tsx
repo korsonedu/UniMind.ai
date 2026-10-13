@@ -8,6 +8,8 @@ import { useStudyRoomWs } from '@/hooks/useStudyRoomWs';
 import { useXiaoYuEngine } from '@/hooks/useXiaoYuEngine';
 import { FEATURES } from './store/useInstitutionStore';
 const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ default: m.MainLayout })));
+const CommunityLayout = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityLayout })));
+const CommunityEntry = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityEntry })));
 import { useAuthStore } from './store/useAuthStore';
 import { useSystemStore } from './store/useSystemStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
@@ -39,6 +41,7 @@ const SystemSettings = lazyNamed(() => import('./pages/SystemSettings'), 'System
 const KnowledgeMap = lazyNamed(() => import('./pages/KnowledgeMap'), 'KnowledgeMap');
 const KnowledgeNodeDetail = lazyNamed(() => import('./pages/KnowledgeNodeDetail'), 'KnowledgeNodeDetail');
 const QASystem = lazyNamed(() => import('./pages/QASystem'), 'QASystem');
+const QuestionDetail = lazyNamed(() => import('./pages/QASystem'), 'QuestionDetail');
 const TestSessionPage = lazyNamed(() => import('./pages/TestSessionPage'), 'TestSessionPage');
 const PromptTemplatesAdmin = lazyNamed(() => import('./pages/PromptTemplatesAdmin'), 'PromptTemplatesAdmin');
 
@@ -253,11 +256,18 @@ const router = createBrowserRouter([
           { path: "courses/manage", element: <RequireInstitution>{lazyPage(CourseManage)}</RequireInstitution> },
           { path: "articles", element: <Navigate to="/xiaoyu" replace /> },
           { path: "articles/manage", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QASystem)}</FeatureGuard> },
+          {
+            element: lazyPage(CommunityLayout),
+            children: [
+              { path: "community", element: lazyPage(CommunityEntry) },
+              { path: "qa", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QASystem)}</FeatureGuard> },
+              { path: "qa/:id", element: <FeatureGuard feature={FEATURES.FAQ_SYSTEM}>{lazyPage(QuestionDetail)}</FeatureGuard> },
+              { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
+            ],
+          },
           { path: "article/:id", element: <Navigate to="/xiaoyu" replace /> },
           { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
-          { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
           { path: "xiaoyu", element: lazyPage(XiaoYu) },
           { path: "xiaoyu/practice/:sessionId", element: lazyPage(PracticeSession) },
           { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeMap)}</FeatureGuard> },

@@ -30,6 +30,21 @@ const achievements = [{ id: 1, key: 'diagnostic', name: '首次诊断', descript
 const articles = [{ id: 1, title: '理解货币政策的传导', content: '<p>从政策利率、融资成本与消费投资三个环节理解货币政策。</p>', summary: '政策利率如何影响经济活动', tags: ['金融学'], author_display_name: 'UniMind', created_at: date(-2), updated_at: date(-1), view_count: 36 }];
 const plans: { id: number; content: string; is_completed: boolean }[] = [{ id: 1, content: '复习货币政策', is_completed: false }];
 const messages: { id: number; content: string; timestamp: string; user_detail: typeof user }[] = [];
+const qaTeacher = { ...user, id: 2, username: 'teacher-preview', nickname: '陈老师' };
+const qaAnswers = [
+  { id: 701, question: 601, content: '先区分政策利率和市场利率。政策利率影响银行的资金成本，再通过信贷、资产价格和预期影响消费与投资。\n\n传导需要时间，也会受到银行放贷意愿与企业投资预期的影响。', is_teacher: true, created_at: `${date()}T02:20:00Z`, user_detail: qaTeacher, likes_count: 3, is_liked: false },
+  { id: 702, question: 601, content: '明白了，如果企业对未来收益预期较弱，即使融资成本降低，也可能不增加投资，对吗？', is_teacher: false, created_at: `${date()}T02:30:00Z`, user_detail: user, likes_count: 0, is_liked: false },
+  { id: 703, question: 601, content: '对，这就是预期影响传导效果的一个例子。回答时可以把融资成本和预期分别解释，再说明两者如何共同影响投资决策。', is_teacher: true, created_at: `${date()}T02:40:00Z`, user_detail: qaTeacher, likes_count: 1, is_liked: false },
+];
+const qaQuestions: Array<{
+  id: number; content: string; attachment: string | null; is_solved: boolean; is_starred: boolean;
+  created_at: string; user_detail: typeof user; answers: typeof qaAnswers;
+  first_answer: (typeof qaAnswers)[number] | null; reply_count: number;
+  likes_count: number; is_liked: boolean; is_followed: boolean;
+}> = [
+  { id: 601, content: '政策利率下降后，为什么消费和投资不一定马上增加？\n\n我理解融资成本会降低，但不太清楚银行信贷和市场预期在这里分别起什么作用。', attachment: null, is_solved: true, is_starred: true, created_at: `${date()}T02:00:00Z`, user_detail: user, answers: qaAnswers, first_answer: qaAnswers[0], reply_count: 3, likes_count: 5, is_liked: false, is_followed: false },
+  { id: 602, content: '如何理解现值计算中的折现率？\n\n我在比较两笔未来现金流时有些困惑。未来两年后收到的金额相同，但其中一笔来自国债，另一笔来自企业债券。\n\n如果直接使用相同的折现率，计算出来的现值也会一样。但企业债券的违约风险更高，我感觉这个风险应该在计算中有所体现。\n\n我的问题是：折现率应该只考虑资金的时间价值，还是同时考虑风险补偿？选择折现率时，应该先确定一个无风险利率，再加入风险溢价吗？\n\n另外，如果市场利率变化，已经发行的固定利率债券价格也会变化。这个变化能否直接从现值公式中解释？\n\n希望老师能结合一个简单例子，把现金流、折现率和债券价格之间的关系串起来。', attachment: null, is_solved: false, is_starred: false, created_at: `${date()}T01:00:00Z`, user_detail: { ...user, id: 3, username: 'classmate-preview', nickname: '林同学' }, answers: [], first_answer: null, reply_count: 0, likes_count: 0, is_liked: false, is_followed: false },
+];
 const watchLater: { course: number; created_at: string }[] = [{ course: 3, created_at: date() }];
 const courseActivity = Array.from({ length: 28 }, (_, i) => ({ date: date(i - 27), course: i % 2 + 1, watched_seconds: i % 5 ? (i * 211) % 2300 : 0, completions: i === 26 ? 1 : 0, elo_earned: i === 26 ? 20 : 0 }));
 let learningGoal: { title: string; deadline: string; courses: number[] } | null = JSON.parse(sessionStorage.getItem('unimind-preview-goal') || 'null');
@@ -90,10 +105,25 @@ api.defaults.adapter = async config => {
     case '/users/me/knowledge-mastery/': data = { '1': 'learning', '2': 'learning' }; break;
     case '/users/me/report-card/': data = { student: { ...user, date_joined: date(-60) }, stats: { total_attempted: 236, total_distinct: 180, correct_count: 148, wrong_count: 42, mastered_count: 128, accuracy: 82.2, study_streak: 6, checkin_streak: 5 }, radar: [{ subject: '金融学', avg_mastery: 72, kp_count: 12 }, { subject: '经济学', avg_mastery: 65, kp_count: 8 }, { subject: '数学', avg_mastery: 84, kp_count: 10 }], daily_activity: dashboard.stats.heatmap_days, exams: dashboard.exams, achievements: achievements.filter(a => a.is_unlocked) }; break;
     case '/articles/': data = { articles, tag_stats: [{ tag: '金融学', count: 1 }], total_pages: 1 }; break;
-    case '/qa/questions/': data = []; break;
+    case '/qa/questions/': {
+      if (config.method === 'post') {
+        const question = { id: Date.now(), content: String((config.data as FormData).get('content')), attachment: null, is_solved: false, is_starred: false, created_at: new Date().toISOString(), user_detail: user, answers: [], first_answer: null, reply_count: 0, likes_count: 0, is_liked: false, is_followed: false };
+        qaQuestions.unshift(question); data = question;
+      } else data = qaQuestions.filter(q => (!params.get('search') || `${q.content}${q.user_detail.nickname}`.includes(params.get('search')!)) && (params.get('filter') === 'solved' ? q.is_solved : params.get('filter') === 'unsolved' ? !q.is_solved : params.get('filter') === 'followed' ? q.is_followed : params.get('filter') === 'starred' ? q.is_starred : true));
+      break;
+    }
+    case '/qa/answers/': {
+      const question = qaQuestions.find(q => q.id === payload.question)!;
+      const isTeacher = role === 'teacher' || role === 'admin';
+      if (!question.answers.length && !isTeacher) throw new AxiosError('首个回答必须由教师完成', 'PREVIEW_FORBIDDEN', config);
+      const answer = { id: Date.now(), question: question.id, content: payload.content, is_teacher: isTeacher, created_at: new Date().toISOString(), user_detail: user, likes_count: 0, is_liked: false };
+      question.answers.push(answer); question.reply_count = question.answers.length;
+      if (!question.first_answer) { question.first_answer = answer; question.is_solved = true; }
+      data = answer; break;
+    }
     case '/users/online/': data = [user]; break;
     case '/study/messages/': if (config.method === 'post') messages.push({ id: Date.now(), content: payload.content, timestamp: new Date().toISOString(), user_detail: user }); data = messages; break;
-    case '/users/plans/': if (config.method === 'post') plans.push({ id: Date.now(), content: payload.content, is_completed: false }); data = plans; break;
+    case '/users/plans/': if (config.method === 'post') { const plan = { id: Date.now(), content: payload.content, is_completed: false }; plans.push(plan); data = plan; } else data = plans; break;
     case '/quizzes/stats/': data = { review_goal: 8, new_questions: 10, at_risk_count: 3, recommended_questions: 18, estimated_minutes: 20, weak_focus_count: 2 }; break;
     case '/quizzes/questions/': {
       const ids = params.get('ids')?.split(',').map(Number);
@@ -110,7 +140,29 @@ api.defaults.adapter = async config => {
     case '/quizzes/wrong-questions/insights/': data = { overview: { wrong_questions: 2, wrong_attempts: 5 }, recommended_drills: [{ drill_type: 'cause', drill_key: 'concept', drill_label: '概念理解', question_count: 2, question_ids: [103, 101], recommended_questions: 2 }, { drill_type: 'knowledge_point', drill_key: '2', drill_label: '货币政策', question_count: 2, question_ids: [103, 101], recommended_questions: 2 }], cause_breakdown: [{ cause_key: 'concept', cause_label: '概念理解', question_count: 2, wrong_attempts: 5, ratio: 1 }], knowledge_point_breakdown: [{ knowledge_point_id: 2, knowledge_point_name: '货币政策', question_count: 2, avg_wrong_count: 2.5 }] }; break;
     case '/payments/orders/': data = []; break;
     default:
-      if (/^\/ai\/projects\/\d+\/$/.test(path)) {
+      if (/^\/qa\/questions\/\d+\/$/.test(path)) {
+        const index = qaQuestions.findIndex(q => q.id === Number(path.split('/')[3]));
+        if (index < 0) throw new AxiosError('问题不存在', 'PREVIEW_NOT_FOUND', config);
+        const question = qaQuestions[index];
+        if (config.method === 'delete') qaQuestions.splice(index, 1);
+        else {
+          if (config.method === 'patch') question.content = payload.content;
+          data = question;
+        }
+      }
+      else if (/^\/qa\/questions\/\d+\/action\/$/.test(path)) {
+        const question = qaQuestions.find(q => q.id === Number(path.split('/')[3]))!;
+        if (payload.toggle_follow) question.is_followed = !question.is_followed;
+        if (payload.toggle_like) { question.is_liked = !question.is_liked; question.likes_count += question.is_liked ? 1 : -1; }
+        if (payload.toggle_star) question.is_starred = !question.is_starred;
+        if (payload.toggle_solved) question.is_solved = !question.is_solved;
+        data = question;
+      }
+      else if (/^\/qa\/answers\/\d+\/action\/$/.test(path)) {
+        const answer = qaQuestions.flatMap(q => q.answers).find(a => a.id === Number(path.split('/')[3]))!;
+        answer.is_liked = !answer.is_liked; answer.likes_count += answer.is_liked ? 1 : -1; data = answer;
+      }
+      else if (/^\/ai\/projects\/\d+\/$/.test(path)) {
         const id = Number(path.split('/')[3]);
         if (config.method === 'delete') { projectFixtures.projects = projectFixtures.projects.filter(project => project.id !== id); history = history.filter(message => message.conversation_project !== id); Object.entries(projectFixtures.assignments).forEach(([key, value]) => { if (value === id) delete projectFixtures.assignments[key]; }); }
         else { const project = projectFixtures.projects.find(project => project.id === id)!; project.name = payload.name; project.instructions = payload.instructions || ''; data = project; }

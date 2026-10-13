@@ -19,7 +19,7 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
     <Card className="um-study-online border-0 shadow-none rounded-none bg-transparent overflow-hidden p-4 min-h-0 flex flex-col">
       <header className="um-study-section-header mb-3 flex items-center justify-between">
         <CardTitle className="text-[13px] font-semibold text-foreground">
-          实时共学
+          在线人数
         </CardTitle>
         <span className="text-xs tabular-nums text-muted-foreground">{onlineUsers.length}</span>
       </header>

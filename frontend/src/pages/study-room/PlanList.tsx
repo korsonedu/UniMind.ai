@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Card, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, Circle, ListChecks, Plus, Trash } from '@phosphor-icons/react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CheckCircle, Circle, Plus, Trash } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -21,11 +22,45 @@ interface PlanListProps {
 const PlanList: React.FC<PlanListProps> = (props) => {
   const { plans, allowBroadcast, onRefresh, onStartPlan, onPlanCompleted, onPlanDeleted } = props;
   const [newPlan, setNewPlan] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const { confirm, Dialog } = useConfirm();
+
+  const addPlan = async () => {
+    const content = newPlan.trim();
+    if (!content || isAdding) return;
+    setIsAdding(true);
+    try {
+      const { data } = await api.post('/users/plans/', { content });
+      onRefresh();
+      setNewPlan('');
+      setEditorOpen(false);
+      if (allowBroadcast) {
+        try {
+          await api.post('/study/messages/', { content: `📅 制定了计划：${content}`, related_plan_id: data.id });
+        } catch { toast.error('计划已保存，但共学动态发送失败'); }
+      }
+    } catch (e) { toast.error(formatApiErrorToast(e, '添加计划失败')); }
+    finally { setIsAdding(false); }
+  };
 
   return (
     <Card className="um-study-plans border-0 shadow-none rounded-none bg-transparent overflow-hidden p-4 md:flex-1 min-h-0 flex flex-col">
-      <header className="um-study-section-header mb-3 flex items-center justify-between"><CardTitle className="text-[13px] font-semibold text-foreground">计划清单</CardTitle><ListChecks className="h-4 w-4 text-muted-foreground" /></header>
+      <header className="um-study-section-header mb-3 flex items-center justify-between">
+        <CardTitle className="text-[13px] font-semibold text-foreground">计划清单</CardTitle>
+        <Popover open={editorOpen} onOpenChange={setEditorOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground" aria-label="添加学习计划"><Plus className="h-[18px] w-[18px]" /></Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" sideOffset={8} collisionPadding={16} className="um-study-plan-editor w-[300px] max-w-[calc(100vw-32px)] rounded-2xl p-4" aria-label="新建学习计划">
+            <form onSubmit={e => { e.preventDefault(); void addPlan(); }} className="space-y-3">
+              <label htmlFor="study-new-plan" className="block text-sm font-medium">新建学习计划</label>
+              <Input id="study-new-plan" value={newPlan} onChange={e => setNewPlan(e.target.value)} placeholder="今天准备完成什么？" autoComplete="off" disabled={isAdding} onKeyDown={e => { if (e.key === 'Enter' && e.nativeEvent.isComposing) e.preventDefault(); }} className="h-10 rounded-lg text-base md:text-sm" />
+              <div className="flex justify-end"><Button type="submit" disabled={isAdding || !newPlan.trim()} size="sm" className="rounded-full px-4">{isAdding ? '保存中…' : '添加计划'}</Button></div>
+            </form>
+          </PopoverContent>
+        </Popover>
+      </header>
       <div className="flex-1 overflow-y-auto space-y-1.5 pr-2 scrollbar-none">
         {plans.map(p => (
           <div key={p.id} className={cn("um-study-plan group flex items-center gap-3 p-2 rounded-lg transition-colors", p.is_completed && "is-complete")}>
@@ -69,47 +104,6 @@ const PlanList: React.FC<PlanListProps> = (props) => {
             </button>
           </div>
         ))}
-      </div>
-      <div className="mt-4 flex gap-2">
-        <Input
-          value={newPlan}
-          onChange={e => setNewPlan(e.target.value)}
-          onKeyDown={async (e) => {
-            if (e.key === 'Enter' && !(e.nativeEvent as any).isComposing) {
-              if (!newPlan.trim()) return;
-              const res = await api.post('/users/plans/', { content: newPlan });
-              if (allowBroadcast) {
-                await api.post('/study/messages/', {
-                  content: `📅 制定了计划：${newPlan}`,
-                  related_plan_id: res.data.id
-                });
-              }
-              onRefresh();
-              setNewPlan('');
-            }
-          }}
-          placeholder="添加学习计划…"
-          className="um-study-plan-input h-9 rounded-lg text-[13px] px-3 text-foreground"
-        />
-        <Button
-          onClick={async () => {
-            if (!newPlan.trim()) return;
-            const res = await api.post('/users/plans/', { content: newPlan });
-            if (allowBroadcast) {
-              await api.post('/study/messages/', {
-                content: `📅 制定了计划：${newPlan}`,
-                related_plan_id: res.data.id
-              });
-            }
-            onRefresh();
-            setNewPlan('');
-          }}
-          size="icon"
-          className="um-study-plan-add h-9 w-9 bg-primary text-primary-foreground rounded-lg shrink-0 transition-colors"
-          aria-label="添加学习计划"
-        >
-          <Plus className="h-3.5 w-3.5"/>
-        </Button>
       </div>
       {Dialog}
     </Card>

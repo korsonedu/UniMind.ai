@@ -30,6 +30,7 @@ export function LearningHeatmap({ today, days }: { today: string; days: Learning
   const start = dateOffset(yearStart, -weekday(yearStart));
   const weeks = Math.ceil((weekday(yearStart) + 365) / 7);
   const dates = Array.from({ length: weeks * 7 }, (_, index) => dateOffset(start, index));
+  const selectedWeek = Math.floor(dates.indexOf(selected) / 7);
   const activeDays = dates.filter(date => date >= yearStart && date <= today && ((byDate.get(date)?.seconds || 0) > 0 || (byDate.get(date)?.completions || 0) > 0)).length;
   const summary = (date: string) => {
     const weekStart = dateOffset(date, -weekday(date));
@@ -63,7 +64,8 @@ export function LearningHeatmap({ today, days }: { today: string; days: Learning
         <TooltipProvider delayDuration={120}><div className="um-heatmap-grid" role="group" aria-label="全年每日学习热力图">{dates.map((date, index) => {
           if (date < yearStart || date > today) return <span key={date} aria-hidden="true" />;
           const label = summary(date);
-          return <Tooltip key={date}><TooltipTrigger asChild><button type="button" data-day-index={index} data-level={level(byDate.get(date))} aria-label={label} aria-pressed={date === selected} aria-describedby={`${chartId}-detail`} tabIndex={date === selected ? 0 : -1} onPointerEnter={() => setSelected(date)} onClick={() => setSelected(date)} onFocus={() => setSelected(date)} onKeyDown={event => move(event, index)} /></TooltipTrigger><TooltipPortal><TooltipContent className="um-heatmap-tooltip">{label}</TooltipContent></TooltipPortal></Tooltip>;
+          const isSelected = mode === 'week' ? Math.floor(index / 7) === selectedWeek : date === selected;
+          return <Tooltip key={date}><TooltipTrigger asChild><button type="button" data-day-index={index} data-level={level(byDate.get(date))} aria-label={label} aria-pressed={isSelected} aria-describedby={`${chartId}-detail`} tabIndex={date === selected ? 0 : -1} onPointerEnter={() => setSelected(date)} onClick={() => setSelected(date)} onFocus={() => setSelected(date)} onKeyDown={event => move(event, index)} /></TooltipTrigger><TooltipPortal><TooltipContent className="um-heatmap-tooltip">{label}</TooltipContent></TooltipPortal></Tooltip>;
         })}</div></TooltipProvider>
       </div>
     </div>
