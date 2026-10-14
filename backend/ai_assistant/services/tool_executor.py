@@ -783,6 +783,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                     continue
                 formatted_answers.append({
                     'question': {
+                        'id': qid,
                         'question_text': q_dict['text'],
                         'q_type': q_dict['q_type'],
                         'answer': q_dict['correct_answer'],

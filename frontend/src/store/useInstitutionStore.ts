@@ -3,7 +3,7 @@ import api, { setPreviewInstitutionId } from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 
-interface InstitutionInfo {
+export interface InstitutionInfo {
   id: number;
   name: string;
   slug: string;

@@ -1,3 +1,4 @@
+import type { GeneratedQuestion } from '@/types/api';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -30,7 +31,7 @@ interface TaskStatus {
   current_stage: string;
   status_text: string;
   stages: Array<{ stage: string; count?: number; timestamp?: string }>;
-  questions?: Array<Record<string, unknown>>;
+  questions?: GeneratedQuestion[];
 }
 
 interface Bot {
@@ -44,7 +45,7 @@ interface Props {
   pipelineTaskId: number | null;
   bot: Bot | null;
   onPipelineStart?: (taskId: number) => void;
-  onPipelineComplete?: (questions: Array<Record<string, unknown>>, taskId: number) => void;
+  onPipelineComplete?: (questions: GeneratedQuestion[], taskId: number) => void;
   onQuestionsSaved?: (indices: number[]) => void;
   onSystemMessage?: (msg: string) => void;
 }
@@ -78,7 +79,7 @@ const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
 const POLL_INITIAL = 5000;
 const POLL_MAX = 60000;
 
-export default function QuestionPanel({ questions, savedIndices, pipelineTaskId, bot, onPipelineStart, onPipelineComplete, onQuestionsSaved, onSystemMessage }: Props) {
+export default function QuestionPanel({ questions, savedIndices, pipelineTaskId, onPipelineStart, onPipelineComplete, onQuestionsSaved, onSystemMessage }: Props) {
   // 过滤掉已保存的题目，用原始索引
   const displayQuestions = questions
     .map((q, i) => ({ q, originalIndex: i }))
@@ -96,10 +97,12 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
   const completedHandledRef = useRef(false);
   const doPollRef = useRef<(() => void) | undefined>(undefined);
 
+  const [statusTaskId, setStatusTaskId] = useState(pipelineTaskId);
+  if (statusTaskId !== pipelineTaskId) { setStatusTaskId(pipelineTaskId); setTaskStatus(null); }
+
   // ── Polling effect ──
   useEffect(() => {
     if (!pipelineTaskId) {
-      setTaskStatus(null);
       completedHandledRef.current = false;
       doPollRef.current = undefined;
       return;
@@ -177,7 +180,7 @@ export default function QuestionPanel({ questions, savedIndices, pipelineTaskId,
     } else {
       setSelected(new Set(displayQuestions.map((_, i) => i)));
     }
-  }, [selected.size, displayQuestions.length]);
+  }, [selected.size, displayQuestions]);
 
   const handleSave = useCallback(async () => {
     const selectedDisplayIndices = selected.size > 0 ? Array.from(selected) : undefined;

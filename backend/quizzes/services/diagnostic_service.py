@@ -2,12 +2,23 @@ import logging
 from datetime import timedelta
 from django.utils import timezone
 from django.db import transaction
+from rest_framework import serializers
 from quizzes.models import UserQuestionStatus, UserKnowledgeState
+from .question_normalizer import normalize_objective_answer
 
 logger = logging.getLogger(__name__)
 
 DIAGNOSTIC_QUESTION_COUNT = 10
 DIAGNOSTIC_TIME_LIMIT_SECONDS = 300
+
+
+class DiagnosticQuestionReference(serializers.Serializer):
+    id = serializers.IntegerField(min_value=1)
+
+
+class DiagnosticAnswerInput(serializers.Serializer):
+    question = DiagnosticQuestionReference()
+    answer = serializers.CharField(allow_blank=True, trim_whitespace=False)
 
 
 def generate_diagnostic_questions(institution):
@@ -30,7 +41,6 @@ def generate_diagnostic_questions(institution):
             'question_text': q.text,
             'q_type': q.q_type,
             'options': q.options or [],
-            'answer': q.correct_answer,
             'knowledge_point_id': kp.id if kp else None,
             '_kp_name': kp.name if kp else '',
         })
@@ -41,18 +51,34 @@ def generate_diagnostic_questions(institution):
 def grade_diagnostic_answers(user, answers):
     """评分诊断答案，返回结果和知识点分析。"""
     from ai_service import AIService
+    from quizzes.models import Question
+
+    serializer = DiagnosticAnswerInput(
+        data=answers, many=True, allow_empty=False,
+        max_length=DIAGNOSTIC_QUESTION_COUNT,
+    )
+    serializer.is_valid(raise_exception=True)
+    answers = serializer.validated_data
+    question_ids = [item['question']['id'] for item in answers]
+    if len(set(question_ids)) != len(question_ids):
+        raise serializers.ValidationError({'answers': '诊断题目不能重复。'})
+    questions = Question.objects.filter(
+        pk__in=question_ids, institution=user.institution,
+    ).select_related('knowledge_point').in_bulk()
+    if len(questions) != len(question_ids):
+        raise serializers.ValidationError({'answers': '题目不存在或无访问权限。'})
 
     results = []
     kp_scores = {}  # kp_id -> {correct, total, kp_name}
 
     for item in answers:
-        question_data = item.get('question', {})
-        user_answer = item.get('answer', '')
-        kp_id = item.get('knowledge_point_id') or question_data.get('knowledge_point_id')
-        kp_name = item.get('_kp_name') or question_data.get('_kp_name', '')
-
-        q_type = question_data.get('q_type', 'objective')
-        correct_answer = question_data.get('answer', '')
+        question = questions[item['question']['id']]
+        user_answer = item['answer']
+        kp_id = question.knowledge_point_id
+        kp_name = question.knowledge_point.name if kp_id else ''
+        q_type = question.q_type
+        correct_answer = question.correct_answer
+        question_data = {'question_text': question.text, 'answer': correct_answer}
 
         # 客观题用精确匹配，主观题用 AI 评分
         feedback = ''
@@ -91,7 +117,7 @@ def _check_objective_answer(user_answer, correct_answer):
     """客观题精确匹配。"""
     if not user_answer or not correct_answer:
         return False
-    return user_answer.strip().upper() == correct_answer.strip().upper()
+    return normalize_objective_answer(user_answer) == normalize_objective_answer(correct_answer)
 
 
 def _grade_subjective_answer(ai_service, question_data, user_answer):
@@ -223,7 +249,6 @@ def generate_reassessment(user, previous_diagnostic_id=None):
             'question_text': q.text,
             'q_type': q.q_type,
             'options': q.options or [],
-            'answer': q.correct_answer,
             'knowledge_point_id': kp.id if kp else None,
             '_kp_name': kp.name if kp else '',
         })

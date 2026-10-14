@@ -1,3 +1,4 @@
+import type { KnowledgePoint, QuizQuestion, Course } from '@/types/api';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useNavigate } from 'react-router-dom';
@@ -23,14 +24,14 @@ export const KnowledgeMap: React.FC = () => {
   const [allNodes, setAllNodes] = useState<KPNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<KPNode | null>(null);
-  const [nodeDetails, setNodeDetails] = useState<{ courses: any[]; questions: any[] }>({
+  const [nodeDetails, setNodeDetails] = useState<{ courses: Course[]; questions: QuizQuestion[] }>({
     courses: [],
     questions: [],
   });
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [treeSearch, setTreeSearch] = useState('');
   const isMobile = useIsMobile();
-  const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
+  const [selectedQuestion, setSelectedQuestion] = useState<QuizQuestion | null>(null);
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph');
   const [graphRootId, setGraphRootId] = useState<string>('all');
   const [masteryData, setMasteryData] = useState<Record<string, string>>({});
@@ -38,10 +39,6 @@ export const KnowledgeMap: React.FC = () => {
   const [mobileVisibleCount, setMobileVisibleCount] = useState(40);
   const mobileSentinelRef = useRef<HTMLDivElement>(null);
 
-  // Reset visible count when search changes or toggling to tree
-  useEffect(() => {
-    setMobileVisibleCount(40);
-  }, [treeSearch, mobileTreeOpen]);
 
   // IntersectionObserver: load more grid items as user scrolls
   useEffect(() => {
@@ -60,24 +57,22 @@ export const KnowledgeMap: React.FC = () => {
     return () => observer.disconnect();
   }, [isMobile, mobileTreeOpen, allNodes.length]);
 
-  useEffect(() => {
-    fetchMap();
-    fetchMastery();
-  }, []);
 
-  const fetchMastery = async () => {
-    try {
-      const { data } = await api.get('/users/me/knowledge-mastery/');
+
+  const fetchMastery = () => {
+
+    return api.get('/users/me/knowledge-mastery/').then(({ data }) => {
       setMasteryData(data || {});
-    } catch (e) { console.debug('[KnowledgeMap] mastery fetch failed:', e); }
+    })
+      .catch((e: unknown) => { console.debug('[KnowledgeMap] mastery fetch failed:', e); });
   };
 
-  const fetchMap = async () => {
-    try {
-      const res = await api.get('/quizzes/knowledge-points/');
-      let rawData = res.data;
+  const fetchMap = () => {
+
+    return api.get('/quizzes/knowledge-points/').then((res) => {
+      const rawData = res.data;
       const flatNodes: KPNode[] = [];
-      const flatten = (items: any[]) => {
+      const flatten = (items: KnowledgePoint[]) => {
         for (const item of items) {
           flatNodes.push({
             id: item.id,
@@ -95,11 +90,20 @@ export const KnowledgeMap: React.FC = () => {
       else flatNodes.push(...rawData);
       flatNodes.sort((a, b) => (b.questions_count || 0) - (a.questions_count || 0) || (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name));
       setAllNodes(flatNodes);
-    } catch (e) { console.debug('[KnowledgeMap] fetchMap failed:', e);
-    } finally {
-      setLoading(false);
-    }
+    })
+      .catch((e: unknown) => {
+        console.debug('[KnowledgeMap] fetchMap failed:', e);
+      })
+      .finally(() => {
+        setLoading(false);
+
+      });
   };
+
+  useEffect(() => {
+    fetchMap();
+    fetchMastery();
+  }, []);
 
   /** Find the ancestor at `targetLevel` for a given node. */
   const findAncestorAtLevel = useCallback(
@@ -221,7 +225,7 @@ export const KnowledgeMap: React.FC = () => {
                   <Input
                     placeholder="搜索知识卡片..."
                     value={treeSearch}
-                    onChange={e => setTreeSearch(e.target.value)}
+                    onChange={e => { setTreeSearch(e.target.value); setMobileVisibleCount(40); }}
                     className="w-full rounded-2xl bg-card border-border shadow-sm h-11 pl-10 pr-4 font-bold"
                   />
                 </div>
@@ -235,7 +239,7 @@ export const KnowledgeMap: React.FC = () => {
                   selectedId={selectedNode?.id ?? null}
                   onSelect={handleNodeSelect}
                   searchQuery={treeSearch}
-                  onSearchChange={setTreeSearch}
+                  onSearchChange={value => { setTreeSearch(value); setMobileVisibleCount(40); }}
                   masteryData={masteryData}
                 />
               </div>
@@ -276,7 +280,7 @@ export const KnowledgeMap: React.FC = () => {
                 selectedId={selectedNode?.id ?? null}
                 onSelect={handleNodeSelect}
                 searchQuery={treeSearch}
-                onSearchChange={setTreeSearch}
+                onSearchChange={value => { setTreeSearch(value); setMobileVisibleCount(40); }}
                 masteryData={masteryData}
               />
             </div>
@@ -304,7 +308,7 @@ export const KnowledgeMap: React.FC = () => {
                   <Input
                     placeholder="搜索考点..."
                     value={treeSearch}
-                    onChange={e => setTreeSearch(e.target.value)}
+                    onChange={e => { setTreeSearch(e.target.value); setMobileVisibleCount(40); }}
                     className="flex-1 rounded-xl bg-card border-border shadow-sm h-10 px-4 font-bold text-xs"
                   />
                 )}

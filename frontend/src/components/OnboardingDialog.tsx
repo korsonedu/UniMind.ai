@@ -1,3 +1,5 @@
+import type { SubjectCategory } from '@/components/DirectionSelector';
+import { formatApiErrorToast } from '@/lib/apiError';
 import { useState, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -54,7 +56,7 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
 
   // Direction data
   const [plan, setPlan] = useState('');
-  const [subjects, setSubjects] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<SubjectCategory[]>([]);
 
   const goToStep = useCallback((nextStep: number) => {
     setAnimState('exiting');
@@ -93,8 +95,8 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
       const subRes = await api.get('/quizzes/knowledge-points/subjects/');
       setSubjects(subRes.data.categories || []);
       goToStep(3);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '激活码无效');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '激活码无效'));
     }
     setLoading(false);
   };
@@ -130,8 +132,8 @@ export function OnboardingDialog({ mandatory = false }: { mandatory?: boolean })
       updateUser({ institution_id: data.institution.id, institution_role: 'owner' });
       await fetchFeatures();
       setDone(true);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '创建失败');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '创建失败'));
     }
     setLoading(false);
   };

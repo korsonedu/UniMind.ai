@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect, useRef } from 'react';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { Button } from '@/components/ui/button';
@@ -58,17 +60,17 @@ export const StudyRoom: React.FC = () => {
   const setCoachEvent = useStudyRoomStore(s => s.setCoachEvent);
   const startSession = useStudyRoomStore(s => s.startSession);
   const pauseSession = useStudyRoomStore(s => s.pauseSession);
-  const resumeSession = useStudyRoomStore(s => s.resumeSession);
+
   const endSession = useStudyRoomStore(s => s.endSession);
   const [duration, setDuration] = useState(25);
   const [taskName, setTaskName] = useState('深度专注学习');
 
   // ── Chat & plans state ──
-  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<{ id: number; username: string; nickname: string; avatar_url: string; current_task: string; elo_score: number; today_focused_minutes: number; today_completed_tasks: unknown[] }[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [activePlanId, setActivePlanId] = useState<number | null>(null);
+  const [, setActivePlanId] = useState<number | null>(null);
 
   // ── UI state ──
   const [showStopAlert, setShowStopAlert] = useState(false);
@@ -100,9 +102,27 @@ export const StudyRoom: React.FC = () => {
   }, [setPageHeader]);
 
   // ── API calls ──
-  const fetchOnline = async () => { try { const res = await api.get('/users/online/'); setOnlineUsers(res.data); } catch (e) { console.error('fetchOnline failed', e); } };
-  const fetchMessages = async () => { try { const res = await api.get('/study/messages/'); setMessages(res.data); } catch (e) { console.error('fetchMessages failed', e); } };
-  const fetchPlans = async () => { try { const res = await api.get('/users/plans/'); setPlans(res.data); } catch (e) { console.error('fetchPlans failed', e); } };
+  const fetchOnline = () => {
+
+    return api.get('/users/online/').then((res) => {
+      setOnlineUsers(res.data);
+    })
+      .catch((e: unknown) => { console.error('fetchOnline failed', e); });
+  };
+  const fetchMessages = () => {
+
+    return api.get('/study/messages/').then((res) => {
+      setMessages(res.data);
+    })
+      .catch((e: unknown) => { console.error('fetchMessages failed', e); });
+  };
+  const fetchPlans = () => {
+
+    return api.get('/users/plans/').then((res) => {
+      setPlans(res.data);
+    })
+      .catch((e: unknown) => { console.error('fetchPlans failed', e); });
+  };
 
   // ── Coach event toast ──
   useEffect(() => {
@@ -120,7 +140,7 @@ export const StudyRoom: React.FC = () => {
       toast.success(`已专注 ${coachEvent.total_minutes} 分钟，继续保持！`, { duration: 4000 });
     }
     setCoachEvent(null);
-  }, [coachEvent]);
+  }, [allowBroadcast, coachEvent, duration, setCoachEvent, taskName]);
 
   // ── Last session summary ──
   useEffect(() => {
@@ -155,11 +175,11 @@ export const StudyRoom: React.FC = () => {
     setIsAtBottom(scrollHeight - scrollTop - clientHeight < 150);
   };
 
-  const scrollToBottom = (force = false) => {
+  const scrollToBottom = useCallback((force = false) => {
     if (scrollContainerRef.current && (isAtBottom || force)) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  };
+  }, [isAtBottom]);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -169,7 +189,7 @@ export const StudyRoom: React.FC = () => {
       if (isMe || isAtBottom) setTimeout(() => scrollToBottom(true), 50);
       lastMessageIdRef.current = lastMsg.id;
     }
-  }, [messages, user?.username, isAtBottom]);
+  }, [messages, user?.username, isAtBottom, scrollToBottom]);
 
   // ── Timer logic (delegates to store → WS) ──
   const handleDurationChange = (val: number) => {
@@ -184,7 +204,7 @@ export const StudyRoom: React.FC = () => {
       try {
         await api.post('/study/messages/', { content: `💪 开始了「${taskName}」任务 (计划 ${duration} 分钟)` });
         fetchMessages();
-      } catch (e) { toast.error('发送失败，请重试'); }
+      } catch { toast.error('发送失败，请重试'); }
     }
   };
 
@@ -197,7 +217,7 @@ export const StudyRoom: React.FC = () => {
       try {
         await api.post('/study/messages/', { content: `❌ 中止了「${taskName}」任务 (专注 ${focusedMins} 分钟)` });
         fetchMessages();
-      } catch (e) { toast.error('发送失败，请重试'); }
+      } catch { toast.error('发送失败，请重试'); }
     }
   };
 
@@ -210,7 +230,7 @@ export const StudyRoom: React.FC = () => {
       fetchMessages();
       setIsAtBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
-    } catch (e) {
+    } catch {
       setChatInput(content);
       toast.error('发送失败');
     }
@@ -224,7 +244,7 @@ export const StudyRoom: React.FC = () => {
       const res = await api.post('/study/upload-image/', formData);
       setChatInput(prev => (prev ? prev + '\n' : '') + `![image](${res.data.url})`);
       toast.success('图片已就绪，点击发送即可', { id: tid });
-    } catch (e) {
+    } catch {
       toast.error('图片处理失败', { id: tid });
     }
   };
@@ -240,7 +260,7 @@ export const StudyRoom: React.FC = () => {
       fetchMessages();
       setIsAtBottom(true);
       setTimeout(() => scrollToBottom(true), 100);
-    } catch (e) {
+    } catch {
       toast.error('发送 GIF 失败');
     }
   };
@@ -262,8 +282,8 @@ export const StudyRoom: React.FC = () => {
       toast.success('已撤回');
       fetchMessages();
       fetchPlans();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.error || '撤回失败');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '撤回失败'));
     }
   };
 
@@ -272,9 +292,9 @@ export const StudyRoom: React.FC = () => {
       await api.patch('/users/me/update/', { [field]: val });
       if (field === 'allow_broadcast') setAllowBroadcast(val);
       if (field === 'show_others_broadcast') setShowOthersBroadcast(val);
-      updateUser({ ...user, [field]: val } as any);
+      updateUser({ ...user, [field]: val } );
       toast.success('偏好已更新');
-    } catch (e) { toast.error('更新失败'); }
+    } catch { toast.error('更新失败'); }
   };
 
   const handleEnterMobileFocus = async () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { Trophy, Medal, Spinner, Buildings } from '@phosphor-icons/react';
 import {
   Popover,
@@ -36,31 +36,33 @@ export const EloPopover: React.FC = () => {
 
   const hasInstitution = !!user?.institution_id;
 
-  const fetchRanking = async () => {
+  const fetchRanking = useCallback(() => {
     if (!hasInstitution) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get('/users/institution/me/students/ranking/');
+    return api.get('/users/institution/me/students/ranking/').then((res) => {
       setRanking(res.data || []);
-    } catch {
-      setError('failed');
-    } finally {
-      setLoading(false);
-    }
-  };
+      setError(null);
+    })
+      .catch(() => {
+        setError('failed');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [hasInstitution]);
+
+
 
   useEffect(() => {
-    if (open && user) {
+    if (open && user?.id) {
       fetchRanking();
     }
-  }, [open, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, user?.id, fetchRanking]);
 
   const currentUserRank = ranking.findIndex(u => u.id === user?.id) + 1;
   const currentUserInList = currentUserRank > 0;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={next => { setOpen(next); if (next && hasInstitution) { setLoading(true); setError(null); } }}>
       <PopoverTrigger asChild>
         <button
           aria-label={`ELO ${user?.elo_score ?? '暂无'}，查看评分与排名`}

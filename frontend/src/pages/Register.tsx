@@ -1,3 +1,4 @@
+import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ export const Register: React.FC = () => {
   const [sendingCode, setSendingCode] = useState(false);
   const [error, setError] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
+  const [, setCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
@@ -26,7 +27,7 @@ export const Register: React.FC = () => {
   useEffect(() => {
     const { user } = useAuthStore.getState();
     if (user) navigate('/', { replace: true });
-  }, []);
+  }, [navigate]);
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
@@ -62,8 +63,8 @@ export const Register: React.FC = () => {
           return prev - 1;
         });
       }, 1000);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '发送失败');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '发送失败'));
     } finally {
       setSendingCode(false);
     }
@@ -77,8 +78,8 @@ export const Register: React.FC = () => {
     try {
       await api.post('/users/register/', { email, code, nickname, password, agreed_to_terms: agreedToTerms, referral_code: refCode });
       navigate(institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login');
-    } catch (err: any) {
-      setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat()[0] as string || '注册失败');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '注册失败'));
     } finally {
       setLoading(false);
     }

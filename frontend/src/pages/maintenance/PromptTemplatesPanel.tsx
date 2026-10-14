@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,7 +45,7 @@ export const PromptTemplatesPanel: React.FC = () => {
   const [namespace, setNamespace] = useState('quizzes');
   const [templates, setTemplates] = useState<TemplateListItem[]>([]);
   const [selectedTemplateName, setSelectedTemplateName] = useState('');
-  const [loadingList, setLoadingList] = useState(false);
+  const [loadingList, setLoadingList] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rolling, setRolling] = useState(false);
@@ -66,10 +67,16 @@ export const PromptTemplatesPanel: React.FC = () => {
 
   const dirty = useMemo(() => content !== originalContent, [content, originalContent]);
 
-  const fetchTemplates = async () => {
-    setLoadingList(true);
-    try {
-      const res = await api.get('/quizzes/admin/prompt-templates/', { params: { namespace } });
+  const [templateQuery, setTemplateQuery] = useState({ namespace, selectedTemplateName });
+  if (templateQuery.namespace !== namespace || templateQuery.selectedTemplateName !== selectedTemplateName) {
+    if (templateQuery.namespace !== namespace) setLoadingList(true);
+    setLoadingDetail(Boolean(selectedTemplateName));
+    setTemplateQuery({ namespace, selectedTemplateName });
+  }
+
+  const fetchTemplates = useCallback(() => {
+
+    return api.get('/quizzes/admin/prompt-templates/', { params: { namespace } }).then((res) => {
       const list = (res.data?.results || []) as TemplateListItem[];
       setTemplates(list);
       if (list.length === 0) {
@@ -80,23 +87,26 @@ export const PromptTemplatesPanel: React.FC = () => {
         setLatestVersion(0);
         return;
       }
-      if (!list.find((x) => x.template_name === selectedTemplateName)) {
-        setSelectedTemplateName(list[0].template_name);
-      }
-    } catch (e) {
-      toast.error(formatApiErrorToast(e, '模板列表加载失败'));
-    } finally {
-      setLoadingList(false);
-    }
-  };
-
-  const fetchTemplateDetail = async (templateName: string) => {
-    if (!templateName) return;
-    setLoadingDetail(true);
-    try {
-      const res = await api.get('/quizzes/admin/prompt-templates/detail/', {
-        params: { namespace, template_name: templateName },
+      setSelectedTemplateName(current => list.some(x => x.template_name === current) ? current : list[0].template_name);
+    })
+      .catch((e: unknown) => {
+        toast.error(formatApiErrorToast(e, '模板列表加载失败'));
+      })
+      .finally(() => {
+        setLoadingList(false);
       });
+  }, [namespace]);
+  const refreshFetchTemplates = useCallback(() => {
+    setLoadingList(true);
+    return fetchTemplates();
+  }, [fetchTemplates]);
+
+
+  const fetchTemplateDetail = useCallback((templateName: string) => {
+    if (!templateName) return;
+    return api.get('/quizzes/admin/prompt-templates/detail/', {
+      params: { namespace, template_name: templateName },
+    }).then((res) => {
       const detail = res.data || {};
       setContent(String(detail.content || ''));
       setOriginalContent(String(detail.content || ''));
@@ -105,22 +115,29 @@ export const PromptTemplatesPanel: React.FC = () => {
       setHistory(rows);
       setSelectedHistoryId(rows[0]?.id ?? null);
       setChangeNote('');
-    } catch (e) {
-      toast.error(formatApiErrorToast(e, '模板详情加载失败'));
-    } finally {
-      setLoadingDetail(false);
-    }
-  };
+    })
+      .catch((e: unknown) => {
+        toast.error(formatApiErrorToast(e, '模板详情加载失败'));
+      })
+      .finally(() => {
+        setLoadingDetail(false);
+      });
+  }, [namespace]);
+  const refreshFetchTemplateDetail = useCallback((templateName: string) => {
+    setLoadingDetail(true);
+    return fetchTemplateDetail(templateName);
+  }, [fetchTemplateDetail]);
+
 
   useEffect(() => {
     fetchTemplates();
-  }, [namespace]);
+  }, [fetchTemplates, namespace]);
 
   useEffect(() => {
     if (selectedTemplateName) {
       fetchTemplateDetail(selectedTemplateName);
     }
-  }, [selectedTemplateName]);
+  }, [fetchTemplateDetail, selectedTemplateName]);
 
   const handleSave = async () => {
     if (!selectedTemplateName) return;
@@ -133,8 +150,8 @@ export const PromptTemplatesPanel: React.FC = () => {
         change_note: changeNote,
       });
       toast.success('模板已保存并生成新版本');
-      await fetchTemplateDetail(selectedTemplateName);
-      await fetchTemplates();
+      await refreshFetchTemplateDetail(selectedTemplateName);
+      await refreshFetchTemplates();
     } catch (e) {
       toast.error(formatApiErrorToast(e, '模板保存失败'));
     } finally {
@@ -152,8 +169,8 @@ export const PromptTemplatesPanel: React.FC = () => {
         version_id: selectedHistoryId,
       });
       toast.success('已回滚到指定版本并生成新版本记录');
-      await fetchTemplateDetail(selectedTemplateName);
-      await fetchTemplates();
+      await refreshFetchTemplateDetail(selectedTemplateName);
+      await refreshFetchTemplates();
     } catch (e) {
       toast.error(formatApiErrorToast(e, '回滚失败'));
     } finally {
@@ -181,7 +198,7 @@ export const PromptTemplatesPanel: React.FC = () => {
         </div>
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">模板列表</p>
-          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={fetchTemplates}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={refreshFetchTemplates}>
             {loadingList ? <Spinner className="w-3.5 h-3.5 animate-spin" /> : <ArrowsClockwise className="w-3.5 h-3.5 opacity-50" />}
           </Button>
         </div>
@@ -249,7 +266,7 @@ export const PromptTemplatesPanel: React.FC = () => {
       <Card className="xl:col-span-3 p-5 rounded-3xl border border-black/[0.04] shadow-sm bg-white space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-bold text-black/40 uppercase tracking-widest">版本历史</p>
-          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => selectedTemplateName && fetchTemplateDetail(selectedTemplateName)}>
+          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg" onClick={() => selectedTemplateName && refreshFetchTemplateDetail(selectedTemplateName)}>
             {loadingDetail ? <Spinner className="w-3.5 h-3.5 animate-spin" /> : <ArrowsClockwise className="w-3.5 h-3.5 opacity-50" />}
           </Button>
         </div>

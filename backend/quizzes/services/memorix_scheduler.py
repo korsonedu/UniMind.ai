@@ -214,7 +214,6 @@ def get_memorix_session_plan(user, minutes: int = 25, preferred_limit: Optional[
     new_qs = Question.objects.exclude(id__in=attempted_ids)
     inst = getattr(user, 'institution', None)
     if inst:
-        from django.db.models import Q
         new_qs = new_qs.filter(institution=inst)
     new_questions_count = new_qs.count()
 

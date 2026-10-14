@@ -1,3 +1,5 @@
+import { formatApiErrorToast } from '@/lib/apiError';
+import type { QuizQuestion } from '@/types/api';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from '@/components/ui/badge';
@@ -9,12 +11,12 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 
 interface KnowledgeTrainingDialogProps {
-  question: any;
+  question: QuizQuestion | null;
   onClose: () => void;
   onSuccess?: () => void;
 }
 
-const normalizeObjectiveOptions = (rawOptions: any): Array<{ key: string; text: string }> => {
+const normalizeObjectiveOptions = (rawOptions: string[] | Record<string, string> | null | undefined): Array<{ key: string; text: string }> => {
   if (Array.isArray(rawOptions)) {
     return rawOptions
       .slice(0, 4)
@@ -44,10 +46,15 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
   onClose,
   onSuccess
 }) => {
+  if (!question) return null;
+  return <TrainingQuestion key={question.id} question={question} onClose={onClose} onSuccess={onSuccess} />;
+};
+
+const TrainingQuestion: React.FC<KnowledgeTrainingDialogProps> = ({ question, onClose, onSuccess }) => {
   const [answer, setAnswer] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [resultData, setResultData] = useState<any>(null);
+  const [resultData, setResultData] = useState<{ analysis?: string; feedback?: string; score?: number; max_score?: number; total_score?: number; is_correct?: boolean } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const objectiveOptions = useMemo(
@@ -55,12 +62,6 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
     [question?.options]
   );
 
-  useEffect(() => {
-    setAnswer('');
-    setIsSubmitting(false);
-    setShowResult(false);
-    setResultData(null);
-  }, [question?.id]);
 
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
@@ -80,6 +81,9 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
     return '暂无判分依据，请稍后重试。';
   }, [resultData?.feedback, showResult]);
 
+
+  if (!question) return null;
+
   const handleSubmit = async () => {
     if (!answer.trim()) return toast.error('请输入或选择答案');
 
@@ -90,8 +94,8 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
       toast.success('已提交后台判分，你可以先去做别的事。');
       if (onSuccess) onSuccess();
       onClose();
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '提交失败');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '提交失败'));
     } finally {
       setIsSubmitting(false);
     }
@@ -103,7 +107,6 @@ export const KnowledgeTrainingDialog: React.FC<KnowledgeTrainingDialogProps> = (
     setResultData(null);
   };
 
-  if (!question) return null;
 
   return (
     <Dialog open={!!question} onOpenChange={(open) => { if (!open && !isSubmitting) onClose(); }}>

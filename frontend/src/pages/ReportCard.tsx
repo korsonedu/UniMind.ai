@@ -22,10 +22,8 @@ export const ReportCard = () => {
   const [error, setError] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const fetchData = () => {
-    setLoading(true);
-    setError(false);
     api.get<ReportData>('/users/me/report-card/')
-      .then(res => setData(res.data))
+      .then(res => { setData(res.data); setError(false); })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   };
@@ -48,7 +46,7 @@ export const ReportCard = () => {
 
   return <LearningRecordLayout action={<button className="um-record-button" onClick={handleDownloadPDF} disabled={downloading || loading || error || !data}><Download size={16} />{downloading ? '生成中…' : '下载 PDF'}</button>}>
     {loading ? <div className="um-record-loading" aria-label="加载成绩报告" aria-busy="true"><Skeleton className="h-24 w-full" /><Skeleton className="h-64 w-full" /></div>
-      : error ? <div className="um-record-empty" role="alert"><p>成绩报告加载失败。</p><button className="um-record-button" onClick={fetchData}>重试</button></div>
+      : error ? <div className="um-record-empty" role="alert"><p>成绩报告加载失败。</p><button className="um-record-button" onClick={() => { setLoading(true); setError(false); fetchData(); }}>重试</button></div>
       : !data ? <div className="um-record-empty"><p>暂无成绩报告</p><Link to="/xiaoyu">开始学习</Link></div>
       : <>
         <div className="um-record-identity"><span>{data.student.nickname || '学习者'}</span><span>累计学习记录</span></div>
@@ -84,7 +82,7 @@ export const ReportCard = () => {
               <CartesianGrid vertical={false} stroke="var(--um-color-border)" strokeDasharray="3 3" />
               <XAxis dataKey="created_at" tickFormatter={(value: string) => value.slice(5, 10)} tick={{ fontSize: 12, fill: 'var(--um-color-text-muted)' }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: 'var(--um-color-text-muted)' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(value: any) => [`${value}%`, '得分率']} labelFormatter={(label: any) => `考试 ${label}`} contentStyle={{ background: 'var(--um-color-surface)', borderColor: 'var(--um-color-border)', borderRadius: 8, fontSize: 12 }} />
+              <Tooltip formatter={(value: unknown) => [`${value}%`, '得分率']} labelFormatter={(label: unknown) => `考试 ${label}`} contentStyle={{ background: 'var(--um-color-surface)', borderColor: 'var(--um-color-border)', borderRadius: 8, fontSize: 12 }} />
               <Bar dataKey="percentage" fill="var(--um-color-accent)" radius={[3, 3, 0, 0]} maxBarSize={32} />
             </BarChart></ResponsiveContainer></div> : <p className="um-record-chart-empty">完成考试后查看成绩变化。</p>}
           </section>

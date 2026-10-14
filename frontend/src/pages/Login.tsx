@@ -1,3 +1,4 @@
+import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,7 @@ export const Login: React.FC = () => {
   useEffect(() => {
     const { user } = useAuthStore.getState();
     if (user) navigate('/', { replace: true });
-  }, []);
+  }, [navigate]);
 
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -65,9 +66,8 @@ export const Login: React.FC = () => {
       }
       await fetchFeatures();
       navigate('/');
-    } catch (err: any) {
-      const errorData = err.response?.data;
-      setError(errorData?.error || errorData?.non_field_errors?.[0] || errorData?.detail || '登录失败');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '登录失败'));
     } finally {
       setLoading(false);
     }
@@ -86,8 +86,8 @@ export const Login: React.FC = () => {
     try {
       await api.post('/users/send-verification-code/', { email, purpose: 'login_by_code' });
       navigate(`/verify-code?email=${encodeURIComponent(email)}&purpose=login_by_code${institutionSlug ? `&institution=${institutionSlug}&role=${institutionRole}` : ''}`);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '发送失败，请稍后重试');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '发送失败，请稍后重试'));
       setSendingCode(false);
     }
   };

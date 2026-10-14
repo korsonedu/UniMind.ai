@@ -29,7 +29,7 @@ export const QuickCreateAlbumDialog: React.FC<Props> = ({ open, onOpenChange, on
       setName('');
       setDesc('');
       toast.success('专辑已创建');
-    } catch (e) {
+    } catch {
       toast.error('创建失败');
     }
   };

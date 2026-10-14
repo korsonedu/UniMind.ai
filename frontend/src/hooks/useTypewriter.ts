@@ -60,7 +60,7 @@ export function useTypewriter({
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   // Re-run when text changes to advance character by character
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [text, words, typingSpeed, deletingSpeed, pauseDuration]);
 
   return text;

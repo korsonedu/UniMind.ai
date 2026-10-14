@@ -53,9 +53,9 @@ export function UpgradeModal({ open, onOpenChange, feature, currentPlan = 'free'
 
   // Determine target plan
   const requiredPlan = feature ? FEATURE_REQUIRED_PLAN[feature] : null;
-  const currentIdx = PLAN_ORDER.indexOf(currentPlan as any);
+  const currentIdx = PLAN_ORDER.indexOf(currentPlan as typeof PLAN_ORDER[number]);
   const nextIdx = requiredPlan
-    ? PLAN_ORDER.indexOf(requiredPlan as any)
+    ? PLAN_ORDER.indexOf(requiredPlan as typeof PLAN_ORDER[number])
     : Math.min(currentIdx + 1, PLAN_ORDER.length - 1);
   const targetPlan = PLAN_ORDER[Math.max(nextIdx, 1)]; // at least solo
   const meta = PLAN_META[targetPlan];

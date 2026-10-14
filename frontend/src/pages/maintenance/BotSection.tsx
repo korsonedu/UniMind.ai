@@ -1,3 +1,4 @@
+import type { Bot } from '@/types/api';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,26 +15,33 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useConfirm } from '@/components/useConfirm';
 import { InstitutionBotSection } from './InstitutionBotSection';
 
+type EditableBot = Omit<Bot, 'avatar'> & { avatar: string | File | null };
+
 export const BotSection: React.FC = () => {
   const user = useAuthStore(s => s.user);
-  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   // 机构管理员看到可见性开关 + 自定义 bot 管理
   if (user?.is_institution_admin && !user?.is_admin) {
     return <div className="max-w-5xl mx-auto space-y-6"><InstitutionBotSection /></div>;
   }
-  const [items, setItems] = useState<any[]>([]);
+  return <PlatformBotSection />;
+};
+
+function PlatformBotSection() {
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
+  const [items, setItems] = useState<Bot[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editingItem, setEditingItem] = useState<EditableBot | null>(null);
   const [form, setForm] = useState({ name: '', prompt: '', avatar: null as File | null, is_exclusive: false });
 
-  const fetchItems = useCallback(async () => {
-    try {
-      const res = await api.get('/ai/bots/');
+  const fetchItems = useCallback(() => {
+
+    return api.get('/ai/bots/').then((res) => {
       setItems(res.data);
-    } catch (e) { console.debug('[BotSection] fetch failed:', e); }
-    finally { setLoading(false); }
+    })
+      .catch((e: unknown) => { console.debug('[BotSection] fetch failed:', e); })
+      .finally(() => { setLoading(false); });
   }, []);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
@@ -60,11 +68,11 @@ export const BotSection: React.FC = () => {
   const handleUpdate = async () => {
     if (!editingItem) return;
     const fd = new FormData();
-    Object.keys(editingItem).forEach(key => {
-      if (editingItem[key] instanceof File) fd.append(key, editingItem[key]);
-      else if (editingItem[key] !== null && editingItem[key] !== undefined) {
-        if (key === 'avatar' && typeof editingItem[key] === 'string') return;
-        fd.append(key, String(editingItem[key]));
+    Object.entries(editingItem).forEach(([key, value]) => {
+      if (value instanceof File) fd.append(key, value);
+      else if (value !== null && value !== undefined) {
+        if (key === 'avatar' && typeof value === 'string') return;
+        fd.append(key, String(value));
       }
     });
     try {
@@ -110,11 +118,11 @@ export const BotSection: React.FC = () => {
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
           <ScrollArea className="h-[560px]">
             <div className="divide-y divide-black/[0.04]">
-              {items.map((item: any) => (
+              {items.map((item: Bot) => (
                 <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
                   <div className="flex items-center gap-4">
                     <Avatar className="h-10 w-10 rounded-full shrink-0">
-                      <AvatarImage src={item.avatar} />
+                      <AvatarImage src={item.avatar || undefined} />
                       <AvatarFallback className="text-xs font-medium bg-[#F5F5F7]">{item.name?.[0]}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
@@ -186,7 +194,7 @@ export const BotSection: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
-        <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
+        {editingItem && <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">编辑 AI 助教</DialogTitle>
           </DialogHeader>
@@ -213,7 +221,7 @@ export const BotSection: React.FC = () => {
               Update & Sync
             </Button>
           </div>
-        </DialogContent>
+        </DialogContent>}
       </Dialog>
       {ConfirmDialog}
     </div>

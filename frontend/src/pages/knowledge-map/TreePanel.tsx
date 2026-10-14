@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CaretRight, CaretDown, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -55,11 +55,12 @@ export const KnowledgeTreePanel: React.FC<{
     return roots;
   }, [nodes]);
 
-  // Auto-expand to show selected node
-  useEffect(() => {
-    if (!selectedId) return;
+  const [expandedFor, setExpandedFor] = useState<number | null>(null);
+  // Expand the new selection before committing its tree.
+  if (selectedId && selectedId !== expandedFor) {
+    setExpandedFor(selectedId);
     const nodeMap = new Map(nodes.map(n => [n.id, n]));
-    if (!nodeMap.has(selectedId)) return;
+
     const path: number[] = [];
     let cur: KPNode | undefined = nodeMap.get(selectedId);
     while (cur) {
@@ -71,7 +72,7 @@ export const KnowledgeTreePanel: React.FC<{
       path.forEach(id => next.add(id));
       return next;
     });
-  }, [selectedId, nodes]);
+  }
 
   const toggleExpand = (id: number) => {
     setExpandedIds(prev => {

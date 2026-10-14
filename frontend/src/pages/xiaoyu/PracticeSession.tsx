@@ -1,3 +1,4 @@
+import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Spinner, CaretLeft, Target, Clock } from '@phosphor-icons/react';
@@ -57,21 +58,35 @@ function processMathContent(text: string): string {
 
 const PracticeSession: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
+  return <PracticeSessionContent key={sessionId} sessionId={sessionId} />;
+};
+
+const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [error, setError] = useState('');
+  const [answers, setAnswers] = useState<Record<number, string>>(() => {
+    if (!sessionId) return {};
+    const saved = localStorage.getItem(`practice:${sessionId}:answers`);
+    if (!saved) return {};
+    try { return JSON.parse(saved); } catch { return {}; }
+  });
+  const [error, setError] = useState(sessionId ? '' : '缺少会话 ID');
   const [submitResult, setSubmitResult] = useState<SubmitResponse | null>(null);
-  const [startTime] = useState(Date.now());
-  const [isMobile, setIsMobile] = useState(false);
+  const [startTime] = useState(Date.now);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (phase === 'results') return;
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [phase, startTime]);
 
   // ── Mobile detection ─────────────────────────────────
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
@@ -79,10 +94,7 @@ const PracticeSession: React.FC = () => {
 
   // ── Fetch questions ──────────────────────────────────
   useEffect(() => {
-    if (!sessionId) {
-      setError('缺少会话 ID');
-      return;
-    }
+    if (!sessionId) return;
     api.post('/ai/practice/start/', { count: 5 })
       .then((res) => {
         if (res.data.questions?.length) {
@@ -93,7 +105,7 @@ const PracticeSession: React.FC = () => {
         }
       })
       .catch((err) => {
-        setError(err?.response?.data?.error || '加载题目失败');
+        setError(formatApiErrorToast(err, '加载题目失败'));
       });
   }, [sessionId]);
 
@@ -113,14 +125,6 @@ const PracticeSession: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // ── Restore answers from localStorage on mount ───────
-  useEffect(() => {
-    if (!sessionId) return;
-    const saved = localStorage.getItem(`practice:${sessionId}:answers`);
-    if (saved) {
-      try { setAnswers(JSON.parse(saved)); } catch {}
-    }
-  }, [sessionId]);
 
   // ── Pre-grade on question change ─────────────────────
   const prevIdxRef = React.useRef(currentIdx);
@@ -140,7 +144,7 @@ const PracticeSession: React.FC = () => {
         }).catch(() => {}); // 静默失败，submit 时 fallback
       }
     }
-  }, [currentIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentIdx, questions, answers, sessionId]);
 
   // ── Persist answers to localStorage ──────────────────
   const persistAnswers = (updated: Record<number, string>) => {
@@ -178,13 +182,13 @@ const PracticeSession: React.FC = () => {
       setPhase('results');
       // Clean up localStorage
       localStorage.removeItem(`practice:${sessionId}:answers`);
-    } catch (err: any) {
-      setError(err?.response?.data?.error || '提交失败');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '提交失败'));
       setPhase('answering');
     }
   };
 
-  const timeSpent = Math.floor((Date.now() - startTime) / 1000);
+  const timeSpent = elapsed;
   const timeStr = `${Math.floor(timeSpent / 60)}分${timeSpent % 60}秒`;
 
   // ── Touch swipe ──────────────────────────────────────
@@ -292,7 +296,7 @@ const PracticeSession: React.FC = () => {
   // ── Answering Phase ──────────────────────────────────
   const current = questions[currentIdx];
   const isLast = currentIdx === questions.length - 1;
-  const hasCurrentAnswer = answers[current?.id]?.trim()?.length > 0;
+
   const allAnswered = questions.every((q) => answers[q.id]?.trim()?.length > 0);
 
   return (

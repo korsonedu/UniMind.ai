@@ -17,16 +17,17 @@ export const NotificationConfigSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const fetchConfig = useCallback(async () => {
-    try {
-      const res = await api.get('/users/institution/me/notification-config/');
+  const fetchConfig = useCallback(() => {
+
+    return api.get('/users/institution/me/notification-config/').then((res) => {
       setConfig({
         enabled: res.data.enabled ?? false,
         channel: res.data.channel ?? 'email',
         due_threshold: res.data.due_threshold ?? 5,
       });
-    } catch { /* endpoint not available yet */ }
-    finally { setLoading(false); }
+    })
+      .catch(() => { /* endpoint not available yet */ })
+      .finally(() => { setLoading(false); });
   }, []);
 
   useEffect(() => { fetchConfig(); }, [fetchConfig]);

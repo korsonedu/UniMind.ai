@@ -1,3 +1,4 @@
+import type { KnowledgePoint } from '@/types/api';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +37,7 @@ export const TagInput = ({ tags, setTags, compact = false }: { tags: string[], s
   );
 };
 
-export const KPTreeNode = ({ node, allNodes, onDelete, onEdit }: { node: any, allNodes: any[], onDelete: (id: number) => void, onEdit: (node: any) => void }) => {
+export const KPTreeNode = ({ node, allNodes, onDelete, onEdit }: { node: KnowledgePoint, allNodes: KnowledgePoint[], onDelete: (id: number) => void, onEdit: (node: KnowledgePoint) => void }) => {
   const [isOpen, setIsOpen] = useState(true);
   const children = allNodes.filter(n => n.parent === node.id);
   const hasChildren = children.length > 0;

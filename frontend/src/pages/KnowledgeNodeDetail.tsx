@@ -1,3 +1,4 @@
+import type { QuizQuestion } from '@/types/api';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Spinner, ArrowsOut, Target, Lightning } from '@phosphor-icons/react';
@@ -23,8 +24,8 @@ export const KnowledgeNodeDetail: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [node, setNode] = useState<KnowledgePointDetail | null>(null);
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [selectedQuestion, setSelectedQuestion] = useState<QuizQuestion | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {

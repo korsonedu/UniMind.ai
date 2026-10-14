@@ -1,3 +1,5 @@
+import { isCancel } from 'axios';
+import type { Course, KnowledgePoint, Album } from '@/types/api';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,14 +23,16 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
+type EditableCourse = Omit<Course, 'cover_image' | 'video_file' | 'courseware' | 'reference_materials' | 'knowledge_point' | 'album_obj' | 'tags'> & { cover_image: string | File | null; video_file: string | File | null; courseware: string | File | null; reference_materials: string | File | null; knowledge_point: number | string | null; album_obj?: number | string; tags: string[] };
+
 export const CourseSection: React.FC = () => {
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
-  const [kpList, setKpList] = useState<any[]>([]);
-  const [albumList, setAlbumList] = useState<any[]>([]);
+  const [kpList, setKpList] = useState<KnowledgePoint[]>([]);
+  const [albumList, setAlbumList] = useState<Album[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editingItem, setEditingItem] = useState<EditableCourse | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -39,7 +43,7 @@ export const CourseSection: React.FC = () => {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   // 拖拽顺序用 ref 同步维护：dragOver/dragEnd 是连续事件，React 渲染可能滞后，
   // 直接读 state 闭包会拿到旧顺序，导致提交的排序不是用户看到的结果
-  const itemsRef = useRef<any[]>([]);
+  const itemsRef = useRef<Course[]>([]);
   const dragIdxRef = useRef<number | null>(null);
   const [form, setForm] = useState({
     title: '', album_obj: '0', desc: '', elo_reward: 50,
@@ -48,21 +52,22 @@ export const CourseSection: React.FC = () => {
     tags: [] as string[],
   });
 
-  const fetchData = useCallback(async (p = 1) => {
-    try {
-      const [c, k, a] = await Promise.all([
-        api.get('/courses/', { params: { page: p, page_size: 100, ordering: sortBy } }),
-        api.get('/quizzes/knowledge-points/'),
-        api.get('/courses/albums/'),
-      ]);
+  const fetchData = useCallback((p = 1) => {
+
+    return Promise.all([
+      api.get('/courses/', { params: { page: p, page_size: 100, ordering: sortBy } }),
+      api.get('/quizzes/knowledge-points/'),
+      api.get('/courses/albums/'),
+    ]).then(([c, k, a]) => {
       setItems(c.data.items || c.data);
       itemsRef.current = c.data.items || c.data;
       setTotal(c.data.total ?? c.data.length ?? 0);
       setTotalPages(c.data.total_pages ?? 1);
       setKpList(k.data);
       setAlbumList(a.data);
-    } catch (e) { console.debug('[CourseSection] fetch failed:', e); }
-    finally { setLoading(false); }
+    })
+      .catch((e: unknown) => { console.debug('[CourseSection] fetch failed:', e); })
+      .finally(() => { setLoading(false); });
   }, [sortBy]);
 
   useEffect(() => { fetchData(page); }, [fetchData, page]);
@@ -88,7 +93,7 @@ export const CourseSection: React.FC = () => {
   const handleDragEnd = async () => {
     dragIdxRef.current = null;
     setDragIdx(null);
-    const updated = itemsRef.current.map((item: any, i: number) => ({ id: item.id, sort_order: i }));
+    const updated = itemsRef.current.map((item: Course, i: number) => ({ id: item.id, sort_order: i }));
     try {
       await api.post('/courses/reorder/', { items: updated });
     } catch {
@@ -151,8 +156,8 @@ export const CourseSection: React.FC = () => {
       setStatus(uploadId, 'completed');
       toast.success('课程已发布');
       fetchData();
-    } catch (e: any) {
-      if (e?.name === 'AbortError' || e?.code === 'ERR_CANCELED') return;
+    } catch (e: unknown) {
+      if ((e instanceof Error && e.name === 'AbortError') || isCancel(e)) return;
       const message = formatApiErrorToast(e, '发布失败');
       toast.error(message);
       setStatus(uploadId, 'failed', message);
@@ -162,11 +167,11 @@ export const CourseSection: React.FC = () => {
   const handleUpdate = async () => {
     if (!editingItem) return;
     const fd = new FormData();
-    Object.keys(editingItem).forEach(key => {
-      if (editingItem[key] instanceof File) fd.append(key, editingItem[key]);
-      else if (editingItem[key] !== null && editingItem[key] !== undefined) {
-        if (['video_file', 'cover_image', 'courseware'].includes(key) && typeof editingItem[key] === 'string') return;
-        fd.append(key, String(editingItem[key]));
+    Object.entries(editingItem).forEach(([key, value]) => {
+      if (value instanceof File) fd.append(key, value);
+      else if (value !== null && value !== undefined) {
+        if (['video_file', 'cover_image', 'courseware'].includes(key) && typeof value === 'string') return;
+        fd.append(key, String(value));
       }
     });
     try {
@@ -226,7 +231,7 @@ export const CourseSection: React.FC = () => {
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
           <ScrollArea className="h-[560px]">
             <div className="divide-y divide-black/[0.04]">
-              {items.map((item: any, idx: number) => (
+              {items.map((item: Course, idx: number) => (
                 <div key={item.id}
                   draggable
                   onDragStart={() => handleDragStart(idx)}
@@ -245,9 +250,9 @@ export const CourseSection: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold truncate">{item.title}</p>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {item.album_name && <Badge variant="secondary" className="text-[10px] rounded-lg bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">{item.album_name}</Badge>}
-                        {item.knowledge_point_name && <Badge className="text-[10px] bg-[#0071E3]/10 text-[#0071E3] hover:bg-[#0071E3]/20 rounded-lg font-medium">{item.knowledge_point_name}</Badge>}
-                        {item.tags?.map((tag: any, i: number) => (
+                        {item.album?.name && <Badge variant="secondary" className="text-[10px] rounded-lg bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">{item.album?.name}</Badge>}
+                        {kpList.find(point => point.id === item.knowledge_point)?.name && <Badge className="text-[10px] bg-[#0071E3]/10 text-[#0071E3] hover:bg-[#0071E3]/20 rounded-lg font-medium">{kpList.find(point => point.id === item.knowledge_point)?.name}</Badge>}
+                        {item.tags?.map((tag: Course['tags'][number], i: number) => (
                           <Badge key={i} className="text-[10px] bg-black text-white hover:bg-black/80 rounded-lg">{tag.name ?? tag}</Badge>
                         ))}
                       </div>
@@ -273,7 +278,7 @@ export const CourseSection: React.FC = () => {
                     </div>
                     </div>
                     <div className="flex gap-1 shrink-0 items-center">
-                      <Button onClick={() => setEditingItem({ ...item })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
+                      <Button onClick={() => setEditingItem({ ...item, tags: item.tags.map(tag => tag.name) })} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-[#F5F5F7] rounded-lg">
                         <PencilSimple className="w-3.5 h-3.5" />
                       </Button>
                       <Button onClick={() => handleDelete(item.id, item.title)} variant="ghost" size="icon" className="h-8 w-8 text-[#6E6E73] hover:bg-red-50 hover:text-red-500 rounded-lg">
@@ -381,7 +386,7 @@ export const CourseSection: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
+        {editingItem && <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">属性核心配置</DialogTitle>
           </DialogHeader>
@@ -393,7 +398,7 @@ export const CourseSection: React.FC = () => {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-[#6E6E73] ml-1">ELO 奖励</Label>
-                <Input type="number" value={editingItem?.elo_reward || 0} onChange={e => setEditingItem({ ...editingItem, elo_reward: e.target.value })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
+                <Input type="number" value={editingItem?.elo_reward || 0} onChange={e => setEditingItem({ ...editingItem, elo_reward: Number(e.target.value) })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
               </div>
             </div>
             <div className="space-y-1.5">
@@ -403,18 +408,18 @@ export const CourseSection: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-[#6E6E73] ml-1">更新视频</Label>
-                <Input type="file" onChange={e => setEditingItem({ ...editingItem, video_file: e.target.files?.[0] })} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
+                <Input type="file" onChange={e => { const file = e.target.files?.[0]; if (file) setEditingItem({ ...editingItem, video_file: file }); }} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-[#6E6E73] ml-1">更新封面</Label>
-                <Input type="file" onChange={e => setEditingItem({ ...editingItem, cover_image: e.target.files?.[0] })} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
+                <Input type="file" onChange={e => { const file = e.target.files?.[0]; if (file) setEditingItem({ ...editingItem, cover_image: file }); }} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
               </div>
             </div>
             <Button onClick={handleUpdate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
               Update & Sync
             </Button>
           </div>
-        </DialogContent>
+        </DialogContent>}
       </Dialog>
 
       {/* Quick Create Dialogs */}

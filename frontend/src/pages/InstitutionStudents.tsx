@@ -1,3 +1,5 @@
+import type { InstitutionInfo } from '@/store/useInstitutionStore';
+import { formatApiErrorToast } from '@/lib/apiError';
 import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +22,6 @@ import { useConfirm } from '@/components/useConfirm';
 export default function InstitutionStudents() {
   const { isPlatformAdmin, institution } = useInstitutionStore();
   const [showGlobal, setShowGlobal] = useState(false);
-  const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   // 平台管理员 + 有机构 → 默认显示机构花名册，可切换到全局
   if (isPlatformAdmin && institution) {
@@ -63,8 +64,8 @@ export default function InstitutionStudents() {
    Platform Admin: Global User Management
    ═══════════════════════════════════════════════════════════ */
 
-type UserTag = { id: number; name: string; color: string };
-type PermGroup = { id: number; key: string; name: string; permissions: string[] };
+type UserTag = { is_active: boolean; id: number; name: string; color: string };
+type PermGroup = { is_active: boolean; id: number; key: string; name: string; permissions: string[] };
 type PlatformUser = {
   id: number; username: string; nickname: string; email?: string;
   role: 'student' | 'admin'; is_member: boolean; is_staff: boolean; is_superuser: boolean;
@@ -90,20 +91,34 @@ function PlatformUserManagement() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<PlatformUser | null>(null);
 
-  const fetchAll = useCallback(async () => {
+  const [memberQuery, setMemberQuery] = useState({ search });
+  if (memberQuery.search !== search) {
+    setMemberQuery({ search });
     setLoading(true);
-    try {
-      const [uRes, tRes, gRes] = await Promise.all([
-        api.get('/users/admin/superusers/users/', { params: { page_size: 200, search } }),
-        api.get('/users/admin/user-tags/'),
-        api.get('/users/admin/permission-groups/'),
-      ]);
+  }
+
+  const fetchAll = useCallback(() => {
+
+    return Promise.all([
+      api.get('/users/admin/superusers/users/', { params: { page_size: 200, search } }),
+      api.get('/users/admin/user-tags/'),
+      api.get('/users/admin/permission-groups/'),
+    ]).then(([uRes, tRes, gRes]) => {
       setUsers(uRes.data.results || uRes.data || []);
-      setTags((tRes.data || []).filter((t: any) => t.is_active));
-      setGroups((gRes.data || []).filter((g: any) => g.is_active));
-    } catch { toast.error('加载成员列表失败'); }
-    setLoading(false);
+      setTags((tRes.data || []).filter((t: UserTag) => t.is_active));
+      setGroups((gRes.data || []).filter((g: PermGroup) => g.is_active));
+    })
+      .catch(() => { toast.error('加载成员列表失败'); })
+      .finally(() => {
+
+        setLoading(false);
+      });
   }, [search]);
+  const refreshFetchAll = useCallback(() => {
+    setLoading(true);
+    return fetchAll();
+  }, [fetchAll]);
+
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -134,7 +149,7 @@ function PlatformUserManagement() {
               <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder='搜索用户…' className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <Button variant="ghost" size="icon" onClick={fetchAll}><ArrowsClockwise className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={refreshFetchAll}><ArrowsClockwise className="h-4 w-4" /></Button>
           </div>
 
           {loading ? (
@@ -174,8 +189,8 @@ function PlatformUserManagement() {
           {selected ? (
             <PlatformPermissionEditor key={selected.id}
               user={selected} tags={tags} groups={groups}
-              onSaved={fetchAll} onCancel={() => setSelected(null)}
-              onTagsChanged={fetchAll} onGroupsChanged={fetchAll} />
+              onSaved={refreshFetchAll} onCancel={() => setSelected(null)}
+              onTagsChanged={refreshFetchAll} onGroupsChanged={refreshFetchAll} />
           ) : (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground pt-20">
               选择左侧用户以编辑权限
@@ -205,8 +220,8 @@ function PlatformPermissionEditor({
   const [newGroupKey, setNewGroupKey] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
 
-  const toggle = (setter: any, field: string, val: any) => setter((prev: any) => ({
-    ...prev, [field]: prev[field].includes(val) ? prev[field].filter((v: any) => v !== val) : [...prev[field], val],
+  const toggle = <K extends 'tag_ids' | 'group_ids' | 'extra' | 'blocked'>(field: K, val: (typeof e)[K][number]) => setE(prev => ({
+    ...prev, [field]: prev[field].some(value => value === val) ? prev[field].filter(value => value !== val) : [...prev[field], val],
   }));
 
   const addTag = async () => {
@@ -247,7 +262,7 @@ function PlatformPermissionEditor({
         <div className="space-y-4 pr-2">
           {/* Role + Checkboxes */}
           <div className="flex items-center gap-4 flex-wrap">
-            <select value={e.role} onChange={ev => setE({ ...e, role: ev.target.value as any })}
+            <select value={e.role} onChange={ev => setE({ ...e, role: ev.target.value as PlatformUser['role'] })}
               className="h-9 rounded-lg border px-3 text-sm font-medium">
               <option value="student">student</option><option value="admin">admin</option>
             </select>
@@ -263,7 +278,7 @@ function PlatformPermissionEditor({
           <Section label='标签'>
             <div className="flex flex-wrap gap-1.5">
               {tags.map(t => (
-                <button key={t.id} onClick={() => toggle(setE, 'tag_ids', t.id)}
+                <button key={t.id} onClick={() => toggle('tag_ids', t.id)}
                   className={cn('text-[11px] font-bold px-2.5 py-1 rounded-lg border', e.tag_ids.includes(t.id) ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-card border-border text-muted-foreground/60')}>{t.name}</button>
               ))}
             </div>
@@ -278,7 +293,7 @@ function PlatformPermissionEditor({
           <Section label='权限组'>
             <div className="flex flex-wrap gap-1.5">
               {groups.map(g => (
-                <button key={g.id} onClick={() => toggle(setE, 'group_ids', g.id)}
+                <button key={g.id} onClick={() => toggle('group_ids', g.id)}
                   className={cn('text-[11px] font-bold px-2.5 py-1 rounded-lg border', e.group_ids.includes(g.id) ? 'bg-indigo-100 border-indigo-300 text-indigo-800' : 'bg-card border-border text-muted-foreground/60')}>{g.name}</button>
               ))}
             </div>
@@ -293,7 +308,7 @@ function PlatformPermissionEditor({
           <Section label='额外授权（绿色 = 已授权）'>
             <div className="flex flex-wrap gap-1">
               {ALL_CAPS.map(c => (
-                <button key={c} onClick={() => toggle(setE, 'extra', c)}
+                <button key={c} onClick={() => toggle('extra', c)}
                   className={cn('text-[10px] font-mono font-bold px-2 py-0.5 rounded border', e.extra.includes(c) ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-card border-border text-muted-foreground/40 hover:border-muted-foreground/40')}>{c}</button>
               ))}
             </div>
@@ -303,7 +318,7 @@ function PlatformPermissionEditor({
           <Section label='禁用权限（红色 = 已禁用）'>
             <div className="flex flex-wrap gap-1">
               {ALL_CAPS.map(c => (
-                <button key={c} onClick={() => toggle(setE, 'blocked', c)}
+                <button key={c} onClick={() => toggle('blocked', c)}
                   className={cn('text-[10px] font-mono font-bold px-2 py-0.5 rounded border', e.blocked.includes(c) ? 'bg-red-100 border-red-300 text-red-800' : 'bg-card border-border text-muted-foreground/40 hover:border-muted-foreground/40')}>{c}</button>
               ))}
             </div>
@@ -337,7 +352,7 @@ type RosterMember = {
   elo_score: number; institution_role: string; date_joined: string;
 };
 
-function InstitutionRosterManagement({ institution }: { institution: any }) {
+function InstitutionRosterManagement({ institution }: { institution: InstitutionInfo }) {
   const user = useAuthStore(s => s.user);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
   const isOwner = user?.is_institution_owner;
@@ -349,9 +364,16 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [roleUpdating, setRoleUpdating] = useState<number | null>(null);
 
-  const fetch = async () => {
-    try { const { data } = await api.get('/users/institution/me/members/'); setMembers(data); } catch { toast.error('加载成员列表失败'); }
-    setLoading(false);
+  const fetch = () => {
+
+    return api.get('/users/institution/me/members/').then(({ data }) => {
+      setMembers(data);
+    })
+      .catch(() => { toast.error('加载成员列表失败'); })
+      .finally(() => {
+
+        setLoading(false);
+      });
   };
   useEffect(() => { fetch(); }, []);
 
@@ -376,8 +398,8 @@ function InstitutionRosterManagement({ institution }: { institution: any }) {
       await api.patch(`/users/institution/me/members/${memberId}/role/`, { role: newRole });
       setMembers(prev => prev.map(m => m.id === memberId ? { ...m, institution_role: newRole } : m));
       toast.success(newRole === 'teacher' ? '已设为教师' : '已设为学员');
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || '修改角色失败，请重试');
+    } catch (err: unknown) {
+      toast.error(formatApiErrorToast(err, '修改角色失败，请重试'));
     }
     setRoleUpdating(null);
   };
@@ -598,7 +620,7 @@ function AddStudentDialog({ onAdded, disabled }: { onAdded: () => void; disabled
       await api.post('/users/institution/me/students/', form);
       setForm({ username: '', email: '', nickname: '', password: '' });
       onAdded(); setOpen(false);
-    } catch (err: any) { setError(err.response?.data?.error || '添加学员失败，请检查信息后重试'); }
+    } catch (err: unknown) { setError(formatApiErrorToast(err, '添加学员失败，请检查信息后重试')); }
     setSaving(false);
   };
 
@@ -642,8 +664,9 @@ function StudentDetailPanel({ studentId }: { studentId: number }) {
   const [stats, setStats] = useState<StudentStats | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [loadingStudent, setLoadingStudent] = useState(studentId);
+  if (loadingStudent !== studentId) { setLoadingStudent(studentId); setLoading(true); }
   useEffect(() => {
-    setLoading(true);
     api.get(`/users/institution/me/students/${studentId}/stats/`)
       .then(res => setStats(res.data))
       .catch(() => {})
@@ -761,11 +784,11 @@ function BatchImportDialog({ onImported }: { onImported: () => void }) {
     try {
       const { data } = await api.post('/users/institution/me/students/', { students });
       const fail = (data.failed || []).length;
-      const errors = (data.failed || []).map((f: any) => `${f.username}: ${f.error}`);
+      const errors = (data.failed || []).map((f: { username: string; error: string }) => `${f.username}: ${f.error}`);
       setResult({ ok: data.created_count || 0, fail, errors }); setImporting(false);
       if (data.created_count > 0) onImported();
-    } catch (err: any) {
-      setResult({ ok: 0, fail: students.length, errors: [err.response?.data?.error || '导入失败'] });
+    } catch (err: unknown) {
+      setResult({ ok: 0, fail: students.length, errors: [formatApiErrorToast(err, '导入失败')] });
       setImporting(false);
     }
   };
@@ -816,8 +839,8 @@ function ResetPasswordDialog({ userId, username }: { userId: number; username: s
       }
       toast.success(`已重置 ${username} 的密码`);
       setOpen(false); setPassword('');
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || '重置失败，可能需要平台管理员权限');
+    } catch (err: unknown) {
+      toast.error(formatApiErrorToast(err, '重置失败，可能需要平台管理员权限'));
     }
     setSaving(false);
   };

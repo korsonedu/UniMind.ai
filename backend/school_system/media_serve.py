@@ -12,6 +12,10 @@ from email.utils import formatdate, parsedate_to_datetime
 
 from django.conf import settings
 from django.http import HttpResponse, StreamingHttpResponse, HttpResponseRedirect
+from rest_framework.exceptions import AuthenticationFailed
+
+from core.authentication import CookieTokenAuthentication
+from users.permissions import is_platform_admin
 
 
 _RANGE_RE = re.compile(r"bytes\s*=\s*(\d*)\s*-\s*(\d*)")
@@ -58,6 +62,14 @@ def _iter_chunks(file_path: str, offset: int = 0, size: int | None = None, chunk
 
 
 def media_serve(request, path):
+    if not request.user.is_authenticated:
+        try:
+            authentication = CookieTokenAuthentication().authenticate(request)
+        except AuthenticationFailed:
+            return HttpResponse(status=401)
+        if authentication is not None:
+            request.user, _ = authentication
+
     # 权限检查：机构文件必须登录才能访问
     if path.startswith('institutions/') and not request.user.is_authenticated:
         return HttpResponse(status=401)
@@ -72,7 +84,7 @@ def media_serve(request, path):
                 institution_id = parts[1]
 
                 # 超管可以访问所有文件
-                if request.user.is_superuser:
+                if is_platform_admin(request.user):
                     pass
                 # 普通用户只能访问自己机构的文件
                 elif hasattr(request.user, 'institution_id') and str(request.user.institution_id) == institution_id:

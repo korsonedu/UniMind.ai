@@ -27,6 +27,8 @@ export const KnowledgeGraph = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [canvasSize, setCanvasSize] = useState({ w: 1000, h: 600 });
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
+  const [layoutNodes, setLayoutNodes] = useState(nodes);
+  if (layoutNodes !== nodes) { setLayoutNodes(nodes); setTransform({ x: 0, y: 0, k: 1 }); }
   const [isDark, setIsDark] = useState(
     () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
   );
@@ -50,7 +52,6 @@ export const KnowledgeGraph = ({
         vy: 0,
       };
     });
-    setTransform({ x: 0, y: 0, k: 1 });
   }, [nodes]);
 
   useEffect(() => {
@@ -76,7 +77,8 @@ export const KnowledgeGraph = ({
     return () => ro.disconnect();
   }, []);
 
-  const animate = () => {
+  useEffect(() => {
+    const animate = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -165,12 +167,11 @@ export const KnowledgeGraph = ({
     else requestRef.current = null;
   };
 
-  useEffect(() => {
     requestRef.current = requestAnimationFrame(animate);
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [nodes, transform, isDark, selectedId, canvasSize]);
+  }, [nodes, transform, isDark, selectedId, canvasSize, masteryData]);
 
   const handleWheel = (e: React.WheelEvent) => {
     const delta = e.deltaY > 0 ? 0.9 : 1.1;

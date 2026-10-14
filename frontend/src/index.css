@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 @layer base {
   :root {
@@ -136,7 +135,7 @@ html {
 
 /* Ensure all Lucide icons and common headers adapt to dark mode */
 .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
-  @apply text-foreground !important;
+  @apply text-foreground!;
 }
 
 .dark .lucide {
@@ -318,13 +317,13 @@ html {
 
 /* ── Custom Sonner styling ── */
 [data-sonner-toast] {
-  @apply bg-card text-foreground border border-border shadow-2xl rounded-2xl p-4 font-sans !important;
+  @apply bg-card! text-foreground! border! border-border! shadow-2xl! rounded-2xl! p-4! font-sans!;
 }
 [data-sonner-toast] [data-title] {
-  @apply text-foreground font-bold !important;
+  @apply text-foreground! font-bold!;
 }
 [data-sonner-toast] [data-description] {
-  @apply text-muted-foreground font-medium !important;
+  @apply text-muted-foreground! font-medium!;
 }
 
 /* ── Hide scrollbar but keep scrolling ── */

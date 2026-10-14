@@ -1,4 +1,5 @@
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import type { PluggableList } from 'unified';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
@@ -8,11 +9,11 @@ interface Props {
   content: string;
   className?: string;
   /** 额外的 remark 插件 */
-  extraRemarkPlugins?: any[];
+  extraRemarkPlugins?: PluggableList;
   /** 额外的 rehype 插件 */
-  extraRehypePlugins?: any[];
+  extraRehypePlugins?: PluggableList;
   /** 自定义组件覆盖（如图片渲染） */
-  components?: Record<string, any>;
+  components?: Components;
 }
 
 /**

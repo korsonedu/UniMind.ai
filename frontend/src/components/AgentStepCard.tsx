@@ -83,7 +83,7 @@ export const ToolStepMessage: React.FC<{
   step: AgentStep;
   index?: number;
   botGradient?: string;
-}> = ({ step, index = 0, botGradient = 'from-amber-500 to-orange-500' }) => (
+}> = ({ step, index = 0 }) => (
   <div
     className="flex gap-0 w-full animate-in fade-in slide-in-from-bottom-1 duration-300"
     style={{ animationDelay: `${Math.min(index * 40, 200)}ms` }}

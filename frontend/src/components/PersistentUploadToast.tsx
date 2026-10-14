@@ -30,9 +30,10 @@ export const PersistentUploadToast: React.FC = () => {
   const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
+    const timeouts = timeoutsRef.current;
     return () => {
-      timeoutsRef.current.forEach(t => clearTimeout(t));
-      timeoutsRef.current.clear();
+      timeouts.forEach(t => clearTimeout(t));
+      timeouts.clear();
     };
   }, []);
 

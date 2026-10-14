@@ -1,12 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlayCircle, Pen, ArrowCounterClockwise, BookOpen, TrendUp, Calendar, FileText, ArrowRight, CheckCircle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
-/** Context for reply-type action cards to trigger a chat message send */
-export const AgentReplyContext = createContext<{ onReply?: (value: string) => void }>({});
-export const useAgentReply = () => useContext(AgentReplyContext);
+import { useAgentReply } from './agentReplyContext';
 
 type ReplyMode = 'single' | 'multi' | 'acknowledge' | 'input' | 'rating';
 
@@ -64,18 +62,6 @@ async function persistReplyChoice(card: ActionCard) {
       card_action_url: card.action.url,
       card_icon: card.icon,
       card_description: card.description,
-      completed: true,
-    });
-  } catch { /* 静默失败 */ }
-}
-
-/** 记录卡片完成 */
-export async function trackCardComplete(actionUrl: string) {
-  try {
-    await api.post('/ai/card-interactions/', {
-      card_action_url: actionUrl,
-      card_action_type: 'quiz',
-      card_title: '',
       completed: true,
     });
   } catch { /* 静默失败 */ }
@@ -288,7 +274,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
             const isChosen = chosenUrl === card.action.url;
             const isLocked = chosenUrl !== null;
             const isMultiChecked = multiSelected.has(card.action.url);
-            const url = card.action.url;
+
 
             // reply 类型：选择题样式（single/multi/acknowledge 共用）
             if (isReply) {

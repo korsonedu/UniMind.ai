@@ -44,15 +44,17 @@ export function StudentHealthPanel() {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const fetchHealth = useCallback(async () => {
-    try {
-      const { data: res } = await api.get('/users/institution/me/student-health/?include_children=true');
+  const fetchHealth = useCallback(() => {
+
+    return api.get('/users/institution/me/student-health/?include_children=true').then(({ data: res }) => {
       setData(res);
-    } catch {
-      // page not accessible for non-admin
-    } finally {
-      setLoading(false);
-    }
+    })
+      .catch(() => {
+        // page not accessible for non-admin
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => { fetchHealth(); }, [fetchHealth]);

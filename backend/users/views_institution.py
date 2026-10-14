@@ -2,7 +2,7 @@ import csv
 import logging
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import F, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -1310,9 +1310,9 @@ class InstitutionBusinessDashboardView(APIView):
         # 营收指标：从 Order 表聚合
         from payments.models import Order
         paid_orders = Order.objects.filter(institution=inst, status='paid')
-        total_revenue = paid_orders.aggregate(total=models.Sum('amount_cents'))['total'] or 0
+        total_revenue = paid_orders.aggregate(total=Sum('amount_cents'))['total'] or 0
         revenue_this_month = paid_orders.filter(paid_at__gte=month_start).aggregate(
-            total=models.Sum('amount_cents')
+            total=Sum('amount_cents')
         )['total'] or 0
 
         # ARPU：有付费订单的用户人均消费

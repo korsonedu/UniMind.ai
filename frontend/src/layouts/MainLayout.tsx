@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, Trophy, User as UserIcon, SignOut, ShieldCheck, CreditCard, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront, Code } from '@phosphor-icons/react';
+import { BookOpen, Trophy, User as UserIcon, SignOut, ShieldCheck, CreditCard, Sparkle, Gear, Brain, ChartBar, Gauge, Buildings, ChatCircleText, Wrench, Eye, EyeSlash, UserPlus, Users, Robot, TreeStructure, Storefront } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from 'sonner';
+
 import UnimindLogo from '../../Unimind_logo.png';
 import { PersistentUploadToast } from '@/components/PersistentUploadToast';
 import '@/styles/app-shell.css';
@@ -165,7 +165,7 @@ export const MainLayout: React.FC = () => {
   const [invitePopoverOpen, setInvitePopoverOpen] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [showPanelTour, setShowPanelTour] = useState(false);
-  const avatarRef = useRef<HTMLButtonElement>(null);
+  const [avatarElement, setAvatarElement] = useState<HTMLButtonElement | null>(null);
 
   const { institution: instFromStore, fetchFeatures, hasFeature, loading: featuresLoading, previewMode, previewInstitution, exitPreview } = useInstitutionStore();
   const instInfo = instFromStore || user?.institution || null;
@@ -199,7 +199,7 @@ export const MainLayout: React.FC = () => {
 
   useEffect(() => {
     if (!studentPreview) fetchFeatures();
-  }, [studentPreview]);
+  }, [studentPreview, fetchFeatures]);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -221,7 +221,7 @@ export const MainLayout: React.FC = () => {
   const isTourPage = location.pathname === '/workbench' || location.pathname === '/xiaoyu';
   const tourSteps = effectiveIsInstStudent ? studentTourSteps : teacherTourSteps;
 
-  const handleTourDismiss = async () => {
+  const handleTourDismiss = useCallback(async () => {
     setShowTour(false);
     try {
       await api.patch('/users/me/tour-dismiss/');
@@ -229,7 +229,7 @@ export const MainLayout: React.FC = () => {
     } catch {
       // silently ignore — will retry next time
     }
-  };
+  }, [updateUser]);
 
   // Poll for first target element, then show tour
   useEffect(() => {
@@ -259,10 +259,12 @@ export const MainLayout: React.FC = () => {
   // Dismiss tour when navigating away from tour page
   useEffect(() => {
     if (showTour && !isTourPage) {
-      setShowTour(false);
-      handleTourDismiss();
+      api.patch('/users/me/tour-dismiss/').then(() => {
+        setShowTour(false);
+        updateUser({ tour_dismissed_at: new Date().toISOString() });
+      }).catch(() => {});
     }
-  }, [location.pathname, showTour, isTourPage]);
+  }, [showTour, isTourPage, updateUser]);
 
   // ── Panel Tour（工作台首次对话后双栏布局）──
   const handlePanelTourDismiss = async () => {
@@ -382,7 +384,7 @@ export const MainLayout: React.FC = () => {
                 <NotificationBell />
                 <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <button ref={avatarRef} id="avatar-btn" aria-label="账户菜单" className="um-app-avatar-button">
+                  <button ref={setAvatarElement} id="avatar-btn" aria-label="账户菜单" className="um-app-avatar-button">
                     <Avatar className="h-7 w-7">
                       <AvatarImage src={user?.avatar_url} />
                       <AvatarFallback className="text-[10px] font-bold">{user?.username?.[0]}</AvatarFallback>
@@ -607,8 +609,8 @@ export const MainLayout: React.FC = () => {
         <PersistentUploadToast />
         {invitePopoverOpen && instInfo?.invite_slug && (
           <div className="fixed z-50" style={{
-            top: (avatarRef.current?.getBoundingClientRect().bottom ?? 60) + 8,
-            right: window.innerWidth - (avatarRef.current?.getBoundingClientRect().right ?? window.innerWidth - 200),
+            top: (avatarElement?.getBoundingClientRect().bottom ?? 60) + 8,
+            right: window.innerWidth - (avatarElement?.getBoundingClientRect().right ?? window.innerWidth - 200),
           }}>
             <InvitePopover
               inviteSlug={instInfo.invite_slug}
@@ -620,7 +622,7 @@ export const MainLayout: React.FC = () => {
           <div className="fixed inset-0 z-40" onClick={() => setInvitePopoverOpen(false)} />
         )}
 
-        {showTour && (
+        {showTour && isTourPage && (
           <GuidedTour
             steps={tourSteps}
             onDismiss={handleTourDismiss}

@@ -19,6 +19,10 @@ on:
 jobs:
   backend-checks:
     runs-on: ubuntu-latest
+    env:
+      ACCOUNT_DEV_LOCAL_CACHE: "true"
+      CELERY_BROKER_URL: "memory://"
+      CELERY_RESULT_BACKEND: "cache+memory://"
 
     steps:
       - name: Checkout
@@ -32,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r backend/requirements.txt
           pip install pip-audit
 
       - name: Dependency vulnerability scan
@@ -45,6 +49,10 @@ jobs:
       - name: Migration drift check
         working-directory: backend
         run: python manage.py makemigrations --check --dry-run
+
+      - name: Backend regression tests
+        working-directory: backend
+        run: python -m pytest
 
       - name: QA smoke check
         working-directory: backend
@@ -76,4 +84,12 @@ jobs:
 
       - name: Frontend build check
         working-directory: frontend
+        run: npm run build
+
+      - name: Frontend lint check
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Admin frontend build check
+        working-directory: frontend/admin
         run: npm run build

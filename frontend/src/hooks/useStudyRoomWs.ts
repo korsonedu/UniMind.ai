@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useStudyRoomStore } from '@/store/useStudyRoomStore';
 
 const WS_BASE =
-  (import.meta as any).env?.VITE_WS_URL ||
+  import.meta.env?.VITE_WS_URL ||
   (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
 
 const RECONNECT_DELAY_MS = 2000;
@@ -42,7 +42,7 @@ export function useStudyRoomWs(enabled: boolean) {
   }, [send, setSendWsMessage]);
 
   // ── Connect ──
-  const connect = useCallback(() => {
+  const connect = useCallback(function connectSocket() {
     if (!mountedRef.current || !enabled) return;
 
     // Clean up existing connection
@@ -129,7 +129,7 @@ export function useStudyRoomWs(enabled: boolean) {
       const delay = reconnectDelayRef.current;
       reconnectDelayRef.current = Math.min(delay * 1.5, MAX_RECONNECT_DELAY_MS);
       reconnectTimerRef.current = window.setTimeout(() => {
-        connect();
+        connectSocket();
       }, delay);
     };
   }, [enabled, setWsConnected, setSession, setTimeLeft, setLastSummary, setCoachEvent, send]);

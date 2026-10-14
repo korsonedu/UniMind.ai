@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Copy, Check, X } from '@phosphor-icons/react';
+import { Copy, X } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 

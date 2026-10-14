@@ -63,7 +63,7 @@ export function QuickStartPanel({ studentCount }: Props) {
     };
 
     document.querySelector('#avatar-btn')?.addEventListener('click', onAvatarClick, { once: true });
-  }, [pulse]);
+  }, [markInviteDone, pulse]);
 
   useEffect(() => {
     api.get('/users/institution/me/bulk-init/')

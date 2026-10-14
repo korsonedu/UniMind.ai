@@ -72,20 +72,28 @@ export default function InstitutionDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchDashboard = useCallback(async () => {
+  const [dashboardSource, setDashboardSource] = useState({ isPlatformAdmin, institution });
+  if (dashboardSource.isPlatformAdmin !== isPlatformAdmin || dashboardSource.institution !== institution) {
+    setDashboardSource({ isPlatformAdmin, institution });
     setLoading(true);
+  }
+
+  const fetchDashboard = useCallback(() => {
     const endpoint = isPlatformAdmin && !institution
       ? '/users/institutions/overview/'
       : '/users/institution/me/';
-    try {
-      const res = await api.get(endpoint);
+    return api.get(endpoint).then((res) => {
       setData(res.data);
-    } catch {
-      // redirect handled by RequireAuth
-    } finally {
-      setLoading(false);
-    }
+    })
+      .catch(() => {
+        // redirect handled by RequireAuth
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [isPlatformAdmin, institution]);
+
+
 
   useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
 
@@ -119,7 +127,7 @@ export default function InstitutionDashboard() {
         </div>
 
         <div className="space-y-3">
-          {data.institutions.map((inst: any) => (
+          {data.institutions.map((inst: { id: number; name: string; plan: string; student_count: number; is_active: boolean; max_students: number; plan_label: string; plan_expires_at: string | null }) => (
             <Card key={inst.id} variant="apple" className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">

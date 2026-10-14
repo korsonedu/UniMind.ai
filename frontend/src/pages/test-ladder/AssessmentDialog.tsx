@@ -1,3 +1,4 @@
+import type { QuizQuestion } from '@/types/api';
 import '@/styles/practice.css';
 import React from 'react';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -10,11 +11,11 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 interface AssessmentProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  questions: any[];
+  questions: QuizQuestion[];
   currentIdx: number;
   setCurrentIdx: React.Dispatch<React.SetStateAction<number>>;
-  answers: any;
-  handleSelect: (id: number, val: any) => void;
+  answers: Record<number, string>;
+  handleSelect: (id: number, val: string) => void;
   toggleMastered: (id: number) => void;
   toggleFavorite: (id: number) => void;
   handleSubmit: () => void;

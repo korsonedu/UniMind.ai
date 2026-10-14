@@ -109,7 +109,7 @@ const Nav: React.FC<{ token: string | null }> = ({ token }) => {
     ? 'bg-white/90 backdrop-blur-xl border-b border-gray-100 shadow-sm'
     : 'bg-transparent';
   const txtColor = 'text-unimind-text-secondary hover:text-unimind-text';
-  const logoColor = 'text-unimind-text';
+
 
   return (
     <nav className={cn('fixed top-0 left-0 right-0 z-[var(--z-dropdown)] transition-all duration-500', navBg)}>
@@ -229,17 +229,17 @@ const Hero: React.FC = () => {
         {/* Promo badge — capsule below CTA */}
         <div className="reveal reveal-delay-2">
           <button
-            onClick={() => navigate('/promo/plus')}
+            onClick={() => navigate('/pricing')}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-xiaoyu-100 hover:border-xiaoyu-500 transition-all duration-300 cursor-pointer group bg-xiaoyu-50"
           >
-            <span className="text-[11px] font-semibold text-xiaoyu-500">首批机构专享 · Growth 方案免费开放</span>
+            <span className="text-[11px] font-semibold text-xiaoyu-500">查看各版本功能与价格</span>
             <ArrowRight className="h-3 w-3 text-xiaoyu-500 group-hover:translate-x-0.5 transition-transform" />
           </button>
         </div>
 
         {/* Trust markers */}
         <p className="text-[11px] text-unimind-text-quaternary tracking-wide reveal reveal-delay-2">
-          首批机构免费获得 Growth 方案 · 活动截止 2026.6.30
+          选择适合机构的方案，开始智能教学。
         </p>
       </div>
 
@@ -656,7 +656,7 @@ const FinalCTA: React.FC = () => {
             准备好，进入智能教育新时代
           </h2>
           <p className="text-sm md:text-base text-white/50 max-w-lg mx-auto leading-relaxed">
-            首批机构免费获得 Growth 方案。AI 出题、自适应复习、学情分析——开箱即用。
+            AI 出题、自适应复习、学情分析——开箱即用。
           </p>
         </div>
 
@@ -676,7 +676,7 @@ const FinalCTA: React.FC = () => {
           </button>
         </div>
 
-        <p className="text-xs text-white/20 reveal reveal-delay-2">已有 50+ 机构在使用 UniMind · 活动截止 2026.6.30</p>
+        <p className="text-xs text-white/20 reveal reveal-delay-2">已有 50+ 机构在使用 UniMind</p>
       </div>
     </section>
   );

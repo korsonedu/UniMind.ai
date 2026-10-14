@@ -1,3 +1,5 @@
+import type { Course } from '@/types/api';
+import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,20 +13,23 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
+type CourseTag = { id: number; name: string; course_count: number; courses: Pick<Course, 'id' | 'title' | 'cover_image'>[] };
+
 export const TagSection: React.FC = () => {
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
-  const [tags, setTags] = useState<any[]>([]);
+  const [tags, setTags] = useState<CourseTag[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [newTagName, setNewTagName] = useState('');
 
-  const fetchTags = useCallback(async () => {
-    try {
-      const res = await api.get('/courses/tags/');
+  const fetchTags = useCallback(() => {
+
+    return api.get('/courses/tags/').then((res) => {
       setTags(res.data);
-    } catch (e) { console.debug('[TagSection] fetch failed:', e); }
-    finally { setLoading(false); }
+    })
+      .catch((e: unknown) => { console.debug('[TagSection] fetch failed:', e); })
+      .finally(() => { setLoading(false); });
   }, []);
 
   useEffect(() => { fetchTags(); }, [fetchTags]);
@@ -37,12 +42,12 @@ export const TagSection: React.FC = () => {
       setNewTagName('');
       setShowCreate(false);
       fetchTags();
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || '创建失败');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '创建失败'));
     }
   };
 
-  const handleDelete = async (tag: any) => {
+  const handleDelete = async (tag: CourseTag) => {
     if (!(await confirm(`删除标签「${tag.name}」？此操作仅解除关联，不影响课程。`))) return;
     try {
       await api.delete(`/courses/tags/${tag.id}/`);
@@ -79,7 +84,7 @@ export const TagSection: React.FC = () => {
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
           <ScrollArea className="h-[560px]">
             <div className="divide-y divide-black/[0.04]">
-              {tags.map((tag: any) => {
+              {tags.map((tag: CourseTag) => {
                 const isExpanded = expandedId === tag.id;
                 return (
                   <div key={tag.id}>
@@ -110,7 +115,7 @@ export const TagSection: React.FC = () => {
                     {isExpanded && tag.courses && tag.courses.length > 0 && (
                       <div className="px-4 pb-4 pl-14">
                         <div className="rounded-xl bg-[#F5F5F7]/60 p-3 space-y-1.5">
-                          {tag.courses.map((c: any) => (
+                          {tag.courses.map((c: CourseTag['courses'][number]) => (
                             <div key={c.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-white/60 transition-colors">
                               <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
                                 {c.cover_image ? (

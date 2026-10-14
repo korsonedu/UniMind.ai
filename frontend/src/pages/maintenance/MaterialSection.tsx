@@ -1,3 +1,5 @@
+import { isCancel, type AxiosProgressEvent } from 'axios';
+import type { StartupMaterial } from '@/types/api';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,26 +16,29 @@ import { useUploadStore } from '@/store/useUploadStore';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
+type EditableStartupMaterial = Omit<StartupMaterial, 'file'> & { file: string | File };
+
 export const MaterialSection: React.FC = () => {
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<StartupMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editingItem, setEditingItem] = useState<EditableStartupMaterial | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [form, setForm] = useState({ name: '', description: '', file: null as File | null });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchItems = useCallback(async (p = 1) => {
-    try {
-      const res = await api.get('/courses/startup-materials/', { params: { page: p, page_size: 10 } });
+  const fetchItems = useCallback((p = 1) => {
+
+    return api.get('/courses/startup-materials/', { params: { page: p, page_size: 10 } }).then((res) => {
       setItems(res.data.items || res.data);
       setTotal(res.data.total ?? (Array.isArray(res.data) ? res.data.length : 0));
       setTotalPages(res.data.total_pages ?? 1);
-    } catch (e) { console.debug('[MaterialSection] fetch failed:', e); }
-    finally { setLoading(false); }
+    })
+      .catch((e: unknown) => { console.debug('[MaterialSection] fetch failed:', e); })
+      .finally(() => { setLoading(false); });
   }, []);
 
   useEffect(() => { fetchItems(page); }, [fetchItems, page]);
@@ -65,15 +70,15 @@ export const MaterialSection: React.FC = () => {
     try {
       await api.post('/courses/startup-materials/', fd, {
         signal: controller.signal,
-        onUploadProgress: (p: any) => {
+        onUploadProgress: (p: AxiosProgressEvent) => {
           if (p.total) updateProgress(uploadId, Math.round((p.loaded / p.total) * 100));
         },
       });
       setStatus(uploadId, 'completed');
       toast.success('资料已上传');
       fetchItems();
-    } catch (e: any) {
-      if (e?.name !== 'AbortError' && e?.code !== 'ERR_CANCELED') {
+    } catch (e: unknown) {
+      if (!(e instanceof Error && e.name === 'AbortError') && !isCancel(e)) {
         const message = formatApiErrorToast(e, '上传失败');
         toast.error(message);
         setStatus(uploadId, 'failed', message);
@@ -84,11 +89,11 @@ export const MaterialSection: React.FC = () => {
   const handleUpdate = async () => {
     if (!editingItem) return;
     const fd = new FormData();
-    Object.keys(editingItem).forEach(key => {
-      if (editingItem[key] instanceof File) fd.append(key, editingItem[key]);
-      else if (editingItem[key] !== null && editingItem[key] !== undefined) {
-        if (key === 'file' && typeof editingItem[key] === 'string') return;
-        fd.append(key, String(editingItem[key]));
+    Object.entries(editingItem).forEach(([key, value]) => {
+      if (value instanceof File) fd.append(key, value);
+      else if (value !== null && value !== undefined) {
+        if (key === 'file' && typeof value === 'string') return;
+        fd.append(key, String(value));
       }
     });
     try {
@@ -144,7 +149,7 @@ export const MaterialSection: React.FC = () => {
           <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
             <ScrollArea className="h-[560px]">
               <div className="divide-y divide-black/[0.04]">
-                {items.map((item: any) => (
+                {items.map((item: StartupMaterial) => (
                   <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
                     <div className="flex items-center justify-between">
                       <div className="min-w-0 flex-1">
@@ -215,7 +220,7 @@ export const MaterialSection: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
-        <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
+        {editingItem && <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">编辑资料</DialogTitle>
           </DialogHeader>
@@ -230,13 +235,13 @@ export const MaterialSection: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[#6E6E73] ml-1">替换文件</Label>
-              <Input type="file" onChange={e => setEditingItem({ ...editingItem, file: e.target.files?.[0] })} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
+              <Input type="file" onChange={e => { const file = e.target.files?.[0]; if (file) setEditingItem({ ...editingItem, file: file }); }} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" />
             </div>
             <Button onClick={handleUpdate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
               更新
             </Button>
           </div>
-        </DialogContent>
+        </DialogContent>}
       </Dialog>
       {ConfirmDialog}
     </div>

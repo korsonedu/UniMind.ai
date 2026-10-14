@@ -21,6 +21,47 @@ import { useConfirm } from '@/components/useConfirm';
 type TaskStatus = 'draft' | 'pending' | 'running' | 'review' | 'completed' | 'failed' | 'cancelled';
 type TaskType = 'ai_parse' | 'ai_generate' | 'bulk_import' | 'course_publish' | 'article_publish' | 'other';
 
+type PipelineQuestion = {
+  question: string;
+  q_type?: string;
+  question_type?: string;
+  subjective_type?: string;
+  type?: string;
+  options?: Record<string, string>;
+  answer?: string;
+  kp_name?: string;
+  difficulty_level: string;
+  review_score?: number;
+  quality_warning?: boolean;
+  review_feedback?: string;
+  review_dimensions?: Record<string, number>;
+  iteration?: number;
+  knowledge_tags?: string[];
+  detected_difficulty?: string;
+  answer_correct?: boolean;
+  answer_accuracy_note?: string;
+  difficulty_match?: boolean;
+  difficulty_mismatch_reason?: string;
+  bloom_level?: string;
+};
+
+type PipelineStage = {
+  stage: string;
+  count?: number;
+  diversity_report?: {
+    overall_assessment?: string;
+    similar_pairs?: { q1_index: number; q2_index: number; reason: string }[];
+  };
+};
+
+type PipelineResult = {
+  questions?: PipelineQuestion[];
+  questions_created?: number;
+  summary?: { avg_quality_score?: number; total_generated?: number; iteration_distribution?: Record<string, number> };
+  stages?: PipelineStage[];
+  pipeline?: { author_windows?: number; author_candidates?: number; review_passed?: number; review_rejected?: number };
+};
+
 type PipelineTask = {
   id: number;
   task_type: TaskType;
@@ -31,7 +72,7 @@ type PipelineTask = {
   description: string;
   progress: number;
   payload: Record<string, unknown>;
-  result: Record<string, unknown>;
+  result: PipelineResult;
   error_message: string;
   created_by_username: string;
   created_at: string;
@@ -118,7 +159,7 @@ export const PipelinePanel: React.FC = () => {
   const [previewTask, setPreviewTask] = useState<PipelineTask | null>(null);
   const [reviewSelectedIds, setReviewSelectedIds] = useState<Set<number>>(new Set());
   const [editingQuestionIdx, setEditingQuestionIdx] = useState<number | null>(null);
-  const [editedQuestions, setEditedQuestions] = useState<Record<number, any>>({});
+  const [editedQuestions, setEditedQuestions] = useState<Record<number, PipelineQuestion>>({});
 
   const debouncedSearch = useDebouncedValue(search.trim(), 400);
 
@@ -141,7 +182,7 @@ export const PipelinePanel: React.FC = () => {
     return map[s] || s;
   };
 
-  const getTypeLabel = (q: any): string => {
+  const getTypeLabel = (q: PipelineQuestion): string => {
     const Q_TYPE_MAP: Record<string, string> = {
       objective: '客观选择',
       subjective: '主观题',
@@ -154,11 +195,11 @@ export const PipelinePanel: React.FC = () => {
       'subjective:essay': '论述',
       'subjective:calculate': '计算',
     };
-    const sub = Q_TYPE_MAP[q.subjective_type];
+    const sub = q.subjective_type && Q_TYPE_MAP[q.subjective_type];
     if (sub && q.q_type !== 'objective') return sub;
-    const cqt = Q_TYPE_MAP[q.question_type];
+    const cqt = q.question_type && Q_TYPE_MAP[q.question_type];
     if (cqt) return cqt;
-    const qt = Q_TYPE_MAP[q.q_type] || Q_TYPE_MAP[q.type];
+    const qt = (q.q_type && Q_TYPE_MAP[q.q_type]) || (q.type && Q_TYPE_MAP[q.type]);
     if (qt) return qt;
     return q.subjective_type || q.question_type || q.q_type || q.type || '?';
   };
@@ -203,37 +244,50 @@ export const PipelinePanel: React.FC = () => {
     return map[type] || type;
   };
 
-  const fetchTasks = useCallback(async (targetPage: number) => {
+  const [taskQuery, setTaskQuery] = useState({ debouncedSearch, statusFilter, typeFilter });
+  if (taskQuery.debouncedSearch !== debouncedSearch || taskQuery.statusFilter !== statusFilter || taskQuery.typeFilter !== typeFilter) {
+    setTaskQuery({ debouncedSearch, statusFilter, typeFilter });
     setLoading(true);
-    try {
-      const [res, metricsRes, reviewRes] = await Promise.all([
-        api.get('/quizzes/admin/pipeline-tasks/', {
-          params: { page: targetPage, page_size: 20, status: statusFilter, task_type: typeFilter, search: debouncedSearch },
-        }),
-        api.get('/quizzes/admin/pipeline-metrics/', { params: { days: 14 } }),
-        api.get('/quizzes/admin/pipeline-review/'),
-      ]);
+  }
+
+  const fetchTasks = useCallback((targetPage: number) => {
+
+    return Promise.all([
+      api.get('/quizzes/admin/pipeline-tasks/', {
+        params: { page: targetPage, page_size: 20, status: statusFilter, task_type: typeFilter, search: debouncedSearch },
+      }),
+      api.get('/quizzes/admin/pipeline-metrics/', { params: { days: 14 } }),
+      api.get('/quizzes/admin/pipeline-review/'),
+    ]).then(([res, metricsRes, reviewRes]) => {
       setTasks((res.data?.results || []) as PipelineTask[]);
       setMetrics((metricsRes.data || null) as PipelineMetrics | null);
       setReviewTasks((reviewRes.data?.results || []) as PipelineTask[]);
       setPage(res.data?.page || targetPage);
       setTotalPages(res.data?.total_pages || 1);
-    } catch (e) {
-      toast.error(formatApiErrorToast(e, '任务中心加载失败'));
-    } finally {
-      setLoading(false);
-    }
+    })
+      .catch((e: unknown) => {
+        toast.error(formatApiErrorToast(e, '任务中心加载失败'));
+      })
+      .finally(() => {
+        setLoading(false);
+
+      });
   }, [debouncedSearch, statusFilter, typeFilter]);
+  const refreshFetchTasks = useCallback((targetPage: number) => {
+    setLoading(true);
+    return fetchTasks(targetPage);
+  }, [fetchTasks]);
+
 
   // 过滤器/搜索词变化时回到第 1 页重新加载
-  useEffect(() => { fetchTasks(1); }, [debouncedSearch, statusFilter, typeFilter]);
+  useEffect(() => { fetchTasks(1); }, [debouncedSearch, fetchTasks, statusFilter, typeFilter]);
 
   const handleRetryTask = async (taskId: number) => {
     setUpdatingMap((prev) => ({ ...prev, [taskId]: true }));
     try {
       await api.post(`/quizzes/admin/pipeline-tasks/${taskId}/retry/`);
       toast.success('已创建重试任务');
-      fetchTasks(1);
+      refreshFetchTasks(1);
     } catch (e) {
       toast.error(formatApiErrorToast(e, '重试失败'));
     } finally {
@@ -247,7 +301,7 @@ export const PipelinePanel: React.FC = () => {
     try {
       await api.delete(`/quizzes/admin/pipeline-tasks/${taskId}/`);
       toast.success('任务已删除');
-      fetchTasks(1);
+      refreshFetchTasks(1);
     } catch (e) {
       toast.error(formatApiErrorToast(e, '删除失败'));
     } finally {
@@ -265,7 +319,7 @@ export const PipelinePanel: React.FC = () => {
       const items = Array.isArray(raw) ? raw : [];
 
       const flat: KnowledgePoint[] = [];
-      const walk = (nodes: any[], parentName?: string) => {
+      const walk = (nodes: (KnowledgePoint & { children?: KnowledgePoint[] })[], parentName?: string) => {
         for (const it of nodes) {
           flat.push({ id: Number(it.id), name: it.name, level: it.level, parent_name: parentName });
           if (it.children?.length) walk(it.children, it.name);
@@ -275,7 +329,7 @@ export const PipelinePanel: React.FC = () => {
       if (items.length > 0 && items[0].children !== undefined) {
         walk(items);
       } else {
-        items.forEach((it: any) => flat.push({ id: Number(it.id), name: it.name, level: it.level }));
+        items.forEach((it: KnowledgePoint) => flat.push({ id: Number(it.id), name: it.name, level: it.level }));
       }
       // 仅保留 level='kp' 的叶子考点
       setKnowledgePoints(flat.filter((kp) => kp.level === 'kp'));
@@ -304,7 +358,7 @@ export const PipelinePanel: React.FC = () => {
       toast.success(`对抗性出题已提交，任务 #${res.data.task_id}。完成后将进入审核队列`);
       setSmartDialogOpen(false);
       setSmartKpIds([]);
-      fetchTasks(1);
+      refreshFetchTasks(1);
     } catch (e) {
       toast.error(formatApiErrorToast(e, '对抗性出题启动失败'));
     } finally {
@@ -314,10 +368,10 @@ export const PipelinePanel: React.FC = () => {
 
   // ── Review Actions ──────────────────────────────────────────
 
-  const handleReviewAction = async (taskId: number, action: 'approve' | 'reject', selectedIndices?: number[], editedQuestions?: Record<number, any>) => {
+  const handleReviewAction = async (taskId: number, action: 'approve' | 'reject', selectedIndices?: number[], editedQuestions?: Record<number, PipelineQuestion>) => {
     setReviewingMap((prev) => ({ ...prev, [taskId]: true }));
     try {
-      const body: any = { action };
+      const body: { action: 'approve' | 'reject'; question_indices?: number[]; edited_questions?: Record<number, PipelineQuestion> } = { action };
       if (action === 'approve' && selectedIndices) {
         body.question_indices = selectedIndices;
       }
@@ -326,10 +380,10 @@ export const PipelinePanel: React.FC = () => {
       }
       const res = await api.post(`/quizzes/admin/pipeline-review/${taskId}/`, body);
       toast.success(action === 'approve'
-        ? `已批准入库 ${(res.data as any).questions_created || 0} 题`
+        ? `已批准入库 ${(res.data as PipelineResult).questions_created || 0} 题`
         : '已拒绝');
       setPreviewTask(null);
-      fetchTasks(1);
+      refreshFetchTasks(1);
     } catch (e) {
       toast.error(formatApiErrorToast(e, '操作失败'));
     } finally {
@@ -396,19 +450,19 @@ export const PipelinePanel: React.FC = () => {
           <ScrollArea className="h-64">
             <div className="space-y-2">
               {reviewTasks.map((task) => {
-                const questions = (task.result as any)?.questions || [];
-                const summary = (task.result as any)?.summary || {};
+                const questions = task.result?.questions || [];
+                const summary = task.result?.summary || {};
                 return (
                   <div key={task.id} className="p-4 bg-white rounded-2xl border border-amber-100 space-y-2">
                     <div className="flex items-center justify-between gap-4">
-                      <div onClick={() => { setPreviewTask(task); const qs = (task.result as any)?.questions || []; setReviewSelectedIds(new Set(qs.map((_: any, i: number) => i))); setEditedQuestions({}); }} className="min-w-0 text-left hover:text-indigo-600 transition-colors cursor-pointer">
+                      <div onClick={() => { setPreviewTask(task); const qs = task.result?.questions || []; setReviewSelectedIds(new Set(qs.map((_: unknown, i: number) => i))); setEditedQuestions({}); }} className="min-w-0 text-left hover:text-indigo-600 transition-colors cursor-pointer">
                         <p className="text-xs font-bold truncate">{task.title}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
                           {`${questions.length} 题 | 均分 ${typeof summary.avg_quality_score === 'number' ? summary.avg_quality_score.toFixed(3) : '--'} | ${formatDate(task.created_at)}`}
                         </p>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <Button onClick={() => { setPreviewTask(task); const qs = (task.result as any)?.questions || []; setReviewSelectedIds(new Set(qs.map((_: any, i: number) => i))); setEditedQuestions({}); }} variant="outline" className="h-8 rounded-lg text-[10px] font-bold px-2">预览</Button>
+                        <Button onClick={() => { setPreviewTask(task); const qs = task.result?.questions || []; setReviewSelectedIds(new Set(qs.map((_: unknown, i: number) => i))); setEditedQuestions({}); }} variant="outline" className="h-8 rounded-lg text-[10px] font-bold px-2">预览</Button>
                         <Button
                           onClick={() => handleReviewAction(task.id, 'approve')}
                           disabled={reviewingMap[task.id]}
@@ -458,7 +512,7 @@ export const PipelinePanel: React.FC = () => {
               className="bg-apple-gray-50 border-none h-10 rounded-xl font-bold text-xs mt-1" placeholder="搜索任务标题" />
           </div>
           <div className="lg:col-span-2">
-            <Button onClick={() => fetchTasks(1)} variant="outline" className="h-10 rounded-xl text-xs font-bold w-full">
+            <Button onClick={() => refreshFetchTasks(1)} variant="outline" className="h-10 rounded-xl text-xs font-bold w-full">
               <ArrowsClockwise className={loading ? 'h-3.5 w-3.5 animate-spin mr-1' : 'h-3.5 w-3.5 mr-1'} />刷新
             </Button>
           </div>
@@ -471,7 +525,7 @@ export const PipelinePanel: React.FC = () => {
         ) : (
           <div className="space-y-2">
             {tasks.map((task) => {
-              const pipeline = (task.result?.pipeline || null) as Record<string, any> | null;
+              const pipeline = task.result?.pipeline || null;
               return (
                 <div key={task.id} className="p-4 bg-apple-gray-50/50 rounded-2xl border border-black/[0.03] space-y-2">
                   <div className="flex items-start justify-between gap-3">
@@ -512,8 +566,8 @@ export const PipelinePanel: React.FC = () => {
         <div className="flex items-center justify-between pt-2">
           <p className="text-[11px] text-muted-foreground">{`第 ${page}/${Math.max(totalPages, 1)} 页`}</p>
           <div className="flex gap-2">
-            <Button variant="outline" disabled={page <= 1 || loading} onClick={() => fetchTasks(page - 1)} className="h-8 rounded-lg text-[11px] font-bold">上一页</Button>
-            <Button variant="outline" disabled={page >= totalPages || loading} onClick={() => fetchTasks(page + 1)} className="h-8 rounded-lg text-[11px] font-bold">下一页</Button>
+            <Button variant="outline" disabled={page <= 1 || loading} onClick={() => refreshFetchTasks(page - 1)} className="h-8 rounded-lg text-[11px] font-bold">上一页</Button>
+            <Button variant="outline" disabled={page >= totalPages || loading} onClick={() => refreshFetchTasks(page + 1)} className="h-8 rounded-lg text-[11px] font-bold">下一页</Button>
           </div>
         </div>
       </Card>
@@ -610,9 +664,9 @@ export const PipelinePanel: React.FC = () => {
             <DialogTitle>{previewTask?.title || '题目预览'}</DialogTitle>
             <DialogDescription>
               {(() => {
-                const qs = (previewTask?.result as any)?.questions || [];
-                const sm = (previewTask?.result as any)?.summary || {};
-                const st = (previewTask?.result as any)?.stages || [];
+                const qs = previewTask?.result?.questions || [];
+                const sm = previewTask?.result?.summary || {};
+                const st = previewTask?.result?.stages || [];
                 return `${qs.length} 道题，均分 ${typeof sm.avg_quality_score === 'number' ? sm.avg_quality_score.toFixed(3) : '--'}，共 ${st.length} 阶段`;
               })()}
             </DialogDescription>
@@ -620,8 +674,8 @@ export const PipelinePanel: React.FC = () => {
           <div className="space-y-4 py-2">
             {/* ── ARC 管线流程 ── */}
             {(() => {
-              const stages = (previewTask?.result as any)?.stages || [];
-              const summary = (previewTask?.result as any)?.summary || {};
+              const stages = previewTask?.result?.stages || [];
+              const summary = previewTask?.result?.summary || {};
               if (stages.length === 0 && !summary.avg_quality_score) return null;
               return (
                 <div className="p-4 bg-slate-50 rounded-2xl space-y-3">
@@ -631,7 +685,7 @@ export const PipelinePanel: React.FC = () => {
                     <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-1">
                       <p className="text-[11px] font-black text-indigo-600">A · Author</p>
                       <p className="text-[10px] text-slate-500">
-                        {`生成 ${summary.total_generated || stages.find((s: any) => s.stage === 'author_generated')?.count || '?'} 道候选`}
+                        {`生成 ${summary.total_generated || stages.find((s: PipelineStage) => s.stage === 'author_generated')?.count || '?'} 道候选`}
                       </p>
                     </div>
                     {/* R - Reviewer */}
@@ -656,8 +710,8 @@ export const PipelinePanel: React.FC = () => {
 
             {/* ── 批次多样性报告 ── */}
             {(() => {
-              const stages = (previewTask?.result as any)?.stages || [];
-              const classifyStage = stages.find((s: any) => s.stage === 'classify_done');
+              const stages = previewTask?.result?.stages || [];
+              const classifyStage = stages.find((s: PipelineStage) => s.stage === 'classify_done');
               const dr = classifyStage?.diversity_report;
               if (!dr) return null;
               return (
@@ -669,7 +723,7 @@ export const PipelinePanel: React.FC = () => {
                   {(dr.similar_pairs || []).length > 0 && (
                     <div className="space-y-1">
                       <p className="text-[9px] font-bold text-amber-600">相似题目 ({(dr.similar_pairs || []).length})</p>
-                      {(dr.similar_pairs || []).map((sp: any, si: number) => (
+                      {(dr.similar_pairs || []).map((sp: { q1_index: number; q2_index: number; reason: string }, si: number) => (
                         <p key={si} className="text-[10px] text-slate-500">
                           #{sp.q1_index + 1} ↔ #{sp.q2_index + 1}: {sp.reason}
                         </p>
@@ -681,12 +735,12 @@ export const PipelinePanel: React.FC = () => {
             })()}
 
             {/* ── 题目列表 ── */}
-            {((previewTask?.result as any)?.questions || []).map((q: any, i: number) => (
+            {(previewTask?.result?.questions || []).map((q: PipelineQuestion, i: number) => (
               <div key={i} className="p-4 bg-white rounded-2xl border space-y-3">
                 {/* 题头 */}
                 <div className="flex items-center gap-2">
                   <Checkbox checked={reviewSelectedIds.has(i)}
-                    onCheckedChange={(c) => setReviewSelectedIds(prev => { const next = new Set(prev); c ? next.add(i) : next.delete(i); return next; })} />
+                    onCheckedChange={(c) => setReviewSelectedIds(prev => { const next = new Set(prev); if (c) next.add(i); else next.delete(i); return next; })} />
                   <Badge className="text-[9px] font-bold rounded-lg">{i + 1}</Badge>
                   <Badge className="bg-slate-100 text-slate-700 border-none text-[9px] font-bold rounded-lg">{getTypeLabel(q)}</Badge>
                   <Badge className={cn(
@@ -779,7 +833,7 @@ export const PipelinePanel: React.FC = () => {
                 )}
 
                 {/* C: Classifier 审计 */}
-                {(q.knowledge_tags?.length > 0 || q.detected_difficulty || q.answer_correct !== undefined || q.bloom_level) && (
+                {((q.knowledge_tags?.length || 0) > 0 || q.detected_difficulty || q.answer_correct !== undefined || q.bloom_level) && (
                   <div className="pl-2 border-l-2 border-emerald-200 space-y-1.5">
                     <p className="text-[9px] font-bold uppercase text-emerald-500">C · Classifier（审计）</p>
                     {/* 答案正确性 */}

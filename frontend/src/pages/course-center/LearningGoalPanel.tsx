@@ -27,9 +27,14 @@ export function LearningGoalPanel({ courses, progress, today }: { courses: Cours
   const [deadline, setDeadline] = useState('');
   const [selected, setSelected] = useState<number[]>([]);
   const [search, setSearch] = useState('');
+  const [goalKey, setGoalKey] = useState(`${version}:${JSON.stringify(progress)}`);
+  if (goalKey !== `${version}:${JSON.stringify(progress)}`) {
+    setGoalKey(`${version}:${JSON.stringify(progress)}`);
+    setLoading(true);
+  }
+
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
     api.get<LearningGoal | null>('/courses/learning-goal/', { signal: controller.signal })
       .then(response => { setGoal(response.data); setError(false); })
       .catch(() => { if (!controller.signal.aborted) setError(true); })

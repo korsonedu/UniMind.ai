@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,26 +24,36 @@ const fmtDate = (d: Date) =>
 
 export function BillingPage() {
   const user = useAuthStore(s => s.user);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [orders, setOrders] = useState<{ id: number; plan: string; billing_cycle: string; gateway: string; amount_cents: number; status: string; created_at: string; paid_at: string | null; }[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
   const [contactOpen, setContactOpen] = useState(false);
   const [contactPlan, setContactPlan] = useState('');
 
   const currentTier = (user?.institution?.plan || user?.personal_plan || user?.membership_tier || 'free') as string;
   const isTrial = user?.is_member && user?.membership_source === 'trial';
+  const [now] = useState(Date.now);
   const membershipEnd = user?.membership_expires_at ? new Date(user?.membership_expires_at) : null;
   const daysLeft = membershipEnd
-    ? Math.max(0, Math.ceil((membershipEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    ? Math.max(0, Math.ceil((membershipEnd.getTime() - now) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  useEffect(() => { fetchOrders(); }, []);
 
-  const fetchOrders = async () => {
-    setLoadingOrders(true);
-    try { const { data } = await api.get('/payments/orders/'); setOrders(data); }
-    catch { toast.error('加载订单失败'); }
-    finally { setLoadingOrders(false); }
-  };
+
+  const fetchOrders = useCallback(() => {
+
+    return api.get('/payments/orders/').then(({ data }) => {
+      setOrders(data);
+    })
+      .catch(() => { toast.error('加载订单失败'); })
+      .finally(() => {
+        setLoadingOrders(false);
+
+      });
+  }, []);
+
+
+
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
   const currentMeta = PLAN[currentTier] || PLAN.free;
 
@@ -177,7 +188,7 @@ export function BillingPage() {
               </div>
             ) : (
               <div className="divide-y divide-border/40">
-                {orders.map((o: any) => (
+                {orders.map((o) => (
                   <div key={o.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                     <div>
                       <p className="text-[13px] font-bold text-foreground capitalize">

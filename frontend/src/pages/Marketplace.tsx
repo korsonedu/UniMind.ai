@@ -15,7 +15,7 @@ import {
   Star,
 } from '@phosphor-icons/react';
 import api from '@/lib/api';
-import { cn } from '@/lib/utils';
+
 import { PageWrapper } from '@/components/PageWrapper';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,11 +78,7 @@ const STATUS_LABELS: Record<string, string> = {
   unpublished: '已下架',
 };
 
-const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  draft: 'secondary',
-  published: 'default',
-  unpublished: 'outline',
-};
+
 
 function formatPrice(cents: number): string {
   if (cents === 0) return '免费';
@@ -140,31 +136,43 @@ function BrowseTab() {
   const [detail, setDetail] = useState<Listing | null>(null);
   const [fetchingDetail, setFetchingDetail] = useState(false);
 
-  const fetchListings = useCallback(async (pageNum = 1) => {
-    setLoading(true);
-    try {
-      const params: Record<string, string | number> = { page: pageNum, page_size: 12 };
-      if (search) params.search = search;
-      if (subject) params.subject = subject;
-      if (contentType) params.content_type = contentType;
-      if (licenseType) params.license_type = licenseType;
-      const { data } = await api.get('/quizzes/marketplace/', { params });
+  const [listingQuery, setListingQuery] = useState({ search, subject, contentType, licenseType });
+  if (listingQuery.search !== search || listingQuery.subject !== subject || listingQuery.contentType !== contentType || listingQuery.licenseType !== licenseType) {
+    setListingQuery({ search, subject, contentType, licenseType });
+    setLoading(true); setPage(1);
+  }
+
+  const fetchListings = useCallback((pageNum = 1) => {
+    const params: Record<string, string | number> = { page: pageNum, page_size: 12 };
+    if (search) params.search = search;
+    if (subject) params.subject = subject;
+    if (contentType) params.content_type = contentType;
+    if (licenseType) params.license_type = licenseType;
+    return api.get('/quizzes/marketplace/', { params }).then(({ data }) => {
       setListings(Array.isArray(data.listings) ? data.listings : []);
       setTotal(data.total || 0);
-    } catch {
-      toast.error('加载内容列表失败');
-    } finally {
-      setLoading(false);
-    }
+      setPage(pageNum);
+    })
+      .catch(() => {
+        toast.error('加载内容列表失败');
+      })
+      .finally(() => {
+        setLoading(false);
+
+      });
   }, [search, subject, contentType, licenseType]);
+  const refreshFetchListings = useCallback((pageNum = 1) => {
+    setLoading(true);
+    return fetchListings(pageNum);
+  }, [fetchListings]);
+
 
   useEffect(() => {
     fetchListings(1);
-    setPage(1);
   }, [fetchListings]);
 
   function handleSearch() {
-    fetchListings(1);
+    refreshFetchListings(1);
     setPage(1);
   }
 
@@ -304,7 +312,7 @@ function BrowseTab() {
                 variant="outline"
                 size="sm"
                 disabled={page <= 1}
-                onClick={() => { const next = page - 1; setPage(next); fetchListings(next); }}
+                onClick={() => { const next = page - 1; setPage(next); refreshFetchListings(next); }}
               >
                 上一页
               </Button>
@@ -315,7 +323,7 @@ function BrowseTab() {
                 variant="outline"
                 size="sm"
                 disabled={page >= totalPages}
-                onClick={() => { const next = page + 1; setPage(next); fetchListings(next); }}
+                onClick={() => { const next = page + 1; setPage(next); refreshFetchListings(next); }}
               >
                 下一页
               </Button>
@@ -388,17 +396,23 @@ function MyListingsTab() {
   const [submitting, setSubmitting] = useState(false);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
-  const fetchMyListings = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get('/quizzes/marketplace/manage/');
+  const fetchMyListings = useCallback(() => {
+
+    return api.get('/quizzes/marketplace/manage/').then(({ data }) => {
       setListings(Array.isArray(data) ? data : []);
-    } catch {
-      toast.error('加载我的上架列表失败');
-    } finally {
-      setLoading(false);
-    }
+    })
+      .catch(() => {
+        toast.error('加载我的上架列表失败');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
+  const refreshFetchMyListings = useCallback(() => {
+    setLoading(true);
+    return fetchMyListings();
+  }, [fetchMyListings]);
+
 
   useEffect(() => {
     fetchMyListings();
@@ -424,7 +438,7 @@ function MyListingsTab() {
     try {
       await api.post('/quizzes/marketplace/publish/', payload);
       setShowPublish(false);
-      await fetchMyListings();
+      await refreshFetchMyListings();
       toast.success('发布成功');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '发布失败';
@@ -455,7 +469,7 @@ function MyListingsTab() {
     try {
       await api.put(`/quizzes/marketplace/manage/${editItem.id}/`, payload);
       setEditItem(null);
-      await fetchMyListings();
+      await refreshFetchMyListings();
       toast.success('更新成功');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '更新失败';
@@ -469,7 +483,7 @@ function MyListingsTab() {
     if (!(await confirm(`确定删除「${item.title}」？此操作不可撤销。`))) return;
     try {
       await api.delete(`/quizzes/marketplace/manage/${item.id}/`);
-      await fetchMyListings();
+      await refreshFetchMyListings();
       toast.success('已删除');
     } catch {
       toast.error('删除失败');
@@ -479,7 +493,7 @@ function MyListingsTab() {
   async function handleStatusChange(item: Listing, newStatus: string) {
     try {
       await api.put(`/quizzes/marketplace/manage/${item.id}/`, { status: newStatus });
-      await fetchMyListings();
+      await refreshFetchMyListings();
       toast.success(`状态已更新为「${STATUS_LABELS[newStatus] || newStatus}」`);
     } catch {
       toast.error('状态更新失败');

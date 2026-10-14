@@ -1,3 +1,4 @@
+import { formatApiErrorToast } from '@/lib/apiError';
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
@@ -21,7 +22,7 @@ export function Checkout() {
 
   // Promo code
   const [couponCode, setCouponCode] = useState('');
-  const [couponResult, setCouponResult] = useState<any>(null);
+  const [couponResult, setCouponResult] = useState<{ valid: false; error: string } | { valid: true; discount: number; original_amount?: number; final_amount?: number; } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
 
   const validateCoupon = useCallback(async (code: string) => {
@@ -34,8 +35,8 @@ export function Checkout() {
         billing_cycle: cycle,
       });
       setCouponResult(data);
-    } catch (err: any) {
-      setCouponResult({ valid: false, error: err.response?.data?.error || '验证失败' });
+    } catch (err: unknown) {
+      setCouponResult({ valid: false, error: formatApiErrorToast(err, '验证失败') });
     } finally { setValidatingCoupon(false); }
   }, [plan, cycle]);
 
@@ -48,7 +49,7 @@ export function Checkout() {
     setPaying(true);
     setError('');
     try {
-      const payload: any = { plan, billing_cycle: cycle, gateway };
+      const payload: { plan: string; billing_cycle: string; gateway: string; coupon_code?: string } = { plan, billing_cycle: cycle, gateway };
       if (couponCode.trim() && couponResult?.valid) {
         payload.coupon_code = couponCode.trim();
       }
@@ -68,12 +69,8 @@ export function Checkout() {
         setError('支付网关未返回结算地址');
         setPaying(false);
       }
-    } catch (e: any) {
-      const msg =
-        e?.response?.data?.error ||
-        e?.response?.data?.detail ||
-        e?.message ||
-        '创建订单失败，请重试';
+    } catch (e: unknown) {
+      const msg = formatApiErrorToast(e, '创建订单失败，请重试');
       setError(msg);
       setPaying(false);
     }

@@ -1,3 +1,4 @@
+import type { Course } from '@/types/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -23,8 +24,8 @@ export const VideoLesson: React.FC = () => {
   const updateUser = useAuthStore(s => s.updateUser);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
-  const [course, setCourse] = useState<any>(null);
-  const [relatedCourses, setRelatedCourses] = useState<any[]>([]);
+  const [course, setCourse] = useState<Course | null>(null);
+  const [relatedCourses, setRelatedCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasAwarded, setHasAwarded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -83,7 +84,7 @@ export const VideoLesson: React.FC = () => {
       setIsFullscreen(isFS);
       // 退出全屏时解锁方向（进入时的 lock 在 toggleFullscreen 手势上下文里调用）
       if (!isFS) {
-        try { screen.orientation?.unlock?.(); } catch {}
+        try { screen.orientation?.unlock?.(); } catch { /* Orientation locking is optional; fullscreen remains available. */ }
       }
     };
     // iOS Safari webkit 全屏事件（原生播放器自动处理横屏）
@@ -110,17 +111,17 @@ export const VideoLesson: React.FC = () => {
   };
 
   const toggleFullscreen = async () => {
-    const v = videoRef.current;
+    const v = videoRef.current as (HTMLVideoElement & { webkitDisplayingFullscreen?: boolean; webkitExitFullscreen?: () => void; webkitEnterFullscreen?: () => void }) | null;
     // 退出全屏（标准全屏或 iOS Safari webkit 全屏）
-    if (document.fullscreenElement || (v as any)?.webkitDisplayingFullscreen) {
+    if (document.fullscreenElement || v?.webkitDisplayingFullscreen) {
       document.exitFullscreen().catch(() => {});
-      (v as any)?.webkitExitFullscreen?.();
+      v?.webkitExitFullscreen?.();
       return;
     }
     if (!v) return;
     // iOS Safari：使用原生播放器全屏，自动处理横屏
-    if ((v as any).webkitEnterFullscreen) {
-      (v as any).webkitEnterFullscreen();
+    if (v.webkitEnterFullscreen) {
+      v.webkitEnterFullscreen();
       return;
     }
     // 标准浏览器：全屏容器 div 使视频可自由撑满
@@ -130,7 +131,7 @@ export const VideoLesson: React.FC = () => {
     try {
       await container.requestFullscreen();
       // 紧跟在 requestFullscreen 后锁横屏，必须在此处（用户手势上下文中）调用
-      try { await (screen.orientation as any)?.lock?.('landscape'); } catch {}
+      try { await (screen.orientation as ScreenOrientation & { lock?: (orientation: string) => Promise<void> })?.lock?.('landscape'); } catch { /* Orientation locking is optional; fullscreen remains available. */ }
     } catch {
       setIsFullscreen(false);
     }
@@ -173,7 +174,7 @@ export const VideoLesson: React.FC = () => {
 
         if (res.data.album) {
           const albumRes = await api.get(`/courses/albums/${res.data.album.id}/courses/`, { signal: controller.signal });
-          setRelatedCourses(albumRes.data.filter((c: any) => c.id !== res.data.id));
+          setRelatedCourses(albumRes.data.filter((c: Course) => c.id !== res.data.id));
         }
       } catch (e) { if (!controller.signal.aborted) console.error('fetchCourse failed', e); }
       finally { if (!controller.signal.aborted) setLoading(false); }
@@ -264,7 +265,7 @@ export const VideoLesson: React.FC = () => {
                 // 暂停时补存进度，避免最后 10 秒内的位置丢失
                 api.post(`/courses/${courseId}/progress/`, { position: videoRef.current?.currentTime ?? 0 }).catch(() => {});
               }}
-              onClick={() => { videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause(); }}
+              onClick={() => { if (videoRef.current?.paused) void videoRef.current.play(); else videoRef.current?.pause(); }}
               src={course.video_file}
               className={isFullscreen ? 'absolute inset-0 w-full h-full object-contain' : 'w-full lg:max-h-[70vh] cursor-pointer'}
               preload="metadata"
@@ -282,7 +283,7 @@ export const VideoLesson: React.FC = () => {
                 <span className="text-[11px] font-medium text-white/70 tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <div className="flex items-center gap-0.5">
                   <button
-                    onClick={() => { videoRef.current?.paused ? videoRef.current?.play() : videoRef.current?.pause(); }}
+                    onClick={() => { if (videoRef.current?.paused) void videoRef.current.play(); else videoRef.current?.pause(); }}
                     className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors"
                     aria-label={isPlaying ? '暂停' : '播放'}
                     title={isPlaying ? '暂停' : '播放'}

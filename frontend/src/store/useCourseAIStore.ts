@@ -133,7 +133,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
     try {
       const res = await api.get(`/courses/${courseId}/transcript/`);
       if (res.data.status === 'completed') {
-        const segments = (res.data.segments || []).map((s: any) => ({
+        const segments = (res.data.segments || []).map((s: { start_time: number; end_time: number; start?: number; end?: number; text: string; index: number }) => ({
           start: s.start_time ?? s.start ?? 0,
           end: s.end_time ?? s.end ?? 0,
           text: s.text ?? '',
@@ -160,7 +160,7 @@ export const useCourseAIStore = create<CourseAIState>((set, get) => ({
             if (pollRes.data.status === 'completed') {
               _pollTimers.delete(key);
               _pollIntervals.delete(key);
-              const pollSegments = (pollRes.data.segments || []).map((s: any) => ({
+              const pollSegments = (pollRes.data.segments || []).map((s: { start_time: number; end_time: number; start?: number; end?: number; text: string; index: number }) => ({
                 start: s.start_time ?? s.start ?? 0,
                 end: s.end_time ?? s.end ?? 0,
                 text: s.text ?? '',

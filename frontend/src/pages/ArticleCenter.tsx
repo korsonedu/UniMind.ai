@@ -1,3 +1,4 @@
+import type { Article } from '@/types/api';
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FileText, CaretRight, CaretLeft, PlusCircle, MagnifyingGlass, SquaresFour, ListBullets } from '@phosphor-icons/react';
@@ -24,14 +25,14 @@ export const ArticleCenter: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const params: Record<string, any> = { page };
+  const params: Record<string, unknown> = { page };
   if (selectedTag) params.tag = selectedTag;
   if (search.trim()) params.search = search.trim();
 
   const cacheKey = `articles-${selectedTag || 'all'}-${search}-${page}`;
   const { data, loading, error, refetch } = useFetch<{
-    articles: any[];
-    tag_stats: any[];
+    articles: Article[];
+    tag_stats: { name: string; count: number }[];
     total_pages: number;
   }>(
     (signal) => api.get('/articles/', { params, signal }).then(r => r.data),
@@ -41,7 +42,7 @@ export const ArticleCenter: React.FC = () => {
   const articles = data?.articles || [];
   const tagStats = data?.tag_stats || [];
   const totalPages = data?.total_pages || 1;
-  const totalCount = tagStats.reduce((sum: number, t: any) => sum + (t.count || 0), 0);
+  const totalCount = tagStats.reduce((sum: number, t: { name: string; count: number }) => sum + (t.count || 0), 0);
 
   const handleTagChange = (tag: string | null) => {
     setSelectedTag(selectedTag === tag ? null : tag);
@@ -68,7 +69,7 @@ export const ArticleCenter: React.FC = () => {
     </Button>
   ) : undefined;
 
-  const GridCard = ({ article }: { article: any }) => (
+  const GridCard = ({ article }: { article: Article }) => (
     <Link
       key={article.id}
       to={`/article/${article.id}`}
@@ -104,7 +105,7 @@ export const ArticleCenter: React.FC = () => {
     </Link>
   );
 
-  const ListRow = ({ article }: { article: any }) => (
+  const ListRow = ({ article }: { article: Article }) => (
     <Link key={article.id} to={`/article/${article.id}`} className="hover:bg-muted/50 transition-all border-b border-border last:border-0 cursor-pointer group block">
       <div className="md:hidden px-4 py-4 space-y-2">
         <div className="flex items-center justify-between gap-2">
@@ -228,7 +229,7 @@ export const ArticleCenter: React.FC = () => {
               全部 · {totalCount}
             </button>
 
-            {tagStats.map((tag: any) => {
+            {tagStats.map((tag: { name: string; count: number }) => {
               const isActive = selectedTag === tag.name;
               return (
                 <button

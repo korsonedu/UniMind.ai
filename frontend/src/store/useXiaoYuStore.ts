@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { AgentStep } from '@/hooks/useAgentChat';
+import type { VisualData } from '@/pages/xiaoyu/visuals';
 
 export interface XiaoYuMessage {
   _id: string;
@@ -12,7 +13,7 @@ export interface XiaoYuMessage {
   feedback?: boolean | null;
   conversation_id?: string;
   conversation_title?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> & { visual?: VisualData; all_visuals?: VisualData[] };
 }
 
 interface XiaoYuState {

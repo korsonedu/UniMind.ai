@@ -12,23 +12,19 @@ const MAX_ATTEMPTS = 30;
 export function PaymentResult() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<'checking' | 'paid' | 'failed'>('checking');
+  const [orderId] = useState(() => sessionStorage.getItem('last_order_id'));
+  const [status, setStatus] = useState<'checking' | 'paid' | 'failed'>(() => orderId ? 'checking' : searchParams.get('redirect_status') === 'succeeded' ? 'paid' : 'failed');
   const [mounted, setMounted] = useState(false);
   const [pollInterval, setPollInterval] = useState(POLL_INITIAL);
   const attemptsRef = useRef(0);
 
-  const redirectStatus = searchParams.get('redirect_status');
+
   const isStripeReturn = !!searchParams.get('payment_intent');
 
   useEffect(() => { requestAnimationFrame(() => setMounted(true)); }, []);
 
   useEffect(() => {
-    const orderId = sessionStorage.getItem('last_order_id');
-    if (!orderId) {
-      if (redirectStatus === 'succeeded') { setStatus('paid'); }
-      else { setStatus('failed'); }
-      return;
-    }
+    if (!orderId) return;
 
     let cancelled = false;
     attemptsRef.current = 0;
@@ -63,7 +59,7 @@ export function PaymentResult() {
     }, pollInterval);
 
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [redirectStatus, pollInterval]);
+  }, [orderId, pollInterval]);
 
   // Reset polling interval when tab becomes visible again
   useEffect(() => {

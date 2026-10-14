@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Link, Plus, Copy, Trash } from '@phosphor-icons/react';
+import { Plus, Copy, Trash } from '@phosphor-icons/react';
 
 interface Invite {
   id: number;
@@ -69,7 +69,7 @@ export const InstitutionInviteSection: React.FC = () => {
 
   const createInvite = () => {
     setCreating(true);
-    const payload: any = { assigned_role: assignedRole, requires_approval: requireApproval };
+    const payload: { max_uses?: number; expires_at?: string; assigned_role: string; requires_approval: boolean; label?: string } = { assigned_role: assignedRole, requires_approval: requireApproval };
     const m = parseInt(maxUses, 10);
     if (m > 0) payload.max_uses = m;
     api.post('/users/institution/me/invites/', payload)

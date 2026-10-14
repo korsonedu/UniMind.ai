@@ -2,20 +2,7 @@
  * API 开放平台 — 企业开发者门户
  */
 import { useState, useEffect, useCallback } from 'react';
-import {
-  Code,
-  Key,
-  Copy,
-  Trash,
-  BookOpen,
-  Plus,
-  Spinner,
-  ChartBar,
-  Gauge,
-  Clock,
-  CheckCircle,
-  X,
-} from '@phosphor-icons/react';
+import { Code, Key, Copy, Trash, BookOpen, Plus, Spinner, ChartBar, Gauge, Clock, X } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { PageWrapper } from '@/components/PageWrapper';
@@ -102,17 +89,23 @@ function ApiKeysTab() {
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
-  const fetchKeys = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get('/users/institution/me/api-keys/');
+  const fetchKeys = useCallback(() => {
+
+    return api.get('/users/institution/me/api-keys/').then(({ data }) => {
       setKeys(Array.isArray(data) ? data : []);
-    } catch {
-      toast.error('加载 API 密钥失败');
-    } finally {
-      setLoading(false);
-    }
+    })
+      .catch(() => {
+        toast.error('加载 API 密钥失败');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
+  const refreshFetchKeys = useCallback(() => {
+    setLoading(true);
+    return fetchKeys();
+  }, [fetchKeys]);
+
 
   useEffect(() => {
     fetchKeys();
@@ -137,7 +130,7 @@ function ApiKeysTab() {
       const { data } = await api.post('/users/institution/me/api-keys/', payload);
       setNewSecret(data.secret);
       setShowCreate(false);
-      await fetchKeys();
+      await refreshFetchKeys();
       toast.success('API 密钥已创建');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '创建失败';
@@ -150,7 +143,7 @@ function ApiKeysTab() {
   async function handleToggle(key: ApiKey) {
     try {
       await api.put(`/users/institution/me/api-keys/${key.id}/`, { is_active: !key.is_active });
-      await fetchKeys();
+      await refreshFetchKeys();
       toast.success(key.is_active ? '密钥已停用' : '密钥已启用');
     } catch {
       toast.error('操作失败');
@@ -161,7 +154,7 @@ function ApiKeysTab() {
     if (!(await confirm(`确定删除密钥「${key.name}」？使用该密钥的集成将立即失效。`))) return;
     try {
       await api.delete(`/users/institution/me/api-keys/${key.id}/`);
-      await fetchKeys();
+      await refreshFetchKeys();
       toast.success('密钥已删除');
     } catch {
       toast.error('删除失败');

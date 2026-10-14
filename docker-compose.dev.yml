@@ -26,6 +26,7 @@ services:
     ports:
       - "8000:8000"
     depends_on:
+      db: !reset null
       redis:
         condition: service_healthy
 
@@ -58,6 +59,8 @@ services:
       DB_PASSWORD: ""
       REDIS_URL: redis://redis:6379/0
     command: celery -A school_system worker -l info --pool=solo
+    depends_on:
+      db: !reset null
     volumes:
       - ./backend:/app/backend
 
@@ -79,6 +82,8 @@ services:
       DB_PASSWORD: ""
       REDIS_URL: redis://redis:6379/0
     command: celery -A school_system beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    depends_on:
+      db: !reset null
     volumes:
       - ./backend:/app/backend
     profiles:

@@ -8,20 +8,26 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 
 export const InsightsPanel: React.FC = () => {
-  const [biData, setBIData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [biData, setBIData] = useState<{ user_overview: { total: number; members: number; member_rate: number }; kp_errors: { question__knowledge_point__name: string; total_errors: number }[]; course_stats: { course__title: string; completions: number; total_views: number; total_elo: number }[]; } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const fetchBI = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await api.get('/users/admin/bi/');
+  const fetchBI = useCallback(() => {
+
+    return api.get('/users/admin/bi/').then((res) => {
       setBIData(res.data);
-    } catch {
-      toast.error('分析数据同步失败');
-    } finally {
-      setIsLoading(false);
-    }
+    })
+      .catch(() => {
+        toast.error('分析数据同步失败');
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   }, []);
+  const refreshFetchBI = useCallback(() => {
+    setIsLoading(true);
+    return fetchBI();
+  }, [fetchBI]);
+
 
   useEffect(() => { fetchBI(); }, [fetchBI]);
 
@@ -61,7 +67,7 @@ export const InsightsPanel: React.FC = () => {
             <Badge variant="outline" className="text-xs font-medium border-red-100 text-red-500 rounded-lg">按错题总数降序</Badge>
           </div>
           <div className="space-y-4">
-            {biData?.kp_errors?.map((item: any, i: number) => (
+            {biData?.kp_errors?.map((item, i: number) => (
               <div key={i} className="space-y-2">
                 <div className="flex justify-between items-center px-1">
                   <span className="text-xs font-medium">{item.question__knowledge_point__name}</span>
@@ -87,12 +93,12 @@ export const InsightsPanel: React.FC = () => {
               <Video className="h-5 w-5 text-emerald-500" />
               <h3 className="text-lg font-semibold tracking-tight">课程吸睛指数</h3>
             </div>
-            <Button variant="ghost" size="icon" onClick={fetchBI} className="rounded-full h-8 w-8 hover:bg-black/[0.04]">
+            <Button variant="ghost" size="icon" onClick={refreshFetchBI} className="rounded-full h-8 w-8 hover:bg-black/[0.04]">
               <ArrowsClockwise className={cn("w-3.5 h-3.5 text-[#8E8E93]", isLoading && "animate-spin")} />
             </Button>
           </div>
           <div className="space-y-2">
-            {biData?.course_stats?.map((item: any, i: number) => (
+            {biData?.course_stats?.map((item, i: number) => (
               <div key={i} className="p-4 bg-white rounded-xl border border-transparent hover:border-black/[0.04] hover:shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex items-center justify-between group transition-[border-color,box-shadow]">
                 <div className="min-w-0 flex-1 pr-4">
                   <p className="text-sm font-medium truncate">{item.course__title}</p>

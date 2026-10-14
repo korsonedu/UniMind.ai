@@ -1,7 +1,8 @@
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/button';
-import { Layers, LogOut, Building2 } from 'lucide-react';
+import { Stack as Layers, SignOut as LogOut, Buildings as Building2 } from '@phosphor-icons/react';
+import api from '@/lib/api';
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ export default function AdminLayout() {
               variant="ghost"
               size="sm"
               className="h-8 text-xs text-[#8E8E93]"
-              onClick={() => { logout(); navigate('/login'); }}
+              onClick={async () => { await api.post('/users/logout/'); logout(); navigate('/login'); }}
             >
               <LogOut className="h-3.5 w-3.5 mr-1" /> 退出
             </Button>

@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { formatApiErrorToast } from '@/lib/apiError';
+import type { QAQuestion, QAAnswer } from '@/types/api';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChatCircleText, MagnifyingGlass, Paperclip, PaperPlaneTilt, DotsThree, Star, Trash, CheckCircle, Circle, ArrowLeft, Spinner, ChatCircle, PencilSimple, ThumbsUp, Eye } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -23,7 +25,7 @@ import '@/styles/qa.css';
 
 // --- Sub-Components ---
 
-const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: any, onReplyClick: () => void, onRefresh: () => void }) => {
+const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: QAAnswer, onReplyClick: () => void, onRefresh: () => void }) => {
   const user = useAuthStore(s => s.user);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(answer.content);
@@ -34,9 +36,6 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: any, onReplyC
   const [isLiked, setIsLiked] = useState(answer.is_liked || false);
   const { confirm, Dialog } = useConfirm();
 
-  useEffect(() => {
-    if (!isEditing) setEditContent(answer.content);
-  }, [answer.content, isEditing]);
 
   const handleEdit = async () => {
     if (!editContent.trim()) return;
@@ -46,7 +45,7 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: any, onReplyC
       toast.success('回复已更新');
       setIsEditing(false);
       onRefresh();
-    } catch (e) { toast.error('更新失败'); }
+    } catch { toast.error('更新失败'); }
     finally { setIsSubmitting(false); }
   };
 
@@ -56,7 +55,7 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: any, onReplyC
       await api.delete(`/qa/answers/${answer.id}/`);
       toast.success('回复已删除');
       onRefresh();
-    } catch (e) { toast.error('删除失败'); }
+    } catch { toast.error('删除失败'); }
   };
 
   const handleLike = async (e: React.MouseEvent) => {
@@ -65,7 +64,7 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: any, onReplyC
           const res = await api.patch(`/qa/answers/${answer.id}/action/`, { toggle_like: true });
           setIsLiked(res.data.is_liked);
           setLikesCount(res.data.likes_count);
-      } catch(e) { toast.error('操作失败'); }
+      } catch { toast.error('操作失败'); }
   };
 
   return (
@@ -97,7 +96,7 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: any, onReplyC
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setIsEditing(true)} className="gap-2 text-xs">
+                <DropdownMenuItem onClick={() => { setEditContent(answer.content); setIsEditing(true); }} className="gap-2 text-xs">
                   <PencilSimple className="h-3 w-3" /> 编辑
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleDelete} className="gap-2 text-xs text-red-600 focus:text-red-700 focus:bg-red-50">
@@ -146,7 +145,7 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: any, onReplyC
   );
 };
 
-const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: { question: any, onRefresh: () => void, isAdmin: boolean, detail?: boolean, onDelete?: () => void }) => {
+const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: { question: QAQuestion, onRefresh: () => void, isAdmin: boolean, detail?: boolean, onDelete?: () => void }) => {
   const location = useLocation();
   const [replyContent, setReplyContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -165,12 +164,9 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
   // Follow State
   const [isFollowed, setIsFollowed] = useState(question.is_followed || false);
 
-  useEffect(() => {
-    if (!isEditing) setEditContent(question.content);
-  }, [question.content, isEditing]);
 
   const firstAnswer = question.first_answer;
-  const teacherAnswer = question.answers.find((answer: any) => answer.is_teacher);
+  const teacherAnswer = question.answers.find((answer: QAAnswer) => answer.is_teacher);
   const canReply = !!firstAnswer || isAdmin || !!user?.is_institution_teacher;
   const isLongQuestion = question.content.length > 280 || question.content.split('\n').length > 6;
 
@@ -182,7 +178,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
         const { data } = await api.patch(`/qa/questions/${question.id}/action/`, { toggle_follow: true });
         setIsFollowed(data.is_followed);
         toast.success(data.is_followed ? '已关注' : '已取消关注');
-    } catch(e) { toast.error('操作失败'); }
+    } catch { toast.error('操作失败'); }
   };
 
   const handleLike = async (e: React.MouseEvent) => {
@@ -191,7 +187,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
           const res = await api.patch(`/qa/questions/${question.id}/action/`, { toggle_like: true });
           setIsLiked(res.data.is_liked);
           setLikesCount(res.data.likes_count);
-      } catch(e) { toast.error('操作失败'); }
+      } catch { toast.error('操作失败'); }
   };
 
   const handleUpdate = async () => {
@@ -201,7 +197,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
         toast.success('已更新');
         setIsEditing(false);
         onRefresh();
-     } catch(e) { toast.error('更新失败'); }
+     } catch { toast.error('更新失败'); }
   };
 
   const handleAction = async (action: string) => {
@@ -216,7 +212,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
         toast.success('状态已更新');
       }
       onRefresh();
-    } catch (e) { toast.error('操作失败'); }
+    } catch { toast.error('操作失败'); }
   };
 
   const handleReply = async () => {
@@ -227,8 +223,8 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
       setReplyContent('');
       onRefresh();
       toast.success('回复已提交');
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '回复失败');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '回复失败'));
     } finally {
       setIsSubmitting(false);
     }
@@ -292,7 +288,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
               )}
               {(isAdmin || user?.username === question.user_detail.username) && (
                 <>
-                  <DropdownMenuItem onClick={() => setIsEditing(true)} className="gap-2 text-xs font-bold">
+                  <DropdownMenuItem onClick={() => { setEditContent(question.content); setIsEditing(true); }} className="gap-2 text-xs font-bold">
                     <PencilSimple className="h-3.5 w-3.5" /> 编辑内容
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleAction('delete')} className="gap-2 text-xs font-bold text-red-600 focus:text-red-700 focus:bg-red-50">
@@ -375,7 +371,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
 
       {detail && !isEditing && question.answers.length > 0 && (
         <section className="um-qa-reply-list" aria-label="全部回复">
-          {question.answers.map((answer: any) => (
+          {question.answers.map((answer: QAAnswer) => (
             <AnswerItem key={answer.id} answer={answer} onReplyClick={triggerReply} onRefresh={onRefresh} />
           ))}
         </section>
@@ -421,7 +417,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
 };
 
 export const QASystem: React.FC = () => {
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<QAQuestion[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const filter = searchParams.get('filter') || 'all';
   const search = searchParams.get('search') || '';
@@ -445,16 +441,27 @@ export const QASystem: React.FC = () => {
     }, { replace: true });
   };
 
-  const fetchQuestions = async (background = false) => {
-    if (!background) setLoading(true);
-    try {
-      const res = await api.get('/qa/questions/', { params: { filter, search } });
-      setQuestions(res.data);
-    } catch (e) { toast.error('加载失败'); }
-    finally { if (!background) setLoading(false); }
-  };
+  const [questionQuery, setQuestionQuery] = useState({ filter, search });
+  if (questionQuery.filter !== filter || questionQuery.search !== search) {
+    setQuestionQuery({ filter, search });
+    setLoading(true);
+  }
 
-  useEffect(() => { fetchQuestions(); }, [filter, search]);
+  const fetchQuestions = useCallback((background = false) => {
+
+    return api.get('/qa/questions/', { params: { filter, search } }).then((res) => {
+      setQuestions(res.data);
+    })
+      .catch(() => { toast.error('加载失败'); })
+      .finally(() => { if (!background) setLoading(false); });
+  }, [filter, search]);
+  const refreshFetchQuestions = useCallback((background = false) => {
+    if (!background) setLoading(true);
+    return fetchQuestions(background);
+  }, [fetchQuestions]);
+
+
+  useEffect(() => { fetchQuestions(); }, [fetchQuestions, filter, search]);
 
   useEffect(() => {
     const input = questionInputRef.current;
@@ -478,8 +485,8 @@ export const QASystem: React.FC = () => {
       setQContent('');
       setQFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      fetchQuestions();
-    } catch (e) {
+      refreshFetchQuestions();
+    } catch {
       toast.error('发送失败');
     } finally {
       setIsPosting(false);
@@ -566,7 +573,7 @@ export const QASystem: React.FC = () => {
             </div>
           ) : (
             questions.map(q => (
-              <ThreadCard key={q.id} question={q} onRefresh={() => fetchQuestions(true)} isAdmin={isAdmin} />
+              <ThreadCard key={q.id} question={q} onRefresh={() => refreshFetchQuestions(true)} isAdmin={isAdmin} />
             ))
           )}
         </section>
@@ -580,7 +587,7 @@ export const QuestionDetail: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const user = useAuthStore(s => s.user);
-  const [question, setQuestion] = useState<any>(null);
+  const [question, setQuestion] = useState<QAQuestion | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const returnPath = `/qa${location.search}`;
@@ -592,11 +599,14 @@ export const QuestionDetail: React.FC = () => {
     } catch { toast.error('加载问题失败，请重试'); }
   };
 
+  const [loadingQuestionId, setLoadingQuestionId] = useState(id);
+  if (loadingQuestionId !== id) {
+    setLoadingQuestionId(id);
+    setLoading(true); setFailed(false); setQuestion(null);
+  }
+
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setFailed(false);
-    setQuestion(null);
     api.get(`/qa/questions/${id}/`).then(({ data }) => {
       if (active) setQuestion(data);
     }).catch(() => {

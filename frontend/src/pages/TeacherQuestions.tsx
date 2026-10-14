@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 /**
  * 题库管理 — 题目列表。
  */
@@ -35,33 +36,47 @@ export default function TeacherQuestions() {
   const [difficulty, setDifficulty] = useState('all');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<{ total: number; results: QuestionItem[] }>({ total: 0, results: [] });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
-  const fetchQuestions = async (p = page) => {
+  const [questionQuery, setQuestionQuery] = useState({ search, qType, difficulty });
+  if (questionQuery.search !== search || questionQuery.qType !== qType || questionQuery.difficulty !== difficulty) {
+    setQuestionQuery({ search, qType, difficulty });
     setLoading(true);
-    try {
-      const res = await api.get('/quizzes/admin/questions/', {
-        params: {
-          search: search || undefined,
-          q_type: qType !== 'all' ? qType : undefined,
-          difficulty: difficulty !== 'all' ? difficulty : undefined,
-          page: p,
-          page_size: 50,
-        },
-      });
+  }
+
+  const fetchQuestions = useCallback((p: number) => {
+
+    return api.get('/quizzes/admin/questions/', {
+      params: {
+        search: search || undefined,
+        q_type: qType !== 'all' ? qType : undefined,
+        difficulty: difficulty !== 'all' ? difficulty : undefined,
+        page: p,
+        page_size: 50,
+      },
+    }).then((res) => {
       setData(res.data);
       setPage(p);
-    } catch { toast.error('加载题库失败'); }
-    setLoading(false);
-  };
+    })
+      .catch(() => { toast.error('加载题库失败'); })
+      .finally(() => {
 
-  useEffect(() => { fetchQuestions(1); }, [search, qType, difficulty]);
+        setLoading(false);
+      });
+  }, [search, qType, difficulty]);
+  const refreshFetchQuestions = useCallback((p = page) => {
+    setLoading(true);
+    return fetchQuestions(p);
+  }, [fetchQuestions, page]);
+
+
+  useEffect(() => { fetchQuestions(1); }, [search, qType, difficulty, fetchQuestions]);
 
   const toggleSelect = (id: number) => {
     setSelected(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -146,11 +161,11 @@ export default function TeacherQuestions() {
 
           {data.total > 50 && (
             <div className="flex items-center justify-center gap-2 pt-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => fetchQuestions(page - 1)}>
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => refreshFetchQuestions(page - 1)}>
                 上一页
               </Button>
               <span className="text-sm text-muted-foreground">{page}/{Math.ceil(data.total / 50)}</span>
-              <Button variant="outline" size="sm" disabled={page >= Math.ceil(data.total / 50)} onClick={() => fetchQuestions(page + 1)}>
+              <Button variant="outline" size="sm" disabled={page >= Math.ceil(data.total / 50)} onClick={() => refreshFetchQuestions(page + 1)}>
                 下一页
               </Button>
             </div>

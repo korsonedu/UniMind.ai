@@ -20,10 +20,15 @@ export default function Legal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [loadingDocType, setLoadingDocType] = useState(docType);
+  if (loadingDocType !== docType) {
+    setLoadingDocType(docType);
+    setLoading(true); setError('');
+  }
+
   useEffect(() => {
-    setLoading(true);
     api.get(`/legal/${docType}/`)
-      .then(r => setDoc(r.data))
+      .then(r => { setDoc(r.data); setError(''); })
       .catch(() => setError('文档加载失败'))
       .finally(() => setLoading(false));
   }, [docType]);

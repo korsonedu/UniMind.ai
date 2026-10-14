@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  kpList: any[];
+  kpList: { id: number; name: string }[];
   onCreated: (kpId: string) => void;
   onRefresh: () => void;
 }
@@ -31,7 +31,7 @@ export const QuickCreateKPDialog: React.FC<Props> = ({ open, onOpenChange, kpLis
       onCreated(newId);
       onOpenChange(false);
       setForm({ name: '', description: '', parent: '0' });
-    } catch (e) {
+    } catch {
       toast.error('创建失败');
     }
   };
@@ -61,7 +61,7 @@ export const QuickCreateKPDialog: React.FC<Props> = ({ open, onOpenChange, kpLis
                 <SelectValue placeholder="顶级节点" />
               </SelectTrigger>
               <SelectContent>
-                {kpList.map((kp: any) => (
+                {kpList.map((kp: { id: number; name: string }) => (
                   <SelectItem key={kp.id} value={kp.id.toString()} className="text-xs">{kp.name}</SelectItem>
                 ))}
               </SelectContent>

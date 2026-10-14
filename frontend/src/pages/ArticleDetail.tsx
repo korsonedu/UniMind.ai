@@ -1,3 +1,4 @@
+import type { Article } from '@/types/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 export const ArticleDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [article, setArticle] = useState<any>(null);
+  const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
   const [scrollProgress, setScrollProgress] = useState(0);
   const viewCounted = useRef(false);

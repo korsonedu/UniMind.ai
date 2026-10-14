@@ -19,12 +19,13 @@ export function useConversationProjects(enabled: boolean, projectId: number | nu
   const [projects, setProjects] = useState<ConversationProject[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(false);
-  const reload = useCallback(async () => {
-    try {
-      const response = await api.get<ConversationProject[]>('/ai/projects/');
+  const reload = useCallback(() => {
+
+    return api.get<ConversationProject[]>('/ai/projects/').then((response) => {
       setProjects(response.data);
       setError(false);
-    } catch { setError(true); }
+    })
+      .catch(() => { setError(true); });
   }, []);
   useEffect(() => { if (enabled) void reload(); }, [enabled, reload]);
 

@@ -27,7 +27,7 @@ export interface TimelineMessage {
     label: string;
     args_summary?: string;
     result_summary?: string;
-    visual?: { type: string; payload: any };
+    visual?: { type: string; payload: unknown };
   };
   /** 是否为 Agent 主动推送 */
   isPush?: boolean;
@@ -50,7 +50,6 @@ export function AgentTimeline({
   messages,
   streamingText,
   isStreaming,
-  userAvatar,
   userInitial,
   className,
 }: Props) {

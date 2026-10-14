@@ -14,15 +14,16 @@ export const NotificationSection: React.FC = () => {
   const [showCompose, setShowCompose] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', link: '' });
   const [isSending, setIsSending] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<{ id: number; title: string; content: string; link: string | null; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchHistory = useCallback(async () => {
-    try {
-      const res = await api.get('/notifications/');
+  const fetchHistory = useCallback(() => {
+
+    return api.get('/notifications/').then((res) => {
       setHistory(Array.isArray(res.data) ? res.data : res.data?.results || []);
-    } catch (e) { console.debug('[NotificationSection] endpoint not available:', e); }
-    finally { setLoading(false); }
+    })
+      .catch((e: unknown) => { console.debug('[NotificationSection] endpoint not available:', e); })
+      .finally(() => { setLoading(false); });
   }, []);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
@@ -68,7 +69,7 @@ export const NotificationSection: React.FC = () => {
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
           <ScrollArea className="h-[560px]">
             <div className="divide-y divide-black/[0.04]">
-              {history.map((item: any, i: number) => (
+              {history.map((item, i: number) => (
                 <div key={item.id || i} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">

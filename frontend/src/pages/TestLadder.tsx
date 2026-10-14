@@ -1,3 +1,4 @@
+import type { QuizQuestion, KnowledgePoint } from '@/types/api';
 import '@/styles/practice.css';
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, CaretDown, Bell, Info } from '@phosphor-icons/react';
@@ -5,14 +6,14 @@ import { normalizeOptions } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PageWrapper } from '@/components/PageWrapper';
 import { toast } from "sonner";
 import api from '@/lib/api';
-import { useSystemStore } from '@/store/useSystemStore';
+
 import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -36,9 +37,9 @@ export const TestLadder: React.FC = () => {
   const [preference, setPreference] = useState<string>(() => {
     try { return localStorage.getItem('quiz_preference') || 'balanced'; } catch { return 'balanced'; }
   });
-  
+
   // Data State
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [goals, setGoals] = useState({
     review_goal: 0,
     new_questions: 0,
@@ -47,47 +48,50 @@ export const TestLadder: React.FC = () => {
     estimated_minutes: 14,
     weak_focus_count: 0,
   });
-  
+
   // Assessment UI State
   const [isTestOpen, setIsTestOpen] = useState(false);
   const [difficulty, setDifficulty] = useState("mixed");
-  const [qCount, setQCount] = useState("5");
+  const [customQCount, setQCount] = useState("5");
   const [isCustomCount, setIsCustomCount] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [answers, setAnswers] = useState<any>({});
+  const [answers, setAnswers] = useState<Record<number, string>>({});
   const [starting, setStarting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gradingMessage] = useState("");
 
-  useEffect(() => {
-    fetchGoals();
-  }, []);
+
 
   // React Query: 学科列表 — 低频变更数据，缓存 2 分钟
   const { data: subjectList = [] } = useQuery({
     queryKey: queryKeys.knowledgePoints.subjects,
     queryFn: () => api.get('/quizzes/knowledge-points/').then(r => {
       const data = Array.isArray(r.data) ? r.data : (r.data?.results || []);
-      return data.map((item: any) => ({ id: item.id, name: item.name, code: item.code }));
+      return data.map((item: KnowledgePoint) => ({ id: item.id, name: item.name, code: item.code }));
     }),
     staleTime: 120000,
   });
   const [loadingStates, setLoadingStates] = useState({ goals: true });
 
-  useEffect(() => {
-    if (isCustomCount) return;
-    const suggested = Number(goals.recommended_questions || 0);
-    if (!Number.isFinite(suggested) || suggested <= 0) return;
-    setQCount(String(Math.max(1, Math.min(50, suggested))));
-  }, [goals.recommended_questions, isCustomCount]);
+  const suggestedCount = Number(goals.recommended_questions);
+  const qCount = isCustomCount || !Number.isFinite(suggestedCount) || suggestedCount <= 0
+    ? customQCount : String(Math.max(1, Math.min(50, suggestedCount)));
 
-  const fetchGoals = async () => {
-    try {
-      const res = await api.get('/quizzes/stats/');
+  const fetchGoals = () => {
+
+    return api.get('/quizzes/stats/').then((res) => {
       setGoals(res.data);
-    } catch (e) { console.error('fetchGoals failed', e); }
-    finally { setLoadingStates(s => ({ ...s, goals: false })); }
+    })
+      .catch((e: unknown) => { console.error('fetchGoals failed', e); })
+      .finally(() => {
+        setLoadingStates(s => ({ ...s, goals: false }));
+
+      });
   };
+
+  useEffect(() => {
+    fetchGoals();
+  }, []);
 
   const toggleFavorite = async (qId: number) => {
     try {
@@ -130,7 +134,7 @@ export const TestLadder: React.FC = () => {
     try {
       const res = await api.get(`/quizzes/questions/?${params.toString()}`);
       if (res.data.length === 0) return toast.error('题库暂无可用题目');
-      setQuestions(res.data.map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
+      setQuestions(res.data.map((q: QuizQuestion) => ({ ...q, options: normalizeOptions(q.options) })));
       setIsTestOpen(true);
       setAnswers({});
       setCurrentIdx(0);
@@ -155,7 +159,7 @@ export const TestLadder: React.FC = () => {
       toast.success('试卷已提交 AI 批改', { description: '完成后请在通知中心点击查看报告。' });
       setIsTestOpen(false);
       fetchGoals();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(formatApiErrorToast(e, '提交失败'));
     } finally { setIsSubmitting(false); }
   };
@@ -191,7 +195,7 @@ export const TestLadder: React.FC = () => {
 
             <div className="um-practice-subject"><span className="um-practice-label">学科范围</span><Popover><PopoverTrigger asChild><Button variant="outline" aria-label="选择学科">{selectedSubIds.length ? `已选 ${selectedSubIds.length} 个学科` : '全部学科'}<CaretDown size={14} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="start"><h2>学科范围</h2>{subjectList.map((subject: { id: number; name: string }) => <Label key={subject.id}><Checkbox checked={selectedSubIds.includes(subject.id)} onCheckedChange={checked => setSelectedSubIds(prev => checked ? [...prev, subject.id] : prev.filter(id => id !== subject.id))} />{subject.name}</Label>)}{!subjectList.length && <p>暂无可选学科</p>}{selectedSubIds.length > 0 && <Button variant="ghost" onClick={() => setSelectedSubIds([])}>清除筛选</Button>}</PopoverContent></Popover></div>
           </div>
-          <div className="um-practice-start"><div><span className="um-practice-label">练习偏好</span><div className="um-practice-preference" role="group" aria-label="练习偏好">{[{ value: 'balanced', label: '均衡' }, { value: 'new_first', label: '偏新题' }, { value: 'review_first', label: '偏复习' }].map(item => <button type="button" key={item.value} aria-pressed={preference === item.value} onClick={() => { setPreference(item.value); try { localStorage.setItem('quiz_preference', item.value); } catch {} }}>{item.label}</button>)}</div></div><Button onClick={startTest} disabled={starting || loadingStates.goals} className="um-practice-primary">{starting ? '正在读取题目…' : '开始练习'}<ArrowRight size={15} /></Button></div>
+          <div className="um-practice-start"><div><span className="um-practice-label">练习偏好</span><div className="um-practice-preference" role="group" aria-label="练习偏好">{[{ value: 'balanced', label: '均衡' }, { value: 'new_first', label: '偏新题' }, { value: 'review_first', label: '偏复习' }].map(item => <button type="button" key={item.value} aria-pressed={preference === item.value} onClick={() => { setPreference(item.value); try { localStorage.setItem('quiz_preference', item.value); } catch { /* Browser may deny local storage. */ } }}>{item.label}</button>)}</div></div><Button onClick={startTest} disabled={starting || loadingStates.goals} className="um-practice-primary">{starting ? '正在读取题目…' : '开始练习'}<ArrowRight size={15} /></Button></div>
         </section>
         {/* Modularized Assessment Flow */}
         <AssessmentDialog 

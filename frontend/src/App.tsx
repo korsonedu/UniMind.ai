@@ -24,36 +24,33 @@ import { FeedbackButton } from './components/FeedbackButton';
 import { OnboardingDialog } from '@/components/OnboardingDialog';
 
 // Lazy-loaded pages — named exports need .then() wrapper
-const lazyNamed = <T extends Record<string, React.ComponentType<any>>>(loader: () => Promise<T>, name: keyof T) =>
-  lazy(() => loader().then(m => ({ default: m[name] })));
+const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
+const CourseCenter = lazy(() => import('./pages/CourseCenter').then(module => ({ default: module.CourseCenter })));
+const TestLadder = lazy(() => import('./pages/TestLadder').then(module => ({ default: module.TestLadder })));
+const StudyRoom = lazy(() => import('./pages/StudyRoom').then(module => ({ default: module.StudyRoom })));
+const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
+const Maintenance = lazy(() => import('./pages/Maintenance').then(module => ({ default: module.Maintenance })));
+const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
+const AccountCallback = lazy(() => import('./pages/AccountCallback').then(module => ({ default: module.AccountCallback })));
+const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
+const VerifyCode = lazy(() => import('./pages/VerifyCode').then(module => ({ default: module.VerifyCode })));
+const SystemSettings = lazy(() => import('./pages/SystemSettings').then(module => ({ default: module.SystemSettings })));
+const KnowledgeMap = lazy(() => import('./pages/KnowledgeMap').then(module => ({ default: module.KnowledgeMap })));
+const KnowledgeNodeDetail = lazy(() => import('./pages/KnowledgeNodeDetail').then(module => ({ default: module.KnowledgeNodeDetail })));
+const QASystem = lazy(() => import('./pages/QASystem').then(module => ({ default: module.QASystem })));
+const QuestionDetail = lazy(() => import('./pages/QASystem').then(module => ({ default: module.QuestionDetail })));
+const TestSessionPage = lazy(() => import('./pages/TestSessionPage').then(module => ({ default: module.TestSessionPage })));
+const PromptTemplatesAdmin = lazy(() => import('./pages/PromptTemplatesAdmin').then(module => ({ default: module.PromptTemplatesAdmin })));
 
-const Landing = lazyNamed(() => import('./pages/Landing'), 'Landing');
-const CourseCenter = lazyNamed(() => import('./pages/CourseCenter'), 'CourseCenter');
-const TestLadder = lazyNamed(() => import('./pages/TestLadder'), 'TestLadder');
-const StudyRoom = lazyNamed(() => import('./pages/StudyRoom'), 'StudyRoom');
-const Settings = lazyNamed(() => import('./pages/Settings'), 'Settings');
-const Maintenance = lazyNamed(() => import('./pages/Maintenance'), 'Maintenance');
-const Login = lazyNamed(() => import('./pages/Login'), 'Login');
-const AccountCallback = lazyNamed(() => import('./pages/AccountCallback'), 'AccountCallback');
-const Register = lazyNamed(() => import('./pages/Register'), 'Register');
-const VerifyCode = lazyNamed(() => import('./pages/VerifyCode'), 'VerifyCode');
-const SystemSettings = lazyNamed(() => import('./pages/SystemSettings'), 'SystemSettings');
-const KnowledgeMap = lazyNamed(() => import('./pages/KnowledgeMap'), 'KnowledgeMap');
-const KnowledgeNodeDetail = lazyNamed(() => import('./pages/KnowledgeNodeDetail'), 'KnowledgeNodeDetail');
-const QASystem = lazyNamed(() => import('./pages/QASystem'), 'QASystem');
-const QuestionDetail = lazyNamed(() => import('./pages/QASystem'), 'QuestionDetail');
-const TestSessionPage = lazyNamed(() => import('./pages/TestSessionPage'), 'TestSessionPage');
-const PromptTemplatesAdmin = lazyNamed(() => import('./pages/PromptTemplatesAdmin'), 'PromptTemplatesAdmin');
+const WrongQuestionReviewPage = lazy(() => import('./pages/WrongQuestionReviewPage').then(module => ({ default: module.WrongQuestionReviewPage })));
+const ReportCard = lazy(() => import('./pages/ReportCard').then(module => ({ default: module.ReportCard })));
+const Achievements = lazy(() => import('./pages/Achievements').then(module => ({ default: module.Achievements })));
 
-const WrongQuestionReviewPage = lazyNamed(() => import('./pages/WrongQuestionReviewPage'), 'WrongQuestionReviewPage');
-const ReportCard = lazyNamed(() => import('./pages/ReportCard'), 'ReportCard');
-const Achievements = lazyNamed(() => import('./pages/Achievements'), 'Achievements');
-
-const BillingPage = lazyNamed(() => import('./pages/Billing'), 'BillingPage');
-const PaymentResult = lazyNamed(() => import('./pages/PaymentResult'), 'PaymentResult');
-const Checkout = lazyNamed(() => import('./pages/Checkout'), 'Checkout');
-const DiagnosticTest = lazyNamed(() => import('./pages/DiagnosticTest'), 'DiagnosticTest');
-const XiaoYu = lazyNamed(() => import('./pages/XiaoYu'), 'XiaoYu');
+const BillingPage = lazy(() => import('./pages/Billing').then(module => ({ default: module.BillingPage })));
+const PaymentResult = lazy(() => import('./pages/PaymentResult').then(module => ({ default: module.PaymentResult })));
+const Checkout = lazy(() => import('./pages/Checkout').then(module => ({ default: module.Checkout })));
+const DiagnosticTest = lazy(() => import('./pages/DiagnosticTest').then(module => ({ default: module.DiagnosticTest })));
+const XiaoYu = lazy(() => import('./pages/XiaoYu').then(module => ({ default: module.XiaoYu })));
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
 // Default exports — plain lazy() works
@@ -68,10 +65,10 @@ const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
 const MemorixPage = lazy(() => import('./pages/Memorix'));
 const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
 const PlatformAdmin = lazy(() => import('./pages/PlatformAdmin'));
-const JoinPage = lazyNamed(() => import('./pages/JoinPage'), 'JoinPage');
+const JoinPage = lazy(() => import('./pages/JoinPage').then(module => ({ default: module.JoinPage })));
 const NotFound = lazy(() => import('./pages/NotFound'));
-const Marketplace = lazyNamed(() => import('./pages/Marketplace'), 'Marketplace');
-const APIPlatform = lazyNamed(() => import('./pages/APIPlatform'), 'APIPlatform');
+const Marketplace = lazy(() => import('./pages/Marketplace').then(module => ({ default: module.Marketplace })));
+const APIPlatform = lazy(() => import('./pages/APIPlatform').then(module => ({ default: module.APIPlatform })));
 const CourseManage = lazy(() => import('./pages/CourseManage'));
 const AuditLogs = lazy(() => import('./pages/AuditLogs'));
 const Legal = lazy(() => import('./pages/Legal'));
@@ -149,16 +146,19 @@ const RequireInstitution = ({ children }: { children: ReactNode }) => {
   const institution = useInstitutionStore(s => s.institution);
   const isPlatformAdmin = useInstitutionStore(s => s.isPlatformAdmin);
   const featuresLoading = useInstitutionStore(s => s.loading);
+  const featuresError = useInstitutionStore(s => s.featuresError);
   const fetchFeatures = useInstitutionStore(s => s.fetchFeatures);
 
   useEffect(() => {
-    if (user && !institution && !featuresLoading) {
+    if (user && (user.is_admin || user.institution || user.institution_id) && !institution && !isPlatformAdmin && !featuresLoading && !featuresError) {
       fetchFeatures();
     }
-  }, [user, institution, featuresLoading, fetchFeatures]);
+  }, [user, institution, isPlatformAdmin, featuresLoading, featuresError, fetchFeatures]);
 
   if (!user) return <Navigate to="/login" replace />;
-  if (featuresLoading) return <Loading message="Loading institution…" fullScreen size="lg" />;
+  if (!institution && !isPlatformAdmin && !user.institution && !user.institution_id && !user.is_admin) return <Navigate to="/" replace />;
+  if (featuresError) return <div role="alert" className="p-8 text-center space-y-3"><p>机构信息加载失败</p><button onClick={fetchFeatures} className="underline">重新加载</button></div>;
+  if (featuresLoading || (!institution && !isPlatformAdmin)) return <Loading message="Loading institution…" fullScreen size="lg" />;
   if (!institution && !isPlatformAdmin) return <Navigate to="/" replace />;
   if (isPlatformAdmin) return children;
   if (!institution?.id) return <Navigate to="/" replace />;
@@ -198,7 +198,7 @@ const isKorsonedu = typeof window !== 'undefined' &&
   /korsonedu\.com/.test(window.location.hostname);
 
 const RootRedirect = () => {
-  const user = useAuthStore(s => s.user);
+
   const setAuth = useAuthStore(s => s.setAuth);
   const logout = useAuthStore(s => s.logout);
   const hasHydrated = useAuthStore.persist.hasHydrated();

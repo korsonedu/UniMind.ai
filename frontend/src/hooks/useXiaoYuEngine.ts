@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 import api, { streamFetch } from '@/lib/api';
 import { toast } from 'sonner';
+import type { XiaoYuMessage } from '@/store/useXiaoYuStore';
+import type { Bot } from '@/types/api';
 import { useXiaoYuStore } from '@/store/useXiaoYuStore';
 import type { AgentStep } from '@/hooks/useAgentChat';
 
@@ -23,9 +25,12 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
   const timersRef = useRef<number[]>([]);
   const sendCountRef = useRef(0);
   const conversationIdRef = useRef(conversationId);
-  conversationIdRef.current = conversationId;
   const botIdRef = useRef(botId);
-  botIdRef.current = botId;
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+    botIdRef.current = botId;
+  }, [conversationId, botId]);
 
   // ── Fetch 小宇 bot on mount ──
   useEffect(() => {
@@ -33,7 +38,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
     api.get('/ai/bots/')
       .then((r) => {
         const bots = Array.isArray(r.data) ? r.data : (r.data?.results || []);
-        const xiaoyu = bots.find((b: any) => b.bot_type === 'planner');
+        const xiaoyu = bots.find((b: Bot) => b.bot_type === 'planner');
         if (xiaoyu) setBotId(xiaoyu.id);
       })
       .catch(() => {});
@@ -65,7 +70,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
       visible: true,
       timestamp: new Date().toISOString(),
     };
-    setMessages((prev: any) => [...prev, userMsg]);
+    setMessages((prev: XiaoYuMessage[]) => [...prev, userMsg]);
 
     try {
       const { url, init } = streamFetch(
@@ -93,8 +98,8 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
         const delay = Math.max(0, pos - shownCount.current) * STEP_DELAY_MS;
         const timerId = window.setTimeout(() => {
           shownCount.current = Math.max(shownCount.current, pos + 1);
-          setMessages((prev: any) =>
-            prev.map((m: any) => (m._id === id ? { ...m, visible: true } : m)),
+          setMessages((prev: XiaoYuMessage[]) =>
+            prev.map((m: XiaoYuMessage) => (m._id === id ? { ...m, visible: true } : m)),
           );
         }, delay);
         timersRef.current.push(timerId);
@@ -115,7 +120,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
 
             if (payload.type === 'message' && payload.content) {
               const id = nextId();
-              setMessages((prev: any) => [
+              setMessages((prev: XiaoYuMessage[]) => [
                 ...prev,
                 {
                   _id: id,
@@ -126,8 +131,8 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                 },
               ]);
               requestAnimationFrame(() => {
-                setMessages((prev: any) => {
-                  const pos = prev.findIndex((m: any) => m._id === id);
+                setMessages((prev: XiaoYuMessage[]) => {
+                  const pos = prev.findIndex((m: XiaoYuMessage) => m._id === id);
                   if (pos >= 0) scheduleShow(id, pos);
                   return prev;
                 });
@@ -136,9 +141,9 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
               const step = payload as AgentStep;
 
               if (step.status === 'calling') {
-                setMessages((prev: any) => {
+                setMessages((prev: XiaoYuMessage[]) => {
                   const existingIdx = prev.findIndex(
-                    (m: any) => m.toolStep?.call_id === step.call_id,
+                    (m: XiaoYuMessage) => m.toolStep?.call_id === step.call_id,
                   );
                   if (existingIdx >= 0) {
                     const updated = [...prev];
@@ -163,8 +168,8 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                   ];
                 });
               } else if (step.status === 'done') {
-                setMessages((prev: any) =>
-                  prev.map((m: any) =>
+                setMessages((prev: XiaoYuMessage[]) =>
+                  prev.map((m: XiaoYuMessage) =>
                     m.toolStep?.call_id === step.call_id
                       ? { ...m, toolStep: step }
                       : m,
@@ -179,7 +184,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                 toast.error(finalContent || 'AI 调用失败');
               } else if (finalContent) {
                 const id = nextId();
-                setMessages((prev: any) => [
+                setMessages((prev: XiaoYuMessage[]) => [
                   ...prev,
                   {
                     _id: id,
@@ -194,8 +199,8 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                   },
                 ]);
                 requestAnimationFrame(() => {
-                  setMessages((prev: any) => {
-                    const pos = prev.findIndex((m: any) => m._id === id);
+                  setMessages((prev: XiaoYuMessage[]) => {
+                    const pos = prev.findIndex((m: XiaoYuMessage) => m._id === id);
                     if (pos >= 0) scheduleShow(id, pos);
                     return prev;
                   });
@@ -224,8 +229,8 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
     } finally {
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
-      setMessages((prev: any) =>
-        prev.map((m: any) =>
+      setMessages((prev: XiaoYuMessage[]) =>
+        prev.map((m: XiaoYuMessage) =>
           m.visible === false ? { ...m, visible: true } : m,
         ),
       );

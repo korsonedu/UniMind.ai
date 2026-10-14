@@ -1,3 +1,5 @@
+import type { SubjectCategory } from '@/components/DirectionSelector';
+import { formatApiErrorToast } from '@/lib/apiError';
 import { useEffect, useState, useCallback, useRef, Fragment } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -125,7 +127,7 @@ function KPEditDialog({
   allNodes: KPNode[];
   onCreateEdge: (sourceId: number, targetId: number, edgeType: EdgeType, weight: number) => Promise<void>;
 }) {
-  const [form, setForm] = useState({ name: '', code: '', level: 'kp', description: '', parent: '0' });
+  const [form, setForm] = useState(() => ({ name: node?.name || '', code: node?.code || '', level: node?.level || 'kp', description: node?.description || '', parent: node?.parent ? String(node.parent) : '0' }));
   const [saving, setSaving] = useState(false);
   // Edge creation within dialog
   const [edgeTargetId, setEdgeTargetId] = useState<number | null>(null);
@@ -134,21 +136,6 @@ function KPEditDialog({
   const [edgeSearch, setEdgeSearch] = useState('');
   const [addingEdge, setAddingEdge] = useState(false);
 
-  useEffect(() => {
-    if (node) {
-      setForm({
-        name: node.name || '',
-        code: node.code || '',
-        level: node.level || 'kp',
-        description: node.description || '',
-        parent: node.parent ? String(node.parent) : '0',
-      });
-    } else {
-      setForm({ name: '', code: '', level: 'kp', description: '', parent: '0' });
-    }
-    setEdgeTargetId(null);
-    setEdgeSearch('');
-  }, [node, open]);
 
   const handleSave = async () => {
     if (!form.name.trim()) { toast.error('名称不能为空'); return; }
@@ -180,7 +167,7 @@ function KPEditDialog({
       }
       onSaved();
       onClose();
-    } catch (e: any) { toast.error(e.response?.data?.error || '保存失败'); }
+    } catch (e: unknown) { toast.error(formatApiErrorToast(e, '保存失败')); }
     setSaving(false);
   };
 
@@ -318,7 +305,7 @@ export function KnowledgeSystemPanel() {
   const [edgeTargetId, setEdgeTargetId] = useState<number | null>(null);
   const [edgeType, setEdgeType] = useState<EdgeType>('similar');
   const [edgeWeight, setEdgeWeight] = useState(0.3);
-  const [subjects, setSubjects] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<SubjectCategory[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const dragCounter = useRef(0);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -333,6 +320,39 @@ export function KnowledgeSystemPanel() {
       if (dragCounter.current === 0) setDragOver(false);
     }
   }, []);
+
+  const [treeQuery, setTreeQuery] = useState({ selectedSubject });
+  if (treeQuery.selectedSubject !== selectedSubject) {
+    setTreeQuery({ selectedSubject });
+    setLoading(true);
+  }
+
+  const fetchTree = useCallback(() => {
+    const params: { subject?: string } = {};
+    if (selectedSubject) params.subject = selectedSubject;
+    return api.get('/quizzes/knowledge-points/', { params }).then(({ data }) => {
+      setTree(data);
+      const flat: KPNode[] = [];
+      const walk = (nodes: KPNode[]) => {
+        for (const n of nodes) {
+          flat.push(n);
+          if (n.children) walk(n.children);
+        }
+      };
+      walk(data);
+      setAllNodes(flat);
+    })
+      .catch((e: unknown) => { console.debug('[KnowledgeSystemPanel] fetch failed:', e); })
+      .finally(() => {
+
+        setLoading(false);
+      });
+  }, [selectedSubject]);
+  const refreshFetchTree = useCallback(() => {
+    setLoading(true);
+    return fetchTree();
+  }, [fetchTree]);
+
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation();
@@ -350,55 +370,44 @@ export function KnowledgeSystemPanel() {
     api.post('/quizzes/knowledge-points/import-md/', fd)
       .then(({ data }) => {
         toast.success(`导入完成：新建 ${data.created} 个，更新 ${data.updated} 个`);
-        fetchTree();
+        refreshFetchTree();
       })
-      .catch((e: any) => toast.error(e.response?.data?.error || '导入失败'))
+      .catch((e: unknown) => toast.error(formatApiErrorToast(e, '导入失败')))
       .finally(() => setImporting(false));
-  }, []);
+  }, [refreshFetchTree]);
 
-  const fetchSubjects = async () => {
-    try {
-      const { data } = await api.get('/quizzes/knowledge-points/subjects/');
+  const fetchSubjects = () => {
+
+    return api.get('/quizzes/knowledge-points/subjects/').then(({ data }) => {
       setSubjects(data.categories || []);
-    } catch { setSubjects([]); }
+    })
+      .catch(() => { setSubjects([]); });
   };
 
-  const fetchTree = async () => {
-    setLoading(true);
-    try {
-      const params: any = {};
-      if (selectedSubject) params.subject = selectedSubject;
-      const { data } = await api.get('/quizzes/knowledge-points/', { params });
-      setTree(data);
-      // Flatten tree for parent selector
-      const flat: KPNode[] = [];
-      const walk = (nodes: KPNode[]) => {
-        for (const n of nodes) {
-          flat.push(n);
-          if (n.children) walk(n.children);
-        }
-      };
-      walk(data);
-      setAllNodes(flat);
-    } catch (e) { console.debug('[KnowledgeSystemPanel] fetch failed:', e); }
-    setLoading(false);
-  };
 
-  useEffect(() => { fetchSubjects(); fetchTree(); }, []);
-  useEffect(() => { fetchTree(); }, [selectedSubject]);
+
+  useEffect(() => { fetchSubjects(); }, []);
+  useEffect(() => { fetchTree(); }, [fetchTree]);
 
   // ── 边操作 ──
-  const fetchEdges = useCallback(async (kpId: number) => {
-    setEdgesLoading(true);
-    try {
-      const { data } = await api.get('/quizzes/knowledge-edges/', { params: { kp_id: kpId } });
-      setEdges(data || []);
-    } catch { setEdges([]); } finally { setEdgesLoading(false); }
-  }, []);
+  const fetchEdges = useCallback((kpId: number) => {
 
+    return api.get('/quizzes/knowledge-edges/', { params: { kp_id: kpId } }).then(({ data }) => {
+      setEdges(data || []);
+    })
+      .catch(() => { setEdges([]); })
+      .finally(() => { setEdgesLoading(false); });
+  }, []);
+  const refreshFetchEdges = useCallback((kpId: number) => {
+    setEdgesLoading(true);
+    return fetchEdges(kpId);
+  }, [fetchEdges]);
+
+
+  const [edgesFor, setEdgesFor] = useState(selectedId);
+  if (edgesFor !== selectedId) { setEdgesFor(selectedId); setEdgeTargetId(null); setEdges([]); setEdgesLoading(Boolean(selectedId)); }
   useEffect(() => {
-    if (selectedId) { fetchEdges(selectedId); setEdgeTargetId(null); }
-    else setEdges([]);
+    if (selectedId) fetchEdges(selectedId);
   }, [selectedId, fetchEdges]);
 
   const handleCreateEdge = async () => {
@@ -408,10 +417,10 @@ export function KnowledgeSystemPanel() {
         edges: [{ source: selectedId, target: edgeTargetId, edge_type: edgeType, weight: edgeWeight }],
       });
       toast.success('关联已创建');
-      fetchEdges(selectedId);
+      refreshFetchEdges(selectedId);
       setEdgeTargetId(null);
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || '创建失败');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '创建失败'));
     }
   };
 
@@ -419,7 +428,7 @@ export function KnowledgeSystemPanel() {
     try {
       await api.delete(`/quizzes/knowledge-edges/${edgeId}/`);
       toast.success('关联已删除');
-      if (selectedId) fetchEdges(selectedId);
+      if (selectedId) refreshFetchEdges(selectedId);
     } catch { toast.error('删除失败'); }
   };
 
@@ -428,8 +437,8 @@ export function KnowledgeSystemPanel() {
     try {
       await api.delete(`/quizzes/knowledge-points/${node.id}/`);
       toast.success('已删除');
-      fetchTree();
-    } catch (e: any) { toast.error('删除失败'); }
+      refreshFetchTree();
+    } catch { toast.error('删除失败'); }
   };
 
   const handleExportMD = async () => {
@@ -451,8 +460,8 @@ export function KnowledgeSystemPanel() {
       const { data } = await api.post('/quizzes/knowledge-points/import-md/', { content: mdText });
       toast.success(`导入完成：新建 ${data.created} 个，更新 ${data.updated} 个`);
       setMdText('');
-      fetchTree();
-    } catch (e: any) { toast.error(e.response?.data?.error || '导入失败'); }
+      refreshFetchTree();
+    } catch (e: unknown) { toast.error(formatApiErrorToast(e, '导入失败')); }
     setImporting(false);
   };
 
@@ -465,8 +474,8 @@ export function KnowledgeSystemPanel() {
       fd.append('file', file);
       const { data } = await api.post('/quizzes/knowledge-points/import-md/', fd);
       toast.success(`导入完成：新建 ${data.created} 个，更新 ${data.updated} 个`);
-      fetchTree();
-    } catch (e: any) { toast.error(e.response?.data?.error || '导入失败'); }
+      refreshFetchTree();
+    } catch (e: unknown) { toast.error(formatApiErrorToast(e, '导入失败')); }
     setImporting(false);
   };
 
@@ -488,7 +497,7 @@ export function KnowledgeSystemPanel() {
             <Brain className="h-4 w-4 text-indigo-500" /> 知识体系
           </h3>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={fetchTree}>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={refreshFetchTree}>
               <ArrowsClockwise className="h-3 w-3 mr-1" /> 刷新
             </Button>
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleExportMD}>
@@ -513,10 +522,10 @@ export function KnowledgeSystemPanel() {
               >
                 全部
               </Button>
-              {subjects.map((cat: any) => (
+              {subjects.map((cat: SubjectCategory) => (
                 <Fragment key={cat.name}>
                   <span className="text-[9px] text-muted-foreground/50 mx-0.5 shrink-0 select-none">·</span>
-                  {cat.subjects?.map((subj: any) => (
+                  {cat.subjects?.map((subj: SubjectCategory['subjects'][number]) => (
                     <Button
                       key={subj.subject}
                       variant={selectedSubject === subj.subject ? 'apple' : 'ghost'}
@@ -545,7 +554,7 @@ export function KnowledgeSystemPanel() {
           <ScrollArea className="flex-1 -mx-2">
             <div className="space-y-0.5 pr-2">
               {tree.map(node => (
-                <TreeNode key={node.id} node={node} depth={0} selectedId={selectedId} onSelect={setSelectedId} onEdit={setEditNode} onDelete={handleDelete} onRefresh={fetchTree} />
+                <TreeNode key={node.id} node={node} depth={0} selectedId={selectedId} onSelect={setSelectedId} onEdit={setEditNode} onDelete={handleDelete} onRefresh={refreshFetchTree} />
               ))}
             </div>
           </ScrollArea>
@@ -634,7 +643,7 @@ export function KnowledgeSystemPanel() {
                   <div className="py-4 text-center text-xs text-gray-300">暂无关联</div>
                 ) : (
                   edges.map(e => {
-                    const otherId = e.source === selectedId ? e.target : e.source;
+
                     const otherName = e.source === selectedId ? e.target_name : e.source_name;
                     return (
                       <div key={e.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-2.5 py-2 text-xs">
@@ -729,11 +738,11 @@ export function KnowledgeSystemPanel() {
       </div>
       </ScrollArea>
 
-      <KPEditDialog
+      <KPEditDialog key={`${editNode?.id ?? "new"}:${showCreate || !!editNode}`}
         open={showCreate || !!editNode}
         node={editNode}
         onClose={() => { setShowCreate(false); setEditNode(null); }}
-        onSaved={fetchTree}
+        onSaved={refreshFetchTree}
         parentOptions={allNodes}
         allNodes={allNodes}
         onCreateEdge={async (sourceId, targetId, edgeType, weight) => {
@@ -741,7 +750,7 @@ export function KnowledgeSystemPanel() {
             edges: [{ source: sourceId, target: targetId, edge_type: edgeType, weight }],
           });
           toast.success('关联已创建');
-          if (selectedId) fetchEdges(selectedId);
+          if (selectedId) refreshFetchEdges(selectedId);
         }}
       />
       {ConfirmDialog}

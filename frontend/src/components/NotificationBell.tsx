@@ -62,7 +62,7 @@ export const NotificationBell = () => {
     if (open) fetchNotifications();
   };
 
-  const handleItemClick = async (notif: any) => {
+  const handleItemClick = async (notif: ReturnType<typeof useNotificationStore.getState>['notifications'][number]) => {
     if (!notif.is_read) await markAsRead(notif.id);
     if (notif.link) {
         if (notif.link.startsWith('/')) navigate(notif.link);

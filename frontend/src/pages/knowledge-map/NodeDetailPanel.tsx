@@ -1,3 +1,4 @@
+import type { QuizQuestion, Course } from '@/types/api';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, ArrowsOut, Video, X, Stack, Lightning } from '@phosphor-icons/react';
@@ -19,9 +20,9 @@ const LEVEL_LABELS: Record<string, string> = {
 
 export const NodeDetailPanel: React.FC<{
   node: KPNode | null;
-  details: { courses: any[]; questions: any[] };
+  details: { courses: Course[]; questions: QuizQuestion[] };
   loading: boolean;
-  onQuestionClick: (q: any) => void;
+  onQuestionClick: (q: QuizQuestion) => void;
   onClear: () => void;
   masteryData?: Record<string, string>;
 }> = ({ node, details, loading, onQuestionClick, onClear, masteryData = {} }) => {
@@ -97,7 +98,7 @@ export const NodeDetailPanel: React.FC<{
                   {details.questions.length === 0 && (
                     <p className="text-[10px] text-muted-foreground/50">暂无题目</p>
                   )}
-                  {details.questions.map((q: any) => (
+                  {details.questions.map((q: QuizQuestion) => (
                     <button
                       key={q.id}
                       onClick={() => onQuestionClick(q)}
@@ -121,7 +122,7 @@ export const NodeDetailPanel: React.FC<{
                   {details.courses.length === 0 && (
                     <p className="text-[10px] text-muted-foreground/50">暂无课程</p>
                   )}
-                  {details.courses.map((c: any) => (
+                  {details.courses.map((c: Course) => (
                     <div key={c.id} className="p-3 bg-emerald-50/50 rounded-xl flex items-center gap-2 border border-emerald-100">
                       <Video className="w-3 h-3 text-emerald-500 shrink-0" />
                       <p className="text-[11px] font-medium truncate">{c.title}</p>

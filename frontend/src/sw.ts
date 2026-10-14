@@ -5,11 +5,10 @@ import { registerRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 
-declare const self: ServiceWorkerGlobalScope;
+declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Parameters<typeof precacheAndRoute>[0] };
 
 // Precache
 cleanupOutdatedCaches();
-// @ts-ignore — injected by vite-plugin-pwa
 precacheAndRoute(self.__WB_MANIFEST);
 
 // API runtime caching

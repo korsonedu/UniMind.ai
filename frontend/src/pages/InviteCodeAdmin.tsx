@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,16 +57,24 @@ export default function InviteCodeAdmin() {
 
   const isTrial = codeType === 'trial';
 
-  const fetchCodes = async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get('/users/admin/plan-invite-codes/');
-      setCodes(data);
-    } catch { toast.error('加载邀请码失败'); }
-    setLoading(false);
-  };
+  const fetchCodes = useCallback(() => {
 
-  useEffect(() => { fetchCodes(); }, []);
+    return api.get('/users/admin/plan-invite-codes/').then(({ data }) => {
+      setCodes(data);
+    })
+      .catch(() => { toast.error('加载邀请码失败'); })
+      .finally(() => {
+
+        setLoading(false);
+      });
+  }, []);
+  const refreshFetchCodes = useCallback(() => {
+    setLoading(true);
+    return fetchCodes();
+  }, [fetchCodes]);
+
+
+  useEffect(() => { fetchCodes(); }, [fetchCodes]);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -78,8 +87,8 @@ export default function InviteCodeAdmin() {
         duration_days: isTrial ? 7 : durationDays,
         note,
       });
-      setGenerated(data.codes.map((c: any) => c.code));
-      fetchCodes();
+      setGenerated(data.codes.map((c: InviteCode) => c.code));
+      refreshFetchCodes();
       toast.success(`已生成 ${data.generated} 条${isTrial ? '试用' : '正式'}邀请码`);
     } catch { toast.error('生成邀请码失败，请重试'); }
     setGenerating(false);
@@ -87,7 +96,7 @@ export default function InviteCodeAdmin() {
 
   const handleDeactivate = async (id: number) => {
     await api.post(`/users/admin/plan-invite-codes/${id}/deactivate/`);
-    fetchCodes();
+    refreshFetchCodes();
   };
 
   const copyCode = (code: string) => {

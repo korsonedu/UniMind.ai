@@ -1,3 +1,5 @@
+import type { Editor } from '@tiptap/core';
+import type { ReactNode } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
@@ -12,7 +14,7 @@ interface MarkdownEditorProps {
   placeholder?: string;
 }
 
-const ToolbarButton = ({ onClick, isActive, label, children }: any) => (
+const ToolbarButton = ({ onClick, isActive, label, children }: { onClick: () => void; isActive?: boolean; label: string; children: ReactNode }) => (
   <button
     type="button"
     onClick={onClick}
@@ -47,7 +49,7 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
     ],
     content: content ? content.replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&') : '',
     onUpdate: ({ editor }) => {
-      const markdown = (editor.storage as any).markdown.getMarkdown();
+      const markdown = (editor.storage as Editor['storage'] & { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
       // Unescape common HTML entities that tiptap-markdown might escape
       const cleaned = markdown
         .replace(/&gt;/g, '>')
@@ -88,7 +90,7 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
         .ProseMirror code { background: hsl(var(--unimind-bg-secondary)); color: hsl(var(--primary)); padding: 0.2rem 0.4rem; border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem; }
         .ProseMirror pre { background: hsl(var(--foreground)); color: hsl(var(--unimind-bg-secondary)); padding: 1.5rem; border-radius: 1rem; font-family: monospace; margin-bottom: 1.25rem; }
         .ProseMirror pre code { background: transparent; color: inherit; padding: 0; }
-        
+
         .dark .ProseMirror h1, .dark .ProseMirror h2, .dark .ProseMirror h3 { color: white; }
         .dark .ProseMirror p { color: hsl(var(--muted-foreground)); }
         .dark .ProseMirror blockquote { background: rgba(255,255,255,0.05); }
@@ -126,9 +128,9 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
         >
           <UnderlineIcon className="w-4 h-4" />
         </ToolbarButton>
-        
+
         <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-2" />
-        
+
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
           isActive={editor.isActive('heading', { level: 1 })}
@@ -143,9 +145,9 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
         >
           <TextHTwo className="w-4 h-4" />
         </ToolbarButton>
-        
+
         <div className="w-px h-6 bg-slate-200 dark:bg-white/10 mx-2" />
-        
+
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           isActive={editor.isActive('bulletList')}
@@ -184,7 +186,7 @@ export const MarkdownEditor = ({ content, onChange, placeholder }: MarkdownEdito
           <ArrowClockwise className="w-4 h-4" />
         </ToolbarButton>
       </div>
-      
+
       {/* Editor Surface */}
       <div className="relative">
         <EditorContent editor={editor} />

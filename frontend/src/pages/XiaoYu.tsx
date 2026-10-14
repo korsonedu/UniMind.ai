@@ -4,6 +4,8 @@ import NativeSessionSidebar from '@/components/NativeSessionSidebar';
 import type { Bot } from '@/hooks/useAgentConversation';
 import { useXiaoYuStore } from '@/store/useXiaoYuStore';
 
+const findAssistantBot = (bots: Bot[]) => bots.find((bot: Bot) => bot.name === '小宇');
+
 const SKILLS = [
   { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
   { icon: CalendarCheck, label: '制定复习安排', prompt: '根据我的薄弱点和到期复习情况，帮我安排今天的复习' },
@@ -23,7 +25,7 @@ export const XiaoYu = () => {
   return <AgentChatLayout
     appearance="native" layout="inline" inputTourClass="xiaoyu-input"
     sidebar={props => <NativeSessionSidebar sessions={props.sessions} activeSessionId={props.activeSessionId} onSelect={props.onLoadSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
-    findBot={bots => bots.find((bot: Bot) => bot.name === '小宇')}
+    findBot={findAssistantBot}
     skills={SKILLS} typewriterWords={['让小宇分析薄弱知识点', '让小宇安排今天的复习', '让小宇推荐适合的课程', '让小宇看看复习进度']}
     chatPlaceholder="和小宇对话…" resetMessage="已开始新对话"
     landingTitle="小宇" landingDescription="" botDisplayName="小宇"

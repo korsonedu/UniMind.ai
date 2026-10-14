@@ -33,10 +33,8 @@ export function Achievements() {
   const [error, setError] = useState(false);
   const [category, setCategory] = useState('all');
   const fetchData = () => {
-    setLoading(true);
-    setError(false);
     api.get<AchievementData[]>('/users/achievements/')
-      .then(res => setData(res.data))
+      .then(res => { setData(res.data); setError(false); })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   };
@@ -46,7 +44,7 @@ export function Achievements() {
   const filtered = category === 'all' ? data : data.filter(item => item.category === category);
   return <LearningRecordLayout>
     {loading ? <div className="um-record-loading" aria-label="加载成就" aria-busy="true"><Skeleton className="h-16 w-full" /><Skeleton className="h-64 w-full" /></div>
-      : error ? <div className="um-record-empty" role="alert"><p>成就加载失败。</p><button className="um-record-button" onClick={fetchData}>重试</button></div>
+      : error ? <div className="um-record-empty" role="alert"><p>成就加载失败。</p><button className="um-record-button" onClick={() => { setLoading(true); setError(false); fetchData(); }}>重试</button></div>
       : !data.length ? <div className="um-record-empty"><p>暂无成就</p><span>开始学习后，在这里查看解锁进度。</span></div>
       : <>
         <div className="um-achievement-summary"><div><strong>{unlocked}<span> / {data.length}</span></strong><p>已解锁成就</p></div><progress value={unlocked} max={data.length} aria-label="成就解锁进度" /></div>

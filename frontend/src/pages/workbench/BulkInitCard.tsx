@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import { useState, useEffect } from 'react';
 import { Sparkle, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
@@ -48,8 +49,8 @@ export function BulkInitCard() {
         total_target: questionCount,
       });
       setDone(true);
-    } catch (e: any) {
-      if (e?.response?.data?.code === 'bulk_init_already_used') {
+    } catch (e: unknown) {
+      if (isAxiosError<{ code: string }>(e) && e.response?.data?.code === 'bulk_init_already_used') {
         setDone(true);
       }
     } finally {

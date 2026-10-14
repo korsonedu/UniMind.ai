@@ -24,7 +24,7 @@ export function InvitePopover({ inviteSlug, onClose }: InvitePopoverProps) {
     setRegenerating(true);
     try {
       const { default: api } = await import('@/lib/api');
-      const res = await api.post('/users/institution/me/regenerate-invite-slug/');
+      await api.post('/users/institution/me/regenerate-invite-slug/');
       toast.success('邀请链接已重置');
       onClose(); // close on regenerate since slug changed
     } catch {

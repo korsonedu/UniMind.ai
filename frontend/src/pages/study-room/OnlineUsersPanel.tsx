@@ -9,8 +9,10 @@ import {
 } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
 
+interface OnlineUser { id: number; username: string; nickname: string; avatar_url: string; current_task: string; elo_score: number; today_focused_minutes: number; today_completed_tasks: unknown[]; }
+
 interface OnlineUsersPanelProps {
-  onlineUsers: any[];
+  onlineUsers: OnlineUser[];
   currentUsername?: string;
 }
 
@@ -24,7 +26,7 @@ const OnlineUsersPanel: React.FC<OnlineUsersPanelProps> = ({ onlineUsers, curren
         <span className="text-xs tabular-nums text-muted-foreground">{onlineUsers.length}</span>
       </header>
       <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-none">
-        {onlineUsers.map((u: any) => (
+        {onlineUsers.map((u: OnlineUser) => (
           <HoverCard key={u.id || u.username}>
             <HoverCardTrigger asChild>
               <div className="um-study-online-user flex items-center gap-3 p-2 rounded-lg transition-colors cursor-pointer group">

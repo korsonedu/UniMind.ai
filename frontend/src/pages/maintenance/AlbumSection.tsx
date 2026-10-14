@@ -1,3 +1,4 @@
+import type { Album } from '@/types/api';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,21 +12,24 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
+type EditableAlbum = Omit<Album, 'cover_image'> & { cover_image: string | File | null };
+
 export const AlbumSection: React.FC = () => {
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editingItem, setEditingItem] = useState<EditableAlbum | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: '', description: '', cover: null as File | null });
 
-  const fetchItems = useCallback(async () => {
-    try {
-      const res = await api.get('/courses/albums/');
+  const fetchItems = useCallback(() => {
+
+    return api.get('/courses/albums/').then((res) => {
       setItems(res.data);
-    } catch (e) { console.debug('[AlbumSection] fetch failed:', e); }
-    finally { setLoading(false); }
+    })
+      .catch((e: unknown) => { console.debug('[AlbumSection] fetch failed:', e); })
+      .finally(() => { setLoading(false); });
   }, []);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
@@ -50,11 +54,11 @@ export const AlbumSection: React.FC = () => {
   const handleUpdate = async () => {
     if (!editingItem) return;
     const fd = new FormData();
-    Object.keys(editingItem).forEach(key => {
-      if (editingItem[key] instanceof File) fd.append(key, editingItem[key]);
-      else if (editingItem[key] !== null && editingItem[key] !== undefined) {
-        if (key === 'cover_image' && typeof editingItem[key] === 'string') return;
-        fd.append(key, String(editingItem[key]));
+    Object.entries(editingItem).forEach(([key, value]) => {
+      if (value instanceof File) fd.append(key, value);
+      else if (value !== null && value !== undefined) {
+        if (key === 'cover_image' && typeof value === 'string') return;
+        fd.append(key, String(value));
       }
     });
     try {
@@ -102,7 +106,7 @@ export const AlbumSection: React.FC = () => {
         <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
           <ScrollArea className="h-[560px]">
             <div className="divide-y divide-black/[0.04]">
-              {items.map((item: any) => {
+              {items.map((item: Album) => {
                 const isExpanded = expandedId === item.id;
                 return (
                   <div key={item.id}>
@@ -148,7 +152,7 @@ export const AlbumSection: React.FC = () => {
                     {isExpanded && item.courses && item.courses.length > 0 && (
                       <div className="px-4 pb-4 pl-14">
                         <div className="rounded-xl bg-[#F5F5F7]/60 p-3 space-y-1.5">
-                          {item.courses.map((c: any) => (
+                          {item.courses.map((c: Album['courses'][number]) => (
                             <div key={c.id} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-white/60 transition-colors">
                               <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
                                 {c.cover_image ? (
@@ -212,7 +216,7 @@ export const AlbumSection: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
-        <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
+        {editingItem && <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">编辑专辑</DialogTitle>
           </DialogHeader>
@@ -227,13 +231,13 @@ export const AlbumSection: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-[#6E6E73] ml-1">更新封面</Label>
-              <Input type="file" onChange={e => setEditingItem({ ...editingItem, cover_image: e.target.files?.[0] })} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" accept="image/*" />
+              <Input type="file" onChange={e => { const file = e.target.files?.[0]; if (file) setEditingItem({ ...editingItem, cover_image: file }); }} className="rounded-xl h-10 bg-[#F5F5F7] text-xs" accept="image/*" />
             </div>
             <Button onClick={handleUpdate} className="w-full h-11 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow]">
               Update & Sync
             </Button>
           </div>
-        </DialogContent>
+        </DialogContent>}
       </Dialog>
       {ConfirmDialog}
     </div>

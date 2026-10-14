@@ -1,21 +1,14 @@
+import { formatApiErrorToast as apiErr } from '@/lib/apiError';
+import { useCallback } from 'react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
-import {
-  Building2, Plus, Search, Loader2, Pencil, Power, PowerOff,
-  Users, Calendar,
-} from 'lucide-react';
+import { Buildings as Building2, Plus, MagnifyingGlass as Search, Spinner as Loader2, Pencil, Power, Power as PowerOff, Users, Calendar } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
-import { formatApiErrorToast } from '@/lib/apiError';
 
-const apiErr = (err: any, fallback: string): string => {
-  const d = err?.response?.data;
-  return d?.error || d?.details?.detail || d?.detail || fallback;
-};
 
 interface Institution {
   id: number;
@@ -36,11 +29,10 @@ interface Institution {
 }
 
 const PLAN_COLORS: Record<string, string> = {
-  free: 'bg-[#AEAEB2]', solo: 'bg-[#0071E3]', plus: 'bg-[#34C759]', pro: 'bg-[#FF9500]',
+  free: 'bg-[#AEAEB2]', starter: 'bg-[#0071E3]', growth: 'bg-[#34C759]', enterprise: 'bg-[#FF9500]',
 };
 
 export default function Institutions() {
-  const { user } = useAuthStore();
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -48,20 +40,23 @@ export default function Institutions() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Institution | null>(null);
 
-  const fetchInstitutions = async () => {
-    try {
-      const params: Record<string, string> = {};
-      if (search) params.search = search;
-      if (planFilter) params.plan = planFilter;
-      const { data } = await api.get('/users/institutions/', { params });
+  const fetchInstitutions = useCallback(() => {
+    const params: Record<string, string> = {};
+    if (search) params.search = search;
+    if (planFilter) params.plan = planFilter;
+    return api.get('/users/institutions/', { params }).then(({ data }) => {
       setInstitutions(data);
-    } catch (err: any) {
-      console.warn('[Institutions] fetch failed:', apiErr(err, 'unknown'));
-    }
-    setLoading(false);
-  };
+    })
+      .catch((err: unknown) => {
+        console.warn('[Institutions] fetch failed:', apiErr(err, 'unknown'));
+      })
+      .finally(() => {
 
-  useEffect(() => { fetchInstitutions(); }, [search, planFilter]);
+        setLoading(false);
+      });
+  }, [search, planFilter]);
+
+  useEffect(() => { fetchInstitutions(); }, [search, planFilter, fetchInstitutions]);
 
   const handleActivate = async (id: number) => {
     await api.post(`/users/institutions/${id}/activate/`);
@@ -103,7 +98,7 @@ export default function Institutions() {
           />
         </div>
         <div className="flex gap-1.5">
-          {['', 'free', 'solo', 'plus', 'pro'].map(p => (
+          {['', 'free', 'starter', 'growth', 'enterprise'].map(p => (
             <button
               key={p}
               onClick={() => setPlanFilter(p)}
@@ -224,13 +219,13 @@ function CreateDialog({
     e.preventDefault();
     setSaving(true); setError('');
     try {
-      const payload: any = { ...form };
+      const payload: Omit<typeof form, 'plan_expires_at'> & { plan_expires_at?: string } = { ...form };
       if (!payload.plan_expires_at) delete payload.plan_expires_at;
       if (!payload.contact_phone) payload.contact_phone = '';
       if (!payload.slug) payload.slug = payload.name.toLowerCase().replace(/\s+/g, '-');
       await api.post('/users/institutions/', payload);
       onCreated();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(apiErr(err, '创建失败'));
     }
     setSaving(false);
@@ -258,9 +253,9 @@ function CreateDialog({
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium"
             >
               <option value="free">Free</option>
-              <option value="solo">Solo</option>
-              <option value="plus">Plus</option>
-              <option value="pro">Pro</option>
+              <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
+              <option value="enterprise">Enterprise</option>
             </select>
             <Input type="date"
               value={form.plan_expires_at} onChange={e => setForm({ ...form, plan_expires_at: e.target.value })} />
@@ -301,7 +296,7 @@ function EditDialog({
     e.preventDefault();
     setSaving(true); setError('');
     try {
-      const payload: any = { ...form };
+      const payload: Omit<typeof form, 'plan_expires_at'> & { plan_expires_at?: string } = { ...form };
       if (!payload.plan_expires_at) delete payload.plan_expires_at;
       await api.put(`/users/institutions/${institution.id}/`, payload);
       if (form.plan !== institution.plan) {
@@ -311,7 +306,7 @@ function EditDialog({
         });
       }
       onUpdated();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(apiErr(err, '保存失败'));
     }
     setSaving(false);
@@ -337,9 +332,9 @@ function EditDialog({
               className="h-10 rounded-xl border border-border bg-background px-3 text-sm font-medium"
             >
               <option value="free">Free</option>
-              <option value="solo">Solo</option>
-              <option value="plus">Plus</option>
-              <option value="pro">Pro</option>
+              <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
+              <option value="enterprise">Enterprise</option>
             </select>
             <Input type="date"
               value={form.plan_expires_at} onChange={e => setForm({ ...form, plan_expires_at: e.target.value })} />

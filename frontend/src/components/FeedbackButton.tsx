@@ -37,6 +37,7 @@ export function FeedbackButton() {
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [hasMoved, setHasMoved] = useState(false);
   const dragging = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
   const offset = useRef({ x: 0, y: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -44,6 +45,7 @@ export function FeedbackButton() {
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (!btnRef.current) return;
     dragging.current = true;
+    setIsDragging(true);
     const rect = btnRef.current.getBoundingClientRect();
     offset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -62,6 +64,7 @@ export function FeedbackButton() {
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
     dragging.current = false;
+    setIsDragging(false);
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
   }, []);
 
@@ -130,7 +133,7 @@ export function FeedbackButton() {
         style={floatingStyle}
         className={cn(
           "h-12 w-12 rounded-full bg-black dark:bg-white text-white dark:text-black shadow-lg flex items-center justify-center transition-[box-shadow,transform] duration-200 active:scale-95 select-none",
-          dragging.current ? "shadow-2xl scale-105 cursor-grabbing" : "hover:shadow-xl hover:scale-110 cursor-grab",
+          isDragging ? "shadow-2xl scale-105 cursor-grabbing" : "hover:shadow-xl hover:scale-110 cursor-grab",
         )}
         aria-label="反馈"
         title="拖拽可移动位置"

@@ -1,3 +1,4 @@
+import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import api, { streamFetch } from '@/lib/api';
 // processMathContent removed — LLM outputs LaTeX directly
@@ -22,7 +23,7 @@ export interface Message {
   conversation_id?: string;
   conversation_title?: string;
   conversation_project?: number | null;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> & { visual?: VisualData; all_visuals?: VisualData[] };
 }
 
 export interface ConversationSession {
@@ -73,17 +74,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // Stabilize callback refs to avoid dependency churn in doSend
   const onDoneRef = useRef(options.onDone);
-  onDoneRef.current = options.onDone;
   const onStepDoneRef = useRef(options.onStepDone);
-  onStepDoneRef.current = options.onStepDone;
   const onStepDoneEffectRef = useRef(options.onStepDoneEffect);
-  onStepDoneEffectRef.current = options.onStepDoneEffect;
   const onStepQuestionsRef = useRef(options.onStepQuestions);
-  onStepQuestionsRef.current = options.onStepQuestions;
   const onAllVisualsRef = useRef(options.onAllVisuals);
-  onAllVisualsRef.current = options.onAllVisuals;
   const getExtraPayloadRef = useRef(options.getExtraPayload);
-  getExtraPayloadRef.current = options.getExtraPayload;
 
   const [bot, setBot] = useState<Bot | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -96,7 +91,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
   const projectIdRef = useRef(projectId);
-  projectIdRef.current = projectId;
   const [sessionOpen, setSessionOpen] = useState(false);
   const [taskList, setTaskList] = useState<TaskListData | null>(null);
   const [chatWidth, setChatWidth] = useState(() => Math.min(Math.round(window.innerWidth * 0.36), 420));
@@ -114,7 +108,17 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const timersRef = useRef<number[]>([]);
   const sendCountRef = useRef(0);
   const conversationIdRef = useRef(conversationId);
-  conversationIdRef.current = conversationId;
+
+  useEffect(() => {
+    onDoneRef.current = options.onDone;
+    onStepDoneRef.current = options.onStepDone;
+    onStepDoneEffectRef.current = options.onStepDoneEffect;
+    onStepQuestionsRef.current = options.onStepQuestions;
+    onAllVisualsRef.current = options.onAllVisuals;
+    getExtraPayloadRef.current = options.getExtraPayload;
+    projectIdRef.current = projectId;
+    conversationIdRef.current = conversationId;
+  }, [options.onDone, options.onStepDone, options.onStepDoneEffect, options.onStepQuestions, options.onAllVisuals, options.getExtraPayload, projectId, conversationId]);
 
   const hasConversation = activeSessionId !== null || messages.some(m => m.role === 'user');
 
@@ -191,7 +195,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   /** 恢复历史消息中 metadata 的 visual 到 toolStep，确保侧栏切换时卡片不消失 */
   const restoreVisualsFromMetadata = useCallback((msgs: Message[]): Message[] => {
     return msgs.map((m) => {
-      const meta = (m as any).metadata;
+      const meta = m.metadata;
       const visuals = meta?.all_visuals || (meta?.visual ? [meta.visual] : null);
       if (!visuals || visuals.length === 0) return m;
       const v = visuals[0];
@@ -206,15 +210,16 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
           step: 0,
           name: 'render_visual',
           status: 'done',
-          label: (v.payload as any)?.title || '可视化',
+          label: (typeof v.payload?.title === 'string' ? v.payload.title : undefined) || '可视化',
           visual: v,
           args_summary: '',
           result_summary: '',
         };
       }
       if (msg.metadata) {
-        delete (msg.metadata as any).visual;
-        delete (msg.metadata as any).all_visuals;
+        msg.metadata = { ...msg.metadata };
+        delete msg.metadata.visual;
+        delete msg.metadata.all_visuals;
       }
       return msg;
     });
@@ -226,8 +231,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       const hRes = await api.get('/ai/history/', { params: { bot_id: bot.id } });
       if (hRes.data.length > 0) {
         const allMsgs: Message[] = hRes.data
-          .filter((m: Record<string, unknown>) => m.content !== '[Thinking...]')
-          .map((m: Record<string, unknown>) => ({
+          .filter((m: Message) => m.content !== '[Thinking...]')
+          .map((m: Message) => ({
             ...m,
             content: m.content as string,
             visible: true,
@@ -474,7 +479,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         setLoading(false);
       }
     }
-  }, [bot, activeSessionId]);
+  }, [bot, options.enableProjects]);
 
   // ── Handlers ──
 

@@ -1,3 +1,4 @@
+import type { Article, KnowledgePoint } from '@/types/api';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,31 +17,34 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 import { useConfirm } from '@/components/useConfirm';
 
+type EditableArticle = Omit<Article, 'cover_image' | 'knowledge_point'> & { cover_image: string | File | null; knowledge_point: number | string | null };
+
 export const ArticleSection: React.FC = () => {
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
-  const [kpList, setKpList] = useState<any[]>([]);
+  const [kpList, setKpList] = useState<KnowledgePoint[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editingItem, setEditingItem] = useState<EditableArticle | null>(null);
   const [showNewKP, setShowNewKP] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [form, setForm] = useState({ title: '', content: '', author_display_name: '', tags: [] as string[], knowledge_point: '0' });
 
-  const fetchItems = useCallback(async (p = 1) => {
-    try {
-      const [a, k] = await Promise.all([
-        api.get('/articles/', { params: { page: p } }),
-        api.get('/quizzes/knowledge-points/'),
-      ]);
+  const fetchItems = useCallback((p = 1) => {
+
+    return Promise.all([
+      api.get('/articles/', { params: { page: p } }),
+      api.get('/quizzes/knowledge-points/'),
+    ]).then(([a, k]) => {
       setItems(a.data.articles || []);
       setTotal(a.data.total ?? (a.data.articles || []).length);
       setTotalPages(a.data.total_pages ?? 1);
       setKpList(k.data);
-    } catch (e) { console.debug('[ArticleSection] fetch failed:', e); }
-    finally { setLoading(false); }
+    })
+      .catch((e: unknown) => { console.debug('[ArticleSection] fetch failed:', e); })
+      .finally(() => { setLoading(false); });
   }, []);
 
   useEffect(() => { fetchItems(page); }, [fetchItems, page]);
@@ -115,12 +119,12 @@ export const ArticleSection: React.FC = () => {
           <Card className="bg-white rounded-2xl border border-black/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.02),0_4px_16px_rgba(0,0,0,0.03)] overflow-hidden">
             <ScrollArea className="h-[560px]">
               <div className="divide-y divide-black/[0.04]">
-                {items.map((item: any) => (
+                {items.map((item: Article) => (
                   <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">{item.title}</p>
-                        <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-2">{item.content?.replace(/[#*`>\[\]!\-]/g, '').slice(0, 150)}</p>
+                        <p className="text-xs text-[#8E8E93] mt-0.5 line-clamp-2">{item.content?.replace(/[#*`>[\]!-]/g, '').slice(0, 150)}</p>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           {item.author_display_name && (
                             <span className="text-[11px] text-[#AEAEB2] font-medium">{item.author_display_name}</span>
@@ -217,7 +221,7 @@ export const ArticleSection: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
-        <DialogContent className="sm:max-w-[850px] max-h-[90vh] overflow-y-auto rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
+        {editingItem && <DialogContent className="sm:max-w-[850px] max-h-[90vh] overflow-y-auto rounded-3xl p-8 border-none shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_4px_8px_rgba(0,0,0,0.04),0_16px_32px_rgba(0,0,0,0.08),0_32px_64px_rgba(0,0,0,0.04)] bg-white text-left">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">属性核心配置</DialogTitle>
           </DialogHeader>
@@ -242,7 +246,7 @@ export const ArticleSection: React.FC = () => {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-[#6E6E73] ml-1">关联知识点</Label>
-                <Select value={editingItem?.knowledge_point || '0'} onValueChange={v => v === 'NEW_KP' ? setShowNewKP(true) : setEditingItem({ ...editingItem, knowledge_point: v })}>
+                <Select value={String(editingItem?.knowledge_point || 0)} onValueChange={v => v === 'NEW_KP' ? setShowNewKP(true) : setEditingItem({ ...editingItem, knowledge_point: v })}>
                   <SelectTrigger className="h-10 rounded-xl bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 font-medium text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -266,7 +270,7 @@ export const ArticleSection: React.FC = () => {
               Update & Sync
             </Button>
           </div>
-        </DialogContent>
+        </DialogContent>}
       </Dialog>
 
       {/* Quick Create KP */}

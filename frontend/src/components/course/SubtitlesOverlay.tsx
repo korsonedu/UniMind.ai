@@ -15,7 +15,7 @@ export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
   const { transcriptStatus, transcriptSegments, fetchTranscript, triggerTranscription, clearCourseTimers } =
     useCourseAIStore();
   const activeIdxRef = useRef(-1);
-  const [, forceRender] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const autoTriggeredRef = useRef(false);
 
   useEffect(() => {
@@ -48,7 +48,7 @@ export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
       }
       if (found !== activeIdxRef.current) {
         activeIdxRef.current = found;
-        forceRender((n) => n + 1);
+        setActiveIdx(found);
       }
       raf = requestAnimationFrame(tick);
     };
@@ -56,9 +56,8 @@ export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
     return () => cancelAnimationFrame(raf);
   }, [visible, transcriptSegments, videoRef]);
 
-  if (!visible || activeIdxRef.current < 0) return null;
+  if (!visible || activeIdx < 0) return null;
 
-  const activeIdx = activeIdxRef.current;
 
   return (
     <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-10 max-w-[85%]">

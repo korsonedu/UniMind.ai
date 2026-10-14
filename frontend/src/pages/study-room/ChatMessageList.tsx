@@ -6,20 +6,23 @@ import { ArrowDown, Lightning, CheckCircle, XCircle, Calendar } from '@phosphor-
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { processMathContent } from '@/lib/utils';
 
+type MarkdownNode = { type: string; value?: string; children?: MarkdownNode[] };
+
 interface Message {
   id: number;
   user_detail: { username: string; nickname: string; avatar_url: string; role: string; };
   content: string;
   timestamp: string;
   related_plan?: number;
+  message_type?: string;
 }
 
 const remarkSoftBreaks = () => {
   const skipTypes = new Set(['code', 'inlineCode', 'math', 'inlineMath', 'html']);
-  const walk = (node: any) => {
+  const walk = (node: MarkdownNode) => {
     if (!node || skipTypes.has(node.type) || !Array.isArray(node.children)) return;
-    const nextChildren: any[] = [];
-    node.children.forEach((child: any) => {
+    const nextChildren: MarkdownNode[] = [];
+    node.children.forEach((child: MarkdownNode) => {
       if (child?.type === 'text' && typeof child.value === 'string' && child.value.includes('\n')) {
         const normalizedValue = child.value.replace(/\r\n?/g, '\n');
         const lines = normalizedValue.split('\n');
@@ -34,7 +37,7 @@ const remarkSoftBreaks = () => {
     });
     node.children = nextChildren;
   };
-  return (tree: any) => { walk(tree); };
+  return (tree: MarkdownNode) => { walk(tree); };
 };
 
 const isTaskStateMessage = (content: string) =>
@@ -119,9 +122,9 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
                       content={processMathContent(msg.content)}
                       extraRemarkPlugins={[remarkSoftBreaks]}
                       components={{
-                        img: ({node, ...props}: any) => <img {...props} loading="lazy" alt={props.alt || 'image'} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank', 'noopener,noreferrer')}/>,
-                        p: ({node, ...props}: any) => <p {...props} className="m-0 leading-normal w-fit" />,
-                        div: ({node, ...props}: any) => <div {...props} className="w-fit" />,
+                        img: (input) => { const props = { ...input }; delete props.node; return <img {...props} loading="lazy" alt={props.alt || 'image'} className="max-w-[130px] md:max-w-[200px] rounded-lg my-0.5 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => window.open(props.src || '', '_blank', 'noopener,noreferrer')}/>; },
+                        p: (input) => { const props = { ...input }; delete props.node; return <p {...props} className="m-0 leading-normal w-fit" />; },
+                        div: (input) => { const props = { ...input }; delete props.node; return <div {...props} className="w-fit" />; },
                         br: () => <br />
                       }}
                     />

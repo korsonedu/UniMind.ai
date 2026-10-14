@@ -70,10 +70,6 @@ export const TagAutocomplete: React.FC<Props> = ({ tags, setTags, compact = fals
     }
   };
 
-  useEffect(() => {
-    setSelectedIndex(0);
-    setShowSuggestions(filtered.length > 0);
-  }, [inputValue]);
 
   return (
     <div className="space-y-1.5 text-left relative">
@@ -81,7 +77,7 @@ export const TagAutocomplete: React.FC<Props> = ({ tags, setTags, compact = fals
         <Input
           ref={inputRef}
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => { setInputValue(e.target.value); setSelectedIndex(0); setShowSuggestions(true); }}
           onFocus={() => filtered.length > 0 && setShowSuggestions(true)}
           onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
           onKeyDown={handleKeyDown}

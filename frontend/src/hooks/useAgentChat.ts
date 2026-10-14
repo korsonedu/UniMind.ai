@@ -1,3 +1,4 @@
+import type { GeneratedQuestion } from '@/types/api';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { TaskListData } from '@/components/TaskList';
 
@@ -10,16 +11,9 @@ export interface AgentStep {
   args_summary?: string;
   result_summary?: string;
   actions?: Array<{ label: string; route: string }>;
-  visual?: { type: string; payload: any };
-  questions?: Array<{
-    index: number;
-    question: string;
-    q_type: string;
-    difficulty_level: string;
-    kp_name: string;
-    answer_preview: string;
-  }>;
-  task_list?: {
+  visual?: { type: string; payload: unknown };
+  questions?: (GeneratedQuestion & { index: number; answer_preview: string })[];
+ task_list?: {
     task_id: string;
     items?: TaskListData['items'];
     update?: { id: string; status: 'done'; duration_ms?: number };
@@ -96,6 +90,20 @@ export function useAgentChat(botId: number) {
     return [...prev, event];
   }, []);
 
+  const reset = useCallback(() => {
+    setSteps([]);
+    setStreamingText('');
+    setMessages([]);
+    setIsDone(false);
+    setError(null);
+    setIsConnected(false);
+    setTaskList(null);
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
   const sendMessage = useCallback((message: string) => {
     reset();
     setIsConnected(true);
@@ -163,21 +171,9 @@ export function useAgentChat(botId: number) {
         setIsDone(true);
       }
     };
-  }, [botId, upsertStep]);
+  }, [botId, upsertStep, reset]);
 
-  const reset = useCallback(() => {
-    setSteps([]);
-    setStreamingText('');
-    setMessages([]);
-    setIsDone(false);
-    setError(null);
-    setIsConnected(false);
-    setTaskList(null);
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-  }, []);
+
 
   return {
     steps,

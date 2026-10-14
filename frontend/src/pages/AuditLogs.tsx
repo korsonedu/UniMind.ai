@@ -19,8 +19,13 @@ export default function AuditLogs() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const [loadingPage, setLoadingPage] = useState(page);
+  if (loadingPage !== page) {
+    setLoadingPage(page);
     setLoading(true);
+  }
+
+  useEffect(() => {
     api.get(`/users/institution/me/audit-logs/?page=${page}`)
       .then(r => {
         setLogs(r.data.items || []);

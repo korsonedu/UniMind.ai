@@ -23,7 +23,7 @@ interface User {
   current_task?: string;
   current_timer_end?: string;
   today_focused_minutes?: number;
-  today_completed_tasks?: any[];
+  today_completed_tasks?: unknown[];
   institution?: {
     id: number;
     name: string;

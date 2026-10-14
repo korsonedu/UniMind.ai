@@ -41,30 +41,26 @@ interface RevenueData {
   inst_by_plan: Record<string, number>;
 }
 
+const MetricCard = ({ icon: Icon, label, value, sub, color = 'text-foreground' }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode; sub?: string; color?: string }) => (
+    <Card className="p-5 rounded-2xl border border-black/[0.04] shadow-sm bg-white space-y-1.5">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="h-4 w-4" />
+        <span className="text-[11px] font-bold uppercase tracking-wide">{label}</span>
+      </div>
+      <div className={cn('text-[28px] font-black tracking-tight tabular-nums', color)}>{value}</div>
+      {sub && <div className="text-[11px] text-muted-foreground font-medium">{sub}</div>}
+    </Card>
+  );
+
 const OverviewTab: React.FC = () => {
-  const [analytics, setAnalytics] = useState<any>(null);
+  const [analytics, setAnalytics] = useState<{ summary: Record<string, number> } | null>(null);
   const [revenue, setRevenue] = useState<RevenueData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
-    // analytics — essential
-    try {
-      const aRes = await api.get('/users/admin/analytics/dashboard/');
-      setAnalytics(aRes.data);
-    } catch {
-      toast.error('加载平台数据失败');
-      setAnalytics(null);
-    }
-    // revenue — optional (may fail if payments app disabled)
-    try {
-      const rRes = await api.get('/users/admin/revenue/');
-      setRevenue(rRes.data);
-    } catch {
-      setRevenue(null);
-    }
-    setLoading(false);
-  }, []);
+  const fetchAll = useCallback(() => Promise.all([
+    api.get('/users/admin/analytics/dashboard/').then(res => setAnalytics(res.data)).catch(() => { toast.error('加载平台数据失败'); setAnalytics(null); }),
+    api.get('/users/admin/revenue/').then(res => setRevenue(res.data)).catch(() => setRevenue(null)),
+  ]).finally(() => setLoading(false)), []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -79,18 +75,9 @@ const OverviewTab: React.FC = () => {
   const s = analytics?.summary || {};
 
   const fmtNum = (n: number) => n?.toLocaleString() || '0';
-  const fmtMoney = (n: number) => n != null ? `¥${n.toLocaleString()}` : '---';
+  const fmtMoney = (n: number | null) => n != null ? `¥${n.toLocaleString()}` : '---';
 
-  const MetricCard = ({ icon: Icon, label, value, sub, color = 'text-foreground' }: any) => (
-    <Card className="p-5 rounded-2xl border border-black/[0.04] shadow-sm bg-white space-y-1.5">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon className="h-4 w-4" />
-        <span className="text-[11px] font-bold uppercase tracking-wide">{label}</span>
-      </div>
-      <div className={cn('text-[28px] font-black tracking-tight tabular-nums', color)}>{value}</div>
-      {sub && <div className="text-[11px] text-muted-foreground font-medium">{sub}</div>}
-    </Card>
-  );
+
 
   return (
     <div className="space-y-8 text-left">
@@ -114,8 +101,8 @@ const OverviewTab: React.FC = () => {
           <CurrencyCircleDollar className="h-4 w-4 text-unimind-green" /> 商业化
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MetricCard icon={CurrencyCircleDollar} label="累计营收" value={fmtMoney(revenue?.total_revenue ?? null as any)} color="text-unimind-green" />
-          <MetricCard icon={CurrencyCircleDollar} label="MRR" value={fmtMoney(revenue?.mrr ?? null as any)} sub={revenue ? `ARR ${fmtMoney(revenue.arr)}` : undefined} color="text-unimind-green" />
+          <MetricCard icon={CurrencyCircleDollar} label="累计营收" value={fmtMoney(revenue?.total_revenue ?? null)} color="text-unimind-green" />
+          <MetricCard icon={CurrencyCircleDollar} label="MRR" value={fmtMoney(revenue?.mrr ?? null)} sub={revenue ? `ARR ${fmtMoney(revenue.arr)}` : undefined} color="text-unimind-green" />
           <MetricCard icon={Crown} label="活跃订阅" value={revenue ? fmtNum(revenue.active_subscriptions) : '---'} />
           <MetricCard icon={Users} label="付费用户" value={revenue ? fmtNum(revenue.paying_users) : '---'} sub={revenue ? `ARPU ¥${revenue.arpu}` : undefined} />
         </div>

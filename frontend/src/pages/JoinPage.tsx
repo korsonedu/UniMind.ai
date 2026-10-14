@@ -13,7 +13,9 @@ export const JoinPage: React.FC = () => {
   const navigate = useNavigate();
   const user = useAuthStore(s => s.user);
   const updateUser = useAuthStore(s => s.updateUser);
-  const [status, setStatus] = useState<Status>('loading');
+  const [joinStatus, setStatus] = useState<Status>('joining');
+  const status = joinStatus === 'success' || joinStatus === 'pending_approval' ? joinStatus
+    : !user ? 'unauthenticated' : user.institution || user.institution_id ? 'conflict' : joinStatus;
   const [instName, setInstName] = useState('');
 
   useEffect(() => {
@@ -24,18 +26,16 @@ export const JoinPage: React.FC = () => {
 
     // 未登录 → 跳注册页，带上 invite_slug 作为 institution 参数
     if (!user) {
-      setStatus('unauthenticated');
       return;
     }
 
     // 已有所属机构 → 冲突提示
     if (user.institution || user.institution_id) {
-      setStatus('conflict');
       return;
     }
 
+    if (joinStatus === 'success' || joinStatus === 'pending_approval') return;
     // 已登录 + 无机构 → 自动加入
-    setStatus('joining');
     api.post('/users/institution/join-by-invite-slug/', { invite_slug })
       .then(async (res) => {
         const data = res.data;
@@ -54,7 +54,7 @@ export const JoinPage: React.FC = () => {
         toast.error(msg);
         navigate('/');
       });
-  }, [invite_slug, user, navigate, updateUser]);
+  }, [invite_slug, user, navigate, updateUser, joinStatus]);
 
   // 未登录 → 引导注册
   if (status === 'unauthenticated') {

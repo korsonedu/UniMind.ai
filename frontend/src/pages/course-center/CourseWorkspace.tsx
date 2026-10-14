@@ -5,7 +5,8 @@ import { useNavigate, useParams, useSearchParams, useOutletContext } from 'react
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
 import { VideoLesson } from '@/pages/VideoLesson';
-import { DirectoryResizeHandle, useDirectoryWidth } from '@/components/DirectoryResizeHandle';
+import { useDirectoryWidth } from '@/hooks/useDirectoryWidth';
+import { DirectoryResizeHandle } from '@/components/DirectoryResizeHandle';
 import { CourseTree } from './CourseTree';
 import { CoursePortal } from './CoursePortal';
 import { courseGroups, type Course, type CourseGrouping, type CourseProgress, type LearningActivity, type WatchLater } from './types';
@@ -50,9 +51,14 @@ export function CourseCenter() {
     if (value && value !== 'all') next.set(key, value); else next.delete(key);
     navigate(`/courses?${next}`);
   };
+  const [loadingKey, setLoadingKey] = useState(`${version}:${ordering}`);
+  if (loadingKey !== `${version}:${ordering}`) {
+    setLoadingKey(`${version}:${ordering}`);
+    setLoading(true);
+  }
+
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
     async function load() {
       try {
         const kpResponse = await api.get('/quizzes/knowledge-points/', { signal: controller.signal });
@@ -79,11 +85,12 @@ export function CourseCenter() {
     }
     void load(); return () => controller.abort();
   }, [version, ordering]);
+  const [queueKey, setQueueKey] = useState(`${version}:${id}`);
+  if (queueKey !== `${version}:${id}`) { setQueueKey(`${version}:${id}`); setQueueLoading(true); }
   useEffect(() => {
     const controller = new AbortController();
     api.get('/courses/learning-progress/', { signal: controller.signal }).then(r => { setProgress(r.data); setProgressError(''); }).catch(() => { if (!controller.signal.aborted) setProgressError('观看记录加载失败'); });
     api.get('/courses/learning-activity/', { signal: controller.signal }).then(r => { setActivity(r.data); setActivityError(''); }).catch(() => { if (!controller.signal.aborted) setActivityError('学习活动加载失败'); });
-    setQueueLoading(true);
     api.get('/courses/watch-later/', { signal: controller.signal }).then(r => { setQueue(r.data); setQueueError(''); }).catch(() => { if (!controller.signal.aborted) setQueueError('稍后观看加载失败'); }).finally(() => { if (!controller.signal.aborted) setQueueLoading(false); });
     return () => controller.abort();
   }, [version, id]);

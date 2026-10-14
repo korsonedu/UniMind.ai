@@ -1,3 +1,5 @@
+import { formatApiErrorToast } from '@/lib/apiError';
+import type { QuizQuestion } from '@/types/api';
 import '@/styles/practice.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
@@ -18,7 +20,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
 
-const hasAnswer = (val: any) => {
+const hasAnswer = (val: unknown) => {
   if (typeof val === 'string') return val.trim().length > 0;
   return val !== null && val !== undefined && val !== '';
 };
@@ -26,10 +28,10 @@ const hasAnswer = (val: any) => {
 export const TestSessionPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, any>>({});
+  const [answers, setAnswers] = useState<Record<number, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [empty, setEmpty] = useState(false);
@@ -71,7 +73,7 @@ export const TestSessionPage: React.FC = () => {
           response = await api.get(`/quizzes/questions/?${fallback}`, { signal: controller.signal });
         }
         setEmpty(!response.data?.length);
-        setQuestions((response.data || []).map((q: any) => ({ ...q, options: normalizeOptions(q.options) })));
+        setQuestions((response.data || []).map((q: QuizQuestion) => ({ ...q, options: normalizeOptions(q.options) })));
         setAnswers({});
         setCurrentIdx(0);
       } catch {
@@ -116,7 +118,7 @@ export const TestSessionPage: React.FC = () => {
       const res = await api.post('/quizzes/favorite/toggle/', { question_id: qId });
       setQuestions((prev) => prev.map((q) => (q.id === qId ? { ...q, is_favorite: res.data.is_favorite } : q)));
       toast.success(res.data.is_favorite ? '已加入收藏' : '已取消收藏');
-    } catch (e) {
+    } catch {
       toast.error('操作失败');
     }
   };
@@ -134,7 +136,7 @@ export const TestSessionPage: React.FC = () => {
         });
         toast.success('已标记掌握');
       }
-    } catch (e) {
+    } catch {
       toast.error('操作失败');
     }
   };
@@ -160,8 +162,8 @@ export const TestSessionPage: React.FC = () => {
       await api.post('/quizzes/submit-exam/', { answers: payload });
       toast.success('试卷已提交 AI 批改', { description: '完成后请在通知中心查看报告。' });
       navigate(practiceDone ? '/xiaoyu?practiceDone=1' : returnPath, { replace: true });
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '提交失败');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '提交失败'));
     } finally {
       setIsSubmitting(false);
     }

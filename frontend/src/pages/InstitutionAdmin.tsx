@@ -1,3 +1,6 @@
+import type { SubjectCategory } from '@/components/DirectionSelector';
+
+import { formatApiErrorToast } from '@/lib/apiError';
 import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,38 +59,49 @@ export default function InstitutionAdmin() {
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
 
   // Coupon management
-  const [coupons, setCoupons] = useState<any[]>([]);
-  const [couponsLoading, setCouponsLoading] = useState(false);
+  const [coupons, setCoupons] = useState<{ id: number; code: string; discount_type: string; discount_value: number; is_active: boolean; description: string; max_uses: number; used_count: number; valid_until: string | null; min_order_cents: number; current_uses: number; expires_at: string | null; plan_restriction: string; }[]>([]);
+  const [couponsLoading, setCouponsLoading] = useState(true);
   const [couponCreateOpen, setCouponCreateOpen] = useState(false);
 
-  const fetchInstitutions = useCallback(async () => {
-    try {
-      const params: Record<string, string> = {};
-      if (debouncedSearch) params.search = debouncedSearch;
-      if (planFilter) params.plan = planFilter;
-      const { data } = await api.get('/users/institutions/', { params });
+  const fetchInstitutions = useCallback(() => {
+    const params: Record<string, string> = {};
+    if (debouncedSearch) params.search = debouncedSearch;
+    if (planFilter) params.plan = planFilter;
+    return api.get('/users/institutions/', { params }).then(({ data }) => {
       setInstitutions(data);
-    } catch (e) { console.error('[InstitutionAdmin] fetch failed:', e); }
-    setLoading(false);
+    })
+      .catch((e: unknown) => { console.error('[InstitutionAdmin] fetch failed:', e); })
+      .finally(() => {
+
+        setLoading(false);
+      });
   }, [debouncedSearch, planFilter]);
 
   useEffect(() => { fetchInstitutions(); }, [fetchInstitutions]);
 
-  const fetchCoupons = useCallback(async () => {
-    setCouponsLoading(true);
-    try {
-      const { data } = await api.get('/payments/coupons/');
+  const fetchCoupons = useCallback(() => {
+
+    return api.get('/payments/coupons/').then(({ data }) => {
       setCoupons(Array.isArray(data) ? data : data.results || []);
-    } catch { console.error('[CouponAdmin] fetch failed'); }
-    setCouponsLoading(false);
+    })
+      .catch(() => { console.error('[CouponAdmin] fetch failed'); })
+      .finally(() => {
+
+        setCouponsLoading(false);
+      });
   }, []);
+  const refreshFetchCoupons = useCallback(() => {
+    setCouponsLoading(true);
+    return fetchCoupons();
+  }, [fetchCoupons]);
+
 
   useEffect(() => { fetchCoupons(); }, [fetchCoupons]);
 
   const handleToggleCoupon = async (id: number, isActive: boolean) => {
     try {
       await api.put(`/payments/coupons/${id}/`, { is_active: !isActive });
-      fetchCoupons();
+      refreshFetchCoupons();
     } catch { toast.error('更新失败'); }
   };
 
@@ -95,7 +109,7 @@ export default function InstitutionAdmin() {
     if (!(await confirm(`确认删除优惠券「${code}」？`))) return;
     try {
       await api.delete(`/payments/coupons/${id}/`);
-      fetchCoupons();
+      refreshFetchCoupons();
     } catch { toast.error('删除失败'); }
   };
 
@@ -298,7 +312,7 @@ export default function InstitutionAdmin() {
           </div>
         ) : (
           <div className="space-y-2">
-            {coupons.map((c: any) => {
+            {coupons.map((c) => {
               const discountText = c.discount_type === 'percentage' ? `${c.discount_value}% 折扣` : `¥${(c.discount_value / 100).toFixed(0)} 减免`;
               return (
               <Card key={c.id} variant="apple" className="p-4">
@@ -349,7 +363,7 @@ export default function InstitutionAdmin() {
       <CreateCouponDialog
         open={couponCreateOpen}
         onClose={() => setCouponCreateOpen(false)}
-        onCreated={() => { setCouponCreateOpen(false); fetchCoupons(); }}
+        onCreated={() => { setCouponCreateOpen(false); refreshFetchCoupons(); }}
       />
 
       {/* Create Dialog */}
@@ -392,14 +406,14 @@ function CreateInstitutionDialog({
     e.preventDefault();
     setSaving(true); setError('');
     try {
-      const payload: any = { ...form };
+      const payload: Record<string, string | number | boolean | null | undefined> = { ...form };
       if (!payload.plan_expires_at) delete payload.plan_expires_at;
       if (!payload.contact_phone) payload.contact_phone = '';
-      if (!payload.slug) payload.slug = payload.name.toLowerCase().replace(/\s+/g, '-');
+      if (!payload.slug) payload.slug = form.name.toLowerCase().replace(/\s+/g, '-');
       await api.post('/users/institutions/', payload);
       onCreated();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.response?.data?.error || '创建机构失败，请检查信息后重试');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '创建机构失败，请检查信息后重试'));
     }
     setSaving(false);
   };
@@ -473,7 +487,7 @@ function EditInstitutionDialog({
     e.preventDefault();
     setSaving(true); setError('');
     try {
-      const payload: any = { ...form };
+      const payload: Record<string, string | number | boolean | null | undefined> = { ...form };
       if (!payload.plan_expires_at) delete payload.plan_expires_at;
       await api.put(`/users/institutions/${institution.id}/`, payload);
       if (form.plan !== institution.plan) {
@@ -483,8 +497,8 @@ function EditInstitutionDialog({
         });
       }
       onUpdated();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || '保存机构信息失败，请重试');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '保存机构信息失败，请重试'));
     }
     setSaving(false);
   };
@@ -562,7 +576,7 @@ function InstitutionSelfSettings() {
 
   // Direction editing
   const [directionOpen, setDirectionOpen] = useState(false);
-  const [directionSubjects, setDirectionSubjects] = useState<any[]>([]);
+  const [directionSubjects, setDirectionSubjects] = useState<SubjectCategory[]>([]);
   const [directionSelected, setDirectionSelected] = useState<string[]>([]);
   const [directionSaving, setDirectionSaving] = useState(false);
   const [directionError, setDirectionError] = useState('');
@@ -594,10 +608,15 @@ function InstitutionSelfSettings() {
     });
   }, []);
 
+  const [loadingPlan, setLoadingPlan] = useState(plan);
+  if (loadingPlan !== plan) {
+    setLoadingPlan(plan);
+    setSsoLoading(plan === 'enterprise'); setApiKeysLoading(plan === 'enterprise');
+  }
+
   // Fetch SSO config & API keys (enterprise only)
   useEffect(() => {
     if (plan !== 'enterprise') return;
-    setSsoLoading(true);
     api.get('/users/institution/me/sso-config/')
       .then(({ data }) => setSsoConfig({
         provider: data.provider || 'feishu',
@@ -611,11 +630,10 @@ function InstitutionSelfSettings() {
       }))
       .catch((e) => { console.error('[InstitutionSelfSettings] SSO config fetch failed:', e); })
       .finally(() => setSsoLoading(false));
-    setApiKeysLoading(true);
     api.get('/users/institution/me/api-keys/')
       .then(({ data }) => {
         const keys = Array.isArray(data) ? data : data.results || [];
-        setApiKeysCount(keys.filter((k: any) => k.is_active).length);
+        setApiKeysCount(keys.filter((k: { is_active: boolean }) => k.is_active).length);
       })
       .catch(() => setApiKeysCount(0))
       .finally(() => setApiKeysLoading(false));
@@ -631,8 +649,8 @@ function InstitutionSelfSettings() {
       };
       await api.put('/users/institution/me/sso-config/', payload);
       toast.success('SSO 配置已保存');
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '保存 SSO 配置失败');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '保存 SSO 配置失败'));
     } finally {
       setSsoSaving(false);
     }
@@ -653,8 +671,8 @@ function InstitutionSelfSettings() {
       if (data.logo_url) setLogoPreview(data.logo_url);
       setLogo(null);
       toast.success('机构信息已更新');
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || '保存机构设置失败，请重试');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '保存机构设置失败，请重试'));
     } finally {
       setSaving(false);
     }
@@ -965,8 +983,8 @@ function InstitutionSelfSettings() {
               setForm(f => ({ ...f, business_type: data.business_type }));
               toast.success(`已更新：删除 ${data.deleted} 个旧知识点，导入 ${data.imported_nodes} 个新知识点`);
               setDirectionOpen(false);
-            } catch (err: any) {
-              setDirectionError(err.response?.data?.error || '更新失败');
+            } catch (err: unknown) {
+              setDirectionError(formatApiErrorToast(err, '更新失败'));
             } finally {
               setDirectionSaving(false);
             }
@@ -989,7 +1007,7 @@ function DirectionEditDialog({
   open: boolean;
   onClose: () => void;
   plan: string;
-  subjects: any[];
+  subjects: SubjectCategory[];
   selected: string[];
   onSelectedChange: (s: string[]) => void;
   onSave: (names: string[]) => void;
@@ -1096,7 +1114,7 @@ function CreateCouponDialog({
     e.preventDefault();
     setSaving(true); setError('');
     try {
-      const payload: any = {
+      const payload: Record<string, string | number | boolean | null | undefined> = {
         code: form.code.trim(),
         discount_type: form.discount_type,
         discount_value: parseInt(form.discount_value, 10),
@@ -1114,8 +1132,8 @@ function CreateCouponDialog({
       }
       await api.post('/payments/coupons/', payload);
       onCreated();
-    } catch (err: any) {
-      setError(err.response?.data?.error || Object.values(err.response?.data || {}).flat().join('; ') || '创建失败');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '创建失败'));
     }
     setSaving(false);
   };

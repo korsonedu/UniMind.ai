@@ -1,3 +1,5 @@
+import type { Bot } from '@/types/api';
+import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,8 @@ interface GlobalBotVis {
   is_visible: boolean;
 }
 
+type EditableBot = Omit<Bot, 'avatar'> & { avatar: string | File | null };
+
 export const InstitutionBotSection: React.FC = () => {
   const { hasFeature, usage } = useInstitutionStore();
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
@@ -31,26 +35,31 @@ export const InstitutionBotSection: React.FC = () => {
   const [globalLoading, setGlobalLoading] = useState(true);
 
   // Custom bots
-  const [customBots, setCustomBots] = useState<any[]>([]);
+  const [customBots, setCustomBots] = useState<Bot[]>([]);
   const [customLoading, setCustomLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [editingItem, setEditingItem] = useState<EditableBot | null>(null);
   const [form, setForm] = useState({ name: '', prompt: '', avatar: null as File | null, is_exclusive: false });
 
-  const fetchGlobalBots = useCallback(async () => {
-    try {
-      const { data } = await api.get('/ai/bots/visibility/');
+  const fetchGlobalBots = useCallback(() => {
+
+    return api.get('/ai/bots/visibility/').then(({ data }) => {
       setGlobalBots(data);
-    } catch (e) { console.debug('[InstitutionBotSection] fetch failed:', e); }
-    finally { setGlobalLoading(false); }
+    })
+      .catch((e: unknown) => { console.debug('[InstitutionBotSection] fetch failed:', e); })
+      .finally(() => { setGlobalLoading(false); });
   }, []);
 
-  const fetchCustomBots = useCallback(async () => {
-    try {
-      const { data } = await api.get('/ai/bots/');
-      setCustomBots(data.filter((b: any) => b.institution !== null));
-    } catch (e) { console.debug('[InstitutionBotSection] fetch failed:', e); }
-    finally { setCustomLoading(false); }
+  const fetchCustomBots = useCallback(() => {
+
+    return api.get('/ai/bots/').then(({ data }) => {
+      setCustomBots(data.filter((b: Bot) => b.institution !== null));
+    })
+      .catch((e: unknown) => { console.debug('[InstitutionBotSection] fetch failed:', e); })
+      .finally(() => {
+        setCustomLoading(false);
+
+      });
   }, []);
 
   useEffect(() => { fetchGlobalBots(); fetchCustomBots(); }, [fetchGlobalBots, fetchCustomBots]);
@@ -78,19 +87,19 @@ export const InstitutionBotSection: React.FC = () => {
       resetForm();
       setShowCreate(false);
       fetchCustomBots();
-    } catch (e: any) {
-      toast.error(e.response?.data?.detail || e.response?.data?.error || '创建失败');
+    } catch (e: unknown) {
+      toast.error(formatApiErrorToast(e, '创建失败'));
     }
   };
 
   const handleUpdate = async () => {
     if (!editingItem) return;
     const fd = new FormData();
-    Object.keys(editingItem).forEach(key => {
-      if (editingItem[key] instanceof File) fd.append(key, editingItem[key]);
-      else if (editingItem[key] !== null && editingItem[key] !== undefined) {
-        if (key === 'avatar' && typeof editingItem[key] === 'string') return;
-        fd.append(key, String(editingItem[key]));
+    Object.entries(editingItem).forEach(([key, value]) => {
+      if (value instanceof File) fd.append(key, value);
+      else if (value !== null && value !== undefined) {
+        if (key === 'avatar' && typeof value === 'string') return;
+        fd.append(key, String(value));
       }
     });
     try {
@@ -193,11 +202,11 @@ export const InstitutionBotSection: React.FC = () => {
           <Card className="bg-white rounded-2xl border border-black/[0.04] overflow-hidden">
             <ScrollArea className="max-h-[500px]">
               <div className="divide-y divide-black/[0.04]">
-                {customBots.map((item: any) => (
+                {customBots.map((item: Bot) => (
                   <div key={item.id} className="p-4 hover:bg-[#F5F5F7]/50 transition-colors group">
                     <div className="flex items-center gap-4">
                       <Avatar className="h-10 w-10 rounded-full shrink-0">
-                        <AvatarImage src={item.avatar} />
+                        <AvatarImage src={item.avatar || undefined} />
                         <AvatarFallback className="text-xs font-medium bg-[#F5F5F7]">{item.name?.[0]}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
@@ -264,7 +273,7 @@ export const InstitutionBotSection: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingItem} onOpenChange={open => !open && setEditingItem(null)}>
-        <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-2xl bg-white">
+        {editingItem && <DialogContent className="sm:max-w-[600px] rounded-3xl p-8 border-none shadow-2xl bg-white">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">编辑机器人</DialogTitle>
           </DialogHeader>
@@ -287,7 +296,7 @@ export const InstitutionBotSection: React.FC = () => {
               更新
             </Button>
           </div>
-        </DialogContent>
+        </DialogContent>}
       </Dialog>
       {ConfirmDialog}
     </div>

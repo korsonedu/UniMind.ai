@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, Plus, ArrowUp, MagnifyingGlass, Folder, Check } from '@phosphor-icons/react';
 import api from '@/lib/api';
-import { processMathContent, cn } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import ChatBubble from '@/components/ChatBubble';
@@ -21,7 +21,7 @@ import {
 import type { AgentStep } from '@/hooks/useAgentChat';
 import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
-import { AgentReplyContext } from '@/pages/xiaoyu/visuals/ActionCardsRenderer';
+import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
 import { TaskList } from '@/components/TaskList';
 import { NativeAgentShell } from '@/components/NativeAgentShell';
 import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
@@ -172,8 +172,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const {
     bot, messages, input, loading, isComposing, initialized, skillOpen,
     sessions, activeSessionId, sessionOpen, chatWidth, dragging, hasConversation, conversationId, taskList,
-    scrollRef, inputRef,
-    projectId, setProjectId,
+    scrollRef, projectId, setProjectId,
     setMessages, setInput, setBot, setInitialized, setSkillOpen, setSessionOpen,
     setIsComposition, setActiveSessionId, setSessions, setConversationId,
     handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleReset,
@@ -225,15 +224,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   }, [messages, sessions, activeSessionId]);
 
   // 通知父组件 sessions 变化（用于外部 session 切换器）
-  useEffect(() => {
-    onSessionsReady?.({
-      sessions,
-      activeSessionId,
-      loadSession: wrappedLoadSession,
-      deleteSession: handleDeleteSession,
-      newConversation: wrappedReset,
-    });
-  }, [sessions, activeSessionId]);
+
 
   // Apply pending visuals after messages state updates
   const prevMsgLenRef = useRef(0);
@@ -270,15 +261,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           const hRes = await api.get('/ai/history/', { params: { bot_id: found.id } });
           if (hRes.data.length > 0) {
             const allMsgs: Message[] = hRes.data
-              .filter((m: Record<string, unknown>) => m.content !== '[Thinking...]')
-              .map((m: Record<string, unknown>) => {
+              .filter((m: Message) => m.content !== '[Thinking...]')
+              .map((m: Message) => {
                 const msg = {
                   ...m,
                   content: processContent ? processContent(m.content as string) : (m.content as string),
                   visible: true,
                 } as Message;
                 // 恢复 metadata 中的 visual 到 toolStep（历史加载时 visual 存储在 metadata 中）
-                const meta = (m as any).metadata;
+                const meta = m.metadata ? { ...m.metadata } : undefined;
                 const visuals = meta?.all_visuals || (meta?.visual ? [meta.visual] : null);
                 if (visuals && visuals.length > 0) {
                   const v = visuals[0];
@@ -294,16 +285,17 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       step: 0,
                       name: 'render_visual',
                       status: 'done',
-                      label: (v.payload as any)?.title || '可视化',
+                      label: (typeof v.payload?.title === 'string' ? v.payload.title : undefined) || '可视化',
                       visual: v,
                       args_summary: '',
                       result_summary: '',
                     };
                   }
                   // 清理 metadata 避免渲染时走 hasMetadataVisual 分母重复
-                  if ((msg as any).metadata) {
-                    delete (msg as any).metadata.visual;
-                    delete (msg as any).metadata.all_visuals;
+                  if (msg.metadata) {
+                    msg.metadata = { ...msg.metadata };
+                    delete msg.metadata.visual;
+                    delete msg.metadata.all_visuals;
                   }
                 }
                 return msg;
@@ -332,7 +324,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     };
     init();
     return () => { cancelled = true; };
-  }, []);
+  }, [appearance, botDisplayName, findBot, groupIntoSessions, processContent, setActiveSessionId, setBot, setConversationId, setInitialized, setMessages, setProjectId, setSessions]);
 
   // 做题后回到小宇，自动触发判分分析
   useEffect(() => {
@@ -342,7 +334,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       window.history.replaceState({}, '', window.location.pathname);
       setTimeout(() => doSend('帮我分析刚才的练习结果'), 500);
     }
-  }, [initialized]);
+  }, [doSend, initialized]);
 
   useEffect(() => {
     const textarea = nativeInputRef.current;
@@ -367,16 +359,16 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   // ── Session load/reset wrappers ──
 
-  const wrappedLoadSession = (session: ConversationSession) => {
+  const wrappedLoadSession = useCallback((session: ConversationSession) => {
     if (onLoadSession) {
       onLoadSession(session, handleLoadSession);
     } else {
       handleLoadSession(session);
     }
     setSessionOpen(false);
-  };
+  }, [handleLoadSession, onLoadSession, setSessionOpen]);
 
-  const wrappedReset = (notify = true, nextProjectId = projectId) => {
+  const wrappedReset = useCallback((notify = true, nextProjectId = projectId) => {
     if (onReset) {
       onReset(() => handleReset(notify));
     } else {
@@ -384,7 +376,17 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     }
     if (appearance === 'native') setProjectId(nextProjectId);
     setVisual(null);
-  };
+  }, [appearance, handleReset, onReset, projectId, setProjectId]);
+
+  useEffect(() => {
+    onSessionsReady?.({
+      sessions,
+      activeSessionId,
+      loadSession: wrappedLoadSession,
+      deleteSession: handleDeleteSession,
+      newConversation: wrappedReset,
+    });
+  }, [sessions, activeSessionId, onSessionsReady, wrappedLoadSession, handleDeleteSession, wrappedReset]);
 
   const selectNewProject = (id: number | null) => {
     wrappedReset(false, id);

@@ -15,7 +15,7 @@ export function formatDuration(seconds: number): string {
 }
 
 /** Normalize options to array format — handles legacy dict-format data. */
-export function normalizeOptions(options: any): string[] {
+export function normalizeOptions(options: string[] | Record<string, string> | null | undefined): string[] {
   if (Array.isArray(options)) return options;
   if (options && typeof options === 'object') {
     return Object.keys(options).sort().map(k => options[k]);
@@ -25,7 +25,7 @@ export function normalizeOptions(options: any): string[] {
 
 export function processMathContent(content: string) {
   if (!content) return "";
-  
+
   // 1. Fix double backslashes ONLY when they precede a command letter.
   // This avoids breaking LaTeX newlines (\\) while fixing escaped commands (\\frac).
   let processed = content.replace(/\\\\([a-zA-Z])/g, '\\$1');

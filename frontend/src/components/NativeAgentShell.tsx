@@ -2,7 +2,8 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { SidebarSimple, Plus, X } from '@phosphor-icons/react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useOutletContext } from 'react-router-dom';
-import { DirectoryResizeHandle, useDirectoryWidth } from './DirectoryResizeHandle';
+import { useDirectoryWidth } from '@/hooks/useDirectoryWidth';
+import { DirectoryResizeHandle } from './DirectoryResizeHandle';
 
 interface Props { native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; }
 

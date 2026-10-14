@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GraduationCap, Briefcase, Wrench, Check, BookOpen, Pen } from '@phosphor-icons/react';
+import { GraduationCap, Briefcase, Check, BookOpen, Pen } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 
@@ -15,7 +15,7 @@ interface Subject {
   topics?: number;
 }
 
-interface SubjectCategory {
+export interface SubjectCategory {
   name: string;
   subjects: Subject[];
 }

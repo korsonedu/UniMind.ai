@@ -25,7 +25,6 @@ export function MemoryRetentionTrend() {
   const [version, setVersion] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
     api.get<MemoryCurve>('/quizzes/memorix/curve/', { params: { window_days: 90 }, signal: controller.signal })
       .then(response => { setCurve(response.data); setError(false); })
       .catch(() => { if (!controller.signal.aborted) setError(true); })
@@ -46,7 +45,7 @@ export function MemoryRetentionTrend() {
   const path = (key: 'predicted' | 'actual') => series.map((point, index) => `${index ? 'L' : 'M'} ${x(point)} ${y(point[key])}`).join(' ');
 
   return <section className="um-memory-trend um-portal-card" aria-label="记忆保持趋势">
-    <header className="um-course-section-heading"><div><h2>记忆保持趋势</h2><p>Memorix-Field · 近 {curve?.window_days || 90} 天的复习记录</p></div><button type="button" className="um-course-text-button" disabled={loading} onClick={() => setVersion(value => value + 1)}>{loading ? '读取中…' : '刷新'}</button></header>
+    <header className="um-course-section-heading"><div><h2>记忆保持趋势</h2><p>Memorix-Field · 近 {curve?.window_days || 90} 天的复习记录</p></div><button type="button" className="um-course-text-button" disabled={loading} onClick={() => { setLoading(true); setVersion(value => value + 1); }}>{loading ? '读取中…' : '刷新'}</button></header>
     {loading ? <p role="status" className="um-memory-empty">正在读取记忆趋势…</p> : error ? <p role="alert" className="um-memory-empty">记忆趋势加载失败，请刷新重试。</p> : !series.length ? <div className="um-memory-empty"><p>完成几轮复习后，你可以在这里看到记忆保持的变化。</p><Link to="/tests">开始练习</Link></div> : <>
       <dl className="um-memory-metrics"><div><dt>预计记住的程度</dt><dd>{percent(curve?.metrics.avg_predicted)}</dd></div><div><dt>实际回忆表现</dt><dd>{percent(curve?.metrics.avg_actual)}</dd></div><div><dt>复习记录</dt><dd>{curve?.metrics.review_count}<small> 次</small></dd></div></dl>
       <p className="um-memory-explainer">上方为期间平均值。实线是系统预测的记忆保持程度，虚线是复习时成功回忆的比例，只统计有复习记录的日期。</p>

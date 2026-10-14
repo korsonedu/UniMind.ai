@@ -3,9 +3,9 @@
  * 学生数 / 月活 / 留存率。
  */
 import { useEffect, useState } from 'react';
-import { Spinner, Users, UserCircle, ChartLine, TrendUp, TrendDown, CurrencyDollar, ClockCounterClockwise, CreditCard } from '@phosphor-icons/react';
+import { Users, UserCircle, ChartLine, TrendUp, TrendDown, CurrencyDollar, ClockCounterClockwise, CreditCard } from '@phosphor-icons/react';
 import api from '@/lib/api';
-import { cn } from '@/lib/utils';
+
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,12 +52,11 @@ export function BusinessDashboard() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-    setError(false);
     api
       .get('/users/institution/me/business-dashboard/')
       .then((res) => {
         setData(res.data);
+        setError(false);
       })
       .catch(() => {
         toast.error('加载业务数据失败');

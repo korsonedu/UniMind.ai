@@ -1,3 +1,4 @@
+import { formatApiErrorToast } from '@/lib/apiError';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -32,13 +33,10 @@ export const VerifyCode: React.FC = () => {
     return () => clearInterval(timer);
   }, [countdown]);
 
-  useEffect(() => {
-    if (code.length === 6) handleLogin(code);
-  }, [code]);
 
   useEffect(() => {
     if (!email) navigate('/login', { replace: true });
-  }, [email]);
+  }, [email, navigate]);
 
   const handleLogin = async (otp: string) => {
     setLoading(true);
@@ -57,9 +55,9 @@ export const VerifyCode: React.FC = () => {
       }
       await fetchFeatures();
       navigate('/');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setCode('');
-      setError(err.response?.data?.error || '验证码错误，请重试');
+      setError(formatApiErrorToast(err, '验证码错误，请重试'));
     } finally {
       setLoading(false);
     }
@@ -71,8 +69,8 @@ export const VerifyCode: React.FC = () => {
     try {
       await api.post('/users/send-verification-code/', { email, purpose: 'login_by_code' });
       setCountdown(60);
-    } catch (err: any) {
-      setError(err.response?.data?.error || '重发失败');
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '重发失败'));
     } finally {
       setResending(false);
     }
@@ -112,7 +110,7 @@ export const VerifyCode: React.FC = () => {
 
       {/* OTP Input */}
       <div className="flex justify-center mb-6">
-        <InputOTP maxLength={6} value={code} onChange={setCode} disabled={loading}>
+        <InputOTP maxLength={6} value={code} onChange={value => { setCode(value); if (value.length === 6) void handleLogin(value); }} disabled={loading}>
           <InputOTPGroup>
             <InputOTPSlot index={0} />
             <InputOTPSlot index={1} />

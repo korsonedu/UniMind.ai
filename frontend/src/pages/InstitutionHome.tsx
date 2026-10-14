@@ -585,13 +585,18 @@ const InstitutionHome: React.FC<{ slug?: string }> = ({ slug: propSlug }) => {
   const [error, setError] = useState(false);
   const user = useAuthStore(s => s.user);
 
+  const [loadingSlug, setLoadingSlug] = useState(slug);
+  if (loadingSlug !== slug) {
+    setLoadingSlug(slug);
+    setLoading(true); setError(false);
+  }
+
   useEffect(() => {
-    if (!slug) { setError(true); setLoading(false); return; }
-    setLoading(true);
-    setError(false);
+    if (!slug) return;
     api.get(`/users/public/institution/${encodeURIComponent(slug)}/`)
       .then(res => {
         setInstitution(res.data);
+        setError(false);
         document.title = `${res.data.name} - UniMind.ai - 新一代AI教育基础设施`;
       })
       .catch(() => setError(true))
@@ -600,7 +605,7 @@ const InstitutionHome: React.FC<{ slug?: string }> = ({ slug: propSlug }) => {
 
   useEffect(() => { window.scrollTo(0, 0); }, [slug]);
 
-  if (loading) return <LoadingState />;
+  if (slug && loading) return <LoadingState />;
   if (error || !institution) return <ErrorState slug={slug || ''} />;
 
   const registerUrl = `${UNIMIND_BASE}/register?institution=${institution.slug}`;

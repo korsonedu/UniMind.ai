@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { formatApiErrorToast } from '@/lib/apiError';
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -59,7 +60,7 @@ export const Settings: React.FC = () => {
   const [email, setEmail] = useState('');
   const [passwords, setPasswords] = useState({ old: '', new: '' });
 
-  const isStudent = user?.role === 'student' || user?.institution_role === 'student';
+
 
   const previewUrl = `https://api.dicebear.com/7.x/${avatar.style}/svg?seed=${avatar.seed}`;
 
@@ -74,7 +75,7 @@ export const Settings: React.FC = () => {
       });
       updateUser(res.data);
       toast.success('个人账户信息已同步');
-    } catch (err) { toast.error('操作失败'); }
+    } catch { toast.error('操作失败'); }
     finally { setLoading(false); }
   };
 
@@ -85,7 +86,7 @@ export const Settings: React.FC = () => {
       updateUser(res.data);
       toast.success('邮箱更新成功');
       setEmail('');
-    } catch (e) { toast.error('操作失败'); }
+    } catch { toast.error('操作失败'); }
   };
 
   const handleUpdatePassword = async () => {
@@ -95,7 +96,7 @@ export const Settings: React.FC = () => {
       await api.patch('/users/me/password/', { old_password: passwords.old, new_password: passwords.new });
       toast.success('密码重置成功');
       setPasswords({ old: '', new: '' });
-    } catch (e) { toast.error('原始密码错误'); }
+    } catch { toast.error('原始密码错误'); }
   };
 
   return (
@@ -221,7 +222,7 @@ export const Settings: React.FC = () => {
                   if (!confirm('确认注销账户？所有数据将被永久删除，此操作不可撤销。')) return;
                   api.post('/users/me/delete/', { password: pwd })
                     .then(() => { toast.success('账户已注销'); window.location.href = '/'; })
-                    .catch(e => toast.error(e.response?.data?.error || '注销失败'));
+                    .catch(e => toast.error(formatApiErrorToast(e, '注销失败')));
                 }}
               >
                 注销账户

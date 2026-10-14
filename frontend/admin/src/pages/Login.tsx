@@ -1,24 +1,24 @@
-import { useState } from 'react';
+import { formatApiErrorToast } from '@/lib/apiError';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Layers, Loader2 } from 'lucide-react';
+import { Stack as Layers, Spinner as Loader2 } from '@phosphor-icons/react';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { token } = useAuthStore();
+  const { user } = useAuthStore();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Already logged in → redirect
-  if (token) {
-    navigate('/institutions', { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (user) navigate('/institutions', { replace: true });
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,16 +26,10 @@ export default function Login() {
     setError('');
     try {
       const res = await api.post('/users/login/', { username, password });
-      localStorage.setItem('token', res.data.token);
-      useAuthStore.getState().setAuth(res.data.user, res.data.token);
+      useAuthStore.getState().setAuth(res.data.user, null);
       navigate('/institutions', { replace: true });
-    } catch (err: any) {
-      const detail = err.response?.data?.detail || err.response?.data?.error;
-      if (typeof detail === 'object') {
-        setError(Object.values(detail).flat().join('; ') || '登录失败');
-      } else {
-        setError(detail || '登录失败，请检查用户名和密码');
-      }
+    } catch (err: unknown) {
+      setError(formatApiErrorToast(err, '登录失败，请检查用户名和密码'));
       setLoading(false);
     }
   };

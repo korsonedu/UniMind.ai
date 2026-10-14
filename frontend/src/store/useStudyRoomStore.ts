@@ -36,8 +36,8 @@ interface StudyRoomState {
   setLastSummary: (s: SessionEndedSummary | null) => void;
 
   // ── 督学事件 ──
-  coachEvent: { event: string; [key: string]: any } | null;
-  setCoachEvent: (e: { event: string; [key: string]: any } | null) => void;
+  coachEvent: { event: string; task_name?: string; duration?: number; total_focus?: number; total_minutes?: number } | null;
+  setCoachEvent: (e: { event: string; task_name?: string; duration?: number; total_focus?: number; total_minutes?: number } | null) => void;
 
   // ── 动作 ──
   sendWsMessage: ((msg: object) => void) | null;

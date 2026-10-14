@@ -57,6 +57,10 @@ interface PositionedNode extends KnowledgeNode {
 export const KnowledgeMapRenderer: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload }) => {
   if (!Array.isArray(payload.nodes) || payload.nodes.length === 0) return null;
 
+  return <KnowledgeMapGraph payload={payload} />;
+};
+
+const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload }) => {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const positioned = useMemo(() => {
@@ -78,8 +82,8 @@ export const KnowledgeMapRenderer: React.FC<{ payload: KnowledgeMapPayload }> = 
     for (let iter = 0; iter < 120; iter++) {
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
-          let dx = nodes[j].x - nodes[i].x;
-          let dy = nodes[j].y - nodes[i].y;
+          const dx = nodes[j].x - nodes[i].x;
+          const dy = nodes[j].y - nodes[i].y;
           const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
           const force = 600 / (dist * dist);
           const fx = (dx / dist) * force;

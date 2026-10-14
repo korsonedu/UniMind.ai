@@ -1,3 +1,5 @@
+import { normalizeOptions } from '@/lib/utils';
+import type { GeneratedQuestion } from '@/types/api';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { FileText, Users, ChartBar, Brain, ArrowLeft, Files, Lightning, Hourglass, Database, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
@@ -6,7 +8,7 @@ import AgentChatLayout from '@/components/AgentChatLayout';
 import QuestionPanel from '@/pages/workbench/QuestionPanel';
 import { BulkInitCard } from '@/pages/workbench/BulkInitCard';
 import { QuickStartPanel } from '@/pages/workbench/QuickStartPanel';
-import type { Bot, Message, ConversationSession } from '@/hooks/useAgentConversation';
+import type { Bot } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/hooks/useAgentChat';
 
 interface InstitutionStats {
@@ -37,6 +39,8 @@ interface QuestionData {
   kp_id?: number;
   source?: 'quick_generate' | 'arc_refine';
 }
+
+const findAssistantBot = (bots: Bot[]) => bots.find((bot: Bot) => bot.bot_type === 'exam_generator');
 
 const SKILLS = [
   { icon: FileText, label: '出题', prompt: '帮我出5道题' },
@@ -242,11 +246,11 @@ export default function Workbench() {
 
   const handleQuestionsGenerated = useCallback((questions: AgentStep['questions']) => {
     if (!questions?.length) return;
-    const mapped: QuestionData[] = questions.map((q: any) => ({
+    const mapped: QuestionData[] = questions.map((q: GeneratedQuestion) => ({
       question: q.question || '',
       q_type: q.q_type || 'objective',
       subjective_type: q.subjective_type || null,
-      options: q.options || null,
+      options: q.options ? normalizeOptions(q.options) : null,
       answer: q.answer || q.answer_preview || '',
       grading_points: q.grading_points || null,
       difficulty_level: q.difficulty_level || 'normal',
@@ -258,14 +262,14 @@ export default function Workbench() {
     setGeneratedQuestions(prev => [...prev, ...mapped]);
     setSavedIndices(new Set());
     setViewMode('questions');
-  }, []);
+  }, [setGeneratedQuestions, setSavedIndices, setViewMode]);
 
-  const handlePipelineComplete = useCallback((questions: Array<Record<string, unknown>>, taskId: number) => {
-    const mapped: QuestionData[] = questions.map((q: any, i: number) => ({
+  const handlePipelineComplete = useCallback((questions: GeneratedQuestion[]) => {
+    const mapped: QuestionData[] = questions.map((q: GeneratedQuestion) => ({
       question: q.question || '',
       q_type: q.q_type || 'objective',
       subjective_type: q.subjective_type || null,
-      options: q.options || null,
+      options: q.options ? normalizeOptions(q.options) : null,
       answer: q.answer || q.answer_preview || '',
       grading_points: q.grading_points || null,
       difficulty_level: q.difficulty_level || 'normal',
@@ -277,7 +281,7 @@ export default function Workbench() {
     setGeneratedQuestions(prev => [...prev, ...mapped]);
     setSavedIndices(new Set());
     setPipelineTaskId(null);
-  }, []);
+  }, [setGeneratedQuestions, setSavedIndices, setPipelineTaskId]);
 
   const handleQuestionsSaved = useCallback((indices: number[]) => {
     setSavedIndices(prev => {
@@ -301,7 +305,7 @@ export default function Workbench() {
     setPipelineTaskId(null);
     setViewMode('overview');
     clearState();
-  }, []);
+  }, [setGeneratedQuestions, setSavedIndices, setPipelineTaskId, setViewMode]);
 
   // 侧栏可拖动宽度
   const [sidebarWidth, setSidebarWidth] = useState(320);
@@ -424,7 +428,7 @@ export default function Workbench() {
         <AgentChatLayout
           layout="inline"
           inputTourClass="workbench-input"
-          findBot={(bots) => bots.find((b: Bot) => b.bot_type === 'exam_generator')}
+          findBot={findAssistantBot}
           skills={SKILLS}
           typewriterWords={['出题、查学生、发通知...', '根据薄弱知识点出题', '看看学员学习情况']}
           chatPlaceholder="告诉 Agent 你要做什么..."

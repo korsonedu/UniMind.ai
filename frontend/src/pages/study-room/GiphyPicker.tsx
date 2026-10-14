@@ -15,7 +15,7 @@ interface GiphyPickerProps {
 
 export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
   const [giphySearch, setGiphySearch] = useState('');
-  const [giphyResults, setGiphyResults] = useState<any[]>([]);
+  const [giphyResults, setGiphyResults] = useState<{ id: string; title: string; images: { fixed_height: { url: string }; fixed_height_small: { url: string }; original: { url: string } } }[]>([]);
   const [isGiphyLoading, setIsGiphyLoading] = useState(false);
 
   const fetchGiphy = async (query: string, append = false) => {
@@ -30,7 +30,7 @@ export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
       if (data.data) {
         setGiphyResults(prev => append ? [...prev, ...data.data] : data.data);
       }
-    } catch (e) {
+    } catch {
       // 静默处理 GIPHY 加载失败
       setIsGiphyLoading(false);
       return;

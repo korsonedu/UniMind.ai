@@ -1,3 +1,5 @@
+import { isAxiosError } from 'axios';
+import { formatApiErrorToast } from '@/lib/apiError';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -12,10 +14,10 @@ import { Brain, Clock, Hash, ArrowRight, ArrowLeft, CheckCircle, House } from '@
 type Phase = 'welcome' | 'testing' | 'results';
 
 interface Question {
+  id: number;
   question_text: string;
   q_type: string;
   options?: string[];
-  answer?: string;
   knowledge_point_id?: number;
   _kp_name?: string;
 }
@@ -43,18 +45,11 @@ export function DiagnosticTest() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [timeLeft, setTimeLeft] = useState(300);
+  const [deadline, setDeadline] = useState(0);
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [isReassessment, setIsReassessment] = useState(false);
   const submittedRef = useRef(false);
 
-  useEffect(() => {
-    if (phase !== 'testing') return;
-    const timer = setInterval(() => setTimeLeft(t => {
-      if (t <= 1) { clearInterval(timer); return 0; }
-      return t - 1;
-    }), 1000);
-    return () => clearInterval(timer);
-  }, [phase]);
 
   const handleSubmit = useCallback(async () => {
     if (submittedRef.current) return;
@@ -74,19 +69,23 @@ export function DiagnosticTest() {
       setResult(res.data);
       updateUser({ has_completed_initial_assessment: true });
       setPhase('results');
-    } catch (err: any) {
+    } catch (err: unknown) {
       submittedRef.current = false;
-      toast.error(err.response?.data?.error || '提交失败');
+      toast.error(formatApiErrorToast(err, '提交失败'));
     } finally {
       setLoading(false);
     }
-  }, [questions, answers, isReassessment]);
+  }, [questions, answers, isReassessment, updateUser]);
 
   useEffect(() => {
-    if (timeLeft <= 0 && phase === 'testing') {
-      handleSubmit();
-    }
-  }, [timeLeft, phase, handleSubmit]);
+    if (phase !== 'testing') return;
+    const timer = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining === 0) { clearInterval(timer); void handleSubmit(); }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [phase, deadline, handleSubmit]);
 
   const startDiagnostic = async () => {
     submittedRef.current = false;
@@ -95,13 +94,14 @@ export function DiagnosticTest() {
       const res = await api.post('/users/me/diagnostic/generate/');
       setQuestions(res.data.questions);
       setTimeLeft(res.data.time_limit_seconds || 300);
+      setDeadline(Date.now() + (res.data.time_limit_seconds || 300) * 1000);
       setPhase('testing');
-    } catch (err: any) {
-      if (err.response?.data?.status === 'already_completed') {
+    } catch (err: unknown) {
+      if (isAxiosError<{ status: string }>(err) && err.response?.data?.status === 'already_completed') {
         toast.info('诊断已完成，你可以直接开始练习');
         navigate('/tests');
       } else {
-        toast.error(err.response?.data?.error || '生成诊断题失败');
+        toast.error(formatApiErrorToast(err, '生成诊断题失败'));
       }
     } finally {
       setLoading(false);
@@ -114,19 +114,20 @@ export function DiagnosticTest() {
       const { data } = await api.post('/users/me/diagnostic/reassess/');
       setQuestions(data.questions);
       setTimeLeft(data.time_limit_seconds || 300);
+      setDeadline(Date.now() + (data.time_limit_seconds || 300) * 1000);
       setCurrentIndex(0);
       setAnswers({});
       setResult(null);
       setIsReassessment(true);
       setPhase('testing');
       submittedRef.current = false;
-    } catch (err: any) {
-      if (err.response?.data?.status === 'already_completed') {
+    } catch (err: unknown) {
+      if (isAxiosError<{ status: string }>(err) && err.response?.data?.status === 'already_completed') {
         toast.info('您已完成诊断评估');
         navigate('/tests');
         return;
       }
-      toast.error(err.response?.data?.error || '生成重评估失败');
+      toast.error(formatApiErrorToast(err, '生成重评估失败'));
     } finally {
       setLoading(false);
     }
@@ -236,7 +237,7 @@ export function DiagnosticTest() {
                     onClick={() => setAnswers(prev => ({ ...prev, [currentIndex]: opt }))}
                   >
                     <span className="font-semibold mr-2 text-muted-foreground">{String.fromCharCode(65 + i)}.</span>
-                    {opt}
+                    {opt.replace(/^[A-Z][.．、:：)）]\s*/i, '')}
                   </button>
                 ))}
               </div>

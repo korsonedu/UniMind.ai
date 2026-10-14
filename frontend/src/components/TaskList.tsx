@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Check, Spinner, CaretDown, CaretRight } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +26,10 @@ function formatDuration(ms: number): string {
 
 export function TaskList({ data, onComplete }: TaskListProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const prevDoneRef = useRef<Set<string>>(new Set());
+  const [completion, setCompletion] = useState(() => {
+    const doneIds = new Set(data.items.filter(item => item.status === 'done').map(item => item.id));
+    return { items: data.items, doneIds, justCompleted: doneIds };
+  });
 
   const runningCount = data.items.filter(i => i.status === 'running').length;
   const doneCount = data.items.filter(i => i.status === 'done').length;
@@ -45,8 +48,10 @@ export function TaskList({ data, onComplete }: TaskListProps) {
 
   // Track newly completed items for animation
   const doneIds = new Set(data.items.filter(i => i.status === 'done').map(i => i.id));
-  const justCompleted = new Set([...doneIds].filter(id => !prevDoneRef.current.has(id)));
-  prevDoneRef.current = doneIds;
+  if (completion.items !== data.items) {
+    setCompletion({ items: data.items, doneIds, justCompleted: new Set([...doneIds].filter(id => !completion.doneIds.has(id))) });
+  }
+  const justCompleted = completion.justCompleted;
 
   const doneItems = data.items.filter(i => i.status === 'done');
   const activeItems = data.items.filter(i => i.status === 'running');
