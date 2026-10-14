@@ -49,7 +49,7 @@ class KnowledgePointListView(generics.ListCreateAPIView):
         subject = self.request.query_params.get('subject')
         if preview_inst_id and is_platform_admin(user):
             return f"knowledge_tree:ids:inst:{preview_inst_id}"
-        if is_platform_admin(user) and user.institution is None:
+        if user.institution is None:
             if subject:
                 return f"knowledge_tree:ids:global:subject:{subject}"
             return "knowledge_tree:ids:global"
@@ -71,7 +71,7 @@ class KnowledgePointListView(generics.ListCreateAPIView):
                 return KnowledgePoint.objects.none()
             cache_key = f"knowledge_tree:ids:inst:{preview_inst_id}"
             inst_filter = {'institution_id': preview_inst_id}
-        elif is_platform_admin(user) and user.institution is None:
+        elif user.institution is None:
             if subject:
                 cache_key = f"knowledge_tree:ids:global:subject:{subject}"
                 inst_filter = {'institution__isnull': True, 'subject': subject}
@@ -130,8 +130,8 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
             if not is_platform_admin(user):
                 return qs.none()
             return qs.filter(institution_id=preview_inst_id)
-        # 平台管理员：只接触全局节点
-        if is_platform_admin(user) and user.institution is None:
+        # 独立学习账号读取全局知识目录，不按管理角色区分。
+        if user.institution is None:
             return qs.filter(institution__isnull=True)
         # 机构用户：只接触本机构节点
         if user.institution:

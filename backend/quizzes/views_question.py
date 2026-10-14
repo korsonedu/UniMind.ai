@@ -70,7 +70,7 @@ class QuestionListView(generics.ListCreateAPIView):
                 qs = qs.filter(institution__isnull=True)
             else:
                 qs = qs.filter(institution_id=preview_inst_id)
-        elif not is_platform_admin(user):
+        else:
             # 机构数据隔离：机构成员可见本机构题库 + 全局题库；独立用户仅见全局题库
             inst = getattr(user, 'institution', None)
             if inst:
@@ -106,9 +106,6 @@ class QuestionListView(generics.ListCreateAPIView):
                     qs = filtered
                 else:
                     qs = Question.objects.none()
-
-        if is_platform_admin(user) and not self.request.query_params.get('limit'):
-            return qs
 
         ids_param = self.request.query_params.get('ids') or self.request.query_params.get('question_ids')
         if ids_param:
@@ -281,4 +278,3 @@ class AdminQuestionListView(APIView):
             'total_pages': (total + page_size - 1) // page_size,
             'results': data
         })
-

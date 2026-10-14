@@ -69,6 +69,7 @@ if IS_PROD and not ALLOWED_HOSTS:
 # 可选模块: payments,study_room,faq_system,notifications,articles
 _ENABLED_RAW = os.getenv('ENABLED_APPS', '')
 ENABLED_APPS = [a.strip() for a in _ENABLED_RAW.split(',') if a.strip()] if _ENABLED_RAW else None
+LEARNING_FREE_AI_CALLS_PER_MONTH = _get_int('LEARNING_FREE_AI_CALLS_PER_MONTH', 100)
 
 INSTALLED_APPS = [
     "daphne",

@@ -1,16 +1,32 @@
 from rest_framework import serializers
-from .models import Course, Album, StartupMaterial, CourseTag, CourseTagRelation, VideoProgress
+from .models import Course, CourseModule, Album, StartupMaterial, CourseTag, CourseTagRelation, VideoProgress
+
+
+class CourseModuleSerializer(serializers.ModelSerializer):
+    course_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = CourseModule
+        fields = ('id', 'name', 'description', 'is_public', 'sort_order', 'course_count')
+        validators = []
+
+    def validate_name(self, value):
+        institution_id = self.instance.institution_id if self.instance else self.context['request'].user.institution_id
+        duplicates = CourseModule.objects.filter(institution_id=institution_id, name=value)
+        if self.instance:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise serializers.ValidationError('当前机构已存在同名模块。')
+        return value
 
 
 class RelativeFileField(serializers.FileField):
-    """返回 URL：OSS 绝对路径保持不变，本地路径补 / 前缀"""
+    """文件先经过访问校验，再由媒体服务返回本地文件或 OSS 签名地址。"""
     def to_representation(self, value):
         if not value:
             return None
-        url = value.url
-        if url.startswith('http://') or url.startswith('https://'):
-            return url
-        return url if url.startswith('/') else '/' + url
+        from urllib.parse import quote
+        return '/media/' + quote(value.name, safe='/')
 
 
 class RelativeImageField(serializers.ImageField):
@@ -42,6 +58,8 @@ class AlbumSerializer(serializers.ModelSerializer):
 
 
 class CourseSerializer(serializers.ModelSerializer):
+    module_name = serializers.CharField(source='module.name', read_only=True, default='')
+    module_sort_order = serializers.IntegerField(source='module.sort_order', read_only=True, default=0)
     cover_image = RelativeImageField(required=False)
     video_file = RelativeFileField(required=False)
     courseware = RelativeFileField(required=False)
@@ -53,6 +71,18 @@ class CourseSerializer(serializers.ModelSerializer):
     )
     tags = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
+
+    def validate(self, attrs):
+        module = attrs.get('module')
+        if not self.instance and not module:
+            raise serializers.ValidationError({'module': '请选择所属模块。'})
+        if 'module' in attrs:
+            if module is None:
+                raise serializers.ValidationError({'module': '请选择所属模块。'})
+            institution_id = self.instance.institution_id if self.instance else self.context['request'].user.institution_id
+            if module.institution_id != institution_id:
+                raise serializers.ValidationError({'module': '模块不属于当前课程所在机构。'})
+        return attrs
 
     def get_tags(self, obj):
         relations = obj.tag_relations.select_related('tag').all()
@@ -68,7 +98,7 @@ class CourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ('id', 'title', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'progress', 'created_at', 'updated_at', 'author')
+        fields = ('id', 'title', 'module', 'module_name', 'module_sort_order', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'progress', 'created_at', 'updated_at', 'author')
         read_only_fields = ('author', 'institution')
 
 class StartupMaterialSerializer(serializers.ModelSerializer):
@@ -95,4 +125,3 @@ class CourseTagSerializer(serializers.ModelSerializer):
         course_ids = obj.course_relations.values_list('course_id', flat=True)
         courses = Course.objects.filter(id__in=course_ids).only('id', 'title', 'cover_image')
         return AlbumCourseBriefSerializer(courses, many=True).data
-

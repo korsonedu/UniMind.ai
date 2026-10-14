@@ -21,7 +21,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
 import { FeedbackButton } from './components/FeedbackButton';
-import { OnboardingDialog } from '@/components/OnboardingDialog';
+
 
 // Lazy-loaded pages — named exports need .then() wrapper
 const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
@@ -29,18 +29,13 @@ const CourseCenter = lazy(() => import('./pages/CourseCenter').then(module => ({
 const TestLadder = lazy(() => import('./pages/TestLadder').then(module => ({ default: module.TestLadder })));
 const StudyRoom = lazy(() => import('./pages/StudyRoom').then(module => ({ default: module.StudyRoom })));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
-const Maintenance = lazy(() => import('./pages/Maintenance').then(module => ({ default: module.Maintenance })));
 const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
 const AccountCallback = lazy(() => import('./pages/AccountCallback').then(module => ({ default: module.AccountCallback })));
 const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
 const VerifyCode = lazy(() => import('./pages/VerifyCode').then(module => ({ default: module.VerifyCode })));
-const SystemSettings = lazy(() => import('./pages/SystemSettings').then(module => ({ default: module.SystemSettings })));
-const KnowledgeMap = lazy(() => import('./pages/KnowledgeMap').then(module => ({ default: module.KnowledgeMap })));
-const KnowledgeNodeDetail = lazy(() => import('./pages/KnowledgeNodeDetail').then(module => ({ default: module.KnowledgeNodeDetail })));
 const QASystem = lazy(() => import('./pages/QASystem').then(module => ({ default: module.QASystem })));
 const QuestionDetail = lazy(() => import('./pages/QASystem').then(module => ({ default: module.QuestionDetail })));
 const TestSessionPage = lazy(() => import('./pages/TestSessionPage').then(module => ({ default: module.TestSessionPage })));
-const PromptTemplatesAdmin = lazy(() => import('./pages/PromptTemplatesAdmin').then(module => ({ default: module.PromptTemplatesAdmin })));
 
 const WrongQuestionReviewPage = lazy(() => import('./pages/WrongQuestionReviewPage').then(module => ({ default: module.WrongQuestionReviewPage })));
 const ReportCard = lazy(() => import('./pages/ReportCard').then(module => ({ default: module.ReportCard })));
@@ -54,26 +49,13 @@ const XiaoYu = lazy(() => import('./pages/XiaoYu').then(module => ({ default: mo
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
 // Default exports — plain lazy() works
-const Workbench = lazy(() => import('./pages/Workbench'));
-const TeacherQuestions = lazy(() => import('./pages/TeacherQuestions'));
-const AssetHub = lazy(() => import('./pages/AssetHub'));
-const TeacherKnowledgeTree = lazy(() => import('./pages/TeacherKnowledgeTree'));
-const InstitutionDashboard = lazy(() => import('./pages/InstitutionDashboard'));
-const InstitutionStudents = lazy(() => import('./pages/InstitutionStudents'));
-const InstitutionAdmin = lazy(() => import('./pages/InstitutionAdmin'));
-const InstitutionHome = lazy(() => import('./pages/InstitutionHome'));
 const MemorixPage = lazy(() => import('./pages/Memorix'));
-const InviteCodeAdmin = lazy(() => import('./pages/InviteCodeAdmin'));
-const PlatformAdmin = lazy(() => import('./pages/PlatformAdmin'));
 const JoinPage = lazy(() => import('./pages/JoinPage').then(module => ({ default: module.JoinPage })));
 const NotFound = lazy(() => import('./pages/NotFound'));
-const Marketplace = lazy(() => import('./pages/Marketplace').then(module => ({ default: module.Marketplace })));
-const APIPlatform = lazy(() => import('./pages/APIPlatform').then(module => ({ default: module.APIPlatform })));
-const CourseManage = lazy(() => import('./pages/CourseManage'));
-const AuditLogs = lazy(() => import('./pages/AuditLogs'));
+
 const Legal = lazy(() => import('./pages/Legal'));
 const PricingPage = lazy(() => import('./pages/Pricing'));
-const PromoPlus = lazy(() => import('./pages/PromoPlus'));
+
 
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -105,9 +87,7 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
   const { theme, setTheme } = useSystemStore();
 
   useEffect(() => {
-    if (user?.role === 'admin') {
-      if (theme === 'dark') setTheme('dark');
-    } else if (user && theme !== 'light') {
+    if (user && theme !== 'light') {
       setTheme('light');
     }
     // PWA push subscription — deferred to avoid blocking render
@@ -117,85 +97,13 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [user?.role, user, theme, setTheme]);
+  }, [user, theme, setTheme]);
 
   if (!user) return <Navigate to="/login" replace />;
   return children;
 };
 
-// 超级管理员：is_superuser 且无机构绑定
-const RequirePlatformAdmin = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuthStore();
-  if (!user) return <Navigate to="/login" replace />;
-  if (!user.is_admin) return <Navigate to="/settings" replace />;
-  return children;
-};
-
-// 机构管理员或超级管理员：可访问管理类功能
-const RequireAdmin = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuthStore();
-  if (!user) return <Navigate to="/login" replace />;
-  if (!user.is_admin && !user.is_institution_admin)
-    return <Navigate to="/settings" replace />;
-  return children;
-};
-
-// 机构成员（管理员 + 学员）+ 超级管理员预览
-const RequireInstitution = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuthStore();
-  const institution = useInstitutionStore(s => s.institution);
-  const isPlatformAdmin = useInstitutionStore(s => s.isPlatformAdmin);
-  const featuresLoading = useInstitutionStore(s => s.loading);
-  const featuresError = useInstitutionStore(s => s.featuresError);
-  const fetchFeatures = useInstitutionStore(s => s.fetchFeatures);
-
-  useEffect(() => {
-    if (user && (user.is_admin || user.institution || user.institution_id) && !institution && !isPlatformAdmin && !featuresLoading && !featuresError) {
-      fetchFeatures();
-    }
-  }, [user, institution, isPlatformAdmin, featuresLoading, featuresError, fetchFeatures]);
-
-  if (!user) return <Navigate to="/login" replace />;
-  if (!institution && !isPlatformAdmin && !user.institution && !user.institution_id && !user.is_admin) return <Navigate to="/" replace />;
-  if (featuresError) return <div role="alert" className="p-8 text-center space-y-3"><p>机构信息加载失败</p><button onClick={fetchFeatures} className="underline">重新加载</button></div>;
-  if (featuresLoading || (!institution && !isPlatformAdmin)) return <Loading message="Loading institution…" fullScreen size="lg" />;
-  if (!institution && !isPlatformAdmin) return <Navigate to="/" replace />;
-  if (isPlatformAdmin) return children;
-  if (!institution?.id) return <Navigate to="/" replace />;
-  // 机构管理员（owner / teacher）可访问管理类页面
-  if (user.institution_role !== 'owner' && user.institution_role !== 'teacher' && !user.is_institution_admin && !user.is_admin) {
-    return <Navigate to="/" replace />;
-  }
-  return children;
-};
-
-// 超管默认跳转到机构管理；Pro 机构 → 机构主页；未完成诊断的学生 → 诊断；否则 → 学生主页
-const HomeRedirect = () => {
-  const { user } = useAuthStore();
-  const institution = useInstitutionStore(s => s.institution);
-  if (user?.role === 'admin' && !institution && !user?.institution) return <Navigate to="/institution/admin" replace />;
-  if (institution?.plan === 'enterprise') {
-    if (user?.institution_role === 'owner' || user?.institution_role === 'teacher' || user?.is_institution_admin) {
-      return <Navigate to="/workbench" replace />;
-    }
-    return <Navigate to="/institution" replace />;
-  }
-  // 教师/机构主 → 工作台
-  if (user?.institution_role === 'owner' || user?.institution_role === 'teacher' || user?.is_institution_admin) {
-    return <Navigate to="/workbench" replace />;
-  }
-  // 学生 → 小宇（Agent 为入口，诊断由小宇引导）
-  if (user?.institution_role === 'student') {
-    return <Navigate to="/xiaoyu" replace />;
-  }
-
-  return <Navigate to="/xiaoyu" replace />;
-};
-
-// Root entry handler to manage landing vs app logic
-// korsonedu.com → 机构主页；unimind-ai.com → 正常 Landing/App
-const isKorsonedu = typeof window !== 'undefined' &&
-  /korsonedu\.com/.test(window.location.hostname);
+const HomeRedirect = () => <Navigate to="/xiaoyu" replace />;
 
 const RootRedirect = () => {
 
@@ -231,9 +139,6 @@ const RootRedirect = () => {
 
   if (userData) return <Outlet />;
 
-  // korsonedu.com → 直接展示机构主页
-  if (isKorsonedu) return <Suspense fallback={<PageLoader />}><InstitutionHome slug="korsonedu" /></Suspense>;
-
   return <Suspense fallback={<PageLoader />}><Landing /></Suspense>;
 };
 
@@ -253,7 +158,8 @@ const router = createBrowserRouter([
         element: <RequireAuth><Suspense fallback={<PageLoader />}><MainLayout /></Suspense></RequireAuth>,
         children: [
           { path: "courses", element: lazyPage(CourseCenter) },
-          { path: "courses/manage", element: <RequireInstitution>{lazyPage(CourseManage)}</RequireInstitution> },
+          { path: "courses/manage", element: <Navigate to="/courses" replace /> },
+          { path: "learning-products", element: <Navigate to="/xiaoyu" replace /> },
           { path: "articles", element: <Navigate to="/xiaoyu" replace /> },
           { path: "articles/manage", element: <Navigate to="/xiaoyu" replace /> },
           {
@@ -270,41 +176,37 @@ const router = createBrowserRouter([
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
           { path: "xiaoyu", element: lazyPage(XiaoYu) },
           { path: "xiaoyu/practice/:sessionId", element: lazyPage(PracticeSession) },
-          { path: "knowledge-map", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeMap)}</FeatureGuard> },
-          { path: "knowledge-map/node/:id", element: <FeatureGuard feature={FEATURES.KNOWLEDGE_GRAPH}>{lazyPage(KnowledgeNodeDetail)}</FeatureGuard> },
+          { path: "knowledge-map/*", element: <Navigate to="/xiaoyu" replace /> },
           { path: "settings", element: lazyPage(Settings) },
           { path: "billing", element: lazyPage(BillingPage) },
-          { path: "system-settings", element: <RequireAdmin>{lazyPage(SystemSettings)}</RequireAdmin> },
-          { path: "management", element: <RequireAdmin>{lazyPage(Maintenance)}</RequireAdmin> },
+          { path: "system-settings", element: <Navigate to="/settings" replace /> },
+          { path: "management", element: <Navigate to="/xiaoyu" replace /> },
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "achievements", element: lazyPage(Achievements) },
 
           { path: "report-card", element: lazyPage(ReportCard) },
 
-          { path: "workbench", element: <RequireInstitution>{lazyPage(Workbench)}</RequireInstitution> },
-          { path: "assets", element: <RequireInstitution>{lazyPage(AssetHub)}</RequireInstitution> },
-          { path: "knowledge-tree", element: <RequireInstitution>{lazyPage(TeacherKnowledgeTree)}</RequireInstitution> },
-          { path: "questions", element: <RequireInstitution>{lazyPage(TeacherQuestions)}</RequireInstitution> },
-          { path: "institution", element: <RequireInstitution>{lazyPage(InstitutionDashboard)}</RequireInstitution> },
-          { path: "institution/students", element: <RequireInstitution>{lazyPage(InstitutionStudents)}</RequireInstitution> },
-          { path: "marketplace", element: <RequireInstitution>{lazyPage(Marketplace)}</RequireInstitution> },
-          { path: "api-platform", element: <RequireInstitution><FeatureGuard feature={FEATURES.API_ACCESS}>{lazyPage(APIPlatform)}</FeatureGuard></RequireInstitution> },
-          { path: "institution/admin", element: <RequireAdmin>{lazyPage(InstitutionAdmin)}</RequireAdmin> },
-          { path: "institution/audit-logs", element: <RequireAdmin>{lazyPage(AuditLogs)}</RequireAdmin> },
-          { path: "invite-codes", element: <RequirePlatformAdmin>{lazyPage(InviteCodeAdmin)}</RequirePlatformAdmin> },
-          { path: "prompt-templates", element: <RequirePlatformAdmin>{lazyPage(PromptTemplatesAdmin)}</RequirePlatformAdmin> },
-          { path: "platform", element: <RequirePlatformAdmin>{lazyPage(PlatformAdmin)}</RequirePlatformAdmin> },
+          { path: "workbench", element: <Navigate to="/xiaoyu" replace /> },
+          { path: "assets", element: <Navigate to="/xiaoyu" replace /> },
+          { path: "knowledge-tree", element: <Navigate to="/xiaoyu" replace /> },
+          { path: "questions", element: <Navigate to="/tests" replace /> },
+          { path: "institution/*", element: <Navigate to="/xiaoyu" replace /> },
+          { path: "marketplace", element: <Navigate to="/courses" replace /> },
+          { path: "api-platform", element: <Navigate to="/xiaoyu" replace /> },
+          { path: "invite-codes", element: <Navigate to="/xiaoyu" replace /> },
+          { path: "prompt-templates", element: <Navigate to="/xiaoyu" replace /> },
+          { path: "platform", element: <Navigate to="/xiaoyu" replace /> },
           { path: "*", element: lazyPage(NotFound) },
         ],
       },
     ],
   },
   { path: "/join/:invite_slug", element: lazyPage(JoinPage) },
-  { path: "/intro/:slug", element: lazyPage(InstitutionHome) },
+  { path: "/intro/:slug", element: <Navigate to="/" replace /> },
   { path: "/intro", element: <Navigate to="/" replace /> },
   { path: "/pricing", element: lazyPage(PricingPage) },
-  { path: "/promo/plus", element: lazyPage(PromoPlus) },
+  { path: "/promo/plus", element: <Navigate to="/pricing" replace /> },
   { path: "/memorix", element: lazyPage(MemorixPage) },
   { path: "/login", element: lazyPage(Login) },
   { path: "/account-callback", element: lazyPage(AccountCallback) },
@@ -344,7 +246,6 @@ function App() {
         <Suspense fallback={null}>
           <NPSSurvey />
         </Suspense>
-        <OnboardingOverlay />
         <XiaoYuEngineBridge />
         <StudyRoomWsBridge />
         <RouterProvider router={router} />
@@ -352,12 +253,6 @@ function App() {
       </ErrorBoundary>
     </QueryClientProvider>
   );
-}
-
-function OnboardingOverlay() {
-  const hasHydrated = useAuthStore.persist.hasHydrated();
-  if (!hasHydrated) return null;
-  return <OnboardingDialog mandatory />;
 }
 
 export default App;

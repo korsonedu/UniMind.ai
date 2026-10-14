@@ -23,7 +23,8 @@ from core.utils import apply_institution_filter
 
 def _get_course_for_user(pk, user, request=None):
     """按机构隔离获取课程，无权限返回 None。"""
-    qs = apply_institution_filter(Course.objects.all(), user, request)
+    from .access import visible_courses
+    qs = visible_courses(request)
     return qs.filter(pk=pk).first()
 
 
@@ -228,6 +229,9 @@ class OSSMultipartCompleteView(APIView):
         if not title:
             return Response({"error": "课程标题必填"}, status=400)
 
+        metadata = CourseSerializer(data={'title': title, 'module': request.data.get('module')}, context={'request': request})
+        metadata.is_valid(raise_exception=True)
+
         # 校验 object_key 归属当前用户机构
         user_inst_id = getattr(request.user, 'institution_id', None)
         expected_prefix = f"institutions/{user_inst_id or 'public'}/"
@@ -322,6 +326,7 @@ class OSSMultipartCompleteView(APIView):
         # 创建课程
         course = Course(
             title=title,
+            module_id=request.data.get('module'),
             description=description,
             elo_reward=elo_reward,
             author=request.user,
@@ -541,11 +546,17 @@ class AlbumListCreateView(generics.ListCreateAPIView):
     serializer_class = AlbumSerializer
     def get_queryset(self):
         from django.db.models import Count
-        qs = Album.objects.annotate(course_count=Count('courses')).prefetch_related('courses').order_by('-created_at')
-        return apply_institution_filter(qs, self.request.user, self.request)
+        from django.db.models import Prefetch
+        from .access import visible_courses
+        visible = visible_courses(self.request)
+        qs = Album.objects.annotate(course_count=Count('courses')).prefetch_related(Prefetch('courses', queryset=visible)).order_by('-created_at')
+        from users.permissions import is_platform_admin, is_institution_admin
+        if is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
+            return apply_institution_filter(qs, self.request.user, self.request)
+        return qs.filter(pk__in=visible.values_list('album_obj_id', flat=True))
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
-        return [permissions.AllowAny()]
+        return [IsMember()]
 
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("cover_image"), allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
@@ -568,11 +579,12 @@ class AlbumCoursesView(APIView):
     permission_classes = [IsMember]
 
     def get(self, request, album_id):
-        album = apply_institution_filter(Album.objects.all(), request.user, request).filter(pk=album_id).first()
+        from .access import visible_courses
+        courses = visible_courses(request).filter(album_obj_id=album_id).order_by('sort_order', '-created_at')
+        album = Album.objects.filter(pk=album_id).first() if courses.exists() else None
         if not album:
             return Response({'error': '专辑不存在'}, status=404)
 
-        courses = album.courses.all().order_by('sort_order', '-created_at')
         return Response(CourseSerializer(courses, many=True, context={'request': request}).data)
 
 class CourseListCreateView(generics.ListCreateAPIView):
@@ -586,7 +598,8 @@ class CourseListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = apply_institution_filter(Course.objects.all(), user, self.request)
+        from .access import visible_courses
+        qs = visible_courses(self.request) if self.request.method == 'GET' else apply_institution_filter(Course.objects.select_related('module'), user, self.request)
         ordering = self.request.query_params.get('ordering', '-created_at')
         allowed = ('sort_order', '-sort_order', 'created_at', '-created_at', 'title', '-title')
         if ordering in allowed:
@@ -599,6 +612,14 @@ class CourseListCreateView(generics.ListCreateAPIView):
         album = self.request.query_params.get('album')
         if q: qs = qs.filter(title__icontains=q)
         if kp: qs = qs.filter(knowledge_point_id=kp)
+        module = self.request.query_params.get('module')
+        if module == 'unassigned':
+            qs = qs.filter(module__isnull=True)
+        elif module:
+            try:
+                qs = qs.filter(module_id=int(module))
+            except (ValueError, TypeError):
+                raise ValidationError({'module': '模块编号无效。'})
         if album:
             try:
                 qs = qs.filter(album_obj_id=int(album))
@@ -713,10 +734,13 @@ class CourseReorderView(APIView):
 
 
 class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Course.objects.all()
+    queryset = Course.objects.select_related('module')
     serializer_class = CourseSerializer
 
     def get_queryset(self):
+        if self.request.method == 'GET':
+            from .access import visible_courses
+            return visible_courses(self.request)
         return apply_institution_filter(super().get_queryset(), self.request.user, self.request)
 
     def get_permissions(self):
@@ -789,4 +813,3 @@ class CourseTranscriptView(APIView):
         from .services.task_dispatcher import dispatch_transcription
         dispatch_transcription(course.id)
         return Response({'status': 'processing'})
-

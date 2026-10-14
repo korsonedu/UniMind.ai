@@ -20,7 +20,7 @@ from django.contrib.auth import get_user_model
 from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS, InstitutionInvite, JoinRequest
 
 User = get_user_model()
-from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionOwner, IsInstitutionActive, IsInstitutionMember, IsInstitutionTeacher, is_platform_admin
+from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionOwner, IsInstitutionActive, IsInstitutionMember, IsInstitutionTeacher, is_platform_admin, is_institution_admin
 from .serializers_institution import (
     InstitutionSerializer, CreateInstitutionSerializer, ChangePlanSerializer,
     InstitutionStudentSerializer, CreateStudentSerializer, InstitutionFeatureSerializer,
@@ -210,13 +210,6 @@ class InstitutionStudentListView(APIView):
 
             with transaction.atomic():
                 inst = Institution.objects.select_for_update().get(pk=inst.pk)
-                remaining = inst.max_students - inst.student_count
-                if len(students_data) > remaining:
-                    return Response(
-                        {'error': f'当前剩余{remaining}个名额，无法导入{len(students_data)}人。请升级版本。'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
                 created = []
                 failed = []
                 for i, item in enumerate(students_data):
@@ -230,7 +223,6 @@ class InstitutionStudentListView(APIView):
                             nickname=serializer.validated_data.get('nickname', ''),
                             institution=inst,
                             institution_role='student',
-                            is_member=True,
                             email_verified=True,
                         )
                         created.append(InstitutionStudentSerializer(user).data)
@@ -247,11 +239,6 @@ class InstitutionStudentListView(APIView):
             }, status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST)
 
         # 单个创建
-        if inst.student_count >= inst.max_students:
-            return Response(
-                {'error': f'学员数已达{inst.get_plan_display()}版上限{inst.max_students}人，请升级版本。'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
         serializer = CreateStudentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = User.objects.create_user(
@@ -261,7 +248,6 @@ class InstitutionStudentListView(APIView):
             nickname=serializer.validated_data.get('nickname', ''),
             institution=inst,
             institution_role='student',
-            is_member=True,
             email_verified=True,
         )
         return Response(InstitutionStudentSerializer(user).data, status=status.HTTP_201_CREATED)
@@ -409,56 +395,25 @@ class InstitutionFeatureView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from users.learning import LEARNING_FEATURES, usage_info
         user = request.user
         inst = user.institution
-
-        # 缓存 key：按用户+机构组合（features 和 usage 变化不频繁，300s TTL）
-        cache_key = f"inst:features:u{user.id}:i{inst.id if inst else 0}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return Response(cached)
-
+        features = list(LEARNING_FEATURES)
         inst_data = None
         if inst:
-            effective_plan = inst.get_effective_plan()
-            plan_label = dict(Institution.PLAN_CHOICES).get(effective_plan, effective_plan)
             inst_data = {
                 'id': inst.id, 'name': inst.name, 'slug': inst.slug,
-                'plan': effective_plan, 'plan_label': plan_label,
-                'plan_expires_at': inst.plan_expires_at,
-                'is_active': inst.is_active,
-                'is_plan_active': inst.is_plan_active,
-                'max_students': inst.max_students,
-                'student_count': inst.student_count,
-                'invite_slug': inst.invite_slug,
+                'plan': inst.get_effective_plan(), 'plan_label': inst.get_plan_display(),
+                'plan_expires_at': None, 'is_active': inst.is_active,
+                'is_plan_active': inst.is_active, 'max_students': inst.max_students,
+                'student_count': inst.student_count, 'invite_slug': inst.invite_slug,
                 'business_type': inst.business_type,
             }
-
-        # Platform admins without an institution see all features.
-        # Platform admins WITH an institution see that institution's plan features.
-        if is_platform_admin(user) and inst is None:
-            features = get_plan_features('enterprise')
-        elif inst:
-            features = get_plan_features(inst.get_effective_plan())
-        else:
-            features = []
-
-        from users.quota import get_all_quota_info
-        usage = get_all_quota_info(inst) if inst else {}
-        # 向后兼容：顶层 used/limit → ai_question
-        ai_q = usage.get('ai_question', {})
-        usage.setdefault('used', ai_q.get('used', 0))
-        usage.setdefault('limit', ai_q.get('limit', 0))
-
-        data = InstitutionFeatureSerializer({
-            'is_platform_admin': is_platform_admin(user),
-            'institution': inst_data,
-            'features': features,
-            'usage': usage,
-        }).data
-        cache.set(cache_key, data, 300)
-        return Response(data)
-
+        personal_usage = usage_info(user)
+        usage = {'ai_call_total': personal_usage, 'ai_question': personal_usage,
+                 'used': personal_usage['used'], 'limit': personal_usage['limit']}
+        return Response({'is_platform_admin': False,
+                         'institution': inst_data, 'features': features, 'usage': usage})
 
 # ── Institution Dashboard ──
 
@@ -599,12 +554,8 @@ class CheckInviteView(APIView):
 
     def get(self, request):
         invite_slug = request.COOKIES.get('institution_invite', '')
-        exists = bool(
-            invite_slug and (
-                InstitutionInvite.objects.filter(slug=invite_slug, is_active=True).exists()
-                or Institution.objects.filter(invite_slug=invite_slug, is_active=True).exists()
-            )
-        )
+        exists = bool(invite_slug and InstitutionInvite.objects.filter(
+            slug=invite_slug, is_active=True, institution__is_active=True).exists())
         return Response({'has_invite': exists})
 
 
@@ -754,21 +705,6 @@ class InstitutionMemberRoleView(APIView):
 
 # ── Public Institution Page ──
 
-class PublicInstitutionView(APIView):
-    """公开：按 slug 获取机构信息（机构公开页使用）"""
-    permission_classes = [AllowAny]
-
-    def get(self, request, slug):
-        inst = get_object_or_404(Institution, slug=slug, is_active=True)
-        return Response({
-            'id': inst.id,
-            'name': inst.name,
-            'slug': inst.slug,
-            'description': inst.description or '',
-            'logo_url': request.build_absolute_uri(inst.logo.url) if inst.logo else None,
-        })
-
-
 class InstitutionJoinBySlugView(APIView):
     """通过机构标识（slug 或 invite_slug）加入机构，role 由邀请链接或请求参数决定"""
     permission_classes = [IsAuthenticated]
@@ -805,9 +741,7 @@ class InstitutionJoinBySlugView(APIView):
 
         user.institution = inst
         user.institution_role = role
-        user.is_member = True
-        user.membership_tier = inst.get_effective_plan()
-        user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
+        user.save(update_fields=['institution', 'institution_role'])
 
         return Response({
             'status': 'ok',
@@ -824,26 +758,16 @@ class InstitutionJoinByInviteSlugView(APIView):
         if not invite_slug:
             return Response({'error': '缺少邀请标识'}, status=400)
 
-        # 优先查 InstitutionInvite，fallback 到旧的 Institution.invite_slug
+        # 加入教学机构与个人学习权益分别管理。
         invite = InstitutionInvite.objects.filter(slug=invite_slug, is_active=True).first()
         if invite:
             inst = invite.institution
-            if not inst.is_active or not inst.is_plan_active:
-                return Response({'error': '该机构已停用或服务已到期'}, status=403)
+            if not inst.is_active:
+                return Response({'error': '该机构已停用'}, status=403)
             assigned_role = invite.assigned_role
             requires_approval = invite.requires_approval
         else:
-            try:
-                inst = Institution.objects.get(invite_slug=invite_slug, is_active=True)
-            except Institution.DoesNotExist:
-                return Response({'error': '邀请链接无效或机构已停用'}, status=404)
-            if not inst.is_plan_active:
-                return Response({'error': '该机构服务已到期'}, status=403)
-            assigned_role = 'student'
-            requires_approval = False  # 旧链接向后兼容：无需审批
-
-        if inst.student_count >= inst.max_students:
-            return Response({'error': '该机构学员数已达上限'}, status=403)
+            return Response({'error': '邀请链接无效或已停用。'}, status=404)
 
         user = request.user
         if user.institution == inst:
@@ -883,9 +807,7 @@ class InstitutionJoinByInviteSlugView(APIView):
         # 无需审批：直接加入并更新计数
         user.institution = inst
         user.institution_role = assigned_role
-        user.is_member = True
-        user.membership_tier = inst.get_effective_plan()
-        user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
+        user.save(update_fields=['institution', 'institution_role'])
 
         if invite:
             InstitutionInvite.objects.filter(pk=invite.pk).update(
@@ -980,9 +902,7 @@ class InstitutionJoinRequestReviewView(APIView):
             user = join_req.user
             user.institution = inst
             user.institution_role = join_req.invite.assigned_role if join_req.invite else 'student'
-            user.is_member = True
-            user.membership_tier = inst.get_effective_plan()
-            user.save(update_fields=['institution', 'institution_role', 'is_member', 'membership_tier'])
+            user.save(update_fields=['institution', 'institution_role'])
             if join_req.invite:
                 InstitutionInvite.objects.filter(pk=join_req.invite_id).update(
                     used_count=F('used_count') + 1
@@ -995,7 +915,7 @@ class InstitutionJoinRequestReviewView(APIView):
 
 class InstitutionCreateView(APIView):
     """注册后用户通过方案邀请码自建机构，成功后自动成为机构管理员"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPlatformAdmin]
 
     @transaction.atomic
     def post(self, request):

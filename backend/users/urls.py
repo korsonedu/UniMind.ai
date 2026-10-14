@@ -1,4 +1,6 @@
 from django.urls import path
+from .views_learning import (LearningCatalogView, MyLearningAccessView, LearningProductAdminView,
+                             LearningProductDetailView, LearningGrantAdminView, LearningGrantDetailView)
 from .views import (
     RegisterView, LoginView, LoginByCodeView, UserDetailView, UpdateProfileView,
     TourDismissView, TourPanelDismissView,
@@ -21,7 +23,7 @@ from .views_admin import (
 from .views_institution import (
     InstitutionDashboardView, PlatformAdminInstitutionOverviewView,
     InstitutionListView, InstitutionDetailView,
-    InstitutionCreateView, InstitutionActivateView, InstitutionDeactivateView,
+    InstitutionActivateView, InstitutionDeactivateView,
     InstitutionChangePlanView,
     InstitutionStudentListView, InstitutionStudentDetailView,
     InstitutionStudentStatsView, InstitutionStudentResetPasswordView,
@@ -31,7 +33,7 @@ from .views_institution import (
     CheckInviteView, RegenerateInviteSlugView,
     PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
     UpdateDirectionsView,
-    PublicInstitutionView, InstitutionJoinBySlugView, InstitutionJoinByInviteSlugView,
+    InstitutionJoinByInviteSlugView,
     InstitutionMemberListView, InstitutionMemberRoleView,
     InstitutionAuditLogView, InstitutionNotificationConfigView,
     InstitutionBulkInitView,
@@ -48,6 +50,12 @@ from .views_sso import (
 )
 
 urlpatterns = [
+    path('learning/catalog/', LearningCatalogView.as_view(), name='learning-catalog'),
+    path('learning/access/', MyLearningAccessView.as_view(), name='learning-access'),
+    path('learning/products/', LearningProductAdminView.as_view(), name='learning-product-admin'),
+    path('learning/products/<int:pk>/', LearningProductDetailView.as_view(), name='learning-product-detail'),
+    path('learning/grants/', LearningGrantAdminView.as_view(), name='learning-grant-admin'),
+    path('learning/grants/<int:pk>/', LearningGrantDetailView.as_view(), name='learning-grant-detail'),
     # Auth & profile
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
@@ -90,7 +98,6 @@ urlpatterns = [
 
     # Institution — platform admin
     path('institutions/', InstitutionListView.as_view(), name='institution-list'),
-    path('institutions/create/', InstitutionCreateView.as_view(), name='institution-create'),
     path('institutions/<int:pk>/', InstitutionDetailView.as_view(), name='institution-detail'),
     path('institutions/<int:pk>/activate/', InstitutionActivateView.as_view(), name='institution-activate'),
     path('institutions/<int:pk>/deactivate/', InstitutionDeactivateView.as_view(), name='institution-deactivate'),
@@ -106,9 +113,7 @@ urlpatterns = [
     path('institution/me/features/', InstitutionFeatureView.as_view(), name='institution-features'),
     path('institution/me/regenerate-invite-slug/', RegenerateInviteSlugView.as_view(), name='regenerate-invite-slug'),
     path('institution/me/bulk-init/', InstitutionBulkInitView.as_view(), name='institution-bulk-init'),
-    path('institution/join-by-slug/', InstitutionJoinBySlugView.as_view(), name='institution-join-by-slug'),
     path('institution/join-by-invite-slug/', InstitutionJoinByInviteSlugView.as_view(), name='institution-join-by-invite-slug'),
-    path('public/institution/<str:slug>/', PublicInstitutionView.as_view(), name='public-institution'),
     path('check-invite/', CheckInviteView.as_view(), name='check-invite'),
 
     # Institution — students

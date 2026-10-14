@@ -59,11 +59,11 @@ export function FeatureGuard({
           </div>
           <h2 className="text-xl font-bold mb-2">{featureName}暂未开放</h2>
           <p className="text-muted-foreground text-sm mb-6">
-            该功能需要升级方案后使用，请联系机构管理员开通。
+            请在学习服务中查看该功能的可用权益。
           </p>
           <Button onClick={() => setShowUpgrade(true)} className="rounded-full px-6">
             <Sparkle className="w-4 h-4 mr-2" />
-            升级方案
+            查看学习服务
           </Button>
         </div>
       </div>

@@ -70,6 +70,22 @@ def media_serve(request, path):
         if authentication is not None:
             request.user, _ = authentication
 
+    from django.db.models import Q
+    from courses.models import Course
+    course_file = Q(video_file=path) | Q(courseware=path) | Q(reference_materials=path)
+    has_course_access = False
+    if Course.objects.filter(course_file).exists():
+        if not request.user.is_authenticated:
+            return HttpResponse(status=401)
+        from courses.access import visible_courses
+        managed = Course.objects.filter(course_file)
+        if not request.user.is_superuser:
+            managed = managed.filter(institution_id=request.user.institution_id) if request.user.institution_id else managed.none()
+        can_manage = request.user.is_staff and request.user.has_perm('courses.change_course') and managed.exists()
+        if not can_manage and not visible_courses(request).filter(course_file).exists():
+            return HttpResponse(status=403)
+        has_course_access = True
+
     # 权限检查：机构文件必须登录才能访问
     if path.startswith('institutions/') and not request.user.is_authenticated:
         return HttpResponse(status=401)
@@ -84,7 +100,7 @@ def media_serve(request, path):
                 institution_id = parts[1]
 
                 # 超管可以访问所有文件
-                if is_platform_admin(request.user):
+                if is_platform_admin(request.user) or has_course_access:
                     pass
                 # 普通用户只能访问自己机构的文件
                 elif hasattr(request.user, 'institution_id') and str(request.user.institution_id) == institution_id:

@@ -565,8 +565,8 @@ def has_plan_feature(institution, feature: str) -> bool:
 def get_effective_plan_for_user(user) -> str:
     """获取用户的生效方案。
     - 超管 → enterprise
-    - 有机构 → institution.get_effective_plan()
-    - 无机构 → personal_plan（默认 free）
+    - 教师和机构管理者 → institution.get_effective_plan()
+    - 学习者 → 个人有效的历史会员方案（默认 free）
 
     结果缓存 300s，减少每次请求的递归查询。
     """
@@ -581,10 +581,11 @@ def get_effective_plan_for_user(user) -> str:
 
     if user.is_superuser:
         plan = 'enterprise'
-    elif user.institution_id:
+    elif user.institution_id and user.institution_role in ('owner', 'teacher'):
         plan = user.institution.get_effective_plan()
     else:
-        plan = getattr(user, 'personal_plan', 'free')
+        from users.learning import has_legacy_membership
+        plan = (user.personal_plan if user.personal_plan != 'free' else user.membership_tier) if has_legacy_membership(user) else 'free'
 
     cache.set(cache_key, plan, timeout=300)
     return plan
@@ -682,3 +683,4 @@ from .models_commercial import (
     InstitutionUsageLog,
     InstitutionAuditLog,
 )
+from .models_learning import LearningProduct, LearningGrant, LearningUsage

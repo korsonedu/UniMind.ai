@@ -67,6 +67,12 @@ def create_order(*, user, plan: str, billing_cycle: str, gateway: str, instituti
     )
 
 
+def create_learning_order(*, user, product, gateway):
+    return Order.objects.create(user=user, product=product, institution=None, plan='learning', billing_cycle='fixed',
+                                amount_cents=product.price_cents, entitlement_snapshot=product.snapshot(), gateway=gateway,
+                                expires_at=timezone.now() + timedelta(minutes=ORDER_TIMEOUT_MINUTES))
+
+
 def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount_cents: int | None = None):
     """Called when a payment gateway confirms payment.
 
@@ -108,8 +114,12 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
         order.save(update_fields=['status', 'paid_at', 'gateway_order_id'])
 
         # 会员激活移入 atomic 块内，确保崩溃窗口中不会出现已付款未激活
-        duration = PLAN_DURATION_DAYS.get(order.billing_cycle, 30)
-        activate_membership(order.user, order.plan, duration, source=order.gateway)
+        if order.product_id:
+            from users.learning import grant_product
+            grant_product(order.user, order.product, source='payment', order=order, snapshot=order.entitlement_snapshot)
+        else:
+            duration = PLAN_DURATION_DAYS.get(order.billing_cycle, 30)
+            activate_membership(order.user, order.plan, duration, source='payment')
 
     # Generate invoice asynchronously
     from payments.tasks import generate_invoice

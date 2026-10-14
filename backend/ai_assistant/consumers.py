@@ -148,6 +148,14 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             _sent_any_message = True
             send_sync({"type": "message", "content": text})
 
+        from users.learning import reserve_ai_call
+        from rest_framework.exceptions import PermissionDenied
+        try:
+            reserve_ai_call(self.user)
+        except PermissionDenied as error:
+            send_sync({'type': 'error', 'message': str(error.detail)})
+            return
+
         try:
             user_msg = self._save_message(self.user, self.bot, 'user', message, conversation_id=conversation_id)
 
@@ -269,36 +277,11 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _get_bot(self, bot_id):
-        from .models import Bot, BotVisibility
-        from users.permissions import is_platform_admin
+        from .models import Bot
+        from .views import _user_can_access_bot
         try:
             bot = Bot.objects.get(id=bot_id)
-            user = self.user
-
-            # 平台管理员：始终允许
-            if is_platform_admin(user):
-                return bot
-
-            # 全局 bot (institution=None)
-            if bot.institution is None:
-                if not bot.is_active:
-                    return None
-                # planner/exam_generator 始终可见，不允许租户隐藏
-                if bot.bot_type in ('planner', 'exam_generator'):
-                    return bot
-                if user.institution:
-                    vis = BotVisibility.objects.filter(
-                        institution=user.institution, bot=bot
-                    ).first()
-                    if vis and not vis.is_visible:
-                        return None
-                return bot
-
-            # 机构 bot：必须匹配用户机构
-            if bot.institution == user.institution:
-                return bot
-
-            return None
+            return bot if _user_can_access_bot(self.user, bot) else None
         except Bot.DoesNotExist:
             return None
 

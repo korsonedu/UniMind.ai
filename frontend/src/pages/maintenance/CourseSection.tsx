@@ -1,5 +1,5 @@
 import { isCancel } from 'axios';
-import type { Course, KnowledgePoint, Album } from '@/types/api';
+import type { Course, CourseModule, KnowledgePoint, Album } from '@/types/api';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,11 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Video, Image as ImageIcon, FileArrowUp, PencilSimple, Trash, Plus, Check, X, DotsSixVertical } from '@phosphor-icons/react';
+import { BookOpen, Video, Image as ImageIcon, FileArrowUp, PencilSimple, Trash, Plus, Check, X, DotsSixVertical, Folders, ArrowRight } from '@phosphor-icons/react';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { TagAutocomplete } from '@/components/TagAutocomplete';
 import { QuickCreateKPDialog } from './QuickCreateKPDialog';
 import { QuickCreateAlbumDialog } from './QuickCreateAlbumDialog';
+import { CourseModuleDialog } from './CourseModuleDialog';
 import { createCourseWithSmartUpload } from '@/lib/chunkedUpload';
 import { useUploadStore } from '@/store/useUploadStore';
 import { Pagination } from '@/components/Pagination';
@@ -31,6 +32,12 @@ export const CourseSection: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [kpList, setKpList] = useState<KnowledgePoint[]>([]);
   const [albumList, setAlbumList] = useState<Album[]>([]);
+  const [modules, setModules] = useState<CourseModule[]>([]);
+  const [showModules, setShowModules] = useState(false);
+  const [moduleFilter, setModuleFilter] = useState('all');
+  const [selected, setSelected] = useState<number[]>([]);
+  const [targetModule, setTargetModule] = useState('');
+  const [assigning, setAssigning] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editingItem, setEditingItem] = useState<EditableCourse | null>(null);
   const [page, setPage] = useState(1);
@@ -46,7 +53,7 @@ export const CourseSection: React.FC = () => {
   const itemsRef = useRef<Course[]>([]);
   const dragIdxRef = useRef<number | null>(null);
   const [form, setForm] = useState({
-    title: '', album_obj: '0', desc: '', elo_reward: 50,
+    title: '', module: '', album_obj: '0', desc: '', elo_reward: 50,
     knowledge_point: '0', video: null as File | null,
     cover: null as File | null, courseware: null as File | null,
     tags: [] as string[],
@@ -55,20 +62,23 @@ export const CourseSection: React.FC = () => {
   const fetchData = useCallback((p = 1) => {
 
     return Promise.all([
-      api.get('/courses/', { params: { page: p, page_size: 100, ordering: sortBy } }),
+      api.get('/courses/', { params: { page: p, page_size: 100, ordering: sortBy, module: moduleFilter === 'all' ? undefined : moduleFilter } }),
       api.get('/quizzes/knowledge-points/'),
       api.get('/courses/albums/'),
-    ]).then(([c, k, a]) => {
+      api.get('/courses/modules/'),
+    ]).then(([c, k, a, m]) => {
       setItems(c.data.items || c.data);
       itemsRef.current = c.data.items || c.data;
       setTotal(c.data.total ?? c.data.length ?? 0);
       setTotalPages(c.data.total_pages ?? 1);
       setKpList(k.data);
       setAlbumList(a.data);
+      setModules(m.data);
+      setSelected([]);
     })
-      .catch((e: unknown) => { console.debug('[CourseSection] fetch failed:', e); })
+      .catch((e: unknown) => { toast.error(formatApiErrorToast(e, '课程管理数据加载失败')); })
       .finally(() => { setLoading(false); });
-  }, [sortBy]);
+  }, [sortBy, moduleFilter]);
 
   useEffect(() => { fetchData(page); }, [fetchData, page]);
 
@@ -103,7 +113,7 @@ export const CourseSection: React.FC = () => {
   };
 
   const resetForm = () => setForm({
-    title: '', album_obj: '0', desc: '', elo_reward: 50,
+    title: '', module: '', album_obj: '0', desc: '', elo_reward: 50,
     knowledge_point: '0', video: null, cover: null, courseware: null, tags: [],
   });
 
@@ -115,6 +125,7 @@ export const CourseSection: React.FC = () => {
 
   const handleCreate = async () => {
     if (!form.title || !form.video) return toast.error('核心信息不全');
+    if (!form.module) return toast.error('请选择所属模块');
     setIsSubmitting(true);
 
     const file = form.video;
@@ -139,6 +150,7 @@ export const CourseSection: React.FC = () => {
     try {
       await createCourseWithSmartUpload({
         title,
+        module: form.module,
         description: desc,
         eloReward,
         albumObj: albumObj !== '0' ? albumObj : undefined,
@@ -168,6 +180,8 @@ export const CourseSection: React.FC = () => {
     if (!editingItem) return;
     const fd = new FormData();
     Object.entries(editingItem).forEach(([key, value]) => {
+      if (['id', 'album', 'module_name', 'module_sort_order', 'progress', 'created_at', 'updated_at'].includes(key)) return;
+      if (key === 'tags') return;
       if (value instanceof File) fd.append(key, value);
       else if (value !== null && value !== undefined) {
         if (['video_file', 'cover_image', 'courseware'].includes(key) && typeof value === 'string') return;
@@ -199,6 +213,17 @@ export const CourseSection: React.FC = () => {
     setForm(prev => ({ ...prev, album_obj: albumId }));
   };
 
+  const assignModules = async () => {
+    if (!targetModule || !selected.length || assigning) return;
+    setAssigning(true);
+    try {
+      await api.post('/courses/modules/assign/', { module: Number(targetModule), courses: selected });
+      toast.success('课程归属已更新');
+      await fetchData(page);
+    } catch (error) { toast.error(formatApiErrorToast(error, '课程归类失败')); }
+    finally { setAssigning(false); }
+  };
+
   if (loading) return null;
 
   return (
@@ -213,11 +238,18 @@ export const CourseSection: React.FC = () => {
           <Badge variant="secondary" className="text-[11px] rounded-full bg-[#F5F5F7] text-[#6E6E73] hover:bg-[#F5F5F7]">{total}</Badge>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" title="管理课程模块" aria-label="管理课程模块" onClick={() => setShowModules(true)}><Folders size={18} /></Button>
           <Button onClick={() => { resetForm(); setShowCreate(true); }} className="h-10 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-medium text-sm px-5 shadow-[0_1px_3px_rgba(0,113,227,0.3)] transition-[background-color,box-shadow] gap-2">
             <Plus className="w-4 h-4" />
             上传课程
           </Button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" aria-label="选择本页课程" checked={items.length > 0 && selected.length === items.length} disabled={!items.length || assigning} onChange={event => setSelected(event.target.checked ? items.map(item => item.id) : [])} />本页</label>
+        <Select value={moduleFilter} onValueChange={value => { setModuleFilter(value); setPage(1); }}><SelectTrigger className="w-44" aria-label="按模块筛选"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部模块</SelectItem><SelectItem value="unassigned">待归类</SelectItem>{modules.map(module => <SelectItem key={module.id} value={String(module.id)}>{module.name}</SelectItem>)}</SelectContent></Select>
+        {selected.length > 0 && <><span className="text-sm text-muted-foreground">已选 {selected.length} 门</span><Select value={targetModule} onValueChange={setTargetModule} disabled={assigning}><SelectTrigger className="w-44" aria-label="课程归属模块"><SelectValue placeholder="选择目标模块" /></SelectTrigger><SelectContent>{modules.map(module => <SelectItem key={module.id} value={String(module.id)}>{module.name}</SelectItem>)}</SelectContent></Select><Button size="icon" aria-label="批量归入模块" title="批量归入模块" disabled={assigning || !targetModule} onClick={() => { void assignModules(); }}><ArrowRight size={18} /></Button></>}
       </div>
 
       {items.length === 0 ? (
@@ -233,7 +265,7 @@ export const CourseSection: React.FC = () => {
             <div className="divide-y divide-black/[0.04]">
               {items.map((item: Course, idx: number) => (
                 <div key={item.id}
-                  draggable
+                  draggable={!selected.length && moduleFilter === 'all'}
                   onDragStart={() => handleDragStart(idx)}
                   onDragOver={(e) => handleDragOver(e, idx)}
                   onDragEnd={handleDragEnd}
@@ -244,12 +276,14 @@ export const CourseSection: React.FC = () => {
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <input type="checkbox" className="mt-1 shrink-0" aria-label={`选择课程：${item.title}`} checked={selected.includes(item.id)} disabled={assigning} onChange={event => setSelected(previous => event.target.checked ? [...previous, item.id] : previous.filter(id => id !== item.id))} />
                       <div className="cursor-grab active:cursor-grabbing pt-0.5 text-[#AEAEB2] hover:text-[#6E6E73] shrink-0" title="拖动排序">
                         <DotsSixVertical className="w-4 h-4" />
                       </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold truncate">{item.title}</p>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <Badge variant="secondary">{item.module_name || '待归类'}</Badge>
                         {item.album?.name && <Badge variant="secondary" className="text-[10px] rounded-lg bg-[#F5F5F7] text-[#8E8E93] font-medium hover:bg-[#F5F5F7]">{item.album?.name}</Badge>}
                         {kpList.find(point => point.id === item.knowledge_point)?.name && <Badge className="text-[10px] bg-[#0071E3]/10 text-[#0071E3] hover:bg-[#0071E3]/20 rounded-lg font-medium">{kpList.find(point => point.id === item.knowledge_point)?.name}</Badge>}
                         {item.tags?.map((tag: Course['tags'][number], i: number) => (
@@ -309,6 +343,11 @@ export const CourseSection: React.FC = () => {
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-[#6E6E73] ml-1">课程标题</Label>
                 <Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="bg-[#F5F5F7] border-transparent focus-visible:ring-1 focus-visible:ring-[#0071E3]/20 focus-visible:ring-offset-0 focus-visible:border-[#0071E3]/30 h-11 rounded-xl px-4 text-sm font-medium" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="course-module">所属模块</Label>
+                <Select value={form.module} onValueChange={module => setForm({ ...form, module })}><SelectTrigger id="course-module"><SelectValue placeholder="请选择模块" /></SelectTrigger><SelectContent>{modules.map(module => <SelectItem key={module.id} value={String(module.id)}>{module.name}</SelectItem>)}</SelectContent></Select>
+                {!modules.length && <Button type="button" variant="outline" onClick={() => setShowModules(true)}><Plus size={16} />新建模块</Button>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -391,6 +430,10 @@ export const CourseSection: React.FC = () => {
             <DialogTitle className="text-lg font-semibold">属性核心配置</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 pt-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-course-module">所属模块</Label>
+              <Select value={editingItem.module ? String(editingItem.module) : ''} onValueChange={value => setEditingItem({ ...editingItem, module: Number(value) })}><SelectTrigger id="edit-course-module"><SelectValue placeholder="待归类" /></SelectTrigger><SelectContent>{modules.map(module => <SelectItem key={module.id} value={String(module.id)}>{module.name}</SelectItem>)}</SelectContent></Select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-[#6E6E73] ml-1">标题</Label>
@@ -423,6 +466,7 @@ export const CourseSection: React.FC = () => {
       </Dialog>
 
       {/* Quick Create Dialogs */}
+      <CourseModuleDialog open={showModules} onOpenChange={setShowModules} modules={modules} onRefresh={() => fetchData(page)} />
       <QuickCreateKPDialog open={showNewKP} onOpenChange={setShowNewKP} kpList={kpList} onCreated={onKPCreated} onRefresh={fetchData} />
       <QuickCreateAlbumDialog open={showNewAlbum} onOpenChange={setShowNewAlbum} onCreated={onAlbumCreated} onRefresh={fetchData} />
       {ConfirmDialog}

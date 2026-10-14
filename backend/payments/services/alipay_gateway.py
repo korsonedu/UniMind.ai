@@ -4,6 +4,7 @@ Alipay page pay integration.
 import json
 import logging
 import os
+from decimal import Decimal
 
 from alipay import Alipay
 
@@ -33,13 +34,13 @@ def create_page_pay(order, app_id='', private_key='', alipay_public_key=''):
     """Create Alipay page pay → returns full payment URL."""
     alipay = _get_client(app_id, private_key, alipay_public_key)
 
-    subject = f'UniMind {order.get_plan_display()} {order.get_billing_cycle_display()}'
+    subject = f'UniMind {order.entitlement_snapshot.get("name", order.get_plan_display())}'
     out_trade_no = f'unimind-{order.id}-{order.created_at.strftime("%Y%m%d%H%M%S")}'
 
     order_str = alipay.api_alipay_trade_page_pay(
         subject=subject,
         out_trade_no=out_trade_no,
-        total_amount=order.amount_cents / 100.0,  # Alipay uses yuan
+        total_amount=str(Decimal(order.amount_cents) / 100),
         return_url=ALIPAY_RETURN_URL,
     )
 
@@ -72,6 +73,8 @@ def verify_webhook(headers, body: bytes):
     signature = parsed.pop('sign', '') or headers.get('sign', '')
     if not verify_notify(parsed, signature):
         raise ValueError('Alipay webhook signature verification failed')
+    if parsed.get('app_id') != ALIPAY_APP_ID:
+        raise ValueError('Alipay app ID mismatch')
     return parsed
 
 
@@ -106,6 +109,6 @@ def process_notify(data: dict) -> dict | None:
     return {
         'order_id': order_id,
         'gateway_txn_id': data.get('trade_no', out_trade_no),
-        'amount_cents': int(float(data.get('total_amount', 0)) * 100),
+        'amount_cents': int(Decimal(data['total_amount']) * 100),
         'raw': data,
     }

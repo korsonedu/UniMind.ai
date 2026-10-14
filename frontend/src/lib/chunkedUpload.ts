@@ -22,6 +22,7 @@ export interface CreateCourseParams {
   title: string;
   description: string;
   eloReward: number;
+  module: string;
   albumObj?: string;
   knowledgePoint?: string;
   tags?: string[];
@@ -153,7 +154,7 @@ export async function createCourseWithSmartUpload(params: CreateCourseParams) {
 
 async function runUpload(params: CreateCourseParams) {
   const {
-    title, description, eloReward, albumObj, knowledgePoint, tags,
+    title, description, eloReward, module, albumObj, knowledgePoint, tags,
     video, cover, courseware, referenceMaterials,
     onProgress, onStatus, signal,
   } = params;
@@ -265,6 +266,7 @@ async function runUpload(params: CreateCourseParams) {
   fd.append('object_key', object_key);
   fd.append('parts', JSON.stringify(etags));
   fd.append('title', title);
+  fd.append('module', module);
   fd.append('description', description);
   fd.append('elo_reward', String(eloReward));
   if (albumObj && albumObj !== '0') fd.append('album_obj', albumObj);

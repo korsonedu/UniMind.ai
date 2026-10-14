@@ -98,11 +98,23 @@ export interface Album {
   created_at: string;
 }
 
+export interface CourseModule {
+  id: number;
+  name: string;
+  is_public: boolean;
+  description: string;
+  sort_order: number;
+  course_count: number;
+}
+
 export interface Course {
   id: number;
   title: string;
   description: string;
   album: Album | null;
+  module: number | null;
+  module_name: string;
+  module_sort_order: number;
   album_obj?: number;
   knowledge_point: number | null;
   cover_image: string | null;

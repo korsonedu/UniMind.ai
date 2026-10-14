@@ -2,7 +2,6 @@ import { type ReactNode } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import { CaretLeft } from '@phosphor-icons/react';
 import { FEATURES, useInstitutionStore } from '@/store/useInstitutionStore';
-import { useAuthStore } from '@/store/useAuthStore';
 import '@/styles/community.css';
 
 const channels = [
@@ -19,10 +18,9 @@ export function CommunityEntry() {
 export function CommunityLayout() {
   const { workspaceHeader } = useOutletContext<{ workspaceHeader?: ReactNode }>() || {};
   const { hasFeature, loading } = useInstitutionStore();
-  const user = useAuthStore(s => s.user);
   const location = useLocation();
   const currentChannel = channels.find(channel => channel.path === location.pathname || location.pathname.startsWith(`${channel.path}/`));
-  const homePath = user?.institution_role === 'student' ? '/xiaoyu' : '/workbench';
+  const homePath = '/xiaoyu';
 
   return (
     <div className="um-community">

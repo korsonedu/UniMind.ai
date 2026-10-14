@@ -1,25 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Spinner, Check, XCircle, ArrowRight, House } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
 const POLL_INITIAL = 2000;
-const POLL_MAX = 60000;
 const MAX_ATTEMPTS = 30;
 
 export function PaymentResult() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [orderId] = useState(() => sessionStorage.getItem('last_order_id'));
-  const [status, setStatus] = useState<'checking' | 'paid' | 'failed'>(() => orderId ? 'checking' : searchParams.get('redirect_status') === 'succeeded' ? 'paid' : 'failed');
+  const [status, setStatus] = useState<'checking' | 'paid' | 'failed'>(() => orderId ? 'checking' : 'failed');
   const [mounted, setMounted] = useState(false);
-  const [pollInterval, setPollInterval] = useState(POLL_INITIAL);
-  const attemptsRef = useRef(0);
-
-
-  const isStripeReturn = !!searchParams.get('payment_intent');
 
   useEffect(() => { requestAnimationFrame(() => setMounted(true)); }, []);
 
@@ -27,48 +20,32 @@ export function PaymentResult() {
     if (!orderId) return;
 
     let cancelled = false;
-    attemptsRef.current = 0;
-
-    const timer = setTimeout(async () => {
-      if (cancelled) return;
-      if (document.visibilityState === 'hidden') return;
-      if (attemptsRef.current >= MAX_ATTEMPTS) {
-        if (!cancelled) setStatus('failed');
-        return;
-      }
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
       try {
         const { data } = await api.get(`/payments/orders/${orderId}/`);
+        if (cancelled) return;
         if (data.status === 'paid') {
-          if (!cancelled) { setStatus('paid'); sessionStorage.removeItem('last_order_id'); }
+          setStatus('paid');
+          sessionStorage.removeItem('last_order_id');
           return;
         }
-        attemptsRef.current++;
-        if (attemptsRef.current >= MAX_ATTEMPTS) {
-          if (!cancelled) setStatus('failed');
+        if (['cancelled', 'refunded'].includes(data.status)) {
+          setStatus('failed');
           return;
         }
-        setPollInterval(prev => Math.min(prev * 2, POLL_MAX));
       } catch {
-        attemptsRef.current++;
-        if (attemptsRef.current >= MAX_ATTEMPTS) {
-          if (!cancelled) setStatus('failed');
-          return;
-        }
-        setPollInterval(prev => Math.min(prev * 2, POLL_MAX));
+        // A delayed callback or temporary network failure can be retried.
       }
-    }, pollInterval);
-
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [orderId, pollInterval]);
-
-  // Reset polling interval when tab becomes visible again
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') setPollInterval(POLL_INITIAL);
+      if (cancelled) return;
+      attempts += 1;
+      if (attempts >= MAX_ATTEMPTS) setStatus('failed');
+      else timer = setTimeout(poll, POLL_INITIAL);
     };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
+    void poll();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [orderId]);
 
   return (
     <>
@@ -105,11 +82,11 @@ export function PaymentResult() {
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-[15px] font-extrabold text-white/80 tracking-tight">支付成功</h3>
-                <p className="text-[12px] text-white/20 font-semibold">方案已升级，立即开始使用</p>
+                <p className="text-[12px] text-white/20 font-semibold">学习权益已开通</p>
               </div>
               <Button variant="apple" className="h-10 px-6 rounded-xl text-[13px] font-extrabold gap-2 bg-white text-black hover:bg-white/90 shadow-lg shadow-white/5"
                 onClick={() => navigate('/billing', { replace: true })}>
-                查看方案与账单 <ArrowRight className="h-3.5 w-3.5" />
+                查看学习服务与账单 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           )}
@@ -122,13 +99,13 @@ export function PaymentResult() {
               <div className="space-y-1.5">
                 <h3 className="text-[15px] font-extrabold text-white/50 tracking-tight">支付未完成</h3>
                 <p className="text-[12px] text-white/15 font-semibold leading-relaxed">
-                  {isStripeReturn ? '银行卡验证未通过或支付被取消' : '未能确认支付状态，请联系客服'}
+                  暂未确认支付成功，请在账单中查看最新状态。
                 </p>
               </div>
               <div className="space-y-2">
                 <Button variant="apple" className="w-full h-10 rounded-xl text-[13px] font-extrabold bg-white text-black hover:bg-white/90"
                   onClick={() => navigate('/billing', { replace: true })}>
-                  返回方案与账单
+                  返回学习服务与账单
                 </Button>
                 <Button variant="outline" className="w-full h-10 rounded-xl text-[13px] font-extrabold border-white/[0.06] text-white/30 hover:text-white/60 hover:bg-white/[0.03] gap-2"
                   onClick={() => navigate('/', { replace: true })}>

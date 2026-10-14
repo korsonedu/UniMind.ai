@@ -1,174 +1,44 @@
-import { formatApiErrorToast } from '@/lib/apiError';
-import { useEffect, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '@/lib/api';
-import { Spinner, WarningCircle, Ticket } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-
-const PLAN_LABELS: Record<string, string> = {
-  starter: 'Starter',
-  growth: 'Growth',
-  enterprise: 'Enterprise',
-};
+import { formatApiErrorToast } from '@/lib/apiError';
+import type { LearningCatalog } from '@/types/learning';
+import { learningPrice } from '@/types/learning';
 
 export function Checkout() {
-  const [searchParams] = useSearchParams();
+  const [params] = useSearchParams();
+  const [catalog, setCatalog] = useState<LearningCatalog | null>(null);
+  const [gateway, setGateway] = useState('');
   const [error, setError] = useState('');
   const [paying, setPaying] = useState(false);
-
-  const plan = searchParams.get('plan') || 'starter';
-  const cycle = searchParams.get('cycle') || 'annual';
-  const gateway = searchParams.get('gateway') || 'stub';
-
-  // Promo code
-  const [couponCode, setCouponCode] = useState('');
-  const [couponResult, setCouponResult] = useState<{ valid: false; error: string } | { valid: true; discount: number; original_amount?: number; final_amount?: number; } | null>(null);
-  const [validatingCoupon, setValidatingCoupon] = useState(false);
-
-  const validateCoupon = useCallback(async (code: string) => {
-    if (!code.trim()) { setCouponResult(null); return; }
-    setValidatingCoupon(true);
-    try {
-      const { data } = await api.post('/payments/coupons/validate/', {
-        code: code.trim(),
-        plan: plan,
-        billing_cycle: cycle,
-      });
-      setCouponResult(data);
-    } catch (err: unknown) {
-      setCouponResult({ valid: false, error: formatApiErrorToast(err, '验证失败') });
-    } finally { setValidatingCoupon(false); }
-  }, [plan, cycle]);
-
   useEffect(() => {
-    const timer = setTimeout(() => validateCoupon(couponCode), 500);
-    return () => clearTimeout(timer);
-  }, [couponCode, validateCoupon]);
-
-  const handlePay = async () => {
-    setPaying(true);
-    setError('');
+    void api.get<LearningCatalog>('/users/learning/catalog/').then(response => { setCatalog(response.data); setGateway(response.data.payment_methods[0] || ''); }).catch(() => setError('服务信息加载失败，请返回后重试。'));
+  }, []);
+  const product = catalog?.products.find(item => item.id === Number(params.get('product')));
+  const pay = async () => {
+    if (!product || !gateway || paying) return;
+    setError(''); setPaying(true);
     try {
-      const payload: { plan: string; billing_cycle: string; gateway: string; coupon_code?: string } = { plan, billing_cycle: cycle, gateway };
-      if (couponCode.trim() && couponResult?.valid) {
-        payload.coupon_code = couponCode.trim();
+      const { data } = await api.post('/payments/create-session/', { product: product.id, gateway });
+      sessionStorage.setItem('last_order_id', String(data.order_id));
+      if (gateway === 'stub') {
+        await api.post(`/payments/orders/${data.order_id}/simulate/`);
+        window.location.assign('/payments/result');
+        return;
       }
-      const { data } = await api.post('/payments/create-session/', payload);
-      if (data.checkout_url) {
-        const url = new URL(data.checkout_url);
-        const allowedHosts = ['mapi.alipay.com', 'openapi.alipay.com'];
-        if (!allowedHosts.some(h => url.hostname === h || url.hostname.endsWith('.' + h))) {
-          if (url.origin !== window.location.origin && url.hostname !== 'localhost') {
-            setError('支付网关地址异常，请联系客服');
-            setPaying(false);
-            return;
-          }
-        }
-        window.location.href = data.checkout_url;
-      } else {
-        setError('支付网关未返回结算地址');
-        setPaying(false);
-      }
-    } catch (e: unknown) {
-      const msg = formatApiErrorToast(e, '创建订单失败，请重试');
-      setError(msg);
-      setPaying(false);
-    }
+      const target = new URL(data.checkout_url, window.location.origin);
+      if (target.protocol !== 'https:' || !['openapi.alipay.com', 'openapi-sandbox.dl.alipaydev.com', 'mapi.alipay.com'].includes(target.hostname)) throw new Error('支付地址异常，请联系客服。');
+      window.location.assign(target.href);
+    } catch (error) { setError(formatApiErrorToast(error, '创建订单失败，请重试')); setPaying(false); }
   };
-
-  const planLabel = PLAN_LABELS[plan] || plan;
-  const cycleLabel = cycle === 'annual' ? '年付' : cycle === 'monthly' ? '月付' : cycle;
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-unimind-bg-secondary">
-      <div className="w-full max-w-sm mx-4 bg-card rounded-[2rem] border border-border shadow-dialog p-8 text-center space-y-5">
-        {error ? (
-          <div className="space-y-5">
-            <div className="mx-auto w-12 h-12 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center">
-              <WarningCircle className="h-6 w-6 text-red-500" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-foreground">支付启动失败</h2>
-              <p className="mt-1.5 text-sm text-muted-foreground">{error}</p>
-            </div>
-            <button
-              onClick={() => {
-                setError('');
-                setPaying(false);
-              }}
-              className="text-sm font-bold text-primary hover:underline"
-            >
-              重试
-            </button>
-          </div>
-        ) : (
-          <>
-            {/* Plan Summary */}
-            <div>
-              <h2 className="text-lg font-extrabold text-foreground">确认订阅</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {planLabel} · {cycleLabel}
-              </p>
-            </div>
-
-            {/* Promo Code */}
-            <div className="space-y-2 text-left">
-              <div className="relative">
-                <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="输入优惠码"
-                  value={couponCode}
-                  onChange={e => setCouponCode(e.target.value)}
-                  className="w-full h-10 pl-9 pr-3 rounded-xl border border-border bg-background text-sm font-medium placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                {validatingCoupon && (
-                  <Spinner className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-                )}
-              </div>
-
-              {couponResult?.valid && (
-                <div className="flex items-center gap-2 px-1">
-                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                    {'\u2713'} {`已优惠 ¥${(couponResult.discount / 100).toFixed(2)}`}
-                  </span>
-                  {couponResult.original_amount != null && (
-                    <span className="text-xs text-muted-foreground line-through">
-                      ¥{(couponResult.original_amount / 100).toFixed(2)}
-                    </span>
-                  )}
-                  {couponResult.final_amount != null && (
-                    <span className="text-xs font-bold text-foreground">
-                      ¥{(couponResult.final_amount / 100).toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {couponResult?.valid === false && (
-                <p className="text-xs text-red-500 px-1">{couponResult.error}</p>
-              )}
-            </div>
-
-            {/* Pay Button */}
-            <Button
-              variant="apple"
-              className="w-full h-12 rounded-xl font-bold text-sm"
-              onClick={handlePay}
-              disabled={paying}
-            >
-              {paying ? (
-                <>
-                  <Spinner className="h-4 w-4 animate-spin mr-2" />
-                  正在创建订单…
-                </>
-              ) : (
-                '立即支付'
-              )}
-            </Button>
-          </>
-        )}
-      </div>
-    </div>
-  );
+  return <main className="min-h-dvh px-5 py-12 bg-background"><div className="max-w-xl mx-auto space-y-7">
+    <Link to="/pricing" className="text-sm text-muted-foreground">返回学习服务</Link>
+    <h1 className="text-2xl font-semibold">确认购买</h1>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {!catalog ? <p role="status">正在加载…</p> : !product ? <p>该服务尚未上架或已下架，请返回选择其他服务。</p> : <>
+      <section className="border-y py-6 space-y-4"><h2 className="text-xl font-medium">{product.name}</h2><p className="text-muted-foreground whitespace-pre-wrap">{product.description}</p><p>{product.duration_days} 天有效 · 每月 {product.monthly_ai_calls} 次 AI 对话</p>{product.module_names.length > 0 && <p className="text-sm">课程模块：{product.module_names.join('、')}</p>}<p className="text-2xl">{learningPrice(product.price_cents)}</p></section>
+      {catalog.payment_methods.length ? <><fieldset className="space-y-3"><legend className="text-sm mb-3">支付方式</legend>{catalog.payment_methods.map(method => <label key={method} className="flex items-center gap-2"><input type="radio" name="gateway" value={method} checked={gateway === method} onChange={() => setGateway(method)} />{method === 'alipay' ? '支付宝' : '开发环境模拟支付'}</label>)}</fieldset><p className="text-sm text-muted-foreground">本次为一次性购买，不会自动续费。</p><Button disabled={paying || !gateway} onClick={() => { void pay(); }}>{paying ? '正在创建订单…' : '确认支付'}</Button></> : <p className="text-sm text-muted-foreground">在线支付暂未开通，请稍后再试。</p>}
+    </>}
+  </div></main>;
 }

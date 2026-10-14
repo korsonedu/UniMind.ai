@@ -172,9 +172,8 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
 
 def _user_can_access_bot(user, bot):
     """验证用户是否有权使用指定 bot。"""
-    from users.permissions import is_platform_admin
-    if is_platform_admin(user):
-        return True
+    if bot.bot_type == 'exam_generator' or not bot.is_active:
+        return False
     # 全局 bot：检查可见性
     if bot.institution is None:
         if not bot.is_active:
@@ -205,16 +204,7 @@ class BotListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        from users.permissions import is_platform_admin, is_institution_admin
-
-        if is_platform_admin(user):
-            qs = Bot.objects.all()
-        elif is_institution_admin(user) and user.institution:
-            qs = Bot.objects.filter(
-                models.Q(institution__isnull=True) |
-                models.Q(institution=user.institution)
-            )
-        elif user.institution:
+        if user.institution:
             # planner/exam_generator 始终可见，不参与隐藏过滤
             hidden_ids = BotVisibility.objects.filter(
                 institution=user.institution, is_visible=False,
@@ -228,7 +218,7 @@ class BotListCreateView(generics.ListCreateAPIView):
         else:
             qs = Bot.objects.filter(institution__isnull=True, is_active=True)
 
-        return qs
+        return qs.exclude(bot_type='exam_generator')
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -349,10 +339,14 @@ class AIChatView(APIView):
             conversation_id = _uuid.uuid4()
 
         bot = Bot.objects.filter(id=bot_id).first()
-        if bot:
-            if not _user_can_access_bot(request.user, bot):
-                return Response({'error': '无权使用此机器人'}, status=403)
-            sync_bot_prompt(bot)
+        if not bot:
+            return Response({'error': 'Bot not found'}, status=404)
+        if not _user_can_access_bot(request.user, bot):
+            return Response({'error': '无权使用此机器人'}, status=403)
+        sync_bot_prompt(bot)
+
+        from users.learning import reserve_ai_call
+        reserve_ai_call(request.user)
 
         # 1. Save User Message
         if bot:
@@ -480,6 +474,9 @@ class AIChatStreamView(APIView):
             return Response({'error': '无权使用此机器人'}, status=403)
 
         sync_bot_prompt(bot)
+
+        from users.learning import reserve_ai_call
+        reserve_ai_call(request.user)
 
         # Save user message
         save_new_conversation_project(request, bot, conversation_id)

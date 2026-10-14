@@ -4,33 +4,14 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.http import HttpResponse, JsonResponse
-from django.utils.html import escape
 from pathlib import Path
 from school_system.media_serve import media_serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
-_INTRO_PATH_RE = re.compile(r'^/intro/([^/]+)$')
-
 _DEFAULT_META = {
-    'title': 'UniMind.ai — Agent 驱动的新一代智能教育基础设施',
-    'description': 'AI 驱动的智能教育基础设施。学生端 AI 学习教练「小宇」+ 教师端 AI 教研助手「工作台」，覆盖出题、发布、练习、批改与记忆调度的完整教学闭环。',
+    'title': 'UniMind.ai 智能学习平台',
+    'description': '面向每一位学习者的学习平台，提供练习、错题复习、学习记录和 AI 对话。科晟智慧学员可获得课程配套服务。',
 }
-
-
-def _get_institution_meta(slug: str, request) -> dict | None:
-    from users.models import Institution
-    inst = Institution.objects.filter(slug=slug, is_active=True).first()
-    if inst is None:
-        return None
-    name = escape(inst.name)
-    desc = escape(inst.description) if inst.description else f'{name}，使用 UniMind.ai Agent 驱动的智能教育基础设施，AI 教练 + 对话式出题 + 自适应刷题。'
-    meta = {
-        'title': f'{name} - UniMind.ai — Agent 驱动的新一代智能教育基础设施',
-        'description': desc,
-    }
-    if inst.logo:
-        meta['og_image'] = request.build_absolute_uri(inst.logo.url)
-    return meta
 
 
 def _build_meta_html(meta: dict) -> str:
@@ -45,22 +26,14 @@ def _build_meta_html(meta: dict) -> str:
 
 
 def serve_spa(request, *args, **kwargs):
-    """Serve index.html for SPA client-side routing, injecting dynamic meta for intro pages."""
+    """Serve the learning platform entrypoint for client-side routing."""
     index_path = Path(settings.BASE_DIR) / 'static' / 'index.html'
     if not index_path.exists():
         return HttpResponse('SPA entrypoint not found.', status=404)
 
     html = index_path.read_text()
 
-    # Check if this is an institution intro page and inject dynamic meta
-    path = request.path.rstrip('/')
-    match = _INTRO_PATH_RE.match(path)
-    if match:
-        meta = _get_institution_meta(match.group(1), request) or _DEFAULT_META
-    else:
-        meta = _DEFAULT_META
-
-    meta_html = _build_meta_html(meta)
+    meta_html = _build_meta_html(_DEFAULT_META)
     html = re.sub(r'^\s*<title>.*?</title>\s*$', meta_html, html, flags=re.MULTILINE)
 
     return HttpResponse(html, content_type='text/html')

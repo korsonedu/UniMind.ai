@@ -1,220 +1,50 @@
-import { useCallback } from 'react';
-import { useState, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { PageWrapper } from '@/components/PageWrapper';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight } from '@phosphor-icons/react';
 import api from '@/lib/api';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Check, Crown, CreditCard, Spinner, ArrowRight, Sparkle } from '@phosphor-icons/react';
-import { cn } from '@/lib/utils';
-import { ContactAdminModal } from '@/components/ContactAdminModal';
+import { formatApiErrorToast } from '@/lib/apiError';
+import { queryClient } from '@/lib/queryClient';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
+import type { LearningGrant } from '@/types/learning';
+import { learningDate, learningPrice } from '@/types/learning';
 
-const PLAN: Record<string, { label: string; priceM: number; color: string; gradient: string }> = {
-  free:       { label: 'Free', priceM: 0, color: 'bg-unimind-text-quaternary', gradient: 'from-neutral-400 to-neutral-500' },
-  starter:    { label: 'Starter', priceM: 499, color: 'bg-primary', gradient: 'from-[#0071E3] to-[#0077ED]' },
-  growth:     { label: 'Growth', priceM: 1299, color: 'bg-unimind-green', gradient: 'from-[#34C759] to-[#30D158]' },
-  enterprise: { label: 'Enterprise', priceM: 3999, color: 'bg-amber-500', gradient: 'from-amber-500 to-amber-400' },
-};
-
-const fmtDate = (d: Date) =>
-  new Intl.DateTimeFormat(navigator.language || 'en', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-
+interface Access { ai_usage: { used: number; limit: number | null }; grants: LearningGrant[]; }
+interface Order { id: number; product_name: string; status: string; amount_cents: number; created_at: string; }
 
 export function BillingPage() {
-  const user = useAuthStore(s => s.user);
-  const [orders, setOrders] = useState<{ id: number; plan: string; billing_cycle: string; gateway: string; amount_cents: number; status: string; created_at: string; paid_at: string | null; }[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(true);
-  const [contactOpen, setContactOpen] = useState(false);
-  const [contactPlan, setContactPlan] = useState('');
-
-  const currentTier = (user?.institution?.plan || user?.personal_plan || user?.membership_tier || 'free') as string;
-  const isTrial = user?.is_member && user?.membership_source === 'trial';
-  const [now] = useState(Date.now);
-  const membershipEnd = user?.membership_expires_at ? new Date(user?.membership_expires_at) : null;
-  const daysLeft = membershipEnd
-    ? Math.max(0, Math.ceil((membershipEnd.getTime() - now) / (1000 * 60 * 60 * 24)))
-    : 0;
-
-
-
-  const fetchOrders = useCallback(() => {
-
-    return api.get('/payments/orders/').then(({ data }) => {
-      setOrders(data);
-    })
-      .catch(() => { toast.error('加载订单失败'); })
-      .finally(() => {
-        setLoadingOrders(false);
-
-      });
-  }, []);
-
-
-
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
-
-  const currentMeta = PLAN[currentTier] || PLAN.free;
-
-  const planFeatures = {
-    starter: ['AI 出题', '小宇 AI 助手', '完整学情报告', '诊断测试 · 错题洞察'] as string[],
-    growth: ['Memorix 图扩散记忆调度', '知识图谱', '视频 AI 大纲', '答疑系统', '多教师协作', '自习室', '机构学情 · 数据导出', '学生端收费'] as string[],
-    enterprise: ['AI Bot 自定义', '品牌白标', 'API 接入', '私有化部署', 'SSO 单点登录', '审计日志', 'SLA 99.9%'] as string[],
+  const [access, setAccess] = useState<Access | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [error, setError] = useState('');
+  const [code, setCode] = useState('');
+  const [activating, setActivating] = useState(false);
+  const load = () => {
+    setError('');
+    void Promise.all([api.get<Access>('/users/learning/access/'), api.get<Order[]>('/payments/orders/')])
+      .then(([rights, history]) => { setAccess(rights.data); setOrders(history.data); })
+      .catch(() => setError('学习服务加载失败，请重试。'));
   };
-
-  const statusLabels: Record<string, string> = {
-    paid: '已支付',
-    pending: '待支付',
-    expired: '已过期',
-    refunded: '已退款',
-    cancelled: '已取消',
+  useEffect(load, []);
+  const activate = async (event: React.FormEvent) => {
+    event.preventDefault(); if (activating || !code.trim()) return;
+    setActivating(true);
+    try {
+      await api.post('/users/me/activate/', { code: code.trim() });
+      await queryClient.invalidateQueries();
+      await useInstitutionStore.getState().fetchFeatures();
+      setCode(''); load(); toast.success('权益已激活');
+    } catch (error) { toast.error(formatApiErrorToast(error, '激活失败')); }
+    finally { setActivating(false); }
   };
-
-  return (
-    <PageWrapper>
-      <div className="h-full w-full px-4 py-4 md:py-6 overflow-y-auto">
-        <div className="max-w-4xl mx-auto space-y-5">
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-[22px] font-black tracking-tight text-foreground">方案与账单</h2>
-              <p className="text-[13px] text-muted-foreground font-semibold mt-0.5">管理会员方案和支付记录</p>
-            </div>
-          </div>
-
-
-          <Card className="border border-black/[0.04] shadow-none rounded-2xl p-5 bg-card space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  'h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br', currentMeta.gradient,
-                )}>
-                  <Crown className="h-5 w-5 text-white" />
-                </div>
-                <div className="leading-tight">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-extrabold text-[16px] text-foreground">{`${currentMeta.label} 方案`}</h3>
-                    {isTrial && (
-                      <Badge variant="outline" className="text-[10px] font-extrabold border-amber-200 dark:border-amber-800/40 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30">
-                        试用中
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-[12px] text-muted-foreground font-semibold">
-                    {isTrial
-                      ? `试用还剩 ${daysLeft} 天`
-                      : membershipEnd
-                        ? `到期时间：${fmtDate(membershipEnd)}`
-                        : '免费方案 · 功能受限'}
-                  </p>
-                </div>
-              </div>
-              {currentTier !== 'enterprise' && (
-                <Button variant="apple" className="h-9 px-4 rounded-xl text-[12px] font-extrabold gap-1.5"
-                  onClick={() => { setContactPlan('Starter'); setContactOpen(true); }}>
-                  <Sparkle className="h-3.5 w-3.5" /> 升级
-                </Button>
-              )}
-            </div>
-            {currentTier !== 'free' && (planFeatures as Record<string, string[]>)[currentTier] && (
-              <div className="bg-unimind-bg-secondary rounded-xl p-4">
-                <p className="text-[10px] font-extrabold text-muted-foreground/40 uppercase tracking-[0.25em] mb-3">当前功能</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                  {(planFeatures as Record<string, string[]>)[currentTier]?.map((f: string, i: number) => (
-                    <div key={i} className="flex items-center gap-2 text-[12px] font-semibold text-foreground/55 py-0.5">
-                      <Check className="h-3.5 w-3.5 text-unimind-green shrink-0" />
-                      {f}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-
-
-          {currentTier !== 'enterprise' && (
-            <div>
-              <p className="text-[11px] font-extrabold text-muted-foreground/40 uppercase tracking-[0.25em] mb-3 ml-1">可升级方案</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {(Object.keys(PLAN) as string[])
-                  .filter(k => k !== 'free' && PLAN[k].priceM > (PLAN[currentTier]?.priceM || 0))
-                  .map((k) => {
-                    const p = PLAN[k];
-                    const feats = (planFeatures as Record<string, string[]>)[k] || [];
-                    return (
-                      <Card key={k} className="border border-black/[0.04] shadow-none rounded-2xl p-4 space-y-3 text-center bg-card">
-                        <Badge className={cn('text-[10px] font-extrabold text-white bg-gradient-to-br', p.gradient, 'border-none')}>
-                          {p.label}
-                        </Badge>
-                        <div>
-                          <span className="text-[26px] font-black text-foreground tabular-nums tracking-tight">¥{p.priceM}</span>
-                          <span className="text-[11px] text-muted-foreground font-semibold ml-0.5">/月</span>
-                        </div>
-                        <ul className="text-left space-y-0.5">
-                          {feats.slice(0, 4).map((f: string, i: number) => (
-                            <li key={i} className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground/50">
-                              <Check className="h-3 w-3 text-unimind-green shrink-0" /> {f}
-                            </li>
-                          ))}
-                        </ul>
-                        <Button variant="outline" size="sm"
-                          className="w-full h-9 rounded-xl text-[11px] font-extrabold border border-black/[0.06] hover:bg-unimind-bg-secondary gap-1"
-                          onClick={() => { setContactPlan(p.label); setContactOpen(true); }}>
-                          {`升级至 ${p.label}`} <ArrowRight className="h-3 w-3" />
-                        </Button>
-                      </Card>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-
-
-          <Card className="border border-black/[0.04] shadow-none rounded-2xl p-5 space-y-4 bg-card">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-4.5 w-4.5 text-muted-foreground/50" />
-              <h3 className="font-extrabold text-[13px] text-foreground">支付记录</h3>
-            </div>
-
-            {loadingOrders ? (
-              <div className="flex items-center justify-center py-14">
-                <Spinner className="h-5 w-5 animate-spin text-muted-foreground/25" />
-              </div>
-            ) : orders.length === 0 ? (
-              <div className="py-14 text-center space-y-1">
-                <p className="text-[13px] font-semibold text-muted-foreground">暂无支付记录</p>
-                <p className="text-[11px] text-muted-foreground/50 font-medium">升级方案后将在此显示</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border/40">
-                {orders.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                    <div>
-                      <p className="text-[13px] font-bold text-foreground capitalize">
-                        {o.plan} · {o.billing_cycle === 'annual' ? '年付' : '月付'}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground font-semibold mt-0.5">
-                        {fmtDate(new Date(o.created_at))} · {o.gateway}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[14px] font-extrabold text-foreground tabular-nums">¥{(o.amount_cents / 100).toFixed(0)}</p>
-                      <Badge variant={o.status === 'paid' ? 'default' : 'secondary'}
-                        className={cn('text-[9px] font-extrabold mt-0.5',
-                          o.status === 'paid' && 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40',
-                        )}>
-                        {statusLabels[o.status] || o.status}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
-      <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} planLabel={contactPlan} />
-    </PageWrapper>
-  );
+  const status: Record<string, string> = { paid: '已支付', pending: '待支付', refunded: '已退款', expired: '已过期', cancelled: '已取消' };
+  return <main className="max-w-4xl mx-auto py-6 space-y-8">
+    <header className="flex flex-wrap justify-between items-center gap-4"><h1 className="text-2xl font-semibold">学习服务与账单</h1><Button asChild variant="outline"><Link to="/pricing">查看学习服务<ArrowRight size={16} /></Link></Button></header>
+    {error ? <div role="alert"><p>{error}</p><Button variant="outline" onClick={load}>重试</Button></div> : !access ? <p role="status">正在加载…</p> : <>
+      <section className="border-y py-6"><h2 className="font-medium">本月 AI 对话</h2><p className="mt-3 text-2xl tabular-nums">{access.ai_usage.used}<span className="text-sm text-muted-foreground"> / {access.ai_usage.limit ?? '不限'} 次</span></p><p className="mt-2 text-sm text-muted-foreground">基础学习持续开放。服务到期后，学习记录会保留。</p></section>
+      <section><h2 className="font-medium mb-3">我的权益</h2><ul className="divide-y">{access.grants.map(grant => <li key={grant.id} className="py-4"><div className="flex flex-wrap justify-between gap-3"><span>{grant.snapshot.name}</span><span className="text-sm text-muted-foreground">{grant.source === 'course' ? '课程配套' : grant.source === 'admin' ? '赠送' : '个人购买'}</span></div><p className="text-sm mt-2 text-muted-foreground">有效至 {learningDate(grant.expires_at)} · 每月 {grant.snapshot.monthly_ai_calls} 次 AI 对话</p></li>)}</ul>{!access.grants.length && <p className="text-sm text-muted-foreground">当前使用基础学习服务。课程配套或购买的服务将在这里显示。</p>}</section>
+      <section><h2 className="font-medium mb-3">激活已有权益</h2><form className="flex gap-3 max-w-lg" onSubmit={activate}><input aria-label="权益激活码" value={code} onChange={event => setCode(event.target.value)} placeholder="输入激活码" className="border rounded-md px-3 py-2 min-w-0 flex-1 bg-background" /><Button type="submit" disabled={activating || !code.trim()}>{activating ? '激活中…' : '激活'}</Button></form></section>
+      <section><h2 className="font-medium mb-3">购买记录</h2><ul className="divide-y">{orders.map(order => <li key={order.id} className="flex flex-wrap justify-between gap-3 py-4 text-sm"><div><p>{order.product_name}</p><p className="mt-1 text-muted-foreground">{learningDate(order.created_at)}</p></div><p>{learningPrice(order.amount_cents)} · {status[order.status] || order.status}</p></li>)}</ul>{!orders.length && <p className="text-sm text-muted-foreground">暂无购买记录</p>}</section>
+    </>}
+  </main>;
 }

@@ -2,8 +2,6 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from users.models import Institution, InstitutionAuditLog
-
 DEFAULT_TRIAL_DAYS = 7
 
 
@@ -21,23 +19,14 @@ def activate_membership(user, plan, duration_days, source='payment'):
 
     user.is_member = True
     user.membership_tier = plan
+    user.personal_plan = plan
     user.membership_expires_at = expires_at
     user.membership_source = source
-    user.save(update_fields=['is_member', 'membership_tier', 'membership_expires_at', 'membership_source'])
+    user.save(update_fields=['is_member', 'personal_plan', 'membership_tier', 'membership_expires_at', 'membership_source'])
 
-    # Upgrade affiliated institution if applicable
-    inst = user.institution
-    if inst and inst.plan != plan:
-        old_plan = inst.plan
-        inst.plan = plan
-        inst.plan_expires_at = expires_at
-        inst.save(update_fields=['plan', 'plan_expires_at', 'updated_at'])
-        InstitutionAuditLog.objects.create(
-            institution=inst,
-            operator=user,
-            action='purchase_plan',
-            detail=f'{old_plan} → {plan} (expires: {expires_at}) via {source}',
-        )
+    from django.core.cache import cache
+    cache.delete(f'effective_plan:{user.pk}')
+    cache.delete(f'inst:features:u{user.pk}:i{user.institution_id or 0}')
 
 
 def extend_membership(user, extra_days):
@@ -53,6 +42,7 @@ def extend_membership(user, extra_days):
 def downgrade_to_free(user):
     user.is_member = False
     user.membership_tier = 'free'
+    user.personal_plan = 'free'
     user.membership_expires_at = None
     user.membership_source = None
-    user.save(update_fields=['is_member', 'membership_tier', 'membership_expires_at', 'membership_source'])
+    user.save(update_fields=['is_member', 'personal_plan', 'membership_tier', 'membership_expires_at', 'membership_source'])

@@ -46,22 +46,17 @@ class ActivateMembershipView(APIView):
         if not code_str:
             return Response({'error': '请输入激活码'}, status=400)
 
-        try:
-            invite = PlanInviteCode.objects.get(code=code_str, is_active=True)
-        except PlanInviteCode.DoesNotExist:
-            return Response({'error': '无效或已被使用的激活码'}, status=400)
-
-        if invite.is_exhausted:
-            return Response({'error': '邀请码已达到使用次数上限'}, status=400)
-
-        user = request.user
-        plan = invite.plan
-        duration_days = invite.duration_days
-        code_type = invite.code_type
-
+        code_str = str(code_str).strip().upper()
         from .services.membership import activate_membership
-        activate_membership(user, plan, duration_days, source='code')
-        # 不在这里消耗邀请码，由 InstitutionCreateView 统一消耗
+        with transaction.atomic():
+            user = User.objects.select_for_update().get(pk=request.user.pk)
+            valid, result = PlanInviteCode.validate_and_use(code_str)
+            if not valid:
+                return Response({'error': result}, status=400)
+            plan, duration_days = result
+            invite = PlanInviteCode.objects.get(code=code_str)
+            code_type = invite.code_type
+            activate_membership(user, plan, duration_days, source='code')
 
         return Response({
             'status': 'ok',

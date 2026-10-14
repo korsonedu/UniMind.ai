@@ -1,7 +1,26 @@
 from django.contrib import admin
 from django.db.models import Count, Avg
+from core.admin_base import InstitutionContentAdmin
 
-from .models import Experience, ExperienceVerification
+from .models import Experience, ExperienceVerification, Bot, BotVisibility
+
+
+@admin.register(Bot)
+class BotAdmin(InstitutionContentAdmin):
+    list_display = ('name', 'bot_type', 'institution', 'is_active')
+    list_filter = ('bot_type', 'institution', 'is_active')
+    search_fields = ('name',)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        from .prompt_sync import sync_bot_prompt
+        sync_bot_prompt(obj)
+
+
+@admin.register(BotVisibility)
+class BotVisibilityAdmin(InstitutionContentAdmin):
+    list_display = ('institution', 'bot', 'is_visible')
+    autocomplete_fields = ('bot',)
 
 
 class ExperienceDimensionFilter(admin.SimpleListFilter):

@@ -9,13 +9,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 
 from payments.models import Order, Invoice, Subscription, Coupon
 from payments.serializers import (
     CreateOrderSerializer, OrderSerializer, InvoiceSerializer,
     CouponSerializer, CouponValidateSerializer,
 )
-from payments.services.base import create_order, confirm_order, get_plan_price
+from payments.services.base import create_order, create_learning_order, confirm_order, get_plan_price
 from payments.services.coupon import validate_coupon
 from payments.services.gateway_router import get_gateway, gateway_supports_subscriptions
 from payments.services.subscription import (
@@ -35,22 +36,18 @@ class CreateCheckoutSessionView(APIView):
         ser = CreateOrderSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        plan = ser.validated_data['plan']
-        billing_cycle = ser.validated_data['billing_cycle']
         gateway = ser.validated_data['gateway']
 
         from django.conf import settings as django_settings
         if gateway == 'stub' and not getattr(django_settings, 'DEBUG', False):
             return Response({'error': '当前环境不支持该支付方式'}, status=400)
 
-        order = create_order(
-            user=request.user,
-            plan=plan,
-            billing_cycle=billing_cycle,
-            gateway=gateway,
-            institution=request.user.institution,
-            coupon_code=ser.validated_data.get('coupon_code', ''),
-        )
+        from users.models import LearningProduct
+        from users.views_learning import payment_methods
+        if gateway not in payment_methods():
+            return Response({'error': '该支付方式暂未开通。'}, status=400)
+        product = get_object_or_404(LearningProduct, pk=ser.validated_data['product'], is_active=True, price_cents__gt=0)
+        order = create_learning_order(user=request.user, product=product, gateway=gateway)
 
         try:
             gw = get_gateway(gateway)
@@ -125,6 +122,8 @@ class SimulatePaymentView(APIView):
 
         if order.status == 'paid':
             return Response({'status': 'already_paid', 'message': '该订单已支付'})
+        if order.gateway != 'stub':
+            return Response({'error': '仅模拟订单可使用此操作。'}, status=400)
 
         import uuid
         txn_id = f'stub_{uuid.uuid4().hex[:12]}'
@@ -260,27 +259,7 @@ class CouponValidateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        ser = CouponValidateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        code = ser.validated_data['code']
-        plan = ser.validated_data['plan']
-        billing_cycle = ser.validated_data['billing_cycle']
-
-        try:
-            amount = get_plan_price(plan, billing_cycle)
-        except (KeyError, ValueError):
-            return Response({'error': '无效的方案或计费周期'}, status=400)
-
-        result = validate_coupon(code, request.user, plan, amount)
-        if result['valid']:
-            return Response({
-                'valid': True,
-                'discount_cents': result['discount_cents'],
-                'final_amount_cents': result['final_amount_cents'],
-                'original_amount_cents': amount,
-                'code': code,
-            })
-        return Response({'valid': False, 'error': result['error']}, status=400)
+        return Response({'error': '旧版机构套餐优惠码已停止使用。'}, status=410)
 
 
 class CouponListCreateView(APIView):
@@ -362,21 +341,21 @@ class MyReferralView(APIView):
 class WebhookView(APIView):
     """支付网关 webhook 接收端。通过 ?gateway=xxx 路由到对应网关。"""
     permission_classes = []
+    authentication_classes = []
 
     def post(self, request):
         import hmac
         from django.conf import settings
-        webhook_secret = getattr(settings, 'PAYMENT_WEBHOOK_SECRET', '')
-        if not webhook_secret:
-            return Response({"error": "Webhook not configured"}, status=500)
-        else:
-            provided = request.headers.get('X-Webhook-Secret', '')
-            if not hmac.compare_digest(str(provided), str(webhook_secret)):
-                return Response({'detail': 'Invalid webhook secret'}, status=403)
-
         gateway_name = request.query_params.get('gateway')
         if not gateway_name:
             return Response({'error': 'Missing gateway parameter'}, status=400)
+        if gateway_name != 'alipay':
+            webhook_secret = getattr(settings, 'PAYMENT_WEBHOOK_SECRET', '')
+            if not webhook_secret:
+                return Response({"error": "Webhook not configured"}, status=500)
+            provided = request.headers.get('X-Webhook-Secret', '')
+            if not hmac.compare_digest(str(provided), str(webhook_secret)):
+                return Response({'detail': 'Invalid webhook secret'}, status=403)
 
         from django.conf import settings as django_settings
         if gateway_name == 'stub' and not getattr(django_settings, 'DEBUG', False):
@@ -391,7 +370,14 @@ class WebhookView(APIView):
             event = gw.verify_webhook(request.headers, request.body)
             result = gw.process_webhook_event(event)
             if not result:
-                return Response({'status': 'ignored'})
+                return HttpResponse('success') if gateway_name == 'alipay' else Response({'status': 'ignored'})
+
+            if result.get('order_id'):
+                order = Order.objects.get(pk=result['order_id'], gateway=gateway_name)
+                if gateway_name == 'alipay':
+                    expected_number = f'unimind-{order.id}-{order.created_at.strftime("%Y%m%d%H%M%S")}'
+                    if event.get('out_trade_no') != expected_number or result.get('amount_cents') is None:
+                        raise ValueError('Invalid Alipay order notification')
 
             # Subscription checkout completed → activate the subscription
             if result.get('type') == 'subscription_checkout_completed':
@@ -426,7 +412,7 @@ class WebhookView(APIView):
 
             # One-time payment events
             confirm_order(result['order_id'], result['gateway_txn_id'], result['raw'], result.get('amount_cents'))
-            return Response({'status': 'ok'})
+            return HttpResponse('success') if gateway_name == 'alipay' else Response({'status': 'ok'})
         except Order.DoesNotExist:
             return Response({'status': 'order not found'}, status=404)
         except Exception:

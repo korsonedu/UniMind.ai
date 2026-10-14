@@ -4,13 +4,14 @@ import { flushSync } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CaretLeft, Play, Pause, Calendar, BookOpen, ShareNetwork, Star, FileText, Download, Playlist, Stack, Sparkle, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
+import { CaretLeft, Play, Pause, Calendar, BookOpen, Star, FileText, Download, Playlist, Stack, Sparkle, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { toast } from 'sonner';
+import { shouldTogglePlayback } from './videoLessonKeyboard';
 
 const formatTime = (s: number) => {
   const m = Math.floor(s / 60);
@@ -18,7 +19,13 @@ const formatTime = (s: number) => {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 };
 
-export const VideoLesson: React.FC = () => {
+interface VideoLessonProps {
+  isFavorite?: boolean;
+  favoritePending?: boolean;
+  onFavoriteChange?: () => void;
+}
+
+export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const updateUser = useAuthStore(s => s.updateUser);
@@ -160,6 +167,18 @@ export const VideoLesson: React.FC = () => {
     setIsMuted(v.muted);
     setPlaybackRate(v.playbackRate);
   }, [course?.video_file]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!shouldTogglePlayback(event)) return;
+      const video = videoRef.current;
+      if (!video) return;
+      event.preventDefault();
+      if (video.paused) void video.play(); else video.pause();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -328,8 +347,7 @@ export const VideoLesson: React.FC = () => {
             </div>
           </div>
           <div className="flex gap-3">
-             <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm"><ShareNetwork className="h-4 w-4 mr-2"/> 分享</Button>
-             <Button variant="outline" className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm text-amber-500"><Star className="h-4 w-4 mr-2"/> 收藏</Button>
+             <Button variant="outline" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite} className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm text-amber-500"><Star className="h-4 w-4 mr-2" weight={isFavorite ? 'fill' : 'regular'}/> {isFavorite ? '已收藏' : '收藏'}</Button>
           </div>
         </header>
 

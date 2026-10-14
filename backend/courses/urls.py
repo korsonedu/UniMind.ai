@@ -11,8 +11,12 @@ from .views import (
 from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
 from .portal import LearningProgressView, LearningActivityView, WatchLaterListView, WatchLaterDetailView
 from .goal import LearningGoalView
+from .modules import ModuleListCreateView, ModuleDetailView, ModuleAssignView
 
 urlpatterns = [
+    path('modules/', ModuleListCreateView.as_view(), name='course-module-list'),
+    path('modules/assign/', ModuleAssignView.as_view(), name='course-module-assign'),
+    path('modules/<int:pk>/', ModuleDetailView.as_view(), name='course-module-detail'),
     path('learning-goal/', LearningGoalView.as_view(), name='course-learning-goal'),
     path('learning-progress/', LearningProgressView.as_view(), name='course-learning-progress'),
     path('learning-activity/', LearningActivityView.as_view(), name='course-learning-activity'),

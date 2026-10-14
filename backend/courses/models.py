@@ -21,8 +21,27 @@ class Album(models.Model):
     def __str__(self):
         return self.name
 
+class CourseModule(models.Model):
+    institution = models.ForeignKey('users.Institution', on_delete=models.CASCADE, null=True, blank=True, related_name='course_modules')
+    name = models.CharField(max_length=100, verbose_name='模块名称')
+    is_public = models.BooleanField(default=False, verbose_name='免费开放')
+    description = models.TextField(blank=True, verbose_name='模块简介')
+    sort_order = models.PositiveIntegerField(default=0, verbose_name='显示顺序')
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['institution', 'name'], name='unique_institution_course_module'),
+            models.UniqueConstraint(fields=['name'], condition=models.Q(institution__isnull=True), name='unique_global_course_module'),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class Course(models.Model):
     title = models.CharField(max_length=200)
+    module = models.ForeignKey(CourseModule, on_delete=models.PROTECT, null=True, blank=True, related_name='courses', verbose_name='所属模块')
     album_obj = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name="所属专辑")
     description = models.TextField(blank=True, null=True)
     knowledge_point = models.ForeignKey(KnowledgePoint, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name="挂载知识点")

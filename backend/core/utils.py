@@ -8,7 +8,7 @@ def apply_institution_filter(qs, user, request=None, institution_field='institut
     平台管理员看全部（可用 preview_institution 预览指定机构）。"""
     preview_inst_id = None
     if request:
-        preview_inst_id = request.query_params.get('preview_institution')
+        preview_inst_id = getattr(request, 'query_params', request.GET).get('preview_institution')
     if preview_inst_id:
         if not is_platform_admin(user):
             raise PermissionDenied("仅平台管理员可预览其他机构数据")
@@ -19,5 +19,4 @@ def apply_institution_filter(qs, user, request=None, institution_field='institut
     if inst:
         return qs.filter(**{institution_field: inst})
     return qs.filter(**{f'{institution_field}__isnull': True})
-
 

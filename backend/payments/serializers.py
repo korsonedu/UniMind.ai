@@ -4,17 +4,20 @@ from payments.models import Order, Invoice, Coupon
 
 
 class CreateOrderSerializer(serializers.Serializer):
-    plan = serializers.ChoiceField(choices=[('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise')])
-    billing_cycle = serializers.ChoiceField(choices=[('monthly', 'Monthly'), ('annual', 'Annual')])
-    gateway = serializers.ChoiceField(choices=[('stub', 'Stub (开发)'), ('wechat', 'WeChat Pay'), ('alipay', 'Alipay')])
-    coupon_code = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+    product = serializers.IntegerField(min_value=1)
+    gateway = serializers.ChoiceField(choices=['stub', 'alipay'])
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    product_name = serializers.SerializerMethodField()
+
+    def get_product_name(self, obj):
+        return obj.entitlement_snapshot.get('name', obj.get_plan_display())
+
     class Meta:
         model = Order
         fields = [
-            'id', 'plan', 'billing_cycle', 'amount_cents', 'status',
+            'id', 'product', 'product_name', 'plan', 'billing_cycle', 'amount_cents', 'status',
             'gateway', 'coupon_code', 'discount_cents', 'paid_at', 'created_at', 'expires_at',
         ]
 

@@ -35,7 +35,8 @@ class ProgressInput(serializers.Serializer):
 
 
 def visible_courses(request):
-    return apply_institution_filter(Course.objects.all(), request.user, request)
+    from .access import visible_courses as accessible
+    return accessible(request)
 
 
 class LearningProgressView(APIView):

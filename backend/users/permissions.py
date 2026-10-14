@@ -20,7 +20,7 @@ ADMIN_CAPABILITIES = [
 
 # Frontend/backed can share this matrix payload as single source of truth.
 ROLE_PERMISSION_MATRIX = {
-    "student": [CAP_LEARNING_ACCESS],
+    "student": [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS],
     "member": [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS],
     "admin": [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *ADMIN_CAPABILITIES],
 }
@@ -62,26 +62,14 @@ def is_institution_teacher(user) -> bool:
 
 
 def is_member_or_admin(user) -> bool:
-    if not user or not user.is_authenticated:
-        return False
-    if is_platform_admin(user) or is_institution_admin(user):
-        return True
-    if not getattr(user, "is_member", False):
-        return False
-    from django.utils import timezone
-    now = timezone.now()
-    if getattr(user, 'membership_expires_at', None) and user.membership_expires_at < now:
-        return False
-    return True
+    return bool(user and user.is_authenticated and user.is_active)
 
 
 def get_user_capabilities(user) -> list[str]:
     if not user or not user.is_authenticated:
         return []
 
-    caps = [CAP_LEARNING_ACCESS]
-    if getattr(user, "is_member", False) or is_platform_admin(user) or is_institution_admin(user):
-        caps.append(CAP_MEMBER_ACCESS)
+    caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS]
     if is_platform_admin(user):
         caps.extend(ADMIN_CAPABILITIES)
 
@@ -144,10 +132,10 @@ class IsAdmin(permissions.BasePermission):
 
 
 class IsMember(permissions.BasePermission):
-    message = "您需要先成为学员（激活会员）才能使用此功能。"
+    message = "请登录后使用学习功能。"
 
     def has_permission(self, request, view):
-        return is_member_or_admin(request.user)
+        return bool(request.user and request.user.is_authenticated and request.user.is_active)
 
 
 class IsMemberOrReadOnlyList(permissions.BasePermission):
@@ -213,8 +201,8 @@ class IsInstitutionOwner(permissions.BasePermission):
 
 
 class IsInstitutionActive(permissions.BasePermission):
-    """所在机构有效（已启用 + 版本未到期）"""
-    message = "机构服务已到期或已停用，请联系管理员。"
+    """内部教学机构处于启用状态。"""
+    message = "教学机构已停用，请联系管理员。"
 
     def has_permission(self, request, view):
         user = request.user
@@ -225,7 +213,7 @@ class IsInstitutionActive(permissions.BasePermission):
         inst = user.institution
         if inst is None:
             return False
-        return inst.is_active and inst.is_plan_active
+        return inst.is_active
 
 
 class HasPlanFeature(permissions.BasePermission):
@@ -244,6 +232,9 @@ class HasPlanFeature(permissions.BasePermission):
             return False
         required = getattr(view, 'required_feature', None)
         if required is None:
+            return True
+        from users.learning import LEARNING_FEATURES
+        if required in LEARNING_FEATURES:
             return True
         from users.models import get_effective_plan_for_user, get_plan_features
         return required in get_plan_features(get_effective_plan_for_user(user))
@@ -278,11 +269,15 @@ class HasQuota(permissions.BasePermission):
         resource = getattr(view, 'quota_resource', None)
         if resource is None:
             return True
+        if resource == 'ai_call_total':
+            from users.learning import usage_info
+            info = usage_info(user)
+            if info['limit'] is not None and info['used'] >= info['limit']:
+                self.message = '本月 AI 额度已用完，可在学习服务中查看可用权益。'
+                return False
+            return True
         from users.quota import check_quota, get_quota_message
         if not check_quota(user.institution, resource):
             self.message = get_quota_message(user.institution, resource)
             return False
         return True
-
-
-

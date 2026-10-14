@@ -3,7 +3,6 @@
 .um-course-main { position: relative; }
 .um-course-header { position: absolute; top: 0; left: 0; right: 0; z-index: 10; background: transparent; border-bottom: 0; min-height: var(--um-height-header); padding: 5px 24px; pointer-events: none; }
 .um-course-header button, .um-course-header-actions { pointer-events: auto; }
-.um-course-detail-player { padding-top: var(--um-height-header); }
 .um-course-list-heading { align-items: center; min-height: var(--um-height-header); padding: 6px 16px; }
 .um-course-tree-mode { padding-bottom: 12px; }
 .um-course-content { padding: 24px; }

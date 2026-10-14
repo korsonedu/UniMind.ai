@@ -23,25 +23,24 @@ export interface CourseTreeProps {
   onFacet: (key: 'tag' | 'status' | 'scope', value: string) => void;
   onSelect: (course: Course) => void;
   onRetry: () => void;
-  onPublish?: () => void;
   extraFilters?: ReactNode;
 }
 
-export function CourseTree({ courses, treeCourses, selectedId, loading, error, query, grouping, filter, tag, status, scope, filtersActive, onResetFilters, onQueryChange, onFilter, onFacet, onSelect, onRetry, onPublish, extraFilters }: CourseTreeProps) {
+export function CourseTree({ courses, treeCourses, selectedId, loading, error, query, grouping, filter, tag, status, scope, filtersActive, onResetFilters, onQueryChange, onFilter, onFacet, onSelect, onRetry, extraFilters }: CourseTreeProps) {
   const searchId = useId();
   const tagId = useId();
   const statusId = useId();
   const scopeId = useId();
   const treeId = useId();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const subjects = new Map<string, Map<string, Course[]>>();
+  const modules = new Map<string, { name: string; order: number; albums: Map<string, Course[]> }>();
   const matchingCourses = treeCourses.filter(course => matchesSearch(course, query));
   matchingCourses.forEach(course => {
-    const subject = course.subject_name || course.subject || '未分类';
+    const key = String(course.module ?? 'unassigned');
     const album = course.album_name || '';
-    const albums = subjects.get(subject) || new Map<string, Course[]>();
-    albums.set(album, [...(albums.get(album) || []), course]);
-    subjects.set(subject, albums);
+    const module = modules.get(key) || { name: course.module_name || '待归类', order: course.module ? course.module_sort_order || 0 : Infinity, albums: new Map<string, Course[]>() };
+    module.albums.set(album, [...(module.albums.get(album) || []), course]);
+    modules.set(key, module);
   });
   const tags = [...new Set(courses.flatMap(course => course.tags || []))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
   const toggle = (key: string) => setCollapsed(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; });
@@ -63,20 +62,19 @@ export function CourseTree({ courses, treeCourses, selectedId, loading, error, q
       </Popover>
     </div>
     <nav className="um-course-shortcuts" aria-label="课程快捷导航"><button type="button" aria-current={!selectedId && scope === 'all' && !filter ? 'page' : undefined} onClick={() => { onResetFilters(); onQueryChange(''); }}>学习门户</button></nav>
-    <div className="um-course-list-scroll" aria-busy={loading}>{loading ? <p className="um-course-list-message" role="status">正在加载…</p> : error ? <div className="um-course-list-message"><p role="alert">{error}</p><button type="button" className="um-course-button" onClick={onRetry}>重新加载</button></div> : !subjects.size ? <div className="um-course-list-message"><p>暂无匹配课程</p>{query && <button type="button" className="um-course-text-button" onClick={() => onQueryChange('')}>清除搜索</button>}{filtersActive && <button type="button" className="um-course-text-button" onClick={onResetFilters}>重置筛选</button>}</div> : <nav aria-label="课程目录"><ul className="um-course-tree">
-      {[...subjects].sort(([a], [b]) => a.localeCompare(b, 'zh-CN')).map(([subject, albums], subjectIndex) => {
-        const expanded = !!query.trim() || !collapsed.has(subject);
-        const branchId = `${treeId}-${subjectIndex}`;
+    <div className="um-course-list-scroll" aria-busy={loading}>{loading ? <p className="um-course-list-message" role="status">正在加载…</p> : error ? <div className="um-course-list-message"><p role="alert">{error}</p><button type="button" className="um-course-button" onClick={onRetry}>重新加载</button></div> : !modules.size ? <div className="um-course-list-message"><p>暂无匹配课程</p>{query && <button type="button" className="um-course-text-button" onClick={() => onQueryChange('')}>清除搜索</button>}{filtersActive && <button type="button" className="um-course-text-button" onClick={onResetFilters}>重置筛选</button>}</div> : <nav aria-label="课程目录"><ul className="um-course-tree">
+      {[...modules].sort(([a, left], [b, right]) => left.order - right.order || Number(a) - Number(b)).map(([moduleId, { name, albums }], moduleIndex) => {
+        const expanded = !!query.trim() || !collapsed.has(moduleId);
+        const branchId = `${treeId}-${moduleIndex}`;
         const count = [...albums.values()].reduce((sum, list) => sum + list.length, 0);
-        return <li key={subject}><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${expanded ? '收起' : '展开'}${subject}`} aria-expanded={expanded} aria-controls={branchId} disabled={!!query.trim()} onClick={() => toggle(subject)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={subject} aria-current={!selectedId && grouping === 'subject' && filter === subject ? 'page' : undefined} onClick={() => onFilter(subject, 'subject')}><span>{subject}</span><span>{count}</span></button></div><ul id={branchId} hidden={!expanded}>{[...albums].map(([album, items], albumIndex) => {
+        return <li key={moduleId}><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${expanded ? '收起' : '展开'}${name}`} aria-expanded={expanded} aria-controls={branchId} disabled={!!query.trim()} onClick={() => toggle(moduleId)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={name} aria-current={!selectedId && grouping === 'module' && filter === moduleId ? 'page' : undefined} onClick={() => onFilter(moduleId, 'module')}><span>{name}</span><span>{count}</span></button></div><ul id={branchId} hidden={!expanded}>{[...albums].map(([album, items], albumIndex) => {
           if (!album) return leaves(items);
-          const key = `${subject}/${album}`;
+          const key = JSON.stringify([moduleId === 'unassigned' ? null : Number(moduleId), album]);
           const albumExpanded = !!query.trim() || !collapsed.has(key);
           const albumId = `${branchId}-${albumIndex}`;
-          return <li key={key} className="um-course-tree-album"><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${albumExpanded ? '收起' : '展开'}${album}`} aria-expanded={albumExpanded} aria-controls={albumId} disabled={!!query.trim()} onClick={() => toggle(key)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={album} aria-current={!selectedId && grouping === 'album' && filter === album ? 'page' : undefined} onClick={() => onFilter(album, 'album')}><span>{album}</span></button></div><ul id={albumId} hidden={!albumExpanded}>{leaves(items)}</ul></li>;
+          return <li key={key} className="um-course-tree-album"><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${albumExpanded ? '收起' : '展开'}${album}`} aria-expanded={albumExpanded} aria-controls={albumId} disabled={!!query.trim()} onClick={() => toggle(key)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={album} aria-current={!selectedId && grouping === 'album' && filter === key ? 'page' : undefined} onClick={() => onFilter(key, 'album')}><span>{album}</span></button></div><ul id={albumId} hidden={!albumExpanded}>{leaves(items)}</ul></li>;
         })}</ul></li>;
       })}
     </ul></nav>}</div>
-    {onPublish && <div className="um-course-list-footer"><button type="button" className="um-course-button" onClick={onPublish}>发布课程</button></div>}
   </div>;
 }

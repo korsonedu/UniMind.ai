@@ -152,9 +152,9 @@ export const Settings: React.FC = () => {
                     <CreditCard className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-foreground">方案与账单</h4>
+                    <h4 className="text-sm font-bold text-foreground">学习服务与账单</h4>
                     <p className="text-[11px] text-muted-foreground font-medium">
-                      {user?.is_member ? `当前方案：${user?.personal_plan || user?.membership_tier || 'Free'}` : '升级解锁完整功能'}
+                      查看个人权益、AI 对话额度和购买记录
                     </p>
                   </div>
                 </div>

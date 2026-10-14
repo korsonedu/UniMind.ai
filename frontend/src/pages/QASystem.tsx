@@ -88,7 +88,7 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: QAAnswer, onR
           </div>
 
           {/* Action Menu (Only visible on hover for owner/admin) */}
-          {(user?.username === answer.user_detail.username || user?.role === 'admin') && !isEditing && (
+          {(user?.username === answer.user_detail.username) && !isEditing && (
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="回复操作" className="um-qa-menu-button h-8 w-8 transition-opacity">
@@ -431,7 +431,7 @@ export const QASystem: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const questionInputRef = useRef<HTMLTextAreaElement>(null);
   const user = useAuthStore(s => s.user);
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = false;
 
   const updateQuery = (name: string, value: string) => {
     setSearchParams(params => {
@@ -624,7 +624,7 @@ export const QuestionDetail: React.FC = () => {
         {loading ? <div className="py-16 flex justify-center"><Spinner className="h-6 w-6 animate-spin text-muted-foreground" /></div> : failed ? (
           <p className="py-16 text-center text-sm text-muted-foreground">暂时无法查看这个问题，请返回问题流重试。</p>
         ) : question && (
-          <ThreadCard key={question.id} question={question} detail isAdmin={user?.role === 'admin'} onRefresh={refresh} onDelete={() => navigate(returnPath)} />
+          <ThreadCard key={question.id} question={question} detail isAdmin={false} onRefresh={refresh} onDelete={() => navigate(returnPath)} />
         )}
       </div>
     </PageWrapper>
