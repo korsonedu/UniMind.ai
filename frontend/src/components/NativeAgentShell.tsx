@@ -16,7 +16,7 @@ export function NativeAgentShell({ native, sidebar, onNew, children }: Props) {
   return <div className="um-native-agent um-agent-workspace" data-directory-hidden={!directory.width} data-directory-animated={directory.animated || undefined}>
     <div className="um-agent-directory" style={{ width: directory.width, '--um-directory-content-width': `${directory.contentWidth}px` } as CSSProperties}>
       <div aria-hidden={!directory.width || undefined} inert={!directory.width} className="um-agent-directory-content um-directory-content">{sidebar}</div>
-      <DirectoryResizeHandle width={directory.width} onChange={directory.changeWidth} label="调整历史对话宽度" />
+      <DirectoryResizeHandle width={directory.width} onChange={directory.previewWidth} onCommit={directory.changeWidth} label="调整历史对话宽度" />
     </div>
     <section className="um-agent-main" aria-label="小宇工作区">
       <header className="um-agent-toolbar">
