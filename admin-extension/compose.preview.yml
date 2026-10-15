@@ -1,0 +1,22 @@
+services:
+  directus:
+    image: directus/directus:12.4.1
+    container_name: directus-unimind-preview
+    ports:
+      - "127.0.0.1:8057:8055"
+    environment:
+      SECRET: local-preview-only-directus-secret-20261015
+      DB_CLIENT: sqlite3
+      DB_FILENAME: /directus/database/preview2.sqlite
+      ADMIN_EMAIL: unimind-preview-one@example.com
+      ADMIN_PASSWORD: Preview-Unimind-2026!
+      PUBLIC_URL: http://127.0.0.1:8057
+      WEBSOCKETS_ENABLED: "false"
+      MARKETPLACE_TRUST: all
+      EXTENSIONS_AUTO_RELOAD: "true"
+      UNIMIND_BACKEND_URL: http://host.docker.internal:8002
+      UNIMIND_ADMIN_BRIDGE_SECRET: local-preview-only-unimind-bridge-secret-20261015
+      UNIMIND_DIRECTUS_ADMIN_IDS: ${UNIMIND_DIRECTUS_ADMIN_IDS:-}
+    volumes:
+      - ./.preview/database:/directus/database
+      - ./:/directus/extensions/directus-extension-unimind-admin:ro

@@ -318,6 +318,11 @@ LEADERBOARD_SIZE = _get_int("LEADERBOARD_SIZE", 50)
 
 # 上传限制 — 匹配 nginx client_max_body_size (200MB)
 DATA_UPLOAD_MAX_MEMORY_SIZE = _get_int("DATA_UPLOAD_MAX_MEMORY_SIZE", 209715200)
+
+# Private Directus-to-Django management bridge. Empty configuration denies access.
+UNIMIND_ADMIN_BRIDGE_SECRET = os.environ.get("UNIMIND_ADMIN_BRIDGE_SECRET", "")
+UNIMIND_DIRECTUS_ADMIN_MAP = os.environ.get("UNIMIND_DIRECTUS_ADMIN_MAP", "{}")
+UNIMIND_CONTENT_INSTITUTION_ID = os.environ.get("UNIMIND_CONTENT_INSTITUTION_ID", "")
 FILE_UPLOAD_MAX_MEMORY_SIZE = _get_int("FILE_UPLOAD_MAX_MEMORY_SIZE", 209715200)
 
 # ASR 语音转文字

@@ -1,0 +1,28 @@
+{
+  "name": "directus-extension-unimind-admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": ["dist"],
+  "scripts": {
+    "build": "directus-extension build",
+    "check": "vue-tsc --noEmit"
+  },
+  "directus:extension": {
+    "type": "bundle",
+    "path": {"app": "dist/app.js", "api": "dist/api.js"},
+    "entries": [
+      {"type": "module", "name": "unimind-admin", "source": "src/module/index.ts"},
+      {"type": "endpoint", "name": "unimind-admin-api", "source": "src/endpoint/index.ts"}
+    ],
+    "host": "^12.4.1"
+  },
+  "dependencies": {"vue": "^3.5.22", "lucide-vue-next": "^0.468.0"},
+  "devDependencies": {
+    "@directus/extensions-sdk": "18.0.6",
+    "@directus/types": "18.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.1.0"
+  }
+}

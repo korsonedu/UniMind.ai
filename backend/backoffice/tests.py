@@ -1,0 +1,165 @@
+import hashlib
+import hmac
+import json
+import time
+import uuid
+import tempfile
+
+from django.core.cache import cache
+from django.test import TestCase, override_settings
+from rest_framework.test import APIClient
+from rest_framework.authtoken.models import Token
+from django.core.files.uploadedfile import SimpleUploadedFile
+
+from courses.models import Course, CourseModule
+from quizzes.models import KnowledgePoint, Question, UserQuestionStatus
+from users.models import User, Institution, LearningProduct, LearningGrant, UserAccessProfile
+
+
+class BackofficeTests(TestCase):
+    def setUp(self):
+        self.actors = [str(uuid.uuid4()), str(uuid.uuid4())]
+        self.admins = [User.objects.create_superuser(username=f'operator{i}', password='PreviewOnly123!') for i in range(2)]
+        self.student = User.objects.create_user(username='learner', email='learner@example.test', email_verified=True)
+        self.config = override_settings(
+            UNIMIND_ADMIN_BRIDGE_SECRET='test-bridge-secret-with-more-than-32-characters',
+            UNIMIND_DIRECTUS_ADMIN_MAP=dict(zip(self.actors, [user.pk for user in self.admins])),
+            UNIMIND_CONTENT_INSTITUTION_ID='global',
+            CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}},
+        )
+        self.config.enable()
+        self.addCleanup(self.config.disable)
+        cache.clear()
+        self.client = APIClient()
+
+    def call(self, operation, data=None, actor=0, headers=None):
+        path = f'/api/backoffice/operations/{operation}/'
+        body = json.dumps(data or {}, separators=(',', ':')).encode()
+        timestamp, nonce = str(int(time.time())), str(uuid.uuid4())
+        canonical = '\n'.join(['v1', 'POST', path, self.actors[actor], timestamp, nonce, hashlib.sha256(body).hexdigest()])
+        signature = hmac.new(b'test-bridge-secret-with-more-than-32-characters', canonical.encode(), hashlib.sha256).hexdigest()
+        signed = {'HTTP_X_UNIMIND_OPERATOR': self.actors[actor], 'HTTP_X_UNIMIND_TIMESTAMP': timestamp,
+                  'HTTP_X_UNIMIND_NONCE': nonce, 'HTTP_X_UNIMIND_SIGNATURE': signature}
+        if headers:
+            signed.update(headers)
+        response = self.client.post(path, body, content_type='application/json', **signed)
+        return response, signed
+
+    def test_authentication_and_replay(self):
+        self.assertEqual(self.client.post('/api/backoffice/operations/meta/', {}, format='json').status_code, 401)
+        self.assertEqual(self.call('meta', headers={'HTTP_X_UNIMIND_SIGNATURE': 'forged'})[0].status_code, 401)
+        response, headers = self.call('meta')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.call('meta', actor=1)[0].status_code, 200)
+        self.assertEqual(self.client.post('/api/backoffice/operations/meta/', '{}', content_type='application/json', **headers).status_code, 401)
+
+    def test_bulk_assignment_rejects_cross_institution(self):
+        module = CourseModule.objects.create(name='Existing module')
+        other = Institution.objects.create(name='Other', slug='other')
+        course = Course.objects.create(title='Existing course', institution=other)
+        response, _ = self.call('courses.assign', {'module': module.pk, 'courses': [course.pk], 'request_id': str(uuid.uuid4())})
+        self.assertEqual(response.status_code, 400)
+        course.refresh_from_db()
+        self.assertIsNone(course.module_id)
+
+    def test_grant_is_idempotent(self):
+        product = LearningProduct.objects.create(name='Existing service', duration_days=30)
+        payload = {'user': self.student.pk, 'product': product.pk, 'source': 'course', 'request_id': str(uuid.uuid4())}
+        first = self.call('grants.create', payload)[0]
+        second = self.call('grants.create', payload, actor=1)[0]
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.data['id'], second.data['id'])
+        self.assertEqual(LearningGrant.objects.count(), 1)
+
+    def test_course_access_is_per_user_not_per_module_or_grant(self):
+        profile = UserAccessProfile.objects.create(user=self.student, blocked_permissions=['unrelated.permission'])
+        student_client = APIClient()
+        student_client.credentials(HTTP_AUTHORIZATION='Token ' + Token.objects.create(user=self.student).key)
+        with tempfile.TemporaryDirectory() as directory, override_settings(
+            MEDIA_ROOT=directory, OSS_ACCESS_KEY_ID='',
+            STORAGES={'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'}},
+        ):
+            module = CourseModule.objects.create(subject='金融学', name='基础模块', is_public=False)
+            course = Course.objects.create(title='Video', module=module, video_file=SimpleUploadedFile('lesson.mp4', b'local-fixture-video'))
+            self.assertEqual(student_client.get(f'/api/courses/{course.pk}/').status_code, 200)
+            media = '/media/' + course.video_file.name
+            response = student_client.get(media, HTTP_RANGE='bytes=0-7')
+            self.assertEqual(response.status_code, 206)
+            response.close()
+            areas = self.call('students.detail', {'id': self.student.pk})[0].data['enabled_features']
+            denied = self.call('students.access.save', {'id': self.student.pk, 'enabled_features': [key for key in areas if key != 'course.video'], 'request_id': str(uuid.uuid4())})[0]
+            self.assertEqual(denied.status_code, 200)
+            self.assertEqual(student_client.get('/api/courses/').status_code, 403)
+            self.assertEqual(student_client.get(f'/api/courses/{course.pk}/').status_code, 403)
+            self.assertEqual(student_client.get(media).status_code, 403)
+            features = student_client.get('/api/users/institution/me/features/').data['features']
+            self.assertNotIn('course.video', features)
+            self.assertIn('ai.assistant', features)
+            profile.refresh_from_db()
+            self.assertIn('unrelated.permission', profile.blocked_permissions)
+            self.call('students.access.save', {'id': self.student.pk, 'enabled_features': areas, 'request_id': str(uuid.uuid4())})
+            self.assertEqual(student_client.get(f'/api/courses/{course.pk}/').status_code, 200)
+            self.assertEqual(LearningGrant.objects.count(), 0)
+
+    def test_subject_classification_does_not_require_album_or_knowledge_point(self):
+        payload = {'subject': '金融学', 'name': '基础', 'request_id': str(uuid.uuid4())}
+        module = self.call('modules.save', payload)[0]
+        self.assertEqual(module.status_code, 200)
+        other = self.call('modules.save', {**payload, 'subject': '经济学', 'request_id': str(uuid.uuid4())})[0]
+        self.assertEqual(other.status_code, 200)
+        course = self.call('courses.save', {'title': 'New lesson', 'module': module.data['id'], 'request_id': str(uuid.uuid4())})[0]
+        self.assertEqual(course.status_code, 200)
+        self.assertEqual(course.data['subject_name'], '金融学')
+        self.assertIsNone(course.data['album_obj'])
+        self.assertIsNone(course.data['knowledge_point'])
+
+    def test_question_management_validates_answers_scope_and_history(self):
+        point = KnowledgePoint.objects.create(name='Preview point', level='kp', subject='Finance')
+        other = Institution.objects.create(name='Other question owner', slug='question-owner')
+        foreign = KnowledgePoint.objects.create(name='Other point', level='kp', institution=other)
+        payload = {'text': 'Preview question', 'knowledge_point': point.pk, 'q_type': 'objective',
+                   'options': ['First', 'Second'], 'correct_answer': 'C', 'request_id': str(uuid.uuid4())}
+        self.assertEqual(self.call('questions.save', payload)[0].status_code, 400)
+        payload['correct_answer'] = 'B'
+        self.assertEqual(self.call('questions.save', {**payload, 'knowledge_point': foreign.pk})[0].status_code, 400)
+        response = self.call('questions.save', payload)[0]
+        self.assertEqual(response.status_code, 200, response.data)
+        key = response.data['id']
+        self.assertEqual(self.call('questions.detail', {'id': key}, actor=1)[0].data['correct_answer'], 'B')
+        outsider = Question.objects.create(text='Other question', institution=other)
+        response = self.call('questions.assign', {'questions': [key, outsider.pk], 'knowledge_point': point.pk, 'request_id': str(uuid.uuid4())})[0]
+        self.assertEqual(response.status_code, 400)
+        outsider.refresh_from_db()
+        self.assertIsNone(outsider.knowledge_point_id)
+        self.assertEqual(self.call('questions.list')[0].data['total'], 1)
+        question = Question.objects.get(pk=key)
+        Question.objects.filter(pk=key).update(subjective_type='')
+        UserQuestionStatus.objects.create(user=self.student, question=question)
+        self.assertEqual(self.call('questions.delete', {'id': key, 'request_id': str(uuid.uuid4())})[0].status_code, 400)
+        self.assertTrue(Question.objects.filter(pk=key).exists())
+        self.assertEqual(self.call('questions.save', {'id': key, 'q_type': 'subjective', 'subjective_type': 'short',
+                         'grading_points': 'Preview criterion', 'request_id': str(uuid.uuid4())})[0].status_code, 400)
+        self.assertEqual(self.call('questions.save', {'id': key, 'difficulty_level': 'hard', 'request_id': str(uuid.uuid4())})[0].data['difficulty'], 1400)
+        self.assertEqual(self.call('questions.save', {'id': key, 'difficulty_level': 'normal', 'request_id': str(uuid.uuid4())})[0].data['difficulty'], 1200)
+
+    def test_catalog_rejects_cycles_protects_references_and_invalidates_cache(self):
+        root = KnowledgePoint.objects.create(name='Preview root', level='sub', subject='Finance')
+        point = KnowledgePoint.objects.create(name='Preview point', level='kp', parent=root, subject='Finance')
+        payload = {'id': root.pk, 'parent': point.pk, 'request_id': str(uuid.uuid4())}
+        self.assertEqual(self.call('knowledge.save', payload)[0].status_code, 400)
+        root.refresh_from_db()
+        self.assertIsNone(root.parent_id)
+        keys = ['knowledge_tree:ids:global', 'knowledge_tree:ids:global:subject:Finance', 'knowledge_tree:ids:global:subject:Economics']
+        cache.set_many({key: [root.pk] for key in keys})
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.call('knowledge.save', {'id': root.pk, 'subject': 'Economics', 'request_id': str(uuid.uuid4())})[0]
+        self.assertEqual(response.status_code, 200, response.data)
+        point.refresh_from_db()
+        self.assertEqual(point.subject, 'Economics')
+        self.assertTrue(all(cache.get(key) is None for key in keys))
+        self.assertEqual(self.call('knowledge.delete', {'id': root.pk, 'request_id': str(uuid.uuid4())})[0].status_code, 400)
+        question = Question.objects.create(text='Referenced', knowledge_point=point)
+        self.assertEqual(self.call('knowledge.delete', {'id': point.pk, 'request_id': str(uuid.uuid4())})[0].status_code, 400)
+        question.delete()
+        self.assertEqual(self.call('knowledge.delete', {'id': point.pk, 'request_id': str(uuid.uuid4())})[0].status_code, 200)

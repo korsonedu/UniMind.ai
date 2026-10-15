@@ -83,6 +83,7 @@ if _APP_ON('study_room'):
     urlpatterns.append(path("api/study/", include("study_room.urls")))
 if _APP_ON('courses'):
     urlpatterns.append(path("api/courses/", include("courses.urls")))
+    urlpatterns.append(path("api/backoffice/", include("backoffice.urls")))
 if _APP_ON('articles'):
     urlpatterns.append(path("api/articles/", include("articles.urls")))
 if _APP_ON('ai_assistant'):
