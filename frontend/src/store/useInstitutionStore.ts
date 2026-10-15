@@ -80,17 +80,20 @@ interface InstitutionState {
   clear: () => void;
 }
 
+let accessGeneration = 0;
+
 export const useInstitutionStore = create<InstitutionState>((set, get) => ({
   isPlatformAdmin: false,
   institution: null,
   features: [],
   usage: null,
-  loading: false,
+  loading: true,
   featuresError: false,
   previewMode: false,
   previewInstitution: null,
 
   fetchFeatures: async () => {
+    const generation = accessGeneration;
     const state = get();
     if (state.previewMode) return;
     const isInitial = state.features.length === 0 && !state.isPlatformAdmin;
@@ -100,9 +103,10 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
     try {
       const data = await queryClient.fetchQuery({
         queryKey: queryKeys.institution.features,
-        queryFn: () => api.get('/users/institution/me/features/').then(r => r.data),
-        staleTime: 60000,
+        queryFn: ({ signal }) => api.get('/users/institution/me/features/', { signal }).then(r => r.data),
+        staleTime: 0,
       });
+      if (generation !== accessGeneration) return;
       set({
         isPlatformAdmin: data.is_platform_admin,
         institution: data.institution,
@@ -112,10 +116,9 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
         featuresError: false,
       });
     } catch {
+      if (generation !== accessGeneration) return;
       console.error('Fetch institution features failed');
-      if (isInitial) {
-        set({ loading: false, features: [], featuresError: true });
-      }
+      set({ loading: false, featuresError: true });
     }
   },
 
@@ -156,18 +159,23 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
   },
 
   hasFeature: (feature: string) => {
-    const { isPlatformAdmin, institution, features } = get();
-    if (isPlatformAdmin && !institution) return true;
+    const { features, loading, featuresError } = get();
+    if (loading || featuresError) return false;
     return features.includes(feature);
   },
 
   clear: () => {
+    accessGeneration++;
+    void queryClient.cancelQueries({ queryKey: queryKeys.institution.features });
+    queryClient.removeQueries({ queryKey: queryKeys.institution.features });
     setPreviewInstitutionId(null);
     set({
       isPlatformAdmin: false,
       institution: null,
       features: [],
-      loading: false,
+      loading: true,
+      featuresError: false,
+      usage: null,
       previewMode: false,
       previewInstitution: null,
     });
@@ -176,6 +184,7 @@ export const useInstitutionStore = create<InstitutionState>((set, get) => ({
 
 // Feature flag constants matching backend PLAN_FEATURES
 export const FEATURES = {
+  AI_ASSISTANT: 'ai.assistant',
   AI_GENERATE: 'ai.generate',
   QUIZ_MANUAL: 'quiz.manual',
   QUIZ_EXAM: 'quiz.exam',

@@ -114,6 +114,7 @@ export interface Course {
   album: Album | null;
   module: number | null;
   module_name: string;
+  subject_name?: string;
   module_sort_order: number;
   album_obj?: number;
   knowledge_point: number | null;

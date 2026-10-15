@@ -20,6 +20,13 @@ IDLE_WARNING_COOLDOWN = 300  # idle_warning 冷却时间，避免重复推送
 COACH_MILESTONES = [25, 50, 90, 120]  # 累计分钟里程碑
 
 
+@database_sync_to_async
+def has_study_access(user_id):
+    from users.models import User
+    from users.feature_access import has_learning_feature
+    return has_learning_feature(User.objects.filter(pk=user_id).first(), 'study.room')
+
+
 class StudyRoomConsumer(AsyncWebsocketConsumer):
     """自习室 WebSocket，处理 session 生命周期 + timer 同步 + 督学事件。"""
 
@@ -30,6 +37,10 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
         if not (self.user and self.user.is_authenticated):
             logger.warning("StudyRoom WS rejected: no auth")
             await self.close(code=4001)
+            return
+
+        if not await has_study_access(self.user.id):
+            await self.close(code=4003)
             return
 
         self.user_id = self.user.id
@@ -84,6 +95,9 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
             sm._save_snapshot(user_id, session)
 
     async def receive(self, text_data):
+        if not await has_study_access(self.user_id):
+            await self.close(code=4003)
+            return
         try:
             data = json.loads(text_data)
         except json.JSONDecodeError:

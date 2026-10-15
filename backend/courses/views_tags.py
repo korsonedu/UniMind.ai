@@ -1,4 +1,4 @@
-from rest_framework import generics, permissions
+from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Count
@@ -6,7 +6,7 @@ from django.utils.text import slugify
 
 from .models import Course, CourseTag, CourseTagRelation
 from .serializers import CourseTagSerializer
-from users.permissions import IsAdmin
+from users.permissions import IsAdmin, IsMember
 from core.utils import apply_institution_filter
 
 
@@ -37,7 +37,7 @@ class TagListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == 'POST':
             return [IsAdmin()]
-        return [permissions.IsAuthenticated()]
+        return [IsMember()]
 
     def get_queryset(self):
         inst = self.request.user.institution

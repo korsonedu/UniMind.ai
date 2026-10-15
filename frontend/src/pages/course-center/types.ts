@@ -50,10 +50,10 @@ export function learningDate(date = new Date()): string {
 export type CourseGrouping = 'module' | 'subject' | 'tag' | 'album';
 
 export function courseGroups(course: Course, grouping: CourseGrouping): string[] {
-  if (grouping === 'module') return [String(course.module ?? 'unassigned')];
+  if (grouping === 'module') return [String(course.module ?? 'unassigned'), JSON.stringify([course.subject_name || course.subject || '待归类学科', course.module ?? null])];
   if (grouping === 'tag') return course.tags?.length ? course.tags : ['未标记'];
   if (grouping === 'album') return [course.album_name || '未分专辑', JSON.stringify([course.module ?? null, course.album_name || ''])];
-  return [course.subject_name || course.subject || '未分类'];
+  return [course.subject_name || course.subject || '待归类学科'];
 }
 
 export function matchesSearch(course: Course, query: string): boolean {

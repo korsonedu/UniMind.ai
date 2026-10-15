@@ -27,11 +27,11 @@ export function CommunityLayout() {
       <aside className="um-community-directory" aria-label="社区频道">
         <div className="um-community-heading"><h1>学习社区</h1><p>一起学习，也一起讨论。</p></div>
         <nav aria-label="学习社区频道">
-          {channels.filter(channel => !loading && hasFeature(channel.feature)).map(channel => (
+          {channels.map(channel => !loading && hasFeature(channel.feature) ? (
             <NavLink key={channel.path} to={channel.path} className={({ isActive }) => `um-community-channel${isActive ? ' is-active' : ''}`}>
               <span>{channel.name}</span><small>{channel.description}</small>
             </NavLink>
-          ))}
+          ) : <span key={channel.path} role="link" aria-disabled="true" title="暂未开通" className="um-community-channel opacity-40 cursor-not-allowed"><span>{channel.name}</span><small>{channel.description}</small></span>)}
         </nav>
       </aside>
       <section className="um-community-main" aria-label={currentChannel?.name || '学习社区'}>

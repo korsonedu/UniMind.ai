@@ -14,6 +14,8 @@ useAuthStore.setState({ user: { id: 0, username: 'preview', nickname: '宇驰', 
 const date = (offset = 0) => { const value = new Date(); value.setDate(value.getDate() + offset); return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(value); };
 const memorySeries = [.67, .72, .74, .7, .78, .82, .81, .84].map((predicted, index) => ({ date: date(-28 + index * 4), predicted, actual: [.6, .7, .8, .7, .9, .9, .8, 1][index], count: 10 }));
 const role = sessionStorage.getItem('unimind-preview-role') || 'student';
+const blockedFeatures = new URLSearchParams(location.search).getAll('blocked');
+const lessonDemo = new URLSearchParams(location.search).has('lessonDemo');
 const user = { ...useAuthStore.getState().user!, id: 1, institution_id: 1, institution: { ...useAuthStore.getState().user!.institution!, id: 1 },
   role: (role === 'admin' ? 'admin' : 'student') as 'student' | 'admin', institution_role: role === 'teacher' ? 'owner' : 'student',
   is_admin: role === 'admin', is_institution_admin: role === 'teacher', is_institution_owner: role === 'teacher', is_institution_teacher: role === 'teacher' };
@@ -25,7 +27,7 @@ const practiceQuestions = [
   { id: 103, text: '解释政策利率如何通过融资成本影响消费与投资，并说明一种可能阻碍传导的因素。', q_type: 'subjective', subjective_type: 'short', options: null, difficulty_level: 'hard', difficulty_level_display: '困难', difficulty: 1400, knowledge_point: 2, knowledge_point_detail: kps[1], is_favorite: false, is_mastered: false },
 ];
 const albums = [{ id: 1, name: '金融学基础' }];
-const courses = ['金融市场与利率', '货币政策的传导', '风险与收益'].map((title, index) => ({ id: index + 1, title, description: '本地示例课程', album: albums[0], tags: ['金融学', '基础'], knowledge_points: [2], video_file: '/local-preview-video.mp4', cover_image: '', created_at: date(-7), knowledge_point: 2, video_url: '', thumbnail: '', duration: 1200 + index * 180, elo_reward: 20, sort_order: index, materials: [], progress: index === 0 ? { last_position: 380, is_finished: false, updated_at: date(-1) } : index === 1 ? { last_position: 1380, is_finished: true, updated_at: date(-2) } : null }));
+const courses = ['金融市场与利率', '货币政策的传导', '风险与收益'].map((title, index) => ({ id: index + 1, title, description: '本地示例课程', subject_name: '金融学', module: index < 2 ? 1 : 2, module_name: index < 2 ? '货币与金融市场' : '风险管理', module_sort_order: index < 2 ? 0 : 1, album: albums[0], tags: ['金融学', '基础'], knowledge_points: [2], video_file: '/local-preview-video.mp4', cover_image: '', created_at: date(-7), knowledge_point: 2, video_url: '', thumbnail: '', duration: 1200 + index * 180, elo_reward: 20, sort_order: index, materials: [], progress: index === 0 ? { last_position: 380, is_finished: false, updated_at: date(-1) } : index === 1 ? { last_position: 1380, is_finished: true, updated_at: date(-2) } : null }));
 const achievements = [{ id: 1, key: 'diagnostic', name: '首次诊断', description: '完成首次学习诊断', icon: '🎯', category: 'diagnostic', category_label: '首次诊断', threshold: 1, is_unlocked: true, unlocked_at: date(-7), progress: 1 }, { id: 2, key: 'streak7', name: '连续学习 7 天', description: '连续学习七天解锁', icon: '📅', category: 'streak', category_label: '连续打卡', threshold: 7, is_unlocked: false, unlocked_at: null, progress: 6 }];
 const articles = [{ id: 1, title: '理解货币政策的传导', content: '<p>从政策利率、融资成本与消费投资三个环节理解货币政策。</p>', summary: '政策利率如何影响经济活动', tags: ['金融学'], author_display_name: 'UniMind', created_at: date(-2), updated_at: date(-1), view_count: 36 }];
 const plans: { id: number; content: string; is_completed: boolean }[] = [{ id: 1, content: '复习货币政策', is_completed: false }];
@@ -80,7 +82,7 @@ api.defaults.adapter = async config => {
     case '/ai/delete-conversation/': history = history.filter(message => message.conversation_id !== payload.conversation_id); delete projectFixtures.assignments[payload.conversation_id]; saveProjects(); break;
     case '/ai/reset/': break;
     case '/ai/feedback/': history = history.map(message => message.id === payload.message_id ? { ...message, feedback: payload.feedback } : message); break;
-    case '/users/institution/me/features/': data = { features: Object.values(FEATURES), is_platform_admin: role === 'admin', institution: user.institution, usage: null }; break;
+    case '/users/institution/me/features/': data = { features: Object.values(FEATURES).filter(feature => !blockedFeatures.includes(feature)), is_platform_admin: false, institution: user.institution, usage: null }; break;
     case '/notifications/unread-count/': data = { unread_count: 0, count: 0 }; break;
     case '/notifications/': data = []; break;
     case '/users/achievements/': data = achievements; break;
@@ -168,7 +170,10 @@ api.defaults.adapter = async config => {
         else { const project = projectFixtures.projects.find(project => project.id === id)!; project.name = payload.name; project.instructions = payload.instructions || ''; data = project; }
         saveProjects();
       }
-      else if (/^\/courses\/\d+\/$/.test(path)) data = { ...courses.find(c => c.id === Number(path.split('/')[2])), video_file: null };
+      else if (lessonDemo && /^\/courses\/\d+\/outline\/$/.test(path)) data = { status: 'completed', items: ['课程导入', '利率的基本含义', '名义利率与实际利率', '资金的时间价值', '债券价格与收益率', '期限结构', '风险溢价', '政策利率', '金融市场的联系', '案例讨论', '本节回顾', '思考与练习'].map((title, index) => ({ index, title, timestamp: index, description: index === 0 ? '本地预览示例大纲' : '' })) };
+      else if (lessonDemo && /^\/courses\/\d+\/transcript\/$/.test(path)) data = { status: 'completed', segments: [], full_text: '' };
+      else if (lessonDemo && /^\/courses\/\d+\/progress\/$/.test(path)) data = { elo_added: 0 };
+      else if (/^\/courses\/\d+\/$/.test(path)) data = { ...courses.find(c => c.id === Number(path.split('/')[2])), video_file: lessonDemo ? '/demos/demo-knowledge.mp4' : null, ...(lessonDemo ? { ai_outline_enabled: true, courseware: 'data:text/plain,UniMind%20local%20preview%20courseware', reference_materials: 'data:text/plain,UniMind%20local%20preview%20references', description: '本地预览示例课程。视频使用仓库已有的产品演示素材，大纲与资料均为示例数据。' } : {}) };
       else if (/^\/courses\/\d+\/watch-later\/$/.test(path)) { const course = Number(path.split('/')[2]); if (config.method === 'delete') { const index = watchLater.findIndex(item => item.course === course); if (index >= 0) watchLater.splice(index, 1); } else { const item = { course, created_at: new Date().toISOString() }; if (!watchLater.some(item => item.course === course)) watchLater.push(item); data = item; } }
       else if (/^\/courses\/albums\/\d+\/courses\/$/.test(path)) data = courses;
       else if (/^\/articles\/\d+\/$/.test(path)) data = articles[0];

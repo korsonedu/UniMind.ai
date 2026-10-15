@@ -395,10 +395,11 @@ class InstitutionFeatureView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from users.learning import LEARNING_FEATURES, usage_info
+        from users.learning import usage_info
+        from users.feature_access import learning_features
         user = request.user
         inst = user.institution
-        features = list(LEARNING_FEATURES)
+        features = learning_features(user)
         inst_data = None
         if inst:
             inst_data = {

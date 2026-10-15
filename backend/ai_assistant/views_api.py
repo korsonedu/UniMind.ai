@@ -14,7 +14,7 @@ Endpoints:
 import logging
 
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from users.permissions import IsMember
 from rest_framework.response import Response
 
 from ai_service import AIService
@@ -48,7 +48,7 @@ def _resolve_user(request):
 # ── Grading API ────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsMember])
 def grade_view(request):
     """
     POST /api/grading/grade/
@@ -89,7 +89,7 @@ def grade_view(request):
 # ── Memory API ─────────────────────────────────────────────────────────
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsMember])
 def profile_view(request):
     """
     GET /api/memory/profile/?user_id=<optional>
@@ -112,7 +112,7 @@ def profile_view(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsMember])
 def due_view(request):
     """
     GET /api/memory/due/?user_id=<optional>&limit=20
@@ -141,7 +141,7 @@ def due_view(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsMember])
 def stats_view(request):
     """
     GET /api/memory/stats/?user_id=<optional>
@@ -171,7 +171,7 @@ from django.utils import timezone as _timezone
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsMember])
 def practice_start_view(request):
     """
     POST /api/ai/practice/start/
@@ -228,7 +228,7 @@ def practice_start_view(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsMember])
 def practice_pre_grade_view(request):
     """
     POST /api/ai/practice/pre-grade/
@@ -273,7 +273,7 @@ def practice_pre_grade_view(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsMember])
 def practice_submit_view(request):
     """
     POST /api/ai/practice/submit/
@@ -489,7 +489,7 @@ def practice_submit_view(request):
 # ── Feedback API ─────────────────────────────────────────────────────────
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsMember])
 def feedback_view(request):
     """
     POST /api/ai/feedback/

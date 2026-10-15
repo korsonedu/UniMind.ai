@@ -1,17 +1,15 @@
 import type { Course } from '@/types/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { CaretLeft, Play, Pause, Calendar, BookOpen, Star, FileText, Download, Playlist, Stack, Sparkle, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
+import { useParams } from 'react-router-dom';
+import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
+import '@/styles/course-lesson.css';
 
 const formatTime = (s: number) => {
   const m = Math.floor(s / 60);
@@ -27,12 +25,10 @@ interface VideoLessonProps {
 
 export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const updateUser = useAuthStore(s => s.updateUser);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
-  const [relatedCourses, setRelatedCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasAwarded, setHasAwarded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -45,7 +41,6 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [duration, setDuration] = useState(0);
   const [seeking] = useState(false);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const progressRef = useRef<HTMLDivElement | null>(null);
   const courseId = Number(id);
 
   useEffect(() => {
@@ -186,15 +181,9 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
       try {
         setLoading(true);
         setCourse(null);
-        setRelatedCourses([]);
         setHasAwarded(false);
         const res = await api.get(`/courses/${courseId}/`, { signal: controller.signal });
         setCourse(res.data);
-
-        if (res.data.album) {
-          const albumRes = await api.get(`/courses/albums/${res.data.album.id}/courses/`, { signal: controller.signal });
-          setRelatedCourses(albumRes.data.filter((c: Course) => c.id !== res.data.id));
-        }
       } catch (e) { if (!controller.signal.aborted) console.error('fetchCourse failed', e); }
       finally { if (!controller.signal.aborted) setLoading(false); }
     };
@@ -238,33 +227,31 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     }
   };
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    const bar = progressRef.current;
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current;
-    if (!bar || !v || !duration) return;
-    const rect = bar.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const t = ratio * duration;
+    if (!v || !duration) return;
+    const t = Number(e.target.value);
     v.currentTime = t;
     setCurrentTime(t);
   };
 
   if (loading) return (
-    <div className="min-h-dvh flex flex-col items-center justify-center gap-4 text-center bg-background">
+    <div className="um-lesson um-lesson-state" role="status">
       <div className="h-10 w-10 border-4 border-border border-t-primary rounded-full animate-spin" />
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em]">加载课程...</p>
+      <p>正在加载课程…</p>
     </div>
   );
 
-  if (!course) return <div className="min-h-dvh flex items-center justify-center font-bold">课程未找到</div>;
+  if (!course) return <div className="um-lesson um-lesson-state">课程未找到</div>;
 
   return (
-    <div className="animate-in fade-in duration-700 text-left">
-      {/* 视频播放器 — 移动端左右顶到头，桌面端有 max-w 约束 */}
-      <div className="lg:max-w-[1600px] lg:mx-auto lg:px-6">
+    <div className="um-lesson">
+      <section className="um-lesson-view" aria-label="视频与课程信息">
+        <div className="um-lesson-stage">
         <div
           ref={videoContainerRef}
-          className={isFullscreen ? 'fixed inset-0 z-50 bg-black' : 'bg-black overflow-hidden relative flex items-center justify-center shadow-lg group lg:rounded-2xl'}
+          className="um-lesson-player"
+          data-fullscreen={isFullscreen || undefined}
           onMouseMove={handleVideoInteraction}
           onMouseLeave={() => setShowControls(false)}
           onTouchStart={handleVideoInteraction}
@@ -286,18 +273,13 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
               }}
               onClick={() => { if (videoRef.current?.paused) void videoRef.current.play(); else videoRef.current?.pause(); }}
               src={course.video_file}
-              className={isFullscreen ? 'absolute inset-0 w-full h-full object-contain' : 'w-full lg:max-h-[70vh] cursor-pointer'}
+              className="um-lesson-video"
               preload="metadata"
               poster={course.cover_image || undefined}
             />
             <SubtitlesOverlay courseId={courseId} videoRef={videoRef} visible={subtitlesVisible} />
-            {/* 自定义控制栏：全屏/非全屏均保留 */}
-            <div className={`absolute bottom-0 inset-x-0 z-20 px-3 pb-3 pt-8 bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-              <div ref={progressRef} onClick={handleSeek} className="w-full h-5 flex items-center cursor-pointer group/progress mb-1">
-                <div className="w-full h-1 rounded-full bg-white/20 group-hover/progress:h-1.5 transition-all">
-                  <div className="h-full rounded-full bg-white transition-all" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }} />
-                </div>
-              </div>
+            <div className="um-lesson-controls" data-visible={showControls || !isPlaying || undefined}>
+              <input className="um-lesson-progress" type="range" min="0" max={duration || 0} step="0.1" value={Math.min(currentTime, duration)} onChange={handleSeek} disabled={!duration} aria-label="播放进度" aria-valuetext={`${formatTime(currentTime)} / ${formatTime(duration)}`} />
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-white/70 tabular-nums">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <div className="flex items-center gap-0.5">
@@ -326,101 +308,31 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
             </div>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-4 opacity-20 py-24"><div className="h-24 w-24 rounded-full border-4 border-white/10 flex items-center justify-center"><Play className="h-10 w-10 text-white fill-white"/></div><p className="text-xs font-bold uppercase tracking-widest">暂无视频</p></div>
+            <div className="um-lesson-no-video"><Play size={32} weight="light" /><p>暂无视频</p></div>
           )}
         </div>
-      </div>
-
-      {/* 视频下方内容 */}
-      <div className="max-w-[1600px] mx-auto space-y-8 p-6">
-        <header className="flex items-center justify-between border-b border-border pb-6">
-          <div className="flex items-center gap-6">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl hover:bg-muted shadow-sm border border-border h-12 w-12">
-              <CaretLeft className="h-6 w-6"/>
-            </Button>
-            <div>
-              <h2 className="text-3xl font-bold tracking-tight text-foreground">{course.title}</h2>
-              <div className="flex items-center gap-4 opacity-40 font-bold text-[10px] uppercase tracking-widest leading-none mt-1">
-                 {course.album && <span className="flex items-center gap-1.5 text-foreground"><Stack className="w-3 h-3"/> {course.album.name}</span>}
-                 <span className="flex items-center gap-1.5"><Calendar className="w-3 h-3"/> {new Date(course.created_at).toLocaleDateString('zh-CN')}</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-3">
-             <Button variant="outline" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite} className="rounded-xl font-bold h-11 border-border hover:bg-muted transition-all shadow-sm text-amber-500"><Star className="h-4 w-4 mr-2" weight={isFavorite ? 'fill' : 'regular'}/> {isFavorite ? '已收藏' : '收藏'}</Button>
-          </div>
-        </header>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          {/* Left: AI Tools + Course Info */}
-          <div className="lg:col-span-9 space-y-8">
-            {/* AI 智能大纲 */}
-            <Card className="border-none shadow-sm rounded-3xl bg-card p-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkle className="h-4 w-4 text-indigo-500" />
-                <h3 className="text-sm font-bold text-foreground">AI 智能大纲</h3>
-              </div>
-              <OutlinePanel courseId={courseId} videoRef={videoRef} />
-            </Card>
-
-            {/* Course info + downloads */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-               <div className="md:col-span-2 space-y-8">
-                  <section className="space-y-6">
-                     <div className="flex items-center gap-3 border-b border-border pb-4"><BookOpen className="h-5 w-5 text-emerald-600"/><h3 className="text-xl font-bold text-foreground">课程简介</h3></div>
-                     <p className="text-muted-foreground text-base font-medium leading-relaxed whitespace-pre-wrap">{course.description}</p>
-                  </section>
-
-                  <section className="space-y-4">
-                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">教学资源下载</h4>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {course.courseware && (
-                          <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
-                             <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><FileText className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">教学课件</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
-                             <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.courseware} download><Download className="w-4 h-4"/></a></Button>
-                          </div>
-                        )}
-                        {course.reference_materials && (
-                          <div className="p-5 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between group hover:border-foreground/20 transition-all">
-                             <div className="flex items-center gap-4 text-left"><div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center"><BookOpen className="w-5 h-5"/></div><div><p className="text-xs font-bold truncate w-32">参考文献</p><p className="text-[9px] font-bold opacity-30 uppercase">PDF</p></div></div>
-                             <Button asChild variant="ghost" size="icon" className="rounded-full"><a href={course.reference_materials} download><Download className="w-4 h-4"/></a></Button>
-                          </div>
-                        )}
-                     </div>
-                  </section>
-               </div>
-               <div className="space-y-6">
-                  <Card className="border-none shadow-sm rounded-3xl bg-card p-8 space-y-6 text-left">
-                     <div className="space-y-1"><h4 className="text-xs font-bold uppercase tracking-widest text-foreground">学习奖励</h4><p className="text-2xl font-bold text-green-700">+{course.elo_reward} ELO</p></div>
-                  </Card>
-               </div>
-            </div>
-          </div>
-
-          {/* Right Side: Album & Related */}
-          <div className="lg:col-span-3 space-y-6">
-             <div className="flex items-center justify-between px-2"><h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">同专辑系列</h4><Playlist className="w-4 h-4 opacity-40"/></div>
-             <ScrollArea className="h-[750px] pr-4">
-                <div className="space-y-3">
-                   {relatedCourses.map((c, i) => (
-                     <Link key={c.id} to={`/course/${c.id}`}>
-                       <div className="p-4 rounded-2xl border bg-transparent border-transparent hover:bg-card hover:border-border hover:shadow-md transition-all text-left mb-2 group">
-                          <div className="aspect-video bg-slate-100 rounded-xl mb-3 overflow-hidden">
-                             {c.cover_image && <img src={c.cover_image} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" loading="lazy" />}
-                          </div>
-                          <div className="space-y-1">
-                             <span className="text-[9px] font-bold opacity-30 uppercase">{`第 ${i + 1} 课`}</span>
-                             <p className="text-xs font-bold leading-relaxed text-foreground line-clamp-2">{c.title}</p>
-                          </div>
-                       </div>
-                     </Link>
-                   ))}
-                   {relatedCourses.length === 0 && <div className="py-20 text-center text-muted-foreground italic text-[10px] font-bold uppercase">暂未收录其他课程</div>}
-                </div>
-             </ScrollArea>
-          </div>
         </div>
-      </div>
+        <header className="um-lesson-heading">
+          <div><p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || '待归类'}</p><h1>{course.title}</h1></div>
+          <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{isFavorite ? '已收藏' : '收藏'}</button>
+        </header>
+      </section>
+      <aside className="um-lesson-sidebar" aria-label="学习侧栏">
+        <section className="um-lesson-outline-section" aria-labelledby="lesson-outline-heading">
+          <h2 id="lesson-outline-heading">课程大纲</h2>
+          {course.ai_outline_enabled !== false ? <OutlinePanel courseId={courseId} videoRef={videoRef} /> : <p className="um-lesson-empty">本课程暂无大纲</p>}
+        </section>
+        <section className="um-lesson-resources" aria-labelledby="lesson-resources-heading">
+          <h2 id="lesson-resources-heading">课程资料</h2>
+          {course.courseware && <a href={course.courseware} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>教学课件</span><Download size={16} /></a>}
+          {course.reference_materials && <a href={course.reference_materials} download target="_blank" rel="noopener noreferrer"><FileText size={18} /><span>参考资料</span><Download size={16} /></a>}
+          {!course.courseware && !course.reference_materials && <p className="um-lesson-empty">暂无课程资料</p>}
+        </section>
+        <section className="um-lesson-intro" aria-labelledby="lesson-intro-heading">
+          <h2 id="lesson-intro-heading">课程简介</h2>
+          <div className="um-lesson-description" tabIndex={0}><p>{course.description || '暂无课程简介'}</p></div>
+        </section>
+      </aside>
     </div>
   );
 };

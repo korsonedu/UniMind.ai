@@ -77,6 +77,9 @@ def media_serve(request, path):
     if Course.objects.filter(course_file).exists():
         if not request.user.is_authenticated:
             return HttpResponse(status=401)
+        from users.feature_access import has_learning_feature
+        if not has_learning_feature(request.user, 'course.video'):
+            return HttpResponse(status=403)
         from courses.access import visible_courses
         managed = Course.objects.filter(course_file)
         if not request.user.is_superuser:

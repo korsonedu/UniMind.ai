@@ -21,9 +21,9 @@ import '@/styles/app-shell.css';
 type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string; mobileLabel: string; feature?: string };
 
 const navItems: NavItem[] = [
-  { to: '/xiaoyu', icon: Robot, label: '小宇', mobileLabel: '小宇' },
-  { to: '/report-card', icon: ChartBar, label: '学习记录', mobileLabel: '记录' },
-  { to: '/courses', icon: BookOpen, label: '课程中心', mobileLabel: '课程' },
+  { to: '/xiaoyu', icon: Robot, label: '小宇', mobileLabel: '小宇', feature: 'ai.assistant' },
+  { to: '/report-card', icon: ChartBar, label: '学习记录', mobileLabel: '记录', feature: 'full.report' },
+  { to: '/courses', icon: BookOpen, label: '课程中心', mobileLabel: '课程', feature: 'course.video' },
   { to: '/tests', icon: Trophy, label: '习题训练', mobileLabel: '做题', feature: 'quiz.exam' },
   { to: '/community', icon: ChatCircleText, label: '学习社区', mobileLabel: '社区' },
 ];
@@ -46,11 +46,13 @@ export const MainLayout: React.FC = () => {
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const isCommunityWorkspace = ['/community', '/qa', '/study'].includes(location.pathname) || location.pathname.startsWith('/qa/');
-  const isIntegratedWorkspace = isCommunityWorkspace || ['/xiaoyu', '/courses'].includes(location.pathname) || /^\/course\/\d+/.test(location.pathname);
+  const isIntegratedWorkspace = isCommunityWorkspace
+    || (location.pathname === '/xiaoyu' && hasFeature('ai.assistant'))
+    || ((location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname)) && hasFeature('course.video'));
   const isMobileStudyPage = isMobile && location.pathname === '/study';
-  const isMobileImmersivePage = isMobile && (location.pathname.startsWith('/tests/session') || location.pathname.startsWith('/xiaoyu/practice'));
-  const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/');
-  const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage || location.pathname === '/study');
+  const isMobileImmersivePage = isMobile && ((location.pathname.startsWith('/tests/session') && hasFeature('quiz.exam')) || (location.pathname.startsWith('/xiaoyu/practice') && hasFeature('ai.assistant')));
+  const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/') && hasFeature('course.video');
+  const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage || (location.pathname === '/study' && hasFeature('study.room')));
   const isTourPage = location.pathname === '/xiaoyu';
 
   useEffect(() => {
@@ -61,7 +63,13 @@ export const MainLayout: React.FC = () => {
   useEffect(() => {
     if (useInstitutionStore.getState().previewMode) void exitPreview();
     else void fetchFeatures();
-  }, [fetchFeatures, exitPreview]);
+  }, [fetchFeatures, exitPreview, location.pathname]);
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') void fetchFeatures(); };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [fetchFeatures]);
 
   const handleTourDismiss = useCallback(async () => {
     setShowTour(false);
@@ -89,10 +97,10 @@ export const MainLayout: React.FC = () => {
     if (showTour && !isTourPage) void handleTourDismiss();
   }, [showTour, isTourPage, handleTourDismiss]);
 
-  const visibleNavItems = navItems.filter(item => {
+  const canEnter = (item: NavItem) => {
     if (item.to === '/community') return !featuresLoading && (hasFeature('faq.system') || hasFeature('study.room'));
     return !item.feature || (!featuresLoading && hasFeature(item.feature));
-  });
+  };
   const isActive = (item: NavItem) => {
     const path = location.pathname;
     if (item.to === '/community') return isCommunityWorkspace;
@@ -125,7 +133,7 @@ export const MainLayout: React.FC = () => {
       <aside data-tour="sidebar" aria-label="应用导航" className="um-app-rail relative border-r border-border flex-col p-2 z-0 shrink-0 hidden md:flex w-16">
         <div className="um-app-brand flex justify-center"><Link to="/xiaoyu" className="shrink-0" aria-label="返回小宇"><div className="h-10 w-10 rounded-xl overflow-hidden"><img src="/unimind_logo_small.png" alt="UniMind.ai" className="w-full h-full object-contain brand-logo-invert" /></div></Link></div>
         <nav aria-label="功能导航" className="flex-1 min-h-0 overflow-y-auto space-y-0.5">
-          {visibleNavItems.map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-10 rounded-lg cursor-pointer justify-center p-0', isActive(item) ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}><Link to={item.to} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}><item.icon className="h-[18px] w-[18px] shrink-0" /><span className="sr-only">{item.label}</span></Link></Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}</TooltipContent></TooltipPortal></Tooltip></div>)}
+          {navItems.map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-10 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={item.to} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}><item.icon className="h-[18px] w-[18px] shrink-0" /><span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true"><item.icon className="h-[18px] w-[18px] shrink-0" /><span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && ' · 暂未开通'}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
       <main className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
@@ -136,7 +144,7 @@ export const MainLayout: React.FC = () => {
         </div>
       </main>
       <nav className={cn('md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]', hideMobileBottomNav && 'hidden')}>
-        <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{visibleNavItems.map(item => <Link key={item.to} to={item.to} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}<item.icon className="h-5 w-5" /><span className="text-[10px] font-bold">{item.mobileLabel}</span></Link>)}</div>
+        <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{navItems.map(item => canEnter(item) ? <Link key={item.to} to={item.to} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}<item.icon className="h-5 w-5" /><span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={`${item.label}，暂未开通`} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[40px] text-muted-foreground opacity-40 cursor-not-allowed"><item.icon className="h-5 w-5" /><span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
       </nav>
       <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>确认退出登录？</AlertDialogTitle><AlertDialogDescription>退出后需要重新登录才能访问学习记录和课程。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>返回</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } logout(); navigate('/login'); }}>确认退出</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}

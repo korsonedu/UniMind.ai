@@ -11,7 +11,6 @@ import { CoursePortal } from './CoursePortal';
 import { courseGroups, type Course, type CourseGrouping, type CourseProgress, type LearningActivity, type WatchLater } from './types';
 
 type ApiCourse = Omit<Course, 'tags'> & { album?: { id: number; name: string }; knowledge_point?: number; tags?: (string | { name: string })[] };
-type KnowledgePoint = { id: number; name: string; parent: number | null; children?: KnowledgePoint[] };
 
 export function CourseCenter() {
   const { id } = useParams();
@@ -19,7 +18,6 @@ export function CourseCenter() {
   const [params] = useSearchParams();
   const { workspaceHeader } = useOutletContext<{ workspaceHeader?: ReactNode }>() || {};
   const [courses, setCourses] = useState<Course[]>([]);
-  const [kps, setKps] = useState<KnowledgePoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [version, setVersion] = useState(0);
@@ -35,7 +33,6 @@ export function CourseCenter() {
   const [queueLoading, setQueueLoading] = useState(true);
   const [queuePending, setQueuePending] = useState<number[]>([]);
   const [ordering, setOrdering] = useState('sort_order');
-  const [kpId, setKpId] = useState('');
   const tags = params.getAll('tag');
   const scope = params.get('scope') || 'all';
   const status = params.get('status') || 'all';
@@ -44,7 +41,7 @@ export function CourseCenter() {
   const changeFacet = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     next.delete('view');
-    if (key === 'scope') { next.delete('filter'); next.delete('tag'); next.delete('status'); setQuery(''); }
+    if (key === 'scope') next.delete('status');
     if (value && value !== 'all') next.set(key, value); else next.delete(key);
     navigate(`/courses?${next}`);
   };
@@ -58,22 +55,12 @@ export function CourseCenter() {
     const controller = new AbortController();
     async function load() {
       try {
-        const kpResponse = await api.get('/quizzes/knowledge-points/', { signal: controller.signal });
-        const flatten = (items: KnowledgePoint[]): KnowledgePoint[] => items.flatMap(item => [item, ...flatten(item.children || [])]);
-        const points = flatten(kpResponse.data);
-        setKps(points);
-        const subject = (pk?: number) => {
-          let node = points.find(item => item.id === pk);
-          const seen = new Set<number>();
-          while (node?.parent && !seen.has(node.id)) { seen.add(node.id); node = points.find(item => item.id === node!.parent); }
-          return node?.name || '';
-        };
         const items: Course[] = [];
         let page = 1, totalPages = 1;
         do {
           const response = await api.get('/courses/', { params: { page, page_size: 100, ordering }, signal: controller.signal });
           const data = response.data;
-          items.push(...(data.items || data).map((course: ApiCourse) => ({ ...course, description: course.description || '', tags: (course.tags || []).map(tag => typeof tag === 'string' ? tag : tag.name), album_name: course.album?.name || '', subject_name: subject(course.knowledge_point) })));
+          items.push(...(data.items || data).map((course: ApiCourse) => ({ ...course, description: course.description || '', tags: (course.tags || []).map(tag => typeof tag === 'string' ? tag : tag.name), album_name: course.album?.name || '' })));
           totalPages = data.total_pages || 1; page++;
         } while (page <= totalPages && !controller.signal.aborted);
         setCourses(items); setError('');
@@ -96,14 +83,14 @@ export function CourseCenter() {
   const filtered = courses.filter(course => {
     const record = byProgress.get(course.id);
     const started = !!record && (record.last_position > 0 || record.is_finished);
-    return tags.every(tag => course.tags?.includes(tag)) && (!kpId || (course as Course & { knowledge_point?: number }).knowledge_point === Number(kpId)) && (scope !== 'later' || queueIds.has(course.id)) && (scope !== 'learning' || (started && !record?.is_finished)) && (status === 'all' || (status === 'finished' ? record?.is_finished : status === 'learning' ? started && !record?.is_finished : !started));
+    return tags.every(tag => course.tags?.includes(tag)) && (scope !== 'later' || queueIds.has(course.id)) && (scope !== 'learning' || (started && !record?.is_finished)) && (status === 'all' || (status === 'finished' ? record?.is_finished : status === 'learning' ? started && !record?.is_finished : !started));
   });
   const visible = filtered.filter(course => !filter || courseGroups(course, grouping).includes(filter));
   const matchingFilter = courses.find(course => courseGroups(course, grouping).includes(filter));
   const filterLabel = !filter ? '' : grouping === 'module' ? matchingFilter?.module_name || '待归类' : grouping === 'album' ? matchingFilter?.album_name || '专辑' : filter;
   const selectedCourse = id ? courses.find(course => course.id === Number(id)) : undefined;
   const retry = () => setVersion(value => value + 1);
-  const resetFilters = () => { setKpId(''); setOrdering('sort_order'); navigate('/courses'); };
+  const resetFilters = () => { setOrdering('sort_order'); navigate('/courses'); };
   const open = (course: Course, view = 'overview') => { navigate(`/course/${course.id}${view !== 'overview' ? `?view=${view}` : ''}`); setListOpen(false); };
   const changeQueue = async (course: Course, remove: boolean) => {
     setQueuePending(values => [...values, course.id]);
@@ -114,7 +101,7 @@ export function CourseCenter() {
     } catch { setQueueError('稍后观看更新失败'); }
     finally { setQueuePending(values => values.filter(value => value !== course.id)); }
   };
-  const directory = <CourseTree courses={courses} treeCourses={filtered} selectedId={id ? Number(id) : undefined} loading={loading} error={error} query={query} grouping={grouping} filter={filter} tag={tags[0] || ''} status={status} scope={scope} filtersActive={!!(tags.length || kpId || filter || status !== 'all' || scope !== 'all' || ordering !== 'sort_order')} onResetFilters={resetFilters} onQueryChange={setQuery} onFacet={changeFacet} onFilter={(value, group) => { const next = new URLSearchParams(params); next.set('group', group || grouping); next.set('filter', value); navigate(`/courses?${next}`); setListOpen(false); }} onSelect={open} onRetry={retry}
-    extraFilters={<><label>知识点筛选<select value={kpId} onChange={e => setKpId(e.target.value)}><option value="">全部知识点</option>{kps.map(kp => <option key={kp.id} value={kp.id}>{kp.name}</option>)}</select></label><label>课程排序<select value={ordering} onChange={e => setOrdering(e.target.value)}><option value="sort_order">默认排序</option><option value="created_at">时间正序</option><option value="-created_at">时间倒序</option></select></label><details className="um-course-tag-options"><summary>组合标签{tags.length ? ` · ${tags.length}` : ''}</summary>{[...new Set(courses.flatMap(course => course.tags || []))].map(tag => <label key={tag}><input type="checkbox" checked={tags.includes(tag)} onChange={e => { const next = new URLSearchParams(params); next.delete('tag'); (e.target.checked ? [...tags, tag] : tags.filter(item => item !== tag)).forEach(item => next.append('tag', item)); navigate(`/courses?${next}`); }} />{tag}</label>)}</details></>} />;
-  return <div className="um-course-workspace" data-directory-animated={directoryWidth.animated || undefined} style={{ '--um-directory-width': `${directoryWidth.width}px`, '--um-directory-content-width': `${directoryWidth.contentWidth}px` } as CSSProperties}><aside className="um-course-context" aria-label="课程导航"><div className="um-course-directory-content um-directory-content" aria-hidden={!directoryWidth.width || undefined} inert={!directoryWidth.width}>{directory}</div><DirectoryResizeHandle width={directoryWidth.width} onChange={directoryWidth.changeWidth} label="调整课程导航宽度" /></aside><section className="um-course-main" aria-label="课程功能区"><header className="um-course-header"><div className="um-course-header-title"><button className="um-course-directory-toggle" onClick={directoryWidth.toggle} aria-label={directoryWidth.width ? '收起课程导航' : '展开课程导航'} title={directoryWidth.width ? '收起课程导航' : '展开课程导航'}><SidebarSimple size={18} /></button><Dialog.Root open={listOpen} onOpenChange={setListOpen}><Dialog.Trigger asChild><button className="um-course-button um-course-list-toggle" aria-label="课程导航"><SidebarSimple size={16} />课程导航</button></Dialog.Trigger><Dialog.Portal><Dialog.Overlay className="um-course-drawer-overlay" /><Dialog.Content className="um-course-drawer"><Dialog.Title className="sr-only">课程导航</Dialog.Title><Dialog.Description className="sr-only">搜索、筛选和选择课程</Dialog.Description><Dialog.Close className="um-course-drawer-close" aria-label="关闭课程导航"><X size={16} /></Dialog.Close>{directory}</Dialog.Content></Dialog.Portal></Dialog.Root></div><div className="um-course-header-actions">{workspaceHeader}</div></header><div className="um-course-main-scroll">{id ? <div className="um-course-detail-player"><VideoLesson isFavorite={!!selectedCourse && queueIds.has(selectedCourse.id)} favoritePending={queueLoading || !selectedCourse || queuePending.includes(selectedCourse.id)} onFavoriteChange={selectedCourse ? () => { void changeQueue(selectedCourse, queueIds.has(selectedCourse.id)); } : undefined} /></div> : loading || error ? <div className="um-course-state"><p>{loading ? '正在加载课程…' : error}</p>{error && <button className="um-course-button" onClick={retry}>重试</button>}</div> : <CoursePortal courses={visible} goalCourses={courses} progress={progress} loading={false} error={progressError} activity={activity} activityError={activityError} onRetryActivity={retry} queue={queue} queueLoading={queueLoading} queueError={queueError} queuePending={queuePending} onQueueChange={changeQueue} onRetryQueue={retry} filter={[filterLabel, ...tags, status === 'all' ? '' : status === 'finished' ? '已看完' : status === 'learning' ? '未看完' : '未开始'].filter(Boolean).join(' / ')} onRetry={retry} onClear={resetFilters} onOpen={open} />}</div></section></div>;
+  const directory = <CourseTree courses={courses} treeCourses={visible} selectedId={id ? Number(id) : undefined} loading={loading} error={error} query={query} grouping={grouping} filter={filter} tag={tags[0] || ''} status={status} scope={scope} filtersActive={!!(tags.length || filter || status !== 'all' || scope !== 'all' || ordering !== 'sort_order')} onResetFilters={resetFilters} onQueryChange={setQuery} onFacet={changeFacet} onFilter={(value, group) => { const next = new URLSearchParams(params); next.set('group', group || grouping); next.set('filter', value); navigate(`/courses?${next}`); setListOpen(false); }} onSelect={open} onRetry={retry}
+    extraFilters={<label>课程排序<select value={ordering} onChange={e => setOrdering(e.target.value)}><option value="sort_order">默认排序</option><option value="created_at">时间正序</option><option value="-created_at">时间倒序</option></select></label>} />;
+  return <div className="um-course-workspace" data-directory-animated={directoryWidth.animated || undefined} style={{ '--um-directory-width': `${directoryWidth.width}px`, '--um-directory-content-width': `${directoryWidth.contentWidth}px` } as CSSProperties}><aside className="um-course-context" aria-label="课程导航"><div className="um-course-directory-content um-directory-content" aria-hidden={!directoryWidth.width || undefined} inert={!directoryWidth.width}>{directory}</div><DirectoryResizeHandle width={directoryWidth.width} onChange={directoryWidth.changeWidth} label="调整课程导航宽度" /></aside><section className="um-course-main" aria-label="课程功能区"><header className="um-course-header"><div className="um-course-header-title"><button className="um-course-directory-toggle" onClick={directoryWidth.toggle} aria-label={directoryWidth.width ? '收起课程导航' : '展开课程导航'} title={directoryWidth.width ? '收起课程导航' : '展开课程导航'}><SidebarSimple size={18} /></button><Dialog.Root open={listOpen} onOpenChange={setListOpen}><Dialog.Trigger asChild><button className="um-course-button um-course-list-toggle" aria-label="课程导航"><SidebarSimple size={16} />课程导航</button></Dialog.Trigger><Dialog.Portal><Dialog.Overlay className="um-course-drawer-overlay" /><Dialog.Content className="um-course-drawer"><Dialog.Title className="sr-only">课程导航</Dialog.Title><Dialog.Description className="sr-only">搜索、筛选和选择课程</Dialog.Description><Dialog.Close className="um-course-drawer-close" aria-label="关闭课程导航"><X size={16} /></Dialog.Close>{directory}</Dialog.Content></Dialog.Portal></Dialog.Root></div><div className="um-course-header-actions">{workspaceHeader}</div></header><div className="um-course-main-scroll">{id ? <div className="um-course-detail-player"><VideoLesson isFavorite={!!selectedCourse && queueIds.has(selectedCourse.id)} favoritePending={queueLoading || !selectedCourse || queuePending.includes(selectedCourse.id)} onFavoriteChange={selectedCourse ? () => { void changeQueue(selectedCourse, queueIds.has(selectedCourse.id)); } : undefined} /></div> : loading || error ? <div className="um-course-state"><p>{loading ? '正在加载课程…' : error}</p>{error && <button className="um-course-button" onClick={retry}>重试</button>}</div> : <CoursePortal courses={visible} progress={progress} loading={false} error={progressError} activity={activity} activityError={activityError} onRetryActivity={retry} queue={queue} queueLoading={queueLoading} queueError={queueError} queuePending={queuePending} onQueueChange={changeQueue} onRetryQueue={retry} filter={[filterLabel, ...tags, status === 'all' ? '' : status === 'finished' ? '已看完' : status === 'learning' ? '未看完' : '未开始'].filter(Boolean).join(' / ')} onRetry={retry} onClear={resetFilters} onOpen={open} />}</div></section></div>;
 }

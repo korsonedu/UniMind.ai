@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, Check, Clock as Clock3, CalendarBlank as CalendarDays, Play, Plus, Trophy, X } from '@phosphor-icons/react';
 import { toast } from 'sonner';
@@ -7,13 +7,11 @@ import { CheckInFireworks } from '@/components/CheckInFireworks';
 import { LearningOverview, type DashData } from './LearningOverview';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LearningCalendar } from './LearningCalendar';
-import { LearningGoalPanel } from './LearningGoalPanel';
 import { dateOffset, learningDuration } from './learningDates';
 import { LEARNING_TIME_ZONE, learningDate, playbackTime, type Course, type CourseProgress, type LearningActivity, type WatchLater } from './types';
 
 interface PortalProps {
   courses: Course[];
-  goalCourses: Course[];
   progress: CourseProgress[];
   loading: boolean;
   error: string;
@@ -38,7 +36,7 @@ function progressLabel(record?: CourseProgress) {
   return record.duration > 0 ? `${Math.min(99, Math.round(record.last_position / record.duration * 100))}% · ${playbackTime(record.last_position)} / ${playbackTime(record.duration)}` : `观看至 ${playbackTime(record.last_position)}`;
 }
 
-export function CoursePortal({ courses, goalCourses, progress, loading, error, activity, activityError, onRetryActivity, queue, queueLoading, queueError, queuePending, onQueueChange, onRetryQueue, filter, onRetry, onClear, onOpen }: PortalProps) {
+export function CoursePortal({ courses, progress, loading, error, activity, activityError, onRetryActivity, queue, queueLoading, queueError, queuePending, onQueueChange, onRetryQueue, filter, onRetry, onClear, onOpen }: PortalProps) {
   const name = useAuthStore(state => state.user?.nickname || state.user?.username || '同学');
   const [now, setNow] = useState(() => new Date());
   const [tab, setTab] = useState('unfinished');
@@ -65,7 +63,7 @@ export function CoursePortal({ courses, goalCourses, progress, loading, error, a
     } catch { toast.error('打卡失败，请重试'); }
     finally { setCheckingIn(false); }
   };
-  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 60000); return () => window.clearInterval(timer); }, []);
   const today = learningDate(now);
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: LEARNING_TIME_ZONE, hour: 'numeric', hourCycle: 'h23' }).format(now));
   const greeting = hour < 6 ? '夜深了' : hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
@@ -80,7 +78,10 @@ export function CoursePortal({ courses, goalCourses, progress, loading, error, a
   const queued = queue.filter(item => byCourse.get(item.course)?.video_file).map(item => byCourse.get(item.course)!);
   const queueIds = new Set(queue.map(item => item.course));
   const nextCourses = videoCourses.filter(course => !queueIds.has(course.id) && !byProgress.get(course.id)?.is_finished && !byProgress.get(course.id)?.last_position);
-  const activityDays = activity?.days.filter(day => byCourse.has(day.course)) || [];
+  const activityDays = useMemo(() => {
+    const courseIds = new Set(courses.map(course => course.id));
+    return activity?.days.filter(day => courseIds.has(day.course)) || [];
+  }, [activity, courses]);
   const totals = activity?.totals.filter(item => byCourse.has(item.course)) || [];
   const activeDates = new Set(activityDays.filter(day => day.watched_seconds > 0 || day.completions > 0).map(day => day.date));
   const weekDays = Array.from({ length: 7 }, (_, index) => dateOffset(today, -index)).filter(date => activeDates.has(date)).length;
@@ -99,7 +100,6 @@ export function CoursePortal({ courses, goalCourses, progress, loading, error, a
   return <div className="um-course-content um-course-portal">
     <CheckInFireworks burst={checkInBurst} />
     <header className="um-portal-welcome"><div><h1>{greeting}，{name}</h1><time dateTime={today}>{new Intl.DateTimeFormat('zh-CN', { timeZone: LEARNING_TIME_ZONE, month: 'long', day: 'numeric', weekday: 'long' }).format(now)}</time></div><div className="um-portal-checkin"><span className="um-course-muted">{dash && !dashError ? `连续打卡 ${dash.stats.checkin_streak} 天` : '每日打卡'}</span><button type="button" className="um-course-button" onClick={handleCheckIn} disabled={checkingIn || !dash || dashError || dash.stats.today_checked_in}>{checkingIn ? '打卡中…' : dash?.stats.today_checked_in ? '已打卡' : '今日打卡'}</button></div></header>
-    <LearningGoalPanel courses={goalCourses} progress={progress} today={today} />
     {filter && <div className="um-portal-filter"><span>当前范围：{filter}</span><button type="button" className="um-course-text-button" onClick={onClear}>清除筛选<X size={13} /></button></div>}
     <div className="um-portal-upper">
       <section className="um-portal-card um-course-resume" aria-label="上次观看"><div className="um-portal-resume-label"><Play size={15} fill="currentColor" /><h2>{lastRecord?.is_finished ? '上次观看' : '继续学习'}</h2></div>{loading ? <p role="status" className="um-course-muted">正在读取观看记录…</p> : error ? <div><p role="alert">{error}</p><button type="button" className="um-course-button" onClick={onRetry}>重试观看记录</button></div> : lastCourse && lastRecord ? <><h3>{lastCourse.title}</h3><p className="um-course-muted">{progressLabel(lastRecord)}</p>{!lastRecord.is_finished && lastRecord.duration > 0 && <progress value={lastRecord.last_position} max={Math.max(lastRecord.duration, lastRecord.last_position)} aria-label={`${lastCourse.title}观看进度`} />}<div className="um-portal-resume-actions"><button type="button" className="um-course-button um-course-button-primary" onClick={() => onOpen(lastCourse, 'video')}><Play size={14} fill="currentColor" />{lastRecord.is_finished ? '重新观看' : '继续观看'}</button><button type="button" className="um-course-text-button" onClick={() => onOpen(lastCourse)}>课程详情<ArrowUpRight size={14} /></button></div></> : <><h3>开始学习</h3><p className="um-course-muted">暂无观看记录</p>{videoCourses[0] && <button type="button" className="um-course-button um-course-button-primary" onClick={() => onOpen(videoCourses[0], 'video')}>开始学习</button>}</>}</section>

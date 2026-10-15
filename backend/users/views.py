@@ -15,7 +15,7 @@ from .serializers import (
     DailyPlanSerializer,
 )
 from .models import User, DailyPlan
-from .permissions import IsPlatformAdmin, IsAdmin, is_platform_admin
+from .permissions import IsPlatformAdmin, IsAdmin, HasStudentFeature, is_platform_admin
 from django.utils import timezone
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -1708,7 +1708,7 @@ def _build_report_data(user, date_from=None, date_to=None):
 
 class StudentReportCardView(APIView):
     """GET /api/users/me/report-card/ — 学生自己的成绩报告卡。"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
 
     def get(self, request):
         return Response(_build_report_data(request.user))
@@ -1766,7 +1766,7 @@ def _html_to_pdf(html_string: str, output_path: str):
 
 class StudentReportCardPDFView(APIView):
     """GET /api/users/me/report-card/pdf/ — 成绩报告卡 PDF。"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
 
     def get(self, request):
         data = _build_report_data(request.user)

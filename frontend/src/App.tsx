@@ -157,7 +157,7 @@ const router = createBrowserRouter([
       {
         element: <RequireAuth><Suspense fallback={<PageLoader />}><MainLayout /></Suspense></RequireAuth>,
         children: [
-          { path: "courses", element: lazyPage(CourseCenter) },
+          { path: "courses", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
           { path: "courses/manage", element: <Navigate to="/courses" replace /> },
           { path: "learning-products", element: <Navigate to="/xiaoyu" replace /> },
           { path: "articles", element: <Navigate to="/xiaoyu" replace /> },
@@ -174,8 +174,8 @@ const router = createBrowserRouter([
           { path: "article/:id", element: <Navigate to="/xiaoyu" replace /> },
           { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
-          { path: "xiaoyu", element: lazyPage(XiaoYu) },
-          { path: "xiaoyu/practice/:sessionId", element: lazyPage(PracticeSession) },
+          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{lazyPage(XiaoYu)}</FeatureGuard> },
+          { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
           { path: "knowledge-map/*", element: <Navigate to="/xiaoyu" replace /> },
           { path: "settings", element: lazyPage(Settings) },
           { path: "billing", element: lazyPage(BillingPage) },
@@ -185,7 +185,7 @@ const router = createBrowserRouter([
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "achievements", element: lazyPage(Achievements) },
 
-          { path: "report-card", element: lazyPage(ReportCard) },
+          { path: "report-card", element: <FeatureGuard feature={FEATURES.FULL_REPORT}>{lazyPage(ReportCard)}</FeatureGuard> },
 
           { path: "workbench", element: <Navigate to="/xiaoyu" replace /> },
           { path: "assets", element: <Navigate to="/xiaoyu" replace /> },

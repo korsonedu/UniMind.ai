@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
-import { useAuthStore } from '@/store/useAuthStore';
-import { Spinner, Lock, Sparkle } from '@phosphor-icons/react';
+import { Spinner, Lock } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { UpgradeModal } from '@/components/UpgradeModal';
 
 const FEATURE_LABELS: Record<string, string> = {
+  'ai.assistant': '小宇',
+  'full.report': '学习记录',
   'quiz.exam': '智能刷题',
   'knowledge.graph': '知识地图',
   'faq.system': '答疑系统',
@@ -21,9 +20,7 @@ export function FeatureGuard({
   feature: string;
   children: React.ReactNode;
 }) {
-  const { hasFeature, loading, featuresError, fetchFeatures, institution } = useInstitutionStore();
-  const user = useAuthStore(s => s.user);
-  const [showUpgrade, setShowUpgrade] = useState(false);
+  const { hasFeature, loading, featuresError, fetchFeatures } = useInstitutionStore();
 
   if (loading) {
     return (
@@ -54,25 +51,13 @@ export function FeatureGuard({
     <>
       <div className="min-h-[60vh] flex items-center justify-center p-4">
         <div className="text-center max-w-md">
-          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-5">
-            <Lock className="w-8 h-8 text-muted-foreground" />
-          </div>
+          <Lock className="w-6 h-6 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2">{featureName}暂未开放</h2>
           <p className="text-muted-foreground text-sm mb-6">
-            请在学习服务中查看该功能的可用权益。
+            该功能尚未向你的账号开放，请联系管理员。
           </p>
-          <Button onClick={() => setShowUpgrade(true)} className="rounded-full px-6">
-            <Sparkle className="w-4 h-4 mr-2" />
-            查看学习服务
-          </Button>
         </div>
       </div>
-      <UpgradeModal
-        open={showUpgrade}
-        onOpenChange={setShowUpgrade}
-        feature={feature}
-        currentPlan={institution?.plan || user?.personal_plan || user?.membership_tier || 'free'}
-      />
     </>
   );
 }

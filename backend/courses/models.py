@@ -23,6 +23,7 @@ class Album(models.Model):
 
 class CourseModule(models.Model):
     institution = models.ForeignKey('users.Institution', on_delete=models.CASCADE, null=True, blank=True, related_name='course_modules')
+    subject = models.CharField(max_length=100, blank=True, default='', db_index=True, verbose_name='学科')
     name = models.CharField(max_length=100, verbose_name='模块名称')
     is_public = models.BooleanField(default=False, verbose_name='免费开放')
     description = models.TextField(blank=True, verbose_name='模块简介')
@@ -31,8 +32,8 @@ class CourseModule(models.Model):
     class Meta:
         ordering = ['sort_order', 'id']
         constraints = [
-            models.UniqueConstraint(fields=['institution', 'name'], name='unique_institution_course_module'),
-            models.UniqueConstraint(fields=['name'], condition=models.Q(institution__isnull=True), name='unique_global_course_module'),
+            models.UniqueConstraint(fields=['institution', 'subject', 'name'], name='unique_institution_subject_module'),
+            models.UniqueConstraint(fields=['subject', 'name'], condition=models.Q(institution__isnull=True), name='unique_global_subject_module'),
         ]
 
     def __str__(self):

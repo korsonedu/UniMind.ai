@@ -26,6 +26,7 @@ class LearningProduct(models.Model):
 
 
 class LearningGrant(models.Model):
+    request_id = models.UUIDField(null=True, blank=True, unique=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='learning_grants')
     product = models.ForeignKey(LearningProduct, on_delete=models.PROTECT, related_name='grants')
     order = models.OneToOneField('payments.Order', on_delete=models.PROTECT, null=True, blank=True, related_name='learning_grant')

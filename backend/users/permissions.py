@@ -69,7 +69,8 @@ def get_user_capabilities(user) -> list[str]:
     if not user or not user.is_authenticated:
         return []
 
-    caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS]
+    from .learning import LEARNING_FEATURES
+    caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *LEARNING_FEATURES]
     if is_platform_admin(user):
         caps.extend(ADMIN_CAPABILITIES)
 
@@ -135,7 +136,19 @@ class IsMember(permissions.BasePermission):
     message = "请登录后使用学习功能。"
 
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.is_active)
+        if not (request.user and request.user.is_authenticated and request.user.is_active):
+            return False
+        self.message = HasStudentFeature.message
+        return HasStudentFeature().has_permission(request, view)
+
+
+class HasStudentFeature(permissions.BasePermission):
+    message = '该功能尚未向你的账号开放，请联系管理员。'
+
+    def has_permission(self, request, view):
+        from .feature_access import has_learning_feature, request_feature
+        feature = request_feature(request)
+        return not feature or has_learning_feature(request.user, feature)
 
 
 class IsMemberOrReadOnlyList(permissions.BasePermission):
@@ -143,8 +156,8 @@ class IsMemberOrReadOnlyList(permissions.BasePermission):
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
-            return request.user and request.user.is_authenticated
-        return is_member_or_admin(request.user)
+            return IsMember().has_permission(request, view)
+        return is_member_or_admin(request.user) and HasStudentFeature().has_permission(request, view)
 
 
 class IsAdminWriteMemberRead(permissions.BasePermission):
@@ -235,7 +248,8 @@ class HasPlanFeature(permissions.BasePermission):
             return True
         from users.learning import LEARNING_FEATURES
         if required in LEARNING_FEATURES:
-            return True
+            from .feature_access import has_learning_feature
+            return has_learning_feature(user, required)
         from users.models import get_effective_plan_for_user, get_plan_features
         return required in get_plan_features(get_effective_plan_for_user(user))
 

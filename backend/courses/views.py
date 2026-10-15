@@ -506,7 +506,7 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
-        return [permissions.AllowAny()]
+        return [IsMember()]
 
     def get_queryset(self):
         return apply_institution_filter(StartupMaterial.objects.all().order_by('-created_at'), self.request.user, self.request)
@@ -537,7 +537,7 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
-        return [permissions.AllowAny()]
+        return [IsMember()]
 
     def get_queryset(self):
         return apply_institution_filter(StartupMaterial.objects.all(), self.request.user, self.request)
@@ -569,7 +569,7 @@ class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AlbumSerializer
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
-        return [permissions.AllowAny()]
+        return [IsMember()]
 
     def get_queryset(self):
         return apply_institution_filter(Album.objects.all(), self.request.user, self.request)

@@ -7,17 +7,22 @@ class CourseModuleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CourseModule
-        fields = ('id', 'name', 'description', 'is_public', 'sort_order', 'course_count')
+        fields = ('id', 'name', 'subject', 'description', 'is_public', 'sort_order', 'course_count')
         validators = []
 
-    def validate_name(self, value):
+    def validate(self, attrs):
         institution_id = self.instance.institution_id if self.instance else self.context['request'].user.institution_id
-        duplicates = CourseModule.objects.filter(institution_id=institution_id, name=value)
+        subject = attrs.get('subject', self.instance.subject if self.instance else '').strip()
+        name = attrs.get('name', self.instance.name if self.instance else '')
+        if not subject:
+            raise serializers.ValidationError({'subject': '请填写所属学科。'})
+        attrs['subject'] = subject
+        duplicates = CourseModule.objects.filter(institution_id=institution_id, subject=subject, name=name)
         if self.instance:
             duplicates = duplicates.exclude(pk=self.instance.pk)
         if duplicates.exists():
-            raise serializers.ValidationError('当前机构已存在同名模块。')
-        return value
+            raise serializers.ValidationError({'name': '当前学科已存在同名模块。'})
+        return attrs
 
 
 class RelativeFileField(serializers.FileField):
@@ -58,6 +63,7 @@ class AlbumSerializer(serializers.ModelSerializer):
 
 
 class CourseSerializer(serializers.ModelSerializer):
+    subject_name = serializers.SerializerMethodField()
     module_name = serializers.CharField(source='module.name', read_only=True, default='')
     module_sort_order = serializers.IntegerField(source='module.sort_order', read_only=True, default=0)
     cover_image = RelativeImageField(required=False)
@@ -71,6 +77,17 @@ class CourseSerializer(serializers.ModelSerializer):
     )
     tags = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
+
+    def get_subject_name(self, obj):
+        if obj.module_id and obj.module.subject:
+            return obj.module.subject
+        if not obj.knowledge_point_id:
+            return ''
+        from quizzes.models import KnowledgePoint
+        from .classification import legacy_subject
+        if '_legacy_subject_points' not in self.context:
+            self.context['_legacy_subject_points'] = {point['id']: point for point in KnowledgePoint.objects.values('id', 'name', 'subject', 'parent_id')}
+        return legacy_subject(self.context['_legacy_subject_points'], obj.knowledge_point_id)
 
     def validate(self, attrs):
         module = attrs.get('module')
@@ -98,7 +115,7 @@ class CourseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Course
-        fields = ('id', 'title', 'module', 'module_name', 'module_sort_order', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'progress', 'created_at', 'updated_at', 'author')
+        fields = ('id', 'title', 'module', 'module_name', 'module_sort_order', 'subject_name', 'album', 'album_obj', 'description', 'knowledge_point', 'cover_image', 'video_file', 'elo_reward', 'courseware', 'reference_materials', 'ai_outline_enabled', 'sort_order', 'institution', 'tags', 'progress', 'created_at', 'updated_at', 'author')
         read_only_fields = ('author', 'institution')
 
 class StartupMaterialSerializer(serializers.ModelSerializer):

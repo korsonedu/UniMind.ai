@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Spinner, CaretDown, CaretUp, Sparkle } from '@phosphor-icons/react';
+import React, { useEffect, useCallback, useRef } from 'react';
+import { Spinner } from '@phosphor-icons/react';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
-import { cn, formatDuration } from '@/lib/utils';
+import { formatDuration } from '@/lib/utils';
 
 interface OutlinePanelProps {
   courseId: number;
@@ -10,7 +10,6 @@ interface OutlinePanelProps {
 
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }) => {
   const { outlineStatus, outlineItems, fetchOutline, triggerOutlineGeneration, clearCourseTimers } = useCourseAIStore();
-  const [expanded, setExpanded] = useState(true);
   const autoTriggeredRef = useRef(false);
 
   useEffect(() => {
@@ -38,56 +37,28 @@ export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }
 
   if (outlineStatus === 'idle' || outlineStatus === 'loading') {
     return (
-      <div className="flex items-center gap-2 py-2 text-muted-foreground/60">
-        <Spinner className="h-3 w-3 animate-spin" />
-        <span className="text-[10px] font-bold uppercase tracking-wider">AI 正在分析课程内容…</span>
+      <div className="um-lesson-outline-status" role="status">
+        <Spinner size={16} className="animate-spin" />
+        <span>正在整理课程大纲…</span>
       </div>
     );
   }
 
   if (outlineStatus === 'unavailable' || outlineItems.length === 0) {
-    return null;
+    return <p className="um-lesson-empty">暂无课程大纲</p>;
   }
 
   return (
-    <div className="space-y-3">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <Sparkle className="h-3 w-3 text-indigo-500" />
-        {`AI 智能大纲 (${outlineItems.length} 章节)`}
-        {expanded ? <CaretUp className="h-3 w-3" /> : <CaretDown className="h-3 w-3" />}
-      </button>
-
-      {expanded && (
-        <div className="space-y-1 pl-1">
-          {outlineItems.map((item) => (
-            <button
-              key={item.index}
-              onClick={() => handleSeek(item.timestamp)}
-              className={cn(
-                'w-full text-left p-2.5 rounded-xl',
-                'hover:bg-muted/50 transition-colors group',
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <span className="shrink-0 text-[10px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md tabular-nums">
-                  {formatDuration(item.timestamp)}
-                </span>
-                <span className="text-xs font-bold text-foreground leading-snug group-hover:text-indigo-600 transition-colors">
-                  {item.title}
-                </span>
-              </div>
-              {item.description && (
-                <p className="text-[10px] text-muted-foreground/60 mt-0.5 ml-[52px] line-clamp-2 leading-relaxed">
-                  {item.description}
-                </p>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="um-lesson-outline">
+      <p className="um-lesson-outline-count">{outlineItems.length} 个章节</p>
+      <ol className="um-lesson-outline-items">
+        {outlineItems.map((item) => (
+          <li key={item.index}><button onClick={() => handleSeek(item.timestamp)} aria-label={`${formatDuration(item.timestamp)} ${item.title}`}>
+            <time>{formatDuration(item.timestamp)}</time><span>{item.title}</span>
+            {item.description && <small>{item.description}</small>}
+          </button></li>
+        ))}
+      </ol>
     </div>
   );
 };
