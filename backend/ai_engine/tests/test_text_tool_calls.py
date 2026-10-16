@@ -240,6 +240,79 @@ def test_invalid_arguments_are_returned_to_model_before_retry(monkeypatch):
     assert result["content"] == "已修正。"
 
 
+def test_reply_visual_in_parallel_batch_stops_follow_up_tool_calls(monkeypatch):
+    visual_definition = {
+        "type": "function",
+        "function": {
+            "name": "render_visual",
+            "description": "Render a visual",
+            "parameters": {
+                "type": "object",
+                "properties": {"kind": {"type": "string"}},
+                "required": ["kind"],
+                "additionalProperties": False,
+            },
+        },
+    }
+    responses = iter([
+        _StreamingToolResponse([
+            {**_tool_call_chunk("render_visual", {"kind": "reply"}, "reply-call"), "index": 0},
+            {**_tool_call_chunk("render_visual", {"kind": "data"}, "data-call"), "index": 1},
+        ]),
+        _StreamingResponse(["请点击上方卡片确认。"]),
+    ])
+    request_bodies = []
+
+    def post(*args, **kwargs):
+        request_bodies.append(kwargs["json"])
+        return next(responses)
+
+    class VisualExecutor:
+        def __init__(self):
+            self.pending_visuals = []
+
+        def __call__(self, name, arguments):
+            if arguments["kind"] == "reply":
+                time.sleep(0.01)
+                visual = {
+                    "type": "action_cards",
+                    "payload": {"cards": [{"action": {"type": "reply"}}]},
+                }
+            else:
+                time.sleep(0.02)
+                visual = {"type": "data_card", "payload": {"value": 1}}
+            self.pending_visuals.append(visual)
+            return json.dumps({"status": "ok", "visual": visual})
+
+    monkeypatch.setattr(
+        "ai_engine.service.get_model_for_task",
+        lambda operation: {
+            "api_key": "test-key",
+            "base_url": "https://example.invalid/chat",
+            "model": "test-model",
+            "thinking": False,
+        },
+    )
+    monkeypatch.setattr("ai_engine.service._session.post", post)
+    monkeypatch.setattr("ai_engine.circuit_breaker.AICircuitBreaker.check", lambda *args, **kwargs: None)
+    monkeypatch.setattr("ai_engine.circuit_breaker.AICircuitBreaker.record_success", lambda *args, **kwargs: None)
+
+    result = AIEngine.call_ai_with_streaming_tools(
+        messages=[{"role": "user", "content": "执行需要确认的操作"}],
+        tools=[visual_definition],
+        tool_executor=VisualExecutor(),
+        max_tool_rounds=2,
+    )
+
+    assert result["content"] == "请点击上方卡片确认。"
+    assert request_bodies[1].get("tool_choice") == "none"
+    assert "tools" not in request_bodies[1]
+    assert any(
+        message.get("role") == "system" and "点击卡片确认" in message.get("content", "")
+        for message in request_bodies[1]["messages"]
+    )
+
+
 def test_tool_timeout_returns_without_waiting_for_worker_shutdown():
     release = threading.Event()
 

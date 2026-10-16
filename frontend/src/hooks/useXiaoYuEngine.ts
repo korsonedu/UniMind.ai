@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { XiaoYuMessage } from '@/store/useXiaoYuStore';
 import type { Bot } from '@/types/api';
 import { useXiaoYuStore } from '@/store/useXiaoYuStore';
-import type { AgentStep } from '@/types/toolRun';
+import { upsertToolStepMessage, type AgentStep } from '@/types/toolRun';
 
 interface UseXiaoYuEngineOptions {
   enabled: boolean;
@@ -139,43 +139,22 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
               });
             } else if (payload.type === 'step') {
               const step = payload as AgentStep;
-
-              if (step.status === 'running') {
-                setMessages((prev: XiaoYuMessage[]) => {
-                  const existingIdx = prev.findIndex(
-                    (m: XiaoYuMessage) => m.toolStep?.call_id === step.call_id,
-                  );
-                  if (existingIdx >= 0) {
-                    const updated = [...prev];
-                    updated[existingIdx] = {
-                      ...updated[existingIdx],
-                      toolStep: step,
-                    };
-                    return updated;
-                  }
+              setMessages((prev: XiaoYuMessage[]) => upsertToolStepMessage(
+                prev,
+                step,
+                currentStep => {
                   const id = nextId();
                   scheduleShow(id, prev.length);
-                  return [
-                    ...prev,
-                    {
-                      _id: id,
-                      role: 'assistant' as const,
-                      content: '',
-                      toolStep: step,
-                      visible: false,
-                      timestamp: new Date().toISOString(),
-                    },
-                  ];
-                });
-              } else if (step.status === 'succeeded' || step.status === 'failed') {
-                setMessages((prev: XiaoYuMessage[]) =>
-                  prev.map((m: XiaoYuMessage) =>
-                    m.toolStep?.call_id === step.call_id
-                      ? { ...m, toolStep: step }
-                      : m,
-                  ),
-                );
-              }
+                  return {
+                    _id: id,
+                    role: 'assistant' as const,
+                    content: '',
+                    toolStep: currentStep,
+                    visible: false,
+                    timestamp: new Date().toISOString(),
+                  };
+                },
+              ));
             } else if (payload.type === 'error') {
               toast.error(payload.message || 'AI 调用失败');
             } else if (payload.done) {

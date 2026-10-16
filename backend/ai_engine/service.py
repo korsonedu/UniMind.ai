@@ -1002,9 +1002,12 @@ class AIEngine:
                     })
 
                 if not outcome.failed and name == 'render_visual':
-                    pending_visuals = getattr(tool_executor, 'pending_visuals', None)
-                    if pending_visuals:
-                        visual = pending_visuals[-1]
+                    try:
+                        result_payload = json.loads(outcome.result)
+                    except (json.JSONDecodeError, TypeError):
+                        result_payload = None
+                    visual = result_payload.get('visual') if isinstance(result_payload, dict) else None
+                    if isinstance(visual, dict):
                         is_reply_visual = (
                             visual.get('type') == 'action_cards' and
                             any(

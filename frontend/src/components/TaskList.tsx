@@ -1,8 +1,8 @@
-import { useState, useEffect, useId } from 'react';
+import { useState, useEffect, useId, useRef } from 'react';
 import { Check, Circle, Spinner, X, CaretRight } from '@phosphor-icons/react';
 import { Collapse } from './ui/collapse';
 import { cn } from '@/lib/utils';
-import type { TaskListData } from '@/types/toolRun';
+import { shouldExpandToolRun, type TaskListData } from '@/types/toolRun';
 
 interface TaskListProps {
   data: TaskListData;
@@ -16,6 +16,7 @@ function formatDuration(ms: number): string {
 
 export function TaskList({ data, onComplete }: TaskListProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const previousRunId = useRef(data.run_id);
   const contentId = useId();
   const [completion, setCompletion] = useState(() => {
     const doneIds = new Set(data.items.filter(item => item.status === 'succeeded').map(item => item.id));
@@ -27,6 +28,13 @@ export function TaskList({ data, onComplete }: TaskListProps) {
   const failedCount = data.items.filter(item => item.status === 'failed').length;
   const terminalCount = succeededCount + failedCount;
   const allSucceeded = data.completed && activeCount === 0 && succeededCount > 0 && failedCount === 0;
+
+  useEffect(() => {
+    if (shouldExpandToolRun(previousRunId.current, data)) {
+      setCollapsed(false);
+    }
+    previousRunId.current = data.run_id;
+  }, [data]);
 
   // Auto-collapse after all done for 3s
   useEffect(() => {

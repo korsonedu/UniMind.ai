@@ -3,7 +3,9 @@ import test from 'node:test';
 import {
   completeToolRun,
   reduceToolRun,
+  shouldExpandToolRun,
   type AgentStep,
+  upsertToolStepMessage,
 } from '../src/types/toolRun.ts';
 
 
@@ -59,6 +61,54 @@ test('新 run 重置列表，旧 batch_start 被忽略', () => {
   assert.equal(legacy, first);
   assert.equal(second?.run_id, 'run-two');
   assert.deepEqual(second?.items.map(item => item.id), ['call-new']);
+});
+
+
+test('缺少 Tool Run 身份的旧进度事件不会清空累计任务', () => {
+  const first = reduceToolRun(null, step({ status: 'succeeded' }));
+  const legacy = reduceToolRun(first, {
+    type: 'step',
+    call_id: 'call-one',
+    name: 'quick_generate',
+    label: '正在生成题目',
+    status: 'calling',
+  } as unknown as AgentStep);
+
+  assert.equal(legacy, first);
+});
+
+
+test('小宇工具消息支持 queued 直接失败并原位更新', () => {
+  type Message = { id: string; toolStep?: AgentStep };
+  const create = (toolStep: AgentStep): Message => ({ id: toolStep.call_id, toolStep });
+
+  const queued = upsertToolStepMessage<Message>([], step(), create);
+  const failed = upsertToolStepMessage(
+    queued,
+    step({ status: 'failed', error: { code: 'invalid_arguments', message: '参数错误' } }),
+    create,
+  );
+  const directFailure = upsertToolStepMessage<Message>(
+    [],
+    step({ status: 'failed', error: { code: 'permission_denied', message: '无权限' } }),
+    create,
+  );
+
+  assert.equal(queued.length, 1);
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0].toolStep?.status, 'failed');
+  assert.equal(directFailure.length, 1);
+  assert.equal(directFailure[0].toolStep?.error?.code, 'permission_denied');
+});
+
+
+test('新 run 或任一失败任务要求展开任务列表', () => {
+  const current = reduceToolRun(null, step({ status: 'succeeded' }));
+  const failed = reduceToolRun(null, step({ status: 'failed' }));
+
+  assert.equal(shouldExpandToolRun('run-old', current!), true);
+  assert.equal(shouldExpandToolRun('run-one', current!), false);
+  assert.equal(shouldExpandToolRun('run-one', failed!), true);
 });
 
 

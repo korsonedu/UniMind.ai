@@ -41,6 +41,54 @@ class RecordingExecutor:
         return json.dumps({"ok": True}, ensure_ascii=False)
 
 
+def test_normalizes_legacy_handler_progress_into_current_tool_run():
+    definition = _tool_definition("quick_generate")
+    events = []
+
+    class ProgressExecutor(RecordingExecutor):
+        def __init__(self, permitted_definitions):
+            super().__init__(permitted_definitions)
+            self.on_step = events.append
+
+        def __call__(self, name, arguments):
+            self.on_step({
+                "type": "step",
+                "call_id": "legacy-call",
+                "step": 0,
+                "status": "calling",
+                "name": name,
+                "label": "正在生成第 1/2 批",
+                "questions": [{"id": 1}],
+            })
+            return json.dumps({"ok": True})
+
+    coordinator = ToolRunCoordinator(
+        ProgressExecutor([definition]),
+        [definition],
+        on_step=events.append,
+        run_id="run-progress",
+    )
+
+    coordinator.execute_batch(
+        [_tool_call("quick_generate", call_id="current-call")],
+        round_number=2,
+    )
+
+    progress = [event for event in events if event.get("questions")]
+    assert len(progress) == 1
+    assert progress[0] == {
+        "type": "step",
+        "run_id": "run-progress",
+        "call_id": "current-call",
+        "round": 2,
+        "name": "quick_generate",
+        "label": "正在生成第 1/2 批",
+        "status": "running",
+        "retry_of": None,
+        "questions": [{"id": 1}],
+    }
+
+
 def test_normalizes_missing_duplicate_and_text_protocol_call_ids():
     definition = _tool_definition()
     executor = RecordingExecutor([definition])

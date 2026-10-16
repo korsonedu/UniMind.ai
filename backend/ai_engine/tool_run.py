@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
 from dataclasses import dataclass
@@ -88,6 +89,11 @@ class ToolRunCoordinator:
         self.max_workers = max_workers
         self._seen_call_ids: set[str] = set()
         self._last_failed_by_tool: dict[str, str] = {}
+        self._progress_lock = threading.Lock()
+        self._active_progress: dict[int, tuple[PreparedToolCall, int]] = {}
+        self._terminal_call_ids: set[str] = set()
+        if self.on_step and hasattr(self.tool_executor, 'on_step'):
+            self.tool_executor.on_step = self._handle_executor_progress
 
     @staticmethod
     def _definitions_by_name(definitions) -> dict[str, dict]:
@@ -193,6 +199,22 @@ class ToolRunCoordinator:
         event.update(fields)
         self.on_step(event)
 
+    def _handle_executor_progress(self, raw_event: dict) -> None:
+        if not self.on_step or not isinstance(raw_event, dict):
+            return
+        with self._progress_lock:
+            active = self._active_progress.get(threading.get_ident())
+            if not active or active[0].call_id in self._terminal_call_ids:
+                return
+        call, round_number = active
+        extras = {
+            key: value for key, value in raw_event.items()
+            if key not in {
+                'type', 'run_id', 'call_id', 'round', 'name', 'status', 'retry_of', 'step'
+            }
+        }
+        self._emit(call, round_number, 'running', **extras)
+
     @staticmethod
     def _classify_result_error(result: str) -> dict | None:
         try:
@@ -211,9 +233,23 @@ class ToolRunCoordinator:
         code = 'timeout' if raw_code == 'timeout' else 'execution_error'
         return {'code': code, 'message': message}
 
-    def _run_with_timeout(self, name: str, arguments: dict):
+    def _run_with_timeout(
+        self,
+        call: PreparedToolCall,
+        round_number: int,
+    ):
+        def invoke():
+            thread_id = threading.get_ident()
+            with self._progress_lock:
+                self._active_progress[thread_id] = (call, round_number)
+            try:
+                return self.tool_executor(call.name, call.arguments)
+            finally:
+                with self._progress_lock:
+                    self._active_progress.pop(thread_id, None)
+
         executor = ThreadPoolExecutor(max_workers=1)
-        future = executor.submit(self.tool_executor, name, arguments)
+        future = executor.submit(invoke)
         try:
             return future.result(timeout=TOOL_TIMEOUT_SECONDS)
         except FutureTimeoutError as exc:
@@ -265,7 +301,7 @@ class ToolRunCoordinator:
         self._emit(call, round_number, 'running')
         started = time.monotonic()
         try:
-            raw_result = self._run_with_timeout(call.name, call.arguments)
+            raw_result = self._run_with_timeout(call, round_number)
             result = raw_result if isinstance(raw_result, str) else json.dumps(raw_result, ensure_ascii=False, default=str)
             error = self._classify_result_error(result)
         except TimeoutError:
@@ -276,6 +312,8 @@ class ToolRunCoordinator:
             result = self._error_result(error)
 
         duration_ms = int((time.monotonic() - started) * 1000)
+        with self._progress_lock:
+            self._terminal_call_ids.add(call.call_id)
         if error:
             result = self._error_result(error)
             self._emit(

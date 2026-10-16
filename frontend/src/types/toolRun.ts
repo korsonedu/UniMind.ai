@@ -60,6 +60,10 @@ function isTerminalStatus(status: ToolTaskStatus): boolean {
   }
 }
 
+function isToolTaskStatus(status: AgentStep['status']): status is ToolTaskStatus {
+  return status === 'queued' || status === 'running' || status === 'succeeded' || status === 'failed';
+}
+
 function taskItemFromStep(event: AgentStep): TaskItem {
   if (event.status === 'batch_start') {
     throw new Error('Legacy batch_start cannot create a Tool Run task');
@@ -82,7 +86,7 @@ export function reduceToolRun(
   previous: TaskListData | null,
   event: AgentStep,
 ): TaskListData | null {
-  if (event.status === 'batch_start') return previous;
+  if (!event.run_id || !event.call_id || !isToolTaskStatus(event.status)) return previous;
 
   const nextItem = taskItemFromStep(event);
   if (!previous || previous.run_id !== event.run_id) {
@@ -108,6 +112,27 @@ export function reduceToolRun(
   const items = [...previous.items];
   items[existingIndex] = { ...existing, ...nextItem, status };
   return { ...previous, items };
+}
+
+export function upsertToolStepMessage<T extends { toolStep?: AgentStep }>(
+  messages: T[],
+  event: AgentStep,
+  createMessage: (event: AgentStep) => T,
+): T[] {
+  if (!event.run_id || !event.call_id || !isToolTaskStatus(event.status)) return messages;
+  const existingIndex = messages.findIndex(message => message.toolStep?.call_id === event.call_id);
+  if (existingIndex < 0) return [...messages, createMessage(event)];
+
+  const updated = [...messages];
+  updated[existingIndex] = { ...updated[existingIndex], toolStep: event };
+  return updated;
+}
+
+export function shouldExpandToolRun(
+  previousRunId: string,
+  data: TaskListData,
+): boolean {
+  return previousRunId !== data.run_id || data.items.some(item => item.status === 'failed');
 }
 
 export function completeToolRun(
