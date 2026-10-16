@@ -118,6 +118,8 @@ UniMind 的 planner 和 exam generator 已支持多轮工具调用，但工具�
 
 Python 线程无法安全强制终止已运行的 handler。超时后请求链会继续，但原 handler 可能在后台完成。因此写操作不自动重试，并保留这一限制在技术文档中。
 
+最终实现的单工具等待上限为 30 秒。超时、handler 异常和旧式扁平 `error` 返回都会规范化为 `{"error":{"code":"...","message":"..."}}` 后再回灌模型。
+
 ## 前端状态
 
 Task reducer 使用 `run_id + call_id` 作为唯一键：
