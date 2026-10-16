@@ -283,6 +283,11 @@ def test_classifies_raised_returned_and_timeout_errors(monkeypatch):
         "execution_error",
         "timeout",
     ]
+    assert [json.loads(outcome.result)["error"]["code"] for outcome in outcomes] == [
+        "execution_error",
+        "execution_error",
+        "timeout",
+    ]
 
 
 def test_links_model_retry_to_previous_failed_call_without_auto_retry():

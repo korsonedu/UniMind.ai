@@ -277,6 +277,7 @@ class ToolRunCoordinator:
 
         duration_ms = int((time.monotonic() - started) * 1000)
         if error:
+            result = self._error_result(error)
             self._emit(
                 call,
                 round_number,
