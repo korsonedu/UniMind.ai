@@ -163,6 +163,17 @@ def summarize_tool_result(tool_name: str, result) -> str:
     return str(result)[:150]
 
 
+def set_permitted_tools(tool_executor, tools) -> None:
+    """保存意图路由前的套餐许可集合及完整参数 Schema。"""
+    definitions = {
+        item['function']['name']: item
+        for item in tools
+        if item.get('function', {}).get('name')
+    }
+    tool_executor._permitted_tool_names = set(definitions)
+    tool_executor._permitted_tool_definitions = definitions
+
+
 class BaseToolExecutor:
     """基础工具执行器。将 tool_name 映射到实际数据库查询，捕获 user 和 institution 上下文。"""
 
@@ -175,6 +186,7 @@ class BaseToolExecutor:
         self.user = user
         self._allowed_tool_names = None
         self._permitted_tool_names = None
+        self._permitted_tool_definitions = {}
         self.institution = institution or getattr(user, 'institution', None)
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id

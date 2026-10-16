@@ -219,7 +219,13 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             ai_content = ai_content.replace('\\(', ' $ ').replace('\\)', ' $ ')
 
             msg_metadata = self._build_metadata(tool_executor)
-            done_event = {"type": "done", "full_content": ai_content, "has_intermediate": _sent_any_message}
+            from .services.chat_dispatch import build_tool_run_done_payload
+            done_event = build_tool_run_done_payload(
+                result,
+                type="done",
+                full_content=ai_content,
+                has_intermediate=_sent_any_message,
+            )
             if msg_metadata:
                 done_event["metadata"] = msg_metadata
             on_step(done_event)

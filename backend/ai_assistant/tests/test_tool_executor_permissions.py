@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace
 
-from ai_assistant.services.tool_executor import BaseToolExecutor
+from ai_assistant.services.tool_executor import BaseToolExecutor, set_permitted_tools
 
 
 class _Executor(BaseToolExecutor):
@@ -27,3 +27,28 @@ def test_executor_can_expand_route_only_within_plan_permissions():
     assert routed_result == {"tool": "allowed"}
     assert recovered_result == {"tool": "permitted_but_unrouted"}
     assert blocked_result == {"error": "Tool not allowed: forbidden"}
+
+
+def test_permitted_tools_keep_route_before_schemas():
+    executor = _Executor(user=SimpleNamespace(institution=None))
+    definitions = [
+        {
+            "type": "function",
+            "function": {
+                "name": "permitted_but_unrouted",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"subject": {"type": "string"}},
+                    "required": ["subject"],
+                },
+            },
+        },
+    ]
+
+    set_permitted_tools(executor, definitions)
+    executor._allowed_tool_names = {"allowed"}
+
+    assert executor._permitted_tool_names == {"permitted_but_unrouted"}
+    assert executor._permitted_tool_definitions == {
+        "permitted_but_unrouted": definitions[0],
+    }

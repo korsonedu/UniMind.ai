@@ -11,6 +11,14 @@ from ai_assistant.bot_registry import get_bot_profile
 logger = logging.getLogger(__name__)
 
 
+def build_tool_run_done_payload(result, **payload):
+    """为 SSE 和 WebSocket 的结束事件附加请求级 Tool Run 标识。"""
+    run_id = result.get('run_id') if isinstance(result, dict) else None
+    if run_id:
+        payload['run_id'] = run_id
+    return payload
+
+
 def resolve_tool_choice(profile, bot_type=None):
     """根据 bot profile 决定 tool_choice 值。
     
@@ -179,8 +187,7 @@ def dispatch_bot_chat_sync(
     tools = profile.tools_factory()
     bot_type = bot.bot_type if bot else 'planner'
     tools = filter_tools(bot_type, institution, tools)
-    tool_executor._permitted_tool_names = {
-        t['function']['name'] for t in tools
-    }
+    from ai_assistant.services.tool_executor import set_permitted_tools
+    set_permitted_tools(tool_executor, tools)
 
     return messages, tools, tool_executor, profile, variant_name

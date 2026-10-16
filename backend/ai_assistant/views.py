@@ -708,7 +708,15 @@ class AIChatStreamView(APIView):
                 except Exception:
                     logger.warning("Title generation failed before done", exc_info=True)
 
-                done_payload = {'done': True, 'full_content': ai_content, 'is_error': is_error, 'has_intermediate': _sent_any_message, 'message_id': pending_msg.id}
+                from ai_assistant.services.chat_dispatch import build_tool_run_done_payload
+                done_payload = build_tool_run_done_payload(
+                    result,
+                    done=True,
+                    full_content=ai_content,
+                    is_error=is_error,
+                    has_intermediate=_sent_any_message,
+                    message_id=pending_msg.id,
+                )
                 if metadata:
                     done_payload['metadata'] = metadata
                 if conv_title:

@@ -5,6 +5,7 @@ import pytest
 
 from ai_assistant.models import AIChatMessage, Bot
 from ai_assistant.views import process_ai_chat
+from ai_assistant.services.chat_dispatch import build_tool_run_done_payload
 
 
 @pytest.mark.django_db
@@ -97,3 +98,25 @@ def test_process_chat_keeps_earlier_repeated_message(monkeypatch, user):
         {"role": "user", "content": "1"},
         {"role": "assistant", "content": "上一次回复"},
     ]
+
+
+def test_done_payload_carries_tool_run_id_for_sse_and_websocket():
+    result = {"content": "完成", "run_id": "run-shared"}
+
+    sse_payload = build_tool_run_done_payload(result, done=True, full_content="完成")
+    websocket_payload = build_tool_run_done_payload(
+        result,
+        type="done",
+        full_content="完成",
+    )
+
+    assert sse_payload == {
+        "done": True,
+        "full_content": "完成",
+        "run_id": "run-shared",
+    }
+    assert websocket_payload == {
+        "type": "done",
+        "full_content": "完成",
+        "run_id": "run-shared",
+    }

@@ -78,34 +78,6 @@ class AIEngine:
     })
 
     @staticmethod
-    def _generate_task_list(tool_calls, round_i, batch_index=1):
-        """从工具调用列表生成 task_list 结构，用于前端"计划视图"。
-
-        返回 (task_id, items) 元组。
-        """
-        from ai_assistant.services.tool_executor import generate_step_label
-
-        task_id = f"round_{round_i}_batch_{batch_index}"
-        items = []
-        for tc in tool_calls:
-            func = tc.get('function', {})
-            name = func.get('name', '')
-            call_id = tc.get('id', '')
-            try:
-                args = json.loads(func.get('arguments', '{}'))
-                if not isinstance(args, dict):
-                    args = {}
-            except (json.JSONDecodeError, TypeError):
-                args = {}
-            label = generate_step_label(name, args)
-            items.append({
-                "id": call_id,
-                "label": label,
-                "status": "running",
-            })
-        return task_id, items
-
-    @staticmethod
     def _strip_dsml(text: str, withhold_partial_marker: bool = False) -> str:
         """剥离 DeepSeek DSML 工具调用标记，返回干净的用户可见文本。"""
         if not text:
@@ -809,10 +781,11 @@ class AIEngine:
 
         on_step: callable(event_dict) — 接收 step/text_delta/done/error 事件
         on_message: callable(text) — 有 tool_calls 的轮次，通过此回调发送中间消息
-        返回: {"content": str} 最后一轮文本（无 tool_calls 时）
+        返回: {"content": str, "run_id": str} 最后一轮文本和请求级 Tool Run ID
         """
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from .config import get_model_tier_for_operation
+        from .tool_run import ToolRunCoordinator
         from django.conf import settings as _settings
 
         all_messages = list(messages)
@@ -821,20 +794,26 @@ class AIEngine:
         orig_tc = tool_choice  # 保存初始 tool_choice，thinking 模式下可能为 auto
         _prev_tool_names: tuple = ()  # 上一轮的 tool name 序列
         _same_pattern_count = 0       # 连续重复次数
+        coordinator = ToolRunCoordinator(
+            tool_executor=tool_executor,
+            tool_definitions=tools or [],
+            on_step=on_step,
+            read_only_tools=cls._READ_ONLY_TOOLS,
+        )
 
         for round_i in range(max_tool_rounds):
             config = get_model_for_task(operation)
             if not config['api_key']:
                 if on_step:
                     on_step({"type": "error", "message": "LLM_API_KEY 未设置"})
-                return {"content": ""}
+                return {"content": "", "run_id": coordinator.run_id}
 
             try:
                 AICircuitBreaker.check(operation, model_tier=get_model_tier_for_operation(operation))
             except CircuitBreakerError:
                 if on_step:
                     on_step({"type": "error", "message": "AI 服务熔断中，请稍后重试"})
-                return {"content": ""}
+                return {"content": "", "run_id": coordinator.run_id}
 
             body = cls._build_body(config, all_messages, temperature, max_tokens, tools, tool_choice, stream=True)
 
@@ -897,7 +876,10 @@ class AIEngine:
                 AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 if on_step:
                     on_step({"type": "error", "message": f"AI 调用失败: {e}"})
-                return {"content": accumulated_text or "AI 服务暂时不可用，请稍后重试。"}
+                return {
+                    "content": accumulated_text or "AI 服务暂时不可用，请稍后重试。",
+                    "run_id": coordinator.run_id,
+                }
 
             # Consume SSE stream
             tool_calls_map = {}
@@ -980,7 +962,7 @@ class AIEngine:
             clean_accumulated = cls._strip_dsml(accumulated_text)
 
             if not tool_calls:
-                return {"content": clean_accumulated}
+                return {"content": clean_accumulated, "run_id": coordinator.run_id}
 
             # Emit any remaining clean text that wasn't streamed during this round
             remaining = clean_accumulated[text_emitted_this_round:]
@@ -993,276 +975,52 @@ class AIEngine:
                 if on_message:
                     on_message(clean_accumulated)
 
-            # Build assistant message matching DeepSeek API format
+            outcomes = coordinator.execute_batch(tool_calls, round_i + 1)
+            normalized_tool_calls = [outcome.call.tool_call for outcome in outcomes]
+
             assistant_msg = {
                 "role": "assistant",
                 "content": clean_accumulated or None,
-                "tool_calls": tool_calls,
+                "tool_calls": normalized_tool_calls,
             }
             if reasoning_content:
                 assistant_msg["reasoning_content"] = reasoning_content
             all_messages.append(assistant_msg)
 
-            tool_names_this_round: list = []
+            for outcome in outcomes:
+                name = outcome.call.name
+                all_messages.append({
+                    "role": "tool",
+                    "content": outcome.result,
+                    "tool_call_id": outcome.call.call_id,
+                })
 
-            # ── 1. 先解析所有工具调用 ──
-            _parsed_calls = []
-            for tc in tool_calls:
-                func = tc.get('function', {})
-                name = func.get('name', '')
-                call_id = tc.get('id', '')
-                try:
-                    args = json.loads(func.get('arguments', '{}'))
-                    if not isinstance(args, dict):
-                        args = {}
-                except (json.JSONDecodeError, TypeError):
-                    args = {}
-                _parsed_calls.append((tc, name, args, call_id))
-                tool_names_this_round.append(name)
-
-            # 导入步骤标签和摘要函数（只 import 一次）
-            try:
-                from ai_assistant.services.tool_executor import generate_step_label, summarize_tool_result, extract_step_actions
-                _summarize_fn = summarize_tool_result
-                _extract_actions_fn = extract_step_actions
-            except ImportError:
-                _summarize_fn = None
-                _extract_actions_fn = None
-
-            # 预生成所有工具标签
-            _labels = []
-            for _, name, args, _ in _parsed_calls:
-                try:
-                    _labels.append(generate_step_label(name, args))
-                except Exception:
-                    _labels.append(f"执行 {name}")
-
-            # ── 2. 判断是否可并行 ──
-            _all_read_only = all(
-                name in cls._READ_ONLY_TOOLS for _, name, _, _ in _parsed_calls
-            )
-            _can_parallel = _all_read_only and len(_parsed_calls) > 1
-
-            if _can_parallel:
-                # ── 串行执行只读工具（带 task_list 进度）──
-                import time as _time_module
-
-                task_id, task_items = cls._generate_task_list(tool_calls, round_i)
-
-                # 发送 batch_start 事件
-                if on_step:
-                    on_step({
-                        "type": "step",
-                        "status": "batch_start",
-                        "task_list": {
-                            "task_id": task_id,
-                            "items": task_items,
-                        },
-                    })
-
-                for i, (tc, name, args, call_id) in enumerate(_parsed_calls):
-                    label = _labels[i]
-
-                    _t0 = _time_module.monotonic()
-                    try:
-                        result = cls._run_tool_with_timeout(tool_executor, name, args)
-                    except Exception as e:
-                        result = json.dumps({"error": str(e)}, ensure_ascii=False)
-                    _duration_ms = int((_time_module.monotonic() - _t0) * 1000)
-
-                    result_str = str(result)
-
-                    done_event = {
-                        "type": "step",
-                        "call_id": call_id,
-                        "step": round_i + 1,
-                        "status": "done",
-                        "name": name,
-                        "label": label,
-                        "result_summary": _summarize_fn(name, result_str) if _summarize_fn else result_str[:200],
-                        "task_list": {
-                            "task_id": task_id,
-                            "update": {"id": call_id, "status": "done", "duration_ms": _duration_ms},
-                        },
-                    }
-
-                    # render_visual: 从结果中提取 visual payload
-                    if name == "render_visual" and '"error"' not in result_str:
-                        try:
-                            _parsed_r = json.loads(result_str) if isinstance(result_str, str) else result_str
-                            if isinstance(_parsed_r, dict) and _parsed_r.get('visual'):
-                                pv = _parsed_r['visual']
-                                if isinstance(pv.get('payload'), str):
-                                    try:
-                                        pv['payload'] = json.loads(pv['payload'])
-                                    except (json.JSONDecodeError, TypeError):
-                                        pv['payload'] = {}
-                                done_event["visual"] = pv
-                        except Exception:
-                            pass
-
-                    # quick_generate: 附加题目数据
-                    if name == "quick_generate" and '"error"' not in result_str:
-                        try:
-                            _parsed_r = json.loads(result_str) if isinstance(result_str, str) else result_str
-                            if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
-                                done_event["questions"] = tool_executor._last_generated
-                            elif isinstance(_parsed_r, dict) and _parsed_r.get('questions'):
-                                done_event["questions"] = _parsed_r['questions']
-                        except Exception:
-                            pass
-
-                    # 提取操作链接
-                    if _extract_actions_fn:
-                        try:
-                            actions = _extract_actions_fn(result_str)
-                            if actions:
-                                done_event["actions"] = actions
-                        except Exception:
-                            pass
-
-                    if on_step:
-                        on_step(done_event)
-
+                if not outcome.failed and name in ('quick_generate', 'bulk_generate_questions'):
                     all_messages.append({
-                        "role": "tool",
-                        "content": result_str,
-                        "tool_call_id": call_id,
+                        "role": "system",
+                        "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
                     })
 
-                    # 题目生成后注入提示
-                    if name in ('quick_generate', 'bulk_generate_questions') and '"error"' not in result_str:
-                        all_messages.append({
-                            "role": "system",
-                            "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
-                        })
-
-                    # render_visual 含 reply 卡片 → 停止工具调用
-                    if name == 'render_visual' and '"error"' not in result_str:
-                        if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
-                            pv = tool_executor.pending_visuals[-1]
-                            is_reply_visual = (
-                                pv.get('type') == 'action_cards' and
-                                any(
-                                    isinstance(c, dict) and
-                                    c.get('action', {}).get('type') == 'reply'
-                                    for c in pv.get('payload', {}).get('cards', [])
-                                )
+                if not outcome.failed and name == 'render_visual':
+                    pending_visuals = getattr(tool_executor, 'pending_visuals', None)
+                    if pending_visuals:
+                        visual = pending_visuals[-1]
+                        is_reply_visual = (
+                            visual.get('type') == 'action_cards' and
+                            any(
+                                isinstance(card, dict) and
+                                card.get('action', {}).get('type') == 'reply'
+                                for card in visual.get('payload', {}).get('cards', [])
                             )
-                            if is_reply_visual:
-                                all_messages.append({
-                                    "role": "system",
-                                    "content": "操作确认卡片已渲染到用户界面。你必须立即停止所有工具调用，用自然语言告知用户点击卡片确认（如'请点击上方卡片确认'），然后等待用户操作。不要再调用任何工具。",
-                                })
-                                if not hasattr(tool_executor, '_render_visual_called'):
-                                    tool_executor._render_visual_called = False
-                                tool_executor._render_visual_called = True
+                        )
+                        if is_reply_visual:
+                            all_messages.append({
+                                "role": "system",
+                                "content": "操作确认卡片已渲染到用户界面。你必须立即停止所有工具调用，用自然语言告知用户点击卡片确认（如'请点击上方卡片确认'），然后等待用户操作。不要再调用任何工具。",
+                            })
+                            tool_executor._render_visual_called = True
 
-            else:
-                # ── 串行执行（含写操作工具或仅 1 个工具）──
-                for i, (tc, name, args, call_id) in enumerate(_parsed_calls):
-                    label = _labels[i]
-
-                    if on_step:
-                        on_step({
-                            "type": "step",
-                            "call_id": call_id,
-                            "step": round_i + 1,
-                            "status": "calling",
-                            "name": name,
-                            "label": label,
-                            "args_summary": json.dumps(args, ensure_ascii=False)[:200],
-                        })
-
-                    # 让工具内部能拿到真实 call_id，用于发送进度事件
-                    if hasattr(tool_executor, '_current_call_id'):
-                        tool_executor._current_call_id = call_id
-
-                    try:
-                        result = cls._run_tool_with_timeout(tool_executor, name, args)
-                    except Exception as e:
-                        result = json.dumps({"error": str(e)}, ensure_ascii=False)
-
-                    result_str = str(result)
-
-                    step_event = {
-                        "type": "step",
-                        "call_id": call_id,
-                        "step": round_i + 1,
-                        "status": "done",
-                        "name": name,
-                        "label": label,
-                        "result_summary": _summarize_fn(name, result_str) if _summarize_fn else result_str[:200],
-                    }
-                    # 提取操作链接
-                    if _extract_actions_fn:
-                        actions = _extract_actions_fn(result_str)
-                        if actions:
-                            step_event["actions"] = actions
-                    # render_visual: attach full payload
-                    if name == "render_visual" and hasattr(tool_executor, 'pending_visuals'):
-                        logger.info("[step] render_visual pending_visuals count=%d", len(tool_executor.pending_visuals))
-                        if tool_executor.pending_visuals:
-                            pv = tool_executor.pending_visuals[-1]
-                            if isinstance(pv.get('payload'), str):
-                                try:
-                                    pv['payload'] = json.loads(pv['payload'])
-                                except (json.JSONDecodeError, TypeError):
-                                    pv['payload'] = {}
-                            step_event["visual"] = pv
-                    # quick_generate: attach full question data
-                    if name == "quick_generate" and '"error"' not in result_str:
-                        try:
-                            import json as _json
-                            if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
-                                step_event["questions"] = tool_executor._last_generated
-                                logger.info("[step] quick_generate attached %d questions from _last_generated",
-                                           len(tool_executor._last_generated))
-                            else:
-                                _parsed = _json.loads(result_str) if isinstance(result_str, str) else result
-                                if isinstance(_parsed, dict) and _parsed.get('questions'):
-                                    step_event["questions"] = _parsed['questions']
-                                    logger.info("[step] quick_generate attached %d questions from result",
-                                               len(_parsed['questions']))
-                        except Exception:
-                            logger.exception("[step] quick_generate failed to attach questions")
-                    if on_step:
-                        on_step(step_event)
-
-                    all_messages.append({
-                        "role": "tool",
-                        "content": result_str,
-                        "tool_call_id": call_id,
-                    })
-
-                    # 题目生成后注入提示
-                    if name in ('quick_generate', 'bulk_generate_questions') and '"error"' not in result_str:
-                        all_messages.append({
-                            "role": "system",
-                            "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
-                        })
-
-                    # render_visual 含 reply 卡片 → 停止工具调用
-                    if name == 'render_visual' and '"error"' not in result_str:
-                        if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
-                            pv = tool_executor.pending_visuals[-1]
-                            is_reply_visual = (
-                                pv.get('type') == 'action_cards' and
-                                any(
-                                    isinstance(c, dict) and
-                                    c.get('action', {}).get('type') == 'reply'
-                                    for c in pv.get('payload', {}).get('cards', [])
-                                )
-                            )
-                            if is_reply_visual:
-                                all_messages.append({
-                                    "role": "system",
-                                    "content": "操作确认卡片已渲染到用户界面。你必须立即停止所有工具调用，用自然语言告知用户点击卡片确认（如'请点击上方卡片确认'），然后等待用户操作。不要再调用任何工具。",
-                                })
-                                if not hasattr(tool_executor, '_render_visual_called'):
-                                    tool_executor._render_visual_called = False
-                                tool_executor._render_visual_called = True
-
+            tool_names_this_round = [outcome.call.name for outcome in outcomes]
             accumulated_text = ""
 
             # ── Loop detection：同一工具模式连续重复 → 注入停止指令 ──
@@ -1288,8 +1046,7 @@ class AIEngine:
 
             # quick_generate 连续失败 2 次 → 降级为 auto，让模型能用文字回复
             # 而不是在 required 模式下被迫继续调工具死循环
-            qg_errors = sum(1 for m in all_messages[-len(tool_calls):]
-                          if m.get('role') == 'tool' and '"error"' in str(m.get('content', '')))
+            qg_errors = sum(1 for outcome in outcomes if outcome.failed)
             if not hasattr(tool_executor, '_qg_fail_count'):
                 tool_executor._qg_fail_count = 0
             if qg_errors > 0:
@@ -1340,7 +1097,7 @@ class AIEngine:
                 final_text = cls._strip_dsml(final_text)
                 if on_step:
                     on_step({"type": "text_delta", "delta": final_text})
-                return {"content": final_text}
+                return {"content": final_text, "run_id": coordinator.run_id}
         except Exception as e:
             logger.exception("Final text reply failed: %s", e)
 
@@ -1351,7 +1108,7 @@ class AIEngine:
         if not combined and all_rounds_text:
             # 中间文本已全部在前端可见，返回空让前端依靠已展示的中间消息
             combined = ""
-        return {"content": cls._strip_dsml(combined)}
+        return {"content": cls._strip_dsml(combined), "run_id": coordinator.run_id}
 
     @classmethod
     def agentic_structured_output(cls, messages, schema, tool_name, tool_description,
