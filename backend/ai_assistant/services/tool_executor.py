@@ -174,6 +174,7 @@ class BaseToolExecutor:
     def __init__(self, user, institution=None):
         self.user = user
         self._allowed_tool_names = None
+        self._permitted_tool_names = None
         self.institution = institution or getattr(user, 'institution', None)
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
@@ -188,14 +189,13 @@ class BaseToolExecutor:
         if tool_name != original_name:
             logger.info("Tool alias: %s → %s", original_name, tool_name)
 
-        # 软白名单：路由预测的工具集是引导而非硬限制。
-        # LLM 在多轮工具调用中意图会漂移——路由时没预测到的工具，
-        # 只要本 bot 确实有 handler，就自动放行并加入白名单。
+        # 路由白名单可在套餐权限内自愈扩展，但不能突破套餐权限。
         allowed = getattr(self, '_allowed_tool_names', None)
         if allowed is not None and tool_name not in allowed:
             handler = getattr(self, f'_handle_{tool_name}', None)
-            if handler is not None:
-                # 合法工具，仅路由时未预选 → 自愈放行
+            permitted = getattr(self, '_permitted_tool_names', None)
+            if handler is not None and permitted is not None and tool_name in permitted:
+                # 套餐权限内的合法工具，仅路由时未预选 → 自愈放行
                 allowed.add(tool_name)
                 logger.info(
                     "Tool '%s' not in initial route, auto-allowed (handler exists)",

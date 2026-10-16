@@ -47,6 +47,10 @@
 .um-qa-question-body .prose > :first-child, .um-qa-answer-bubble .prose > :first-child { margin-top: 0; }
 .um-qa-question-body .prose > :last-child, .um-qa-answer-bubble .prose > :last-child { margin-bottom: 0; }
 .um-qa-question-body.is-collapsed { max-height: 146px; overflow: hidden; mask-image: linear-gradient(black 80%, transparent); }
+@supports (height: calc-size(auto, min(size, 146px))) {
+  .um-qa-question-body { interpolate-size: allow-keywords; height: auto; max-height: none; overflow: hidden; transition: height 180ms cubic-bezier(.2,.8,.2,1); }
+  .um-qa-question-body.is-collapsed { height: calc-size(auto, min(size, 146px)); max-height: none; }
+}
 .um-qa-question-body img, .um-qa-answer-bubble img { max-width: 100%; border-radius: 10px; }
 .um-qa-question-body pre, .um-qa-answer-bubble pre, .um-qa-thread .katex-display { max-width: 100%; overflow-x: auto; }
 .um-qa-read-more { margin-top: 3px; }

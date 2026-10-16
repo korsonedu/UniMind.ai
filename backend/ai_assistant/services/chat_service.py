@@ -137,6 +137,9 @@ class AssistantChatService:
 
         # Apply tool permission sandbox
         tools = filter_tools(bot_type, institution, tools)
+        tool_executor._permitted_tool_names = {
+            t['function']['name'] for t in tools
+        }
 
         # 意图预筛选（仅启用 use_intent_router 的 bot）
         if profile.use_intent_router and user_message:

@@ -159,16 +159,13 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         try:
             user_msg = self._save_message(self.user, self.bot, 'user', message, conversation_id=conversation_id)
 
-            history_limit = 10
-            base_qs = AIChatMessage.objects.filter(user=self.user, bot=self.bot)
-            if conversation_id:
-                base_qs = base_qs.filter(conversation_id=conversation_id)
-            history_objs = base_qs.order_by('-timestamp')[:history_limit]
-            history_msgs = [
-                {"role": h.role, "content": h.content}
-                for h in reversed(history_objs)
-                if h.content != '[Thinking...]'
-            ]
+            from .views import _get_chat_history
+            history_msgs = _get_chat_history(
+                self.user,
+                self.bot,
+                conversation_id,
+                exclude_ids=(user_msg.id,),
+            )
 
             student_context = ""
             if self.bot.is_exclusive:

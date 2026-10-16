@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { CaretRight as ChevronRight, MagnifyingGlass as Search, SlidersHorizontal } from '@phosphor-icons/react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Collapse } from '@/components/ui/collapse';
 import { courseGroups, matchesSearch, type Course, type CourseGrouping } from './types';
 
 export interface CourseTreeProps {
@@ -81,11 +82,11 @@ export function CourseTree({ courses, treeCourses, selectedId, loading, error, q
         const expanded = !!query.trim() || !collapsed.has(key);
         const branchId = `${treeId}-${subjectIndex}`;
         const count = [...modules.values()].reduce((sum, module) => sum + module.courses.length, 0);
-        return <li key={key}><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${expanded ? '收起' : '展开'}${subject}`} aria-expanded={expanded} aria-controls={branchId} disabled={!!query.trim()} onClick={() => toggle(key)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={subject} aria-current={!selectedId && grouping === 'subject' && filter === subject ? 'page' : undefined} onClick={() => onFilter(subject, 'subject')}><span>{subject}</span><span>{count}</span></button></div><ul id={branchId} hidden={!expanded}>{[...modules].sort(([, a], [, b]) => a.order - b.order || a.name.localeCompare(b.name, 'zh-CN')).map(([moduleKey, module], moduleIndex) => {
+        return <li key={key}><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${expanded ? '收起' : '展开'}${subject}`} aria-expanded={expanded} aria-controls={branchId} disabled={!!query.trim()} onClick={() => toggle(key)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={subject} aria-current={!selectedId && grouping === 'subject' && filter === subject ? 'page' : undefined} onClick={() => onFilter(subject, 'subject')}><span>{subject}</span><span>{count}</span></button></div><Collapse open={expanded} id={branchId}><ul>{[...modules].sort(([, a], [, b]) => a.order - b.order || a.name.localeCompare(b.name, 'zh-CN')).map(([moduleKey, module], moduleIndex) => {
           const moduleExpanded = !!query.trim() || !collapsed.has(moduleKey);
           const moduleId = `${branchId}-${moduleIndex}`;
-          return <li key={moduleKey} className="um-course-tree-album"><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${moduleExpanded ? '收起' : '展开'}${module.name}`} aria-expanded={moduleExpanded} aria-controls={moduleId} disabled={!!query.trim()} onClick={() => toggle(moduleKey)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={module.name} aria-current={!selectedId && grouping === 'module' && filter === moduleKey ? 'page' : undefined} onClick={() => onFilter(moduleKey, 'module')}><span>{module.name}</span><span>{module.courses.length}</span></button></div><ul id={moduleId} hidden={!moduleExpanded}>{leaves(module.courses)}</ul></li>;
-        })}</ul></li>;
+          return <li key={moduleKey} className="um-course-tree-album"><div className="um-course-tree-branch"><button type="button" className="um-course-tree-toggle" aria-label={`${moduleExpanded ? '收起' : '展开'}${module.name}`} aria-expanded={moduleExpanded} aria-controls={moduleId} disabled={!!query.trim()} onClick={() => toggle(moduleKey)}><ChevronRight size={14} /></button><button type="button" className="um-course-tree-label" title={module.name} aria-current={!selectedId && grouping === 'module' && filter === moduleKey ? 'page' : undefined} onClick={() => onFilter(moduleKey, 'module')}><span>{module.name}</span><span>{module.courses.length}</span></button></div><Collapse open={moduleExpanded} id={moduleId}><ul>{leaves(module.courses)}</ul></Collapse></li>;
+        })}</ul></Collapse></li>;
       })}
     </ul></nav>}</div>
   </div>;

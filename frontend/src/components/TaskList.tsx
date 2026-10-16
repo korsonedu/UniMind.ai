@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Check, Spinner, CaretDown, CaretRight } from '@phosphor-icons/react';
+import { useState, useEffect, useId } from 'react';
+import { Check, Spinner, CaretRight } from '@phosphor-icons/react';
+import { Collapse } from './ui/collapse';
 import { cn } from '@/lib/utils';
 
 export interface TaskItem {
@@ -26,6 +27,7 @@ function formatDuration(ms: number): string {
 
 export function TaskList({ data, onComplete }: TaskListProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const contentId = useId();
   const [completion, setCompletion] = useState(() => {
     const doneIds = new Set(data.items.filter(item => item.status === 'done').map(item => item.id));
     return { items: data.items, doneIds, justCompleted: doneIds };
@@ -60,10 +62,12 @@ export function TaskList({ data, onComplete }: TaskListProps) {
     <div className="my-3 rounded-xl border border-border/60 bg-card/50 overflow-hidden transition-all duration-300">
       {/* Header */}
       <button
+        aria-expanded={!collapsed}
+        aria-controls={contentId}
         onClick={() => setCollapsed(!collapsed)}
         className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/30 transition-colors"
       >
-        {collapsed ? <CaretRight className="w-3.5 h-3.5" /> : <CaretDown className="w-3.5 h-3.5" />}
+        <CaretRight className="um-disclosure-chevron w-3.5 h-3.5" />
         <span>
           {allDone
             ? `全部完成 · ${doneCount} 项`
@@ -72,7 +76,7 @@ export function TaskList({ data, onComplete }: TaskListProps) {
       </button>
 
       {/* Items */}
-      {!collapsed && (
+      <Collapse open={!collapsed} id={contentId}>
         <div className="border-t border-border/30">
           {/* Active items first */}
           {activeItems.map(item => (
@@ -114,7 +118,7 @@ export function TaskList({ data, onComplete }: TaskListProps) {
             );
           })}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }

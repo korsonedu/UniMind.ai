@@ -57,6 +57,11 @@ class AIEngine:
     _DSML_RE_1 = re.compile(r'<龘.*?(?:</龘\w+>|/>)', re.DOTALL)
     # 匹配 <｜｜DSML｜｜xxx>...</｜｜DSML｜｜xxx>
     _DSML_RE_2 = re.compile(r'<｜｜DSML｜｜\w+.*?(?:</｜｜DSML｜｜\w+>)', re.DOTALL)
+    # 兼容模型将工具调用输出为通用 XML，以及 Markdown 转义后的 \<tag> 形式。
+    _FUNCTION_CALLS_RE = re.compile(
+        r'\\?<function_calls\b[^>]*>.*?\\?</function_calls\s*>',
+        re.DOTALL | re.IGNORECASE,
+    )
 
     # 只读工具白名单：这些工具只做 SELECT 查询，无副作用，可并行执行。
     # 不在白名单中的工具（写操作 / 外部 API 调用）保持串行执行。
@@ -101,7 +106,7 @@ class AIEngine:
         return task_id, items
 
     @staticmethod
-    def _strip_dsml(text: str) -> str:
+    def _strip_dsml(text: str, withhold_partial_marker: bool = False) -> str:
         """剥离 DeepSeek DSML 工具调用标记，返回干净的用户可见文本。"""
         if not text:
             return text
@@ -111,14 +116,24 @@ class AIEngine:
             prev = text
             text = AIEngine._DSML_RE_1.sub('', text)
             text = AIEngine._DSML_RE_2.sub('', text)
+            text = AIEngine._FUNCTION_CALLS_RE.sub('', text)
         # 剥离残留的孤立闭合标签
         text = re.sub(r'</龘\w+>', '', text)
         text = re.sub(r'</｜｜DSML｜｜\w+>', '', text)
+        text = re.sub(r'\\?</?function_calls\b[^>]*>', '', text, flags=re.IGNORECASE)
         # 流式截断场景：丢弃未闭合标签之后的全部内容
-        for marker in ['<龘', '<｜｜DSML｜｜']:
+        markers = ['<龘', '<｜｜DSML｜｜', '<function_calls', '\\<function_calls']
+        for marker in markers:
             idx = text.find(marker)
             if idx >= 0:
                 text = text[:idx]
+        if withhold_partial_marker:
+            # SSE 可能在标记名中间分片；暂留与工具标记前缀匹配的末尾。
+            for idx in range(len(text) - 1, -1, -1):
+                suffix = text[idx:]
+                if any(marker.startswith(suffix) for marker in markers):
+                    text = text[:idx]
+                    break
         return text.strip()
 
     @staticmethod
@@ -137,15 +152,22 @@ class AIEngine:
             closes = len(_re.findall(r'</｜｜DSML｜｜\w+>', text))
             if opens > closes:
                 return True
+        # 格式3: <function_calls>，允许 Markdown 转义的 \<function_calls>
+        if _re.search(r'\\?<function_calls\b', text, flags=_re.IGNORECASE):
+            opens = len(_re.findall(r'\\?<function_calls\b[^>]*>', text, flags=_re.IGNORECASE))
+            closes = len(_re.findall(r'\\?</function_calls\s*>', text, flags=_re.IGNORECASE))
+            if opens > closes:
+                return True
         return False
 
     @staticmethod
     def _parse_dsml_tool_calls(text: str):
         """从含有 DSML 标记的文本中提取工具调用列表（OpenAI 兼容格式）。
 
-        支持两种 DeepSeek 原生格式：
+        支持三种文本工具调用格式：
         1. <龘invoke name="..."> <龘parameter name="..." string="true|false">VALUE</龘parameter> </龘invoke>
         2. <｜｜DSML｜｜invoke name="..."> <｜｜DSML｜｜parameter name="...">VALUE</｜｜DSML｜｜parameter> </｜｜DSML｜｜invoke>
+        3. <function_calls> <invoke name="..."> <parameter name="...">VALUE</parameter> </invoke> </function_calls>
         """
         import re as _re
         tool_calls = []
@@ -161,6 +183,12 @@ class AIEngine:
             (
                 _re.compile(r'<｜｜DSML｜｜invoke\s+name="([^"]+)">(.*?)</｜｜DSML｜｜invoke>', _re.DOTALL),
                 _re.compile(r'<｜｜DSML｜｜parameter\s+name="([^"]+)"[^>]*>(.*?)</｜｜DSML｜｜parameter>', _re.DOTALL),
+                False,
+            ),
+            # 格式3: 通用 XML，标记前可带 Markdown 转义反斜杠
+            (
+                _re.compile(r'\\?<invoke\s+name="([^"]+)"[^>]*>(.*?)\\?</invoke\s*>', _re.DOTALL | _re.IGNORECASE),
+                _re.compile(r'\\?<parameter\s+name="([^"]+)"[^>]*>(.*?)\\?</parameter\s*>', _re.DOTALL | _re.IGNORECASE),
                 False,
             ),
         ]
@@ -633,19 +661,19 @@ class AIEngine:
         """Execute a single tool call with a timeout. Returns the tool result
         as a JSON string, or a timeout error JSON string — never raises."""
         import json as _json
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(tool_executor, name, args)
-            try:
-                return future.result(timeout=timeout)
-            except FutureTimeoutError:
-                future.cancel()
-                return _json.dumps(
-                    {"error": "timeout", "message": f"工具 {name} 执行超时 ({timeout}s)"},
-                    ensure_ascii=False,
-                )
-            finally:
-                # Don't block on shutdown — tool already timed out
-                executor.shutdown(wait=False)
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(tool_executor, name, args)
+        try:
+            return future.result(timeout=timeout)
+        except FutureTimeoutError:
+            future.cancel()
+            return _json.dumps(
+                {"error": "timeout", "message": f"工具 {name} 执行超时 ({timeout}s)"},
+                ensure_ascii=False,
+            )
+        finally:
+            # 不使用上下文管理器，避免 __exit__ 在超时后继续等待运行中的工具。
+            executor.shutdown(wait=False, cancel_futures=True)
 
     @classmethod
     def call_ai_with_tools(cls, messages, tools, tool_executor,
@@ -904,7 +932,7 @@ class AIEngine:
                     # 暂不 emit，等完整后再一次性剥离+发送，防止 DSML 泄露到前端
                     in_dsml = cls._has_open_dsml(accumulated_text)
                     if not in_dsml:
-                        clean_text = cls._strip_dsml(accumulated_text)
+                        clean_text = cls._strip_dsml(accumulated_text, withhold_partial_marker=True)
                         new_clean = clean_text[text_emitted_this_round:]
                         if new_clean and on_step:
                             on_step({"type": "text_delta", "delta": new_clean})
@@ -933,7 +961,10 @@ class AIEngine:
 
             # DSML fallback: 如果 DeepSeek 把工具调用作为 DSML 文本输出而没有标准 tool_calls，
             # 从 accumulated_text 中解析 DSML 并转为 tool_calls
-            if not tool_calls and ('<龘' in accumulated_text or '<｜｜DSML｜｜' in accumulated_text):
+            if not tool_calls and any(
+                marker in accumulated_text
+                for marker in ('<龘', '<｜｜DSML｜｜', '<function_calls', '\\<function_calls')
+            ):
                 dsml_tool_calls = cls._parse_dsml_tool_calls(accumulated_text)
                 if dsml_tool_calls:
                     tool_calls = dsml_tool_calls

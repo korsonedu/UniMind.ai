@@ -5,6 +5,7 @@ import './index.css'
 import './styles/native-agent.css'
 import './styles/course-workspace.css'
 import './styles/course-portal.css'
+import './styles/disclosure.css'
 import { initializeSystemAppearance } from './store/useSystemStore'
 
 initializeSystemAppearance()

@@ -179,5 +179,8 @@ def dispatch_bot_chat_sync(
     tools = profile.tools_factory()
     bot_type = bot.bot_type if bot else 'planner'
     tools = filter_tools(bot_type, institution, tools)
+    tool_executor._permitted_tool_names = {
+        t['function']['name'] for t in tools
+    }
 
     return messages, tools, tool_executor, profile, variant_name

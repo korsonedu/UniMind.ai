@@ -1,5 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { CaretRight } from '@phosphor-icons/react';
+import { Collapse } from '@/components/ui/collapse';
 import api from '@/lib/api';
 
 type CurvePoint = { date: string; predicted: number; actual: number; count: number };
@@ -17,6 +19,8 @@ const shortDate = (value: string) => `${Number(value.slice(5, 7))}/${Number(valu
 export function MemoryRetentionTrend() {
   const titleId = useId();
   const descriptionId = useId();
+  const detailsId = useId();
+  const [expanded, setExpanded] = useState(false);
   const [curve, setCurve] = useState<MemoryCurve | null>(null);
   const [history, setHistory] = useState<Optimization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,12 +61,12 @@ export function MemoryRetentionTrend() {
         <text x={x(first)} y="203" textAnchor={series.length === 1 ? 'middle' : 'start'}>{shortDate(first.date)}</text>{series.length > 1 && <text x={x(last)} y="203" textAnchor="end">{shortDate(last.date)}</text>}
       </svg></div>
       <div className="um-memory-legend"><span><i />预计记住的程度</span><span><i />实际回忆表现</span></div>
-      <details className="um-memory-details"><summary>查看数据与算法更新</summary>
+      <div className="um-memory-details"><button type="button" className="um-memory-details-toggle" aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded(value => !value)}><CaretRight size={13} className="um-disclosure-chevron" />{expanded ? '收起数据与算法更新' : '查看数据与算法更新'}</button><Collapse open={expanded} id={detailsId}>
         <p>最近更新：{curve?.profile.last_optimized_at ? new Date(curve.profile.last_optimized_at).toLocaleString('zh-CN') : '尚未更新'}。算法根据你的复习记录调整预测，更新改善率表示预测误差的变化。</p>
         <dl><div><dt>预测误差（RMSE）</dt><dd>{curve?.metrics.rmse ?? '—'}</dd></div><div><dt>平均绝对误差（MAE）</dt><dd>{curve?.metrics.mae ?? '—'}</dd></div></dl>
         <div className="um-memory-table"><table><caption>每日复习数据</caption><thead><tr><th scope="col">日期</th><th scope="col">预计</th><th scope="col">实际</th><th scope="col">次数</th></tr></thead><tbody>{series.map(point => <tr key={point.date}><th scope="row">{point.date}</th><td>{percent(point.predicted)}</td><td>{percent(point.actual)}</td><td>{point.count}</td></tr>)}</tbody></table></div>
         <h3>最近算法更新</h3>{historyError ? <p role="alert">更新记录加载失败，请刷新重试。</p> : !history.length ? <p>暂无更新记录</p> : <ul>{history.slice(0, 3).map(item => <li key={item.id}><span>{item.accepted ? '已采用' : '未采用'} · 预测误差改善 {(item.improvement_ratio * 100).toFixed(2)}%</span><span>{item.reviews_used} 次复习 · {new Date(item.created_at).toLocaleString('zh-CN')}</span></li>)}</ul>}
-      </details>
+      </Collapse></div>
     </>}
   </section>;
 }

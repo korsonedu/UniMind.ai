@@ -41,13 +41,29 @@ def _get_chat_semaphore(bot):
     return _AI_CHAT_SEMAPHORE
 
 
-def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None, history_limit=10):
-    base_qs = AIChatMessage.objects.filter(user=user, bot=bot).select_related('user', 'bot')
+def _get_chat_history(user, bot, conversation_id, exclude_ids=(), limit=10):
+    qs = AIChatMessage.objects.filter(user=user, bot=bot).select_related('user', 'bot')
     if conversation_id:
-        base_qs = base_qs.filter(conversation_id=conversation_id)
-    history_objs = base_qs.order_by('-timestamp')[:history_limit]
-    history_msgs = [{"role": h.role, "content": h.content} for h in reversed(history_objs)
-                    if h.content != "[Thinking...]" and not (h.role == 'user' and h.content == user_message)]
+        qs = qs.filter(conversation_id=conversation_id)
+    valid_exclude_ids = [message_id for message_id in exclude_ids if message_id is not None]
+    if valid_exclude_ids:
+        qs = qs.exclude(id__in=valid_exclude_ids)
+    history_objs = qs.exclude(content='[Thinking...]').order_by('-timestamp', '-id')[:limit]
+    return [
+        {"role": message.role, "content": message.content}
+        for message in reversed(history_objs)
+    ]
+
+
+def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None,
+                    history_limit=10, current_user_message_id=None):
+    history_msgs = _get_chat_history(
+        user,
+        bot,
+        conversation_id,
+        exclude_ids=(pending_msg_id, current_user_message_id),
+        limit=history_limit,
+    )
 
     project_history = add_project_context(user, conversation_id, history_msgs)
 
@@ -351,7 +367,10 @@ class AIChatView(APIView):
         # 1. Save User Message
         if bot:
             save_new_conversation_project(request, bot, conversation_id)
-        AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot, conversation_id=conversation_id)
+        user_msg = AIChatMessage.objects.create(
+            user=request.user, role='user', content=user_message,
+            bot=bot, conversation_id=conversation_id,
+        )
         record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
         # 2. Create Pending Assistant Message
@@ -361,7 +380,12 @@ class AIChatView(APIView):
         from ai_assistant.utils import _THREAD_POOL
         _THREAD_POOL.submit(
             process_ai_chat,
-            request.user, bot, user_message, pending_msg.id, conversation_id,
+            request.user,
+            bot,
+            user_message,
+            pending_msg.id,
+            conversation_id=conversation_id,
+            current_user_message_id=user_msg.id,
         )
 
         return Response({'status': 'pending'})
@@ -480,7 +504,10 @@ class AIChatStreamView(APIView):
 
         # Save user message
         save_new_conversation_project(request, bot, conversation_id)
-        AIChatMessage.objects.create(user=request.user, role='user', content=user_message, bot=bot, conversation_id=conversation_id)
+        user_msg = AIChatMessage.objects.create(
+            user=request.user, role='user', content=user_message,
+            bot=bot, conversation_id=conversation_id,
+        )
         
         # Create pending assistant message (for refresh recovery)
         pending_msg = AIChatMessage.objects.create(
@@ -490,14 +517,12 @@ class AIChatStreamView(APIView):
 
         def _sync_setup():
             """All sync DB/ORM work — called once via sync_to_async."""
-            history_objs = AIChatMessage.objects.filter(
-                user=request.user, bot=bot, conversation_id=conversation_id
-            ).select_related('user', 'bot').order_by('-timestamp')[:10]
-            history_msgs = [
-                {"role": h.role, "content": h.content}
-                for h in reversed(history_objs)
-                if h.content != "[Thinking...]" and h.content != user_message
-            ]
+            history_msgs = _get_chat_history(
+                request.user,
+                bot,
+                conversation_id,
+                exclude_ids=(user_msg.id, pending_msg.id),
+            )
 
             project_history = add_project_context(request.user, conversation_id, history_msgs)
 
@@ -537,17 +562,21 @@ class AIChatStreamView(APIView):
                 history_msgs, messages, tools, tool_executor, profile, sse_variant_name = await sync_to_async(_sync_setup)()
 
                 step_queue: asyncio.Queue = asyncio.Queue()
+                event_loop = asyncio.get_running_loop()
                 _SENTINEL = object()
                 _result_container = [None]
                 _sent_any_message = False
 
                 def on_step(event):
-                    step_queue.put_nowait(event)
+                    event_loop.call_soon_threadsafe(step_queue.put_nowait, event)
 
                 def on_message(text):
                     nonlocal _sent_any_message
                     _sent_any_message = True
-                    step_queue.put_nowait({"type": "message", "content": text})
+                    event_loop.call_soon_threadsafe(
+                        step_queue.put_nowait,
+                        {"type": "message", "content": text},
+                    )
 
                 # 挂到 tool_executor，让工具内部也能发进度事件
                 tool_executor.on_step = on_step
@@ -577,7 +606,7 @@ class AIChatStreamView(APIView):
                         logger.exception("Agent thread error: %s", e)
                         _result_container[0] = {"content": "AI 服务暂时不可用，请稍后再试。"}
                     finally:
-                        step_queue.put_nowait(_SENTINEL)
+                        event_loop.call_soon_threadsafe(step_queue.put_nowait, _SENTINEL)
 
                 from ai_assistant.utils import _THREAD_POOL
                 agent_future = _THREAD_POOL.submit(_run_agent)
