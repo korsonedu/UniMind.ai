@@ -18,7 +18,7 @@ import {
   type ConversationSession,
   RECENT_SESSION_MS,
 } from '@/hooks/useAgentConversation';
-import type { AgentStep } from '@/hooks/useAgentChat';
+import type { AgentStep } from '@/types/toolRun';
 import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
@@ -275,16 +275,17 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   const v = visuals[0];
                   if (msg.toolStep) {
                     // Case 1: toolStep 已存在（从内存恢复的情况），只补 visual
-                    if (msg.toolStep.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual) {
+                    if (msg.toolStep.name === 'render_visual' && msg.toolStep.status === 'succeeded' && !msg.toolStep.visual) {
                       msg.toolStep = { ...msg.toolStep, visual: v };
                     }
                   } else {
                     // Case 2: 从 API 加载 → 无 toolStep，从 metadata 构造
                     msg.toolStep = {
+                      run_id: 'history',
                       call_id: `hist-${m.id || 0}`,
-                      step: 0,
+                      round: 0,
                       name: 'render_visual',
-                      status: 'done',
+                      status: 'succeeded',
                       label: (typeof v.payload?.title === 'string' ? v.payload.title : undefined) || '可视化',
                       visual: v,
                       args_summary: '',
@@ -640,7 +641,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   // metadata visual 仅用于填充 visual state（split 模式右面板），不在 inline 流中二次展示。
                   // 历史消息已在 init 时将 metadata visual 转换为 toolStep，所以历史也能正常渲染。
                   const stepVisual = msg.toolStep?.visual;
-                  const isRenderStep = msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'done';
+                  const isRenderStep = msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'succeeded';
                   if (isRenderStep && stepVisual) {
                     return (
                       <InlineVisualCard
@@ -656,9 +657,9 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   // render_visual 完成但无 visual → 后端校验拒绝了无效参数，AI 会自纠正，用户无需看到
                   if (msg.toolStep) {
                     const step = msg.toolStep;
-                    const isGenDone = (step.name === 'quick_generate' || step.name === 'bulk_generate_questions') && step.status === 'done';
+                    const isGenDone = (step.name === 'quick_generate' || step.name === 'bulk_generate_questions') && step.status === 'succeeded';
                     if (isGenDone) return null;
-                    if (step.name === 'render_visual' && step.status === 'done' && !step.visual) return null;
+                    if (step.name === 'render_visual' && step.status === 'succeeded' && !step.visual) return null;
                     return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
                   }
                   // 普通消息 → ChatBubble

@@ -1,64 +1,24 @@
-import type { GeneratedQuestion } from '@/types/api';
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { TaskListData } from '@/components/TaskList';
+import {
+  completeToolRun,
+  reduceToolRun,
+  type AgentStep,
+  type TaskListData,
+} from '@/types/toolRun';
 
-export interface AgentStep {
-  call_id: string;
-  step: number;
-  status: 'calling' | 'done' | 'batch_start';
-  name: string;
-  label: string;
-  args_summary?: string;
-  result_summary?: string;
-  actions?: Array<{ label: string; route: string }>;
-  visual?: { type: string; payload: unknown };
-  questions?: (GeneratedQuestion & { index: number; answer_preview: string })[];
- task_list?: {
-    task_id: string;
-    items?: TaskListData['items'];
-    update?: { id: string; status: 'done'; duration_ms?: number };
-  };
-}
+export type { AgentStep } from '@/types/toolRun';
 
 type AgentEvent =
   | { type: 'step' } & AgentStep
   | { type: 'text_delta'; delta: string }
   | { type: 'message'; content: string }
-  | { type: 'done'; full_content: string; has_intermediate?: boolean }
+  | { type: 'done'; full_content: string; has_intermediate?: boolean; run_id?: string }
   | { type: 'error'; message: string }
   | { type: 'ping' };
 
 const WS_BASE = import.meta.env.VITE_WS_URL || (
   window.location.protocol === 'https:' ? 'wss://' : 'ws://'
 ) + window.location.host;
-
-function updateTaskList(
-  prev: TaskListData | null,
-  event: AgentStep,
-): TaskListData | null {
-  if (!event.task_list) return prev;
-
-  const { task_id, items, update } = event.task_list;
-
-  // batch_start: initialize task list
-  if (event.status === 'batch_start' && items) {
-    return { task_id, items };
-  }
-
-  // Incremental update to an existing task
-  if (update && prev && prev.task_id === task_id) {
-    return {
-      ...prev,
-      items: prev.items.map(item =>
-        item.id === update.id
-          ? { ...item, status: update.status, duration_ms: update.duration_ms ?? item.duration_ms }
-          : item,
-      ),
-    };
-  }
-
-  return prev;
-}
 
 export function useAgentChat(botId: number) {
   const [steps, setSteps] = useState<AgentStep[]>([]);
@@ -121,8 +81,7 @@ export function useAgentChat(botId: number) {
         switch (event.type) {
           case 'step': {
             const stepEvent = event as AgentStep;
-            setTaskList(prev => updateTaskList(prev, stepEvent));
-            // batch_start events are UI-only (task list), not step timeline
+            setTaskList(prev => reduceToolRun(prev, stepEvent));
             if (stepEvent.status === 'batch_start') break;
             setSteps(prev => upsertStep(prev, stepEvent));
             break;
@@ -140,8 +99,9 @@ export function useAgentChat(botId: number) {
             break;
           }
           case 'done': {
-            const done = event as { type: 'done'; full_content: string };
+            const done = event as { type: 'done'; full_content: string; run_id?: string };
             setStreamingText(done.full_content);
+            setTaskList(prev => completeToolRun(prev, done.run_id));
             setIsDone(true);
             setIsConnected(false);
             break;

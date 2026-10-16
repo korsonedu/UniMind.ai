@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import type { XiaoYuMessage } from '@/store/useXiaoYuStore';
 import type { Bot } from '@/types/api';
 import { useXiaoYuStore } from '@/store/useXiaoYuStore';
-import type { AgentStep } from '@/hooks/useAgentChat';
+import type { AgentStep } from '@/types/toolRun';
 
 interface UseXiaoYuEngineOptions {
   enabled: boolean;
@@ -140,7 +140,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
             } else if (payload.type === 'step') {
               const step = payload as AgentStep;
 
-              if (step.status === 'calling') {
+              if (step.status === 'running') {
                 setMessages((prev: XiaoYuMessage[]) => {
                   const existingIdx = prev.findIndex(
                     (m: XiaoYuMessage) => m.toolStep?.call_id === step.call_id,
@@ -167,7 +167,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                     },
                   ];
                 });
-              } else if (step.status === 'done') {
+              } else if (step.status === 'succeeded' || step.status === 'failed') {
                 setMessages((prev: XiaoYuMessage[]) =>
                   prev.map((m: XiaoYuMessage) =>
                     m.toolStep?.call_id === step.call_id

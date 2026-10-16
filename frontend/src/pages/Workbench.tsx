@@ -9,7 +9,7 @@ import QuestionPanel from '@/pages/workbench/QuestionPanel';
 import { BulkInitCard } from '@/pages/workbench/BulkInitCard';
 import { QuickStartPanel } from '@/pages/workbench/QuickStartPanel';
 import type { Bot } from '@/hooks/useAgentConversation';
-import type { AgentStep } from '@/hooks/useAgentChat';
+import type { AgentStep } from '@/types/toolRun';
 
 interface InstitutionStats {
   weekly_active_students: number;

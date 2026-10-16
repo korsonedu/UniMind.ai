@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { AgentStepCard } from '@/components/AgentStepCard';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
+import type { AgentStep } from '@/types/toolRun';
 
 export interface TimelineMessage {
   id: string;
@@ -19,16 +20,7 @@ export interface TimelineMessage {
   content: string;
   timestamp: string;
   /** 工具调用步骤（来自 Agent） */
-  toolStep?: {
-    call_id: string;
-    step: number;
-    status: 'calling' | 'done';
-    name: string;
-    label: string;
-    args_summary?: string;
-    result_summary?: string;
-    visual?: { type: string; payload: unknown };
-  };
+  toolStep?: AgentStep;
   /** 是否为 Agent 主动推送 */
   isPush?: boolean;
   /** 消息 metadata */
@@ -120,7 +112,7 @@ export function AgentTimeline({
               <AgentStepCard step={msg.toolStep} />
             )}
             {/* render_visual 可视化 */}
-            {msg.toolStep?.status === 'done' && msg.toolStep.visual && (
+            {msg.toolStep?.status === 'succeeded' && msg.toolStep.visual && (
               <InlineVisualCard visual={msg.toolStep.visual as VisualData} />
             )}
             {/* 文本内容（Agent 说的文字） */}

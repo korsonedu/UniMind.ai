@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AgentStep } from '@/hooks/useAgentChat';
+import type { AgentStep } from '@/types/toolRun';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 
 export interface XiaoYuMessage {

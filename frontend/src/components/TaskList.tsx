@@ -1,19 +1,8 @@
 import { useState, useEffect, useId } from 'react';
-import { Check, Spinner, CaretRight } from '@phosphor-icons/react';
+import { Check, Circle, Spinner, X, CaretRight } from '@phosphor-icons/react';
 import { Collapse } from './ui/collapse';
 import { cn } from '@/lib/utils';
-
-export interface TaskItem {
-  id: string;
-  label: string;
-  status: 'running' | 'done';
-  duration_ms?: number;
-}
-
-export interface TaskListData {
-  task_id: string;
-  items: TaskItem[];
-}
+import type { TaskListData } from '@/types/toolRun';
 
 interface TaskListProps {
   data: TaskListData;
@@ -29,34 +18,37 @@ export function TaskList({ data, onComplete }: TaskListProps) {
   const [collapsed, setCollapsed] = useState(false);
   const contentId = useId();
   const [completion, setCompletion] = useState(() => {
-    const doneIds = new Set(data.items.filter(item => item.status === 'done').map(item => item.id));
+    const doneIds = new Set(data.items.filter(item => item.status === 'succeeded').map(item => item.id));
     return { items: data.items, doneIds, justCompleted: doneIds };
   });
 
-  const runningCount = data.items.filter(i => i.status === 'running').length;
-  const doneCount = data.items.filter(i => i.status === 'done').length;
-  const allDone = runningCount === 0 && doneCount > 0;
+  const activeCount = data.items.filter(item => item.status === 'queued' || item.status === 'running').length;
+  const succeededCount = data.items.filter(item => item.status === 'succeeded').length;
+  const failedCount = data.items.filter(item => item.status === 'failed').length;
+  const terminalCount = succeededCount + failedCount;
+  const allSucceeded = data.completed && activeCount === 0 && succeededCount > 0 && failedCount === 0;
 
   // Auto-collapse after all done for 3s
   useEffect(() => {
-    if (allDone) {
+    if (allSucceeded) {
       const timer = setTimeout(() => {
         setCollapsed(true);
         onComplete?.();
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [allDone, onComplete]);
+  }, [allSucceeded, onComplete]);
 
   // Track newly completed items for animation
-  const doneIds = new Set(data.items.filter(i => i.status === 'done').map(i => i.id));
+  const doneIds = new Set(data.items.filter(item => item.status === 'succeeded').map(item => item.id));
   if (completion.items !== data.items) {
     setCompletion({ items: data.items, doneIds, justCompleted: new Set([...doneIds].filter(id => !completion.doneIds.has(id))) });
   }
   const justCompleted = completion.justCompleted;
 
-  const doneItems = data.items.filter(i => i.status === 'done');
-  const activeItems = data.items.filter(i => i.status === 'running');
+  const succeededItems = data.items.filter(item => item.status === 'succeeded');
+  const failedItems = data.items.filter(item => item.status === 'failed');
+  const activeItems = data.items.filter(item => item.status === 'queued' || item.status === 'running');
 
   return (
     <div className="my-3 rounded-xl border border-border/60 bg-card/50 overflow-hidden transition-all duration-300">
@@ -69,9 +61,11 @@ export function TaskList({ data, onComplete }: TaskListProps) {
       >
         <CaretRight className="um-disclosure-chevron w-3.5 h-3.5" />
         <span>
-          {allDone
-            ? `全部完成 · ${doneCount} 项`
-            : `进行中 · ${doneCount}/${data.items.length} 项`}
+          {allSucceeded
+            ? `全部完成 · ${succeededCount} 项`
+            : data.completed && failedCount > 0
+              ? `已完成 · ${succeededCount} 成功 · ${failedCount} 失败`
+              : `进行中 · ${terminalCount}/${data.items.length} 项`}
         </span>
       </button>
 
@@ -84,7 +78,9 @@ export function TaskList({ data, onComplete }: TaskListProps) {
               key={item.id}
               className="flex items-center gap-3 px-4 py-2.5 text-sm border-b border-border/20 last:border-0"
             >
-              <Spinner className="w-4 h-4 text-primary animate-spin shrink-0" />
+              {item.status === 'running'
+                ? <Spinner className="w-4 h-4 text-primary animate-spin shrink-0" />
+                : <Circle className="w-4 h-4 text-muted-foreground/50 shrink-0" />}
               <span className="flex-1 text-foreground">{item.label}</span>
               {item.duration_ms != null && (
                 <span className="text-xs text-muted-foreground tabular-nums">
@@ -94,8 +90,8 @@ export function TaskList({ data, onComplete }: TaskListProps) {
             </div>
           ))}
 
-          {/* Done items */}
-          {doneItems.map(item => {
+          {/* Succeeded items */}
+          {succeededItems.map(item => {
             const isNew = justCompleted.has(item.id);
             return (
               <div
@@ -117,6 +113,29 @@ export function TaskList({ data, onComplete }: TaskListProps) {
               </div>
             );
           })}
+
+          {/* Failed items */}
+          {failedItems.map(item => (
+            <div
+              key={item.id}
+              className="flex items-start gap-3 px-4 py-2.5 text-sm border-b border-border/20 last:border-0 bg-destructive/[0.04]"
+            >
+              <X className="w-4 h-4 mt-0.5 text-destructive shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-foreground">{item.label}</div>
+                {item.error?.message && (
+                  <div className="text-xs text-destructive/80 mt-0.5 break-words">
+                    {item.error.message}
+                  </div>
+                )}
+              </div>
+              {item.duration_ms != null && (
+                <span className="text-xs text-muted-foreground/70 tabular-nums">
+                  {formatDuration(item.duration_ms)}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       </Collapse>
     </div>

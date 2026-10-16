@@ -191,13 +191,16 @@ window.fetch = async (input, init) => {
     saveProjects();
     const visual = { type: 'data_card', payload: { title: '复习进度', items: [{ label: '待复习', value: '8 题' }, { label: '本周练习', value: '42 题' }] } };
     const answer = '先完成到期复习，再检查薄弱知识点。\n\n这是本地示例回复，可以继续输入、切换会话或新建对话。';
+    const runId = 'run-preview';
     history.push({ id: Date.now(), role: 'user', content: payload.message, timestamp: new Date().toISOString(), conversation_id: payload.conversation_id, conversation_project: projectFixtures.assignments[payload.conversation_id], conversation_title: payload.message.slice(0, 20) }, { id: Date.now() + 1, role: 'assistant', content: answer, timestamp: new Date().toISOString(), conversation_id: payload.conversation_id, conversation_project: projectFixtures.assignments[payload.conversation_id], conversation_title: payload.message.slice(0, 20), metadata: { all_visuals: [visual] } });
     const events = [
-      { type: 'step', name: 'get_learning_stats', status: 'calling', call_id: 'fixture-stats', step: 1, label: '查看学习进度' },
-      { type: 'step', name: 'get_learning_stats', status: 'done', call_id: 'fixture-stats', step: 1, label: '查看学习进度', result_summary: '待复习 8 题' },
-      { type: 'step', name: 'render_visual', status: 'calling', call_id: 'fixture-visual', step: 2, label: '复习进度' },
-      { type: 'step', name: 'render_visual', status: 'done', call_id: 'fixture-visual', step: 2, label: '复习进度', visual },
-      { done: true, full_content: answer, conversation_title: payload.message.slice(0, 20), message_id: history[history.length - 1].id, metadata: { all_visuals: [visual] } },
+      { type: 'step', run_id: runId, name: 'get_learning_stats', status: 'queued', call_id: 'fixture-stats', round: 1, label: '查看学习进度' },
+      { type: 'step', run_id: runId, name: 'get_learning_stats', status: 'running', call_id: 'fixture-stats', round: 1, label: '查看学习进度' },
+      { type: 'step', run_id: runId, name: 'get_learning_stats', status: 'succeeded', call_id: 'fixture-stats', round: 1, label: '查看学习进度', result_summary: '待复习 8 题' },
+      { type: 'step', run_id: runId, name: 'render_visual', status: 'queued', call_id: 'fixture-visual', round: 2, label: '复习进度' },
+      { type: 'step', run_id: runId, name: 'render_visual', status: 'running', call_id: 'fixture-visual', round: 2, label: '复习进度' },
+      { type: 'step', run_id: runId, name: 'render_visual', status: 'succeeded', call_id: 'fixture-visual', round: 2, label: '复习进度', visual },
+      { done: true, run_id: runId, full_content: answer, conversation_title: payload.message.slice(0, 20), message_id: history[history.length - 1].id, metadata: { all_visuals: [visual] } },
     ];
     return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'Content-Type': 'text/event-stream' } });
   }

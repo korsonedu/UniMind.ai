@@ -3,8 +3,12 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import api, { streamFetch } from '@/lib/api';
 // processMathContent removed — LLM outputs LaTeX directly
 import { toast } from 'sonner';
-import type { AgentStep } from '@/hooks/useAgentChat';
-import type { TaskListData } from '@/components/TaskList';
+import {
+  completeToolRun,
+  reduceToolRun,
+  type AgentStep,
+  type TaskListData,
+} from '@/types/toolRun';
 
 /** 24 hours in ms — used to decide if a session is "recent" for auto-restore */
 export const RECENT_SESSION_MS = 24 * 60 * 60 * 1000;
@@ -201,15 +205,16 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       const v = visuals[0];
       const msg = { ...m };
       if (msg.toolStep) {
-        if (msg.toolStep.name === 'render_visual' && msg.toolStep.status === 'done' && !msg.toolStep.visual) {
+        if (msg.toolStep.name === 'render_visual' && msg.toolStep.status === 'succeeded' && !msg.toolStep.visual) {
           msg.toolStep = { ...msg.toolStep, visual: v };
         }
       } else {
         msg.toolStep = {
+          run_id: 'history',
           call_id: `hist-${m.id || 0}`,
-          step: 0,
+          round: 0,
           name: 'render_visual',
-          status: 'done',
+          status: 'succeeded',
           label: (typeof v.payload?.title === 'string' ? v.payload.title : undefined) || '可视化',
           visual: v,
           args_summary: '',
@@ -357,35 +362,14 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               });
             } else if (payload.type === 'step') {
               const step = payload as AgentStep;
+              setTaskList(prev => reduceToolRun(prev, step));
 
-              // batch_start: initialize task list (UI-only, not a message)
-              if (step.status === 'batch_start' && step.task_list?.items) {
-                setTaskList({
-                  task_id: step.task_list.task_id,
-                  items: step.task_list.items,
-                });
-                continue;
-              }
-
-              // Incremental task_list update (done events with task_list.update)
-              if (step.task_list?.update) {
-                setTaskList(prev => {
-                  if (!prev || prev.task_id !== step.task_list!.task_id) return prev;
-                  return {
-                    ...prev,
-                    items: prev.items.map(item =>
-                      item.id === step.task_list!.update!.id
-                        ? { ...item, status: step.task_list!.update!.status, duration_ms: step.task_list!.update!.duration_ms ?? item.duration_ms }
-                        : item,
-                    ),
-                  };
-                });
-              }
+              if (step.status === 'batch_start') continue;
 
               // render_visual 的 visual 数据由下方 step.status 块统一处理：
-              //   calling → 创建带 toolStep 的消息，scheduleShow 淡入
-              //   done    → 更新 toolStep（含 visual），AgentChatLayout 根据 toolStep.visual 渲染 InlineVisualCard
-              if (step.status === 'calling') {
+              //   running   → 创建带 toolStep 的消息，scheduleShow 淡入
+              //   terminal  → 更新 toolStep，成功时再处理 visual 和 questions
+              if (step.status === 'running') {
                 setMessages(prev => {
                   // 同一 call_id 已存在则更新（进度事件），否则新建
                   const existingIdx = prev.findIndex(m => m.toolStep?.call_id === step.call_id);
@@ -405,16 +389,18 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                     timestamp: new Date().toISOString(),
                   }];
                 });
-              } else if (step.status === 'done') {
-                if (onStepDoneRef.current) {
+              } else if (step.status === 'succeeded' || step.status === 'failed') {
+                if (step.status === 'succeeded' && onStepDoneRef.current) {
                   setMessages(prev => onStepDoneRef.current!(step, prev) || prev);
                 } else {
                   setMessages(prev => prev.map(m =>
                     m.toolStep?.call_id === step.call_id ? { ...m, toolStep: step } : m
                   ));
                 }
-                onStepDoneEffectRef.current?.(step);
-                if (step.questions?.length) {
+                if (step.status === 'succeeded') {
+                  onStepDoneEffectRef.current?.(step);
+                }
+                if (step.status === 'succeeded' && step.questions?.length) {
                   onStepQuestionsRef.current?.(step.questions);
                 }
               }
@@ -423,6 +409,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             } else if (payload.type === 'error') {
               toast.error(payload.message || 'AI 调用失败');
             } else if (payload.done) {
+              setTaskList(prev => completeToolRun(prev, payload.run_id));
               const finalContent = payload.full_content || '';
               if (payload.is_error) {
                 toast.error(finalContent || 'AI 调用失败');

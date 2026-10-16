@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Spinner, Circle, ArrowRight } from '@phosphor-icons/react';
+import { Check, Spinner, Circle, X, ArrowRight } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import type { AgentStep } from '@/hooks/useAgentChat';
+import type { AgentStep } from '@/types/toolRun';
 
-/** 计时器：step 从 calling 开始计时，done 后停止。 */
+/** 计时器：step 从 running 开始计时，进入终态后停止。 */
 function useElapsed(status: string) {
   const [elapsed, setElapsed] = useState(0);
   const startRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   useEffect(() => {
-    if (status === 'calling') {
+    if (status === 'running') {
       startRef.current = Date.now();
       timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
     }
@@ -25,9 +25,11 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
   const elapsed = useElapsed(step.status);
   const navigate = useNavigate();
 
-  const icon = step.status === 'done' ? (
+  const icon = step.status === 'succeeded' ? (
     <Check className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-emerald-500 animate-in zoom-in duration-300")} />
-  ) : step.status === 'calling' ? (
+  ) : step.status === 'failed' ? (
+    <X className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-destructive")} />
+  ) : step.status === 'running' ? (
     <Spinner className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "animate-spin text-primary")} />
   ) : (
     <Circle className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-muted-foreground/40")} />
@@ -37,10 +39,12 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
     <div className={cn(
       "rounded-lg border transition-all duration-300",
       compact ? "text-[11px]" : "text-[13px]",
-      step.status === 'calling'
+      step.status === 'running'
         ? "border-primary/25 bg-primary/[0.04] shadow-[0_0_0_1px] shadow-primary/10 [animation:gentle-breathe_3s_ease-in-out_infinite]"
-        : step.status === 'done'
+        : step.status === 'succeeded'
           ? "border-emerald-500/20 bg-emerald-500/[0.04]"
+          : step.status === 'failed'
+            ? "border-destructive/25 bg-destructive/[0.04]"
           : "border-border/60 bg-muted/30"
     )}>
       <div className={cn(
@@ -49,18 +53,23 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
       )}>
         {icon}
         <span className="flex-1 font-medium text-foreground">{step.label}</span>
-        {step.status === 'calling' && elapsed >= 3 && (
+        {step.status === 'running' && elapsed >= 3 && (
           <span className="text-[10px] text-muted-foreground/60 font-normal tabular-nums">
             {elapsed >= 60 ? `${Math.floor(elapsed / 60)}m${elapsed % 60}s` : `${elapsed}s`}
           </span>
         )}
-        {step.status === 'done' && step.result_summary && (
+        {step.status === 'succeeded' && step.result_summary && (
           <span className="text-[10px] text-muted-foreground/55 font-normal truncate max-w-[120px]">
             {step.result_summary}
           </span>
         )}
+        {step.status === 'failed' && step.error?.message && (
+          <span className="text-[10px] text-destructive/80 font-normal truncate max-w-[160px]">
+            {step.error.message}
+          </span>
+        )}
       </div>
-      {step.status === 'done' && step.actions && step.actions.length > 0 && (
+      {step.status === 'succeeded' && step.actions && step.actions.length > 0 && (
         <div className="flex flex-wrap gap-1 px-3 pb-2">
           {step.actions.map((a, i) => (
             <button
