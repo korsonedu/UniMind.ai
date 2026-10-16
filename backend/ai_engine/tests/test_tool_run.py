@@ -1,4 +1,5 @@
 import json
+import time
 
 from ai_engine.tool_run import ToolRunCoordinator
 
@@ -142,3 +143,178 @@ def test_prefers_executor_permission_schema_over_routed_definitions():
 
     assert outcome.error["code"] == "invalid_arguments"
     assert executor.calls == []
+
+
+def test_emits_monotonic_lifecycle_and_fails_invalid_call_without_running_it():
+    definition = _tool_definition(
+        parameters={
+            "type": "object",
+            "properties": {"subject": {"type": "string"}},
+            "required": ["subject"],
+            "additionalProperties": False,
+        }
+    )
+    executor = RecordingExecutor([definition])
+    events = []
+    coordinator = ToolRunCoordinator(
+        executor,
+        [definition],
+        on_step=events.append,
+        read_only_tools={"lookup"},
+        run_id="run-test",
+    )
+
+    coordinator.execute_batch(
+        [
+            _tool_call(arguments={"subject": "数学"}, call_id="valid-call"),
+            _tool_call(arguments={}, call_id="invalid-call"),
+        ],
+        round_number=3,
+    )
+
+    assert [(event["call_id"], event["status"]) for event in events] == [
+        ("valid-call", "queued"),
+        ("invalid-call", "queued"),
+        ("invalid-call", "failed"),
+        ("valid-call", "running"),
+        ("valid-call", "succeeded"),
+    ]
+    assert all(event["run_id"] == "run-test" for event in events)
+    assert all(event["round"] == 3 for event in events)
+    assert events[2]["error"]["code"] == "invalid_arguments"
+    assert executor.calls == [("lookup", {"subject": "数学"})]
+
+
+def test_executes_read_only_batch_concurrently_but_returns_input_order():
+    definitions = [_tool_definition("slow"), _tool_definition("fast")]
+
+    class TimedExecutor(RecordingExecutor):
+        def __call__(self, name, arguments):
+            time.sleep(0.12 if name == "slow" else 0.02)
+            return json.dumps({"name": name})
+
+    events = []
+    coordinator = ToolRunCoordinator(
+        TimedExecutor(definitions),
+        definitions,
+        on_step=events.append,
+        read_only_tools={"slow", "fast"},
+        max_workers=2,
+    )
+
+    started = time.monotonic()
+    outcomes = coordinator.execute_batch(
+        [_tool_call("slow", call_id="slow-call"), _tool_call("fast", call_id="fast-call")],
+        round_number=1,
+    )
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.20
+    assert [outcome.call.name for outcome in outcomes] == ["slow", "fast"]
+    succeeded_names = [event["name"] for event in events if event["status"] == "succeeded"]
+    assert succeeded_names == ["fast", "slow"]
+
+
+def test_executes_entire_mixed_batch_serially():
+    definitions = [_tool_definition("read"), _tool_definition("write")]
+
+    class OrderedExecutor(RecordingExecutor):
+        def __init__(self, permitted_definitions):
+            super().__init__(permitted_definitions)
+            self.sequence = []
+
+        def __call__(self, name, arguments):
+            self.sequence.append(f"start:{name}")
+            time.sleep(0.01)
+            self.sequence.append(f"end:{name}")
+            return json.dumps({"ok": True})
+
+    executor = OrderedExecutor(definitions)
+    coordinator = ToolRunCoordinator(
+        executor,
+        definitions,
+        read_only_tools={"read"},
+        max_workers=2,
+    )
+
+    coordinator.execute_batch(
+        [_tool_call("read", call_id="read-call"), _tool_call("write", call_id="write-call")],
+        round_number=1,
+    )
+
+    assert executor.sequence == [
+        "start:read",
+        "end:read",
+        "start:write",
+        "end:write",
+    ]
+
+
+def test_classifies_raised_returned_and_timeout_errors(monkeypatch):
+    definitions = [
+        _tool_definition("raised"),
+        _tool_definition("returned"),
+        _tool_definition("blocked"),
+    ]
+
+    class ErrorExecutor(RecordingExecutor):
+        def __call__(self, name, arguments):
+            if name == "raised":
+                raise RuntimeError("boom")
+            if name == "returned":
+                return json.dumps({"error": "bad result"})
+            time.sleep(0.05)
+            return json.dumps({"ok": True})
+
+    monkeypatch.setattr("ai_engine.tool_run.TOOL_TIMEOUT_SECONDS", 0.005)
+    coordinator = ToolRunCoordinator(ErrorExecutor(definitions), definitions)
+
+    outcomes = coordinator.execute_batch(
+        [
+            _tool_call("raised", call_id="raised-call"),
+            _tool_call("returned", call_id="returned-call"),
+            _tool_call("blocked", call_id="blocked-call"),
+        ],
+        round_number=1,
+    )
+
+    assert [outcome.error["code"] for outcome in outcomes] == [
+        "execution_error",
+        "execution_error",
+        "timeout",
+    ]
+
+
+def test_links_model_retry_to_previous_failed_call_without_auto_retry():
+    definition = _tool_definition()
+
+    class RetryExecutor(RecordingExecutor):
+        def __init__(self, permitted_definitions):
+            super().__init__(permitted_definitions)
+            self.attempts = 0
+
+        def __call__(self, name, arguments):
+            self.attempts += 1
+            if self.attempts == 1:
+                return json.dumps({"error": "try different arguments"})
+            return json.dumps({"ok": True})
+
+    executor = RetryExecutor([definition])
+    events = []
+    coordinator = ToolRunCoordinator(executor, [definition], on_step=events.append)
+
+    first = coordinator.execute_batch(
+        [_tool_call(arguments={}, call_id="first-call")],
+        round_number=1,
+    )[0]
+    second = coordinator.execute_batch(
+        [_tool_call(arguments={}, call_id="second-call")],
+        round_number=2,
+    )[0]
+
+    assert first.failed is True
+    assert second.failed is False
+    assert second.call.retry_of == "first-call"
+    assert executor.attempts == 2
+    second_events = [event for event in events if event["call_id"] == "second-call"]
+    assert all(event["retry_of"] == "first-call" for event in second_events)
