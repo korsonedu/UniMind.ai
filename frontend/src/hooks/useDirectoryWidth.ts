@@ -6,12 +6,12 @@ const MAX_WIDTH = 320;
 const COLLAPSE_WIDTH = MIN_WIDTH / 2;
 
 export function previewDirectoryWidth(value: number, collapseThreshold = COLLAPSE_WIDTH) {
-  if (value < collapseThreshold) return 0;
-  return Math.min(MAX_WIDTH, value);
+  if (value <= collapseThreshold) return 0;
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, value));
 }
 
 export function resolveDirectoryWidth(value: number, collapseThreshold = COLLAPSE_WIDTH) {
-  if (value < collapseThreshold) return 0;
+  if (value <= collapseThreshold) return 0;
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, value));
 }
 
