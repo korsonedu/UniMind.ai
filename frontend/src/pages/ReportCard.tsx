@@ -9,7 +9,13 @@ import api from '@/lib/api';
 
 interface ReportData {
   student: { id: number; nickname: string; elo_score: number; date_joined: string };
-  stats: { total_attempted: number; total_distinct: number; correct_count: number; wrong_count: number; mastered_count: number; accuracy: number; study_streak: number; checkin_streak: number };
+  stats: {
+    total_attempted: number; total_distinct: number; correct_count: number; wrong_count: number;
+    mastered_count: number; accuracy: number; study_streak: number; checkin_streak: number;
+    last_accuracy?: number | null; lifetime_accuracy?: number | null;
+    attempted_questions?: number; has_attempts?: boolean;
+    diagnostic_mastered_count?: number; diagnostic_kp_count?: number;
+  };
   radar: { subject: string; avg_mastery: number; kp_count: number }[];
   daily_activity: { date: string; count: number }[];
   exams: { id: number; total_score: number; max_score: number; percentage: number; elo_change: number; created_at: string }[];
@@ -53,20 +59,28 @@ export const ReportCard = () => {
         <dl className="um-record-metrics">
           {[
             { label: '累计答题', value: data.stats.total_attempted, unit: '次' },
-            { label: '最近作答正确率', value: data.stats.accuracy, unit: '%' },
+            {
+              label: '最近作答正确率',
+              value: data.stats.last_accuracy ?? (data.stats.has_attempts === false ? '—' : data.stats.accuracy),
+              unit: data.stats.has_attempts === false ? '' : '%',
+            },
             { label: '连续学习', value: data.stats.study_streak, unit: '天' },
             { label: 'ELO', value: data.student.elo_score, unit: '' },
           ].map(item => <div key={item.label}><dt>{item.label}</dt><dd>{item.value}<small>{item.unit}</small></dd></div>)}
         </dl>
         <dl className="um-record-details">
           {[
-            ['练习题目', data.stats.total_distinct, '道'], ['最近答对', data.stats.correct_count, '道'],
-            ['曾答错', data.stats.wrong_count, '道'], ['已掌握', data.stats.mastered_count, '道题'],
-            ['连续打卡', data.stats.checkin_streak, '天'], ['已解锁成就', data.achievements.length, '个'],
+            ['练习题目', data.stats.attempted_questions ?? data.stats.total_distinct, '道'],
+            ['最近答对', data.stats.correct_count, '道'],
+            ['曾答错', data.stats.wrong_count, '道'],
+            ['已标记掌握', data.stats.mastered_count, '道题'],
+            ['诊断掌握知识点', `${data.stats.diagnostic_mastered_count ?? 0}/${data.stats.diagnostic_kp_count ?? 0}`, '个'],
+            ['连续打卡', data.stats.checkin_streak, '天'],
+            ['已解锁成就', data.achievements.length, '个'],
           ].map(([label, value, unit]) => <div key={label}><dt>{label}</dt><dd>{value} {unit}</dd></div>)}
         </dl>
         <div className="um-record-charts">
-          <section aria-label="知识点掌握度"><h2>知识点掌握度</h2>
+          <section aria-label="知识点掌握度"><h2>知识点掌握度（基于诊断）</h2>
             {data.radar.length ? <>
               <div className="um-record-chart"><ResponsiveContainer width="100%" height="100%"><RadarChart data={data.radar}>
                 <PolarGrid stroke="var(--um-color-border)" />
@@ -75,7 +89,7 @@ export const ReportCard = () => {
                 <Radar name="掌握度" dataKey="avg_mastery" stroke="var(--um-color-accent)" fill="var(--um-color-accent)" fillOpacity={0.12} strokeWidth={2} />
               </RadarChart></ResponsiveContainer></div>
               <ul className="um-record-subjects">{data.radar.map(item => <li key={item.subject}><span>{item.subject}</span><strong>{item.avg_mastery}%</strong></li>)}</ul>
-            </> : <p className="um-record-chart-empty">完成练习后查看知识点掌握度。</p>}
+            </> : <p className="um-record-chart-empty">完成诊断后查看知识点掌握度。</p>}
           </section>
           <section aria-label="考试成绩趋势"><h2>考试成绩趋势</h2>
             {data.exams.length ? <div className="um-record-chart"><ResponsiveContainer width="100%" height="100%"><BarChart data={data.exams.slice().reverse()} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>

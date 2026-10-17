@@ -4,6 +4,8 @@ import { MemoryRetentionTrend } from './MemoryRetentionTrend';
 export interface DashData {
   stats: {
     streak_days: number; weekly_activity: number; accuracy: number; total_attempted: number;
+    attempted_questions?: number; total_attempts?: number;
+    last_accuracy?: number | null; lifetime_accuracy?: number | null; has_attempts?: boolean;
     heatmap_days: { date: string; count: number }[]; is_new_user: boolean;
     today_checked_in: boolean; checkin_streak: number;
     checkin_history: { date: string; checked_in: boolean }[];
@@ -27,7 +29,14 @@ export function LearningOverview({ data, error, onRetry }: {
         <header><h2>练习表现</h2><Link to="/report-card">成绩报告</Link></header>
         <dl className="um-agent-metrics">
           <div><dt>连续练习</dt><dd>{stats.streak_days}<small> 天</small></dd></div>
-          <div><dt>正确率</dt><dd>{stats.accuracy}<small> %</small></dd><p>累计 {stats.total_attempted} 题</p></div>
+          <div>
+            <dt>最近正确率</dt>
+            <dd>{stats.has_attempts === false ? '—' : (stats.last_accuracy ?? stats.accuracy)}<small>{stats.has_attempts === false ? '' : ' %'}</small></dd>
+            <p>
+              已练 {stats.attempted_questions ?? stats.total_attempted} 题
+              {stats.lifetime_accuracy != null && ` · 累计正确率 ${stats.lifetime_accuracy}%`}
+            </p>
+          </div>
           <div><dt>本周练习</dt><dd>{stats.weekly_activity}<small> 题</small></dd></div>
           <div><dt>待复习</dt><dd>{data?.reviews.due_count ?? 0}<small> 题</small></dd><Link to="/tests">开始练习</Link></div>
         </dl>

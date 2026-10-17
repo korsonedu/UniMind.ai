@@ -9,13 +9,20 @@ interface ReportStats {
   wrong_count?: number;
   mastered_count?: number;
   accuracy?: number;
+  last_accuracy?: number | null;
+  lifetime_accuracy?: number | null;
+  attempted_questions?: number;
+  has_attempts?: boolean;
+  diagnostic_mastered_count?: number;
+  diagnostic_kp_count?: number;
   study_streak?: number;
   checkin_streak?: number;
 }
 
 interface RadarEntry {
   subject: string;
-  avg_score: number;
+  avg_mastery?: number;
+  avg_score?: number;
   kp_count: number;
 }
 
@@ -52,9 +59,14 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
   };
 
   // Backend accuracy is already 0-100 scale
-  const accuracyPct = stats.accuracy != null ? `${Number(stats.accuracy).toFixed(1)}%` : '-';
-  // avg_score is 0-1 mastery score
-  const masteryPct = (score: number) => `${(score * 100).toFixed(0)}%`;
+  const accuracyValue = stats.has_attempts === false
+    ? null
+    : (stats.last_accuracy ?? stats.accuracy);
+  const accuracyPct = accuracyValue != null ? `${Number(accuracyValue).toFixed(1)}%` : '-';
+  // Backend avg_mastery is 0-100 scale; avg_score fallback is 0-1
+  const masteryValue = (entry: RadarEntry) => (
+    entry.avg_mastery ?? (entry.avg_score != null ? entry.avg_score * 100 : 0)
+  );
 
   return (
     <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
@@ -70,12 +82,15 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <StatItem label="总作答" value={String(stats.total_attempted || 0)} />
-        <StatItem label="正确率" value={accuracyPct} />
+        <StatItem label="累计作答" value={String(stats.total_attempted || 0)} />
+        <StatItem label="最近正确率" value={accuracyPct} />
         <StatItem label="连续天数" value={String(stats.study_streak || 0)} />
-        <StatItem label="正确数" value={String(stats.correct_count || 0)} />
-        <StatItem label="错题数" value={String(stats.wrong_count || 0)} />
-        <StatItem label="已掌握知识点" value={String(stats.mastered_count || 0)} />
+        <StatItem label="最近答对" value={String(stats.correct_count || 0)} />
+        <StatItem label="曾答错" value={String(stats.wrong_count || 0)} />
+        <StatItem
+          label="诊断掌握知识点"
+          value={`${stats.diagnostic_mastered_count ?? 0}/${stats.diagnostic_kp_count ?? 0}`}
+        />
       </div>
 
       {radar.length > 0 && (
@@ -89,10 +104,10 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
                   <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: masteryPct(r.avg_score) }}
+                      style={{ width: `${masteryValue(r).toFixed(0)}%` }}
                     />
                   </div>
-                  <span className="text-muted-foreground w-8 text-right">{masteryPct(r.avg_score)}</span>
+                  <span className="text-muted-foreground w-8 text-right">{masteryValue(r).toFixed(0)}%</span>
                 </div>
               </div>
             ))}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react';
-import api, { streamFetch } from '@/lib/api';
+import api from '@/lib/api';
 import { upsertChatMessage } from '@/lib/chatMessages';
+import { readChatStream } from '@/lib/chatStream';
+import { createRevealQueue } from '@/lib/chatReveal';
 import { toast } from 'sonner';
 import type { XiaoYuMessage } from '@/store/useXiaoYuStore';
 import type { Bot } from '@/types/api';
@@ -23,7 +25,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
   const setBotId = useXiaoYuStore((s) => s.setBotId);
   const setSendMessage = useXiaoYuStore((s) => s.setSendMessage);
   const abortRef = useRef<AbortController | null>(null);
-  const timersRef = useRef<number[]>([]);
+  const revealRef = useRef<ReturnType<typeof createRevealQueue> | null>(null);
   const sendCountRef = useRef(0);
   const conversationIdRef = useRef(conversationId);
   const botIdRef = useRef(botId);
@@ -51,12 +53,16 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
     if (!bid) return;
 
     if (abortRef.current) abortRef.current.abort();
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
+    revealRef.current?.dispose();
+    revealRef.current = null;
 
     const controller = new AbortController();
     abortRef.current = controller;
     const currentSend = ++sendCountRef.current;
+    const requestConversationId = conversationIdRef.current;
+    const isCurrent = () => !controller.signal.aborted
+      && currentSend === sendCountRef.current
+      && requestConversationId === conversationIdRef.current;
 
     setLoading(true);
 
@@ -75,52 +81,28 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
     };
     setMessages((prev: XiaoYuMessage[]) => [...prev, userMsg]);
 
+    const reveal = createRevealQueue({
+      isActive: isCurrent,
+      onReveal: (id) => {
+        setMessages((prev: XiaoYuMessage[]) =>
+          prev.map((m: XiaoYuMessage) => (m._id === id ? { ...m, visible: true } : m)),
+        );
+      },
+    });
+    revealRef.current = reveal;
+
     try {
-      const { url, init } = streamFetch(
-        '/api/ai/chat/stream/',
-        {
+      for await (const payload of readChatStream({
+        body: {
           message: text,
           bot_id: bid,
-          conversation_id: conversationIdRef.current,
+          conversation_id: requestConversationId,
         },
-        controller.signal,
-      );
-      const res = await fetch(url, init);
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('Stream not available');
-
-      const decoder = new TextDecoder();
-      let leftover = '';
-      const shownCount = { current: 0 };
-      const STEP_DELAY_MS = 600;
-
-      function scheduleShow(id: string, pos: number) {
-        const delay = Math.max(0, pos - shownCount.current) * STEP_DELAY_MS;
-        const timerId = window.setTimeout(() => {
-          shownCount.current = Math.max(shownCount.current, pos + 1);
-          setMessages((prev: XiaoYuMessage[]) =>
-            prev.map((m: XiaoYuMessage) => (m._id === id ? { ...m, visible: true } : m)),
-          );
-        }, delay);
-        timersRef.current.push(timerId);
-      }
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        leftover += decoder.decode(value, { stream: true });
-        const lines = leftover.split('\n');
-        leftover = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const payload = JSON.parse(line.slice(6));
-
+        signal: controller.signal,
+        isCurrent,
+      })) {
+        if (!isCurrent()) return;
+        try {
             if (payload.type === 'message' && payload.content) {
               if (streamingId) {
                 const id = streamingId;
@@ -144,9 +126,10 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                 },
               ]);
               requestAnimationFrame(() => {
+                if (!isCurrent()) return;
                 setMessages((prev: XiaoYuMessage[]) => {
                   const pos = prev.findIndex((m: XiaoYuMessage) => m._id === id);
-                  if (pos >= 0) scheduleShow(id, pos);
+                  if (pos >= 0) reveal.schedule(id, pos);
                   return prev;
                 });
               });
@@ -155,19 +138,24 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
               setMessages((prev: XiaoYuMessage[]) => upsertToolStepMessage(
                 prev,
                 step,
-                currentStep => {
-                  const id = nextId();
-                  scheduleShow(id, prev.length);
-                  return {
-                    _id: id,
-                    role: 'assistant' as const,
-                    content: '',
-                    toolStep: currentStep,
-                    visible: false,
-                    timestamp: new Date().toISOString(),
-                  };
-                },
+                currentStep => ({
+                  _id: nextId(),
+                  role: 'assistant' as const,
+                  content: '',
+                  toolStep: currentStep,
+                  visible: false,
+                  timestamp: new Date().toISOString(),
+                }),
               ));
+              requestAnimationFrame(() => {
+                if (!isCurrent()) return;
+                setMessages((prev: XiaoYuMessage[]) => {
+                  const pos = prev.findIndex((m: XiaoYuMessage) => m.toolStep?.call_id === step.call_id);
+                  const targetId = pos >= 0 ? prev[pos]._id : undefined;
+                  if (targetId) reveal.schedule(targetId, pos);
+                  return prev;
+                });
+              });
             } else if (payload.type === 'text_delta') {
               if (!payload.delta) continue;
               streamingId ??= nextId();
@@ -210,9 +198,10 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                   },
                 ]);
                 requestAnimationFrame(() => {
+                  if (!isCurrent()) return;
                   setMessages((prev: XiaoYuMessage[]) => {
                     const pos = prev.findIndex((m: XiaoYuMessage) => m._id === id);
-                    if (pos >= 0) scheduleShow(id, pos);
+                    if (pos >= 0) reveal.schedule(id, pos);
                     return prev;
                   });
                 });
@@ -223,9 +212,8 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
             } else if (payload.error) {
               toast.error(payload.error);
             }
-          } catch {
-            /* skip malformed SSE lines */
-          }
+        } catch {
+          /* skip malformed SSE events */
         }
       }
     } catch (err: unknown) {
@@ -238,14 +226,14 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
           : '发送失败，请重试',
       );
     } finally {
-      timersRef.current.forEach(clearTimeout);
-      timersRef.current = [];
-      setMessages((prev: XiaoYuMessage[]) =>
-        prev.map((m: XiaoYuMessage) =>
-          m.visible === false ? { ...m, visible: true } : m,
-        ),
-      );
-      if (currentSend === sendCountRef.current) {
+      reveal.dispose();
+      if (revealRef.current === reveal) revealRef.current = null;
+      if (isCurrent()) {
+        setMessages((prev: XiaoYuMessage[]) =>
+          prev.map((m: XiaoYuMessage) =>
+            m.visible === false ? { ...m, visible: true } : m,
+          ),
+        );
         setLoading(false);
       }
     }
@@ -261,7 +249,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
   useEffect(() => {
     return () => {
       if (abortRef.current) abortRef.current.abort();
-      timersRef.current.forEach(clearTimeout);
+      revealRef.current?.dispose();
     };
   }, []);
 

@@ -22,6 +22,7 @@ import type { AgentStep } from '@/types/toolRun';
 import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
+import { restoreVisualSteps } from '@/lib/visualHistory';
 import { TaskList } from '@/components/TaskList';
 import { NativeAgentShell } from '@/components/NativeAgentShell';
 import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
@@ -260,47 +261,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           setBot(found);
           const hRes = await api.get('/ai/history/', { params: { bot_id: found.id } });
           if (hRes.data.length > 0) {
-            const allMsgs: Message[] = hRes.data
-              .filter((m: Message) => m.content !== '[Thinking...]')
-              .map((m: Message) => {
-                const msg = {
+            const allMsgs: Message[] = restoreVisualSteps(
+              hRes.data
+                .filter((m: Message) => m.content !== '[Thinking...]')
+                .map((m: Message) => ({
                   ...m,
                   content: processContent ? processContent(m.content as string) : (m.content as string),
                   visible: true,
-                } as Message;
-                // 恢复 metadata 中的 visual 到 toolStep（历史加载时 visual 存储在 metadata 中）
-                const meta = m.metadata ? { ...m.metadata } : undefined;
-                const visuals = meta?.all_visuals || (meta?.visual ? [meta.visual] : null);
-                if (visuals && visuals.length > 0) {
-                  const v = visuals[0];
-                  if (msg.toolStep) {
-                    // Case 1: toolStep 已存在（从内存恢复的情况），只补 visual
-                    if (msg.toolStep.name === 'render_visual' && msg.toolStep.status === 'succeeded' && !msg.toolStep.visual) {
-                      msg.toolStep = { ...msg.toolStep, visual: v };
-                    }
-                  } else {
-                    // Case 2: 从 API 加载 → 无 toolStep，从 metadata 构造
-                    msg.toolStep = {
-                      run_id: 'history',
-                      call_id: `hist-${m.id || 0}`,
-                      round: 0,
-                      name: 'render_visual',
-                      status: 'succeeded',
-                      label: (typeof v.payload?.title === 'string' ? v.payload.title : undefined) || '可视化',
-                      visual: v,
-                      args_summary: '',
-                      result_summary: '',
-                    };
-                  }
-                  // 清理 metadata 避免渲染时走 hasMetadataVisual 分母重复
-                  if (msg.metadata) {
-                    msg.metadata = { ...msg.metadata };
-                    delete msg.metadata.visual;
-                    delete msg.metadata.all_visuals;
-                  }
-                }
-                return msg;
-              });
+                } as Message)),
+            );
             const grouped = groupIntoSessions(allMsgs);
             setSessions(grouped);
             const lastMsg = hRes.data[hRes.data.length - 1];
@@ -640,15 +609,24 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   // 只用 toolStep.visual 渲染，避免与 done 消息的 metadata visual 重复渲染。
                   // metadata visual 仅用于填充 visual state（split 模式右面板），不在 inline 流中二次展示。
                   // 历史消息已在 init 时将 metadata visual 转换为 toolStep，所以历史也能正常渲染。
-                  const stepVisual = msg.toolStep?.visual;
-                  const isRenderStep = msg.toolStep?.name === 'render_visual' && msg.toolStep.status === 'succeeded';
-                  if (isRenderStep && stepVisual) {
+                  const stepVisuals = msg.toolStep?.visuals?.length
+                    ? msg.toolStep.visuals
+                    : (msg.toolStep?.visual ? [msg.toolStep.visual] : []);
+                  const hasVisual = msg.toolStep?.status === 'succeeded' && stepVisuals.length > 0;
+                  if (hasVisual && msg.role !== 'user') {
                     return (
-                      <InlineVisualCard
-                        key={msg._id || i}
-                        visual={stepVisual as VisualData}
-                        index={i}
-                      />
+                      <React.Fragment key={msg._id || i}>
+                        {stepVisuals.map((visual, visualIndex) => (
+                          <InlineVisualCard
+                            key={`${msg._id || i}-visual-${visualIndex}`}
+                            visual={visual as VisualData}
+                            index={i}
+                          />
+                        ))}
+                        {msg.content && (
+                          <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} />
+                        )}
+                      </React.Fragment>
                     );
                   }
                   // 其他工具步骤 → ToolStepMessage

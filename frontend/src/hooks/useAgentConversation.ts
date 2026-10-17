@@ -1,7 +1,10 @@
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import api, { streamFetch } from '@/lib/api';
+import api from '@/lib/api';
 import { upsertChatMessage } from '@/lib/chatMessages';
+import { readChatStream } from '@/lib/chatStream';
+import { createRevealQueue } from '@/lib/chatReveal';
+import { restoreVisualSteps } from '@/lib/visualHistory';
 // processMathContent removed — LLM outputs LaTeX directly
 import { toast } from 'sonner';
 import {
@@ -115,7 +118,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  const timersRef = useRef<number[]>([]);
+  const revealRef = useRef<ReturnType<typeof createRevealQueue> | null>(null);
   const sendCountRef = useRef(0);
   const conversationIdRef = useRef(conversationId);
   const sessionIdsRef = useRef(new Map<string, number>());
@@ -130,8 +133,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     ++sendCountRef.current;
     abortRef.current?.abort();
     abortRef.current = null;
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
+    revealRef.current?.dispose();
+    revealRef.current = null;
     setLoading(false);
   }, []);
 
@@ -240,40 +243,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     setSessionOpen(false);
   }, [cancelRequest, setConversationId]);
 
-  /** 恢复历史消息中 metadata 的 visual 到 toolStep，确保侧栏切换时卡片不消失 */
-  const restoreVisualsFromMetadata = useCallback((msgs: Message[]): Message[] => {
-    return msgs.map((m) => {
-      const meta = m.metadata;
-      const visuals = meta?.all_visuals || (meta?.visual ? [meta.visual] : null);
-      if (!visuals || visuals.length === 0) return m;
-      const v = visuals[0];
-      const msg = { ...m };
-      if (msg.toolStep) {
-        if (msg.toolStep.name === 'render_visual' && msg.toolStep.status === 'succeeded' && !msg.toolStep.visual) {
-          msg.toolStep = { ...msg.toolStep, visual: v };
-        }
-      } else {
-        msg.toolStep = {
-          run_id: 'history',
-          call_id: `hist-${m.id || 0}`,
-          round: 0,
-          name: 'render_visual',
-          status: 'succeeded',
-          label: (typeof v.payload?.title === 'string' ? v.payload.title : undefined) || '可视化',
-          visual: v,
-          args_summary: '',
-          result_summary: '',
-        };
-      }
-      if (msg.metadata) {
-        msg.metadata = { ...msg.metadata };
-        delete msg.metadata.visual;
-        delete msg.metadata.all_visuals;
-      }
-      return msg;
-    });
-  }, []);
-
   const handleRefreshSessions = useCallback(async () => {
     if (!bot) return;
     const revision = ++sessionsRevisionRef.current;
@@ -283,9 +252,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       const allMsgs: Message[] = hRes.data
         .filter((m: Message) => m.content !== '[Thinking...]')
         .map((m: Message) => ({ ...m, visible: true }));
-      setSessions(groupIntoSessions(restoreVisualsFromMetadata(allMsgs)));
+      setSessions(groupIntoSessions(restoreVisualSteps(allMsgs)));
     } catch (e) { console.error('[useAgentConversation] history fetch failed:', e); }
-  }, [bot, groupIntoSessions, restoreVisualsFromMetadata]);
+  }, [bot, groupIntoSessions]);
 
   const handleDeleteSession = useCallback(async (session: ConversationSession) => {
     if (!session.conversationId) return;
@@ -323,8 +292,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
     // Abort any in-flight request
     if (abortRef.current) abortRef.current.abort();
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
+    revealRef.current?.dispose();
+    revealRef.current = null;
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -348,54 +317,28 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     }
     setInput('');
 
+    const reveal = createRevealQueue({
+      isActive: isCurrent,
+      onReveal: (id) => {
+        setMessages(prev => prev.map(m => m._id === id ? { ...m, visible: true } : m));
+      },
+    });
+    revealRef.current = reveal;
+
     try {
-      const { url, init } = streamFetch('/api/ai/chat/stream/', {
-        message: text,
-        bot_id: bot.id,
-        conversation_id: requestConversationId,
-        ...(options.enableProjects ? { project_id: projectIdRef.current } : {}),
-        ...(getExtraPayloadRef.current?.() ?? {}),
-      }, controller.signal);
-      const res = await fetch(url, init);
-      if (!isCurrent()) return;
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('Stream not available');
-
-      const decoder = new TextDecoder();
-      let leftover = '';
-      const shownCount = { current: 0 };
-      const STEP_DELAY_MS = 600;
-
-      function scheduleShow(id: string, pos: number) {
+      for await (const payload of readChatStream({
+        body: {
+          message: text,
+          bot_id: bot.id,
+          conversation_id: requestConversationId,
+          ...(options.enableProjects ? { project_id: projectIdRef.current } : {}),
+          ...(getExtraPayloadRef.current?.() ?? {}),
+        },
+        signal: controller.signal,
+        isCurrent,
+      })) {
         if (!isCurrent()) return;
-        const delay = Math.max(0, pos - shownCount.current) * STEP_DELAY_MS;
-        const timerId = window.setTimeout(() => {
-          if (!isCurrent()) return;
-          shownCount.current = Math.max(shownCount.current, pos + 1);
-          setMessages(prev => prev.map(m => m._id === id ? { ...m, visible: true } : m));
-        }, delay);
-        timersRef.current.push(timerId);
-      }
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (!isCurrent()) {
-          await reader.cancel();
-          return;
-        }
-        if (done) break;
-
-        leftover += decoder.decode(value, { stream: true });
-        const lines = leftover.split('\n');
-        leftover = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const payload = JSON.parse(line.slice(6));
+        try {
             if (payload.type === 'message' && payload.content) {
               if (streamingId) {
                 const id = streamingId;
@@ -422,7 +365,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                 if (!isCurrent()) return;
                 setMessages(prev => {
                   const pos = prev.findIndex(m => m._id === id);
-                  if (pos >= 0) scheduleShow(id, pos);
+                  if (pos >= 0) reveal.schedule(id, pos);
                   return prev;
                 });
               });
@@ -444,10 +387,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                     updated[existingIdx] = { ...updated[existingIdx], toolStep: step };
                     return updated;
                   }
-                  const id = nextId();
-                  scheduleShow(id, prev.length);
                   return [...prev, {
-                    _id: id,
+                    _id: nextId(),
                     role: 'assistant' as const,
                     content: '',
                     toolStep: step,
@@ -455,6 +396,15 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                     timestamp: new Date().toISOString(),
                     conversation_id: requestConversationId,
                   }];
+                });
+                requestAnimationFrame(() => {
+                  if (!isCurrent()) return;
+                  setMessages(prev => {
+                    const pos = prev.findIndex(m => m.toolStep?.call_id === step.call_id);
+                    const targetId = pos >= 0 ? prev[pos]._id : undefined;
+                    if (targetId) reveal.schedule(targetId, pos);
+                    return prev;
+                  });
                 });
               } else if (step.status === 'succeeded' || step.status === 'failed') {
                 if (step.status === 'succeeded' && onStepDoneRef.current) {
@@ -516,7 +466,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                   if (!isCurrent()) return;
                   setMessages(prev => {
                     const pos = prev.findIndex(m => m._id === id);
-                    if (pos >= 0) scheduleShow(id, pos);
+                    if (pos >= 0) reveal.schedule(id, pos);
                     return prev;
                   });
                 });
@@ -535,8 +485,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             } else if (payload.error) {
               toast.error(payload.error);
             }
-          } catch { /* skip malformed SSE lines */ }
-        }
+        } catch { /* skip malformed SSE events */ }
       }
     } catch (err: unknown) {
       if (!isCurrent()) return;
@@ -545,10 +494,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       toast.error(msg.includes('HTTP') ? '服务暂时不可用，请稍后再试' : '发送失败，请重试');
       setInput(text);
     } finally {
+      reveal.dispose();
+      if (revealRef.current === reveal) revealRef.current = null;
       if (isCurrent()) {
-        // 清除未触发的 scheduleShow 定时器，同时让所有消息立即可见
-        timersRef.current.forEach(clearTimeout);
-        timersRef.current = [];
         setMessages(prev => prev.map(m => m.visible === false ? { ...m, visible: true } : m));
         setLoading(false);
       }
@@ -580,7 +528,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   useEffect(() => {
     return () => {
       if (abortRef.current) abortRef.current.abort();
-      timersRef.current.forEach(clearTimeout);
+      revealRef.current?.dispose();
     };
   }, []);
 

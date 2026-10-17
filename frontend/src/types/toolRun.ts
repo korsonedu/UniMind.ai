@@ -23,6 +23,7 @@ export interface AgentStep {
   error?: ToolTaskError | null;
   actions?: Array<{ label: string; route: string }>;
   visual?: { type: string; payload: unknown };
+  visuals?: Array<{ type: string; payload: unknown }>;
   questions?: (GeneratedQuestion & { index: number; answer_preview: string })[];
 }
 

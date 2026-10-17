@@ -14,8 +14,9 @@ interface KnowledgeEdge {
 interface KnowledgeMapPayload {
   title?: string;
   nodes: KnowledgeNode[];
-  edges: KnowledgeEdge[];
+  edges?: KnowledgeEdge[];
   highlights?: string[];
+  note?: string;
 }
 
 const NODE_RADIUS = 28;
@@ -220,6 +221,9 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
         </span>
         <span className="ml-auto">{edges.length} 关联</span>
       </div>
+      {payload.note && (
+        <p className="text-[11px] leading-relaxed text-foreground/35">{payload.note}</p>
+      )}
     </div>
   );
 };

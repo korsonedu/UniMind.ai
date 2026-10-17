@@ -24,6 +24,7 @@ interface DataCardPayload {
     action_link?: string;
   }>;
   cta?: { label: string; link: string };
+  note?: string;
 }
 
 export const DataCardRenderer: React.FC<{ payload: DataCardPayload }> = ({ payload }) => {
@@ -64,6 +65,10 @@ export const DataCardRenderer: React.FC<{ payload: DataCardPayload }> = ({ paylo
           )
         })}
       </div>
+
+      {payload.note && (
+        <p className="text-[11px] leading-relaxed text-foreground/35">{payload.note}</p>
+      )}
 
       {payload.cta && (
         <button
