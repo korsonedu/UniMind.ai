@@ -1,7 +1,10 @@
 import logging
-import os
+from pathlib import Path
 from django.conf import settings
-from ai_engine.config import EMBEDDING_MODEL, EMBEDDING_BASE_URL
+from ai_engine.config import (
+    EMBEDDING_MODEL, EMBEDDING_BASE_URL, EMBEDDING_API_KEY, EMBEDDING_DIMENSIONS,
+    get_model_for_task,
+)
 
 try:
     from mem0 import Memory
@@ -14,8 +17,8 @@ logger = logging.getLogger(__name__)
 def _get_mem0_config(institution_id: int) -> dict:
     """Build mem0 config with pgvector backend for the given institution."""
     db = settings.DATABASES['default']
-    api_key = os.getenv('LLM_API_KEY', '')
-    base_url = os.getenv('LLM_BASE_URL', 'https://api.deepseek.com/v1')
+    llm = get_model_for_task('memory.extract')
+    base_url = llm['base_url'].rstrip('/').removesuffix('/chat/completions')
     return {
         "vector_store": {
             "provider": "pgvector",
@@ -26,16 +29,30 @@ def _get_mem0_config(institution_id: int) -> dict:
                 "user": db['USER'],
                 "password": db['PASSWORD'],
                 "collection_name": f"inst_{institution_id}",
+                "embedding_model_dims": EMBEDDING_DIMENSIONS,
             },
         },
         "embedder": {
             "provider": "openai",
             "config": {
-                "api_key": api_key,
-                "base_url": EMBEDDING_BASE_URL,
+                "api_key": EMBEDDING_API_KEY,
+                "openai_base_url": EMBEDDING_BASE_URL,
                 "model": EMBEDDING_MODEL,
+                "embedding_dims": EMBEDDING_DIMENSIONS,
             },
         },
+        "llm": {
+            "provider": "openai",
+            "config": {
+                "api_key": llm['api_key'],
+                "openai_base_url": base_url,
+                "model": llm['model'],
+                "temperature": 0,
+                "max_tokens": 2000,
+            },
+        },
+        "history_db_path": str(Path(settings.BASE_DIR) / '.cache' / 'mem0' / f'history_inst_{int(institution_id)}.db'),
+        "custom_instructions": "只提取用户明确陈述或确认的长期目标、偏好和学习事实。助手建议、示例和推测不能视作用户事实；临时问题和未确认的方案不要保存。",
         "version": "v1.1",
     }
 
@@ -54,9 +71,11 @@ class TenantMemoryManager:
             raise ImportError("mem0ai is required: pip install mem0ai")
         self.institution_id = institution_id
         self._config = _get_mem0_config(institution_id)
+        if self._config.get('history_db_path'):
+            Path(self._config['history_db_path']).parent.mkdir(parents=True, exist_ok=True)
         self.memory = Memory.from_config(self._config)
 
-    def add(self, user_id: int, message: str, metadata: dict = None):
+    def add(self, user_id: int, message: str | list[dict], metadata: dict = None):
         """Add a memory. mem0 auto-extracts and deduplicates."""
         meta = metadata or {}
         meta["institution_id"] = self.institution_id
@@ -72,7 +91,8 @@ class TenantMemoryManager:
     def search(self, user_id: int, query: str, limit: int = 5) -> list:
         """Semantic search for relevant memories."""
         try:
-            return self.memory.search(query, user_id=str(user_id), limit=limit)
+            result = self.memory.search(query, user_id=str(user_id), limit=limit)
+            return result.get('results', []) if isinstance(result, dict) else result
         except Exception:
             logger.exception("mem0 search failed for user %d", user_id)
             return []
@@ -80,7 +100,8 @@ class TenantMemoryManager:
     def get_all(self, user_id: int) -> list:
         """Get all memories for a user."""
         try:
-            return self.memory.get_all(user_id=str(user_id))
+            result = self.memory.get_all(user_id=str(user_id))
+            return result.get('results', []) if isinstance(result, dict) else result
         except Exception:
             logger.exception("mem0 get_all failed for user %d", user_id)
             return []

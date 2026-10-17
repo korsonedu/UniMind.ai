@@ -1,0 +1,24 @@
+[Unit]
+Description=UniMind local CPU embedding service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/unimind-embedding
+ExecStart=/opt/unimind-embedding/llama-b11707/llama-server --model /opt/unimind-embedding/models/Qwen3-Embedding-0.6B-Q8_0.gguf --alias Qwen/Qwen3-Embedding-0.6B --host 127.0.0.1 --port 8012 --embedding --pooling last --ctx-size 8192 --batch-size 8192 --ubatch-size 8192 --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 --parallel 1 --threads 2 --threads-batch 2 --n-gpu-layers 0 --no-webui
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+MemoryHigh=1G
+MemoryMax=1400M
+CPUQuota=150%
+Nice=10
+LimitCORE=0
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

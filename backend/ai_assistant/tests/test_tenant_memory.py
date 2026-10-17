@@ -20,12 +20,73 @@ def _fake_config(institution_id: int) -> dict:
             "provider": "openai",
             "config": {
                 "api_key": "",
-                "base_url": "https://api.deepseek.com/v1",
-                "model": "deepseek-embedding",
+                "openai_base_url": "http://127.0.0.1:8012/v1",
+                "model": "BAAI/bge-small-zh-v1.5",
+                "embedding_dims": 512,
             },
         },
         "version": "v1.1",
     }
+
+
+def test_real_config_separates_embedding_and_chat_clients(settings, tmp_path, monkeypatch):
+    from ai_assistant.services import tenant_memory
+
+    settings.BASE_DIR = tmp_path
+    monkeypatch.setattr(tenant_memory, "EMBEDDING_MODEL", "test-embedding")
+    monkeypatch.setattr(tenant_memory, "EMBEDDING_BASE_URL", "http://127.0.0.1:8012/v1")
+    monkeypatch.setattr(tenant_memory, "EMBEDDING_API_KEY", "embedding-key", raising=False)
+    monkeypatch.setattr(tenant_memory, "EMBEDDING_DIMENSIONS", 512, raising=False)
+    monkeypatch.setenv("LLM_API_KEY", "chat-key")
+    monkeypatch.setenv("LLM_BASE_URL", "https://chat.example/v1/chat/completions")
+
+    config = tenant_memory._get_mem0_config(42)
+
+    assert config["embedder"]["config"] == {
+        "api_key": "embedding-key", "openai_base_url": "http://127.0.0.1:8012/v1",
+        "model": "test-embedding", "embedding_dims": 512,
+    }
+    assert config["vector_store"]["config"]["embedding_model_dims"] == 512
+    assert config["llm"]["config"]["api_key"] == "chat-key"
+    assert config["llm"]["config"]["openai_base_url"] == "https://chat.example/v1"
+    assert config["history_db_path"] != tenant_memory._get_mem0_config(43)["history_db_path"]
+
+
+def test_extraction_preserves_user_and_assistant_roles(monkeypatch):
+    from types import SimpleNamespace
+    from ai_assistant.services import memory_service
+    from ai_assistant.services import tenant_memory
+    from ai_assistant import utils
+
+    monkeypatch.setattr(memory_service, 'USE_MEM0', True)
+    manager_cls = MagicMock()
+    monkeypatch.setattr(tenant_memory, 'TenantMemoryManager', manager_cls)
+    pool = MagicMock()
+    monkeypatch.setattr(utils, '_THREAD_POOL', pool)
+    history = [
+        {'role': 'assistant', 'content': '我建议每天背 100 个词。'},
+        {'role': 'user', 'content': '我还没确定每天的数量。'},
+    ]
+
+    memory_service.extract_memories_with_mem0(SimpleNamespace(id=12, institution_id=42), history)
+    pool.submit.call_args[0][0]()
+
+    assert manager_cls.return_value.add.call_args.kwargs['message'] == history
+
+
+@pytest.mark.parametrize("operation", ["search", "get_all"])
+@patch("ai_assistant.services.tenant_memory.Memory")
+@patch("ai_assistant.services.tenant_memory._get_mem0_config", return_value={})
+def test_normalizes_mem0_v2_results(mock_config_fn, mock_memory_cls, operation):
+    from ai_assistant.services.tenant_memory import TenantMemoryManager
+
+    rows = [{"id": "memory-one", "memory": "每天练习词汇"}]
+    getattr(mock_memory_cls.from_config.return_value, operation).return_value = {"results": rows}
+    manager = TenantMemoryManager(42)
+
+    result = manager.search(100, "学习安排") if operation == "search" else manager.get_all(100)
+
+    assert result == rows
 
 
 class TestTenantMemoryManager:

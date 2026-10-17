@@ -13,6 +13,29 @@ def _tool(name):
     }
 
 
+def test_embedding_client_uses_shared_service_and_preserves_order(monkeypatch):
+    from unittest.mock import MagicMock
+    import httpx
+    from ai_engine import config
+
+    post = MagicMock()
+    post.return_value.json.return_value = {
+        'data': [
+            {'index': 1, 'embedding': [0.0, 1.0]},
+            {'index': 0, 'embedding': [1.0, 0.0]},
+        ],
+    }
+    monkeypatch.setattr(httpx, 'post', post)
+    monkeypatch.setattr(config, 'EMBEDDING_BASE_URL', 'http://127.0.0.1:8012/v1')
+
+    assert tool_router._call_embedding_api(['词汇', '学习计划']) == [[1.0, 0.0], [0.0, 1.0]]
+    assert post.call_args.args == ('http://127.0.0.1:8012/v1/embeddings',)
+    assert post.call_args.kwargs['json'] == {
+        'model': config.EMBEDDING_MODEL, 'input': ['词汇', '学习计划'],
+        'dimensions': config.EMBEDDING_DIMENSIONS,
+    }
+
+
 def test_vocabulary_study_keeps_visual_tool_when_semantic_routes_miss(monkeypatch):
     monkeypatch.setattr(tool_router, "_retrieve_candidates", lambda *args, **kwargs: [])
     monkeypatch.setattr(tool_router, "_classify_intent_llm", lambda *args, **kwargs: "general")

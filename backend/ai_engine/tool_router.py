@@ -10,7 +10,6 @@
 
 import logging
 import math
-import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from .tool_policy import READ_ONLY_TOOLS
@@ -229,45 +228,6 @@ BOT_TOOL_REGISTRY: Dict[str, List[ToolMeta]] = {
 _embedding_cache: Dict[str, List[List[float]]] = {}  # bot_type → embeddings
 _tool_names_cache: Dict[str, List[str]] = {}          # bot_type → tool names
 
-# ── 本地 Embedding 模型（sentence-transformers，优先级高于 API）──
-
-_local_model = None
-_LOCAL_MODEL_NAME = "BAAI/bge-small-zh-v1.5"
-
-
-def _get_local_model():
-    """Lazy-load 本地 embedding 模型，加载一次全局复用。"""
-    global _local_model
-    if _local_model is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            _local_model = SentenceTransformer(_LOCAL_MODEL_NAME)
-            logger.info("Local embedding model loaded: %s", _LOCAL_MODEL_NAME)
-        except ImportError:
-            logger.warning(
-                "sentence-transformers not installed; embedding routing falls back to API"
-            )
-            return None
-        except Exception:
-            logger.exception("Failed to load local embedding model")
-            return None
-    return _local_model
-
-
-def preload_embedding_model():
-    """预加载本地 embedding 模型（Django 启动时调用）。"""
-    _get_local_model()
-
-
-def _call_embedding_local(texts: List[str]) -> List[List[float]]:
-    """本地 sentence-transformers embedding，返回 float 向量列表。"""
-    model = _get_local_model()
-    if model is None:
-        raise RuntimeError("Local embedding model not available")
-    embeddings = model.encode(texts, normalize_embeddings=True)
-    return [emb.tolist() for emb in embeddings]
-
-
 def _cosine_similarity(a: List[float], b: List[float]) -> float:
     """计算余弦相似度。"""
     dot = sum(x * y for x, y in zip(a, b))
@@ -285,21 +245,14 @@ def _get_embedding_api_url() -> str:
 
 
 def _call_embedding_api(texts: List[str]) -> List[List[float]]:
-    """获取文本的 embedding 向量：本地模型优先，HTTP API 降级。"""
-    # Stage 1: 本地 sentence-transformers
-    try:
-        return _call_embedding_local(texts)
-    except Exception:
-        pass  # 静默降级到 API
-
-    # Stage 2: HTTP API fallback
+    """通过独立 embedding 服务获取向量，与 mem0 共用模型和维度。"""
     import httpx
+    from ai_engine.config import EMBEDDING_MODEL, EMBEDDING_API_KEY, EMBEDDING_DIMENSIONS
     api_url = _get_embedding_api_url()
-    api_key = os.getenv('LLM_API_KEY', '')
     resp = httpx.post(
         api_url,
-        json={"model": os.getenv('AI_EMBEDDING_MODEL', 'deepseek-embedding'), "input": texts},
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={"model": EMBEDDING_MODEL, "input": texts, "dimensions": EMBEDDING_DIMENSIONS},
+        headers={"Authorization": f"Bearer {EMBEDDING_API_KEY}", "Content-Type": "application/json"},
         timeout=30,
     )
     resp.raise_for_status()

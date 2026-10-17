@@ -150,17 +150,15 @@ def extract_memories_with_mem0(user, conversation_history):
     if not user.institution_id:
         return
 
-    lines = []
+    messages = []
     for msg in conversation_history[-10:]:
-        role = '用户' if msg.get('role') == 'user' else 'AI'
+        role = msg.get('role')
         content = str(msg.get('content', ''))[:500]
-        if content and content != '[Thinking...]':
-            lines.append(f"{role}: {content}")
+        if role in ('user', 'assistant') and content and content != '[Thinking...]':
+            messages.append({'role': role, 'content': content})
 
-    if not lines:
+    if not messages:
         return
-
-    conversation_text = "\n".join(lines)
 
     def _worker():
         from django.db import connections
@@ -169,7 +167,7 @@ def extract_memories_with_mem0(user, conversation_history):
             manager = TenantMemoryManager(institution_id=user.institution_id)
             manager.add(
                 user_id=user.id,
-                message=conversation_text,
+                message=messages,
                 metadata={"source": "auto_extract"},
             )
         except Exception:

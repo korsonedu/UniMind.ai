@@ -35,8 +35,10 @@ _TASK_MODEL_MAP = {
 }
 
 # ── Embedding model config (for mem0 semantic memory) ──
-EMBEDDING_MODEL = os.getenv('AI_EMBEDDING_MODEL', 'deepseek-embedding')
-EMBEDDING_BASE_URL = os.getenv('AI_EMBEDDING_BASE_URL', DEFAULT_BASE_URL.replace('/chat/completions', ''))
+EMBEDDING_MODEL = os.getenv('AI_EMBEDDING_MODEL', 'Qwen/Qwen3-Embedding-0.6B')
+EMBEDDING_BASE_URL = os.getenv('AI_EMBEDDING_BASE_URL', 'http://127.0.0.1:8012/v1').rstrip('/')
+EMBEDDING_API_KEY = os.getenv('AI_EMBEDDING_API_KEY', 'local')
+EMBEDDING_DIMENSIONS = int(os.getenv('AI_EMBEDDING_DIMENSIONS', '1024'))
 
 # Thinking effort per task prefix.
 # When thinking is enabled with tool calls, reasoning_content MUST be

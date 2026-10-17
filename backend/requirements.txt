@@ -46,7 +46,7 @@ stripe>=13.0.0
 wechatpayv3>=0.3.0
 alipay>=0.7.4
 # Semantic memory (mem0 + pgvector)
-mem0ai>=0.1.0
+mem0ai==2.0.4
 pgvector>=0.3.0
 # IRT parameter estimation
 scipy>=1.13.0
