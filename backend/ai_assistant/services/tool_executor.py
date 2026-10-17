@@ -115,8 +115,14 @@ def summarize_tool_result(tool_name: str, result) -> str:
     summaries = {
         'search_knowledge_tree': lambda r: f"找到 {r.get('found', 0)} 个知识点",
         'get_user_weak_points': lambda r: f"发现 {len(r.get('weak_points', []))} 个薄弱点",
-        'get_learning_stats': lambda r: f"正确率 {r.get('accuracy', 0)}%，已练 {r.get('total_questions_attempted', 0)} 题",
-        'get_knowledge_mastery_map': lambda r: f"覆盖 {len(r.get('mastery_map', {}))} 个学科",
+        'get_learning_stats': lambda r: (
+            f"已练 {r.get('attempted_questions', 0)} 题 · 最近正确率 {r.get('last_accuracy')}%"
+            if r.get('has_attempts') else "尚未开始练习"
+        ),
+        'get_knowledge_mastery_map': lambda r: (
+            f"诊断掌握 {(r.get('mastery') or {}).get('kp_count', 0)} 个知识点"
+            if (r.get('mastery') or {}).get('kp_count') else "暂无诊断掌握数据"
+        ),
         'get_due_reviews': lambda r: f"{r.get('due_count', 0)} 个待复习",
         'get_exam_history': lambda r: f"共 {len(r.get('exams', []))} 次考试",
         'search_courses': lambda r: f"找到 {len(r.get('courses', []))} 门课程",
@@ -141,7 +147,10 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'list_courses': lambda r: f"共 {r.get('total', 0)} 门课程",
         'list_questions': lambda r: f"共 {r.get('total', 0)} 道题",
         'list_articles': lambda r: f"共 {r.get('total', 0)} 篇文章",
-        'get_report_card': lambda r: f"正确率 {r.get('accuracy', 0)}%，掌握 {r.get('mastered_count', 0)} 个知识点",
+        'get_report_card': lambda r: (
+            f"已练 {r.get('attempted_questions', 0)} 题 · 最近正确率 {r.get('last_accuracy')}%"
+            if r.get('has_attempts') else "尚未开始练习"
+        ),
         'get_my_achievements': lambda r: f"已解锁 {r.get('unlocked_count', len(r.get('unlocked', [])))} 个成就",
         # ── F3: 答疑 ──
         'create_faq_ticket': lambda r: f"工单 #{r.get('ticket_id', '')} 已创建 · {r.get('message', '')[:30]}",
@@ -225,8 +234,18 @@ class BaseToolExecutor:
         try:
             result = handler(args)
             output = json.dumps(result, ensure_ascii=False, default=str)
-        except Exception as exc:
-            output = json.dumps({"error": str(exc)}, ensure_ascii=False)
+        except Exception:
+            logger.exception(
+                "工具执行异常 tool=%s user_id=%s institution_id=%s args_keys=%s",
+                tool_name,
+                getattr(self.user, 'id', None),
+                getattr(self.institution, 'id', None),
+                sorted(args.keys()) if isinstance(args, dict) else [],
+            )
+            output = json.dumps(
+                {"error": {"code": "tool_execution_failed", "message": "数据查询失败，请稍后重试"}},
+                ensure_ascii=False,
+            )
 
         # 记录轨迹日志
         self.tool_call_log.append({"name": tool_name, "args": args})
@@ -234,6 +253,48 @@ class BaseToolExecutor:
         return output
 
     # ── Tool handlers ──────────────────────────────────────────
+
+    def _register_visual(self, visual: Dict) -> Dict:
+        """登记卡片，按 type + payload 指纹去重。"""
+        fingerprint = json.dumps(
+            {'type': visual.get('type'), 'payload': visual.get('payload')},
+            ensure_ascii=False, sort_keys=True, default=str,
+        )
+        for existing in self.pending_visuals:
+            existing_fingerprint = json.dumps(
+                {'type': existing.get('type'), 'payload': existing.get('payload')},
+                ensure_ascii=False, sort_keys=True, default=str,
+            )
+            if existing_fingerprint == fingerprint:
+                return {'status': 'ok', 'visual': existing, 'duplicate': True}
+        self.pending_visuals.append(visual)
+        return {'status': 'ok', 'visual': visual}
+
+    def _attach_visual(self, result: Dict, visual_factory) -> Dict:
+        """给数据工具结果附加卡片。卡片构造失败不影响工具数据。"""
+        try:
+            registered = self._register_visual(visual_factory())
+            visual = registered.get('visual')
+            if isinstance(visual, dict):
+                result['visual'] = visual
+            if registered.get('duplicate'):
+                result['duplicate'] = True
+        except Exception:
+            logger.exception("attach_visual failed")
+        return result
+
+    def pop_pending_visuals(self) -> list:
+        """取出并去重待持久化卡片。"""
+        visuals = []
+        seen = set()
+        for visual in self.pending_visuals:
+            fingerprint = json.dumps(visual, ensure_ascii=False, sort_keys=True, default=str)
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            visuals.append(visual)
+        self.pending_visuals = []
+        return visuals
 
     def _handle_render_visual(self, args: Dict) -> Dict:
         """将可视化数据返回给前端，同时缓存到实例供消息持久化。
@@ -287,8 +348,7 @@ class BaseToolExecutor:
             payload = {**payload, 'cards': fixed_cards}
 
         visual = {"type": visual_type, "payload": payload, "priority": priority}
-        self.pending_visuals.append(visual)
-        return {"status": "ok", "visual": visual}
+        return self._register_visual(visual)
 
     def _handle_search_knowledge_tree(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
@@ -341,7 +401,11 @@ class BaseToolExecutor:
             return {
                 'checkin_streak': stats.get('checkin_streak', 0),
                 'total_attempted': stats.get('total_attempted', 0),
+                'attempted_questions': stats.get('attempted_questions', stats.get('total_distinct', 0)),
                 'accuracy': stats.get('accuracy', 0),
+                'last_accuracy': stats.get('last_accuracy'),
+                'lifetime_accuracy': stats.get('lifetime_accuracy'),
+                'has_attempts': stats.get('has_attempts', stats.get('total_distinct', 0) > 0),
                 'mastered_count': stats.get('mastered_count', 0),
                 'elo_score': data.get('student', {}).get('elo_score', 0),
                 'subjects': [r['subject'] for r in data.get('radar', [])],
@@ -354,9 +418,9 @@ class BaseToolExecutor:
                     for a in data.get('achievements', [])[:5]
                 ],
             }
-        except Exception as e:
+        except Exception:
             logger.exception("get_report_card failed")
-            return {"error": f"获取报告失败: {str(e)}"}
+            return {"error": {"code": "report_card_failed", "message": "获取学习报告失败，请稍后重试"}}
 
     def _handle_get_my_achievements(self, args: Dict) -> Dict:
         """获取学生已解锁的成就列表。"""
@@ -469,16 +533,33 @@ class PlannerToolExecutor(BaseToolExecutor):
 
     def _handle_get_learning_stats(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
-        return MemorySystem.query_learning_stats(self.user)
+        from ai_assistant.services.planner_visuals import build_learning_stats_visual
+
+        result = MemorySystem.query_learning_stats(self.user, self.institution)
+        return self._attach_visual(result, lambda: build_learning_stats_visual(result))
 
     def _handle_get_knowledge_mastery_map(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
-        return MemorySystem.query_mastery_map(self.user, args.get('subject'), self.institution)
+        from ai_assistant.services.planner_visuals import build_mastery_map_visual
+
+        subject = (args.get('subject') or '').strip()
+        result = MemorySystem.query_mastery_map(self.user, subject, self.institution)
+        return self._attach_visual(
+            result,
+            lambda: build_mastery_map_visual(
+                result.get('mastery_map') or {},
+                result.get('mastery') or {},
+                subject,
+            ),
+        )
 
     def _handle_get_due_reviews(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
+        from ai_assistant.services.planner_visuals import build_due_reviews_visual
+
         limit = min(int(args.get('limit', 20)), 50)
-        return MemorySystem.query_due_reviews(self.user, limit, self.institution)
+        result = MemorySystem.query_due_reviews(self.user, limit, self.institution)
+        return self._attach_visual(result, lambda: build_due_reviews_visual(result))
 
     def _handle_get_practice_questions(self, args: Dict) -> Dict:
         """根据知识点或薄弱点从题库中抽取题目供学生练习。"""

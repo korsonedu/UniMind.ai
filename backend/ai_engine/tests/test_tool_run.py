@@ -419,3 +419,77 @@ def test_links_model_retry_to_previous_failed_call_without_auto_retry():
     assert executor.attempts == 2
     second_events = [event for event in events if event["call_id"] == "second-call"]
     assert all(event["retry_of"] == "first-call" for event in second_events)
+
+
+class VisualExecutor(RecordingExecutor):
+    def __init__(self, permitted_definitions):
+        super().__init__(permitted_definitions)
+        self.pending_visuals = []
+
+    def __call__(self, name, arguments):
+        visual = {"type": "data_card", "payload": {"name": name}}
+        self.pending_visuals.append(visual)
+        return json.dumps({"ok": True, "visual": visual}, ensure_ascii=False)
+
+
+def test_visual_from_data_tool_is_attached_to_succeeded_step():
+    definition = _tool_definition("get_learning_stats")
+    events = []
+    executor = VisualExecutor([definition])
+    coordinator = ToolRunCoordinator(
+        executor, [definition], on_step=events.append, run_id="run-visual",
+    )
+
+    coordinator.execute_batch([_tool_call("get_learning_stats")], round_number=1)
+
+    succeeded = [event for event in events if event.get("status") == "succeeded"]
+    assert succeeded
+    assert succeeded[0]["visual"]["payload"]["name"] == "get_learning_stats"
+
+
+def test_parallel_visuals_are_ordered_by_call_index():
+    definitions = [_tool_definition("slow_tool"), _tool_definition("fast_tool")]
+
+    class OrderedExecutor(VisualExecutor):
+        def __call__(self, name, arguments):
+            if name == "slow_tool":
+                time.sleep(0.05)
+            return super().__call__(name, arguments)
+
+    executor = OrderedExecutor(definitions)
+    coordinator = ToolRunCoordinator(
+        executor,
+        definitions,
+        on_step=lambda event: None,
+        read_only_tools={"slow_tool", "fast_tool"},
+        run_id="run-order",
+    )
+
+    coordinator.execute_batch([
+        _tool_call("slow_tool", call_id="slow"),
+        _tool_call("fast_tool", call_id="fast"),
+    ], round_number=1)
+
+    assert [item["payload"]["name"] for item in executor.pending_visuals] == [
+        "slow_tool", "fast_tool",
+    ]
+
+
+def test_unexpected_exception_message_is_safe():
+    definition = _tool_definition("boom")
+
+    class BoomExecutor(RecordingExecutor):
+        def __call__(self, name, arguments):
+            raise RuntimeError("INTERNAL_SECRET")
+
+    events = []
+    executor = BoomExecutor([definition])
+    coordinator = ToolRunCoordinator(
+        executor, [definition], on_step=events.append, run_id="run-boom",
+    )
+
+    outcomes = coordinator.execute_batch([_tool_call("boom")], round_number=1)
+
+    failed = [event for event in events if event.get("status") == "failed"]
+    assert failed[0]["error"]["message"] == "工具执行失败，请稍后重试"
+    assert "INTERNAL_SECRET" not in outcomes[0].result

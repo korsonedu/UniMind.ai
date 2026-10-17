@@ -304,10 +304,12 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             metadata['generated_questions'] = tool_executor._last_generated
         if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
             metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
-        if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
-            visuals = tool_executor.pending_visuals
+        visuals = (
+            tool_executor.pop_pending_visuals()
+            if hasattr(tool_executor, 'pop_pending_visuals') else []
+        )
+        if visuals:
             metadata['visual'] = visuals[-1]  # Last visual for backward compat
             if len(visuals) > 1:
                 metadata['all_visuals'] = visuals
-            tool_executor.pending_visuals = []
         return metadata or None

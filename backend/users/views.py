@@ -1588,8 +1588,9 @@ def _build_report_data(user, date_from=None, date_to=None):
 
     date_from / date_to: 可选日期范围过滤（用于教师查看指定时间段学生报告）。
     """
-    from django.db.models import Sum, Count, Avg, Q
-    from quizzes.models import UserKnowledgeState, UserQuestionStatus, ReviewLog, QuizExam, KnowledgePoint
+    from django.db.models import Count, Avg
+    from quizzes.models import UserKnowledgeState, ReviewLog, QuizExam
+    from quizzes.services.learning_stats import build_learning_stats
     from .models import DailyCheckIn, UserAchievement
 
     now = timezone.now()
@@ -1599,22 +1600,11 @@ def _build_report_data(user, date_from=None, date_to=None):
     if date_to and timezone.is_naive(date_to):
         date_to = timezone.make_aware(date_to)
 
-    date_filter = {}
-    if date_from and date_to:
-        date_filter = {'last_review__range': (date_from, date_to)}
-
-    total_qs = UserQuestionStatus.objects.filter(user=user)
     review_logs_qs = ReviewLog.objects.filter(user=user)
-
-    if date_filter:
-        total_qs = total_qs.filter(**date_filter)
+    if date_from and date_to:
         review_logs_qs = review_logs_qs.filter(review_time__range=(date_from, date_to))
 
-    total_attempted = total_qs.aggregate(Sum('reps'))['reps__sum'] or 0
-    correct_count = total_qs.filter(last_correct=True).count()
-    wrong_count = total_qs.filter(wrong_count__gt=0).count()
-    mastered_count = total_qs.filter(is_mastered=True).count()
-    total_distinct = total_qs.count()
+    stats = build_learning_stats(user, date_from=date_from, date_to=date_to)
 
     # 知识点雷达 — 按 subject 聚合 mastery 平均分
     mastery_qs = (
@@ -1644,28 +1634,14 @@ def _build_report_data(user, date_from=None, date_to=None):
         cnt = review_logs_qs.filter(review_time__date=d).count()
         daily.append({'date': d.isoformat(), 'count': cnt})
 
-    # 连续学习天数（基于 review_logs_qs）
-    review_days = review_logs_qs.values_list('review_time__date', flat=True).distinct()
-    study_streak = 0
-    if date_to:
-        check_date = date_to.date() if isinstance(date_to, datetime.datetime) else (date_to if isinstance(date_to, datetime.date) else now.date())
-    else:
-        check_date = now.date()
-    for d in sorted(set(review_days), reverse=True):
-        if d == check_date:
-            study_streak += 1
-            check_date -= datetime.timedelta(days=1)
-        elif d < check_date:
-            break
-
     # 签到 streak
     today_checkin = DailyCheckIn.objects.filter(user=user, date=now.date()).first()
     checkin_streak = today_checkin.streak if today_checkin else 0
 
     # 最近 10 次考试
     exams_qs = QuizExam.objects.filter(user=user)
-    if date_filter:
-        exams_qs = exams_qs.filter(**date_filter)
+    if date_from and date_to:
+        exams_qs = exams_qs.filter(created_at__range=(date_from, date_to))
     exams = exams_qs.order_by('-created_at')[:10]
     exam_list = [
         {
@@ -1693,11 +1669,21 @@ def _build_report_data(user, date_from=None, date_to=None):
             'date_joined': user.date_joined.isoformat() if user.date_joined else None,
         },
         'stats': {
-            'total_attempted': total_attempted, 'total_distinct': total_distinct,
-            'correct_count': correct_count, 'wrong_count': wrong_count,
-            'mastered_count': mastered_count,
-            'accuracy': round(correct_count / total_distinct * 100, 1) if total_distinct else 0,
-            'study_streak': study_streak, 'checkin_streak': checkin_streak,
+            'total_attempted': stats['total_attempts'],
+            'total_distinct': stats['attempted_questions'],
+            'correct_count': stats['last_correct_count'],
+            'wrong_count': stats['wrong_question_count'],
+            'mastered_count': stats['mastered_question_count'],
+            'accuracy': stats['last_accuracy'] or 0,
+            'last_accuracy': stats['last_accuracy'],
+            'lifetime_accuracy': stats['lifetime_accuracy'],
+            'attempted_questions': stats['attempted_questions'],
+            'has_attempts': stats['has_attempts'],
+            'unclassified_questions': stats['unclassified_questions'],
+            'diagnostic_mastered_count': stats['mastery']['mastered_kp_count'],
+            'diagnostic_kp_count': stats['mastery']['kp_count'],
+            'study_streak': stats['study_streak_days'],
+            'checkin_streak': checkin_streak,
         },
         'radar': radar,
         'daily_activity': daily,

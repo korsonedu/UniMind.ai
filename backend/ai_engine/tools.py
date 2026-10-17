@@ -595,12 +595,12 @@ def get_planner_tools():
     """学习规划师 Agent 工具集（含助教工具 + 规划专用工具）。"""
     assistant = get_assistant_tools()
     planner_only = [
-        _make_tool("get_learning_stats", "获取用户学习统计概览（总做题量、正确率、学习连续天数、学科覆盖）。用于制定计划前了解学生现状。", GET_LEARNING_STATS_SCHEMA,
-            impl_summary="聚合查询：COUNT(quiz_attempt)、AVG(is_correct)、计算最长连续学习天数、COUNT(DISTINCT subject)。需要 user_id。"),
-        _make_tool("get_knowledge_mastery_map", "获取用户知识点掌握度地图，按学科/模块分组。用于识别薄弱环节，制定针对性计划。", GET_KNOWLEDGE_MASTERY_MAP_SCHEMA,
-            impl_summary="查询 knowledge_mastery 表，按 subject → chapter → section 分组返回掌握度百分比。支持 subject 过滤。需要 user_id。"),
-        _make_tool("get_due_reviews", "获取今日待复习的题目列表（来自间隔重复调度）。用于安排今日复习任务。", GET_DUE_REVIEWS_SCHEMA,
-            impl_summary="查询 memorix_schedule 表 WHERE next_review <= today AND user_id=current_user，按 priority 降序返回待复习题目列表。"),
+        _make_tool("get_learning_stats", "获取用户学习统计概览（已练题数、最近正确率、连续学习天数、诊断掌握度）。调用后自动在对话中展示学习概览卡片，文字只需解读。", GET_LEARNING_STATS_SCHEMA,
+            impl_summary="聚合 UserQuestionStatus（reps>0）：已练题数、最近正确率、累计近似正确率、连续学习天数、诊断掌握度。需要 user_id。"),
+        _make_tool("get_knowledge_mastery_map", "获取用户知识点掌握度地图（基于最近一次诊断），按学科/模块分组。调用后自动展示掌握图谱卡片。", GET_KNOWLEDGE_MASTERY_MAP_SCHEMA,
+            impl_summary="查询 UserKnowledgeState，按 subject 返回知识点掌握度（0-100）。支持 subject 过滤。需要 user_id。"),
+        _make_tool("get_due_reviews", "获取今日待复习的题目列表（来自间隔重复调度）。调用后自动展示今日复习卡片。", GET_DUE_REVIEWS_SCHEMA,
+            impl_summary="查询 UserQuestionStatus 中 next_review_at 到期的题目，按到期时间返回待复习列表和优先级。"),
         _make_tool("get_knowledge_difficulty_analysis", "获取知识点的 Memorix 难度分析，识别薄弱知识点。用于回答'我哪些知识点最薄弱'等问题。", GET_KNOWLEDGE_DIFFICULTY_ANALYSIS_SCHEMA,
             impl_summary="查询 UserQuestionStatus 表，按知识点聚合 avg_difficulty、avg_stability、total_reviews，返回掌握程度和 Memorix 洞察。"),
         _make_tool("get_practice_questions", "从题库中抽取相关题目供学生练习。支持按知识点、学科、难度筛选，优先返回做错过的题目。用于'给我出几道题''我想练练XX'等场景。", GET_PRACTICE_QUESTIONS_SCHEMA,

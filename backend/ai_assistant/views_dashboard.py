@@ -52,31 +52,11 @@ class XiaoYuDashboardView(APIView):
 
     # ── Stats ─────────────────────────────────────────────
     def _get_stats(self, user, institution=None):
-        from quizzes.models import UserQuestionStatus, ReviewLog
-        now = timezone.now()
-        uqs = UserQuestionStatus.objects.filter(user=user)
-        if institution:
-            uqs = uqs.filter(
-                models.Q(question__institution=institution)
-            )
-        total = uqs.count()
-        correct = uqs.filter(last_correct=True).count()
-        wrong = uqs.filter(wrong_count__gt=0).count()
+        from quizzes.models import ReviewLog
+        from quizzes.services.learning_stats import build_learning_stats
 
-        # Study streak
-        review_days = (
-            ReviewLog.objects.filter(user=user, review_time__gte=now - timedelta(days=30))
-            .values_list('review_time__date', flat=True)
-            .distinct()
-        )
-        streak = 0
-        check_date = now.date()
-        for d in sorted(set(review_days), reverse=True):
-            if d == check_date:
-                streak += 1
-                check_date -= timedelta(days=1)
-            elif d < check_date:
-                break
+        now = timezone.now()
+        stats = build_learning_stats(user, institution=institution)
 
         # This week activity
         week_ago = now - timedelta(days=7)
@@ -137,13 +117,21 @@ class XiaoYuDashboardView(APIView):
                     break
 
         return {
-            'total_attempted': total,
-            'correct_count': correct,
-            'accuracy': round(correct / total * 100, 1) if total else 0,
-            'wrong_count': wrong,
-            'streak_days': streak,
+            'total_attempted': stats['attempted_questions'],
+            'correct_count': stats['last_correct_count'],
+            'accuracy': stats['last_accuracy'] or 0,
+            'wrong_count': stats['wrong_question_count'],
+            'streak_days': stats['study_streak_days'],
             'weekly_activity': weekly_questions,
-            'is_new_user': total == 0,
+            'is_new_user': stats['is_new_user'],
+            'attempted_questions': stats['attempted_questions'],
+            'total_attempts': stats['total_attempts'],
+            'last_accuracy': stats['last_accuracy'],
+            'lifetime_accuracy': stats['lifetime_accuracy'],
+            'has_attempts': stats['has_attempts'],
+            'unclassified_questions': stats['unclassified_questions'],
+            'subject_count': stats['subject_count'],
+            'mastery': stats['mastery'],
             'today_checked_in': today_checkin is not None,
             'checkin_streak': checkin_streak,
             'checkin_history': checkin_history,

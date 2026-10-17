@@ -79,9 +79,9 @@ def grade_view(request):
             options=question.options,
             subjective_type=question.subjective_type or '主观题',
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("Grading failed for question_id=%s", question_id)
-        return Response({'error': f'判分失败: {str(exc)}'}, status=500)
+        return Response({'error': '判分失败，请稍后重试'}, status=500)
 
     return Response(result)
 
@@ -104,9 +104,9 @@ def profile_view(request):
             user,
             institution=getattr(user, 'institution', None),
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("Profile query failed for user_id=%s", user.id)
-        return Response({'error': f'查询画像失败: {str(exc)}'}, status=500)
+        return Response({'error': '查询画像失败，请稍后重试'}, status=500)
 
     return Response(profile)
 
@@ -133,9 +133,9 @@ def due_view(request):
             limit=limit,
             institution=getattr(user, 'institution', None),
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("Due reviews query failed for user_id=%s", user.id)
-        return Response({'error': f'查询失败: {str(exc)}'}, status=500)
+        return Response({'error': '查询失败，请稍后重试'}, status=500)
 
     return Response(due_data)
 
@@ -156,9 +156,9 @@ def stats_view(request):
             user,
             institution=getattr(user, 'institution', None),
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("Stats query failed for user_id=%s", user.id)
-        return Response({'error': f'查询统计失败: {str(exc)}'}, status=500)
+        return Response({'error': '查询统计失败，请稍后重试'}, status=500)
 
     return Response(stats)
 
@@ -198,9 +198,9 @@ def practice_start_view(request):
             limit=count,
             institution=institution,
         )
-    except Exception as exc:
+    except Exception:
         logger.exception("Practice start failed for user=%s", user.id)
-        return Response({'error': f'抽题失败: {str(exc)}'}, status=500)
+        return Response({'error': '抽题失败，请稍后重试'}, status=500)
 
     questions = result.get('questions', [])
     if not questions:
@@ -374,10 +374,10 @@ def practice_submit_view(request):
                     subjective_type=question.subjective_type or '主观题',
                     user=request.user,
                 )
-            except Exception as exc:
+            except Exception:
                 logger.exception("Grading failed for question_id=%s", qid)
                 grade_result = {
-                    'score': 0, 'max_score': max_q, 'feedback': f'判分异常: {exc}',
+                    'score': 0, 'max_score': max_q, 'feedback': '判分失败，请稍后重试',
                     'is_correct': False,
                 }
 

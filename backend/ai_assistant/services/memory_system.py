@@ -99,49 +99,9 @@ class MemorySystem:
     @staticmethod
     def query_learning_stats(user, institution=None) -> Dict:
         """查询用户学习统计数据。"""
-        from quizzes.models import UserQuestionStatus, ReviewLog
+        from quizzes.services.learning_stats import build_learning_stats
 
-        now = timezone.now()
-        uqs = UserQuestionStatus.objects.filter(user=user)
-        total_questions = uqs.count()
-        total_correct = uqs.filter(last_correct=True).count()
-        total_wrong = uqs.filter(wrong_count__gt=0).count()
-
-        # Study streak: consecutive days with review activity in last 30 days
-        review_days = (
-            ReviewLog.objects.filter(user=user, review_time__gte=now - timedelta(days=30))
-            .values_list('review_time__date', flat=True)
-            .distinct()
-        )
-        sorted_days = sorted(set(review_days), reverse=True)
-        streak = 0
-        if sorted_days:
-            check_date = sorted_days[0]
-            for d in sorted_days:
-                if d == check_date:
-                    streak += 1
-                    check_date -= timedelta(days=1)
-                elif d < check_date:
-                    break
-
-        # Subject coverage
-        subjects_with_progress = (
-            uqs.values('question__knowledge_point__subject')
-            .distinct()
-            .count()
-        )
-
-        return {
-            "total_questions_attempted": total_questions,
-            "correct_count": total_correct,
-            "accuracy": round(total_correct / total_questions * 100, 1) if total_questions else 0,
-            "wrong_count": total_wrong,
-            "study_streak_days": streak,
-            "subjects_with_progress": subjects_with_progress,
-            "is_new_user": total_questions == 0,
-            "suggested_action": "diagnostic_test" if total_questions == 0 else None,
-            "diagnostic_url": "/tests" if total_questions == 0 else None,
-        }
+        return build_learning_stats(user, institution=institution)
 
     @staticmethod
     def query_mastery_map(user, subject: Optional[str] = None, institution=None) -> Dict:
@@ -174,7 +134,12 @@ class MemorySystem:
         for subj in result:
             result[subj].sort(key=lambda x: x['mastery_score'])
 
-        return {"mastery_map": result}
+        from quizzes.services.learning_stats import build_mastery_summary
+
+        return {
+            "mastery_map": result,
+            "mastery": build_mastery_summary(user, institution=institution),
+        }
 
     @staticmethod
     def query_weak_points(user, institution=None) -> Dict:
@@ -586,9 +551,9 @@ class MemorySystem:
                 analysis=analysis,
             )
             return {"grading_record_id": record.id}
-        except Exception as e:
-            logger.warning("write_grading_record failed: %s", e)
-            return {"error": str(e)}
+        except Exception:
+            logger.exception("write_grading_record failed")
+            return {"error": "判分记录保存失败"}
 
     @staticmethod
     def write_question_status_error(user, question_id: int, error_type: str,

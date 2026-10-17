@@ -2,6 +2,7 @@ import asyncio
 import os
 import threading
 import logging
+import time
 from asgiref.sync import sync_to_async
 from django.db import models, close_old_connections
 from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin, IsMemberOrReadOnlyList
@@ -113,8 +114,11 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
                     msg_metadata['generated_questions'] = tool_executor._last_generated
                 if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
                     msg_metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
-                if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
-                    visuals = tool_executor.pending_visuals
+                visuals = (
+                    tool_executor.pop_pending_visuals()
+                    if hasattr(tool_executor, 'pop_pending_visuals') else []
+                )
+                if visuals:
                     msg_metadata['visual'] = visuals[-1]
                     if len(visuals) > 1:
                         msg_metadata['all_visuals'] = visuals
@@ -558,8 +562,48 @@ class AIChatStreamView(APIView):
 
         async def generate():
             history_msgs = []
+            started_at = time.monotonic()
+            metrics_logger = logging.getLogger("agent_debug")
+            metrics = {
+                'setup_ms': None,
+                'first_event_ms': None,
+                'ttft_ms': None,
+                'run_id': None,
+                'terminal_calls': {},
+                'content_chars': 0,
+                'visual_count': 0,
+                'logged': False,
+            }
+
+            def log_metrics(outcome):
+                if metrics['logged']:
+                    return
+                metrics['logged'] = True
+                calls = list(metrics['terminal_calls'].values())
+                metrics_logger.info(
+                    "[SSE metrics] outcome=%s run_id=%s user_id=%s bot_id=%s bot_type=%s "
+                    "conversation_id=%s setup_ms=%s first_event_ms=%s ttft_ms=%s total_ms=%s "
+                    "tool_count=%s tool_time_ms=%s failed_count=%s visual_count=%s content_chars=%s",
+                    outcome,
+                    metrics['run_id'],
+                    request.user.id,
+                    bot.id,
+                    bot.bot_type,
+                    conversation_id,
+                    metrics['setup_ms'],
+                    metrics['first_event_ms'],
+                    metrics['ttft_ms'],
+                    int((time.monotonic() - started_at) * 1000),
+                    len(calls),
+                    sum(int(call.get('duration_ms') or 0) for call in calls),
+                    sum(1 for call in calls if call.get('status') == 'failed'),
+                    metrics['visual_count'],
+                    metrics['content_chars'],
+                )
+
             try:
                 history_msgs, messages, tools, tool_executor, profile, sse_variant_name = await sync_to_async(_sync_setup)()
+                metrics['setup_ms'] = int((time.monotonic() - started_at) * 1000)
 
                 step_queue: asyncio.Queue = asyncio.Queue()
                 event_loop = asyncio.get_running_loop()
@@ -615,6 +659,19 @@ class AIChatStreamView(APIView):
                     event = await step_queue.get()
                     if event is _SENTINEL:
                         break
+                    _event_at = time.monotonic()
+                    if metrics['first_event_ms'] is None:
+                        metrics['first_event_ms'] = int((_event_at - started_at) * 1000)
+                    if event.get('type') in ('text_delta', 'message') and metrics['ttft_ms'] is None:
+                        metrics['ttft_ms'] = int((_event_at - started_at) * 1000)
+                    if event.get('type') == 'step':
+                        if event.get('run_id'):
+                            metrics['run_id'] = event.get('run_id')
+                        if event.get('status') in ('succeeded', 'failed'):
+                            call_key = event.get('call_id') or (
+                                f"{event.get('name')}:{event.get('round')}"
+                            )
+                            metrics['terminal_calls'].setdefault(call_key, event)
                     # ── 诊断日志：空卡片追踪 ──
                     if event.get("type") == "step":
                         _ev_vis = event.get("visual")
@@ -656,26 +713,31 @@ class AIChatStreamView(APIView):
                 error_patterns = ("AI 服务暂时不可用", "AI 暂时无法响应", "LLM_API_KEY")
                 if not is_error:
                     is_error = any(p in ai_content for p in error_patterns) if ai_content else False
+                metrics['content_chars'] = len(ai_content)
 
                 metadata = {}
+                visual_count = len(getattr(tool_executor, 'pending_visuals', []) or [])
+                metrics['visual_count'] = visual_count
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
                     metadata['generated_questions'] = tool_executor._last_generated
                     metadata['pipeline_task_id'] = getattr(tool_executor, '_last_pipeline_task_id', None)
                 if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
                     metadata['pipeline_task_id'] = tool_executor._last_pipeline_task_id
-                if hasattr(tool_executor, 'pending_visuals') and tool_executor.pending_visuals:
-                    visuals = tool_executor.pending_visuals
+                visuals = (
+                    tool_executor.pop_pending_visuals()
+                    if hasattr(tool_executor, 'pop_pending_visuals') else []
+                )
+                if visuals:
                     metadata['visual'] = visuals[-1]  # Last visual for backward compat
                     if len(visuals) > 1:
                         metadata['all_visuals'] = visuals
-                    tool_executor.pending_visuals = []
 
                 # Save assistant message even when ai_content is empty (tool-only responses)
                 has_metadata = bool(metadata)
                 should_save = (ai_content or has_metadata or _sent_any_message) and not is_error
-                logger.info("[SSE done] ai_content_len=%s has_metadata=%s sent_any=%s is_error=%s should_save=%s pending_visuals=%s metadata_keys=%s",
+                logger.info("[SSE done] ai_content_len=%s has_metadata=%s sent_any=%s is_error=%s should_save=%s visual_count=%s metadata_keys=%s",
                     len(ai_content), has_metadata, _sent_any_message, is_error, should_save,
-                    len(tool_executor.pending_visuals) if hasattr(tool_executor, 'pending_visuals') else 'N/A',
+                    visual_count,
                     list(metadata.keys()) if metadata else [])
                 if should_save:
                     save_content = ai_content or ' '  # Empty content breaks some queries
@@ -722,12 +784,15 @@ class AIChatStreamView(APIView):
                 if conv_title:
                     done_payload['conversation_title'] = conv_title
                 yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
+                log_metrics('completed')
 
             except Exception as e:
                 logger.exception("AI Chat Stream Error [%s]: %s", type(e).__name__, e)
+                log_metrics('error')
                 error_msg = "抱歉，连接中断，请稍后再试。"
                 yield f"data: {json.dumps({'error': error_msg})}\n\n"
             finally:
+                log_metrics('disconnect')
                 try:
                     from ai_assistant.services.memory_service import (
                         extract_memories_async,

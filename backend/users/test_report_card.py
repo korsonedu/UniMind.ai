@@ -34,3 +34,30 @@ class ReportCardTests(APITestCase):
         self.client.force_authenticate(None)
         for path in ('/api/users/me/report-card/', '/api/users/me/report-card/pdf/'):
             self.assertIn(self.client.get(path).status_code, (401, 403))
+
+    def test_report_ignores_zero_rep_rows(self):
+        from quizzes.models import Question, UserQuestionStatus
+
+        question = Question.objects.create(text='仅收藏')
+        UserQuestionStatus.objects.create(user=self.user, question=question, reps=0)
+
+        response = self.client.get('/api/users/me/report-card/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['stats']['attempted_questions'], 0)
+        self.assertEqual(response.data['stats']['accuracy'], 0)
+        self.assertFalse(response.data['stats']['has_attempts'])
+
+    def test_date_range_report_does_not_filter_exams_by_review_field(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from users.views import _build_report_data
+
+        now = timezone.now()
+        data = _build_report_data(
+            self.user, date_from=now - timedelta(days=7), date_to=now,
+        )
+
+        self.assertIn('stats', data)
+        self.assertEqual(data['stats']['attempted_questions'], 0)

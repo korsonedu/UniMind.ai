@@ -33,8 +33,8 @@
     <div class="label">累计答题</div>
   </div>
   <div class="stat">
-    <div class="value">{{ data.stats.accuracy }}%</div>
-    <div class="label">正确率</div>
+    <div class="value">{% if data.stats.has_attempts %}{{ data.stats.last_accuracy }}%{% else %}—{% endif %}</div>
+    <div class="label">最近作答正确率</div>
   </div>
   <div class="stat">
     <div class="value">{{ data.stats.study_streak }} 天</div>
@@ -44,8 +44,8 @@
 
 <div class="grid-3">
   <div class="stat">
-    <div class="value">{{ data.stats.mastered_count }}</div>
-    <div class="label">已掌握题目</div>
+    <div class="value">{{ data.stats.diagnostic_mastered_count }}/{{ data.stats.diagnostic_kp_count }}</div>
+    <div class="label">诊断掌握知识点</div>
   </div>
   <div class="stat">
     <div class="value">{{ data.stats.checkin_streak }}</div>
@@ -60,7 +60,7 @@
 <!-- 知识点掌握 -->
 {% if data.radar %}
 <div class="card">
-  <h2>📚 知识点掌握度</h2>
+  <h2>📚 知识点掌握度（基于诊断）</h2>
   <table>
     <tr><th>学科</th><th>平均掌握度</th><th>知识点数</th></tr>
     {% for r in data.radar %}

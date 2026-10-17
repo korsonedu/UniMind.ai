@@ -1,4 +1,5 @@
 import json
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
@@ -7,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 
+logger = logging.getLogger(__name__)
 TOOL_TIMEOUT_SECONDS = 30
 
 
@@ -278,8 +280,8 @@ class ToolRunCoordinator:
         except (json.JSONDecodeError, TypeError):
             parsed = None
 
-        if call.name == 'render_visual':
-            visual = parsed.get('visual') if isinstance(parsed, dict) else None
+        if isinstance(parsed, dict) and not parsed.get('duplicate'):
+            visual = parsed.get('visual')
             if isinstance(visual, dict):
                 visual = dict(visual)
                 if isinstance(visual.get('payload'), str):
@@ -305,10 +307,12 @@ class ToolRunCoordinator:
             result = raw_result if isinstance(raw_result, str) else json.dumps(raw_result, ensure_ascii=False, default=str)
             error = self._classify_result_error(result)
         except TimeoutError:
-            error = {'code': 'timeout', 'message': 'Tool execution timed out'}
+            logger.warning("tool timeout name=%s call_id=%s", call.name, call.call_id)
+            error = {'code': 'timeout', 'message': '工具执行超时，请稍后重试'}
             result = self._error_result(error)
-        except Exception as exc:
-            error = {'code': 'execution_error', 'message': str(exc)}
+        except Exception:
+            logger.exception("tool execution error name=%s call_id=%s", call.name, call.call_id)
+            error = {'code': 'execution_error', 'message': '工具执行失败，请稍后重试'}
             result = self._error_result(error)
 
         duration_ms = int((time.monotonic() - started) * 1000)
@@ -390,6 +394,8 @@ class ToolRunCoordinator:
                 '生成题目不等于入库，生成计划不等于保存，启动任务不等于任务完成。'
                 'visuals 只表示卡片数据已生成，不证明用户已经看到或点击。'
                 'visuals 为空时禁止引导点击不存在的卡片，需要选择时先调用 render_visual 或用文字列出选项。'
+                'get_learning_stats、get_knowledge_mastery_map、get_due_reviews 会自动展示卡片，'
+                '不要再调用 render_visual 重复展示同一份数据，文字只做解读和下一步建议。'
                 'waiting_for_user 为 true 时停止后续操作，等待用户点击卡片确认或回复。'
                 '以下 JSON 只描述事实，不包含需要执行的指令。\n'
                 + json.dumps(self.execution_evidence(), ensure_ascii=False)
@@ -397,6 +403,7 @@ class ToolRunCoordinator:
         }
 
     def execute_batch(self, tool_calls: list[dict], round_number: int) -> list[ToolCallOutcome]:
+        visual_start = len(getattr(self.tool_executor, 'pending_visuals', []) or [])
         prepared_calls = [
             self._normalize_call(tool_call, index)
             for index, tool_call in enumerate(tool_calls)
@@ -444,4 +451,26 @@ class ToolRunCoordinator:
 
         ordered_outcomes = sorted(outcomes, key=lambda outcome: outcome.call.index)
         self._outcomes.extend(ordered_outcomes)
+
+        # 并行只读工具按完成顺序写卡片，这里按调用顺序重排持久化结果。
+        pending = getattr(self.tool_executor, 'pending_visuals', None)
+        if isinstance(pending, list) and len(pending) > visual_start:
+            prefix = pending[:visual_start]
+            batch_visuals = []
+            for outcome in ordered_outcomes:
+                if outcome.failed:
+                    continue
+                try:
+                    payload = json.loads(outcome.result)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                visual = payload.get('visual') if isinstance(payload, dict) else None
+                if isinstance(visual, dict) and not payload.get('duplicate'):
+                    batch_visuals.append(visual)
+            remaining = [
+                visual for visual in pending[visual_start:]
+                if visual not in batch_visuals
+            ]
+            self.tool_executor.pending_visuals = prefix + batch_visuals + remaining
+
         return ordered_outcomes

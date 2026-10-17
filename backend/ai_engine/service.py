@@ -801,6 +801,8 @@ class AIEngine:
                         tc0 = m['tool_calls'][0] if m['tool_calls'] else {}
                         logger.info("  tc[0] keys=%s", list(tc0.keys()))
 
+            llm_started = time.monotonic()
+            round_ttft_ms = None
             try:
                 r = _session.post(
                     config['base_url'],
@@ -832,7 +834,7 @@ class AIEngine:
                 logger.error("call_ai_with_streaming_tools HTTP error: operation=%s round=%s err=%s body=%s", operation, round_i, e, error_body)
                 AICircuitBreaker.record_failure(operation, model_tier=get_model_tier_for_operation(operation))
                 if on_step:
-                    on_step({"type": "error", "message": f"AI 调用失败: {e}"})
+                    on_step({"type": "error", "message": "AI 服务暂时不可用，请稍后重试"})
                 return {
                     "content": accumulated_text or "AI 服务暂时不可用，请稍后重试。",
                     "run_id": coordinator.run_id,
@@ -866,6 +868,8 @@ class AIEngine:
 
                 content = delta.get('content', '')
                 if content:
+                    if round_ttft_ms is None:
+                        round_ttft_ms = int((time.monotonic() - llm_started) * 1000)
                     accumulated_text += content
                     # 流式 DSML 过滤：如果在 DSML 块中（有 <龘 且未闭合），
                     # 暂不 emit，等完整后再一次性剥离+发送，防止 DSML 泄露到前端
@@ -912,8 +916,12 @@ class AIEngine:
                         len(tool_calls)
                     )
 
-            logger.info("call_ai_with_streaming_tools round=%s done: text_len=%s tool_calls=%s finish_reason=%s",
-                        round_i, len(accumulated_text), len(tool_calls), finish_reason)
+            logger.info(
+                "call_ai_with_streaming_tools round=%s done: text_len=%s tool_calls=%s "
+                "finish_reason=%s llm_ms=%s ttft_ms=%s",
+                round_i, len(accumulated_text), len(tool_calls), finish_reason,
+                int((time.monotonic() - llm_started) * 1000), round_ttft_ms,
+            )
 
             # 预先剥离 DSML，避免后续多处重复计算
             clean_accumulated = cls._strip_dsml(accumulated_text)

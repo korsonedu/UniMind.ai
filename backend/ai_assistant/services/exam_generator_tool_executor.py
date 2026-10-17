@@ -196,9 +196,9 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                 skip_review=True,
             )
             questions = result.get('questions', [])
-        except Exception as e:
-            logger.warning("quick_generate 失败: %s", e)
-            return {"error": f"出题失败：{e}。请直接告知用户具体失败原因，不要再尝试生成。"}
+        except Exception:
+            logger.exception("quick_generate 失败")
+            return {"error": "题目生成失败，请稍后重试。请直接告知用户，不要再尝试生成。"}
 
         if not questions:
             return {"error": "题目生成失败。请直接告知用户，不要再尝试重复生成。"}
@@ -255,8 +255,8 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                     'q_type': obj.q_type,
                     'kp_name': q.get('kp_name', ''),
                 })
-            except Exception as e:
-                logger.warning("save_questions_to_bank: 保存题目失败: %s", e)
+            except Exception:
+                logger.exception("save_questions_to_bank: 保存题目失败")
 
         if not saved:
             return {"error": "题目入库失败，请重试"}
@@ -294,8 +294,9 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                 types=types,
                 institution=self.institution,
             )
-        except Exception as e:
-            return {"error": str(e)}
+        except Exception:
+            logger.exception("launch_arc_pipeline 失败")
+            return {"error": "启动失败，请稍后重试"}
 
         self._last_pipeline_task_id = task_id
         return {

@@ -285,13 +285,15 @@ class InstitutionStudentStatsView(APIView):
         week_ago = timezone.now() - timezone.timedelta(days=7)
 
         # Question stats
+        from quizzes.services.learning_stats import build_learning_stats
+        stats = build_learning_stats(student, institution=request.user.institution)
         qs_all = UserQuestionStatus.objects.filter(user=student)
-        total_answered = qs_all.aggregate(t=Sum('reps'))['t'] or 0
-        total_wrong = qs_all.aggregate(t=Sum('wrong_count'))['t'] or 0
-        total_correct = total_answered - total_wrong
-        correct_rate = round(total_correct / total_answered * 100, 1) if total_answered > 0 else 0
-        mastered_count = qs_all.filter(is_mastered=True).count()
-        total_questions = qs_all.count()
+        total_answered = stats['total_attempts']
+        total_wrong = stats['wrong_attempts']
+        total_correct = stats['lifetime_correct_count']
+        correct_rate = stats['lifetime_accuracy'] or 0
+        mastered_count = stats['mastered_question_count']
+        total_questions = stats['attempted_questions']
         due_review = qs_all.filter(next_review_at__lte=timezone.now()).count()
 
         # Recent activity (last 7 days)
