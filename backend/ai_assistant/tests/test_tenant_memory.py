@@ -87,6 +87,12 @@ def test_normalizes_mem0_v2_results(mock_config_fn, mock_memory_cls, operation):
     result = manager.search(100, "学习安排") if operation == "search" else manager.get_all(100)
 
     assert result == rows
+    kwargs = getattr(mock_memory_cls.from_config.return_value, operation).call_args.kwargs
+    assert kwargs['filters'] == {'user_id': '100'}
+    assert 'user_id' not in kwargs
+    if operation == 'search':
+        assert kwargs['top_k'] == 5
+        assert 'limit' not in kwargs
 
 
 class TestTenantMemoryManager:

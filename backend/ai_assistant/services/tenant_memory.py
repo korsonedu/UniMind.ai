@@ -91,7 +91,7 @@ class TenantMemoryManager:
     def search(self, user_id: int, query: str, limit: int = 5) -> list:
         """Semantic search for relevant memories."""
         try:
-            result = self.memory.search(query, user_id=str(user_id), limit=limit)
+            result = self.memory.search(query, filters={'user_id': str(user_id)}, top_k=limit)
             return result.get('results', []) if isinstance(result, dict) else result
         except Exception:
             logger.exception("mem0 search failed for user %d", user_id)
@@ -100,7 +100,7 @@ class TenantMemoryManager:
     def get_all(self, user_id: int) -> list:
         """Get all memories for a user."""
         try:
-            result = self.memory.get_all(user_id=str(user_id))
+            result = self.memory.get_all(filters={'user_id': str(user_id)})
             return result.get('results', []) if isinstance(result, dict) else result
         except Exception:
             logger.exception("mem0 get_all failed for user %d", user_id)
