@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+import pytest
 
 from ai_engine.service import AIEngine
 
@@ -63,6 +64,100 @@ def _tool_call_chunk(name, arguments, call_id):
         "type": "function",
         "function": {"name": name, "arguments": json.dumps(arguments, ensure_ascii=False)},
     }
+
+
+@pytest.mark.parametrize("streaming", [True, False])
+@pytest.mark.parametrize("failed", [True, False])
+def test_each_reply_receives_current_execution_evidence(monkeypatch, streaming, failed):
+    requests = []
+    tool_call = _tool_call_chunk("render_visual", {"subject": "词汇"}, "choice-call")
+    responses = iter([
+        {"choices": [{"message": {"role": "assistant", "content": None, "tool_calls": [tool_call]}}]},
+        {"choices": [{"message": {"role": "assistant", "content": "请回复你的选择。"}}]},
+    ])
+    streaming_responses = iter([
+        _StreamingToolResponse([tool_call]), _StreamingResponse(["请回复你的选择。"]),
+    ])
+
+    def record(messages):
+        requests.append(json.loads(json.dumps(messages)))
+
+    def call_ai(**kwargs):
+        record(kwargs["messages"])
+        return next(responses)
+
+    def post(*args, **kwargs):
+        record(kwargs["json"]["messages"])
+        return next(streaming_responses)
+
+    monkeypatch.setattr(AIEngine, "call_ai", call_ai)
+    monkeypatch.setattr("ai_engine.service._session.post", post)
+    monkeypatch.setattr("ai_engine.service.get_model_for_task", lambda operation: {
+        "api_key": "test-key", "base_url": "https://example.invalid/chat",
+        "model": "test-model", "thinking": False,
+    })
+    monkeypatch.setattr("ai_engine.circuit_breaker.AICircuitBreaker.check", lambda *a, **k: None)
+    monkeypatch.setattr("ai_engine.circuit_breaker.AICircuitBreaker.record_success", lambda *a, **k: None)
+
+    def execute(name, arguments):
+        if failed:
+            return json.dumps({"error": "rendering failed"})
+        return json.dumps({"visual": {"type": "action_cards", "payload": {
+            "cards": [{"action": {"type": "reply"}}],
+        }}})
+
+    method = AIEngine.call_ai_with_streaming_tools if streaming else AIEngine.call_ai_with_tools
+    method(
+        messages=[{"role": "assistant", "content": "已保存，请点击下方卡片。"},
+                  {"role": "user", "content": "重新给我选项"}],
+        tools=[_tool_definition("render_visual")], tool_executor=execute, max_tool_rounds=2,
+    )
+
+    def evidence(messages):
+        context = messages[-1]
+        assert context["role"] == "system"
+        return json.loads(context["content"].split("\n", 1)[1])
+
+    assert evidence(requests[0])["calls"] == []
+    current = evidence(requests[1])
+    assert current["calls"][0]["status"] == ("failed" if failed else "succeeded")
+    assert current["visuals"] == ([] if failed else [{"call_id": "choice-call", "type": "action_cards"}])
+    assert current["waiting_for_user"] is not failed
+
+
+@pytest.mark.parametrize("streaming", [True, False])
+def test_round_limit_final_reply_receives_failed_execution_evidence(monkeypatch, streaming):
+    requests = []
+    calls = [_tool_call_chunk("lookup", {}, "invalid")]
+
+    def call_ai(**kwargs):
+        requests.append(kwargs)
+        if len(requests) == 1 and not streaming:
+            return {"choices": [{"message": {"content": None, "tool_calls": calls}}]}
+        return {"choices": [{"message": {"content": "参数不完整，请补充。"}}]}
+
+    monkeypatch.setattr(AIEngine, "call_ai", call_ai)
+    monkeypatch.setattr("ai_engine.service._session.post", lambda *a, **k: _StreamingToolResponse(calls))
+    monkeypatch.setattr("ai_engine.service.get_model_for_task", lambda operation: {
+        "api_key": "test-key", "base_url": "https://example.invalid/chat",
+        "model": "test-model", "thinking": False,
+    })
+    monkeypatch.setattr("ai_engine.circuit_breaker.AICircuitBreaker.check", lambda *a, **k: None)
+    monkeypatch.setattr("ai_engine.circuit_breaker.AICircuitBreaker.record_success", lambda *a, **k: None)
+    executed = []
+    method = AIEngine.call_ai_with_streaming_tools if streaming else AIEngine.call_ai_with_tools
+
+    method(messages=[{"role": "user", "content": "查询"}], tools=[_tool_definition()],
+           tool_executor=lambda *args: executed.append(args), max_tool_rounds=1)
+
+    final = requests[-1]
+    assert final["tools"] is None
+    assert final["tool_choice"] == "none"
+    evidence = json.loads(final["messages"][-1]["content"].split("\n", 1)[1])
+    assert evidence["calls"] == [{
+        "call_id": "invalid", "name": "lookup", "status": "failed", "error_code": "invalid_arguments",
+    }]
+    assert executed == []
 
 
 def test_streaming_function_calls_markup_executes_tools_without_leaking(monkeypatch):

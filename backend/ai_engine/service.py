@@ -3,13 +3,14 @@ import re
 import ssl
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 import requests
 from requests.adapters import HTTPAdapter
 from django.conf import settings
 from .config import get_model_for_task
 from .observability import record_ai_operation
+from .tool_policy import READ_ONLY_TOOLS
 
 
 logger = logging.getLogger(__name__)
@@ -63,19 +64,7 @@ class AIEngine:
         re.DOTALL | re.IGNORECASE,
     )
 
-    # 只读工具白名单：这些工具只做 SELECT 查询，无副作用，可并行执行。
-    # 不在白名单中的工具（写操作 / 外部 API 调用）保持串行执行。
-    _READ_ONLY_TOOLS = frozenset({
-        'search_knowledge_tree', 'get_user_weak_points', 'get_user_wrong_questions',
-        'lookup_question',
-        'get_report_card', 'get_my_achievements', 'render_visual',
-        'get_learning_stats', 'get_knowledge_mastery_map', 'get_due_reviews',
-        'get_practice_questions', 'get_exam_history',
-        'search_courses', 'search_asr', 'search_articles',
-        'get_knowledge_difficulty_analysis', 'search_knowledge',
-        'check_pipeline_status', 'get_workbench_stats', 'get_student_detail',
-        'list_courses', 'list_questions', 'list_articles',
-    })
+    _READ_ONLY_TOOLS = READ_ONLY_TOOLS
 
     @staticmethod
     def _strip_dsml(text: str, withhold_partial_marker: bool = False) -> str:
@@ -657,11 +646,17 @@ class AIEngine:
 
         tool_executor: callable(tool_name, arguments_dict) -> str
         """
-        all_messages = list(messages)
+        from .tool_run import ToolRunCoordinator
 
-        for _ in range(max_tool_rounds):
+        all_messages = list(messages)
+        coordinator = ToolRunCoordinator(
+            tool_executor, tools or [], read_only_tools=cls._READ_ONLY_TOOLS,
+            tool_timeout_seconds=120,
+        )
+
+        for round_i in range(max_tool_rounds):
             response = cls.call_ai(
-                messages=all_messages,
+                messages=[*all_messages, coordinator.response_context()],
                 tools=tools,
                 tool_choice=tool_choice,
                 temperature=temperature,
@@ -678,92 +673,51 @@ class AIEngine:
                 raw_content = response['choices'][0]['message'].get('content') or ''
                 if raw_content:
                     response['choices'][0]['message']['content'] = cls._strip_dsml(raw_content)
+                response['run_id'] = coordinator.run_id
                 return response
 
             # 将 assistant 消息（含 tool_calls + reasoning_content）追加到历史
             # DeepSeek thinking mode 要求后续轮次完整回传 reasoning_content
             raw_msg = response['choices'][0]['message']
+            outcomes = coordinator.execute_batch(tool_calls, round_i + 1)
             assistant_msg = {
                 "role": "assistant",
                 "content": raw_msg.get('content'),
-                "tool_calls": tool_calls,
+                "tool_calls": [outcome.call.tool_call for outcome in outcomes],
             }
             if raw_msg.get('reasoning_content'):
                 assistant_msg["reasoning_content"] = raw_msg['reasoning_content']
             all_messages.append(assistant_msg)
 
-            # 执行工具并追加结果
-            # 1. 先解析所有工具调用
-            _parsed_calls = []
-            for tc in tool_calls:
-                func = tc.get('function', {})
-                name = func.get('name', '')
-                try:
-                    args = json.loads(func.get('arguments', '{}'))
-                    if not isinstance(args, dict):
-                        args = {}
-                except (json.JSONDecodeError, TypeError):
-                    args = {}
-                _parsed_calls.append((tc, name, args))
-
-            # 2. 判断是否可并行：所有工具都在只读白名单中且 >1 个
-            _all_read_only = all(
-                name in cls._READ_ONLY_TOOLS for _, name, _ in _parsed_calls
-            )
-            _can_parallel = _all_read_only and len(_parsed_calls) > 1
-
-            if _can_parallel:
-                # 并行执行只读工具
-                _tool_results = [None] * len(_parsed_calls)
-
-                def _execute_tool(idx, name, args):
-                    import django.db
-                    django.db.close_old_connections()
-                    return idx, cls._run_tool_with_timeout(tool_executor, name, args)
-
-                with ThreadPoolExecutor(max_workers=min(4, len(_parsed_calls))) as executor:
-                    _future_to_idx = {
-                        executor.submit(_execute_tool, i, name, args): i
-                        for i, (_, name, args) in enumerate(_parsed_calls)
-                    }
-                    for future in as_completed(_future_to_idx):
-                        try:
-                            idx, result = future.result()
-                            _tool_results[idx] = result
-                        except Exception:
-                            idx = _future_to_idx[future]
-                            _tool_results[idx] = json.dumps(
-                                {"error": "parallel execution failed"},
-                                ensure_ascii=False,
-                            )
-
-                # 按原始顺序追加结果
-                for i, (tc, _, _) in enumerate(_parsed_calls):
-                    all_messages.append({
-                        "role": "tool",
-                        "type": "tool",
-                        "tool_call_id": tc.get('id', ''),
-                        "content": str(_tool_results[i]),
-                    })
-            else:
-                # 串行执行（含写操作工具或仅 1 个工具）
-                for tc, name, args in _parsed_calls:
-                    result = cls._run_tool_with_timeout(tool_executor, name, args)
-                    all_messages.append({
-                        "role": "tool",
-                        "type": "tool",
-                        "tool_call_id": tc.get('id', ''),
-                        "content": str(result),
-                    })
+            for outcome in outcomes:
+                all_messages.append({
+                    "role": "tool",
+                    "tool_call_id": outcome.call.call_id,
+                    "content": outcome.result,
+                })
 
             # 首轮后改为 auto，让模型决定是否继续调用工具
             tool_choice = "auto"
+            if coordinator.execution_evidence()['waiting_for_user']:
+                tools = None
+                tool_choice = "none"
 
         logger.warning(
             "call_ai_with_tools: exhausted max_tool_rounds=%s, "
-            "returning last response with %s pending tool_calls",
+            "forcing final text reply after %s tool_calls",
             max_tool_rounds, len(cls._extract_tool_calls(response)),
         )
+        all_messages.append({
+            "role": "system",
+            "content": "工具调用轮次已用完。请根据已有执行结果直接回复，不要再调用工具。",
+        })
+        response = cls.call_ai(
+            messages=[*all_messages, coordinator.response_context()],
+            tools=None, tool_choice="none", temperature=temperature,
+            max_tokens=max_tokens, operation=operation, raise_on_error=raise_on_error,
+        )
+        if response:
+            response['run_id'] = coordinator.run_id
         return response
 
     @classmethod
@@ -815,7 +769,10 @@ class AIEngine:
                     on_step({"type": "error", "message": "AI 服务熔断中，请稍后重试"})
                 return {"content": "", "run_id": coordinator.run_id}
 
-            body = cls._build_body(config, all_messages, temperature, max_tokens, tools, tool_choice, stream=True)
+            body = cls._build_body(
+                config, [*all_messages, coordinator.response_context()],
+                temperature, max_tokens, tools, tool_choice, stream=True,
+            )
 
             timeout_seconds = max(30, int(getattr(_settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120) or 120))
 
@@ -1001,28 +958,6 @@ class AIEngine:
                         "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
                     })
 
-                if not outcome.failed and name == 'render_visual':
-                    try:
-                        result_payload = json.loads(outcome.result)
-                    except (json.JSONDecodeError, TypeError):
-                        result_payload = None
-                    visual = result_payload.get('visual') if isinstance(result_payload, dict) else None
-                    if isinstance(visual, dict):
-                        is_reply_visual = (
-                            visual.get('type') == 'action_cards' and
-                            any(
-                                isinstance(card, dict) and
-                                card.get('action', {}).get('type') == 'reply'
-                                for card in visual.get('payload', {}).get('cards', [])
-                            )
-                        )
-                        if is_reply_visual:
-                            all_messages.append({
-                                "role": "system",
-                                "content": "操作确认卡片已渲染到用户界面。你必须立即停止所有工具调用，用自然语言告知用户点击卡片确认（如'请点击上方卡片确认'），然后等待用户操作。不要再调用任何工具。",
-                            })
-                            tool_executor._render_visual_called = True
-
             tool_names_this_round = [outcome.call.name for outcome in outcomes]
             accumulated_text = ""
 
@@ -1066,10 +1001,9 @@ class AIEngine:
                 tool_choice = "auto"
 
             # render_visual 产出 reply 卡片后强制停止：关 tool_choice + 移除 tools
-            if getattr(tool_executor, '_render_visual_called', False):
+            if coordinator.execution_evidence()['waiting_for_user']:
                 tool_choice = "none"
                 tools = None
-                tool_executor._render_visual_called = False
 
         logger.warning(
             "call_ai_with_streaming_tools: exhausted max_tool_rounds=%s, forcing final text reply",
@@ -1083,7 +1017,7 @@ class AIEngine:
         try:
             config = get_model_for_task(operation)
             final_resp = cls.call_ai(
-                messages=all_messages,
+                messages=[*all_messages, coordinator.response_context()],
                 tools=None,
                 tool_choice="none",
                 temperature=temperature,

@@ -13,6 +13,7 @@ import math
 import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
+from .tool_policy import READ_ONLY_TOOLS
 
 logger = logging.getLogger(__name__)
 
@@ -563,26 +564,6 @@ def classify_intent(user_message: str, recent_messages: List[Dict[str, str]] = N
     return result or "general"
 
 
-def _keyword_fallback(user_message: str, all_tools: List[dict],
-                      recent_messages: List[dict] = None,
-                      bot_type: str = "planner") -> List[dict]:
-    """关键词匹配 fallback：根据意图筛选工具。
-
-    当意图是 general（无关键词命中）时返回空列表，让 LLM 自由决定
-    是否调用工具，而非强制绑定全量工具。
-    """
-    intent = classify_intent(user_message, recent_messages, bot_type=bot_type)
-    intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
-    allowed_names = intent_map.get(intent, {}).get("tools", [])
-
-    if not allowed_names:
-        return [] if intent == "general" else all_tools
-
-    allowed_set = set(allowed_names)
-    filtered = [t for t in all_tools if t["function"]["name"] in allowed_set]
-    return filtered if len(filtered) >= 2 else all_tools
-
-
 # ── 主路由函数 ─────────────────────────────────────────────────
 
 # 工作流延续信号：AI 上一轮在等用户回复来完成某工作流时，
@@ -628,41 +609,24 @@ def route_tools(
     recent_messages: List[Dict[str, str]] = None,
     bot_type: str = "planner",
 ) -> List[dict]:
-    """工具路由：Retrieve（embedding） + Workflow Expansion + 关键词保底。
-
-    对齐 SkillRouter 两段式架构，但 Stage 2 做的是召回补全而非精度重排：
-    1. Embedding 检索 top-k（纯语义，不混上下文）
-    2. Workflow Expansion（AI 在等回复时补入该工作流的工具集）
-    3. 合并意图关键词 → 输出；失败则关键词 fallback
-    """
+    """小工具集常驻只读能力；写入按意图选择，大工具集额外使用语义召回。"""
     _dbg = logging.getLogger("agent_debug")
 
-    candidates = _retrieve_candidates(user_message, bot_type, top_k=8)
+    small_catalog = len(all_tools) <= 32
+    if small_catalog and all(t["function"]["name"] in READ_ONLY_TOOLS for t in all_tools):
+        return list(all_tools)
+
+    candidates = [] if small_catalog else _retrieve_candidates(user_message, bot_type, top_k=8)
     intent = classify_intent(user_message, recent_messages, bot_type=bot_type)
     intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
     intent_tools = set(intent_map.get(intent, {}).get("tools", []))
 
-    # Stage 2: Workflow Expansion
     workflow_tools = _detect_active_workflow(recent_messages, bot_type)
-    # 通用交互能力不参与业务意图裁剪；仅从已获授权的 all_tools 中保留。
-    interaction_tools = {"render_visual"}
-
-    if candidates:
-        merged = set(candidates) | intent_tools | workflow_tools | interaction_tools
-        filtered = [t for t in all_tools if t["function"]["name"] in merged]
-        if filtered:
-            filtered_names = [t["function"]["name"] for t in filtered]
-            has_rv = "render_visual" in filtered_names
-            _dbg.info("route_tools(merged): msg=%r intent=%s tools=%d→%d render_visual=%s candidates=%s intent_tools=%s",
-                       user_message[:60], intent, len(all_tools), len(filtered), has_rv, candidates, sorted(intent_tools))
-            return filtered
-
-    # Fallback: 纯关键词匹配
-    result = _keyword_fallback(user_message, all_tools, recent_messages, bot_type)
-    retained_names = {t["function"]["name"] for t in result} | interaction_tools
-    result = [t for t in all_tools if t["function"]["name"] in retained_names]
+    retained_names = READ_ONLY_TOOLS if small_catalog else {"render_visual"}
+    selected_names = set(candidates) | intent_tools | workflow_tools | retained_names
+    result = [t for t in all_tools if t["function"]["name"] in selected_names]
     result_names = [t["function"]["name"] for t in result]
     has_rv = "render_visual" in result_names
-    _dbg.info("route_tools(keyword): msg=%r intent=%s tools=%d→%d render_visual=%s",
+    _dbg.info("route_tools: msg=%r intent=%s tools=%d→%d render_visual=%s",
               user_message[:60], intent, len(all_tools), len(result), has_rv)
     return result

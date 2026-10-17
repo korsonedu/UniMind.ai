@@ -111,6 +111,54 @@ def test_normalizes_missing_duplicate_and_text_protocol_call_ids():
     assert [outcome.call.tool_call["id"] for outcome in outcomes] == call_ids
 
 
+def test_execution_evidence_tracks_only_current_request_confirmed_artifacts():
+    definitions = [_tool_definition("render_visual"), _tool_definition("save")]
+
+    class ArtifactExecutor(RecordingExecutor):
+        pending_visuals = [{"type": "action_cards", "payload": {"cards": []}}]
+
+        def __call__(self, name, arguments):
+            if name == "save":
+                return json.dumps({"error": "database rejected write"})
+            return json.dumps({"status": "ok", "visual": {
+                "type": "action_cards", "payload": {"cards": [{"action": {"type": "reply"}}]},
+            }})
+
+    coordinator = ToolRunCoordinator(ArtifactExecutor(definitions), definitions, run_id="run-evidence")
+    assert coordinator.execution_evidence() == {
+        "run_id": "run-evidence", "calls": [], "visuals": [], "waiting_for_user": False,
+    }
+
+    coordinator.execute_batch([_tool_call("save", call_id="failed-save")], round_number=1)
+    failed = coordinator.execution_evidence()
+    assert failed["calls"] == [{
+        "call_id": "failed-save", "name": "save", "status": "failed", "error_code": "execution_error",
+    }]
+    assert failed["visuals"] == []
+
+    coordinator.execute_batch([_tool_call("render_visual", call_id="choice")], round_number=2)
+    generated = coordinator.execution_evidence()
+    assert generated["calls"][-1] == {"call_id": "choice", "name": "render_visual", "status": "succeeded"}
+    assert generated["visuals"] == [{"call_id": "choice", "type": "action_cards"}]
+    assert generated["waiting_for_user"] is True
+
+    another_request = ToolRunCoordinator(ArtifactExecutor(definitions), definitions)
+    assert another_request.execution_evidence()["visuals"] == []
+
+
+def test_visual_events_do_not_reuse_cached_artifacts_from_another_call():
+    definition = _tool_definition("render_visual")
+    executor = RecordingExecutor([definition])
+    executor.pending_visuals = [{"type": "action_cards", "payload": {"cards": []}}]
+    events = []
+    coordinator = ToolRunCoordinator(executor, [definition], on_step=events.append)
+
+    coordinator.execute_batch([_tool_call("render_visual")], round_number=1)
+
+    assert "visual" not in events[-1]
+    assert coordinator.execution_evidence()["visuals"] == []
+
+
 def test_rejects_invalid_arguments_before_executor_runs():
     definition = _tool_definition(
         parameters={

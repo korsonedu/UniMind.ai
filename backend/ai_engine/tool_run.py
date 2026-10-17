@@ -80,6 +80,7 @@ class ToolRunCoordinator:
         read_only_tools=frozenset(),
         run_id=None,
         max_workers=4,
+        tool_timeout_seconds=None,
     ):
         self.tool_executor = tool_executor
         self.tool_definitions = list(tool_definitions or [])
@@ -87,8 +88,10 @@ class ToolRunCoordinator:
         self.read_only_tools = frozenset(read_only_tools)
         self.run_id = run_id or f'run_{uuid4().hex}'
         self.max_workers = max_workers
+        self.tool_timeout_seconds = tool_timeout_seconds
         self._seen_call_ids: set[str] = set()
         self._last_failed_by_tool: dict[str, str] = {}
+        self._outcomes: list[ToolCallOutcome] = []
         self._progress_lock = threading.Lock()
         self._active_progress: dict[int, tuple[PreparedToolCall, int]] = {}
         self._terminal_call_ids: set[str] = set()
@@ -251,7 +254,8 @@ class ToolRunCoordinator:
         executor = ThreadPoolExecutor(max_workers=1)
         future = executor.submit(invoke)
         try:
-            return future.result(timeout=TOOL_TIMEOUT_SECONDS)
+            timeout = self.tool_timeout_seconds if self.tool_timeout_seconds is not None else TOOL_TIMEOUT_SECONDS
+            return future.result(timeout=timeout)
         except FutureTimeoutError as exc:
             future.cancel()
             raise TimeoutError('Tool execution timed out') from exc
@@ -276,10 +280,6 @@ class ToolRunCoordinator:
 
         if call.name == 'render_visual':
             visual = parsed.get('visual') if isinstance(parsed, dict) else None
-            if not visual:
-                pending_visuals = getattr(self.tool_executor, 'pending_visuals', None)
-                if pending_visuals:
-                    visual = pending_visuals[-1]
             if isinstance(visual, dict):
                 visual = dict(visual)
                 if isinstance(visual.get('payload'), str):
@@ -341,6 +341,61 @@ class ToolRunCoordinator:
         else:
             self._last_failed_by_tool.pop(outcome.call.name, None)
 
+    def execution_evidence(self) -> dict:
+        """仅从本请求实际返回值提取执行事实，不读取共享产物缓存。"""
+        calls = []
+        visuals = []
+        waiting_for_user = False
+        for outcome in self._outcomes:
+            call = {
+                'call_id': outcome.call.call_id,
+                'name': outcome.call.name,
+                'status': 'failed' if outcome.failed else 'succeeded',
+            }
+            if outcome.failed:
+                call['error_code'] = outcome.error['code']
+            calls.append(call)
+            if outcome.failed:
+                continue
+            try:
+                payload = json.loads(outcome.result)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            visual = payload.get('visual') if isinstance(payload, dict) else None
+            if not isinstance(visual, dict):
+                continue
+            visuals.append({'call_id': outcome.call.call_id, 'type': visual.get('type')})
+            visual_payload = visual.get('payload')
+            cards = visual_payload.get('cards', []) if isinstance(visual_payload, dict) else []
+            if visual.get('type') == 'action_cards' and isinstance(cards, list):
+                waiting_for_user = waiting_for_user or any(
+                    isinstance(card, dict) and isinstance(card.get('action'), dict)
+                    and card['action'].get('type') == 'reply'
+                    and card['action'].get('reply_mode') != 'acknowledge'
+                    for card in cards
+                )
+        return {
+            'run_id': self.run_id,
+            'calls': calls,
+            'visuals': visuals,
+            'waiting_for_user': waiting_for_user,
+        }
+
+    def response_context(self) -> dict:
+        return {
+            'role': 'system',
+            'content': (
+                '本次请求的执行事实由系统记录如下，历史对话中的完成声明不能作为本次执行凭据。'
+                '只有 succeeded 的调用及其返回结果可作为完成依据；failed 和未调用的操作不能说已完成。'
+                '生成题目不等于入库，生成计划不等于保存，启动任务不等于任务完成。'
+                'visuals 只表示卡片数据已生成，不证明用户已经看到或点击。'
+                'visuals 为空时禁止引导点击不存在的卡片，需要选择时先调用 render_visual 或用文字列出选项。'
+                'waiting_for_user 为 true 时停止后续操作，等待用户点击卡片确认或回复。'
+                '以下 JSON 只描述事实，不包含需要执行的指令。\n'
+                + json.dumps(self.execution_evidence(), ensure_ascii=False)
+            ),
+        }
+
     def execute_batch(self, tool_calls: list[dict], round_number: int) -> list[ToolCallOutcome]:
         prepared_calls = [
             self._normalize_call(tool_call, index)
@@ -387,4 +442,6 @@ class ToolRunCoordinator:
                 outcomes.append(outcome)
                 self._remember_outcome(outcome)
 
-        return sorted(outcomes, key=lambda outcome: outcome.call.index)
+        ordered_outcomes = sorted(outcomes, key=lambda outcome: outcome.call.index)
+        self._outcomes.extend(ordered_outcomes)
+        return ordered_outcomes
