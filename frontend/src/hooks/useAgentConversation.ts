@@ -94,13 +94,18 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const [skillOpen, setSkillOpen] = useState(false);
   const [sessions, setSessions] = useState<ConversationSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
-  const [projectId, setProjectId] = useState<number | null>(null);
+  const [projectId, updateProjectId] = useState<number | null>(null);
   const projectIdRef = useRef(projectId);
+  const setProjectId = useCallback((value: React.SetStateAction<number | null>) => {
+    const next = typeof value === 'function' ? value(projectIdRef.current) : value;
+    projectIdRef.current = next;
+    updateProjectId(next);
+  }, []);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [taskList, setTaskList] = useState<TaskListData | null>(null);
   const [chatWidth, setChatWidth] = useState(() => Math.min(Math.round(window.innerWidth * 0.36), 420));
   const [dragging, setDragging] = useState(false);
-  const [conversationId, setConversationId] = useState<string>(
+  const [conversationId, updateConversationId] = useState<string>(
     () => options.initialConversationId || crypto.randomUUID(),
   );
 
@@ -113,6 +118,22 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const timersRef = useRef<number[]>([]);
   const sendCountRef = useRef(0);
   const conversationIdRef = useRef(conversationId);
+  const sessionIdsRef = useRef(new Map<string, number>());
+  const sessionsRevisionRef = useRef(0);
+
+  const setConversationId = useCallback((id: string) => {
+    conversationIdRef.current = id;
+    updateConversationId(id);
+  }, []);
+
+  const cancelRequest = useCallback(() => {
+    ++sendCountRef.current;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     onDoneRef.current = options.onDone;
@@ -160,42 +181,64 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const groupIntoSessions = useCallback((allMessages: Message[]): ConversationSession[] => {
     if (allMessages.length === 0) return [];
     const GAP_MS = 30 * 60 * 1000;
-    const groups: Message[][] = [[]];
+    const groups = new Map<string, Message[]>();
+    let legacyKey = '';
+    let previousLegacy: Message | undefined;
     for (const msg of allMessages) {
-      const current = groups[groups.length - 1];
-      if (current.length > 0) {
-        const prev = current[current.length - 1];
-        const timeGap = msg.timestamp && prev.timestamp
-          ? new Date(msg.timestamp).getTime() - new Date(prev.timestamp).getTime()
-          : 0;
-        const diffConversation = msg.conversation_id && prev.conversation_id
-          && msg.conversation_id !== prev.conversation_id;
-        if (diffConversation || timeGap > GAP_MS) groups.push([]);
+      if (!msg.conversation_id) {
+        const timeGap = msg.timestamp && previousLegacy?.timestamp
+          ? Date.parse(msg.timestamp) - Date.parse(previousLegacy.timestamp) : 0;
+        if (!legacyKey || timeGap > GAP_MS) {
+          legacyKey = `legacy:${msg.id ?? msg._id ?? msg.timestamp ?? groups.size}`;
+        }
+        previousLegacy = msg;
+      } else {
+        legacyKey = '';
+        previousLegacy = undefined;
       }
-      groups[groups.length - 1].push(msg);
+      const key = msg.conversation_id || legacyKey;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(msg);
     }
-    return groups.map((msgs, i) => {
+    return Array.from(groups, ([key, msgs]) => {
+      if (!sessionIdsRef.current.has(key)) sessionIdsRef.current.set(key, sessionIdsRef.current.size);
       const title = msgs.find(m => m.conversation_title)?.conversation_title || '';
       const firstUser = msgs.find(m => m.role === 'user');
       const label = title || (firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : '对话');
       const lastMsg = msgs[msgs.length - 1];
-      return { id: i, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id, projectId: lastMsg.conversation_project ?? null };
-    });
+      return { id: sessionIdsRef.current.get(key)!, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id, projectId: lastMsg.conversation_project ?? null };
+    }).sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
   }, []);
+
+  // Keep the sidebar snapshot current while sending, before any history refresh.
+  useEffect(() => {
+    ++sessionsRevisionRef.current;
+    if (!messages.length) return;
+    const current = groupIntoSessions(messages.map(message => ({ ...message, conversation_id: conversationId })))[0];
+    current.messages = messages;
+    current.projectId = projectId;
+    setActiveSessionId(current.id);
+    setSessions(previous => {
+      const existing = previous.find(session => session.conversationId === conversationId);
+      const updated = { ...existing, ...current };
+      return [...previous.filter(session => session.conversationId !== conversationId), updated]
+        .sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
+    });
+  }, [messages, conversationId, projectId, groupIntoSessions]);
 
   // ── Session management ──
 
   const handleLoadSession = useCallback((session: ConversationSession) => {
-    setMessages(session.messages);
+    cancelRequest();
+    const id = session.conversationId || session.messages.find(message => message.conversation_id)?.conversation_id || crypto.randomUUID();
+    setConversationId(id);
+    setMessages(session.messages.map(message => ({ ...message, conversation_id: id, visible: true })));
+    setInput('');
     setTaskList(null);
     setActiveSessionId(session.id);
     setProjectId(session.projectId ?? null);
     setSessionOpen(false);
-    const lastMsg = session.messages[session.messages.length - 1];
-    if (lastMsg?.conversation_id) {
-      setConversationId(lastMsg.conversation_id);
-    }
-  }, []);
+  }, [cancelRequest, setConversationId]);
 
   /** 恢复历史消息中 metadata 的 visual 到 toolStep，确保侧栏切换时卡片不消失 */
   const restoreVisualsFromMetadata = useCallback((msgs: Message[]): Message[] => {
@@ -233,18 +276,14 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   const handleRefreshSessions = useCallback(async () => {
     if (!bot) return;
+    const revision = ++sessionsRevisionRef.current;
     try {
       const hRes = await api.get('/ai/history/', { params: { bot_id: bot.id } });
-      if (hRes.data.length > 0) {
-        const allMsgs: Message[] = hRes.data
-          .filter((m: Message) => m.content !== '[Thinking...]')
-          .map((m: Message) => ({
-            ...m,
-            content: m.content as string,
-            visible: true,
-          }));
-        setSessions(groupIntoSessions(restoreVisualsFromMetadata(allMsgs)));
-      }
+      if (revision !== sessionsRevisionRef.current) return;
+      const allMsgs: Message[] = hRes.data
+        .filter((m: Message) => m.content !== '[Thinking...]')
+        .map((m: Message) => ({ ...m, visible: true }));
+      setSessions(groupIntoSessions(restoreVisualsFromMetadata(allMsgs)));
     } catch (e) { console.error('[useAgentConversation] history fetch failed:', e); }
   }, [bot, groupIntoSessions, restoreVisualsFromMetadata]);
 
@@ -252,14 +291,13 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     if (!session.conversationId) return;
     try {
       await api.post('/ai/delete-conversation/', { conversation_id: session.conversationId });
+      ++sessionsRevisionRef.current;
       setSessions(prev => prev.filter(s => s.conversationId !== session.conversationId));
       if (conversationIdRef.current === session.conversationId) {
-        abortRef.current?.abort();
-        timersRef.current.forEach(clearTimeout);
-        timersRef.current = [];
-        setLoading(false);
+        cancelRequest();
         setProjectId(session.projectId ?? null);
         setMessages([]);
+        setInput('');
         setTaskList(null);
         setActiveSessionId(null);
         setConversationId(crypto.randomUUID());
@@ -268,7 +306,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     } catch {
       toast.error('删除失败，请重试');
     }
-  }, []);
+  }, [cancelRequest, setConversationId]);
 
   // ── Auto-scroll ──
 
@@ -291,8 +329,13 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     const controller = new AbortController();
     abortRef.current = controller;
     const currentSend = ++sendCountRef.current;
+    const requestConversationId = conversationIdRef.current;
+    const isCurrent = () => !controller.signal.aborted
+      && currentSend === sendCountRef.current
+      && requestConversationId === conversationIdRef.current;
 
     setLoading(true);
+    setTaskList(null);
 
     let msgId = 0;
     const nextId = () => `msg_${++msgId}_${Date.now()}`;
@@ -300,7 +343,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     let streamingContent = '';
 
     if (!silent) {
-      const userMsg: Message = { _id: nextId(), role: 'user', content: text, timestamp: new Date().toISOString() };
+      const userMsg: Message = { _id: nextId(), role: 'user', content: text, timestamp: new Date().toISOString(), conversation_id: requestConversationId };
       setMessages(prev => [...prev, userMsg]);
     }
     setInput('');
@@ -309,11 +352,12 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       const { url, init } = streamFetch('/api/ai/chat/stream/', {
         message: text,
         bot_id: bot.id,
-        conversation_id: conversationIdRef.current,
+        conversation_id: requestConversationId,
         ...(options.enableProjects ? { project_id: projectIdRef.current } : {}),
         ...(getExtraPayloadRef.current?.() ?? {}),
       }, controller.signal);
       const res = await fetch(url, init);
+      if (!isCurrent()) return;
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -326,8 +370,10 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       const STEP_DELAY_MS = 600;
 
       function scheduleShow(id: string, pos: number) {
+        if (!isCurrent()) return;
         const delay = Math.max(0, pos - shownCount.current) * STEP_DELAY_MS;
         const timerId = window.setTimeout(() => {
+          if (!isCurrent()) return;
           shownCount.current = Math.max(shownCount.current, pos + 1);
           setMessages(prev => prev.map(m => m._id === id ? { ...m, visible: true } : m));
         }, delay);
@@ -336,6 +382,10 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
       while (true) {
         const { done, value } = await reader.read();
+        if (!isCurrent()) {
+          await reader.cancel();
+          return;
+        }
         if (done) break;
 
         leftover += decoder.decode(value, { stream: true });
@@ -365,9 +415,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                 content: payload.content,
                 visible: false,
                 timestamp: new Date().toISOString(),
+                conversation_id: requestConversationId,
               }]);
               // scheduleShow 在 updater 外调用，用 rAF 确保 DOM 更新
               requestAnimationFrame(() => {
+                if (!isCurrent()) return;
                 setMessages(prev => {
                   const pos = prev.findIndex(m => m._id === id);
                   if (pos >= 0) scheduleShow(id, pos);
@@ -401,6 +453,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                     toolStep: step,
                     visible: false,
                     timestamp: new Date().toISOString(),
+                    conversation_id: requestConversationId,
                   }];
                 });
               } else if (step.status === 'succeeded' || step.status === 'failed') {
@@ -457,8 +510,10 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                   metadata: payload.metadata || undefined,
                   visible: false,
                   timestamp: new Date().toISOString(),
+                  conversation_id: requestConversationId,
                 }]);
                 requestAnimationFrame(() => {
+                  if (!isCurrent()) return;
                   setMessages(prev => {
                     const pos = prev.findIndex(m => m._id === id);
                     if (pos >= 0) scheduleShow(id, pos);
@@ -484,17 +539,17 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         }
       }
     } catch (err: unknown) {
+      if (!isCurrent()) return;
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const msg = err instanceof Error ? err.message : '发送失败，请重试';
       toast.error(msg.includes('HTTP') ? '服务暂时不可用，请稍后再试' : '发送失败，请重试');
       setInput(text);
     } finally {
-      // 清除未触发的 scheduleShow 定时器，同时让所有消息立即可见
-      timersRef.current.forEach(clearTimeout);
-      timersRef.current = [];
-      setMessages(prev => prev.map(m => m.visible === false ? { ...m, visible: true } : m));
-      // Only clear loading if no newer request has started
-      if (currentSend === sendCountRef.current) {
+      if (isCurrent()) {
+        // 清除未触发的 scheduleShow 定时器，同时让所有消息立即可见
+        timersRef.current.forEach(clearTimeout);
+        timersRef.current = [];
+        setMessages(prev => prev.map(m => m.visible === false ? { ...m, visible: true } : m));
         setLoading(false);
       }
     }
@@ -505,15 +560,14 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const handleReset = useCallback((notify = true) => {
     setProjectId(null);
     if (!bot) return;
-    if (abortRef.current) abortRef.current.abort();
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
+    cancelRequest();
     setMessages([]);
+    setInput('');
     setTaskList(null);
     setActiveSessionId(null);
     setConversationId(crypto.randomUUID());
     if (notify) toast.success(resetMessage);
-  }, [bot, resetMessage]);
+  }, [bot, resetMessage, cancelRequest, setConversationId]);
 
   const handleSkillSelect = useCallback((prompt: string) => {
     setInput(prompt);
