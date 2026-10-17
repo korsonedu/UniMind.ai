@@ -363,10 +363,7 @@ def _retrieve_candidates(query: str, bot_type: str, top_k: int = 8,
 
 PLANNER_INTENT_MAP = {
     "planning": {
-        "keywords": [
-            "规划", "安排", "计划", "复习", "备考", "学习计划", "日程", "每周", "今天做什么",
-            "背单词", "记单词", "单词", "词汇", "vocabulary",
-        ],
+        "keywords": ["规划", "安排", "计划", "复习", "备考", "学习计划", "日程", "每周", "今天做什么"],
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_due_reviews", "get_user_weak_points", "render_visual",
@@ -647,9 +644,11 @@ def route_tools(
 
     # Stage 2: Workflow Expansion
     workflow_tools = _detect_active_workflow(recent_messages, bot_type)
+    # 通用交互能力不参与业务意图裁剪；仅从已获授权的 all_tools 中保留。
+    interaction_tools = {"render_visual"}
 
     if candidates:
-        merged = set(candidates) | intent_tools | workflow_tools
+        merged = set(candidates) | intent_tools | workflow_tools | interaction_tools
         filtered = [t for t in all_tools if t["function"]["name"] in merged]
         if filtered:
             filtered_names = [t["function"]["name"] for t in filtered]
@@ -660,6 +659,8 @@ def route_tools(
 
     # Fallback: 纯关键词匹配
     result = _keyword_fallback(user_message, all_tools, recent_messages, bot_type)
+    retained_names = {t["function"]["name"] for t in result} | interaction_tools
+    result = [t for t in all_tools if t["function"]["name"] in retained_names]
     result_names = [t["function"]["name"] for t in result]
     has_rv = "render_visual" in result_names
     _dbg.info("route_tools(keyword): msg=%r intent=%s tools=%d→%d render_visual=%s",

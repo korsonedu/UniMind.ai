@@ -607,8 +607,8 @@ def get_planner_tools():
             impl_summary="查询 question 表，按知识点/学科/难度过滤，排除已掌握题目。优先返回 UserQuestionStatus 中 wrong_count>0 的薄弱题，再补充新题。随机抽取，返回题目列表（不含答案）。"),
         _make_tool("get_exam_history", "获取用户的考试成绩历史和趋势。用于评估学习进展。", GET_EXAM_HISTORY_SCHEMA,
             impl_summary="查询 exam_record 表 WHERE user_id=current_user，按 created_at 降序返回最近 N 次考试成绩（分数、科目、日期）。"),
-        _make_tool("render_visual", "在 Dashboard 画布上渲染可视化内容。用于展示数学推导过程、解题步骤、知识图谱、数据统计等需要视觉呈现的内容。纯文字问答不需要调用此工具。", RENDER_VISUAL_SCHEMA,
-            impl_summary="将可视化数据（type + payload）返回给前端，前端根据 type 渲染到 Dashboard 画布。"),
+        _make_tool("render_visual", "在对话中渲染可视化内容和交互选项。需要用户选择目标、方向、强度或补充条件时，使用 action_cards，根据上下文动态填写选项；也支持数学推导、解题步骤、知识图谱和数据统计。纯文字问答无需调用。", RENDER_VISUAL_SCHEMA,
+            impl_summary="将可视化数据（type + payload）返回给前端，内联渲染到对话流。action_cards 的选项内容按当前需求动态生成，reply 点击后发送 action.url 中的消息。"),
         _make_tool("grade_student_answer", "批改学生对某道题的回答。传入题目ID和学生答案，返回评分、反馈、解析、变式题推荐和知识点掌握度。用于模拟考试和练习批改场景。", GRADE_STUDENT_ANSWER_SCHEMA,
             impl_summary="查找题目→GradingEngine.grade 判分→返回 score/feedback/analysis/remediation_questions/kp_breakdown。需要 question_id 和 user_answer。"),
         _make_tool("run_diagnostic", "启动诊断测试。generate 模式返回题目列表和时间限制；submit 模式提交答案，返回评分结果。用于新用户首次评估。", RUN_DIAGNOSTIC_SCHEMA,
@@ -941,6 +941,4 @@ SAVE_SESSION_NOTE_SCHEMA = {
     },
     "required": ["note_text"],
 }
-
-
 
