@@ -1,6 +1,7 @@
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import api, { streamFetch } from '@/lib/api';
+import { upsertChatMessage } from '@/lib/chatMessages';
 // processMathContent removed — LLM outputs LaTeX directly
 import { toast } from 'sonner';
 import {
@@ -295,6 +296,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
     let msgId = 0;
     const nextId = () => `msg_${++msgId}_${Date.now()}`;
+    let streamingId: string | null = null;
+    let streamingContent = '';
 
     if (!silent) {
       const userMsg: Message = { _id: nextId(), role: 'user', content: text, timestamp: new Date().toISOString() };
@@ -344,6 +347,17 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
           try {
             const payload = JSON.parse(line.slice(6));
             if (payload.type === 'message' && payload.content) {
+              if (streamingId) {
+                const id = streamingId;
+                setMessages(prev => upsertChatMessage(prev, {
+                  _id: id, role: 'assistant', content: payload.content,
+                  visible: true, timestamp: new Date().toISOString(),
+                  conversation_id: conversationIdRef.current,
+                }));
+                streamingId = null;
+                streamingContent = '';
+                continue;
+              }
               const id = nextId();
               setMessages(prev => [...prev, {
                 _id: id,
@@ -405,7 +419,15 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                 }
               }
             } else if (payload.type === 'text_delta') {
-              // Ignore streaming text, wait for final done event
+              if (!payload.delta) continue;
+              streamingId ??= nextId();
+              streamingContent += payload.delta;
+              const message: Message & { _id: string } = {
+                _id: streamingId, role: 'assistant', content: streamingContent,
+                visible: true, timestamp: new Date().toISOString(),
+                conversation_id: conversationIdRef.current,
+              };
+              setMessages(prev => upsertChatMessage(prev, message));
             } else if (payload.type === 'error') {
               toast.error(payload.message || 'AI 调用失败');
             } else if (payload.done) {
@@ -413,6 +435,16 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               const finalContent = payload.full_content || '';
               if (payload.is_error) {
                 toast.error(finalContent || 'AI 调用失败');
+              } else if (finalContent && streamingId) {
+                const id = streamingId;
+                setMessages(prev => upsertChatMessage(prev, {
+                  _id: id, id: payload.message_id, role: 'assistant',
+                  content: finalContent, visible: true,
+                  conversation_title: payload.conversation_title || undefined,
+                  metadata: payload.metadata || undefined,
+                }));
+                streamingId = null;
+                streamingContent = '';
               } else if (finalContent) {
                 // 最终消息也通过 scheduleShow 排队，确保出现在中间消息和 tool steps 之后
                 const id = nextId();

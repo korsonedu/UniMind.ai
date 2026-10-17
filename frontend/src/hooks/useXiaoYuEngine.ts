@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import api, { streamFetch } from '@/lib/api';
+import { upsertChatMessage } from '@/lib/chatMessages';
 import { toast } from 'sonner';
 import type { XiaoYuMessage } from '@/store/useXiaoYuStore';
 import type { Bot } from '@/types/api';
@@ -61,6 +62,8 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
 
     let msgId = 0;
     const nextId = () => `msg_${++msgId}_${Date.now()}`;
+    let streamingId: string | null = null;
+    let streamingContent = '';
 
     // Add user message
     const userMsg = {
@@ -119,6 +122,16 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
             const payload = JSON.parse(line.slice(6));
 
             if (payload.type === 'message' && payload.content) {
+              if (streamingId) {
+                const id = streamingId;
+                setMessages((prev: XiaoYuMessage[]) => upsertChatMessage(prev, {
+                  _id: id, role: 'assistant', content: payload.content,
+                  visible: true, timestamp: new Date().toISOString(),
+                }));
+                streamingId = null;
+                streamingContent = '';
+                continue;
+              }
               const id = nextId();
               setMessages((prev: XiaoYuMessage[]) => [
                 ...prev,
@@ -155,12 +168,31 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                   };
                 },
               ));
+            } else if (payload.type === 'text_delta') {
+              if (!payload.delta) continue;
+              streamingId ??= nextId();
+              streamingContent += payload.delta;
+              const message: XiaoYuMessage = {
+                _id: streamingId, role: 'assistant', content: streamingContent,
+                visible: true, timestamp: new Date().toISOString(),
+              };
+              setMessages((prev: XiaoYuMessage[]) => upsertChatMessage(prev, message));
             } else if (payload.type === 'error') {
               toast.error(payload.message || 'AI 调用失败');
             } else if (payload.done) {
               const finalContent = payload.full_content || '';
               if (payload.is_error) {
                 toast.error(finalContent || 'AI 调用失败');
+              } else if (finalContent && streamingId) {
+                const id = streamingId;
+                setMessages((prev: XiaoYuMessage[]) => upsertChatMessage(prev, {
+                  _id: id, id: payload.message_id, role: 'assistant',
+                  content: finalContent, visible: true, timestamp: new Date().toISOString(),
+                  conversation_title: payload.conversation_title || undefined,
+                  metadata: payload.metadata || undefined,
+                }));
+                streamingId = null;
+                streamingContent = '';
               } else if (finalContent) {
                 const id = nextId();
                 setMessages((prev: XiaoYuMessage[]) => [
