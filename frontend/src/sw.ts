@@ -1,11 +1,15 @@
 /// <reference lib="WebWorker" />
 
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { clientsClaim } from 'workbox-core';
 import { registerRoute } from 'workbox-routing';
 import { NetworkFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Parameters<typeof precacheAndRoute>[0] };
+
+self.skipWaiting();
+clientsClaim();
 
 // Precache
 cleanupOutdatedCaches();

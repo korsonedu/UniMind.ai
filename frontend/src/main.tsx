@@ -7,8 +7,10 @@ import './styles/course-workspace.css'
 import './styles/course-portal.css'
 import './styles/disclosure.css'
 import { initializeSystemAppearance } from './store/useSystemStore'
+import { registerSW } from 'virtual:pwa-register'
 
 initializeSystemAppearance()
+registerSW({ immediate: true })
 
 async function start() {
   const params = new URLSearchParams(location.search)

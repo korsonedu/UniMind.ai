@@ -9,12 +9,14 @@ import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { Warning, Spinner } from '@phosphor-icons/react';
 
 import api from '@/lib/api';
+import { getReturnTo, getLoginPath } from '@/lib/routing';
 
 export const VerifyCode: React.FC = () => {
   const [searchParams] = useSearchParams();
   const email = searchParams.get('email') || '';
   const institutionSlug = searchParams.get('institution') || '';
   const institutionRole = searchParams.get('role') || 'student';
+  const returnTo = getReturnTo(searchParams.get('next'));
 
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,8 +37,8 @@ export const VerifyCode: React.FC = () => {
 
 
   useEffect(() => {
-    if (!email) navigate('/login', { replace: true });
-  }, [email, navigate]);
+    if (!email) navigate(getLoginPath(returnTo), { replace: true });
+  }, [email, navigate, returnTo]);
 
   const handleLogin = async (otp: string) => {
     setLoading(true);
@@ -54,7 +56,7 @@ export const VerifyCode: React.FC = () => {
         } catch (err) { console.error('Join institution after code login failed:', err); }
       }
       await fetchFeatures();
-      navigate('/');
+      navigate(returnTo, { replace: true });
     } catch (err: unknown) {
       setCode('');
       setError(formatApiErrorToast(err, '验证码错误，请重试'));

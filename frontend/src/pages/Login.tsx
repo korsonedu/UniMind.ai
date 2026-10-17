@@ -9,6 +9,7 @@ import { Warning, Spinner } from '@phosphor-icons/react';
 
 import api from '@/lib/api';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
+import { getReturnTo } from '@/lib/routing';
 
 type LoginTab = 'password' | 'code';
 
@@ -24,11 +25,12 @@ export const Login: React.FC = () => {
   const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const returnTo = getReturnTo(searchParams.get('next'));
 
   useEffect(() => {
     const { user } = useAuthStore.getState();
-    if (user) navigate('/', { replace: true });
-  }, [navigate]);
+    if (user) navigate(returnTo, { replace: true });
+  }, [navigate, returnTo]);
 
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -46,6 +48,11 @@ export const Login: React.FC = () => {
   };
   const institutionSlug = getInstitutionSlug();
   const institutionRole = getInstitutionRole();
+  const registerParams = new URLSearchParams({ next: returnTo });
+  if (institutionSlug) {
+    registerParams.set('institution', institutionSlug);
+    registerParams.set('role', institutionRole);
+  }
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +72,7 @@ export const Login: React.FC = () => {
         } catch (err) { console.error('Join institution after login failed:', err); }
       }
       await fetchFeatures();
-      navigate('/');
+      navigate(returnTo, { replace: true });
     } catch (err: unknown) {
       setError(formatApiErrorToast(err, '登录失败'));
     } finally {
@@ -85,7 +92,10 @@ export const Login: React.FC = () => {
     setError('');
     try {
       await api.post('/users/send-verification-code/', { email, purpose: 'login_by_code' });
-      navigate(`/verify-code?email=${encodeURIComponent(email)}&purpose=login_by_code${institutionSlug ? `&institution=${institutionSlug}&role=${institutionRole}` : ''}`);
+      const params = new URLSearchParams(registerParams);
+      params.set('email', email);
+      params.set('purpose', 'login_by_code');
+      navigate(`/verify-code?${params}`);
     } catch (err: unknown) {
       setError(formatApiErrorToast(err, '发送失败，请稍后重试'));
       setSendingCode(false);
@@ -101,7 +111,7 @@ export const Login: React.FC = () => {
           <p className="text-sm text-[#6E6E73] dark:text-white/40">
             没有账号？
             <Link
-              to={institutionSlug ? `/register?institution=${institutionSlug}` : '/register'}
+              to={`/register?${registerParams}`}
               className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-1"
             >
               注册

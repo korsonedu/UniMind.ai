@@ -1,9 +1,10 @@
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
+import { HOME_PATH, getLoginPath } from '@/lib/routing';
 import { useStudyRoomWs } from '@/hooks/useStudyRoomWs';
 import { useXiaoYuEngine } from '@/hooks/useXiaoYuEngine';
 import { FEATURES } from './store/useInstitutionStore';
@@ -84,6 +85,7 @@ const PageLoader = () => (
 // Auth Guard — RootRedirect already handles auth validation; here we just gate.
 const RequireAuth = ({ children }: { children: ReactNode }) => {
   const user = useAuthStore(s => s.user);
+  const location = useLocation();
   const { theme, setTheme } = useSystemStore();
 
   useEffect(() => {
@@ -99,11 +101,37 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
     }
   }, [user, theme, setTheme]);
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
   return children;
 };
 
-const HomeRedirect = () => <Navigate to="/xiaoyu" replace />;
+const HomeRedirect = () => <Navigate to={HOME_PATH} replace />;
+
+const LegacyRedirect = ({ to }: { to: string }) => {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: to, search, hash }} replace />;
+};
+
+const legacyRoutes = [
+  ['workbench/*', HOME_PATH],
+  ['assets/*', HOME_PATH],
+  ['knowledge-tree/*', HOME_PATH],
+  ['knowledge-map/*', HOME_PATH],
+  ['learning-products/*', HOME_PATH],
+  ['articles/*', HOME_PATH],
+  ['article/*', HOME_PATH],
+  ['management/*', HOME_PATH],
+  ['institution/*', HOME_PATH],
+  ['api-platform/*', HOME_PATH],
+  ['invite-codes/*', HOME_PATH],
+  ['prompt-templates/*', HOME_PATH],
+  ['platform/*', HOME_PATH],
+  ['platform-analytics/*', HOME_PATH],
+  ['questions/*', '/tests'],
+  ['courses/manage/*', '/courses'],
+  ['marketplace/*', '/courses'],
+  ['system-settings/*', '/settings'],
+];
 
 const RootRedirect = () => {
 
@@ -111,6 +139,7 @@ const RootRedirect = () => {
   const logout = useAuthStore(s => s.logout);
   const hasHydrated = useAuthStore.persist.hasHydrated();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { data: userData, isLoading, isError } = useQuery({
     queryKey: queryKeys.user.me,
@@ -128,16 +157,19 @@ const RootRedirect = () => {
   useEffect(() => {
     if (!isError) return;
     logout();
+    if (location.pathname !== '/') return;
     api.get('/users/check-invite/')
       .then(res => {
         if (res.data?.has_invite) navigate('/register', { replace: true });
       })
       .catch(() => {});
-  }, [isError, logout, navigate]);
+  }, [isError, logout, navigate, location.pathname]);
 
   if (!hasHydrated || isLoading) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
   if (userData) return <Outlet />;
+
+  if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
 
   return <Suspense fallback={<PageLoader />}><Landing /></Suspense>;
 };
@@ -149,6 +181,7 @@ const lazyPage = (Component: React.ComponentType) => (
 );
 
 const router = createBrowserRouter([
+  ...legacyRoutes.map(([path, to]) => ({ path, element: <LegacyRedirect to={to} /> })),
   {
     path: "/",
     element: <RootRedirect />,
@@ -158,10 +191,6 @@ const router = createBrowserRouter([
         element: <RequireAuth><Suspense fallback={<PageLoader />}><MainLayout /></Suspense></RequireAuth>,
         children: [
           { path: "courses", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
-          { path: "courses/manage", element: <Navigate to="/courses" replace /> },
-          { path: "learning-products", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "articles", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "articles/manage", element: <Navigate to="/xiaoyu" replace /> },
           {
             element: lazyPage(CommunityLayout),
             children: [
@@ -171,32 +200,18 @@ const router = createBrowserRouter([
               { path: "study", element: <FeatureGuard feature={FEATURES.STUDY_ROOM}>{lazyPage(StudyRoom)}</FeatureGuard> },
             ],
           },
-          { path: "article/:id", element: <Navigate to="/xiaoyu" replace /> },
           { path: "tests", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestLadder)}</FeatureGuard> },
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
           { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{lazyPage(XiaoYu)}</FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
-          { path: "knowledge-map/*", element: <Navigate to="/xiaoyu" replace /> },
           { path: "settings", element: lazyPage(Settings) },
           { path: "billing", element: lazyPage(BillingPage) },
-          { path: "system-settings", element: <Navigate to="/settings" replace /> },
-          { path: "management", element: <Navigate to="/xiaoyu" replace /> },
           { path: "course/:id", element: <FeatureGuard feature={FEATURES.COURSE_VIDEO}>{lazyPage(CourseCenter)}</FeatureGuard> },
           { path: "tests/review", element: <FeatureGuard feature={FEATURES.WRONG_REVIEW}>{lazyPage(WrongQuestionReviewPage)}</FeatureGuard> },
           { path: "achievements", element: lazyPage(Achievements) },
 
           { path: "report-card", element: <FeatureGuard feature={FEATURES.FULL_REPORT}>{lazyPage(ReportCard)}</FeatureGuard> },
 
-          { path: "workbench", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "assets", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "knowledge-tree", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "questions", element: <Navigate to="/tests" replace /> },
-          { path: "institution/*", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "marketplace", element: <Navigate to="/courses" replace /> },
-          { path: "api-platform", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "invite-codes", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "prompt-templates", element: <Navigate to="/xiaoyu" replace /> },
-          { path: "platform", element: <Navigate to="/xiaoyu" replace /> },
           { path: "*", element: lazyPage(NotFound) },
         ],
       },

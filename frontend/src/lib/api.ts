@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getLoginPath } from './routing';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
@@ -26,9 +27,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && error.config?.url !== '/users/login/' && error.config?.url !== '/users/login-by-code/') {
       localStorage.removeItem('auth-storage');
       window.dispatchEvent(new Event('auth:logout'));
-      // Redirect to root — RootRedirect will show landing page
-      if (window.location.pathname !== '/') {
-        window.location.href = '/';
+      // The root identity check renders Landing or the login redirect itself.
+      if (error.config?.url !== '/users/me/'
+        && !['/', '/login', '/register', '/verify-code', '/account-callback'].includes(window.location.pathname)) {
+        window.location.replace(getLoginPath(window.location.pathname + window.location.search + window.location.hash));
       }
       return Promise.reject(error);
     }

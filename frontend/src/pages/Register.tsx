@@ -9,6 +9,7 @@ import { Warning } from '@phosphor-icons/react';
 
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
+import { getReturnTo } from '@/lib/routing';
 
 export const Register: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -23,16 +24,17 @@ export const Register: React.FC = () => {
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = getReturnTo(searchParams.get('next'));
 
   useEffect(() => {
     const { user } = useAuthStore.getState();
-    if (user) navigate('/', { replace: true });
-  }, [navigate]);
+    if (user) navigate(returnTo, { replace: true });
+  }, [navigate, returnTo]);
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
-  const [searchParams] = useSearchParams();
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
     if (fromParam) return fromParam;
@@ -41,6 +43,8 @@ export const Register: React.FC = () => {
     return '';
   };
   const getInstitutionRole = (): string => {
+    const fromParam = searchParams.get('role');
+    if (fromParam) return fromParam;
     const cookie = document.cookie.split('; ').find(r => r.startsWith('institution_invite_role='));
     if (cookie) return cookie.split('=')[1];
     return 'student';
@@ -48,6 +52,11 @@ export const Register: React.FC = () => {
   const institutionSlug = getInstitutionSlug();
   const institutionRole = getInstitutionRole();
   const refCode = searchParams.get('ref') || '';
+  const loginParams = new URLSearchParams({ next: returnTo });
+  if (institutionSlug) {
+    loginParams.set('institution', institutionSlug);
+    loginParams.set('role', institutionRole);
+  }
 
   const handleSendCode = async () => {
     if (!email.trim() || countdown > 0) return;
@@ -77,7 +86,7 @@ export const Register: React.FC = () => {
     setError('');
     try {
       await api.post('/users/register/', { email, code, nickname, password, agreed_to_terms: agreedToTerms, referral_code: refCode });
-      navigate(institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login');
+      navigate(`/login?${loginParams}`);
     } catch (err: unknown) {
       setError(formatApiErrorToast(err, '注册失败'));
     } finally {
@@ -93,7 +102,7 @@ export const Register: React.FC = () => {
         <p className="text-sm text-[#6E6E73] dark:text-white/40">
           已有账号？
           <Link
-            to={institutionSlug ? `/login?institution=${institutionSlug}&role=${institutionRole}` : '/login'}
+            to={`/login?${loginParams}`}
             className="text-[#1D1D1F] dark:text-white font-medium hover:underline ml-1"
           >
             登录
