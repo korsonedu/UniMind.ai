@@ -45,7 +45,7 @@ class MemorySystem:
 
         # 收集所有有 review 记录的题目，在 Python 层计算固定间隔是否到期
         all_statuses = UserQuestionStatus.objects.filter(
-            user=user, is_active=True
+            user=user
         ).select_related('question__knowledge_point').order_by('last_review')
 
         due_list = []
@@ -278,8 +278,7 @@ class MemorySystem:
         subject = (subject or '').strip()
 
         qs = UserQuestionStatus.objects.filter(
-            user=user,
-            is_active=True
+            user=user
         ).select_related('question__knowledge_point')
 
         if institution:
