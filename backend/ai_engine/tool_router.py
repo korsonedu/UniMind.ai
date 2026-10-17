@@ -363,7 +363,10 @@ def _retrieve_candidates(query: str, bot_type: str, top_k: int = 8,
 
 PLANNER_INTENT_MAP = {
     "planning": {
-        "keywords": ["规划", "安排", "计划", "复习", "备考", "学习计划", "日程", "每周", "今天做什么"],
+        "keywords": [
+            "规划", "安排", "计划", "复习", "备考", "学习计划", "日程", "每周", "今天做什么",
+            "背单词", "记单词", "单词", "词汇", "vocabulary",
+        ],
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
             "get_due_reviews", "get_user_weak_points", "render_visual",
@@ -539,7 +542,7 @@ def classify_intent(user_message: str, recent_messages: List[Dict[str, str]] = N
     """分类用户意图：LLM 优先，关键词匹配保底。"""
     # LLM 优先
     result = _classify_intent_llm(user_message, bot_type)
-    if result:
+    if result and result != "general":
         return result
 
     # 关键词保底
@@ -560,7 +563,7 @@ def classify_intent(user_message: str, recent_messages: List[Dict[str, str]] = N
                 if kw in context_text:
                     return intent
 
-    return "general"
+    return result or "general"
 
 
 def _keyword_fallback(user_message: str, all_tools: List[dict],
