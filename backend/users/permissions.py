@@ -20,45 +20,48 @@ ADMIN_CAPABILITIES = [
 
 # Frontend/backed can share this matrix payload as single source of truth.
 ROLE_PERMISSION_MATRIX = {
-    "student": [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS],
+    "student": [CAP_MEMBER_ACCESS, "ai.assistant"],
     "member": [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS],
     "admin": [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *ADMIN_CAPABILITIES],
 }
 
 
 def is_platform_admin(user) -> bool:
-    """超级管理员：is_superuser + 无机构（Layer 1），与 CLAUDE.md 设计一致。"""
-    return bool(
-        user
-        and user.is_authenticated
-        and getattr(user, "is_superuser", False)
-        and user.institution_id is None
-    )
+    """仅两名桥接映射操作者可使用既有平台超管权限。"""
+    if not (user and user.is_authenticated and user.is_active
+            and getattr(user, 'is_staff', False) and getattr(user, 'is_superuser', False)
+            and getattr(user, 'institution_id', None) is None):
+        return False
+    from django.conf import settings
+    import json
+    from uuid import UUID
+    mapping = getattr(settings, 'UNIMIND_DIRECTUS_ADMIN_MAP', {})
+    try:
+        mapping = json.loads(mapping) if isinstance(mapping, str) else mapping
+        if not isinstance(mapping, dict) or len(mapping) != 2:
+            return False
+        for actor in mapping:
+            UUID(actor)
+        return (len(mapping) == 2
+                and len(set(mapping.values())) == 2
+                and all(isinstance(pk, int) and not isinstance(pk, bool) and pk > 0
+                        for pk in mapping.values())
+                and user.pk in mapping.values())
+    except (ValueError, TypeError, AttributeError):
+        return False
 
 
 def is_institution_admin(user) -> bool:
-    """机构管理员：owner 或 teacher。"""
-    return bool(
-        user
-        and user.is_authenticated
-        and user.institution is not None
-        and user.institution_role in ('owner', 'teacher')
-    )
+    """兼容旧调用；历史机构角色不再授予后台权限。"""
+    return is_platform_admin(user)
 
 
 def is_institution_owner(user) -> bool:
-    """机构所有者：仅 owner。"""
-    return bool(
-        user
-        and user.is_authenticated
-        and user.institution is not None
-        and user.institution_role == 'owner'
-    )
+    return is_platform_admin(user)
 
 
 def is_institution_teacher(user) -> bool:
-    """机构教师权限：owner 或 teacher（owner 包含 teacher 所有权限）。"""
-    return is_institution_admin(user)
+    return is_platform_admin(user)
 
 
 def is_member_or_admin(user) -> bool:
@@ -66,13 +69,16 @@ def is_member_or_admin(user) -> bool:
 
 
 def get_user_capabilities(user) -> list[str]:
-    if not user or not user.is_authenticated:
+    if not user or not user.is_authenticated or not user.is_active:
         return []
 
-    from .learning import LEARNING_FEATURES
-    caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *LEARNING_FEATURES]
+    from .learning import LEARNING_FEATURES, is_course_student
+    caps = [CAP_MEMBER_ACCESS, 'ai.assistant']
+    if is_platform_admin(user) or is_course_student(user):
+        caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *LEARNING_FEATURES]
     if is_platform_admin(user):
         caps.extend(ADMIN_CAPABILITIES)
+    allowed_caps = set(caps)
 
     # Superuser 人员管理扩展：读取用户访问档案中的权限组与自定义权限。
     profile = getattr(user, "access_profile", None)
@@ -81,14 +87,14 @@ def get_user_capabilities(user) -> list[str]:
             for group in profile.permission_groups.filter(is_active=True):
                 for cap in (group.permissions or []):
                     cap_str = str(cap).strip()
-                    if cap_str:
+                    if cap_str in allowed_caps:
                         caps.append(cap_str)
         except Exception:
             logger.exception("加载权限组失败: user=%s", user.id)
 
         for cap in (profile.extra_permissions or []):
             cap_str = str(cap).strip()
-            if cap_str:
+            if cap_str in allowed_caps:
                 caps.append(cap_str)
 
         blocked = {str(cap).strip() for cap in (profile.blocked_permissions or []) if str(cap).strip()}
@@ -117,19 +123,8 @@ class IsPlatformAdmin(permissions.BasePermission):
         return is_platform_admin(request.user)
 
 
-class IsAdmin(permissions.BasePermission):
-    """管理端用户：平台超管（Layer 1）或机构管理者（Layer 2/3: owner / teacher）。
-    注意：此权限不区分 Layer 2（owner）和 Layer 3（teacher）。
-    如需严格区分，请使用 IsInstitutionOwner / IsInstitutionTeacher。"""
-    message = "需要管理员权限。"
-
-    def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        if is_platform_admin(user):
-            return True
-        return (user.institution is not None and user.institution_role in ('owner', 'teacher'))
+class IsAdmin(IsPlatformAdmin):
+    """仅既有平台管理员可进入管理端。"""
 
 
 class IsMember(permissions.BasePermission):
@@ -148,6 +143,8 @@ class HasStudentFeature(permissions.BasePermission):
     def has_permission(self, request, view):
         from .feature_access import has_learning_feature, request_feature
         feature = request_feature(request)
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
+            return False
         return not feature or has_learning_feature(request.user, feature)
 
 
@@ -169,48 +166,20 @@ class IsAdminWriteMemberRead(permissions.BasePermission):
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
-            return is_member_or_admin(request.user)
-        return is_platform_admin(request.user) or is_institution_admin(request.user)
+            return IsMember().has_permission(request, view)
+        return is_platform_admin(request.user)
 
 
-class IsInstitutionAdmin(permissions.BasePermission):
-    """机构管理员权限（owner、teacher）"""
-    message = "需要机构管理员权限。"
-
-    def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        # 平台管理员预览模式：直接放行
-        if request.query_params.get('preview_institution') and is_platform_admin(user):
-            return True
-        return (user.institution is not None
-                and user.institution_role in ('owner', 'teacher'))
+class IsInstitutionAdmin(IsPlatformAdmin):
+    """旧权限名兼容，权限仅授予平台管理员。"""
 
 
-class IsInstitutionTeacher(permissions.BasePermission):
-    """机构教师权限（owner 或 teacher）"""
-    message = "需要机构教师权限。"
-
-    def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        if request.query_params.get('preview_institution') and is_platform_admin(user):
-            return True
-        return (user.institution is not None
-                and user.institution_role in ('owner', 'teacher'))
+class IsInstitutionTeacher(IsPlatformAdmin):
+    pass
 
 
-class IsInstitutionOwner(permissions.BasePermission):
-    """机构所有者权限（仅 owner，teacher 不可）"""
-    message = "仅机构所有者可执行此操作。"
-
-    def has_permission(self, request, view):
-        user = request.user
-        return (user and user.is_authenticated
-                and user.institution is not None
-                and user.institution_role == 'owner')
+class IsInstitutionOwner(IsPlatformAdmin):
+    pass
 
 
 class IsInstitutionActive(permissions.BasePermission):
@@ -237,7 +206,7 @@ class HasPlanFeature(permissions.BasePermission):
     方案来源：超管 → enterprise；有机构 → institution.get_effective_plan()；
     无机构 → personal_plan（默认 free）。
     """
-    message = "当前版本不支持此功能，请升级。"
+    message = "当前账号未开放此功能，请联系管理员。"
 
     def has_permission(self, request, view):
         user = request.user
@@ -250,22 +219,11 @@ class HasPlanFeature(permissions.BasePermission):
         if required in LEARNING_FEATURES:
             from .feature_access import has_learning_feature
             return has_learning_feature(user, required)
-        from users.models import get_effective_plan_for_user, get_plan_features
-        return required in get_plan_features(get_effective_plan_for_user(user))
+        return is_platform_admin(user)
 
 
-class IsInstitutionMember(permissions.BasePermission):
-    """属于某个机构的成员"""
-    message = "需要机构成员身份。"
-
-    def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        # 平台管理员预览模式：直接放行
-        if request.query_params.get('preview_institution') and is_platform_admin(user):
-            return True
-        return user.institution is not None
+class IsInstitutionMember(IsPlatformAdmin):
+    """旧机构管理接口仅保留管理员访问。"""
 
 
 class HasQuota(permissions.BasePermission):
@@ -284,11 +242,7 @@ class HasQuota(permissions.BasePermission):
         if resource is None:
             return True
         if resource == 'ai_call_total':
-            from users.learning import usage_info
-            info = usage_info(user)
-            if info['limit'] is not None and info['used'] >= info['limit']:
-                self.message = '本月 AI 额度已用完，可在学习服务中查看可用权益。'
-                return False
+            # 问答预留负责余额与重放校验；此处不能拦截已成功请求的幂等重试。
             return True
         from users.quota import check_quota, get_quota_message
         if not check_quota(user.institution, resource):

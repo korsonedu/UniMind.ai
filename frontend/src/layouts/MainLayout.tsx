@@ -118,7 +118,7 @@ export const MainLayout: React.FC = () => {
         <DropdownMenuLabel className="px-3 py-2 text-xs font-medium text-muted-foreground">{user.nickname || user.username}</DropdownMenuLabel>
         {[
           { to: '/settings', icon: UserIcon, label: '个人设置' },
-          { to: '/billing', icon: CreditCard, label: '学习服务与账单' },
+          { to: '/billing', icon: CreditCard, label: '我的服务' },
           { to: '/achievements', icon: Trophy, label: '成就' },
         ].map(item => <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><item.icon className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">{item.label}</span></DropdownMenuItem>)}
         <DropdownMenuItem onClick={() => window.dispatchEvent(new Event('open-weekly-report'))} className="rounded-lg px-3 py-2 gap-3 cursor-pointer"><ChartBar className="h-3.5 w-3.5" /><span className="font-medium text-[13px]">周报</span></DropdownMenuItem>

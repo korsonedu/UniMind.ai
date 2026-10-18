@@ -20,9 +20,7 @@ def content_institution(required=False):
 
 
 def managed(queryset):
-    if settings.UNIMIND_CONTENT_INSTITUTION_ID:
-        return queryset.filter(institution=content_institution())
-    return queryset
+    return queryset.filter(institution=content_institution(required=True))
 
 
 def identity(data, field='id'):

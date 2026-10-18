@@ -10,6 +10,7 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import Question, UserQuestionStatus, KnowledgePoint
+from core.utils import apply_institution_filter, get_content_institution
 from quizzes.serializers import QuestionSerializer, QuestionListSerializer
 from users.views import IsMember
 from users.models import User
@@ -49,6 +50,14 @@ def _get_descendant_kp_ids(sub_ids):
 class QuestionListView(generics.ListCreateAPIView):
     quota_resource = 'question'
 
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        if self.request.method in ('POST', 'PUT', 'PATCH'):
+            serializer.fields['knowledge_point'].queryset = apply_institution_filter(
+                KnowledgePoint.objects.filter(level='kp'), self.request.user, self.request)
+            serializer.fields['institution'].read_only = True
+        return serializer
+
     def get_serializer_class(self):
         if self.request.method == 'POST':
             return QuestionSerializer  # 管理员创建题目需要完整字段
@@ -63,20 +72,7 @@ class QuestionListView(generics.ListCreateAPIView):
         user = self.request.user
         qs = Question.objects.all().order_by('-created_at')
 
-        # 预览模式：平台管理员查看指定机构题库
-        preview_inst_id = self.request.query_params.get('preview_institution')
-        if preview_inst_id:
-            if not is_platform_admin(user):
-                qs = qs.filter(institution__isnull=True)
-            else:
-                qs = qs.filter(institution_id=preview_inst_id)
-        else:
-            # 机构数据隔离：机构成员可见本机构题库 + 全局题库；独立用户仅见全局题库
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(institution=inst)
-            else:
-                qs = qs.filter(institution__isnull=True)
+        qs = apply_institution_filter(qs, user, self.request)
 
         # Shared filters
         q = self.request.query_params.get('search')
@@ -188,7 +184,7 @@ class QuestionListView(generics.ListCreateAPIView):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        question = serializer.save(institution=self.request.user.institution)
+        question = serializer.save(institution=get_content_institution())
         if not question.ai_answer:
             self.generate_ai_answer(question)
 
@@ -204,16 +200,22 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = QuestionSerializer
     permission_classes = [IsAdmin]
 
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        if self.request.method in ('POST', 'PUT', 'PATCH'):
+            serializer.fields['knowledge_point'].queryset = apply_institution_filter(
+                KnowledgePoint.objects.filter(level='kp'), self.request.user, self.request)
+            serializer.fields['institution'].read_only = True
+        return serializer
+
     def get_queryset(self):
         user = self.request.user
         qs = super().get_queryset()
-        if not is_platform_admin(user):
-            inst = getattr(user, 'institution', None)
-            if inst:
-                qs = qs.filter(institution=inst)
-            else:
-                qs = qs.filter(institution__isnull=True)
+        qs = apply_institution_filter(qs, user, self.request)
         return qs
+
+    def perform_update(self, serializer):
+        serializer.save(institution=get_content_institution())
 
 
 class AdminQuestionListView(APIView):
@@ -227,12 +229,7 @@ class AdminQuestionListView(APIView):
         from users.permissions import is_platform_admin
 
         qs = Question.objects.select_related('knowledge_point').order_by('-created_at')
-        if not is_platform_admin(request.user):
-            inst = getattr(request.user, 'institution', None)
-            if inst:
-                qs = qs.filter(institution=inst)
-            else:
-                qs = qs.filter(institution__isnull=True)
+        qs = apply_institution_filter(qs, request.user, request)
 
         # 过滤条件
         search = request.query_params.get('search', '').strip()

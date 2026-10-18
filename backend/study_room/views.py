@@ -12,7 +12,7 @@ from users.models import DailyPlan
 from .serializers import ChatMessageSerializer
 from users.views import IsMember
 from core.rate_limit import rate_limit
-from core.utils import apply_institution_filter
+from core.utils import apply_institution_filter, get_content_institution
 
 
 def _task_state_message_q() -> Q:
@@ -45,7 +45,7 @@ class ChatMessageListView(generics.ListCreateAPIView):
                 pass
 
         serializer.save(user=self.request.user, related_plan=related_plan,
-                        institution=self.request.user.institution)
+                        institution=get_content_institution())
 
 class UndoBroadcastView(APIView):
     permission_classes = [IsMember]

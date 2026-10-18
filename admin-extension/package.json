@@ -17,7 +17,7 @@
     ],
     "host": "^12.4.1"
   },
-  "dependencies": {"vue": "^3.5.22", "lucide-vue-next": "^0.468.0"},
+  "dependencies": {"vue": "^3.5.22", "vue-router": "^4.6.3", "lucide-vue-next": "^0.468.0"},
   "devDependencies": {
     "@directus/extensions-sdk": "18.0.6",
     "@directus/types": "18.0.0",

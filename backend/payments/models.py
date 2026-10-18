@@ -19,8 +19,9 @@ class Order(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
     institution = models.ForeignKey('users.Institution', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
-    plan = models.CharField(max_length=20, choices=[('learning', '个人学习服务'), ('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise')])
+    plan = models.CharField(max_length=20, choices=[('ai_addon', 'AI 加量'), ('learning', '个人学习服务'), ('starter', 'Starter'), ('growth', 'Growth'), ('enterprise', 'Enterprise')])
     product = models.ForeignKey('users.LearningProduct', on_delete=models.PROTECT, null=True, blank=True, related_name='orders')
+    ai_addon_product = models.ForeignKey('users.AIAddonProduct', on_delete=models.PROTECT, null=True, blank=True, related_name='orders')
     entitlement_snapshot = models.JSONField(default=dict)
     billing_cycle = models.CharField(max_length=10, choices=BILLING_CHOICES)
     amount_cents = models.IntegerField(verbose_name='金额（分）')

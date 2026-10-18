@@ -33,12 +33,12 @@ export function Checkout() {
     } catch (error) { setError(formatApiErrorToast(error, '创建订单失败，请重试')); setPaying(false); }
   };
   return <main className="min-h-dvh px-5 py-12 bg-background"><div className="max-w-xl mx-auto space-y-7">
-    <Link to="/pricing" className="text-sm text-muted-foreground">返回学习服务</Link>
-    <h1 className="text-2xl font-semibold">确认购买</h1>
+    <Link to="/pricing" className="text-sm text-muted-foreground">返回 AI 加量</Link>
+    <h1 className="text-2xl font-semibold">确认购买 AI 加量</h1>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    {!catalog ? <p role="status">正在加载…</p> : !product ? <p>该服务尚未上架或已下架，请返回选择其他服务。</p> : <>
-      <section className="border-y py-6 space-y-4"><h2 className="text-xl font-medium">{product.name}</h2><p className="text-muted-foreground whitespace-pre-wrap">{product.description}</p><p>{product.duration_days} 天有效 · 每月 {product.monthly_ai_calls} 次 AI 对话</p>{product.module_names.length > 0 && <p className="text-sm">课程模块：{product.module_names.join('、')}</p>}<p className="text-2xl">{learningPrice(product.price_cents)}</p></section>
-      {catalog.payment_methods.length ? <><fieldset className="space-y-3"><legend className="text-sm mb-3">支付方式</legend>{catalog.payment_methods.map(method => <label key={method} className="flex items-center gap-2"><input type="radio" name="gateway" value={method} checked={gateway === method} onChange={() => setGateway(method)} />{method === 'alipay' ? '支付宝' : '开发环境模拟支付'}</label>)}</fieldset><p className="text-sm text-muted-foreground">本次为一次性购买，不会自动续费。</p><Button disabled={paying || !gateway} onClick={() => { void pay(); }}>{paying ? '正在创建订单…' : '确认支付'}</Button></> : <p className="text-sm text-muted-foreground">在线支付暂未开通，请稍后再试。</p>}
+    {!catalog ? <p role="status">正在加载…</p> : !product ? <p>该加量尚未上架或已下架。次数、价格和有效期确认后才可购买。</p> : <>
+      <section className="border-y py-6 space-y-4"><h2 className="text-xl font-medium">{product.name}</h2><p className="text-muted-foreground whitespace-pre-wrap">{product.description}</p><p>额外 {product.ai_calls} 次问答 · 支付后 {product.validity_days} 天有效</p><p className="text-2xl">{learningPrice(product.price_cents)}</p></section>
+      {catalog.payment_methods.length ? <><fieldset className="space-y-3"><legend className="text-sm mb-3">支付方式</legend>{catalog.payment_methods.map(method => <label key={method} className="flex items-center gap-2"><input type="radio" name="gateway" value={method} checked={gateway === method} onChange={() => setGateway(method)} />{method === 'alipay' ? '支付宝' : '开发环境模拟支付'}</label>)}</fieldset><p className="text-sm text-muted-foreground">本次为一次性购买，不会自动续费；加量不会每周重新发放，也不会开通课程。</p><Button disabled={paying || !gateway} onClick={() => { void pay(); }}>{paying ? '正在创建订单…' : '确认支付'}</Button></> : <p className="text-sm text-muted-foreground">在线支付暂未开通，请稍后再试。</p>}
     </>}
   </div></main>;
 }

@@ -50,14 +50,8 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
             result["institution_subjects"] = sorted(inst_subject_set)
 
         def _apply_institution_filter(qs, subj=''):
-            """机构有知识树 → 只看机构数据；没有 → fallback 全局。"""
-            if not self.institution:
-                return qs
-            if inst_subject_set:
-                # 机构有自己的知识树，只搜机构数据
-                return qs.filter(institution=self.institution)
-            # 机构没有知识树，fallback 到全局
-            return qs.filter(institution__isnull=True)
+            """仅检索明确配置的科晟内容归属。"""
+            return qs.filter(institution=self.institution)
 
         # mode=kp 或 auto：搜知识点
         if mode in ('kp', 'auto'):
@@ -126,7 +120,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                 ).order_by('?').values_list('name', flat=True)[:8]
             )
         else:
-            base_qs = KnowledgePoint.objects.filter(level='kp', institution__isnull=True)
+            base_qs = KnowledgePoint.objects.filter(level='kp', institution=self.institution)
             subjects = list(base_qs.values_list('subject', flat=True).distinct()[:10])
             result["available_subjects"] = [s for s in subjects if s]
             sample_kps = list(base_qs.order_by('?').values_list('name', flat=True)[:8])
@@ -311,7 +305,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
 
         task_id = int(args.get('task_id', 0))
         try:
-            task = ContentPipelineTask.objects.get(id=task_id)
+            task = ContentPipelineTask.objects.get(id=task_id, institution=self.institution)
         except ContentPipelineTask.DoesNotExist:
             return {"error": f"任务 #{task_id} 不存在"}
 
@@ -336,8 +330,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
 
         scope = args.get('scope', 'summary')
         base_qs = Question.objects.all()
-        if self.institution:
-            base_qs = base_qs.filter(institution=self.institution)
+        base_qs = base_qs.filter(institution=self.institution)
 
         if scope == 'summary':
             total = base_qs.count()
@@ -406,7 +399,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from django.db.models import Avg, Count, Q
         from quizzes.models import Question, UserQuestionStatus
 
-        if not self.institution or not is_institution_teacher(self.user):
+        if not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         student_name = (args.get('name') or args.get('student_name') or '').strip()
@@ -432,6 +425,10 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                                       for s in matches[:10]], "hint": "多个学生匹配，请指定 student_id"}
             else:
                 return {"error": f"未找到学生 '{student_name}'"}
+
+        from users.learning import is_course_student
+        if not student.is_active or not is_course_student(student):
+            return {"error": "该账号不是可访问的课程学员"}
 
         # 答题统计
         status_qs = UserQuestionStatus.objects.filter(user=student)
@@ -473,7 +470,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from notifications.models import Notification
         from users.models import User as UserModel
 
-        if not self.institution or not is_institution_teacher(self.user):
+        if not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         student_name = args.get('student_name', '').strip()
@@ -527,8 +524,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         limit = min(int(args.get('limit', 10)), 20)
 
         qs = Course.objects.all()
-        if self.institution:
-            qs = qs.filter(institution=self.institution)
+        qs = qs.filter(institution=self.institution)
 
         if subject:
             qs = qs.filter(knowledge_point__subject=subject)
@@ -563,8 +559,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         limit = min(int(args.get('limit', 20)), 50)
 
         qs = Question.objects.all()
-        if self.institution:
-            qs = qs.filter(institution=self.institution)
+        qs = qs.filter(institution=self.institution)
 
         if kp_name:
             qs = qs.filter(knowledge_point__name__icontains=kp_name)
@@ -606,8 +601,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         limit = min(int(args.get('limit', 10)), 20)
 
         qs = Article.objects.all()
-        if self.institution:
-            qs = qs.filter(institution=self.institution)
+        qs = qs.filter(institution=self.institution)
         if query:
             from django.db.models import Q as _list_articles_Q
             qs = qs.filter(
@@ -637,7 +631,7 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
         from django.utils import timezone
         from users.permissions import is_institution_teacher
 
-        if not self.institution or not is_institution_teacher(self.user):
+        if not is_institution_teacher(self.user):
             return {"error": "仅教师/机构主可使用此功能"}
 
         # Resolve student
@@ -660,6 +654,10 @@ class ExamGeneratorToolExecutor(BaseToolExecutor):
                 return {"error": "请提供 student_name 或 student_id"}
         except User.DoesNotExist:
             return {"error": "学生不存在"}
+
+        from users.learning import is_course_student
+        if not student.is_active or not is_course_student(student):
+            return {"error": "该账号不是可访问的课程学员"}
 
         # Parse date range (defensive against LLM malformed dates)
         date_from_str = args.get('date_from', '')

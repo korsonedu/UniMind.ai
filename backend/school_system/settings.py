@@ -95,6 +95,7 @@ INSTALLED_APPS = [
     "notifications",
     "core",
     "payments",
+    "backoffice",
 ]
 # 企业版裁剪：ENABLED_APPS 非空时只保留列出的模块（django/channels/rest 等基础 app 始终保留）
 if ENABLED_APPS is not None:

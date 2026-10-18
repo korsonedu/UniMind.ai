@@ -40,7 +40,7 @@ def create_tools(bot, user, institution=None):
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tools = profile.tools_factory()
     bot_type = bot.bot_type if bot else 'planner'
-    return filter_tools(bot_type, institution, tools)
+    return filter_tools(bot_type, institution, tools, user=user)
 
 
 def build_system_prompt(bot, user, student_context='', memory_context='', institution=None, adaptive_directives=''):
@@ -186,7 +186,7 @@ def dispatch_bot_chat_sync(
 
     tools = profile.tools_factory()
     bot_type = bot.bot_type if bot else 'planner'
-    tools = filter_tools(bot_type, institution, tools)
+    tools = filter_tools(bot_type, institution, tools, user=user)
     from ai_assistant.services.tool_executor import set_permitted_tools
     set_permitted_tools(tool_executor, tools)
 

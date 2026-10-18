@@ -152,9 +152,9 @@ export const Settings: React.FC = () => {
                     <CreditCard className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-foreground">学习服务与账单</h4>
+                    <h4 className="text-sm font-bold text-foreground">我的服务</h4>
                     <p className="text-[11px] text-muted-foreground font-medium">
-                      查看个人权益、AI 对话额度和购买记录
+                      查看学员状态、每周问答额度和 AI 加量记录
                     </p>
                   </div>
                 </div>

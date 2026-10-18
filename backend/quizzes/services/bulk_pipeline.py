@@ -126,13 +126,16 @@ def _execute_bulk_pipeline(
     kp_code: Optional[str] = None,
     institution=None,
     institution_only: bool = False,
+    strict_scope: bool = False,
+    review_only: bool = False,
 ):
     """执行批量出题管线。"""
     stage_log: List[Dict] = []
+    pending_questions = []
 
     # ── Phase 1: 选择目标知识点 ──
     _update_task(task, 2, f"正在为「{subject}」选择目标知识点…", stage_log, "select_kps")
-    kps = _select_target_kps(subject, total_target, kp_code=kp_code, institution=institution, institution_only=institution_only)
+    kps = _select_target_kps(subject, total_target, kp_code=kp_code, institution=institution, institution_only=institution_only, strict_scope=strict_scope)
     if not kps:
         task.status = "failed"
         task.error_message = f"学科「{subject}」下没有可用知识点"
@@ -177,7 +180,7 @@ def _execute_bulk_pipeline(
                 continue
 
             # Stage B: Classifier 批量审计
-            subject_kps = _get_subject_knowledge_points([kp], institution=institution)
+            subject_kps = _get_subject_knowledge_points([kp], institution=institution, strict_scope=strict_scope)
             passed = []
             for draft in drafts:
                 classification = _classifier_tag(draft, subject_kps, target_difficulty=difficulty)
@@ -209,7 +212,9 @@ def _execute_bulk_pipeline(
             result.total_audited += len(passed)
 
             # Stage C: 入库
-            saved = _save_questions(passed, institution=institution)
+            if review_only:
+                pending_questions.extend(passed)
+            saved = len(passed) if review_only else _save_questions(passed, institution=institution)
             result.total_saved += saved
             result.total_audited -= (len(passed) - saved)  # 去重跳过的不计入通过
             result.skipped_duplicates += (len(passed) - saved)
@@ -221,7 +226,8 @@ def _execute_bulk_pipeline(
         "stage": "bulk_done",
         "total_generated": result.total_generated,
         "total_audited": result.total_audited,
-        "total_saved": result.total_saved,
+        "total_saved": 0 if review_only else result.total_saved,
+        "pending_review": len(pending_questions),
         "answer_errors": result.answer_errors,
         "difficulty_mismatches": result.difficulty_mismatches,
         "skipped_duplicates": result.skipped_duplicates,
@@ -230,20 +236,23 @@ def _execute_bulk_pipeline(
     })
 
     task.result = {
-        "questions_saved": result.total_saved,
+        "questions": pending_questions,
+        "questions_saved": 0 if review_only else result.total_saved,
+        "pending_review": len(pending_questions),
         "stages": stage_log,
         "summary": {
             "subject": subject,
             "target": total_target,
             "generated": result.total_generated,
-            "saved": result.total_saved,
+            "saved": 0 if review_only else result.total_saved,
+            "pending_review": len(pending_questions),
             "pass_rate": round(result.total_saved / max(result.total_generated, 1), 3),
             "answer_errors": result.answer_errors,
             "difficulty_mismatches": result.difficulty_mismatches,
             "skipped_duplicates": result.skipped_duplicates,
         },
     }
-    task.status = "completed"
+    task.status = "review" if review_only else "completed"
     task.progress = 100
     task.finished_at = timezone.now()
     task.save()
@@ -263,6 +272,7 @@ def _select_target_kps(
     kp_code: Optional[str] = None,
     institution=None,
     institution_only: bool = False,
+    strict_scope: bool = False,
 ) -> List[KnowledgePoint]:
     """选择目标知识点：优先选择已有题目最少的知识点。
 
@@ -276,7 +286,9 @@ def _select_target_kps(
     if kp_code:
         # 单 KP 模式：仅限指定编码
         qs = KnowledgePoint.objects.filter(subject=subject, code=kp_code)
-        if institution:
+        if strict_scope:
+            qs = qs.filter(institution=institution)
+        elif institution:
             if institution_only:
                 qs = qs.filter(institution=institution)
             else:
@@ -288,7 +300,9 @@ def _select_target_kps(
 
     # 多 KP 模式
     qs = KnowledgePoint.objects.filter(subject=subject, level='kp')
-    if institution:
+    if strict_scope:
+        qs = qs.filter(institution=institution)
+    elif institution:
         if institution_only:
             qs = qs.filter(institution=institution)
         else:

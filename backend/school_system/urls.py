@@ -95,10 +95,10 @@ if _APP_ON('notifications'):
 if _APP_ON('payments'):
     urlpatterns.append(path("api/payments/", include("payments.urls")))
 # API v1 (external, API Key auth)
-from users.views_api import ExternalQuestionListView, ExternalAnalyticsView
+from users.views_institution import RetiredInstitutionView
 urlpatterns += [
-    path("api/v1/questions/", ExternalQuestionListView.as_view(), name='v1-questions'),
-    path("api/v1/analytics/overview/", ExternalAnalyticsView.as_view(), name='v1-analytics'),
+    path("api/v1/questions/", RetiredInstitutionView.as_view(), name='v1-questions'),
+    path("api/v1/analytics/overview/", RetiredInstitutionView.as_view(), name='v1-analytics'),
 ]
 urlpatterns.append(path("api/", include("core.urls")))
 urlpatterns += [

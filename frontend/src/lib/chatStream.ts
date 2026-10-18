@@ -21,7 +21,11 @@ export async function* readChatStream({
   const { url, init } = streamFetch('/api/ai/chat/stream/', body, signal);
   const res = await fetch(url, init);
   if (!isCurrent()) return;
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    const detail = data?.detail || data?.error || data?.message;
+    throw new Error(typeof detail === 'string' ? detail : `HTTP ${res.status}`);
+  }
 
   const reader = res.body?.getReader();
   if (!reader) throw new Error('Stream not available');

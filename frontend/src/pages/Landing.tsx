@@ -11,7 +11,7 @@ export function Landing() {
     <header className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-6 md:px-8">
       <Link to="/" aria-label="UniMind 首页"><img src="/Unimind_logo_wide.png" alt="UniMind.ai" className="h-8 w-36 object-contain" /></Link>
       <nav className="flex flex-wrap items-center gap-4 text-sm md:gap-7">
-        <Link to="/pricing" className="hover:underline">学习服务</Link>
+        <Link to="/pricing" className="hover:underline">AI 加量</Link>
         {!token && <Link to="/login" className="hover:underline">登录</Link>}
         <Button asChild className="rounded-lg"><Link to={entry}>{token ? '继续学习' : '免费开始'}<ArrowRight size={16} /></Link></Button>
       </nav>
@@ -19,9 +19,9 @@ export function Landing() {
     <main>
       <section className="mx-auto max-w-6xl px-5 py-16 md:px-8 md:py-24">
         <h1 className="text-5xl font-semibold leading-tight md:text-6xl">UniMind.ai</h1>
-        <p className="mt-6 max-w-2xl text-xl leading-9 md:text-2xl">面向每一位学习者的智能学习平台。</p>
-        <p className="mt-5 max-w-2xl text-base leading-8 text-zinc-600">从一次练习开始，记录错题，安排复习，和小宇一起梳理不理解的知识。基础学习免费开放，你也可以按需要选择课程模块和额外的学习服务。</p>
-        <div className="mt-8 flex flex-wrap items-center gap-5"><Button asChild className="rounded-lg"><Link to={entry}>开始学习<ArrowRight size={16} /></Link></Button><Link to="/pricing" className="text-sm underline underline-offset-4">查看学习服务</Link></div>
+        <p className="mt-6 max-w-2xl text-xl leading-9 md:text-2xl">科晟课程的学习与交付平台。</p>
+        <p className="mt-5 max-w-2xl text-base leading-8 text-zinc-600">课程学员在这里学习课程、练习和复习。还未报名课程，也可以先和小宇聊聊学习问题，体验每周有限的问答服务。</p>
+        <div className="mt-8 flex flex-wrap items-center gap-5"><Button asChild className="rounded-lg"><Link to={entry}>开始学习<ArrowRight size={16} /></Link></Button><Link to="/pricing" className="text-sm underline underline-offset-4">查看 AI 加量</Link></div>
       </section>
       <section className="bg-zinc-50 px-5 py-12 md:px-8 md:py-16">
         <div className="mx-auto max-w-6xl">
@@ -31,9 +31,9 @@ export function Landing() {
       </section>
       <section className="mx-auto grid max-w-6xl gap-10 px-5 py-16 md:grid-cols-3 md:px-8 md:py-20">
         {[
-          { title: '按自己的节奏练习', text: '围绕知识点练习，把错题留在记录里，再回到薄弱的地方。练习、错题复习和学习记录向所有注册用户开放。' },
-          { title: '有问题，找小宇聊聊', text: '基础服务提供每月 AI 对话额度，用于梳理概念与讨论学习问题。需要更多额度时，可以查看可选学习服务。' },
-          { title: '课程与服务按需选择', text: '公开课程模块免费学习。其他课程模块按个人权益开放，科晟智慧学员可获得所报课程对应的配套服务。' },
+          { title: '按自己的节奏练习', text: '课程学员可以围绕知识点练习，把错题留在记录里，再回到薄弱的地方。课程学习与配套功能由管理员开通。' },
+          { title: '有问题，找小宇聊聊', text: '每周问答额度用于梳理概念与讨论学习问题，课程学员享有更多额度。用完后可以等待恢复或联系我们，也可按需购买 AI 加量。' },
+          { title: '课程服务由科晟安排', text: '课程在线下报名和付费，管理员手动开通学员状态。AI 加量只增加问答次数，不会开放课程访问权限。' },
         ].map(item => <div key={item.title}><h2 className="text-xl font-medium">{item.title}</h2><p className="mt-4 text-sm leading-7 text-zinc-600">{item.text}</p></div>)}
       </section>
       <section className="border-t border-zinc-100 px-5 py-14 md:px-8">

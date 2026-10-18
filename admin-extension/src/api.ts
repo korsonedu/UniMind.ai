@@ -27,5 +27,5 @@ export function useTask() {
 }
 
 export function localDate(value: string) {
-  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+  return new Date(value).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' });
 }

@@ -108,17 +108,22 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             ))
             return
 
-        loop = asyncio.get_event_loop()
+        if hasattr(self, '_agent_task') and not self._agent_task.done():
+            await self.send(text_data=json.dumps({'type': 'error', 'message': '请等待当前提问完成。'}, ensure_ascii=False))
+            return
+        self._agent_task = asyncio.create_task(self._execute_agent(message, conversation_id, data.get('request_id')))
+
+    async def _execute_agent(self, message, conversation_id, request_id):
+        loop = asyncio.get_running_loop()
         try:
-            await loop.run_in_executor(None, self._run_agent, message, loop, conversation_id)
+            await loop.run_in_executor(None, self._run_agent, message, loop, conversation_id, request_id)
         except Exception as e:
             logger.exception("Agent WS error: %s", e)
-            await self.send(text_data=json.dumps(
-                {"type": "error", "message": "连接中断，请稍后再试"},
-                ensure_ascii=False,
-            ))
+            if not self._cancelled.is_set():
+                await self.send(text_data=json.dumps(
+                    {"type": "error", "message": "连接中断，请稍后再试"}, ensure_ascii=False))
 
-    def _run_agent(self, message: str, loop=None, conversation_id=None):
+    def _run_agent(self, message: str, loop=None, conversation_id=None, request_id=None):
         """同步方法，在线程池中执行完整的 agent loop。"""
         import asyncio as _asyncio
         from .models import AIChatMessage
@@ -138,7 +143,11 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             )
             future.result(timeout=5)
 
+        engine_failed = threading.Event()
+
         def on_step(event):
+            if event.get('type') == 'error':
+                engine_failed.set()
             send_sync(event)
 
         _sent_any_message = False
@@ -148,10 +157,16 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             _sent_any_message = True
             send_sync({"type": "message", "content": text})
 
-        from users.learning import reserve_ai_call
+        from .views import _reserve_chat_request, _complete_ai_result, _can_use_learning_context
+        from users.learning import confirm_ai_call, release_ai_call
         from rest_framework.exceptions import PermissionDenied
         try:
-            reserve_ai_call(self.user)
+            reservation = _reserve_chat_request(self.user, {'message': message, 'conversation_id': conversation_id,
+                                                          'request_id': request_id}, self.bot)
+            if not reservation.acquired:
+                send_sync({**reservation.response, 'type': 'done'} if reservation.status == 'succeeded' else
+                          {'type': 'error', 'message': '这条提问仍在处理中，请查看当前会话。'})
+                return
         except PermissionDenied as error:
             send_sync({'type': 'error', 'message': str(error.detail)})
             return
@@ -168,16 +183,17 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             )
 
             student_context = ""
-            if self.bot.is_exclusive:
+            if self.bot.is_exclusive and _can_use_learning_context(self.user):
                 student_context = get_student_academic_context(self.user)
 
             memory_context = ""
             adaptive_directives = ""
             try:
                 from .services.memory_service import build_memory_context
-                memory_context, adaptive_directives = build_memory_context(
-                    self.user, message, bot_type=self.bot.bot_type if self.bot else 'planner'
-                )
+                if _can_use_learning_context(self.user):
+                    memory_context, adaptive_directives = build_memory_context(
+                        self.user, message, bot_type=self.bot.bot_type if self.bot else 'planner'
+                    )
             except Exception:
                 pass
 
@@ -206,10 +222,10 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             ws_variant_name = dispatch_result.get('prompt_variant', 'baseline')
 
             if isinstance(result, dict) and 'content' in result:
-                ai_content = result['content']
+                ai_content = result['content'] or ''
                 _quota_earned = True
             elif result and 'choices' in result:
-                ai_content = result['choices'][0]['message']['content']
+                ai_content = result['choices'][0]['message']['content'] or ''
                 _quota_earned = True
             else:
                 ai_content = "AI 助教暂时无法响应，请稍后再试。"
@@ -234,7 +250,8 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                               metadata=msg_metadata,
                               conversation_id=conversation_id)
 
-            if _quota_earned:
+            if _quota_earned and not engine_failed.is_set() and not self._cancelled.is_set() and _complete_ai_result(result, ai_content, msg_metadata):
+                confirm_ai_call(reservation, done_event)
                 from users.quota import increment_quota
                 if self.user and getattr(self.user, 'institution', None):
                     increment_quota(self.user.institution, 'ai_call_total')
@@ -242,8 +259,9 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             try:
                 from .services.memory_service import extract_memories_async, extract_memories_with_mem0
                 full_history = history_msgs + [{'role': 'user', 'content': message}]
-                extract_memories_async(self.user, full_history)
-                extract_memories_with_mem0(self.user, full_history)
+                if _can_use_learning_context(self.user):
+                    extract_memories_async(self.user, full_history)
+                    extract_memories_with_mem0(self.user, full_history)
             except Exception:
                 logger.warning("Memory extraction failed (WS)", exc_info=True)
 
@@ -275,6 +293,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             except AgentCancelled:
                 pass
         finally:
+            release_ai_call(reservation)
             from django.db import close_old_connections
             close_old_connections()
 

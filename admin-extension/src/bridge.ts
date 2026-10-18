@@ -7,6 +7,12 @@ export const operations = new Set([
   'uploads.start', 'uploads.complete', 'uploads.cancel',
   'knowledge.list', 'knowledge.save', 'knowledge.delete',
   'questions.list', 'questions.detail', 'questions.save', 'questions.delete', 'questions.assign',
+  'students.status.save', 'quota.get', 'quota.save', 'addons.list', 'addons.save', 'orders.list', 'ai.config.get', 'ai.config.save',
+  'teaching.stats', 'teaching.knowledge', 'teaching.browse', 'teaching.student', 'teaching.students',
+  'teaching.conversations', 'teaching.history', 'teaching.notification.preview',
+  'teaching.chat', 'teaching.generate', 'teaching.report', 'teaching.notification.send',
+  'pipeline.list', 'pipeline.detail', 'pipeline.metrics', 'pipeline.review', 'pipeline.retry', 'pipeline.delete',
+  'teaching.restore', 'teaching.notification.config', 'teaching.notification.config.save',
 ]);
 
 type Config = { origin: string; secret: string; operators: string[] };

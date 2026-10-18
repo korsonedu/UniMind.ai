@@ -24,10 +24,10 @@ export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdmi
       <DialogContent className="sm:max-w-[420px] rounded-[2rem] border-none shadow-2xl bg-card p-0 overflow-hidden">
         <DialogHeader className="px-8 pt-8 pb-2 text-left space-y-2">
           <DialogTitle className="text-xl font-black tracking-tight text-foreground">
-            {planLabel ? `升级至 ${planLabel} 方案` : '升级方案'}
+            {planLabel ? `咨询 ${planLabel}` : '联系科晟'}
           </DialogTitle>
           <DialogDescription className="text-[13px] font-medium text-muted-foreground leading-relaxed">
-            目前暂未开放在线支付，请联系管理员完成方案升级。
+            学员状态、课程安排或小宇使用问题，请联系科晟。
           </DialogDescription>
         </DialogHeader>
 

@@ -927,7 +927,7 @@ class AIEngine:
             clean_accumulated = cls._strip_dsml(accumulated_text)
 
             if not tool_calls:
-                return {"content": clean_accumulated, "run_id": coordinator.run_id}
+                return {"content": clean_accumulated, "run_id": coordinator.run_id, "finish_reason": finish_reason or "incomplete"}
 
             # Emit any remaining clean text that wasn't streamed during this round
             remaining = clean_accumulated[text_emitted_this_round:]
@@ -1042,7 +1042,8 @@ class AIEngine:
                 final_text = cls._strip_dsml(final_text)
                 if on_step:
                     on_step({"type": "text_delta", "delta": final_text})
-                return {"content": final_text, "run_id": coordinator.run_id}
+                return {"content": final_text, "run_id": coordinator.run_id,
+                        "finish_reason": (final_resp.get("choices") or [{}])[0].get("finish_reason") or "incomplete"}
         except Exception as e:
             logger.exception("Final text reply failed: %s", e)
 
@@ -1053,7 +1054,7 @@ class AIEngine:
         if not combined and all_rounds_text:
             # 中间文本已全部在前端可见，返回空让前端依靠已展示的中间消息
             combined = ""
-        return {"content": cls._strip_dsml(combined), "run_id": coordinator.run_id}
+        return {"content": cls._strip_dsml(combined), "run_id": coordinator.run_id, "finish_reason": "tool_limit"}
 
     @classmethod
     def agentic_structured_output(cls, messages, schema, tool_name, tool_description,

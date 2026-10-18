@@ -21,7 +21,7 @@ from .views_admin import (
     SuperuserUserListView, UserTagListView, PermissionGroupListView,
 )
 from .views_institution import (
-    InstitutionDashboardView, PlatformAdminInstitutionOverviewView,
+    InstitutionDashboardView, PlatformAdminInstitutionOverviewView, RetiredInstitutionView,
     InstitutionListView, InstitutionDetailView,
     InstitutionActivateView, InstitutionDeactivateView,
     InstitutionChangePlanView,
@@ -65,14 +65,14 @@ urlpatterns = [
     # SSO
     path('sso/authorize/', SSOAuthorizeView.as_view(), name='sso-authorize'),
     path('sso/callback/', SSOCallbackView.as_view(), name='sso-callback'),
-    path('institution/me/sso-config/', SSOConfigView.as_view(), name='institution-sso-config'),
+    path('institution/me/sso-config/', RetiredInstitutionView.as_view(), name='institution-sso-config'),
     path('me/', UserDetailView.as_view(), name='user-detail'),
     path('me/update/', UpdateProfileView.as_view(), name='user-update'),
     path('me/tour-dismiss/', TourDismissView.as_view(), name='tour-dismiss'),
     path('me/tour-panel-dismiss/', TourPanelDismissView.as_view(), name='tour-panel-dismiss'),
     path('me/email/', UpdateEmailView.as_view(), name='email-update'),
     path('me/password/', UpdatePasswordView.as_view(), name='password-update'),
-    path('me/activate/', ActivateMembershipView.as_view(), name='activate-membership'),
+    path('me/activate/', RetiredInstitutionView.as_view(), name='activate-membership'),
 
     path('me/knowledge-mastery/', MyKnowledgeMasteryView.as_view(), name='knowledge-mastery'),
     path('me/diagnostic/generate/', DiagnosticGenerateView.as_view(), name='diagnostic-generate'),
@@ -99,22 +99,22 @@ urlpatterns = [
     # Institution — platform admin
     path('institutions/', InstitutionListView.as_view(), name='institution-list'),
     path('institutions/<int:pk>/', InstitutionDetailView.as_view(), name='institution-detail'),
-    path('institutions/<int:pk>/activate/', InstitutionActivateView.as_view(), name='institution-activate'),
-    path('institutions/<int:pk>/deactivate/', InstitutionDeactivateView.as_view(), name='institution-deactivate'),
-    path('institutions/<int:pk>/change-plan/', InstitutionChangePlanView.as_view(), name='institution-change-plan'),
-    path('institutions/<int:pk>/preview/', InstitutionPreviewView.as_view(), name='institution-preview'),
+    path('institutions/<int:pk>/activate/', RetiredInstitutionView.as_view(), name='institution-activate'),
+    path('institutions/<int:pk>/deactivate/', RetiredInstitutionView.as_view(), name='institution-deactivate'),
+    path('institutions/<int:pk>/change-plan/', RetiredInstitutionView.as_view(), name='institution-change-plan'),
+    path('institutions/<int:pk>/preview/', RetiredInstitutionView.as_view(), name='institution-preview'),
 
     path('institutions/overview/', PlatformAdminInstitutionOverviewView.as_view(), name='institution-overview'),
 
     # Institution — self-service (current user's institution)
     path('institution/me/', InstitutionDashboardView.as_view(), name='institution-me'),
-    path('institution/me/update/', InstitutionSelfUpdateView.as_view(), name='institution-self-update'),
-    path('institution/me/directions/', UpdateDirectionsView.as_view(), name='institution-directions-update'),
+    path('institution/me/update/', RetiredInstitutionView.as_view(), name='institution-self-update'),
+    path('institution/me/directions/', RetiredInstitutionView.as_view(), name='institution-directions-update'),
     path('institution/me/features/', InstitutionFeatureView.as_view(), name='institution-features'),
-    path('institution/me/regenerate-invite-slug/', RegenerateInviteSlugView.as_view(), name='regenerate-invite-slug'),
-    path('institution/me/bulk-init/', InstitutionBulkInitView.as_view(), name='institution-bulk-init'),
-    path('institution/join-by-invite-slug/', InstitutionJoinByInviteSlugView.as_view(), name='institution-join-by-invite-slug'),
-    path('check-invite/', CheckInviteView.as_view(), name='check-invite'),
+    path('institution/me/regenerate-invite-slug/', RetiredInstitutionView.as_view(), name='regenerate-invite-slug'),
+    path('institution/me/bulk-init/', RetiredInstitutionView.as_view(), name='institution-bulk-init'),
+    path('institution/join-by-invite-slug/', RetiredInstitutionView.as_view(), name='institution-join-by-invite-slug'),
+    path('check-invite/', RetiredInstitutionView.as_view(), name='check-invite'),
 
     # Institution — students
     path('institution/me/students/', InstitutionStudentListView.as_view(), name='institution-student-list'),
@@ -125,7 +125,7 @@ urlpatterns = [
 
     # Institution — members (owner + teacher management)
     path('institution/me/members/', InstitutionMemberListView.as_view(), name='institution-member-list'),
-    path('institution/me/members/<int:pk>/role/', InstitutionMemberRoleView.as_view(), name='institution-member-role'),
+    path('institution/me/members/<int:pk>/role/', RetiredInstitutionView.as_view(), name='institution-member-role'),
 
 
     # Institution — audit log
@@ -141,16 +141,16 @@ urlpatterns = [
     path('institution/me/student-health/', InstitutionStudentHealthView.as_view(), name='institution-student-health'),
 
     # Institution invites + join requests
-    path('institution/me/invites/', InstitutionInviteListView.as_view(), name='institution-invite-list'),
-    path('institution/me/invites/<int:pk>/', InstitutionInviteDetailView.as_view(), name='institution-invite-detail'),
+    path('institution/me/invites/', RetiredInstitutionView.as_view(), name='institution-invite-list'),
+    path('institution/me/invites/<int:pk>/', RetiredInstitutionView.as_view(), name='institution-invite-detail'),
     path('institution/me/join-requests/', InstitutionJoinRequestListView.as_view(), name='institution-join-request-list'),
-    path('institution/me/join-requests/<int:pk>/review/', InstitutionJoinRequestReviewView.as_view(), name='institution-join-request-review'),
+    path('institution/me/join-requests/<int:pk>/review/', RetiredInstitutionView.as_view(), name='institution-join-request-review'),
 
 
     # Plan invite codes
     path('admin/plan-invite-codes/', PlanInviteCodeListView.as_view(), name='plan-invite-codes'),
-    path('admin/plan-invite-codes/generate/', PlanInviteCodeGenerateView.as_view(), name='plan-invite-codes-generate'),
-    path('admin/plan-invite-codes/<int:pk>/deactivate/', PlanInviteCodeDeactivateView.as_view(), name='plan-invite-codes-deactivate'),
+    path('admin/plan-invite-codes/generate/', RetiredInstitutionView.as_view(), name='plan-invite-codes-generate'),
+    path('admin/plan-invite-codes/<int:pk>/deactivate/', RetiredInstitutionView.as_view(), name='plan-invite-codes-deactivate'),
 
 
     # Account management (P0: 个保法合规)
@@ -172,8 +172,8 @@ urlpatterns = [
 
 
     # API platform
-    path('institution/me/api-keys/', APIKeyListCreateView.as_view(), name='api-key-list'),
-    path('institution/me/api-keys/<int:pk>/', APIKeyDetailView.as_view(), name='api-key-detail'),
+    path('institution/me/api-keys/', RetiredInstitutionView.as_view(), name='api-key-list'),
+    path('institution/me/api-keys/<int:pk>/', RetiredInstitutionView.as_view(), name='api-key-detail'),
 
     # Push notifications
     path('me/push-subscribe/', PushSubscribeView.as_view(), name='push-subscribe'),

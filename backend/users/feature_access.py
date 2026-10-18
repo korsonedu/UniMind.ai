@@ -33,13 +33,17 @@ def request_feature(request):
         ('/api/study/', 'study.room'), ('/api/users/me/report-card/', 'full.report'),
         ('/api/users/me/knowledge-mastery/', 'full.report'),
         ('/api/users/me/diagnostic/', 'quiz.exam'),
+        ('/api/ai/dashboard/', 'full.report'), ('/api/ai/memory/', 'full.report'),
+        ('/api/ai/practice/', 'quiz.exam'), ('/api/ai/grading/', 'quiz.exam'),
+        ('/api/articles/', 'course.video'), ('/api/users/plans/', 'full.report'),
+        ('/api/users/me/checkin/', 'full.report'), ('/api/users/achievements/', 'full.report'),
+        ('/api/users/me/achievements/', 'full.report'),
     ):
         if path.startswith(prefix):
             return feature
     if path.startswith('/api/ai/') and path not in ('/api/ai/dashboard/',) and not path.startswith('/api/ai/workbench/'):
         return 'ai.assistant'
     if path.startswith('/api/quizzes/') and not path.startswith((
-        '/api/quizzes/knowledge-points/', '/api/quizzes/knowledge-edges/',
         '/api/quizzes/admin/', '/api/quizzes/workbench/', '/api/quizzes/marketplace/',
     )):
         return 'quiz.exam'

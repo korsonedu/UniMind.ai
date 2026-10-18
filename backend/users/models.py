@@ -683,4 +683,7 @@ from .models_commercial import (
     InstitutionUsageLog,
     InstitutionAuditLog,
 )
-from .models_learning import LearningProduct, LearningGrant, LearningUsage
+from .models_learning import (
+    LearningProduct, LearningGrant, LearningUsage, CourseStudentStatus, WeeklyAIQuotaConfig,
+    AIAddonProduct, AIAddonGrant, WeeklyAIUsage, AIUsageReservation,
+)

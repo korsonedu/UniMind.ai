@@ -10,6 +10,7 @@ const props = defineProps<{ api: Gateway; meta: Meta }>();
 const { busy, error, run } = useTask();
 const nodes = ref<KnowledgeNode[]>([]);
 const search = ref('');
+const appliedSearch = ref('');
 const subject = ref('');
 const closed = ref<number[]>([]);
 const form = ref<Partial<KnowledgeNode>>();
@@ -18,8 +19,8 @@ const options = computed(() => catalogOptions(nodes.value));
 const subjects = computed(() => [...new Set(nodes.value.map(node => node.subject).filter((value): value is string => !!value))]);
 const visible = computed(() => options.value.filter(node =>
   (!subject.value || node.subject === subject.value) &&
-  (!search.value || node.label.toLowerCase().includes(search.value.toLowerCase())) &&
-  (!!search.value || !node.ancestors.some(id => closed.value.includes(id)))));
+  (!appliedSearch.value || node.label.toLowerCase().includes(appliedSearch.value.toLowerCase())) &&
+  (!!appliedSearch.value || !node.ancestors.some(id => closed.value.includes(id)))));
 const parents = computed(() => options.value.filter(node => node.id !== form.value?.id &&
   !node.ancestors.includes(form.value?.id || 0) &&
   levels.findIndex(level => level.value === node.level) < levels.findIndex(level => level.value === form.value?.level)));
@@ -50,7 +51,7 @@ async function remove() {
   <section class="workspace-section" :aria-busy="busy">
     <div class="section-heading"><h2>知识目录 <span>{{ nodes.length }}</span></h2><div class="actions"><button class="icon" title="刷新" :disabled="busy" @click="run(load)"><RefreshCw :size="17" /></button><button class="primary" :disabled="!canWrite" @click="edit()"><Plus :size="17" />新增目录</button></div></div>
     <p v-if="error && !form && !deletion" class="error" role="alert">{{ error }}</p>
-    <div class="toolbar"><label class="search-field"><Search :size="17" /><input v-model="search" aria-label="搜索知识目录" placeholder="名称或编码" /></label><select v-model="subject" aria-label="筛选学科"><option value="">全部学科</option><option v-for="item in subjects" :key="item" :value="item">{{ item }}</option></select></div>
+    <form class="toolbar" @submit.prevent="appliedSearch = search.trim()"><label class="search-field"><Search :size="17" /><input v-model="search" aria-label="搜索知识目录" placeholder="名称或编码" /></label><select v-model="subject" aria-label="筛选学科" :disabled="busy" @change="appliedSearch = search.trim()"><option value="">全部学科</option><option v-for="item in subjects" :key="item" :value="item">{{ item }}</option></select><button :disabled="busy">查询</button></form>
     <div class="table-scroll"><table><thead><tr><th>知识目录</th><th>学科</th><th>层级</th><th>题目数</th><th>排序</th><th class="right">操作</th></tr></thead><tbody>
       <tr v-for="node in visible" :key="node.id">
         <td class="title-cell"><div class="catalog-name" :style="{ paddingLeft: `${Math.min(node.depth, 4) * 18}px` }"><button v-if="nodes.some(item => item.parent === node.id)" class="icon" :title="closed.includes(node.id) ? '展开目录' : '收起目录'" :aria-expanded="!closed.includes(node.id)" @click="toggle(node.id)"><component :is="closed.includes(node.id) ? ChevronRight : ChevronDown" :size="16" /></button><span v-else class="catalog-spacer" /><span>{{ node.name }}<small>{{ node.code || `#${node.id}` }}</small></span></div></td>

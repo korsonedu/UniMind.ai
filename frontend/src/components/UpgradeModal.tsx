@@ -5,7 +5,7 @@ interface UpgradeModalProps { open: boolean; onOpenChange: (open: boolean) => vo
 
 export function UpgradeModal({ open, onOpenChange }: UpgradeModalProps) {
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md rounded-lg">
-    <DialogHeader><DialogTitle>个人学习服务</DialogTitle><DialogDescription>基础学习免费开放。你可以查看个人课程权益和额外的 AI 对话额度。</DialogDescription></DialogHeader>
-    <Button asChild><a href="/pricing">查看学习服务</a></Button>
+    <DialogHeader><DialogTitle>我的服务</DialogTitle><DialogDescription>课程服务由科晟线下开通。你可以查看学员状态、每周问答额度和 AI 加量。</DialogDescription></DialogHeader>
+    <Button asChild><a href="/billing">查看我的服务</a></Button>
   </DialogContent></Dialog>;
 }

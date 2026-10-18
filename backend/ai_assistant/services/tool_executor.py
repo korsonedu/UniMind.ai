@@ -173,7 +173,7 @@ def summarize_tool_result(tool_name: str, result) -> str:
 
 
 def set_permitted_tools(tool_executor, tools) -> None:
-    """保存意图路由前的套餐许可集合及完整参数 Schema。"""
+    """保存意图路由前的用户许可集合及完整参数 Schema。"""
     definitions = {
         item['function']['name']: item
         for item in tools
@@ -196,7 +196,10 @@ class BaseToolExecutor:
         self._allowed_tool_names = None
         self._permitted_tool_names = None
         self._permitted_tool_definitions = {}
-        self.institution = institution or getattr(user, 'institution', None)
+        from core.utils import get_content_institution
+        from users.learning import is_course_student
+        from users.permissions import is_platform_admin
+        self.institution = get_content_institution() if (is_platform_admin(user) or is_course_student(user)) else None
         self.on_step = None  # 由 views 注入，用于工具内部发进度事件
         self._current_call_id: str | None = None  # 由 service.py 注入，用于进度事件携带正确 call_id
         self.tool_call_log: list = []     # MUTAR 轨迹：工具调用序列
@@ -206,11 +209,21 @@ class BaseToolExecutor:
     def __call__(self, tool_name: str, args: Dict[str, Any]) -> str:
         # 别名修正：LLM 可能跨 bot 误调用不同命名规范的工具
         original_name = tool_name
-        tool_name = self.TOOL_ALIASES.get(tool_name, tool_name)
+        if not hasattr(self, f'_handle_{tool_name}'):
+            tool_name = self.TOOL_ALIASES.get(tool_name, tool_name)
         if tool_name != original_name:
             logger.info("Tool alias: %s → %s", original_name, tool_name)
 
-        # 路由白名单可在套餐权限内自愈扩展，但不能突破套餐权限。
+        # 执行时再次检查身份和功能，不能仅依赖传给模型的工具列表。
+        from ai_engine.tool_permissions import filter_tools
+        definition = {'function': {'name': tool_name}}
+        if not filter_tools('planner', self.institution, [definition], user=self.user):
+            return json.dumps({'error': f'Tool not allowed: {tool_name}'}, ensure_ascii=False)
+        permitted = self._permitted_tool_names
+        if permitted is None or tool_name not in permitted:
+            return json.dumps({'error': f'Tool not allowed: {tool_name}'}, ensure_ascii=False)
+
+        # 路由白名单可在用户权限内自愈扩展，但不能突破用户权限。
         allowed = getattr(self, '_allowed_tool_names', None)
         if allowed is not None and tool_name not in allowed:
             handler = getattr(self, f'_handle_{tool_name}', None)
@@ -505,8 +518,7 @@ class BaseToolExecutor:
             knowledge_point__code=kp_code,
         ).select_related('knowledge_point')
 
-        if self.institution:
-            qs = qs.filter(institution=self.institution)
+        qs = qs.filter(institution=self.institution)
 
         results = qs.order_by('?')[:limit]
 
@@ -597,12 +609,7 @@ class PlannerToolExecutor(BaseToolExecutor):
         ).select_related('knowledge_point', 'album_obj')
 
         # Institution isolation
-        institution = getattr(self.user, 'institution', None)
-        if institution:
-            qs = qs.filter(
-                models.Q(institution=institution) |
-                models.Q(institution__isnull=True)
-            )
+        qs = qs.filter(institution=self.institution)
 
         if subject:
             qs = qs.filter(knowledge_point__subject=subject)
@@ -641,12 +648,7 @@ class PlannerToolExecutor(BaseToolExecutor):
         ).select_related('transcript__course')
 
         # Institution isolation
-        institution = getattr(self.user, 'institution', None)
-        if institution:
-            qs = qs.filter(
-                models.Q(transcript__course__institution=institution) |
-                models.Q(transcript__course__institution__isnull=True)
-            )
+        qs = qs.filter(transcript__course__institution=self.institution)
 
         # Filter by course if specified
         if course_id:
@@ -692,12 +694,7 @@ class PlannerToolExecutor(BaseToolExecutor):
         ).select_related('knowledge_point', 'author')
 
         # Institution isolation
-        institution = getattr(self.user, 'institution', None)
-        if institution:
-            qs = qs.filter(
-                models.Q(institution=institution) |
-                models.Q(institution__isnull=True)
-            )
+        qs = qs.filter(institution=self.institution)
 
         articles = qs[:limit]
 

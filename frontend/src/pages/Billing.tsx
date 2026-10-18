@@ -3,48 +3,39 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
-import { formatApiErrorToast } from '@/lib/apiError';
-import { queryClient } from '@/lib/queryClient';
-import { useInstitutionStore } from '@/store/useInstitutionStore';
-import type { LearningGrant } from '@/types/learning';
-import { learningDate, learningPrice } from '@/types/learning';
+import { ContactAdminModal } from '@/components/ContactAdminModal';
+import type { LearningAccess } from '@/types/learning';
+import { learningDate, learningPrice, learningReset } from '@/types/learning';
 
-interface Access { ai_usage: { used: number; limit: number | null }; grants: LearningGrant[]; }
 interface Order { id: number; product_name: string; status: string; amount_cents: number; created_at: string; }
 
 export function BillingPage() {
-  const [access, setAccess] = useState<Access | null>(null);
+  const [access, setAccess] = useState<LearningAccess | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [error, setError] = useState('');
-  const [code, setCode] = useState('');
-  const [activating, setActivating] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
   const load = () => {
     setError('');
-    void Promise.all([api.get<Access>('/users/learning/access/'), api.get<Order[]>('/payments/orders/')])
+    void Promise.all([api.get<LearningAccess>('/users/learning/access/'), api.get<Order[]>('/payments/orders/')])
       .then(([rights, history]) => { setAccess(rights.data); setOrders(history.data); })
-      .catch(() => setError('学习服务加载失败，请重试。'));
+      .catch(() => setError('我的服务加载失败，请重试。'));
   };
   useEffect(load, []);
-  const activate = async (event: React.FormEvent) => {
-    event.preventDefault(); if (activating || !code.trim()) return;
-    setActivating(true);
-    try {
-      await api.post('/users/me/activate/', { code: code.trim() });
-      await queryClient.invalidateQueries();
-      await useInstitutionStore.getState().fetchFeatures();
-      setCode(''); load(); toast.success('权益已激活');
-    } catch (error) { toast.error(formatApiErrorToast(error, '激活失败')); }
-    finally { setActivating(false); }
-  };
   const status: Record<string, string> = { paid: '已支付', pending: '待支付', refunded: '已退款', expired: '已过期', cancelled: '已取消' };
   return <main className="max-w-4xl mx-auto py-6 space-y-8">
-    <header className="flex flex-wrap justify-between items-center gap-4"><h1 className="text-2xl font-semibold">学习服务与账单</h1><Button asChild variant="outline"><Link to="/pricing">查看学习服务<ArrowRight size={16} /></Link></Button></header>
+    <header className="flex flex-wrap justify-between items-center gap-4"><h1 className="text-2xl font-semibold">我的服务</h1><div className="flex gap-3"><Button variant="outline" onClick={() => setContactOpen(true)}>联系我们</Button><Button asChild variant="outline"><Link to="/pricing">AI 加量<ArrowRight size={16} /></Link></Button></div></header>
     {error ? <div role="alert"><p>{error}</p><Button variant="outline" onClick={load}>重试</Button></div> : !access ? <p role="status">正在加载…</p> : <>
-      <section className="border-y py-6"><h2 className="font-medium">本月 AI 对话</h2><p className="mt-3 text-2xl tabular-nums">{access.ai_usage.used}<span className="text-sm text-muted-foreground"> / {access.ai_usage.limit ?? '不限'} 次</span></p><p className="mt-2 text-sm text-muted-foreground">基础学习持续开放。服务到期后，学习记录会保留。</p></section>
-      <section><h2 className="font-medium mb-3">我的权益</h2><ul className="divide-y">{access.grants.map(grant => <li key={grant.id} className="py-4"><div className="flex flex-wrap justify-between gap-3"><span>{grant.snapshot.name}</span><span className="text-sm text-muted-foreground">{grant.source === 'course' ? '课程配套' : grant.source === 'admin' ? '赠送' : '个人购买'}</span></div><p className="text-sm mt-2 text-muted-foreground">有效至 {learningDate(grant.expires_at)} · 每月 {grant.snapshot.monthly_ai_calls} 次 AI 对话</p></li>)}</ul>{!access.grants.length && <p className="text-sm text-muted-foreground">当前使用基础学习服务。课程配套或购买的服务将在这里显示。</p>}</section>
-      <section><h2 className="font-medium mb-3">激活已有权益</h2><form className="flex gap-3 max-w-lg" onSubmit={activate}><input aria-label="权益激活码" value={code} onChange={event => setCode(event.target.value)} placeholder="输入激活码" className="border rounded-md px-3 py-2 min-w-0 flex-1 bg-background" /><Button type="submit" disabled={activating || !code.trim()}>{activating ? '激活中…' : '激活'}</Button></form></section>
-      <section><h2 className="font-medium mb-3">购买记录</h2><ul className="divide-y">{orders.map(order => <li key={order.id} className="flex flex-wrap justify-between gap-3 py-4 text-sm"><div><p>{order.product_name}</p><p className="mt-1 text-muted-foreground">{learningDate(order.created_at)}</p></div><p>{learningPrice(order.amount_cents)} · {status[order.status] || order.status}</p></li>)}</ul>{!orders.length && <p className="text-sm text-muted-foreground">暂无购买记录</p>}</section>
+      <section><h2 className="font-medium">当前身份</h2><p className="mt-3">{access.ai_usage.unlimited ? '管理员' : access.is_course_student ? '课程学员' : '非课程学员'}</p><p className="mt-2 text-sm text-muted-foreground">{access.is_course_student ? '课程服务由科晟线下安排，学员状态由管理员调整。' : '可以使用小宇问答。课程服务请联系科晟，购买 AI 加量不会开通课程。'}</p></section>
+      <section className="border-y py-6"><h2 className="font-medium">本周 AI 问答</h2>
+        <p className="mt-3 text-2xl tabular-nums">{access.ai_usage.used}<span className="text-sm text-muted-foreground"> / {access.ai_usage.unlimited ? '不限' : access.ai_usage.configured ? access.ai_usage.limit : '待配置'} 次基础额度</span></p>
+        <p className="mt-2 text-sm">剩余可用：{access.ai_usage.unlimited ? '不限' : `${access.ai_usage.remaining} 次`}，其中 AI 加量 {access.ai_usage.addon_remaining} 次。</p>
+        <p className="mt-2 text-sm text-muted-foreground">基础额度按上海时间自然周恢复，下次恢复：{learningReset(access.ai_usage.resets_at)}。一次完整成功答复计一次，失败或取消不扣次。</p>
+        {!access.ai_usage.configured && <p className="mt-2 text-sm text-muted-foreground">基础周额度尚未配置，请联系科晟确认。</p>}
+        {access.ai_usage.remaining === 0 && access.ai_usage.configured && <p className="mt-2 text-sm text-muted-foreground">本周额度已用完，可以等待恢复或联系我们。</p>}
+      </section>
+      <section><h2 className="font-medium mb-3">可用 AI 加量</h2><ul className="divide-y">{access.addons.map(addon => <li key={addon.id} className="py-4"><p>{addon.name}</p><p className="text-sm mt-2 text-muted-foreground">剩余 {Math.max(0, addon.ai_calls - addon.used_calls)} 次，有效至 {learningDate(addon.expires_at)}</p></li>)}</ul>{!access.addons.length && <p className="text-sm text-muted-foreground">暂无可用加量。加量仅用于 AI 问答。</p>}</section>
+      <section><h2 className="font-medium mb-3">购买记录</h2><ul className="divide-y">{orders.map(order => <li key={order.id} className="flex flex-wrap justify-between gap-3 py-4 text-sm"><div><p>{order.product_name}</p><p className="mt-1 text-muted-foreground">{learningDate(order.created_at)}</p></div><p>{learningPrice(order.amount_cents)} · {status[order.status] || order.status}</p></li>)}</ul>{!orders.length && <p className="text-sm text-muted-foreground">暂无购买记录。线下课程付费不在此生成订单。</p>}</section>
     </>}
+    <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />
   </main>;
 }

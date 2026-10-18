@@ -103,7 +103,7 @@ def run_adversarial_pipeline(
     return task.id
 
 
-def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_per_kp: int, difficulty: str = "normal", types: Optional[List[str]] = None, institution=None):
+def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_per_kp: int, difficulty: str = "normal", types: Optional[List[str]] = None, institution=None, strict_scope=False, review_only=False):
     """执行对抗性出题管线。"""
     all_questions = []
     stage_log = []
@@ -126,7 +126,7 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
                      stage_log, "review_start")
         try:
             for iteration in range(1, MAX_ITERATIONS + 1):
-                review_result = _reviewer_evaluate(draft, institution=institution)
+                review_result = _reviewer_evaluate(draft, institution=institution, strict_scope=strict_scope)
                 draft["review_score"] = review_result["score"]
                 draft["review_feedback"] = review_result["feedback"]
                 draft["review_dimensions"] = review_result.get("dimensions", {})
@@ -176,7 +176,7 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
     _update_task(task, 70, f"Reviewer 完成，{len(reviewed)} 道题通过 ({iteration_stats} 轮分布)", stage_log, "review_done")
 
     # ── Stage 3: Classifier 三层审计 ──
-    subject_kps = _get_subject_knowledge_points(kps, institution=institution)
+    subject_kps = _get_subject_knowledge_points(kps, institution=institution, strict_scope=strict_scope)
     _update_task(task, 75, f"Classifier 准备审计 {len(reviewed)} 道题目...", stage_log, "classify_start")
     difficulty_mismatches = 0
     answer_errors = 0
@@ -235,12 +235,15 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
             "knowledge_points": [k.name for k in kps],
         },
     }
-    task.status = "completed"
+    task.status = "review" if review_only else "completed"
     task.progress = 100
     task.finished_at = timezone.now()
     task.save()
 
     all_questions.extend(reviewed)
+
+    if review_only:
+        return
 
     # ── 创建审核任务 ──
     ContentPipelineTask.objects.create(
@@ -342,13 +345,15 @@ AUTHOR_SYSTEM_PROMPT = """\
 调用 submit_questions 提交题目列表，每道题为一个 JSON 对象包含 question/q_type/subjective_type/options/answer/grading_points/difficulty_level 字段。"""
 
 
-def _get_subject_knowledge_points(kps: List[KnowledgePoint], institution=None) -> List[KnowledgePoint]:
+def _get_subject_knowledge_points(kps: List[KnowledgePoint], institution=None, strict_scope=False) -> List[KnowledgePoint]:
     """获取与已选 KP 同科目的所有知识点，作为 Classifier 知识标签候选。"""
     subjects = set(k.subject for k in kps if k.subject)
     if not subjects:
         return kps
     qs = KnowledgePoint.objects.filter(subject__in=subjects)
-    if institution:
+    if strict_scope:
+        qs = qs.filter(institution=institution)
+    elif institution:
         from django.db.models import Q
         qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
     return list(qs.order_by('subject', 'code'))
@@ -451,7 +456,7 @@ REVIEWER_SYSTEM_PROMPT = """\
 - search_similar_questions: 搜索同知识点下已有题目，检查是否与现有题目雷同或重复。
 不需要研究时可直接评审。评审完成后，调用 submit_review 提交评审结果。"""
 
-def _get_reviewer_tool_executor(institution=None):
+def _get_reviewer_tool_executor(institution=None, strict_scope=False):
     """Reviewer research tool executor: lookup KP definition + search similar questions."""
     import json
     from quizzes.models import KnowledgePoint, Question
@@ -461,7 +466,9 @@ def _get_reviewer_tool_executor(institution=None):
             if tool_name == "lookup_knowledge_point_definition":
                 code = (args.get('code') or '').strip()
                 qs = KnowledgePoint.objects.filter(code=code)
-                if institution:
+                if strict_scope:
+                    qs = qs.filter(institution=institution)
+                elif institution:
                     from django.db.models import Q
                     qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
                 kp = qs.first()
@@ -479,7 +486,7 @@ def _get_reviewer_tool_executor(institution=None):
                 qs = Question.objects.filter(
                     knowledge_point__code=kp_code,
                 )
-                if institution:
+                if strict_scope or institution:
                     qs = qs.filter(institution=institution)
                 questions = [
                     {"id": q['id'], "text": (q['text'] or '')[:300],
@@ -494,7 +501,7 @@ def _get_reviewer_tool_executor(institution=None):
     return execute
 
 
-def _reviewer_evaluate(question: Dict, institution=None) -> Dict:
+def _reviewer_evaluate(question: Dict, institution=None, strict_scope=False) -> Dict:
     """Reviewer Agent: from 3 dimensions (v4-pro + thinking + agentic)."""
     from ai_engine.tools import get_reviewer_research_tools
 
@@ -525,7 +532,7 @@ def _reviewer_evaluate(question: Dict, institution=None) -> Dict:
 
     try:
         research_tools = get_reviewer_research_tools()
-        tool_executor = _get_reviewer_tool_executor(institution=institution)
+        tool_executor = _get_reviewer_tool_executor(institution=institution, strict_scope=strict_scope)
         result = AIService.agentic_structured_output(
             system_prompt=system_prompt,
             user_prompt=prompt,

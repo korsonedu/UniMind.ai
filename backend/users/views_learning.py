@@ -8,8 +8,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .learning import active_grants, grant_product, usage_info
-from .models import LearningProduct, LearningGrant
+from .learning import active_grants, usage_info, ai_limit, is_course_student, active_addons, get_weekly_quota_config
+from .models import LearningProduct, LearningGrant, AIAddonProduct
 from .permissions import IsPlatformAdmin
 
 
@@ -45,6 +45,24 @@ class LearningProductSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class AIAddonProductSerializer(serializers.ModelSerializer):
+    configured = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = AIAddonProduct
+        fields = ('id', 'name', 'description', 'price_cents', 'ai_calls', 'validity_days',
+                  'is_active', 'sort_order', 'configured')
+
+    def validate(self, attrs):
+        active = attrs.get('is_active', self.instance.is_active if self.instance else False)
+        if active:
+            for name in ('price_cents', 'ai_calls', 'validity_days'):
+                value = attrs.get(name, getattr(self.instance, name, None))
+                if value is None or value < 1:
+                    raise serializers.ValidationError({name: '请明确配置价格、次数和有效期后再上架。'})
+        return attrs
+
+
 class LearningGrantSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source='user.email', read_only=True)
 
@@ -58,27 +76,35 @@ class LearningCatalogView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return Response({'free_ai_calls': settings.LEARNING_FREE_AI_CALLS_PER_MONTH,
+        config = get_weekly_quota_config()
+        return Response({'experience_weekly_calls': config.experience_calls,
+                         'course_weekly_calls': config.course_calls,
                          'payment_methods': payment_methods(),
-                         'products': LearningProductSerializer(LearningProduct.objects.filter(is_active=True).prefetch_related('modules'), many=True).data})
+                         'products': AIAddonProductSerializer(AIAddonProduct.objects.filter(
+                             is_active=True, price_cents__gt=0, ai_calls__gt=0, validity_days__gt=0), many=True).data})
 
 
 class MyLearningAccessView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        addons = active_addons(request.user)
         return Response({'ai_usage': usage_info(request.user),
+                         'is_course_student': is_course_student(request.user),
+                         'addons': [{'id': grant.id, 'name': grant.snapshot.get('name', ''),
+                                     'ai_calls': grant.ai_calls, 'used_calls': grant.used_calls,
+                                     'expires_at': grant.expires_at} for grant in addons],
                          'grants': LearningGrantSerializer(active_grants(request.user).select_related('user'), many=True).data})
 
 
-class LearningProductAdminView(generics.ListCreateAPIView):
+class LearningProductAdminView(generics.ListAPIView):
     permission_classes = [IsPlatformAdmin]
     serializer_class = LearningProductSerializer
     queryset = LearningProduct.objects.prefetch_related('modules')
     pagination_class = None
 
 
-class LearningProductDetailView(generics.RetrieveUpdateAPIView):
+class LearningProductDetailView(generics.RetrieveAPIView):
     permission_classes = [IsPlatformAdmin]
     serializer_class = LearningProductSerializer
     queryset = LearningProduct.objects.prefetch_related('modules')
@@ -95,17 +121,7 @@ class LearningGrantAdminView(APIView):
         return Response(LearningGrantSerializer(grants[:100], many=True).data)
 
     def post(self, request):
-        class GrantInput(serializers.Serializer):
-            email = serializers.EmailField()
-            product = serializers.PrimaryKeyRelatedField(queryset=LearningProduct.objects.all())
-            source = serializers.ChoiceField(choices=['course', 'admin'], default='course')
-        payload = GrantInput(data=request.data)
-        payload.is_valid(raise_exception=True)
-        user = get_user_model().objects.filter(email__iexact=payload.validated_data['email'], email_verified=True).first()
-        if not user:
-            return Response({'error': '未找到该邮箱的已验证账号，请学员先注册。'}, status=400)
-        grant = grant_product(user, payload.validated_data['product'], source=payload.validated_data['source'])
-        return Response(LearningGrantSerializer(grant).data, status=201)
+        return Response({'error': '旧学习服务不再发放，请在学员管理中手动设置课程学员状态。'}, status=410)
 
 
 class LearningGrantDetailView(generics.UpdateAPIView):

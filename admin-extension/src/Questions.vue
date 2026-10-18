@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Plus, Pencil, Trash2, RefreshCw, Search, ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { Plus, Pencil, Trash2, RefreshCw, Search, ChevronLeft, ChevronRight, Sparkles } from 'lucide-vue-next';
 import Dialog from './Dialog.vue';
 import { useTask } from './api';
 import { catalogOptions, difficulties, subjectiveTypes } from './catalog';
@@ -74,7 +74,7 @@ function toggleAll(event: Event) { selected.value = (event.target as HTMLInputEl
 
 <template>
   <section class="workspace-section" :aria-busy="busy">
-    <div class="section-heading"><h2>题库 <span>{{ rows.total }}</span></h2><div class="actions"><button class="icon" title="刷新" :disabled="busy" @click="run(() => load(rows.page))"><RefreshCw :size="17" /></button><button class="primary" :disabled="!canWrite" @click="run(() => edit())"><Plus :size="17" />新增题目</button></div></div>
+    <div class="section-heading"><h2>题库 <span>{{ rows.total }}</span></h2><div class="actions"><router-link class="button" to="/unimind-admin/workbench"><Sparkles :size="17" />AI 出题</router-link><button class="icon" title="刷新" :disabled="busy" @click="run(() => load(rows.page))"><RefreshCw :size="17" /></button><button class="primary" :disabled="!canWrite" @click="run(() => edit())"><Plus :size="17" />新增题目</button></div></div>
     <p v-if="error && !form && !deletion && !assignment" class="error" role="alert">{{ error }}</p>
     <form class="toolbar" @submit.prevent="run(() => load())">
       <label class="search-field"><Search :size="17" /><input v-model="search" aria-label="搜索题目" placeholder="搜索题目内容" /></label>

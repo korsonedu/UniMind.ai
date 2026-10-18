@@ -33,40 +33,13 @@ import tempfile
 logger = logging.getLogger(__name__)
 security_logger = logging.getLogger('core.security')
 
-from users.permissions import IsMember  # noqa: F401 — 向后兼容 re-export
+from users.permissions import IsMember, HasStudentFeature  # noqa: F401 — 向后兼容 re-export
 
 class ActivateMembershipView(APIView):
-    """用户输入邀请码激活会员。只查 PlanInviteCode 表。"""
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        from .models import PlanInviteCode
-
-        code_str = request.data.get('code')
-        if not code_str:
-            return Response({'error': '请输入激活码'}, status=400)
-
-        code_str = str(code_str).strip().upper()
-        from .services.membership import activate_membership
-        with transaction.atomic():
-            user = User.objects.select_for_update().get(pk=request.user.pk)
-            valid, result = PlanInviteCode.validate_and_use(code_str)
-            if not valid:
-                return Response({'error': result}, status=400)
-            plan, duration_days = result
-            invite = PlanInviteCode.objects.get(code=code_str)
-            code_type = invite.code_type
-            activate_membership(user, plan, duration_days, source='code')
-
-        return Response({
-            'status': 'ok',
-            'message': '会员已成功激活',
-            'code_type': code_type,
-            'plan': plan,
-            'duration_days': duration_days,
-            'user': UserSerializer(user).data,
-        })
-
+        return Response({'detail': '激活码已停用，请联系管理员调整学员状态。'}, status=410)
 
 
 class RegisterView(generics.CreateAPIView):
@@ -168,7 +141,7 @@ from django.db.models.functions import TruncDate
 
 class DailyPlanListView(generics.ListCreateAPIView):
     serializer_class = DailyPlanSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
 
     def get_queryset(self):
         # Return incomplete plans OR plans completed today (Beijing Time)
@@ -185,7 +158,7 @@ class DailyPlanListView(generics.ListCreateAPIView):
 
 class DailyPlanDetailView(generics.UpdateAPIView, generics.DestroyAPIView):
     serializer_class = DailyPlanSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
     def get_queryset(self):
         return DailyPlan.objects.filter(user=self.request.user)
 
@@ -642,7 +615,7 @@ class SendVerificationCodeView(APIView):
 
 class MyKnowledgeMasteryView(APIView):
     """返回当前用户所有知识点的掌握度映射 {kp_id: mastery_level}，基于 Memorix Weibull retrievability"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasStudentFeature]
 
     def get(self, request):
         from django.utils import timezone
@@ -1434,7 +1407,7 @@ class AvatarProxyView(APIView):
 
 class UserCheckInView(APIView):
     """POST /api/users/me/checkin/ — 每日签到；GET 返回签到历史+当前 streak。"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
 
     def get(self, request):
         from .models import DailyCheckIn
@@ -1480,7 +1453,7 @@ class UserCheckInView(APIView):
 
 class AchievementListView(APIView):
     """GET /api/users/achievements/ — 所有预置成就列表（含解锁状态+进度）。"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
 
     def get(self, request):
         from .models import Achievement, UserAchievement, DailyCheckIn
@@ -1541,7 +1514,7 @@ class AchievementListView(APIView):
 
 class UserAchievementView(APIView):
     """GET /api/users/me/achievements/ — 当前用户已解锁成就。"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasStudentFeature]
 
     def get(self, request):
         from .models import UserAchievement

@@ -136,7 +136,7 @@ class AssistantChatService:
             cache.set(cache_key, tools, 300)
 
         # Apply tool permission sandbox
-        tools = filter_tools(bot_type, institution, tools)
+        tools = filter_tools(bot_type, institution, tools, user=getattr(tool_executor, 'user', None))
         from ai_assistant.services.tool_executor import set_permitted_tools
         set_permitted_tools(tool_executor, tools)
 

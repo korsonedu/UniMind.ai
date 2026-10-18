@@ -4,6 +4,7 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from quizzes.models import KnowledgePoint, KnowledgePointAnnotation
+from core.utils import apply_institution_filter, get_content_institution_id, get_content_institution
 from quizzes.serializers import KnowledgePointSerializer
 from users.permissions import IsAdminWriteMemberRead, IsAdmin, IsInstitutionTeacher, IsInstitutionTeacher, HasQuota, is_platform_admin
 
@@ -38,72 +39,39 @@ class KnowledgePointListView(generics.ListCreateAPIView):
     permission_classes = [IsAdminWriteMemberRead]
     quota_resource = 'knowledge_point'
 
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        if self.request.method in ('POST', 'PUT', 'PATCH'):
+            serializer.fields['parent'].queryset = apply_institution_filter(
+                KnowledgePoint.objects.all(), self.request.user, self.request)
+            serializer.fields['institution'].read_only = True
+        return serializer
+
     def get_permissions(self):
         if self.request.method == 'POST':
             return [IsAdmin(), HasQuota()]
         return [IsAdminWriteMemberRead()]
 
     def _get_tree_cache_key(self, user):
-        """返回知识树缓存 key，按机构隔离。平台管理员可按 subject 过滤。"""
-        preview_inst_id = self.request.query_params.get('preview_institution')
-        subject = self.request.query_params.get('subject')
-        if preview_inst_id and is_platform_admin(user):
-            return f"knowledge_tree:ids:inst:{preview_inst_id}"
-        if user.institution is None:
-            if subject:
-                return f"knowledge_tree:ids:global:subject:{subject}"
-            return "knowledge_tree:ids:global"
-        if user.institution:
-            return f"knowledge_tree:ids:inst:{user.institution_id}"
-        return None
+        institution_id = get_content_institution_id()
+        return f"knowledge_tree:ids:inst:{institution_id}" if institution_id else "knowledge_tree:ids:global"
 
     def get_queryset(self):
-        user = self.request.user
-        if not user.is_authenticated:
-            return KnowledgePoint.objects.none()
-
-        subject = self.request.query_params.get('subject')
-
-        # 预览模式：平台管理员可查看任意机构知识树
-        preview_inst_id = self.request.query_params.get('preview_institution')
-        if preview_inst_id:
-            if not is_platform_admin(user):
-                return KnowledgePoint.objects.none()
-            cache_key = f"knowledge_tree:ids:inst:{preview_inst_id}"
-            inst_filter = {'institution_id': preview_inst_id}
-        elif user.institution is None:
-            if subject:
-                cache_key = f"knowledge_tree:ids:global:subject:{subject}"
-                inst_filter = {'institution__isnull': True, 'subject': subject}
-            else:
-                cache_key = "knowledge_tree:ids:global"
-                inst_filter = {'institution__isnull': True}
-        elif user.institution:
-            cache_key = f"knowledge_tree:ids:inst:{user.institution_id}"
-            inst_filter = {'institution': user.institution}
-        else:
-            return KnowledgePoint.objects.none()
-
-        # 尝试从 Redis 缓存中获取树节点 ID 列表
+        qs = apply_institution_filter(super().get_queryset(), self.request.user, self.request)
+        cache_key = self._get_tree_cache_key(self.request.user)
         cached_ids = cache.get(cache_key)
-        if cached_ids is not None:
-            return KnowledgePoint.objects.filter(
-                id__in=cached_ids, parent__isnull=True,
-            ).prefetch_related('children').order_by('order', 'id')
-
-        # Cache miss — 执行完整查询并缓存根节点 ID
-        qs = KnowledgePoint.objects.filter(
-            parent__isnull=True, **inst_filter
-        ).prefetch_related('children').order_by('order', 'id')
-        ids = list(qs.values_list('id', flat=True))
-        cache.set(cache_key, ids, KNOWLEDGE_TREE_CACHE_TIMEOUT)
+        if cached_ids is None:
+            cached_ids = list(qs.values_list('id', flat=True))
+            cache.set(cache_key, cached_ids, KNOWLEDGE_TREE_CACHE_TIMEOUT)
+        qs = qs.filter(id__in=cached_ids)
+        subject = self.request.query_params.get('subject')
+        if subject:
+            qs = qs.filter(subject=subject)
         return qs
 
     def perform_create(self, serializer):
         user = self.request.user
-        institution = None
-        if user.is_authenticated and not is_platform_admin(user) and user.institution:
-            institution = user.institution
+        institution = get_content_institution()
         serializer.save(institution=institution)
         _invalidate_tree_cache(serializer.instance)
 
@@ -119,30 +87,24 @@ class KnowledgePointDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = KnowledgePointSerializer
     permission_classes = [IsAdminWriteMemberRead]
 
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        if self.request.method in ('POST', 'PUT', 'PATCH'):
+            serializer.fields['parent'].queryset = apply_institution_filter(
+                KnowledgePoint.objects.all(), self.request.user, self.request)
+            serializer.fields['institution'].read_only = True
+        return serializer
+
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
         if not user.is_authenticated:
             return qs.none()
-        # 预览模式：平台管理员可查看任意机构知识树
-        preview_inst_id = self.request.query_params.get('preview_institution')
-        if preview_inst_id:
-            if not is_platform_admin(user):
-                return qs.none()
-            return qs.filter(institution_id=preview_inst_id)
-        # 独立学习账号读取全局知识目录，不按管理角色区分。
-        if user.institution is None:
-            return qs.filter(institution__isnull=True)
-        # 机构用户：只接触本机构节点
-        if user.institution:
-            return qs.filter(institution=user.institution)
-        return qs.none()
+        return apply_institution_filter(qs, user, self.request)
 
     def perform_update(self, serializer):
         user = self.request.user
-        institution = None
-        if not is_platform_admin(user) and user.institution:
-            institution = user.institution
+        institution = get_content_institution()
         serializer.save(institution=institution)
         _invalidate_tree_cache(serializer.instance)
 
@@ -337,11 +299,7 @@ class KnowledgePointImportMDView(APIView):
         if not tree:
             return Response({'error': '未解析到有效的知识树结构'}, status=400)
 
-        # 机构管理员自动关联本机构，平台管理员导入为全局树（不得接触机构资产）
-        institution = None
-        user = request.user
-        if not is_platform_admin(user) and user.institution:
-            institution = user.institution
+        institution = get_content_institution()
 
         created, updated = _create_or_update_knowledge_tree(tree, institution=institution)
         # 清除对应机构（或全局）的知识树缓存
@@ -364,13 +322,7 @@ class KnowledgePointExportMDView(APIView):
 
     def get(self, request):
         user = request.user
-        # 平台管理员导出全局树，机构管理员导出本机构树
-        if is_platform_admin(user) and user.institution is None:
-            root_filter = {'institution__isnull': True}
-        elif user.institution:
-            root_filter = {'institution': user.institution}
-        else:
-            return Response({'error': '无法确定所属机构'}, status=400)
+        root_filter = {'institution_id': get_content_institution_id()}
 
         roots = KnowledgePoint.objects.filter(level='sub', parent__isnull=True, **root_filter).order_by('order', 'id')
         if not roots.exists():
@@ -409,12 +361,12 @@ SUBJECT_CATEGORIES = {
 
 class KnowledgePointSubjectsView(APIView):
     """Return global top-level subjects grouped by category, for institution onboarding."""
-    permission_classes = []  # public endpoint
+    permission_classes = [IsAdminWriteMemberRead]
 
     def get(self, request):
         subjects_qs = KnowledgePoint.objects.filter(
             level='sub',
-            institution__isnull=True,
+            institution_id=get_content_institution_id(),
         ).values('subject', 'code', 'name').order_by('subject', 'order')
 
         # group by subject name

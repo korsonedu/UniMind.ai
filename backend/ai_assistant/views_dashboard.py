@@ -10,7 +10,8 @@ from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from users.views import IsMember
-from users.permissions import IsMemberOrReadOnlyList
+from users.permissions import IsMemberOrReadOnlyList, IsPlatformAdmin
+from core.utils import get_content_institution, get_content_institution_id
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class XiaoYuDashboardView(APIView):
 
     def get(self, request):
         user = request.user
-        institution = getattr(user, 'institution', None)
+        institution = get_content_institution()
         data = {}
 
         # 1. Learning Stats
@@ -144,11 +145,7 @@ class XiaoYuDashboardView(APIView):
     def _get_mastery(self, user, institution=None):
         from quizzes.models import UserKnowledgeState
         qs = UserKnowledgeState.objects.filter(user=user).select_related('knowledge_point')
-        if institution:
-            qs = qs.filter(
-                models.Q(knowledge_point__institution=institution) |
-                models.Q(knowledge_point__institution__isnull=True)
-            )
+        qs = qs.filter(knowledge_point__institution_id=get_content_institution_id())
         result = {}
         for uks in qs:
             kp = uks.knowledge_point
@@ -170,16 +167,10 @@ class XiaoYuDashboardView(APIView):
         from quizzes.models import UserQuestionStatus
         now = timezone.now()
         due_qs = UserQuestionStatus.objects.filter(user=user, next_review_at__lte=now)
-        if institution:
-            due_qs = due_qs.filter(
-                models.Q(question__institution=institution)
-            )
+        due_qs = due_qs.filter(question__institution_id=get_content_institution_id())
         due_qs = due_qs.select_related('question__knowledge_point').order_by('next_review_at')[:20]
         base_qs = UserQuestionStatus.objects.filter(user=user, next_review_at__lte=now)
-        if institution:
-            base_qs = base_qs.filter(
-                models.Q(question__institution=institution)
-            )
+        base_qs = base_qs.filter(question__institution_id=get_content_institution_id())
         return {
             'due_count': base_qs.count(),
             'items': [
@@ -214,13 +205,11 @@ class XiaoYuDashboardView(APIView):
 
 class ExamWorkbenchDashboardView(APIView):
     """GET /api/ai/workbench/dashboard/ — 聚合命题官 dashboard 所需的全部数据。"""
-    permission_classes = [IsMember]
+    permission_classes = [IsPlatformAdmin]
 
     def get(self, request):
         user = request.user
-        institution = getattr(user, 'institution', None)
-        if not user.is_institution_admin:
-            return Response({"error": "仅机构管理员可访问"}, status=403)
+        institution = get_content_institution()
 
         data = {}
 
@@ -266,7 +255,7 @@ class ExamWorkbenchDashboardView(APIView):
         """进行中的 ARC 管线任务。"""
         from quizzes.models import ContentPipelineTask
         tasks = ContentPipelineTask.objects.filter(
-            created_by=user,
+            created_by=user, institution_id=get_content_institution_id(),
             status__in=['pending', 'running'],
         ).order_by('-created_at')[:5]
         return [

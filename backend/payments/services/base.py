@@ -39,36 +39,17 @@ def get_plan_price(plan: str, billing_cycle: str) -> int:
 
 
 def create_order(*, user, plan: str, billing_cycle: str, gateway: str, institution=None, coupon_code: str = '') -> Order:
-    amount = get_plan_price(plan, billing_cycle)
-    now = timezone.now()
-
-    discount_cents = 0
-    applied_coupon_code = ''
-
-    if coupon_code:
-        from .coupon import validate_coupon
-        result = validate_coupon(coupon_code, user, plan, amount)
-        if result['valid']:
-            discount_cents = result['discount_cents']
-            amount = result['final_amount_cents']
-            applied_coupon_code = coupon_code
-            # 注意：apply_coupon 在 confirm_order 时调用，避免未支付就扣减次数
-
-    return Order.objects.create(
-        user=user,
-        institution=institution,
-        plan=plan,
-        billing_cycle=billing_cycle,
-        amount_cents=amount,
-        gateway=gateway,
-        coupon_code=applied_coupon_code,
-        discount_cents=discount_cents,
-        expires_at=now + timedelta(minutes=ORDER_TIMEOUT_MINUTES),
-    )
+    raise ValueError('机构套餐已停止销售。')
 
 
 def create_learning_order(*, user, product, gateway):
-    return Order.objects.create(user=user, product=product, institution=None, plan='learning', billing_cycle='fixed',
+    raise ValueError('课程服务已停止在线销售。')
+
+
+def create_ai_addon_order(*, user, product, gateway):
+    if not product.is_active or not product.configured:
+        raise ValueError('AI 加量商品尚未完整配置或未上架。')
+    return Order.objects.create(user=user, ai_addon_product=product, plan='ai_addon', billing_cycle='fixed',
                                 amount_cents=product.price_cents, entitlement_snapshot=product.snapshot(), gateway=gateway,
                                 expires_at=timezone.now() + timedelta(minutes=ORDER_TIMEOUT_MINUTES))
 
@@ -82,14 +63,16 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
     with transaction.atomic():
         order = Order.objects.select_for_update().get(id=order_id)
 
-        if order.status == 'paid':
-            logger.warning("Order %s already paid, ignoring duplicate callback", order.id)
-            return
-
         # 校验回调金额与订单金额一致，防止金额篡改
         if amount_cents is not None and amount_cents != order.amount_cents:
             logger.error("Order %s amount mismatch: expected %s, got %s", order.id, order.amount_cents, amount_cents)
             raise ValueError(f"Payment amount mismatch: expected {order.amount_cents}, got {amount_cents}")
+
+        if order.status == 'paid':
+            if order.gateway_order_id != gateway_txn_id:
+                raise ValueError('Payment transaction mismatch')
+            logger.warning("Order %s already paid, ignoring duplicate callback", order.id)
+            return
 
         # 如果使用了优惠券，在标记支付成功前扣减使用次数
         # （失败则抛出异常回滚整个事务，避免已付款但未扣减的情况）
@@ -114,7 +97,10 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
         order.save(update_fields=['status', 'paid_at', 'gateway_order_id'])
 
         # 会员激活移入 atomic 块内，确保崩溃窗口中不会出现已付款未激活
-        if order.product_id:
+        if order.plan == 'ai_addon':
+            from users.learning import grant_ai_addon
+            grant_ai_addon(order)
+        elif order.product_id:
             from users.learning import grant_product
             grant_product(order.user, order.product, source='payment', order=order, snapshot=order.entitlement_snapshot)
         else:
@@ -123,6 +109,6 @@ def confirm_order(order_id: int, gateway_txn_id: str, raw_callback: dict, amount
 
     # Generate invoice asynchronously
     from payments.tasks import generate_invoice
-    generate_invoice.delay(order.id)
+    transaction.on_commit(lambda: generate_invoice.delay(order.id))
 
     logger.info("Order %s confirmed via %s, txn=%s", order.id, order.gateway, gateway_txn_id)

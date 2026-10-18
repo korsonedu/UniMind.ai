@@ -22,6 +22,7 @@ from ai_assistant.services.grading_engine import GradingEngine
 from ai_assistant.services.memory_system import MemorySystem
 from quizzes.models import Question
 from users.models import User
+from core.utils import get_content_institution, get_content_institution_id
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +35,12 @@ def _resolve_user(request):
         if not (is_platform_admin(request.user) or is_institution_admin(request.user)):
             return None, Response({'error': '无权查询其他用户'}, status=403)
         try:
-            target = User.objects.get(id=user_id)
+            target = User.objects.get(id=user_id, is_active=True, institution_id=get_content_institution_id())
         except User.DoesNotExist:
             return None, Response({'error': '用户不存在'}, status=404)
-        # institution admin can only query users in same institution
-        if is_institution_admin(request.user) and not is_platform_admin(request.user):
-            if target.institution_id != request.user.institution_id:
-                return None, Response({'error': '无权查询其他机构用户'}, status=403)
+        from users.learning import is_course_student
+        if not is_course_student(target):
+            return None, Response({'error': '该账号不是可访问的课程学员'}, status=403)
         return target, None
     return request.user, None
 
@@ -62,7 +62,7 @@ def grade_view(request):
         return Response({'error': 'question_id and user_answer are required'}, status=400)
 
     try:
-        question = Question.objects.get(id=question_id)
+        question = Question.objects.get(id=question_id, institution_id=get_content_institution_id())
     except Question.DoesNotExist:
         return Response({'error': '题目不存在'}, status=404)
 
@@ -102,7 +102,7 @@ def profile_view(request):
     try:
         profile = MemorySystem.query_user_profile(
             user,
-            institution=getattr(user, 'institution', None),
+            institution=get_content_institution(),
         )
     except Exception:
         logger.exception("Profile query failed for user_id=%s", user.id)
@@ -131,7 +131,7 @@ def due_view(request):
         due_data = MemorySystem.query_due_reviews(
             user,
             limit=limit,
-            institution=getattr(user, 'institution', None),
+            institution=get_content_institution(),
         )
     except Exception:
         logger.exception("Due reviews query failed for user_id=%s", user.id)
@@ -154,7 +154,7 @@ def stats_view(request):
     try:
         stats = MemorySystem.query_learning_stats(
             user,
-            institution=getattr(user, 'institution', None),
+            institution=get_content_institution(),
         )
     except Exception:
         logger.exception("Stats query failed for user_id=%s", user.id)
@@ -187,7 +187,7 @@ def practice_start_view(request):
     count = max(1, min(count, 10))
 
     user = request.user
-    institution = getattr(user, 'institution', None)
+    institution = get_content_institution()
 
     try:
         result = MemorySystem.query_practice_questions(
@@ -259,6 +259,9 @@ def practice_pre_grade_view(request):
     session_questions = {q['id'] for q in session_data['questions']}
     if question_id not in session_questions:
         return Response({'error': '题目不属于此会话'}, status=400)
+
+    if not Question.objects.filter(id=question_id, institution_id=get_content_institution_id()).exists():
+        return Response({'error': '题目不在当前内容范围'}, status=403)
 
     # 异步派发 Celery task
     from ai_assistant.tasks import pre_grade_single_question
@@ -334,7 +337,7 @@ def practice_submit_view(request):
             continue
 
         try:
-            question = Question.objects.get(id=qid)
+            question = Question.objects.get(id=qid, institution_id=get_content_institution_id())
         except Question.DoesNotExist:
             results.append({
                 'question_id': qid,

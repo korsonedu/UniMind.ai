@@ -16,7 +16,7 @@ from payments.serializers import (
     CreateOrderSerializer, OrderSerializer, InvoiceSerializer,
     CouponSerializer, CouponValidateSerializer,
 )
-from payments.services.base import create_order, create_learning_order, confirm_order, get_plan_price
+from payments.services.base import create_order, create_ai_addon_order, confirm_order, get_plan_price
 from payments.services.coupon import validate_coupon
 from payments.services.gateway_router import get_gateway, gateway_supports_subscriptions
 from payments.services.subscription import (
@@ -42,12 +42,12 @@ class CreateCheckoutSessionView(APIView):
         if gateway == 'stub' and not getattr(django_settings, 'DEBUG', False):
             return Response({'error': '当前环境不支持该支付方式'}, status=400)
 
-        from users.models import LearningProduct
+        from users.models import AIAddonProduct
         from users.views_learning import payment_methods
         if gateway not in payment_methods():
             return Response({'error': '该支付方式暂未开通。'}, status=400)
-        product = get_object_or_404(LearningProduct, pk=ser.validated_data['product'], is_active=True, price_cents__gt=0)
-        order = create_learning_order(user=request.user, product=product, gateway=gateway)
+        product = get_object_or_404(AIAddonProduct, pk=ser.validated_data['product'], is_active=True, price_cents__gt=0, ai_calls__gt=0, validity_days__gt=0)
+        order = create_ai_addon_order(user=request.user, product=product, gateway=gateway)
 
         try:
             gw = get_gateway(gateway)
@@ -143,62 +143,7 @@ class CreateSubscriptionView(APIView):
     permission_classes = [IsAuthenticated, IsInstitutionOwner]
 
     def post(self, request):
-        user = request.user
-        inst = user.institution
-
-        plan = request.data.get('plan', 'starter')
-        billing_cycle = request.data.get('billing_cycle', 'monthly')
-        gateway = request.data.get('gateway', 'stub')
-
-        if plan not in dict(Subscription.PLAN_CHOICES):
-            return Response({'error': f'无效方案: {plan}'}, status=400)
-        if billing_cycle not in dict(Subscription.BILLING_CHOICES):
-            return Response({'error': f'无效周期: {billing_cycle}'}, status=400)
-
-        if not gateway_supports_subscriptions(gateway):
-            return Response({'error': f'该支付方式暂不支持订阅'}, status=400)
-
-        # 1. Create a one-time order for the subscription checkout
-        try:
-            from payments.services.base import create_order as create_payment_order
-            order = create_payment_order(
-                user=user,
-                plan=plan,
-                billing_cycle=billing_cycle,
-                gateway=gateway,
-                institution=inst,
-            )
-        except Exception:
-            logger.exception('Order creation failed for subscription')
-            return Response({'error': '创建订单失败'}, status=500)
-
-        # 2. Create pending subscription record
-        try:
-            sub = create_subscription(
-                institution=inst,
-                plan=plan,
-                billing_cycle=billing_cycle,
-                gateway=gateway,
-            )
-        except Exception:
-            logger.exception('Subscription record creation failed')
-            return Response({'error': '创建订阅记录失败'}, status=500)
-
-        # 3. Get checkout URL from gateway
-        try:
-            gw = get_gateway(gateway)
-            data = gw.create_subscription_checkout(order)
-        except Exception:
-            logger.exception('Subscription checkout failed for order %s (gateway=%s)', order.id, gateway)
-            order.status = 'cancelled'
-            order.save(update_fields=['status'])
-            return Response({'error': '创建订阅会话失败'}, status=500)
-
-        return Response({
-            'subscription_id': sub.id,
-            'order_id': order.id,
-            'checkout_url': data.get('checkout_url'),
-        }, status=status.HTTP_201_CREATED)
+        return Response({'error': '机构套餐已停止销售。'}, status=410)
 
 
 class SubscriptionStatusView(APIView):

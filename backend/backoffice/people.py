@@ -13,8 +13,11 @@ from .common import identity, paginate, managed
 
 
 def person(user):
+    from users.learning import is_course_student
+    from users.permissions import is_platform_admin
     return {'id': user.pk, 'username': user.username, 'email': user.email, 'nickname': user.nickname,
-            'is_active': user.is_active, 'email_verified': user.email_verified}
+            'is_active': user.is_active, 'email_verified': user.email_verified,
+            'is_course_student': is_course_student(user), 'is_admin': is_platform_admin(user)}
 
 
 def list_students(request, data):
@@ -42,6 +45,22 @@ def save_access(request, data):
     profile.blocked_permissions = sorted(unrelated | (keys - enabled))
     profile.save(update_fields=['blocked_permissions'])
     return {'id': user.pk, 'enabled_features': sorted(enabled)}
+
+
+def save_student_status(request, data):
+    from django.core.cache import cache
+    from users.learning import set_course_student_status
+    user = get_object_or_404(get_user_model().objects.select_for_update(), pk=identity(data))
+    if user.is_superuser:
+        raise serializers.ValidationError('管理员身份不通过学员状态调整。')
+    value = serializers.BooleanField().run_validation(data.get('is_course_student'))
+    existing = getattr(user, 'course_student_status', None)
+    if existing is not None and existing.is_course_student == value:
+        request.backoffice_no_change = True
+    else:
+        set_course_student_status(user, value, actor=request.user)
+    cache.delete(f'effective_plan:{user.pk}')
+    return {'id': user.pk, 'is_course_student': value}
 
 
 class ProductInput(LearningProductSerializer):

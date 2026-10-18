@@ -11,6 +11,7 @@ from typing import Dict, Optional
 
 from django.db import models
 from django.utils import timezone
+from core.utils import get_content_institution_id
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class MemorySystem:
 
         # 收集所有有 review 记录的题目，在 Python 层计算固定间隔是否到期
         all_statuses = UserQuestionStatus.objects.filter(
-            user=user
+            user=user, question__institution_id=get_content_institution_id()
         ).select_related('question__knowledge_point').order_by('last_review')
 
         due_list = []
@@ -109,11 +110,7 @@ class MemorySystem:
         from quizzes.models import UserKnowledgeState
 
         qs = UserKnowledgeState.objects.filter(user=user).select_related('knowledge_point')
-        if institution:
-            qs = qs.filter(
-                models.Q(knowledge_point__institution=institution) |
-                models.Q(knowledge_point__institution__isnull=True)
-            )
+        qs = qs.filter(knowledge_point__institution_id=get_content_institution_id())
         subject_filter = (subject or '').strip()
         if subject_filter:
             qs = qs.filter(knowledge_point__subject=subject_filter)
@@ -148,10 +145,7 @@ class MemorySystem:
         from quizzes.models import UserQuestionStatus
 
         qs = UserQuestionStatus.objects.filter(user=user, wrong_count__gt=0)
-        if institution:
-            qs = qs.filter(
-                models.Q(question__institution=institution)
-            )
+        qs = qs.filter(question__institution_id=get_content_institution_id())
 
         aggregated = (
             qs.values('question__knowledge_point__name', 'question__knowledge_point__code')
@@ -181,10 +175,7 @@ class MemorySystem:
         limit = min(int(limit), 50)
         now = timezone.now()
         due_qs = UserQuestionStatus.objects.filter(user=user, next_review_at__lte=now)
-        if institution:
-            due_qs = due_qs.filter(
-                models.Q(question__institution=institution)
-            )
+        due_qs = due_qs.filter(question__institution_id=get_content_institution_id())
         due_qs = due_qs.select_related('question__knowledge_point').order_by('next_review_at')
         due_count = due_qs.count()
         due_list = due_qs[:limit]
@@ -246,10 +237,7 @@ class MemorySystem:
             user=user
         ).select_related('question__knowledge_point')
 
-        if institution:
-            qs = qs.filter(
-                models.Q(question__institution=institution)
-            )
+        qs = qs.filter(question__institution_id=get_content_institution_id())
 
         if subject:
             qs = qs.filter(question__knowledge_point__subject=subject)
@@ -325,10 +313,7 @@ class MemorySystem:
 
         limit = min(int(limit), 10)
         qs = UserQuestionStatus.objects.filter(user=user, wrong_count__gt=0)
-        if institution:
-            qs = qs.filter(
-                models.Q(question__institution=institution)
-            )
+        qs = qs.filter(question__institution_id=get_content_institution_id())
         wrong_qs = qs.select_related('question__knowledge_point').order_by('-wrong_count')[:limit]
 
         return {
@@ -353,7 +338,7 @@ class MemorySystem:
         from quizzes.models import UserQuestionStatus
         return {
             "subjects": list(
-                UserQuestionStatus.objects.filter(user=user)
+                UserQuestionStatus.objects.filter(user=user, question__institution_id=get_content_institution_id())
                 .values_list('question__knowledge_point__subject', flat=True)
                 .distinct()
             ),
@@ -375,8 +360,7 @@ class MemorySystem:
             user_subjects = user_subjects_data.get("subjects", [])
             if user_subjects:
                 qs = qs.filter(Q(subject__in=user_subjects) | Q(subject__isnull=True))
-        if institution:
-            qs = qs.filter(Q(institution=institution) | Q(institution__isnull=True))
+        qs = qs.filter(institution_id=get_content_institution_id())
 
         nodes = list(qs.select_related('parent').values(
             'id', 'code', 'name', 'level', 'subject', 'parent__name',
@@ -415,8 +399,7 @@ class MemorySystem:
         from quizzes.models import Question
 
         qs = Question.objects.select_related('knowledge_point')
-        if institution:
-            qs = qs.filter(institution=institution)
+        qs = qs.filter(institution_id=get_content_institution_id())
         try:
             q = qs.get(id=question_id)
         except Question.DoesNotExist:
@@ -448,8 +431,7 @@ class MemorySystem:
         limit = min(int(limit), 10)
         qs = Question.objects.select_related('knowledge_point')
 
-        if institution:
-            qs = qs.filter(institution=institution)
+        qs = qs.filter(institution_id=get_content_institution_id())
 
         if kp_name:
             qs = qs.filter(knowledge_point__name__icontains=kp_name)
@@ -589,8 +571,7 @@ class MemorySystem:
             knowledge_point_id=kp_id,
             difficulty_level__in=adjacent,
         ).exclude(id=exclude_id)
-        if institution:
-            qs = qs.filter(institution=institution)
+        qs = qs.filter(institution_id=get_content_institution_id())
 
         questions = list(qs.select_related('knowledge_point').order_by('?')[:limit])
         return {

@@ -21,7 +21,8 @@ from rest_framework.views import APIView
 
 from quizzes.models import KnowledgePoint, KnowledgeEdge
 from quizzes.serializers import KnowledgeEdgeSerializer
-from users.permissions import IsInstitutionAdmin, IsPlatformAdmin, is_platform_admin
+from users.permissions import IsInstitutionAdmin
+from core.utils import apply_institution_filter, get_content_institution_id
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +41,21 @@ class KnowledgeEdgeListCreateView(generics.ListCreateAPIView):
     serializer_class = KnowledgeEdgeSerializer
     permission_classes = [IsInstitutionAdmin]
 
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        if self.request.method in ('POST', 'PUT', 'PATCH'):
+            for field in ('source', 'target'):
+                serializer.fields[field].queryset = apply_institution_filter(
+                    KnowledgePoint.objects.all(), self.request.user, self.request)
+        return serializer
+
     def get_queryset(self):
         user = self.request.user
         qs = KnowledgeEdge.objects.select_related('source', 'target')
 
-        # 平台管理员可查看任意机构
-        if is_platform_admin(user):
-            inst_id = self.request.query_params.get('institution')
-        else:
-            inst_id = getattr(user, 'institution_id', None)
-
-        if inst_id:
-            qs = qs.filter(dm.Q(institution_id=inst_id) | dm.Q(institution__isnull=True))
+        qs = apply_institution_filter(qs, user, self.request)
+        scope_id = get_content_institution_id()
+        qs = qs.filter(source__institution_id=scope_id, target__institution_id=scope_id)
 
         # 按学科过滤
         subject = self.request.query_params.get('subject')
@@ -81,7 +85,7 @@ class KnowledgeEdgeListCreateView(generics.ListCreateAPIView):
         user = self.request.user
         edge = serializer.save(
             source_type='manual',
-            institution_id=getattr(user, 'institution_id', None),
+            institution_id=get_content_institution_id(),
         )
         # 如果是非对称关系（prerequisite / derivation），创建提示
         _ensure_reverse_for_asymmetric(edge)
@@ -103,8 +107,19 @@ class KnowledgeEdgeDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsInstitutionAdmin]
     lookup_field = 'pk'
 
+    def get_serializer(self, *args, **kwargs):
+        serializer = super().get_serializer(*args, **kwargs)
+        if self.request.method in ('POST', 'PUT', 'PATCH'):
+            for field in ('source', 'target'):
+                serializer.fields[field].queryset = apply_institution_filter(
+                    KnowledgePoint.objects.all(), self.request.user, self.request)
+        return serializer
+
     def get_queryset(self):
-        return KnowledgeEdge.objects.select_related('source', 'target')
+        scope_id = get_content_institution_id()
+        return apply_institution_filter(
+            KnowledgeEdge.objects.select_related('source', 'target'), self.request.user, self.request,
+        ).filter(source__institution_id=scope_id, target__institution_id=scope_id)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -127,7 +142,7 @@ class KnowledgeEdgeDetailView(generics.RetrieveUpdateDestroyAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         # 如果 source_type 是 llm，修改后保持不变（仍是 llm 标注 + 人工校准）
-        serializer.save()
+        serializer.save(institution_id=get_content_institution_id())
         from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
         invalidate_adjacency_cache()
 
@@ -155,18 +170,19 @@ class KnowledgeEdgeBulkCreateView(APIView):
             return Response({'detail': 'edges 不能为空'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = self.request.user
-        inst_id = getattr(user, 'institution_id', None)
+        inst_id = get_content_institution_id()
         created, skipped, errors = 0, 0, []
 
         for i, data in enumerate(edges_data):
-            source_id = data.get('source')
-            target_id = data.get('target')
-            edge_type = data.get('edge_type', 'similar')
-            weight = data.get('weight', 0.5)
-
-            if not source_id or not target_id:
-                errors.append({'index': i, 'error': 'source 和 target 必填'})
+            serializer = KnowledgeEdgeSerializer(data={'edge_type': 'similar', 'weight': 0.5, **data})
+            for field in ('source', 'target'):
+                serializer.fields[field].queryset = KnowledgePoint.objects.filter(institution_id=inst_id)
+            if not serializer.is_valid():
+                errors.append({'index': i, 'error': serializer.errors})
                 continue
+            validated = serializer.validated_data
+            source_id, target_id = validated['source'].pk, validated['target'].pk
+            edge_type, weight = validated['edge_type'], validated['weight']
 
             _, is_new = KnowledgeEdge.objects.update_or_create(
                 source_id=source_id,

@@ -27,17 +27,7 @@ def _get_institution_owner(inst):
 
 def create_subscription(*, institution, plan: str, billing_cycle: str, gateway: str) -> Subscription:
     """Create a pending subscription record. Activated later via webhook callback."""
-    now = timezone.now()
-    duration = DURATION_DAYS.get(billing_cycle, 30)
-    return Subscription.objects.create(
-        institution=institution,
-        plan=plan,
-        billing_cycle=billing_cycle,
-        gateway=gateway,
-        status='pending',
-        current_period_start=now,
-        current_period_end=now + timedelta(days=duration),
-    )
+    raise ValueError('机构套餐已停止销售。')
 
 
 def activate_subscription(sub: Subscription, gateway_subscription_id: str, gateway_customer_id: str = '') -> Subscription:

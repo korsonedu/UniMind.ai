@@ -328,6 +328,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     try {
       for await (const payload of readChatStream({
         body: {
+          request_id: crypto.randomUUID(),
           message: text,
           bot_id: bot.id,
           conversation_id: requestConversationId,
@@ -491,7 +492,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       if (!isCurrent()) return;
       if (err instanceof DOMException && err.name === 'AbortError') return;
       const msg = err instanceof Error ? err.message : '发送失败，请重试';
-      toast.error(msg.includes('HTTP') ? '服务暂时不可用，请稍后再试' : '发送失败，请重试');
+      toast.error(msg.includes('HTTP') || err instanceof TypeError ? '服务暂时不可用，请稍后再试' : msg);
       setInput(text);
     } finally {
       reveal.dispose();

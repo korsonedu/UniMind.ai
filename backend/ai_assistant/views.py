@@ -56,8 +56,58 @@ def _get_chat_history(user, bot, conversation_id, exclude_ids=(), limit=10):
     ]
 
 
-def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None,
-                    history_limit=10, current_user_message_id=None):
+def _can_use_learning_context(user):
+    from users.learning import is_course_student
+    from users.permissions import is_platform_admin
+    return is_platform_admin(user) or is_course_student(user)
+
+
+def _reserve_chat_request(user, data, bot):
+    import hashlib
+    import json
+    from users.learning import reserve_ai_call
+    fingerprint = hashlib.sha256(json.dumps({
+        'message': data.get('message', '').strip(), 'bot_id': bot.pk,
+        'conversation_id': str(data.get('conversation_id') or ''),
+    }, sort_keys=True).encode()).hexdigest()
+    return reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint)
+
+
+def _duplicate_chat_response(reservation, *, stream=False):
+    if reservation.status == 'pending':
+        return Response({'error': '这条提问仍在处理中，请查看当前会话。',
+                         'request_id': str(reservation.request_id)}, status=409)
+    if stream:
+        import json
+        from django.http import StreamingHttpResponse
+        return StreamingHttpResponse([f"data: {json.dumps(reservation.response, ensure_ascii=False)}\n\n"],
+                                     content_type='text/event-stream')
+    return Response({'status': 'completed', **reservation.response})
+
+
+def _complete_ai_result(result, content, metadata=None):
+    meaningful_card = bool(metadata and (metadata.get('visual') or metadata.get('generated_questions')))
+    if not result or (not (content or '').strip() and not meaningful_card):
+        return False
+    if result.get('finish_reason') in ('length', 'content_filter', 'tool_limit', 'incomplete') or result.get('error'):
+        return False
+    choices = result.get('choices') or []
+    if choices and choices[0].get('finish_reason') in ('length', 'content_filter'):
+        return False
+    return not any(text in (content or '') for text in ('AI 服务暂时不可用', 'AI 暂时无法响应', 'AI 助教暂时无法响应', 'LLM_API_KEY'))
+
+
+def process_ai_chat(*args, reservation=None, **kwargs):
+    from users.learning import release_ai_call
+    try:
+        return _process_ai_chat(*args, reservation=reservation, **kwargs)
+    finally:
+        if reservation:
+            release_ai_call(reservation)
+
+
+def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None,
+                    history_limit=10, current_user_message_id=None, reservation=None):
     history_msgs = _get_chat_history(
         user,
         bot,
@@ -69,15 +119,19 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
     project_history = add_project_context(user, conversation_id, history_msgs)
 
     student_context = ""
-    if bot and bot.is_exclusive:
+    if bot and bot.is_exclusive and _can_use_learning_context(user):
         student_context = get_student_academic_context(user)
 
     # 获取记忆上下文 (dual-layer: structured + mem0 semantic + adaptive directives)
     from ai_assistant.services.memory_service import build_memory_context
-    memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type if bot else 'planner')
+    memory_context, adaptive_directives = '', ''
+    if _can_use_learning_context(user):
+        memory_context, adaptive_directives = build_memory_context(user, user_message, bot_type=bot.bot_type if bot else 'planner')
 
     from ai_assistant.services.chat_dispatch import dispatch_bot_chat
 
+    tool_executor = None
+    poll_variant_name = 'baseline'
     try:
         with _AI_CHAT_SEMAPHORE:
             dispatch_result = dispatch_bot_chat(
@@ -97,7 +151,7 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
 
         if res and 'choices' in res:
-            ai_content = res['choices'][0]['message']['content']
+            ai_content = res['choices'][0]['message']['content'] or ''
             finish_reason = res['choices'][0].get('finish_reason')
 
             # Format math
@@ -130,6 +184,11 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
             from users.quota import increment_quota
             if user.institution:
                 increment_quota(user.institution, 'ai_call_total')
+
+            if reservation and _complete_ai_result(res, ai_content, pending_msg.metadata if pending_msg else None):
+                from users.learning import confirm_ai_call
+                confirm_ai_call(reservation, {'done': True, 'full_content': ai_content,
+                                             'message_id': pending_msg_id, 'conversation_id': str(conversation_id)})
         else:
             if pending_msg:
                 pending_msg.content = "AI 助教暂时无法响应，请稍后再试。"
@@ -149,8 +208,9 @@ def process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=Non
                 extract_memories_with_mem0,
             )
             full_history = history_msgs + [{'role': 'user', 'content': user_message}]
-            extract_memories_async(user, full_history)
-            extract_memories_with_mem0(user, full_history)
+            if _can_use_learning_context(user):
+                extract_memories_async(user, full_history)
+                extract_memories_with_mem0(user, full_history)
         except Exception:
             logger.warning("Memory extraction failed (polling)", exc_info=True)
 
@@ -365,32 +425,40 @@ class AIChatView(APIView):
             return Response({'error': '无权使用此机器人'}, status=403)
         sync_bot_prompt(bot)
 
-        from users.learning import reserve_ai_call
-        reserve_ai_call(request.user)
+        reservation = _reserve_chat_request(request.user, request.data, bot)
+        if not reservation.acquired:
+            return _duplicate_chat_response(reservation)
 
-        # 1. Save User Message
-        if bot:
-            save_new_conversation_project(request, bot, conversation_id)
-        user_msg = AIChatMessage.objects.create(
-            user=request.user, role='user', content=user_message,
-            bot=bot, conversation_id=conversation_id,
-        )
-        record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
+        try:
+            # 1. Save User Message
+            if bot:
+                save_new_conversation_project(request, bot, conversation_id)
+            user_msg = AIChatMessage.objects.create(
+                user=request.user, role='user', content=user_message,
+                bot=bot, conversation_id=conversation_id,
+            )
+            record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
-        # 2. Create Pending Assistant Message
-        pending_msg = AIChatMessage.objects.create(user=request.user, role='assistant', content="[Thinking...]", bot=bot, conversation_id=conversation_id)
+            # 2. Create Pending Assistant Message
+            pending_msg = AIChatMessage.objects.create(user=request.user, role='assistant', content="[Thinking...]", bot=bot, conversation_id=conversation_id)
 
-        # 3. Start Background Thread
-        from ai_assistant.utils import _THREAD_POOL
-        _THREAD_POOL.submit(
-            process_ai_chat,
-            request.user,
-            bot,
-            user_message,
-            pending_msg.id,
-            conversation_id=conversation_id,
-            current_user_message_id=user_msg.id,
-        )
+            # 3. Start Background Thread
+            from ai_assistant.utils import _THREAD_POOL
+            _THREAD_POOL.submit(
+                process_ai_chat,
+                request.user,
+                bot,
+                user_message,
+                pending_msg.id,
+                conversation_id=conversation_id,
+                current_user_message_id=user_msg.id,
+                reservation=reservation,
+            )
+
+        except BaseException:
+            from users.learning import release_ai_call
+            release_ai_call(reservation)
+            raise
 
         return Response({'status': 'pending'})
 
@@ -503,21 +571,28 @@ class AIChatStreamView(APIView):
 
         sync_bot_prompt(bot)
 
-        from users.learning import reserve_ai_call
-        reserve_ai_call(request.user)
+        reservation = _reserve_chat_request(request.user, request.data, bot)
+        if not reservation.acquired:
+            return _duplicate_chat_response(reservation, stream=True)
 
-        # Save user message
-        save_new_conversation_project(request, bot, conversation_id)
-        user_msg = AIChatMessage.objects.create(
-            user=request.user, role='user', content=user_message,
-            bot=bot, conversation_id=conversation_id,
-        )
+        try:
+            # Save user message
+            save_new_conversation_project(request, bot, conversation_id)
+            user_msg = AIChatMessage.objects.create(
+                user=request.user, role='user', content=user_message,
+                bot=bot, conversation_id=conversation_id,
+            )
         
-        # Create pending assistant message (for refresh recovery)
-        pending_msg = AIChatMessage.objects.create(
-            user=request.user, role='assistant', content="[Thinking...]",
-            bot=bot, conversation_id=conversation_id
-        )
+            # Create pending assistant message (for refresh recovery)
+            pending_msg = AIChatMessage.objects.create(
+                user=request.user, role='assistant', content="[Thinking...]",
+                bot=bot, conversation_id=conversation_id
+            )
+
+        except BaseException:
+            from users.learning import release_ai_call
+            release_ai_call(reservation)
+            raise
 
         def _sync_setup():
             """All sync DB/ORM work — called once via sync_to_async."""
@@ -531,11 +606,13 @@ class AIChatStreamView(APIView):
             project_history = add_project_context(request.user, conversation_id, history_msgs)
 
             student_context = ""
-            if bot.is_exclusive:
+            if bot.is_exclusive and _can_use_learning_context(request.user):
                 student_context = get_student_academic_context(request.user)
 
             from ai_assistant.services.memory_service import build_memory_context
-            memory_context, adaptive_directives = build_memory_context(request.user, user_message, bot_type=bot.bot_type)
+            memory_context, adaptive_directives = '', ''
+            if _can_use_learning_context(request.user):
+                memory_context, adaptive_directives = build_memory_context(request.user, user_message, bot_type=bot.bot_type)
 
             from ai_assistant.services.chat_dispatch import dispatch_bot_chat_sync
 
@@ -562,6 +639,9 @@ class AIChatStreamView(APIView):
 
         async def generate():
             history_msgs = []
+            ai_content = ''
+            tool_executor = None
+            sse_variant_name = 'baseline'
             started_at = time.monotonic()
             metrics_logger = logging.getLogger("agent_debug")
             metrics = {
@@ -609,9 +689,12 @@ class AIChatStreamView(APIView):
                 event_loop = asyncio.get_running_loop()
                 _SENTINEL = object()
                 _result_container = [None]
+                _engine_failed = threading.Event()
                 _sent_any_message = False
 
                 def on_step(event):
+                    if event.get('type') == 'error':
+                        _engine_failed.set()
                     event_loop.call_soon_threadsafe(step_queue.put_nowait, event)
 
                 def on_message(text):
@@ -648,6 +731,7 @@ class AIChatStreamView(APIView):
                             )
                     except Exception as e:
                         logger.exception("Agent thread error: %s", e)
+                        _engine_failed.set()
                         _result_container[0] = {"content": "AI 服务暂时不可用，请稍后再试。"}
                     finally:
                         event_loop.call_soon_threadsafe(step_queue.put_nowait, _SENTINEL)
@@ -701,7 +785,7 @@ class AIChatStreamView(APIView):
                     result = _result_container[0]
 
                 ai_content = ""
-                is_error = False
+                is_error = _engine_failed.is_set()
                 if result is None:
                     ai_content = "AI 正在处理中，请稍候重试。"
                     is_error = True
@@ -783,6 +867,9 @@ class AIChatStreamView(APIView):
                     done_payload['metadata'] = metadata
                 if conv_title:
                     done_payload['conversation_title'] = conv_title
+                if not is_error and _complete_ai_result(result, ai_content, metadata):
+                    from users.learning import confirm_ai_call
+                    await sync_to_async(confirm_ai_call)(reservation, done_payload)
                 yield f"data: {json.dumps(done_payload, ensure_ascii=False)}\n\n"
                 log_metrics('completed')
 
@@ -792,6 +879,8 @@ class AIChatStreamView(APIView):
                 error_msg = "抱歉，连接中断，请稍后再试。"
                 yield f"data: {json.dumps({'error': error_msg})}\n\n"
             finally:
+                from users.learning import release_ai_call
+                await sync_to_async(release_ai_call)(reservation)
                 log_metrics('disconnect')
                 try:
                     from ai_assistant.services.memory_service import (
@@ -799,8 +888,9 @@ class AIChatStreamView(APIView):
                         extract_memories_with_mem0,
                     )
                     full_history = history_msgs + [{'role': 'user', 'content': user_message}]
-                    await sync_to_async(extract_memories_async)(request.user, full_history)
-                    await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
+                    if await sync_to_async(_can_use_learning_context)(request.user):
+                        await sync_to_async(extract_memories_async)(request.user, full_history)
+                        await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     logger.warning("Memory extraction failed (SSE)", exc_info=True)
 
@@ -829,6 +919,9 @@ class AIChatStreamView(APIView):
             generate(),
             content_type='text/event-stream',
         )
+        from users.learning import release_ai_call
+        # Django closes responses even when the client leaves before generator startup.
+        response._resource_closers.append(lambda: release_ai_call(reservation))
         response['Cache-Control'] = 'no-cache'
         response['X-Accel-Buffering'] = 'no'
         return response

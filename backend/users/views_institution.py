@@ -27,6 +27,16 @@ from .serializers_institution import (
     InstitutionInviteSerializer, CreateInstitutionInviteSerializer, JoinRequestSerializer,
 )
 
+class RetiredInstitutionView(APIView):
+    """已退出的机构/激活/API 销售入口，不读取或修改历史数据。"""
+    permission_classes = [AllowAny]
+
+    def _retired(self, request, *args, **kwargs):
+        return Response({'detail': '该入口已停用，请在科晟平台使用个人账号。'}, status=410)
+
+    get = post = put = patch = delete = _retired
+
+
 DIRECTION_LIMITS = {'starter': 1, 'growth': 3, 'enterprise': 999999}
 
 
@@ -77,6 +87,7 @@ def _clone_knowledge_tree(subject_name, institution):
 # ── Super Admin: Institution CRUD ──
 
 class InstitutionListView(APIView):
+    http_method_names = ['get', 'head', 'options']
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def get(self, request):
@@ -106,6 +117,7 @@ class InstitutionListView(APIView):
 
 
 class InstitutionDetailView(APIView):
+    http_method_names = ['get', 'head', 'options']
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def get(self, request, pk):
@@ -400,22 +412,12 @@ class InstitutionFeatureView(APIView):
         from users.learning import usage_info
         from users.feature_access import learning_features
         user = request.user
-        inst = user.institution
         features = learning_features(user)
         inst_data = None
-        if inst:
-            inst_data = {
-                'id': inst.id, 'name': inst.name, 'slug': inst.slug,
-                'plan': inst.get_effective_plan(), 'plan_label': inst.get_plan_display(),
-                'plan_expires_at': None, 'is_active': inst.is_active,
-                'is_plan_active': inst.is_active, 'max_students': inst.max_students,
-                'student_count': inst.student_count, 'invite_slug': inst.invite_slug,
-                'business_type': inst.business_type,
-            }
         personal_usage = usage_info(user)
         usage = {'ai_call_total': personal_usage, 'ai_question': personal_usage,
                  'used': personal_usage['used'], 'limit': personal_usage['limit']}
-        return Response({'is_platform_admin': False,
+        return Response({'is_platform_admin': is_platform_admin(user),
                          'institution': inst_data, 'features': features, 'usage': usage})
 
 # ── Institution Dashboard ──
@@ -677,6 +679,7 @@ class RegenerateInviteSlugView(APIView):
 # ── Institution Member Management (owner + teacher) ──
 
 class InstitutionMemberListView(APIView):
+    http_method_names = ['get', 'head', 'options']
     """机构管理员（owner / teacher）列出所有成员（教师 + 学员）"""
     permission_classes = [IsAuthenticated, IsInstitutionAdmin, IsInstitutionActive]
 
@@ -873,6 +876,7 @@ class InstitutionInviteDetailView(APIView):
 
 
 class InstitutionJoinRequestListView(APIView):
+    http_method_names = ['get', 'head', 'options']
     """GET 加入申请列表（按状态筛选）"""
     permission_classes = [IsAuthenticated, IsInstitutionTeacher, IsInstitutionActive]
 

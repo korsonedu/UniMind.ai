@@ -8,6 +8,10 @@ class UserSerializer(serializers.ModelSerializer):
     is_institution_admin = serializers.SerializerMethodField()
     is_institution_owner = serializers.SerializerMethodField()
     is_institution_teacher = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    is_member = serializers.SerializerMethodField()
+    institution_role = serializers.SerializerMethodField()
+    institution_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -15,31 +19,33 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'username', 'role', 'elo_score', 'avatar_url', 'is_member', 'membership_tier', 'personal_plan', 'membership_expires_at', 'membership_source', 'is_admin', 'is_institution_admin', 'is_institution_owner', 'is_institution_teacher', 'institution_role', 'institution_id', 'tour_dismissed_at', 'tour_panel_dismissed_at')
 
     def get_is_admin(self, obj):
-        return obj.is_superuser and obj.institution_id is None
+        from .permissions import is_platform_admin
+        return is_platform_admin(obj)
+
+    def get_role(self, obj):
+        return 'admin' if self.get_is_admin(obj) else 'student'
+
+    def get_is_member(self, obj):
+        from .learning import is_course_student
+        return self.get_is_admin(obj) or is_course_student(obj)
+
+    def get_institution_role(self, obj):
+        return '' if self.get_is_admin(obj) else 'student'
+
+    def get_institution_id(self, obj):
+        return None
 
     def get_is_institution_admin(self, obj):
-        return obj.institution is not None and obj.institution_role in ('owner', 'teacher')
+        return False
 
     def get_is_institution_owner(self, obj):
-        return obj.institution is not None and obj.institution_role == 'owner'
+        return False
 
     def get_is_institution_teacher(self, obj):
-        return obj.institution is not None and obj.institution_role in ('owner', 'teacher')
+        return False
 
     def get_institution(self, obj):
-        inst = obj.institution
-        if inst is None:
-            return None
-        return {
-            'id': inst.id,
-            'name': inst.name,
-            'plan': inst.plan,
-            'plan_label': inst.get_plan_display(),
-            'is_plan_active': inst.is_plan_active,
-            'max_students': inst.max_students,
-            'student_count': inst.student_count,
-            'invite_slug': inst.invite_slug,
-        }
+        return None
 
 class DailyPlanSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,22 +66,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         fields = ("username", "email", "code", "nickname", "password", "agreed_to_terms")
 
     def create(self, validated_data):
-        # 如果是第一个用户，设为管理员且具有后台权限
-        if User.objects.count() == 0:
-            user = User.objects.create_superuser(
-                username=validated_data["username"],
-                password=validated_data["password"],
-                nickname=validated_data["username"],
-                role="admin"
-            )
-        else:
-            user = User.objects.create_user(
-                username=validated_data["username"],
-                password=validated_data["password"],
-                nickname=validated_data["username"],
-                role="student"
-            )
-        return user
+        return User.objects.create_user(
+            username=validated_data['username'], email=validated_data['email'],
+            password=validated_data['password'], nickname=validated_data.get('nickname', ''), role='student')
 
 
 class DailyCheckInSerializer(serializers.ModelSerializer):
@@ -108,4 +101,3 @@ class UserAchievementSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAchievement
         fields = ('id', 'achievement', 'unlocked_at', 'progress')
-

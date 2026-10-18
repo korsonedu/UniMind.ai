@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from core.models import SecurityAuditLog
 from .authentication import DirectusAdminAuthentication
 from .common import content_institution, paginate
-from . import courses, people, quizzes, uploads
+from . import courses, people, quizzes, uploads, commerce, teaching
 
 
 def meta(request, data):
@@ -35,13 +35,18 @@ READS = {'meta': meta, 'options': courses.options, 'courses.list': courses.list_
          'questions.detail': quizzes.question_detail}
 WRITES = {'courses.save': courses.save_course, 'courses.delete': courses.delete_course,
           'courses.assign': courses.assign_courses, 'modules.save': courses.save_module,
-          'modules.delete': courses.delete_module, 'products.save': people.save_product,
-          'grants.create': people.create_grant, 'grants.revoke': people.revoke_grant,
+          'modules.delete': courses.delete_module, 'grants.revoke': people.revoke_grant,
           'students.access.save': people.save_access,
+          'students.status.save': people.save_student_status,
           'knowledge.save': quizzes.save_catalog, 'knowledge.delete': quizzes.delete_catalog,
           'questions.save': quizzes.save_question, 'questions.delete': quizzes.delete_question,
           'questions.assign': quizzes.assign_questions,
           'uploads.start': uploads.start, 'uploads.complete': uploads.complete, 'uploads.cancel': uploads.cancel}
+
+READS.update(commerce.READS)
+READS.update(teaching.READS)
+WRITES.update(commerce.WRITES)
+WRITES.update(teaching.WRITES)
 
 
 class OperationView(APIView):
@@ -71,7 +76,8 @@ class OperationView(APIView):
                         event_type='admin_action', user=request.user, request_id=str(request_id),
                         detail=json.dumps({'channel': 'directus', 'operator': request.auth, 'operation': operation,
                                            'target': result.get('id'), 'updated': result.get('updated'),
-                                           'enabled_features': result.get('enabled_features')}, ensure_ascii=False))
+                                           'enabled_features': result.get('enabled_features'),
+                                           'is_course_student': result.get('is_course_student')}, ensure_ascii=False))
         except Exception as exc:
             cleanup = getattr(request, 'backoffice_rollback', None)
             if cleanup:
