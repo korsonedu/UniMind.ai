@@ -55,7 +55,7 @@ PARAMS_CACHE_TTL = 300
 
 def _get_redis():
     try:
-        from django_redis import get_redis_connection
+        from core.redis import get_redis_connection
         return get_redis_connection("default")
     except Exception:
         return None

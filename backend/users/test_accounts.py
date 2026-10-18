@@ -204,14 +204,14 @@ class AccountTests(TestCase):
         user.refresh_from_db()
         self.assertIsNone(user.institution_id)
 
-    def test_free_platform_entry_does_not_create_token(self):
+    def test_free_platform_entry_creates_platform_token(self):
         user = User.objects.create_user(username='free', password='Pass12345')
         self.client.post('/accounts/login/', {'identifier': user.username, 'password': 'Pass12345'})
         response = self.client.get('/accounts/unimind/')
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '暂未开通')
-        self.assertFalse(Token.objects.filter(user=user).exists())
-        self.assertNotIn('auth_token', response.cookies)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response['Location'], 'http://localhost:5173/account-callback')
+        self.assertTrue(Token.objects.filter(user=user).exists())
+        self.assertIn('auth_token', response.cookies)
 
     def test_conflicting_accounts_require_explicit_selection(self):
         account = User.objects.create_user(username='account', password='Pass12345', is_member=True)

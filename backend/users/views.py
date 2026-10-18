@@ -298,6 +298,7 @@ class LoginView(APIView):
                 user.locked_until = None
                 user.save(update_fields=['failed_login_count', 'locked_until'])
             with transaction.atomic():
+                User.objects.select_for_update().get(pk=user.pk)
                 Token.objects.filter(user=user).delete()
                 token = Token.objects.create(user=user)
             user.last_login = timezone.now()
@@ -432,6 +433,7 @@ class LoginByCodeView(APIView):
             user.save(update_fields=['failed_login_count', 'locked_until'])
 
         with transaction.atomic():
+            User.objects.select_for_update().get(pk=user.pk)
             Token.objects.filter(user=user).delete()
             token = Token.objects.create(user=user)
 
@@ -619,8 +621,9 @@ class MyKnowledgeMasteryView(APIView):
 
     def get(self, request):
         from django.utils import timezone
+        from core.utils import get_content_institution_id
         from quizzes.models import UserQuestionStatus
-        from quizzes.memorix.service import predict_retrievability as weibull_r
+        from quizzes.memorix.service import load_optimizer, predict_retrievability as weibull_r
 
         def _r_to_level(r: float) -> str:
             if r >= 0.8:
@@ -635,16 +638,20 @@ class MyKnowledgeMasteryView(APIView):
 
         now = timezone.now()
         qs = UserQuestionStatus.objects.filter(
-            user=request.user, stability__gt=0, last_review__isnull=False,
+            user=request.user,
+            question__institution_id=get_content_institution_id(),
+            stability__gt=0,
+            last_review__isnull=False,
         ).select_related('question__knowledge_point')
 
+        optimizer = load_optimizer(request.user.id)
         kp_scores: dict[int, list[float]] = {}
         for s in qs:
             kp = s.question.knowledge_point
             if kp is None:
                 continue
             elapsed = max(0.0, (now - s.last_review).total_seconds() / 86400.0)
-            r = weibull_r(stability=s.stability, elapsed_days=elapsed, user_id=request.user.id)
+            r = weibull_r(stability=s.stability, elapsed_days=elapsed, optimizer=optimizer)
             kp_scores.setdefault(kp.id, []).append(r)
 
         data = {}
@@ -663,14 +670,11 @@ class DiagnosticGenerateView(APIView):
         if user.has_completed_initial_assessment:
             return Response({'error': '诊断已完成', 'status': 'already_completed'}, status=400)
 
-        inst = user.institution
-        if not inst:
-            return Response({'error': '请先加入机构'}, status=400)
-
+        from core.utils import get_content_institution_id
         from quizzes.services.diagnostic_service import (
             generate_diagnostic_questions, DIAGNOSTIC_TIME_LIMIT_SECONDS,
         )
-        questions = generate_diagnostic_questions(inst)
+        questions = generate_diagnostic_questions(get_content_institution_id())
 
         if not questions:
             return Response({'error': '暂无可用知识点，请联系管理员'}, status=400)
@@ -703,7 +707,7 @@ class DiagnosticSubmitView(APIView):
                 grade_diagnostic_answers, initialize_memorix_from_diagnostic,
             )
 
-            results, kp_scores = grade_diagnostic_answers(user, answers)
+            results, kp_scores = grade_diagnostic_answers(answers)
             initialize_memorix_from_diagnostic(user, kp_scores)
 
             # 标记诊断完成
@@ -728,9 +732,6 @@ class DiagnosticReassessView(APIView):
 
     def post(self, request):
         user = request.user
-        inst = user.institution
-        if not inst:
-            return Response({'error': '请先加入机构'}, status=400)
 
         from quizzes.services.diagnostic_service import (
             generate_reassessment, DIAGNOSTIC_TIME_LIMIT_SECONDS,
@@ -1170,7 +1171,7 @@ class AccountDeleteView(APIView):
             # 学习数据
             from quizzes.models import (
                 UserQuestionStatus, QuizExam, ReviewLog,
-                UserKnowledgeState, MemorixProfile, KnowledgePointAnnotation,
+                UserKnowledgeState, MemorixProfile, KnowledgePointAnnotation, PracticeSubmission,
             )
             UserQuestionStatus.objects.filter(user=user).delete()
             QuizExam.objects.filter(user=user).delete()
@@ -1178,6 +1179,7 @@ class AccountDeleteView(APIView):
             UserKnowledgeState.objects.filter(user=user).delete()
             MemorixProfile.objects.filter(user=user).delete()
             KnowledgePointAnnotation.objects.filter(user=user).delete()
+            PracticeSubmission.objects.filter(user=user).delete()
 
             # 其他关联
             from notifications.models import Notification

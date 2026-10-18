@@ -11,11 +11,12 @@
   - source_type='tree' 的边不允许手动修改（由信号自动维护）
   - 手动创建的边 source_type='manual'
   - 手动修改 LLM 生成的边，source_type 保持 'llm'
-  - 非对称关系（prerequisite 等）需同时创建/更新反向边
+  - 有向关系（prerequisite / derivation）仅保留原始方向
 """
 import logging
 from django.db import transaction, models as dm
 from rest_framework import generics, status
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -82,15 +83,25 @@ class KnowledgeEdgeListCreateView(generics.ListCreateAPIView):
         return qs.order_by('source__code', 'target__code')
 
     def perform_create(self, serializer):
-        user = self.request.user
-        edge = serializer.save(
-            source_type='manual',
-            institution_id=get_content_institution_id(),
-        )
-        # 如果是非对称关系（prerequisite / derivation），创建提示
-        _ensure_reverse_for_asymmetric(edge)
         from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
-        invalidate_adjacency_cache()
+        institution_id = get_content_institution_id()
+        validated = serializer.validated_data
+        existing = KnowledgeEdge.objects.filter(
+            source=validated['source'],
+            target=validated['target'],
+            edge_type=validated['edge_type'],
+            institution_id=institution_id,
+        ).first()
+        if existing is not None:
+            if existing.source_type == 'tree':
+                raise PermissionDenied('树边由系统自动维护，不可创建相同关系。')
+            raise ValidationError({'detail': '该关系已存在。'})
+        with transaction.atomic():
+            serializer.save(
+                source_type='manual',
+                institution_id=institution_id,
+            )
+            transaction.on_commit(invalidate_adjacency_cache)
 
 
 # ──────────────────────────────────────────────
@@ -128,23 +139,35 @@ class KnowledgeEdgeDetailView(generics.RetrieveUpdateDestroyAPIView):
                 {'detail': '树边由系统自动维护，不可手动删除。请修改知识树结构。'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        self.perform_destroy(instance)
         from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
-        invalidate_adjacency_cache()
+        with transaction.atomic():
+            self.perform_destroy(instance)
+            transaction.on_commit(invalidate_adjacency_cache)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def perform_update(self, serializer):
         # tree 边不允许手动修改
-        instance = self.get_object()
+        instance = serializer.instance
         if instance.source_type == 'tree':
-            return Response(
-                {'detail': '树边由系统自动维护，不可手动修改。'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        # 如果 source_type 是 llm，修改后保持不变（仍是 llm 标注 + 人工校准）
-        serializer.save(institution_id=get_content_institution_id())
+            raise PermissionDenied('树边由系统自动维护，不可手动修改。')
         from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
-        invalidate_adjacency_cache()
+        validated = serializer.validated_data
+        institution_id = get_content_institution_id()
+        if {'source', 'target', 'edge_type'} & set(validated):
+            duplicate = KnowledgeEdge.objects.filter(
+                source=validated.get('source', instance.source),
+                target=validated.get('target', instance.target),
+                edge_type=validated.get('edge_type', instance.edge_type),
+                institution_id=institution_id,
+            ).exclude(pk=instance.pk).first()
+            if duplicate is not None:
+                if duplicate.source_type == 'tree':
+                    raise PermissionDenied('树边由系统自动维护，不可改成相同关系。')
+                raise ValidationError({'detail': '该关系已存在。'})
+        # 如果 source_type 是 llm，修改后保持不变（仍是 llm 标注 + 人工校准）
+        with transaction.atomic():
+            serializer.save(institution_id=institution_id)
+            transaction.on_commit(invalidate_adjacency_cache)
 
 
 # ──────────────────────────────────────────────
@@ -169,36 +192,53 @@ class KnowledgeEdgeBulkCreateView(APIView):
         if not edges_data:
             return Response({'detail': 'edges 不能为空'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = self.request.user
+        from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
         inst_id = get_content_institution_id()
         created, skipped, errors = 0, 0, []
+        changed = False
 
-        for i, data in enumerate(edges_data):
-            serializer = KnowledgeEdgeSerializer(data={'edge_type': 'similar', 'weight': 0.5, **data})
-            for field in ('source', 'target'):
-                serializer.fields[field].queryset = KnowledgePoint.objects.filter(institution_id=inst_id)
-            if not serializer.is_valid():
-                errors.append({'index': i, 'error': serializer.errors})
-                continue
-            validated = serializer.validated_data
-            source_id, target_id = validated['source'].pk, validated['target'].pk
-            edge_type, weight = validated['edge_type'], validated['weight']
+        try:
+            for i, data in enumerate(edges_data):
+                serializer = KnowledgeEdgeSerializer(data={'edge_type': 'similar', 'weight': 0.5, **data})
+                for field in ('source', 'target'):
+                    serializer.fields[field].queryset = KnowledgePoint.objects.filter(institution_id=inst_id)
+                if not serializer.is_valid():
+                    errors.append({'index': i, 'error': serializer.errors})
+                    continue
+                validated = serializer.validated_data
+                source_id, target_id = validated['source'].pk, validated['target'].pk
+                edge_type, weight = validated['edge_type'], validated['weight']
 
-            _, is_new = KnowledgeEdge.objects.update_or_create(
-                source_id=source_id,
-                target_id=target_id,
-                edge_type=edge_type,
-                institution_id=inst_id,
-                defaults={
-                    'weight': weight,
-                    'source_type': 'manual',
-                    'is_active': True,
-                },
-            )
-            if is_new:
-                created += 1
-            else:
-                skipped += 1
+                existing = KnowledgeEdge.objects.filter(
+                    source_id=source_id,
+                    target_id=target_id,
+                    edge_type=edge_type,
+                    institution_id=inst_id,
+                ).first()
+                if existing is None:
+                    KnowledgeEdge.objects.create(
+                        source_id=source_id,
+                        target_id=target_id,
+                        edge_type=edge_type,
+                        institution_id=inst_id,
+                        weight=weight,
+                        source_type='manual',
+                        is_active=True,
+                    )
+                    created += 1
+                    changed = True
+                elif existing.source_type == 'tree':
+                    skipped += 1
+                    errors.append({'index': i, 'error': {'detail': '树边由系统自动维护，不可批量覆盖。'}})
+                else:
+                    existing.weight = weight
+                    existing.is_active = True
+                    existing.save(update_fields=['weight', 'is_active', 'updated_at'])
+                    skipped += 1
+                    changed = True
+        finally:
+            if changed:
+                transaction.on_commit(invalidate_adjacency_cache)
 
         return Response({'created': created, 'skipped': skipped, 'errors': errors})
 

@@ -9,7 +9,7 @@ from users.permissions import IsAdmin, IsAdminWriteMemberRead, HasQuota
 from core.file_validation import validate_upload_file, IMAGE_EXTENSIONS, IMAGE_MAX_BYTES
 from core.rate_limit import user_rate_limit
 from users.quota import check_and_add_storage_usage
-from core.utils import apply_institution_filter
+from core.utils import apply_institution_filter, get_content_institution
 
 _upload_rl = method_decorator(user_rate_limit("upload", 100, 3600), name="dispatch")
 
@@ -50,13 +50,14 @@ class ArticleListCreateView(generics.ListCreateAPIView):
         
         # 计算标签统计 (基于机构可见文章)
         tag_data = {}
-        for art in queryset.filter(tags__isnull=False):
-            if isinstance(art.tags, list):
-                for t in art.tags:
+        tag_rows = queryset.filter(tags__isnull=False).order_by().values_list('tags', 'views').iterator()
+        for tags, views in tag_rows:
+            if isinstance(tags, list):
+                for t in tags:
                     if t not in tag_data:
                         tag_data[t] = {'count': 0, 'views': 0}
                     tag_data[t]['count'] += 1
-                    tag_data[t]['views'] += (art.views or 0)
+                    tag_data[t]['views'] += (views or 0)
         
         sorted_tags = sorted(tag_data.items(), key=lambda item: item[1]['views'], reverse=True)
         tag_stats = [{'name': k, 'count': v['count'], 'views': v['views']} for k, v in sorted_tags]
@@ -72,7 +73,7 @@ class ArticleListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("cover_image"), allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
-        inst = self.request.user.institution
+        inst = get_content_institution()
         check_and_add_storage_usage(inst, total_size)
         serializer.save(author=self.request.user, institution=inst)
 

@@ -26,7 +26,9 @@ _pool: Optional[redis.ConnectionPool] = None
 def _get_redis() -> redis.Redis:
     global _pool
     if _pool is None:
-        _pool = redis.ConnectionPool.from_url(REDIS_URL, decode_responses=True)
+        _pool = redis.ConnectionPool.from_url(
+            REDIS_URL, decode_responses=True, socket_connect_timeout=3, socket_timeout=3,
+        )
     return redis.Redis(connection_pool=_pool)
 
 
@@ -55,6 +57,39 @@ def _agent_ctx_key(user_id: int) -> str:
 
 # ── Session CRUD ──
 
+def focus_seconds(session: dict, now: float) -> int:
+    """已累计时间，加上当前活动片段实际消耗的秒数。"""
+    total = int(session.get('total_focus', 0))
+    timer_end = _safe_float(session.get('timer_end_ts'))
+    if session.get('status') == 'active' and timer_end:
+        segment_seconds = int(session.get('remaining_seconds', int(session.get('duration', 25)) * 60))
+        total += max(0, segment_seconds - max(0, int(timer_end - now)))
+    return total
+
+
+def persist_expired_session(user_id: int, session: dict) -> bool:
+    """到期统计幂等落库，Redis 保留原状态供前端处理 timer.expired。"""
+    now = time.time()
+    timer_end = session.get('timer_end_ts')
+    if session.get('status') != 'active' or not timer_end or timer_end > now:
+        return False
+    from datetime import datetime, timezone
+    from .models import StudySession
+
+    ended_at = datetime.fromtimestamp(timer_end, tz=timezone.utc)
+    records = StudySession.objects.filter(user_id=user_id, status='active')
+    if session.get('db_session_id'):
+        records = records.filter(pk=session['db_session_id'])
+    else:
+        # 兼容升级前未记录数据库 ID 的会话，不能误结束后来新建的记录。
+        records = records.filter(task_name=session.get('task_name', ''),
+                                 duration_minutes=session.get('duration', 25), started_at__lte=ended_at)
+        record_id = records.order_by('-started_at').values_list('pk', flat=True).first()
+        records = records.filter(pk=record_id)
+    records.update(status='ended', ended_at=ended_at, total_focus_seconds=focus_seconds(session, now))
+    return True
+
+
 def get_session(user_id: int) -> Optional[dict]:
     """获取当前会话状态，无活跃会话返回 None。"""
     r = _get_redis()
@@ -70,10 +105,12 @@ def get_session(user_id: int) -> Optional[dict]:
         'timer_end_ts': timer_end or None,
         'heartbeat_ts': heartbeat or None,
         'total_focus': int(data.get('total_focus', 0)),
+        'remaining_seconds': int(data.get('remaining_seconds', int(data.get('duration', 25)) * 60)),
+        'db_session_id': int(data.get('db_session_id', 0)) or None,
     }
 
 
-def start_session(user_id: int, task_name: str, duration_minutes: int) -> dict:
+def start_session(user_id: int, task_name: str, duration_minutes: int, db_session_id: int | None = None) -> dict:
     """开始新学习会话。"""
     r = _get_redis()
     key = _session_key(user_id)
@@ -87,7 +124,10 @@ def start_session(user_id: int, task_name: str, duration_minutes: int) -> dict:
         'timer_end_ts': timer_end,
         'heartbeat_ts': now,
         'total_focus': 0,
+        'remaining_seconds': duration_minutes * 60,
     }
+    if db_session_id is not None:
+        session['db_session_id'] = db_session_id
     r.hset(key, mapping={k: str(v) for k, v in session.items()})
     # Timer TTL: duration + 60s buffer
     r.expire(key, duration_minutes * 60 + 60)
@@ -106,12 +146,15 @@ def pause_session(user_id: int) -> Optional[dict]:
 
     now = time.time()
     timer_end = _safe_float(data.get('timer_end_ts', ''))
-    remaining = max(0, timer_end - now) if timer_end else 0
+    remaining = max(0, int(timer_end - now)) if timer_end else 0
+    total_focus = focus_seconds(data, now)
 
     r.hset(key, mapping={
         'status': 'paused',
         'timer_end_ts': '0',  # 暂停时无倒计时，用 0 表示
         'heartbeat_ts': str(now),
+        'remaining_seconds': str(remaining),
+        'total_focus': str(total_focus),
     })
     # 暂停后延长 TTL 30 分钟
     r.expire(key, 1800)
@@ -121,9 +164,9 @@ def pause_session(user_id: int) -> Optional[dict]:
         'task_name': data.get('task_name', ''),
         'duration': int(data.get('duration', 25)),
         'timer_end_ts': None,
-        'remaining_seconds': int(remaining),
+        'remaining_seconds': remaining,
         'heartbeat_ts': now,
-        'total_focus': int(data.get('total_focus', 0)),
+        'total_focus': total_focus,
     }
     _save_snapshot(user_id, session)
     return session
@@ -137,9 +180,7 @@ def resume_session(user_id: int) -> Optional[dict]:
     if not data or data.get('status') != 'paused':
         return None
 
-    # 从快照获取剩余时间
-    snap = _get_snapshot(user_id)
-    remaining = snap.get('remaining_seconds', int(data.get('duration', 25)) * 60) if snap else int(data.get('duration', 25)) * 60
+    remaining = int(data.get('remaining_seconds', int(data.get('duration', 25)) * 60))
     now = time.time()
     timer_end = now + remaining
 
@@ -157,6 +198,7 @@ def resume_session(user_id: int) -> Optional[dict]:
         'timer_end_ts': timer_end,
         'heartbeat_ts': now,
         'total_focus': int(data.get('total_focus', 0)),
+        'remaining_seconds': remaining,
     }
     _save_snapshot(user_id, session)
     return session
@@ -178,14 +220,7 @@ def end_session(user_id: int) -> Optional[dict]:
         return None
 
     now = time.time()
-    timer_end = _safe_float(data.get('timer_end_ts', ''))
-    total_focus = int(data.get('total_focus', 0))
-    duration_secs = int(data.get('duration', 25)) * 60
-    if data.get('status') == 'active' and timer_end:
-        # 本次已消耗的秒数 = 设定时长 - 剩余秒数
-        remaining_at_end = max(0, timer_end - now)
-        elapsed = max(0, duration_secs - int(remaining_at_end))
-        total_focus += elapsed
+    total_focus = focus_seconds(data, now)
 
     return {
         'status': 'ended',
@@ -193,6 +228,7 @@ def end_session(user_id: int) -> Optional[dict]:
         'duration': int(data.get('duration', 25)),
         'total_focus_seconds': total_focus,
         'ended_at': now,
+        'db_session_id': int(data.get('db_session_id', 0)) or None,
     }
 
 
@@ -226,6 +262,15 @@ def add_focus_seconds(user_id: int, seconds: int):
 
 
 # ── Snapshot ──
+
+def save_session_snapshot(user_id: int):
+    session = get_session(user_id)
+    if session:
+        timer_end = session.get('timer_end_ts')
+        if timer_end and session['status'] == 'active':
+            session['remaining_seconds'] = max(0, int(timer_end - time.time()))
+        _save_snapshot(user_id, session)
+
 
 def _save_snapshot(user_id: int, session: dict):
     """保存快照供重连回放。"""
@@ -300,6 +345,8 @@ def get_today_focus_stats(user_id: int) -> dict:
         total_secs = sum(s.total_focus_seconds or 0 for s in sessions)
         return count, total_secs
 
+    active = get_session(user_id)
+    expired = persist_expired_session(user_id, active) if active else False
     today_count, today_secs = _day_stats(today)
     yesterday_count, yesterday_secs = _day_stats(yesterday)
 
@@ -318,15 +365,9 @@ def get_today_focus_stats(user_id: int) -> dict:
             trend = "neutral"
 
     # 同时加入当前活跃会话的已计时长
-    active = get_session(user_id)
     current_elapsed = 0
-    if active and active.get('status') == 'active':
-        import time
-        timer_end = active.get('timer_end_ts')
-        if timer_end:
-            duration_secs = active.get('duration', 25) * 60
-            remaining = max(0, timer_end - time.time())
-            current_elapsed = max(0, duration_secs - int(remaining))
+    if active and not expired:
+        current_elapsed = focus_seconds(active, time.time())
 
     return {
         'current_session': active,

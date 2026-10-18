@@ -10,6 +10,23 @@ from payments.models import Order, Invoice
 logger = logging.getLogger(__name__)
 
 
+def enqueue_invoice(order_id: int):
+    if Invoice.objects.filter(order_id=order_id).exists():
+        return
+    try:
+        generate_invoice.delay(order_id)
+    except Exception:
+        # 已支付订单由定时补偿任务重试，不影响支付回调确认。
+        logger.exception("Failed to enqueue invoice for order %s", order_id)
+
+
+@shared_task(soft_time_limit=120, time_limit=180)
+def compensate_missing_invoices():
+    order_ids = Order.objects.filter(status='paid', invoice__isnull=True).values_list('id', flat=True)
+    for order_id in order_ids.iterator(chunk_size=200):
+        generate_invoice(order_id)
+
+
 @shared_task(soft_time_limit=30, time_limit=60)
 def generate_invoice(order_id: int):
     """Generate PDF invoice for a paid order."""
@@ -27,7 +44,7 @@ def generate_invoice(order_id: int):
     try:
         # Placeholder: just create an empty record for now
         # Full PDF rendering would use a template + weasyprint
-        Invoice.objects.update_or_create(
+        Invoice.objects.get_or_create(
             order=order,
             defaults={'invoice_number': invoice_number, 'pdf_file': ''},
         )

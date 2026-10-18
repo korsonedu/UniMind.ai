@@ -1,6 +1,9 @@
-from rest_framework import generics, permissions, status, filters
+from rest_framework import generics, status, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Count, OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.utils.decorators import method_decorator
 from .models import Question, Answer
 from .serializers import QuestionSerializer, AnswerSerializer
@@ -14,14 +17,25 @@ from users.quota import check_and_add_storage_usage
 
 _upload_rl = method_decorator(user_rate_limit("upload", 100, 3600), name="dispatch")
 
+class QuestionPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class QuestionListCreateView(generics.ListCreateAPIView):
     serializer_class = QuestionSerializer
     permission_classes = [IsMember]
     filter_backends = [filters.SearchFilter]
     search_fields = ['content', 'user__nickname']
+    pagination_class = QuestionPagination
 
     def get_queryset(self):
-        qs = Question.objects.all().select_related('user').prefetch_related('answers__user', 'likes', 'followers', 'answers__likes')
+        first_answer = Answer.objects.filter(question_id=OuterRef('pk')).order_by('created_at', 'pk')
+        qs = Question.objects.select_related('user').prefetch_related('likes', 'followers').annotate(
+            answer_count=Count('answers', distinct=True),
+            first_answer_id=Subquery(first_answer.values('pk')[:1]),
+        ).order_by('-created_at', '-pk')
         qs = apply_institution_filter(qs, self.request.user, self.request)
 
         # Filter Logic
@@ -37,6 +51,25 @@ class QuestionListCreateView(generics.ListCreateAPIView):
             qs = qs.filter(followers=self.request.user)
 
         return qs
+
+    def list(self, request, *args, **kwargs):
+        page = self.paginate_queryset(self.filter_queryset(self.get_queryset()))
+        answers = Answer.objects.filter(pk__in=[q.first_answer_id for q in page if q.first_answer_id]).select_related('user').prefetch_related('likes')
+        prefetch_related_objects(page, Prefetch('answers', queryset=answers, to_attr='summary_answers'))
+
+        # 本页每位作者只解析一次学员身份，嵌套用户序列化不再逐行查询。
+        from django.utils import timezone
+        from users.models import CourseStudentStatus, LearningGrant
+        from users.learning import has_legacy_membership
+        authors = {q.user_id: q.user for q in page}
+        authors.update({a.user_id: a.user for q in page for a in q.summary_answers})
+        statuses = dict(CourseStudentStatus.objects.filter(user_id__in=authors).values_list('user_id', 'is_course_student'))
+        missing = authors.keys() - statuses.keys()
+        now = timezone.now()
+        grants = set(LearningGrant.objects.filter(user_id__in=missing, revoked=False, starts_at__lte=now, expires_at__gt=now).values_list('user_id', flat=True))
+        statuses.update({pk: has_legacy_membership(authors[pk]) or pk in grants for pk in missing})
+        context = {**self.get_serializer_context(), 'is_course_student_by_id': statuses}
+        return self.get_paginated_response(self.get_serializer(page, many=True, context=context).data)
 
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("attachment"))
@@ -58,13 +91,13 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.user == serializer.instance.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             serializer.save()
         else:
-            raise permissions.PermissionDenied("无权修改")
+            raise PermissionDenied("无权修改")
 
     def perform_destroy(self, instance):
         if instance.user == self.request.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             instance.delete()
         else:
-            raise permissions.PermissionDenied("无权删除")
+            raise PermissionDenied("无权删除")
 
 class AnswerDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Answer.objects.all()
@@ -79,13 +112,13 @@ class AnswerDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.user == serializer.instance.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             serializer.save()
         else:
-            raise permissions.PermissionDenied("无权修改")
+            raise PermissionDenied("无权修改")
 
     def perform_destroy(self, instance):
         if instance.user == self.request.user or is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             instance.delete()
         else:
-            raise permissions.PermissionDenied("无权删除")
+            raise PermissionDenied("无权删除")
 
 class AnswerCreateView(generics.CreateAPIView):
     serializer_class = AnswerSerializer

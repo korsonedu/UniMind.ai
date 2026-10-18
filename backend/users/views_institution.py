@@ -17,6 +17,7 @@ from datetime import timedelta
 logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
+from core.utils import get_content_institution
 from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS, InstitutionInvite, JoinRequest
 
 User = get_user_model()
@@ -1213,7 +1214,12 @@ class InstitutionBusinessDashboardView(APIView):
     permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
 
     def get(self, request):
-        inst = request.user.institution
+        inst = get_content_institution()
+        if inst is None:
+            return Response(
+                {'error': '当前内容范围为全局，无机构业务指标。'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         now = timezone.now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 

@@ -8,11 +8,12 @@ from users.models import Institution
 
 
 @pytest.fixture
-def diagnostic_user(user):
+def diagnostic_user(user, settings):
     institution = Institution.objects.create(
         name='Diagnostic school', slug='diagnostic-school',
         contact_name='Teacher', contact_email='teacher@example.com', plan='growth',
     )
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = str(institution.id)
     user.institution = institution
     user.is_member = True
     user.save()
@@ -93,7 +94,7 @@ def test_duplicate_question_cannot_inflate_diagnostic(api_client, diagnostic_use
 @pytest.mark.django_db
 def test_memorix_stats_with_review_history(api_client, diagnostic_user, diagnostic_question):
     UserQuestionStatus.objects.create(
-        user=diagnostic_user, question=diagnostic_question, wrong_count=2,
+        user=diagnostic_user, question=diagnostic_question, wrong_count=2, reps=1,
         last_correct=False, stability=2, next_review_at=timezone.now() - timedelta(days=1),
     )
     api_client.force_authenticate(user=diagnostic_user)

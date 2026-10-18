@@ -2,13 +2,14 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.http import QueryDict
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from users.models import User
 from .models import KnowledgePoint, Question
 from .views_question import QuestionListView
 
 
+@override_settings(UNIMIND_CONTENT_INSTITUTION_ID='global')
 class PracticeQuestionFilterTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='practice-filter', role='student')

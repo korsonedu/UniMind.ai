@@ -91,6 +91,8 @@ def rebuild_subject_edges(subject: str, institution=None, dry_run: bool = False)
             else:
                 skipped += 1
 
+        from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
+        transaction.on_commit(invalidate_adjacency_cache)
         return {
             'subject':            subject,
             'kp_count':           len(kp_ids),
@@ -100,6 +102,10 @@ def rebuild_subject_edges(subject: str, institution=None, dry_run: bool = False)
             'parent_child_pairs': len(parent_of),
             'sibling_groups':     len(children_of),
         }
+
+    if not dry_run:
+        from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
+        transaction.on_commit(invalidate_adjacency_cache)
 
     return {
         'subject':            subject,
@@ -160,6 +166,10 @@ def sync_kp_neighborhood(kp: KnowledgePoint, old_parent_id: int | None = None) -
             models.Q(source_id=old_parent_id, target=kp)
         ).delete()
         result['old_parent_cleaned'] = True
+
+    if result.get('deleted') or result.get('created') or result.get('old_parent_cleaned'):
+        from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
+        transaction.on_commit(invalidate_adjacency_cache)
 
     return result
 

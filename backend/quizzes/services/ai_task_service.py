@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 from typing import Any, Dict, List, Optional
 
 from ai_engine.tools import (
@@ -199,17 +200,14 @@ class QuizAITaskService:
 
         if not isinstance(parsed, dict):
             logger.warning("Grading structured_output returned None for operation=quizzes.grade_question")
-            return {
-                'score': 0.0,
-                'feedback': '判分依据和深度解析：未能完成 AI 判分，已返回兜底结果。',
-                'analysis': f'标准答案：{str(correct_answer or "")}',
-                'memorix_rating': 1,
-            }
+            raise ValueError('AI 判分未完成，请稍后重试。')
 
         try:
-            score = float(parsed.get('score', 0))
-        except Exception:
-            score = 0.0
+            score = float(parsed['score'])
+            if not math.isfinite(score):
+                raise ValueError('Non-finite grading score')
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError('AI 判分结果缺少有效分数，请稍后重试。') from exc
         score = max(0.0, min(max_score, score))
 
         try:

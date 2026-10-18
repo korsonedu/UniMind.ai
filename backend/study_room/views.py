@@ -96,7 +96,7 @@ class ImageUploadView(APIView):
         ext = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else 'jpg'
         safe_name = f"chat_images/{uuid.uuid4().hex}.{ext}"
         file_name = default_storage.save(safe_name, file)
-        file_url = request.build_absolute_uri(settings.MEDIA_URL + file_name)
+        file_url = request.build_absolute_uri('/media/' + file_name)
         return Response({'url': file_url})
 
 

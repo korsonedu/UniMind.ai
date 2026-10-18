@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from quizzes.models import QuizExam
 from quizzes.serializers import QuizExamSerializer
 from users.views import IsMember
-from quizzes.ai_workflow import mark_questions_reviewed
+from quizzes.ai_workflow import validate_exam_answers
 from quizzes.services.task_dispatcher import dispatch_exam_grading
 from core.analytics import record_event
 
@@ -17,15 +17,8 @@ class SubmitExamView(APIView):
 
     def post(self, request):
         questions_data = request.data.get('answers', [])
-        if not questions_data:
-            return Response({'error': '无答题数据'}, status=400)
-
+        validate_exam_answers(request.user, questions_data, request=request)
         exam = QuizExam.objects.create(user=request.user)
-
-        mark_questions_reviewed(
-            user=request.user,
-            question_ids=[item.get('question_id') for item in questions_data if item.get('question_id') is not None],
-        )
 
         dispatch_exam_grading(request.user.id, exam.id, questions_data)
         record_event('quiz_attempt', user=request.user, properties={

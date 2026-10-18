@@ -131,10 +131,19 @@ class QuizExam(models.Model):
     max_score = models.FloatField(default=0)
     elo_change = models.IntegerField(default=0)
     summary = models.TextField(blank=True, help_text="AI 对整张试卷的综合点评")
+    grading_completed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at']
+
+class PracticeSubmission(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='practice_submissions')
+    session_id = models.UUIDField(unique=True)
+    answers_hash = models.CharField(max_length=64)
+    response = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
 
 class ExamQuestionResult(models.Model):
     exam = models.ForeignKey(QuizExam, on_delete=models.CASCADE, related_name='results')
@@ -224,6 +233,7 @@ class KnowledgePointAnnotation(models.Model):
 class MemorixProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memorix_profile")
     weights = models.JSONField(default=list)
+    optimizer_state = models.JSONField(default=dict, blank=True)
     last_optimized_at = models.DateTimeField(null=True, blank=True)
     total_reviews_used = models.IntegerField(default=0)
     current_loss = models.FloatField(null=True, blank=True)

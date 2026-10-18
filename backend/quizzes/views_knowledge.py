@@ -1,5 +1,7 @@
 import logging
+from collections import defaultdict
 from django.core.cache import cache
+from django.db.models import Count
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -68,6 +70,27 @@ class KnowledgePointListView(generics.ListCreateAPIView):
         if subject:
             qs = qs.filter(subject=subject)
         return qs
+
+    def list(self, request, *args, **kwargs):
+        root_ids = list(self.filter_queryset(self.get_queryset()).values_list('id', flat=True))
+        if not root_ids:
+            return Response([])
+
+        nodes = list(
+            apply_institution_filter(KnowledgePoint.objects.all(), request.user, request)
+            .annotate(_questions_count=Count('questions'))
+            .order_by('order', 'id')
+        )
+        children_by_parent = defaultdict(list)
+        for node in nodes:
+            children_by_parent[node.parent_id].append(node)
+        for node in nodes:
+            node._tree_children = children_by_parent.get(node.id, [])
+
+        by_id = {node.id: node for node in nodes}
+        roots = [by_id[root_id] for root_id in root_ids if root_id in by_id]
+        serializer = self.get_serializer(roots, many=True)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         user = self.request.user

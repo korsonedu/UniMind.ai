@@ -1,12 +1,10 @@
-import logging
 from datetime import timedelta
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import serializers
+from core.utils import get_content_institution_id
 from quizzes.models import UserQuestionStatus, UserKnowledgeState
 from .question_normalizer import normalize_objective_answer
-
-logger = logging.getLogger(__name__)
 
 DIAGNOSTIC_QUESTION_COUNT = 10
 DIAGNOSTIC_TIME_LIMIT_SECONDS = 300
@@ -21,14 +19,13 @@ class DiagnosticAnswerInput(serializers.Serializer):
     answer = serializers.CharField(allow_blank=True, trim_whitespace=False)
 
 
-def generate_diagnostic_questions(institution):
-    """从题库随机抽取诊断题目（仅机构题目，不足时返回更少量）。"""
+def generate_diagnostic_questions(institution_id):
+    """从题库随机抽取诊断题目（仅受管内容范围，不足时返回更少量）。"""
     from quizzes.models import Question
 
-    # 从机构题库抽题
     qs = list(Question.objects.filter(
         q_type='objective',
-        institution=institution,
+        institution_id=institution_id,
     ).exclude(correct_answer__isnull=True).exclude(correct_answer='').order_by('?')[:DIAGNOSTIC_QUESTION_COUNT])
 
 
@@ -48,9 +45,8 @@ def generate_diagnostic_questions(institution):
     return questions
 
 
-def grade_diagnostic_answers(user, answers):
-    """评分诊断答案，返回结果和知识点分析。"""
-    from ai_service import AIService
+def grade_diagnostic_answers(answers):
+    """评分诊断答案，返回结果和知识点分析。诊断只接受受管范围内的客观题。"""
     from quizzes.models import Question
 
     serializer = DiagnosticAnswerInput(
@@ -63,10 +59,12 @@ def grade_diagnostic_answers(user, answers):
     if len(set(question_ids)) != len(question_ids):
         raise serializers.ValidationError({'answers': '诊断题目不能重复。'})
     questions = Question.objects.filter(
-        pk__in=question_ids, institution=user.institution,
+        pk__in=question_ids,
+        institution_id=get_content_institution_id(),
+        q_type='objective',
     ).select_related('knowledge_point').in_bulk()
     if len(questions) != len(question_ids):
-        raise serializers.ValidationError({'answers': '题目不存在或无访问权限。'})
+        raise serializers.ValidationError({'answers': '题目不存在、不适用于诊断或无访问权限。'})
 
     results = []
     kp_scores = {}  # kp_id -> {correct, total, kp_name}
@@ -76,28 +74,17 @@ def grade_diagnostic_answers(user, answers):
         user_answer = item['answer']
         kp_id = question.knowledge_point_id
         kp_name = question.knowledge_point.name if kp_id else ''
-        q_type = question.q_type
         correct_answer = question.correct_answer
-        question_data = {'question_text': question.text, 'answer': correct_answer}
-
-        # 客观题用精确匹配，主观题用 AI 评分
-        feedback = ''
-        if q_type == 'objective':
-            is_correct = _check_objective_answer(user_answer, correct_answer)
-            score = 1.0 if is_correct else 0.0
-        else:
-            grading = _grade_subjective_answer(AIService, question_data, user_answer)
-            score = grading.get('score', 0.0)
-            is_correct = score >= 0.6
-            feedback = grading.get('feedback', '')
+        is_correct = _check_objective_answer(user_answer, correct_answer)
+        score = 1.0 if is_correct else 0.0
 
         result = {
-            'question_text': question_data.get('question_text', ''),
+            'question_text': question.text,
             'user_answer': user_answer,
             'correct_answer': correct_answer,
             'is_correct': is_correct,
             'score': score,
-            'feedback': feedback,
+            'feedback': '',
             'knowledge_point_id': kp_id,
             'knowledge_point_name': kp_name,
         }
@@ -120,36 +107,6 @@ def _check_objective_answer(user_answer, correct_answer):
     return normalize_objective_answer(user_answer) == normalize_objective_answer(correct_answer)
 
 
-def _grade_subjective_answer(ai_service, question_data, user_answer):
-    """主观题 AI 评分。"""
-    try:
-        prompt = (
-            f"请对以下答案评分（0-1分）并给出简短反馈。\n\n"
-            f"题目：{question_data.get('question_text', '')}\n"
-            f"参考答案：{question_data.get('answer', '')}\n"
-            f"学生答案：{user_answer}\n\n"
-            f"返回 JSON：{{\"score\": 0.0-1.0, \"feedback\": \"简短反馈\"}}"
-        )
-        messages = [
-            {'role': 'system', 'content': '你是阅卷助手。客观评分，给出简短反馈。'},
-            {'role': 'user', 'content': prompt},
-        ]
-        from ai_engine.service import AIEngine
-        res = AIEngine.call_ai(messages, temperature=0.3, max_tokens=200, operation='diagnostic.grade')
-        if res and 'choices' in res:
-            import json
-            content = res['choices'][0]['message']['content']
-            # 提取 JSON
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0]
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0]
-            return json.loads(content.strip())
-    except Exception as e:
-        logger.warning("Diagnostic grading error: %s", e)
-    return {'score': 0.0, 'feedback': '评分失败'}
-
-
 @transaction.atomic
 def initialize_memorix_from_diagnostic(user, kp_scores):
     """根据诊断结果初始化 Memorix 状态。"""
@@ -160,13 +117,10 @@ def initialize_memorix_from_diagnostic(user, kp_scores):
 
         # 获取该知识点下的题目
         from quizzes.models import Question
-        from django.db.models import Q
-        qs = Question.objects.filter(knowledge_point_id=kp_id)
-        inst = getattr(user, 'institution', None)
-        if inst:
-            qs = qs.filter(institution=inst)
-        else:
-            qs = qs.filter(institution__isnull=True)
+        qs = Question.objects.filter(
+            knowledge_point_id=kp_id,
+            institution_id=get_content_institution_id(),
+        )
         questions = qs[:5]
 
         for q in questions:
@@ -208,16 +162,13 @@ def generate_reassessment(user, previous_diagnostic_id=None):
         if state.mastery_score is not None:
             weak_kp_ids.add(state.knowledge_point_id)
 
-    inst = getattr(user, 'institution', None)
-    qs = Question.objects.filter(q_type='objective').exclude(
+    scope_id = get_content_institution_id()
+    qs = Question.objects.filter(
+        q_type='objective',
+        institution_id=scope_id,
+    ).exclude(
         correct_answer__isnull=True
     ).exclude(correct_answer='')
-
-    # 机构隔离
-    if inst:
-        qs = qs.filter(institution=inst)
-    else:
-        qs = qs.filter(institution__isnull=True)
 
     # 优先从弱知识点抽题
     if weak_kp_ids:
@@ -225,19 +176,16 @@ def generate_reassessment(user, previous_diagnostic_id=None):
 
     questions = list(qs.order_by('?')[:DIAGNOSTIC_QUESTION_COUNT])
 
-    # 不够则放宽限制（保持机构隔离）
+    # 不够则放宽限制（保持内容范围）
     if len(questions) < DIAGNOSTIC_QUESTION_COUNT:
         remaining = DIAGNOSTIC_QUESTION_COUNT - len(questions)
         existing_ids = [q.id for q in questions]
         qs_extra = Question.objects.filter(
             q_type='objective',
+            institution_id=scope_id,
         ).exclude(id__in=existing_ids).exclude(
             correct_answer__isnull=True
         ).exclude(correct_answer='')
-        if inst:
-            qs_extra = qs_extra.filter(institution=inst)
-        else:
-            qs_extra = qs_extra.filter(institution__isnull=True)
         extra = list(qs_extra.order_by('?')[:remaining])
         questions += extra
 

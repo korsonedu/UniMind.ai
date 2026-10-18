@@ -838,13 +838,11 @@ class PlannerToolExecutor(BaseToolExecutor):
         mode = args.get('mode', 'generate')
 
         if mode == 'generate':
+            from core.utils import get_content_institution_id
             from quizzes.services.diagnostic_service import (
                 generate_diagnostic_questions, DIAGNOSTIC_TIME_LIMIT_SECONDS,
             )
-            inst = self.institution
-            if not inst:
-                return {"error": "请先加入机构才能进行诊断测试"}
-            questions = generate_diagnostic_questions(inst)
+            questions = generate_diagnostic_questions(get_content_institution_id())
             if not questions:
                 return {"error": "暂无可用题目，请联系管理员"}
             return {
@@ -889,7 +887,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                 return {"error": "未找到有效题目"}
 
             with transaction.atomic():
-                results, kp_scores = grade_diagnostic_answers(self.user, formatted_answers)
+                results, kp_scores = grade_diagnostic_answers(formatted_answers)
                 initialize_memorix_from_diagnostic(self.user, kp_scores)
 
                 self.user.has_completed_initial_assessment = True

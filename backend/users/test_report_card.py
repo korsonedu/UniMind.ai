@@ -2,13 +2,14 @@ from pathlib import Path
 from unittest.mock import patch
 from django.test import override_settings
 from rest_framework.test import APITestCase
-from .models import User
+from .models import CourseStudentStatus, User
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
 class ReportCardTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='report_owner', nickname='报告测试学员')
+        CourseStudentStatus.objects.create(user=self.user, is_course_student=True)
         self.client.force_authenticate(self.user)
 
     def test_report_returns_current_student(self):

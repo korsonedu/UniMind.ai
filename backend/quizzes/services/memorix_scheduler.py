@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from core.utils import get_content_institution_id
 from quizzes.models import Question, UserQuestionStatus
 from quizzes.utils import safe_int as _safe_int
 
@@ -69,7 +70,7 @@ def build_adaptive_question_ids(
     candidate_subquery = base_queryset.values("id")
 
     status_qs = UserQuestionStatus.objects.filter(user=user, question_id__in=candidate_subquery)
-    active_status_qs = status_qs.filter(is_mastered=False)
+    active_status_qs = status_qs.filter(reps__gt=0, is_mastered=False)
 
     mastered_ids_qs = status_qs.filter(is_mastered=True).values_list("question_id", flat=True)
 
@@ -96,7 +97,7 @@ def build_adaptive_question_ids(
         .values_list("question_id", flat=True)
     )
 
-    attempted_ids_qs = status_qs.values_list("question_id", flat=True)
+    attempted_ids_qs = status_qs.filter(reps__gt=0).values_list("question_id", flat=True)
 
     new_pool_ids = list(
         base_queryset.exclude(id__in=attempted_ids_qs)
@@ -200,7 +201,11 @@ def get_memorix_session_plan(user, minutes: int = 25, preferred_limit: Optional[
     now = timezone.now()
     minutes = _clamp(_safe_int(minutes, 25), 10, 120)
 
-    status_qs = UserQuestionStatus.objects.filter(user=user)
+    scope_id = get_content_institution_id()
+    all_status_qs = UserQuestionStatus.objects.filter(
+        user=user, question__institution_id=scope_id,
+    )
+    status_qs = all_status_qs.filter(reps__gt=0)
     active_qs = status_qs.filter(is_mastered=False)
 
     due_count = active_qs.filter(next_review_at__lte=now).count()
@@ -210,12 +215,12 @@ def get_memorix_session_plan(user, minutes: int = 25, preferred_limit: Optional[
     ).count()
     weak_focus_count = active_qs.filter(Q(wrong_count__gte=2) | Q(last_correct=False)).count()
 
-    attempted_ids = status_qs.values_list("question_id", flat=True)
-    new_qs = Question.objects.exclude(id__in=attempted_ids)
-    inst = getattr(user, 'institution', None)
-    if inst:
-        new_qs = new_qs.filter(institution=inst)
-    new_questions_count = new_qs.count()
+    attempted_ids = all_status_qs.filter(
+        Q(reps__gt=0) | Q(is_mastered=True)
+    ).values_list("question_id", flat=True)
+    new_questions_count = Question.objects.filter(
+        institution_id=scope_id
+    ).exclude(id__in=attempted_ids).count()
 
     if preferred_limit is not None:
         recommended_questions = _clamp(_safe_int(preferred_limit, 10), 1, 50)
@@ -301,7 +306,7 @@ def _build_adjacency_from_edges():
 
     # ── 层 2：Redis 动态边 ──
     try:
-        from django_redis import get_redis_connection
+        from core.redis import get_redis_connection
         redis_conn = get_redis_connection("default")
         # 扫描所有 memorix:edge:* 键
         cursor = 0
@@ -352,7 +357,7 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
     乘性形式（论文 §5.1）：u_i 高的 KP 不会被邻居拖到前面。
     """
     from quizzes.models import UserQuestionStatus, Question
-    from quizzes.memorix.service import predict_retrievability
+    from quizzes.memorix.service import load_optimizer, predict_retrievability
     from quizzes.memorix.field import get_u_vector, compute_field_score, ensure_u_entry, get_field_params
 
     adj = _build_adjacency_from_edges()
@@ -378,14 +383,15 @@ def _field_rerank(question_ids, user, now, _alpha_unused=None):
 
     kp_urgency_fallback = {}
     if kps_without_u:
-        statuses = UserQuestionStatus.objects.filter(
+        statuses = list(UserQuestionStatus.objects.filter(
             user=user,
             question__knowledge_point_id__in=kps_without_u,
-        ).select_related('question')
+        ).select_related('question'))
+        optimizer = load_optimizer(user.id) if statuses else None
         for st in statuses:
             kp_id = st.question.knowledge_point_id
             elapsed = (now - st.last_review).total_seconds() / 86400 if st.last_review else 999
-            R = predict_retrievability(st.stability, elapsed, user_id=user.id)
+            R = predict_retrievability(st.stability, elapsed, optimizer=optimizer)
             kp_urgency_fallback[kp_id] = max(0.0, 1.0 - R)
             # 同时初始化 u 条目，下次调度就能用扩散值
             ensure_u_entry(user.id, kp_id, R)

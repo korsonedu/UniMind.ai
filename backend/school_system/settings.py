@@ -381,6 +381,10 @@ CELERY_BEAT_SCHEDULE_FILENAME = os.getenv(
     str(BASE_DIR / "celerybeat-schedule"),
 )
 CELERY_BEAT_SCHEDULE = {
+    "compensate-missing-invoices-every-10m": {
+        "task": "payments.tasks.compensate_missing_invoices",
+        "schedule": 600.0,
+    },
     "expire-stale-orders-every-30m": {
         "task": "payments.tasks.expire_stale_orders",
         "schedule": 1800.0,  # 30 minutes

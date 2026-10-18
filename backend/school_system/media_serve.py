@@ -12,11 +12,9 @@ from email.utils import formatdate, parsedate_to_datetime
 
 from django.conf import settings
 from django.http import HttpResponse, StreamingHttpResponse, HttpResponseRedirect
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 
 from core.authentication import CookieTokenAuthentication
-from users.permissions import is_platform_admin
-
 
 _RANGE_RE = re.compile(r"bytes\s*=\s*(\d*)\s*-\s*(\d*)")
 
@@ -62,6 +60,10 @@ def _iter_chunks(file_path: str, offset: int = 0, size: int | None = None, chunk
 
 
 def media_serve(request, path):
+    # 所有存储后端共用同一对象路径，必须在查询和签名前拒绝路径穿越。
+    if (not path or '\\' in path or '\x00' in path
+            or any(part in {'.', '..', ''} for part in path.split('/'))):
+        return HttpResponse(status=404)
     if not request.user.is_authenticated:
         try:
             authentication = CookieTokenAuthentication().authenticate(request)
@@ -71,45 +73,45 @@ def media_serve(request, path):
             request.user, _ = authentication
 
     from django.db.models import Q
-    from courses.models import Course
+    from courses.models import Course, StartupMaterial
+    from faq_system.models import Question
+    from core.utils import apply_institution_filter
+    from users.feature_access import has_learning_feature
+
     course_file = Q(video_file=path) | Q(courseware=path) | Q(reference_materials=path)
-    has_course_access = False
-    if Course.objects.filter(course_file).exists():
+    courses = Course.objects.filter(course_file)
+    questions = Question.objects.filter(attachment=path)
+    materials = StartupMaterial.objects.filter(file=path)
+    protected = None
+    feature = None
+    if courses.exists():
+        protected, feature = courses, 'course.video'
+    elif questions.exists():
+        protected, feature = questions, 'faq.system'
+    elif materials.exists():
+        protected, feature = materials, 'course.video'
+
+    # 聊天图片在发送消息前就需要预览，上传接口使用 UUID 文件名。
+    is_chat_image = bool(re.fullmatch(r'chat_images/[a-f0-9]{32}(?:_[A-Za-z0-9]+)?\.(?:jpg|jpeg|png|gif|webp)', path))
+    if is_chat_image and feature is None:
+        feature = 'study.room'
+
+    if protected is not None or is_chat_image:
         if not request.user.is_authenticated:
             return HttpResponse(status=401)
-        from users.feature_access import has_learning_feature
-        if not has_learning_feature(request.user, 'course.video'):
+        if not has_learning_feature(request.user, feature):
             return HttpResponse(status=403)
-        from courses.access import visible_courses
-        managed = Course.objects.filter(course_file)
-        if not request.user.is_superuser:
-            managed = managed.filter(institution_id=request.user.institution_id) if request.user.institution_id else managed.none()
-        can_manage = request.user.is_staff and request.user.has_perm('courses.change_course') and managed.exists()
-        if not can_manage and not visible_courses(request).filter(course_file).exists():
+        try:
+            if protected is not None and not apply_institution_filter(protected, request.user, request).exists():
+                return HttpResponse(status=403)
+        except PermissionDenied:
             return HttpResponse(status=403)
-        has_course_access = True
-
-    # 权限检查：机构文件必须登录才能访问
-    if path.startswith('institutions/') and not request.user.is_authenticated:
-        return HttpResponse(status=401)
-
-    # 权限检查：租户只能访问自己机构的文件
-    if request.user.is_authenticated:
-        # 检查是否访问的是机构文件
-        if path.startswith('institutions/'):
-            # 提取机构 ID
-            parts = path.split('/')
-            if len(parts) >= 2:
-                institution_id = parts[1]
-
-                # 超管可以访问所有文件
-                if is_platform_admin(request.user) or has_course_access:
-                    pass
-                # 普通用户只能访问自己机构的文件
-                elif hasattr(request.user, 'institution_id') and str(request.user.institution_id) == institution_id:
-                    pass
-                else:
-                    return HttpResponse(status=403)
+    else:
+        public_image_dirs = {'album_covers', 'course_covers', 'article_covers', 'school_logos', 'institution_logos', 'bot_avatars'}
+        is_image = os.path.splitext(path)[1].lower() in {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif'}
+        if not (is_image and (path.split('/')[0] in public_image_dirs or Course.objects.filter(cover_image=path).exists())):
+            # 未关联业务记录的文件不能凭路径获得新的签名。
+            return HttpResponse(status=404)
 
     # 如果配置了 OSS，使用签名 URL
     if hasattr(settings, 'OSS_ACCESS_KEY_ID') and settings.OSS_ACCESS_KEY_ID:
@@ -124,8 +126,9 @@ def media_serve(request, path):
     # 本地文件服务（开发环境）
     document_root = settings.MEDIA_ROOT
 
-    full = os.path.normpath(os.path.join(document_root, path))
-    if not full.startswith(os.path.normpath(document_root)):
+    document_root = os.path.realpath(document_root)
+    full = os.path.realpath(os.path.join(document_root, path))
+    if os.path.commonpath([document_root, full]) != document_root:
         return HttpResponse(status=404)
     if not os.path.isfile(full):
         return HttpResponse(status=404)

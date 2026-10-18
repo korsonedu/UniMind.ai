@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Question, Answer
 from users.serializers import UserSerializer
+from courses.serializers import RelativeFileField
 
 class AnswerSerializer(serializers.ModelSerializer):
     user_detail = UserSerializer(source='user', read_only=True)
@@ -10,7 +11,7 @@ class AnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Answer
         fields = ('id', 'question', 'user', 'content', 'is_teacher', 'likes', 'created_at', 'updated_at', 'user_detail', 'likes_count', 'is_liked')
-        read_only_fields = ('user', 'is_teacher', 'created_at')
+        read_only_fields = ('question', 'user', 'is_teacher', 'likes', 'created_at')
 
     def get_is_liked(self, obj):
         request = self.context.get('request')
@@ -19,6 +20,7 @@ class AnswerSerializer(serializers.ModelSerializer):
         return False
 
 class QuestionSerializer(serializers.ModelSerializer):
+    attachment = RelativeFileField(required=False, allow_null=True)
     user_detail = UserSerializer(source='user', read_only=True)
     answers = serializers.SerializerMethodField()
     first_answer = serializers.SerializerMethodField()
@@ -30,21 +32,23 @@ class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = ('id', 'user', 'content', 'attachment', 'is_solved', 'is_starred', 'likes', 'followers', 'created_at', 'updated_at', 'institution', 'user_detail', 'answers', 'first_answer', 'reply_count', 'likes_count', 'is_liked', 'is_followed')
-        read_only_fields = ('user', 'created_at', 'updated_at', 'is_solved', 'is_starred', 'likes', 'followers')
+        read_only_fields = ('user', 'institution', 'created_at', 'updated_at', 'is_solved', 'is_starred', 'likes', 'followers')
 
     def get_answers(self, obj):
         # Pass context to answer serializer to get is_liked status correctly
-        qs = obj.answers.all()
+        qs = obj.summary_answers if hasattr(obj, 'summary_answers') else obj.answers.all()
         return AnswerSerializer(qs, many=True, context=self.context).data
 
     def get_first_answer(self, obj):
-        answers = obj.answers.all()
+        answers = obj.summary_answers if hasattr(obj, 'summary_answers') else obj.answers.all()
         first = next(iter(answers), None)
         if first:
             return AnswerSerializer(first, context=self.context).data
         return None
 
     def get_reply_count(self, obj):
+        if hasattr(obj, 'answer_count'):
+            return obj.answer_count
         return len(obj.answers.all())
 
     def get_is_liked(self, obj):

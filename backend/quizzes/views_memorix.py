@@ -3,12 +3,14 @@ import logging
 import math
 from collections import defaultdict
 from django.conf import settings
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.utils import get_content_institution_id
 from quizzes.models import (
-    UserQuestionStatus, ReviewLog, MemorixProfile,
+    UserQuestionStatus, ReviewLog, MemorixProfile, Question,
 )
 from quizzes.serializers import QuizExamSerializer
 from users.views import IsMember
@@ -18,12 +20,27 @@ from quizzes.services.memorix_scheduler import get_memorix_session_plan, build_a
 logger = logging.getLogger(__name__)
 
 
+def _resolve_scoped_question(request):
+    raw_id = request.data.get('question_id')
+    try:
+        question_id = int(raw_id)
+    except (TypeError, ValueError):
+        return None, Response({'detail': 'question_id 无效'}, status=status.HTTP_400_BAD_REQUEST)
+    question = Question.objects.filter(
+        pk=question_id, institution_id=get_content_institution_id(),
+    ).first()
+    if question is None:
+        return None, Response({'detail': '题目不存在'}, status=status.HTTP_404_NOT_FOUND)
+    return question, None
+
+
 class ToggleFavoriteView(APIView):
     permission_classes = [IsMember]
     def post(self, request):
-        q_id = request.data.get('question_id')
-        status_obj, _ = UserQuestionStatus.objects.get_or_create(user=request.user, question_id=q_id)
-        from django.db.models import F
+        question, error = _resolve_scoped_question(request)
+        if error:
+            return error
+        status_obj, _ = UserQuestionStatus.objects.get_or_create(user=request.user, question=question)
         UserQuestionStatus.objects.filter(id=status_obj.id).update(is_favorite=~F('is_favorite'))
         status_obj.refresh_from_db(fields=['is_favorite'])
         return Response({'is_favorite': status_obj.is_favorite})
@@ -32,9 +49,10 @@ class ToggleFavoriteView(APIView):
 class ToggleMasteredView(APIView):
     permission_classes = [IsMember]
     def post(self, request):
-        q_id = request.data.get('question_id')
-        status_obj, _ = UserQuestionStatus.objects.get_or_create(user=request.user, question_id=q_id)
-        from django.db.models import F
+        question, error = _resolve_scoped_question(request)
+        if error:
+            return error
+        status_obj, _ = UserQuestionStatus.objects.get_or_create(user=request.user, question=question)
         UserQuestionStatus.objects.filter(id=status_obj.id).update(is_mastered=~F('is_mastered'))
         status_obj.refresh_from_db(fields=['is_mastered'])
         return Response({'is_mastered': status_obj.is_mastered})
@@ -59,30 +77,28 @@ class QuizStatsView(APIView):
     def get(self, request):
         user = request.user
         now = timezone.now()
+        scope_id = get_content_institution_id()
 
-        from quizzes.models import UserQuestionStatus, Question
+        all_status_qs = UserQuestionStatus.objects.filter(
+            user=user, question__institution_id=scope_id,
+        )
+        status_qs = all_status_qs.filter(reps__gt=0)
+        active_status_qs = status_qs.filter(is_mastered=False)
 
-        status_qs = UserQuestionStatus.objects.filter(user=user)
+        review_count = active_status_qs.filter(next_review_at__lte=now).count()
 
-        review_count = status_qs.filter(next_review_at__lte=now).count()
-
-        at_risk_count = status_qs.filter(
+        at_risk_count = active_status_qs.filter(
             stability__lt=7,
             next_review_at__lte=now + datetime.timedelta(days=3),
             next_review_at__gt=now
         ).count()
 
-        attempted_ids = status_qs.values_list('question_id', flat=True)
-        from django.db.models import Q
-        inst = getattr(user, 'institution', None)
-        if inst:
-            new_questions_count = Question.objects.exclude(id__in=attempted_ids).filter(
-                Q(institution=inst) | Q(institution__isnull=True)
-            ).count()
-        else:
-            new_questions_count = Question.objects.exclude(id__in=attempted_ids).filter(
-                institution__isnull=True
-            ).count()
+        attempted_ids = all_status_qs.filter(
+            Q(reps__gt=0) | Q(is_mastered=True)
+        ).values_list('question_id', flat=True)
+        new_questions_count = Question.objects.filter(
+            institution_id=scope_id
+        ).exclude(id__in=attempted_ids).count()
 
         plan = get_memorix_session_plan(user=user, minutes=25)
 

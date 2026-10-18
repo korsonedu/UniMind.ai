@@ -9,6 +9,7 @@ import time
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
+from asgiref.sync import sync_to_async
 
 from . import session_manager as sm
 
@@ -53,7 +54,7 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
         logger.info("StudyRoom WS accepted: user=%s", self.user_id)
 
         # 发送当前会话状态同步
-        session = sm.get_session(self.user_id)
+        session = await sync_to_async(sm.get_session, thread_sensitive=False)(self.user_id)
         if session:
             now = time.time()
             timer_end = session.get('timer_end_ts')
@@ -63,6 +64,7 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
                 session['time_left'] = session.get('remaining_seconds', 0)
             else:
                 session['time_left'] = 0
+            await database_sync_to_async(sm.persist_expired_session)(self.user_id, session)
             await self.send(text_data=json.dumps({
                 'type': 'session.sync',
                 'session': session,
@@ -86,13 +88,7 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
             self._idle_task.cancel()
 
         # 保存快照供重连
-        session = sm.get_session(user_id)
-        if session:
-            now = time.time()
-            timer_end = session.get('timer_end_ts')
-            if timer_end and session['status'] == 'active':
-                session['remaining_seconds'] = max(0, int(timer_end - now))
-            sm._save_snapshot(user_id, session)
+        await sync_to_async(sm.save_session_snapshot, thread_sensitive=False)(user_id)
 
     async def receive(self, text_data):
         if not await has_study_access(self.user_id):
@@ -117,7 +113,7 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
         elif msg_type == 'session.end':
             await self._handle_end()
         elif msg_type == 'ping':
-            sm.update_heartbeat(self.user_id)
+            await sync_to_async(sm.update_heartbeat, thread_sensitive=False)(self.user_id)
             await self.send(text_data=json.dumps({'type': 'pong'}))
         else:
             await self.send(text_data=json.dumps(
@@ -130,28 +126,33 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
         task_name = data.get('task_name', '专注学习')
         duration = int(data.get('duration', 25))
         # 结束上一个会话的 DB 记录（避免孤儿）
+        previous = await sync_to_async(sm.end_session, thread_sensitive=False)(self.user_id)
+        if previous:
+            await self._finalize_session_record(previous)
         await self._finalize_previous_db_session()
         # 重置防护标志
         self._timer_expired_sent = False
         self._milestones_sent.clear()
-        session = sm.start_session(self.user_id, task_name, duration)
+        record_id = await self._save_session_record('active', task_name, duration)
+        session = await sync_to_async(sm.start_session, thread_sensitive=False)(self.user_id, task_name, duration, record_id)
         await self.send(text_data=json.dumps({
             'type': 'session.sync',
             'session': {**session, 'time_left': duration * 60},
         }, ensure_ascii=False))
-        await self._save_session_record('active', task_name, duration)
 
     async def _handle_pause(self):
-        session = sm.pause_session(self.user_id)
+        session = await sync_to_async(sm.pause_session, thread_sensitive=False)(self.user_id)
         if session:
+            await self._update_session_record('paused')
             await self.send(text_data=json.dumps({
                 'type': 'session.sync',
-                'session': session,
+                'session': {**session, 'time_left': session['remaining_seconds']},
             }, ensure_ascii=False))
 
     async def _handle_resume(self):
-        session = sm.resume_session(self.user_id)
+        session = await sync_to_async(sm.resume_session, thread_sensitive=False)(self.user_id)
         if session:
+            await self._update_session_record('active')
             now = time.time()
             timer_end = session.get('timer_end_ts')
             time_left = max(0, int(timer_end - now)) if timer_end else 0
@@ -159,16 +160,15 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
                 'type': 'session.sync',
                 'session': {**session, 'time_left': time_left},
             }, ensure_ascii=False))
-            await self._update_session_record('active')
 
     async def _handle_end(self):
-        result = sm.end_session(self.user_id)
+        result = await sync_to_async(sm.end_session, thread_sensitive=False)(self.user_id)
         if result:
+            await self._finalize_session_record(result)
             await self.send(text_data=json.dumps({
                 'type': 'session.ended',
                 'summary': result,
             }, ensure_ascii=False))
-            await self._finalize_session_record(result)
 
     # ── Background loops ──
 
@@ -180,7 +180,7 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
                 if self._cancelled.is_set():
                     break
 
-                session = sm.get_session(self.user_id)
+                session = await sync_to_async(sm.get_session, thread_sensitive=False)(self.user_id)
                 if not session or session['status'] != 'active':
                     continue
 
@@ -190,6 +190,8 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
                     continue
 
                 time_left = max(0, int(timer_end - now))
+                if time_left <= 0:
+                    await database_sync_to_async(sm.persist_expired_session)(self.user_id, session)
                 await self.send(text_data=json.dumps({
                     'type': 'timer.tick',
                     'time_left': time_left,
@@ -198,10 +200,7 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
                 # Timer 到期 — 只发一次
                 if time_left <= 0 and not self._timer_expired_sent:
                     self._timer_expired_sent = True
-                    total_focus = session.get('total_focus', 0)
-                    duration_secs = session.get('duration', 25) * 60
-                    # 焦点时间 = 已累积 + 本次完整时长
-                    accumulated_focus = total_focus + duration_secs
+                    accumulated_focus = sm.focus_seconds(session, now)
                     await self.send(text_data=json.dumps({
                         'type': 'timer.expired',
                         'task_name': session.get('task_name', ''),
@@ -234,7 +233,7 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
                 if self._cancelled.is_set():
                     break
 
-                session = sm.get_session(self.user_id)
+                session = await sync_to_async(sm.get_session, thread_sensitive=False)(self.user_id)
                 if not session or session['status'] != 'active':
                     continue
 
@@ -271,12 +270,12 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _save_session_record(self, status: str, task_name: str, duration: int):
         from .models import StudySession
-        StudySession.objects.create(
+        return StudySession.objects.create(
             user=self.user,
             status=status,
             task_name=task_name,
             duration_minutes=duration,
-        )
+        ).pk
 
     @database_sync_to_async
     def _update_session_record(self, status: str):
@@ -295,9 +294,12 @@ class StudyRoomConsumer(AsyncWebsocketConsumer):
     def _finalize_session_record(self, result: dict):
         from .models import StudySession
         from django.utils import timezone
-        session = StudySession.objects.filter(
+        records = StudySession.objects.filter(
             user=self.user, status__in=('active', 'paused')
-        ).order_by('-started_at').first()
+        )
+        if result.get('db_session_id'):
+            records = records.filter(pk=result['db_session_id'])
+        session = records.order_by('-started_at').first()
         if session:
             session.status = 'ended'
             session.ended_at = timezone.now()

@@ -160,7 +160,7 @@ def learn_edge_weights_from_reviews():
 
     # 写入 Redis
     try:
-        from django_redis import get_redis_connection
+        from core.redis import get_redis_connection
         redis_conn = get_redis_connection("default")
     except Exception:
         logger.warning("learn_edge_weights: Redis unavailable")

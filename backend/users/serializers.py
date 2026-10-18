@@ -27,6 +27,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_is_member(self, obj):
         from .learning import is_course_student
+        statuses = self.context.get('is_course_student_by_id')
+        if statuses is not None and obj.pk in statuses:
+            return self.get_is_admin(obj) or statuses[obj.pk]
         return self.get_is_admin(obj) or is_course_student(obj)
 
     def get_institution_role(self, obj):

@@ -36,3 +36,11 @@ def on_kp_saved(sender, instance, created, **kwargs):
         return
     old_parent_id = getattr(instance, '_old_parent_id', None)
     sync_kp_neighborhood(instance, old_parent_id=old_parent_id)
+
+
+@receiver(post_delete, sender=KnowledgePoint)
+def on_kp_deleted(sender, instance, **kwargs):
+    """树边随知识点级联删除，提交后清除邻接缓存。"""
+    from django.db import transaction
+    from quizzes.services.memorix_scheduler import invalidate_adjacency_cache
+    transaction.on_commit(invalidate_adjacency_cache)

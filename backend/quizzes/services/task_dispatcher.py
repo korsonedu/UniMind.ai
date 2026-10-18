@@ -20,15 +20,6 @@ def _start_thread_grading(user_id: int, exam_id: int, questions_data: List[Dict[
     thread.start()
 
 
-def _has_active_celery_worker(timeout: float = 1.0) -> bool:
-    try:
-        inspector = run_exam_grading_task.app.control.inspect(timeout=timeout)
-        ping_result = inspector.ping() if inspector else None
-        return bool(ping_result)
-    except Exception:
-        return False
-
-
 def dispatch_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, Any]]) -> None:
     use_celery = bool(getattr(settings, "QUIZ_EXAM_GRADING_USE_CELERY", False))
     if not use_celery:
@@ -36,8 +27,6 @@ def dispatch_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[
         return
 
     try:
-        if not _has_active_celery_worker():
-            raise RuntimeError("no_active_celery_workers")
         run_exam_grading_task.delay(user_id, exam_id, questions_data)
     except Exception as exc:
         logger.exception("Celery dispatch exam grading unavailable, fallback thread mode: %s", exc)

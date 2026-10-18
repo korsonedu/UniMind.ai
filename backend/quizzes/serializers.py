@@ -7,22 +7,56 @@ from .models import (
 from users.serializers import UserSerializer
 
 class KnowledgePointSerializer(serializers.ModelSerializer):
-    questions_count = serializers.IntegerField(source='questions.count', read_only=True)
+    questions_count = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
 
     class Meta:
         model = KnowledgePoint
         fields = ('id', 'code', 'name', 'level', 'prefix_category', 'description', 'parent', 'institution', 'order', 'created_at', 'questions_count', 'children')
 
+    def get_questions_count(self, obj):
+        annotated = getattr(obj, '_questions_count', None)
+        if annotated is not None:
+            return annotated
+        return obj.questions.count()
+
     def get_children(self, obj):
-        children = obj.children.all()  # uses prefetch cache when available
+        children = getattr(obj, '_tree_children', None)
+        if children is None:
+            children = obj.children.all()
         if not children:
             return []
         return KnowledgePointSerializer(children, many=True, context=self.context).data
 
+    def validate_parent(self, value):
+        instance = self.instance
+        if value is None or instance is None:
+            return value
+        if value.pk == instance.pk:
+            raise serializers.ValidationError('上级知识点不能是自身。')
+        seen = set()
+        ancestor = value
+        while ancestor is not None:
+            if ancestor.pk == instance.pk:
+                raise serializers.ValidationError('上级知识点不能是当前节点的后代。')
+            if ancestor.pk in seen:
+                raise serializers.ValidationError('上级知识点层级存在循环。')
+            seen.add(ancestor.pk)
+            ancestor = ancestor.parent
+        return value
+
+
+class KnowledgePointSummarySerializer(serializers.ModelSerializer):
+    """题目内嵌的精简知识点摘要，不展开子树。"""
+
+    class Meta:
+        model = KnowledgePoint
+        fields = ('id', 'code', 'name', 'level', 'prefix_category', 'description', 'parent', 'institution', 'order', 'created_at')
+
+
 class QuestionListSerializer(serializers.ModelSerializer):
     """学生端题目列表 serializer — 不含答案/解析等敏感字段。"""
-    knowledge_point_detail = KnowledgePointSerializer(source='knowledge_point', read_only=True)
+    knowledge_point_detail = KnowledgePointSummarySerializer(source='knowledge_point', read_only=True)
     is_favorite = serializers.SerializerMethodField()
     is_mastered = serializers.SerializerMethodField()
     difficulty_level_display = serializers.CharField(source='get_difficulty_level_display', read_only=True)
@@ -63,7 +97,7 @@ class QuestionListSerializer(serializers.ModelSerializer):
 
 class QuestionSerializer(serializers.ModelSerializer):
     """管理员/内部用 serializer — 含完整答案和评分标准。"""
-    knowledge_point_detail = KnowledgePointSerializer(source='knowledge_point', read_only=True)
+    knowledge_point_detail = KnowledgePointSummarySerializer(source='knowledge_point', read_only=True)
     is_favorite = serializers.SerializerMethodField()
     is_mastered = serializers.SerializerMethodField()
     difficulty_level_display = serializers.CharField(source='get_difficulty_level_display', read_only=True)
@@ -163,7 +197,7 @@ class KnowledgeEdgeSerializer(serializers.ModelSerializer):
             'edge_type', 'weight', 'source_type', 'is_active',
             'institution', 'created_at', 'updated_at',
         )
-        read_only_fields = ('id', 'institution', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'institution', 'source_type', 'created_at', 'updated_at')
 
 
 class MarketplaceListingSerializer(serializers.ModelSerializer):
