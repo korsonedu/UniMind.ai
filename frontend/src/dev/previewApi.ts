@@ -64,7 +64,8 @@ let history: Message[] = [
 ];
 const projectFixtures: { projects: { id: number; name: string; instructions: string }[]; assignments: Record<string, number | null> } = JSON.parse(sessionStorage.getItem('unimind-preview-projects') || '{"projects":[],"assignments":{}}');
 const saveProjects = () => sessionStorage.setItem('unimind-preview-projects', JSON.stringify(projectFixtures));
-history = history.map(message => ({ ...message, conversation_project: projectFixtures.assignments[message.conversation_id!] ?? null }));
+const conversationFixtures: Record<string, { title: string; is_pinned: boolean }> = JSON.parse(sessionStorage.getItem('unimind-preview-conversations') || '{}');
+history = history.map(message => ({ ...message, conversation_project: projectFixtures.assignments[message.conversation_id!] ?? null, conversation_title: conversationFixtures[message.conversation_id!]?.title || message.conversation_title, conversation_pinned: conversationFixtures[message.conversation_id!]?.is_pinned || false }));
 api.defaults.adapter = async config => {
   let data: unknown = {};
   const payload = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : config.data;
@@ -164,6 +165,17 @@ api.defaults.adapter = async config => {
         const answer = qaQuestions.flatMap(q => q.answers).find(a => a.id === Number(path.split('/')[3]))!;
         answer.is_liked = !answer.is_liked; answer.likes_count += answer.is_liked ? 1 : -1; data = answer;
       }
+      else if (/^\/ai\/conversations\/[^/]+\/$/.test(path)) {
+        const id = path.split('/')[3];
+        const existing = history.find(message => message.conversation_id === id);
+        const metadata = { ...(conversationFixtures[id] || { title: existing?.conversation_title || '', is_pinned: existing?.conversation_pinned || false }), ...payload };
+        conversationFixtures[id] = { title: metadata.title, is_pinned: metadata.is_pinned };
+        if ('project_id' in payload) projectFixtures.assignments[id] = payload.project_id;
+        data = { conversation_id: id, title: metadata.title, is_pinned: metadata.is_pinned, project_id: projectFixtures.assignments[id] ?? null };
+        history = history.map(message => message.conversation_id === id ? { ...message, conversation_title: metadata.title, conversation_pinned: metadata.is_pinned, conversation_project: projectFixtures.assignments[id] ?? null } : message);
+        sessionStorage.setItem('unimind-preview-conversations', JSON.stringify(conversationFixtures));
+        saveProjects();
+      }
       else if (/^\/ai\/projects\/\d+\/$/.test(path)) {
         const id = Number(path.split('/')[3]);
         if (config.method === 'delete') { projectFixtures.projects = projectFixtures.projects.filter(project => project.id !== id); history = history.filter(message => message.conversation_project !== id); Object.entries(projectFixtures.assignments).forEach(([key, value]) => { if (value === id) delete projectFixtures.assignments[key]; }); }
@@ -192,7 +204,9 @@ window.fetch = async (input, init) => {
     const visual = { type: 'data_card', payload: { title: '复习进度', items: [{ label: '待复习', value: '8 题' }, { label: '本周练习', value: '42 题' }] } };
     const answer = '先完成到期复习，再检查薄弱知识点。\n\n这是本地示例回复，可以继续输入、切换会话或新建对话。';
     const runId = 'run-preview';
-    history.push({ id: Date.now(), role: 'user', content: payload.message, timestamp: new Date().toISOString(), conversation_id: payload.conversation_id, conversation_project: projectFixtures.assignments[payload.conversation_id], conversation_title: payload.message.slice(0, 20) }, { id: Date.now() + 1, role: 'assistant', content: answer, timestamp: new Date().toISOString(), conversation_id: payload.conversation_id, conversation_project: projectFixtures.assignments[payload.conversation_id], conversation_title: payload.message.slice(0, 20), metadata: { all_visuals: [visual] } });
+    const title = conversationFixtures[payload.conversation_id]?.title || history.find(message => message.conversation_id === payload.conversation_id)?.conversation_title || payload.message.slice(0, 20);
+    const pinned = conversationFixtures[payload.conversation_id]?.is_pinned || false;
+    history.push({ id: Date.now(), role: 'user', content: payload.message, timestamp: new Date().toISOString(), conversation_id: payload.conversation_id, conversation_project: projectFixtures.assignments[payload.conversation_id], conversation_title: title, conversation_pinned: pinned }, { id: Date.now() + 1, role: 'assistant', content: answer, timestamp: new Date().toISOString(), conversation_id: payload.conversation_id, conversation_project: projectFixtures.assignments[payload.conversation_id], conversation_title: title, conversation_pinned: pinned, metadata: { all_visuals: [visual] } });
     const events = [
       { type: 'step', run_id: runId, name: 'get_learning_stats', status: 'queued', call_id: 'fixture-stats', round: 1, label: '查看学习进度' },
       { type: 'step', run_id: runId, name: 'get_learning_stats', status: 'running', call_id: 'fixture-stats', round: 1, label: '查看学习进度' },
@@ -200,7 +214,7 @@ window.fetch = async (input, init) => {
       { type: 'step', run_id: runId, name: 'render_visual', status: 'queued', call_id: 'fixture-visual', round: 2, label: '复习进度' },
       { type: 'step', run_id: runId, name: 'render_visual', status: 'running', call_id: 'fixture-visual', round: 2, label: '复习进度' },
       { type: 'step', run_id: runId, name: 'render_visual', status: 'succeeded', call_id: 'fixture-visual', round: 2, label: '复习进度', visual },
-      { done: true, run_id: runId, full_content: answer, conversation_title: payload.message.slice(0, 20), message_id: history[history.length - 1].id, metadata: { all_visuals: [visual] } },
+      { done: true, run_id: runId, full_content: answer, conversation_title: title, message_id: history[history.length - 1].id, metadata: { all_visuals: [visual] } },
     ];
     return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { headers: { 'Content-Type': 'text/event-stream' } });
   }

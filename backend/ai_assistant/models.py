@@ -37,6 +37,7 @@ class Conversation(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     bot = models.ForeignKey('Bot', on_delete=models.CASCADE)
     title = models.CharField(max_length=120, blank=True, default='')
+    is_pinned = models.BooleanField(default=False)
     project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, null=True, blank=True, related_name='conversations')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

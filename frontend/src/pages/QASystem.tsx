@@ -422,6 +422,10 @@ export const QASystem: React.FC = () => {
   const filter = searchParams.get('filter') || 'all';
   const search = searchParams.get('search') || '';
   const [loading, setLoading] = useState(true);
+  const [nextPage, setNextPage] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const questionsRequestRef = useRef(0);
+  const loadedPagesRef = useRef(1);
 
   // New Question State
   const [qContent, setQContent] = useState('');
@@ -445,15 +449,36 @@ export const QASystem: React.FC = () => {
   if (questionQuery.filter !== filter || questionQuery.search !== search) {
     setQuestionQuery({ filter, search });
     setLoading(true);
+    loadedPagesRef.current = 1;
   }
 
-  const fetchQuestions = useCallback((background = false) => {
-
-    return api.get('/qa/questions/', { params: { filter, search } }).then((res) => {
-      setQuestions(res.data);
-    })
-      .catch(() => { toast.error('加载失败'); })
-      .finally(() => { if (!background) setLoading(false); });
+  const fetchQuestions = useCallback(async (background = false, page = 1) => {
+    const requestId = ++questionsRequestRef.current;
+    if (page > 1) setLoadingMore(true);
+    const lastPage = background && page === 1 ? loadedPagesRef.current : page;
+    try {
+      const items: QAQuestion[] = [];
+      let currentPage = page;
+      let hasNext = false;
+      for (; currentPage <= lastPage; currentPage++) {
+        const { data } = await api.get('/qa/questions/', { params: { filter, search, page: currentPage } });
+        if (requestId !== questionsRequestRef.current) return;
+        items.push(...(Array.isArray(data) ? data : data.results));
+        hasNext = !Array.isArray(data) && !!data.next;
+        if (!hasNext || currentPage === lastPage) break;
+      }
+      if (requestId !== questionsRequestRef.current) return;
+      setQuestions(previous => page === 1 ? items : [...previous, ...items.filter(item => !previous.some(question => question.id === item.id))]);
+      loadedPagesRef.current = currentPage;
+      setNextPage(hasNext ? currentPage + 1 : null);
+    } catch {
+      if (requestId === questionsRequestRef.current) toast.error('加载失败');
+    } finally {
+      if (requestId === questionsRequestRef.current) {
+        setLoadingMore(false);
+        if (!background) setLoading(false);
+      }
+    }
   }, [filter, search]);
   const refreshFetchQuestions = useCallback((background = false) => {
     if (!background) setLoading(true);
@@ -575,6 +600,11 @@ export const QASystem: React.FC = () => {
             questions.map(q => (
               <ThreadCard key={q.id} question={q} onRefresh={() => refreshFetchQuestions(true)} isAdmin={isAdmin} />
             ))
+          )}
+          {!loading && nextPage && (
+            <Button variant="ghost" disabled={loadingMore} onClick={() => fetchQuestions(true, nextPage)} className="w-full mt-4">
+              {loadingMore ? '加载中…' : '加载更多'}
+            </Button>
           )}
         </section>
       </div>

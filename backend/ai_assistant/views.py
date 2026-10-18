@@ -4,6 +4,7 @@ import threading
 import logging
 import time
 from asgiref.sync import sync_to_async
+from django.utils.decorators import method_decorator
 from django.db import models, close_old_connections
 from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin, IsMemberOrReadOnlyList
 from rest_framework import generics, permissions, serializers
@@ -504,12 +505,14 @@ class AIChatListView(generics.ListAPIView):
         qs = qs.annotate(_conversation_title=Subquery(title_subquery))
         project_subquery = Conversation.objects.filter(user=self.request.user, conversation_id=OuterRef('conversation_id')).values('project_id')[:1]
         qs = qs.annotate(_conversation_project=Subquery(project_subquery))
+        pinned_subquery = Conversation.objects.filter(user=self.request.user, conversation_id=OuterRef('conversation_id')).values('is_pinned')[:1]
+        qs = qs.annotate(_conversation_pinned=Subquery(pinned_subquery))
         return qs
 
 
 class AIChatResetView(APIView):
     permission_classes = [IsMember]
-    @user_rate_limit(key_prefix='chat_reset', max_requests=10, window_seconds=3600)
+    @method_decorator(user_rate_limit(key_prefix='chat_reset', max_requests=10, window_seconds=3600))
     def post(self, request):
         bot_id = request.data.get('bot_id')
         qs = AIChatMessage.objects.filter(user=request.user)

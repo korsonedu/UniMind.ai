@@ -26,6 +26,9 @@ import { restoreVisualSteps } from '@/lib/visualHistory';
 import { TaskList } from '@/components/TaskList';
 import { NativeAgentShell } from '@/components/NativeAgentShell';
 import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
+import { Link } from 'react-router-dom';
+import { ContactAdminModal } from '@/components/ContactAdminModal';
+import { learningReset, type AIUsage, type LearningAccess } from '@/types/learning';
 
 // ── Types ──
 
@@ -133,6 +136,7 @@ export interface AgentChatLayoutProps {
     activeSessionId: number | null;
     onLoadSession: (session: ConversationSession) => void;
     onDeleteSession?: (session: ConversationSession) => void;
+    onUpdateSession: ReturnType<typeof useAgentConversation>['handleUpdateSession'];
     onNewConversation: () => void;
     botDisplayName: string;
   }) => React.ReactNode;
@@ -169,6 +173,9 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const nativeInputRef = useRef<HTMLTextAreaElement>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
+  const [aiUsage, setAIUsage] = useState<AIUsage | null>(null);
+  const [quotaError, setQuotaError] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
 
   const {
     bot, messages, input, loading, isComposing, initialized, skillOpen,
@@ -176,7 +183,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     scrollRef, projectId, setProjectId,
     setMessages, setInput, setBot, setInitialized, setSkillOpen, setSessionOpen,
     setIsComposition, setActiveSessionId, setSessions, setConversationId,
-    handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleReset,
+    handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleUpdateSession, handleReset,
     handleSkillSelect, groupIntoSessions, doSend,
   } = useAgentConversation({
     enableProjects: appearance === 'native',
@@ -198,6 +205,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   });
   const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions);
   const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
+
+  useEffect(() => {
+    if (appearance !== 'native' || loading) return;
+    const controller = new AbortController();
+    void api.get<LearningAccess>('/users/learning/access/', { signal: controller.signal })
+      .then(({ data }) => { setAIUsage(data.ai_usage); setQuotaError(false); })
+      .catch(() => { if (!controller.signal.aborted) setQuotaError(true); });
+    return () => controller.abort();
+  }, [appearance, loading]);
 
   // Expose doSend to parent
   useEffect(() => {
@@ -384,8 +400,23 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     } }, onNewInProject: id => wrappedReset(false, id),
     sessions, activeSessionId, onLoadSession: wrappedLoadSession,
     onDeleteSession: onDeleteSession ? handleDeleteSession : undefined,
+    onUpdateSession: handleUpdateSession,
     onNewConversation: wrappedReset, botDisplayName,
   });
+
+  const quotaExhausted = aiUsage && !aiUsage.unlimited && aiUsage.remaining === 0;
+  const quotaLow = aiUsage && !aiUsage.unlimited && aiUsage.remaining !== null && aiUsage.remaining > 0 && aiUsage.remaining <= 5;
+  const quotaHint = appearance === 'native' && <>
+    <p aria-live="polite" className={cn('mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-1 text-[11px] leading-5 text-muted-foreground', quotaLow && 'text-amber-700')}>
+      {quotaError ? <span>AI 额度暂时无法读取，请稍后查看。</span> : !aiUsage ? <span>正在读取 AI 额度…</span> : aiUsage.unlimited ? <span>AI 问答不限次数</span> : <>
+        <span>{aiUsage.configured ? `本周 AI 剩余 ${aiUsage.base_remaining} 次` : '基础周额度待配置'}{aiUsage.addon_remaining > 0 && ` · 加量剩余 ${aiUsage.addon_remaining} 次`}{quotaLow && ' · 额度不多了'}</span>
+        {quotaExhausted && aiUsage.configured && <span>{learningReset(aiUsage.resets_at)}（上海时间）恢复基础额度</span>}
+        {(quotaExhausted || !aiUsage.configured) && <button type="button" className="underline underline-offset-2 hover:text-foreground" onClick={() => setContactOpen(true)}>联系科晟</button>}
+        {(quotaExhausted || quotaLow) && <Link to="/pricing" className="underline underline-offset-2 hover:text-foreground">按需 AI 加量</Link>}
+      </>}
+    </p>
+    <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />
+  </>;
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
@@ -401,6 +432,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <button className="um-agent-project-picker-none" onClick={() => selectNewProject(null)}>未分类</button>
               </PopoverContent>
             </Popover> 中做些什么？</> : '我们要做些什么？'}</h2>
+            <div className="w-full max-w-[680px]">
             <div data-tour={inputTourClass} className="um-agent-composer">
               <textarea ref={nativeInputRef} value={input} onChange={event => setInput(event.target.value)}
                 onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
@@ -415,6 +447,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 </Popover>
                 <button className="um-agent-button um-agent-button-primary um-agent-send" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label="发送消息"><ArrowUp size={18} /></button>
               </footer>
+            </div>
+            {quotaHint}
             </div>
           </section>
         </div>
@@ -717,6 +751,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   </Button>
                 </div>
               </div>
+              {quotaHint}
             </div>
           </div>
           </div>

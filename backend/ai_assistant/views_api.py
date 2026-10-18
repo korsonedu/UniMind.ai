@@ -11,8 +11,13 @@ Endpoints:
     POST /api/ai/feedback/          — AI 回复反馈（赞/踩）
 """
 
+import hashlib
+import json
 import logging
+import math
 
+from django.db import transaction
+from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
 from users.permissions import IsMember
 from rest_framework.response import Response
@@ -20,11 +25,17 @@ from rest_framework.response import Response
 from ai_service import AIService
 from ai_assistant.services.grading_engine import GradingEngine
 from ai_assistant.services.memory_system import MemorySystem
-from quizzes.models import Question
+from ai_assistant.services.practice import practice_grade_cache_key
+from quizzes.models import Question, PracticeSubmission, GradingRecord
 from users.models import User
 from core.utils import get_content_institution, get_content_institution_id
 
 logger = logging.getLogger(__name__)
+
+
+class PracticeAnswerInput(serializers.Serializer):
+    question_id = serializers.IntegerField(min_value=1)
+    answer = serializers.CharField(allow_blank=True, default='')
 
 
 def _resolve_user(request):
@@ -183,8 +194,7 @@ def practice_start_view(request):
     kp_name = (request.data.get('kp_name') or '').strip()
     subject = (request.data.get('subject') or '').strip()
     difficulty = (request.data.get('difficulty') or '').strip()
-    count = int(request.data.get('count', 5))
-    count = max(1, min(count, 10))
+    count = serializers.IntegerField(min_value=1, max_value=10).run_validation(request.data.get('count', 5))
 
     user = request.user
     institution = get_content_institution()
@@ -235,11 +245,11 @@ def practice_pre_grade_view(request):
     Body: { session_id, question_id, answer }
 
     异步预批改：收到单题答案后立即派发 Celery task 后台批改，
-    结果写 Redis (practice:grade:{session_id}:{question_id})。
+    结果按会话、题目及答案摘要缓存。
     submit 时优先读缓存，减少同步等待。
     """
-    session_id = (request.data.get('session_id') or '').strip()
-    question_id = int(request.data.get('question_id', 0))
+    session_id = serializers.UUIDField().run_validation(request.data.get('session_id')).hex
+    question_id = serializers.IntegerField(min_value=1).run_validation(request.data.get('question_id'))
     user_answer = str(request.data.get('answer', '')).strip()
 
     if not session_id or not question_id:
@@ -265,12 +275,16 @@ def practice_pre_grade_view(request):
 
     # 异步派发 Celery task
     from ai_assistant.tasks import pre_grade_single_question
-    pre_grade_single_question.delay(
-        session_id=session_id,
-        question_id=question_id,
-        user_answer=user_answer,
-        user_id=request.user.id,
-    )
+    try:
+        pre_grade_single_question.delay(
+            session_id=session_id,
+            question_id=question_id,
+            user_answer=user_answer,
+            user_id=request.user.id,
+        )
+    except Exception:
+        logger.exception('Practice pre-grade dispatch failed')
+        return Response({'error': '预批改暂不可用，提交时会重新批改'}, status=503)
 
     return Response({'status': 'accepted', 'question_id': question_id})
 
@@ -278,215 +292,152 @@ def practice_pre_grade_view(request):
 @api_view(['POST'])
 @permission_classes([IsMember])
 def practice_submit_view(request):
-    """
-    POST /api/ai/practice/submit/
-    Body: { session_id, answers: [{question_id, answer}, ...] }
-    Returns: { total_score, max_score, correct_rate, time_spent,
-               results: [{question_id, is_correct, score, feedback, error_analysis?}],
-               kp_breakdown, summary_text }
+    """Grade outside locks, then commit the complete session exactly once."""
+    session_id = serializers.UUIDField().run_validation(request.data.get('session_id')).hex
+    answer_input = PracticeAnswerInput(data=request.data.get('answers'), many=True, allow_empty=False)
+    answer_input.is_valid(raise_exception=True)
+    answers = answer_input.validated_data
+    ids = [answer['question_id'] for answer in answers]
+    if len(ids) != len(set(ids)):
+        return Response({'error': '每道题只能提交一次答案'}, status=400)
+    answers_hash = hashlib.sha256(json.dumps(
+        sorted(answers, key=lambda answer: answer['question_id']), sort_keys=True,
+    ).encode()).hexdigest()
 
-    优先读 Redis 预批改缓存 (practice:grade:{session_id}:{qid})，
-    缓存未命中时同步批改。
-    """
-    session_id = (request.data.get('session_id') or '').strip()
-    answers = request.data.get('answers', [])
+    def replay(submission):
+        if submission.answers_hash != answers_hash:
+            return Response({'error': '此练习已提交，不能更换答案'}, status=409)
+        return Response(submission.response)
 
-    if not session_id:
-        return Response({'error': 'session_id 必填'}, status=400)
-    if not answers or not isinstance(answers, list):
-        return Response({'error': 'answers 必填，且必须为数组'}, status=400)
-
-    # 从 Redis 取 session 验证
+    prior = PracticeSubmission.objects.filter(user=request.user, session_id=session_id).first()
+    if prior:
+        return replay(prior)
     session_key = f'practice:session:{session_id}'
-    session_data = _cache.get(session_key)
-    if not session_data:
+    session = _cache.get(session_key)
+    if not session:
+        prior = PracticeSubmission.objects.filter(user=request.user, session_id=session_id).first()
+        if prior:
+            return replay(prior)
         return Response({'error': '会话已过期或不存在'}, status=404)
-    if session_data['user_id'] != request.user.id:
+    if session['user_id'] != request.user.id:
         return Response({'error': '无权访问此会话'}, status=403)
+    if set(ids) != {question['id'] for question in session['questions']}:
+        return Response({'error': '请提交会话内全部题目的答案'}, status=400)
+    scope = get_content_institution_id()
+    questions = {question.pk: question for question in Question.objects.filter(
+        pk__in=ids, institution_id=scope,
+    ).select_related('knowledge_point')}
+    if len(questions) != len(ids):
+        return Response({'error': '题目不存在或已不在当前内容范围'}, status=403)
 
-    session_questions = {q['id']: q for q in session_data['questions']}
-    valid_question_ids = set(session_questions.keys())
-
-    # 验证 question_ids
-    submitted_ids = {int(a.get('question_id', 0)) for a in answers}
-    if not submitted_ids.issubset(valid_question_ids):
-        return Response({'error': '提交的题目 ID 与 session 不匹配'}, status=400)
-
-    ai = None  # lazy init，只在缓存未命中时创建
+    ai = None
+    graded = []
     results = []
-    total_score = 0.0
-    max_score_total = 0.0
-    kp_scores: dict = {}  # kp_id → {correct, total}
+    kp_scores = {}
     cache_hits = 0
-
-    for ans in answers:
-        qid = int(ans.get('question_id', 0))
-        user_answer = str(ans.get('answer', '')).strip()
-        question_entry = session_questions.get(qid, {})
-
-        if not user_answer:
-            results.append({
-                'question_id': qid,
-                'is_correct': False,
-                'score': 0,
-                'max_score': 10.0,
-                'feedback': '未作答',
-                'kp_name': question_entry.get('kp_name', ''),
-            })
-            max_score_total += 10.0
-            continue
-
-        try:
-            question = Question.objects.get(id=qid, institution_id=get_content_institution_id())
-        except Question.DoesNotExist:
-            results.append({
-                'question_id': qid,
-                'is_correct': False,
-                'score': 0,
-                'max_score': 10.0,
-                'feedback': '题目不存在',
-                'kp_name': '',
-            })
-            max_score_total += 10.0
-            continue
-
-        max_q = question.get_max_score()
-        kp_id = question.knowledge_point_id
-        kp_name = question.knowledge_point.name if question.knowledge_point else ''
-
-        # 优先读 Redis 预批改缓存
-        cache_key = f'practice:grade:{session_id}:{qid}'
-        cached = _cache.get(cache_key)
-        if cached and '_error' not in cached:
-            cache_hits += 1
-            grade_result = cached
+    for answer in answers:
+        question = questions[answer['question_id']]
+        text = answer['answer']
+        maximum = question.get_max_score()
+        cache_key = practice_grade_cache_key(session_id, question.pk, text)
+        if not text:
+            grade = {'score': 0, 'feedback': '未作答', 'is_correct': False}
         else:
-            # 缓存未命中 → 同步批改
-            if ai is None:
-                ai = AIService()
-            try:
-                grade_result = GradingEngine.grade(
-                    ai=ai,
-                    question_text=question.text or '',
-                    user_answer=user_answer,
-                    correct_answer=question.correct_answer or '',
-                    q_type=question.q_type or 'objective',
-                    max_score=max_q,
-                    grading_points=question.grading_points,
-                    options=question.options,
-                    subjective_type=question.subjective_type or '主观题',
-                    user=request.user,
-                )
-            except Exception:
-                logger.exception("Grading failed for question_id=%s", qid)
-                grade_result = {
-                    'score': 0, 'max_score': max_q, 'feedback': '判分失败，请稍后重试',
-                    'is_correct': False,
-                }
-
-        score = float(grade_result.get('score', 0))
-        is_correct = grade_result.get('is_correct', score >= max_q * 0.6)
-        total_score += score
-        max_score_total += max_q
-
-        # 写入记录 + Memorix 更新
-        error_analysis = grade_result.get('error_analysis')
-        error_type = ''
-        error_metadata = {}
-        if error_analysis and isinstance(error_analysis, dict):
-            error_type = error_analysis.get('type', '')
-            error_metadata = {
-                'reasoning': error_analysis.get('reasoning', ''),
-                'suggested_focus': error_analysis.get('suggested_focus', ''),
-                'graded_at': _timezone.now().isoformat(),
-            }
-            MemorySystem.write_question_status_error(request.user, qid, error_type, error_metadata)
-
-        MemorySystem.write_grading_record(
-            user=request.user,
-            question_id=qid,
-            score=score,
-            max_score=max_q,
-            is_correct=is_correct,
-            error_type=error_type,
-            error_metadata=error_metadata,
-            feedback=grade_result.get('feedback', ''),
-            analysis=grade_result.get('analysis', ''),
-        )
-
-        # Memorix 状态更新
-        normalized = score / max_q if max_q > 0 else 0
-        memorix_rating = int(grade_result.get('memorix_rating', 2))
-        memorix_rating = min(4, max(1, memorix_rating))
-        from quizzes.ai_workflow import _apply_memorix_status
-        _apply_memorix_status(
-            user=request.user,
-            question=question,
-            normalized_score=normalized,
-            memorix_rating=memorix_rating,
-            review_time=_timezone.now(),
-        )
-
-        # 知识点统计
-        kp_id = question.knowledge_point_id
-        kp_name = question.knowledge_point.name if question.knowledge_point else ''
-        if kp_id:
-            if kp_id not in kp_scores:
-                kp_scores[kp_id] = {'correct': 0, 'total': 0, 'kp_name': kp_name}
-            kp_scores[kp_id]['total'] += 1
-            if is_correct:
-                kp_scores[kp_id]['correct'] += 1
-
+            grade = _cache.get(cache_key)
+            if grade and '_error' not in grade:
+                cache_hits += 1
+            else:
+                try:
+                    if ai is None:
+                        ai = AIService()
+                    grade = GradingEngine.grade(
+                        ai=ai, question_text=question.text or '', user_answer=text,
+                        correct_answer=question.correct_answer or '', q_type=question.q_type,
+                        max_score=maximum, grading_points=question.grading_points,
+                        options=question.options, subjective_type=question.subjective_type or '主观题',
+                        user=request.user,
+                    )
+                    _cache.set(cache_key, grade, timeout=1800)
+                except Exception:
+                    logger.exception('Practice grading failed for question_id=%s', question.pk)
+                    return Response({'error': '判分失败，答案已保留，请稍后重新提交'}, status=503)
+        try:
+            score = float(grade['score'])
+            if not math.isfinite(score):
+                raise ValueError('Invalid grading score')
+            score = max(0.0, min(maximum, score))
+            is_correct = score >= maximum * 0.6
+            rating = min(4, max(1, int(grade.get('memorix_rating', 3 if is_correct else 1))))
+        except (KeyError, TypeError, ValueError):
+            return Response({'error': '判分结果无效，请稍后重新提交'}, status=503)
+        kp_name = question.knowledge_point.name if question.knowledge_point_id else ''
         results.append({
-            'question_id': qid,
-            'is_correct': is_correct,
-            'score': score,
-            'max_score': max_q,
-            'feedback': grade_result.get('feedback', ''),
-            'error_analysis': error_analysis,
-            'kp_name': kp_name,
+            'question_id': question.pk, 'is_correct': is_correct, 'score': score,
+            'max_score': maximum, 'feedback': grade.get('feedback', ''),
+            'error_analysis': grade.get('error_analysis'), 'kp_name': kp_name,
         })
+        graded.append((question, text, grade, score, maximum, is_correct, rating))
+        if question.knowledge_point_id:
+            kp = kp_scores.setdefault(question.knowledge_point_id, {'correct': 0, 'total': 0, 'kp_name': kp_name})
+            kp['total'] += 1
+            kp['correct'] += int(is_correct)
 
-    correct_rate = round(total_score / max_score_total * 100, 1) if max_score_total > 0 else 0
-    correct_count = sum(1 for r in results if r['is_correct'])
-
-    # 知识点 breakdown
-    kp_breakdown = [
-        {
-            'kp_id': kp_id,
-            'kp_name': info['kp_name'],
-            'correct_rate': round(info['correct'] / info['total'] * 100, 1) if info['total'] > 0 else 0,
-        }
-        for kp_id, info in kp_scores.items()
-    ]
-
-    # 生成摘要
-    summary_parts = [f'正确率 {correct_rate}%（{correct_count}/{len(results)}）']
-    weak_kps = [kp for kp in kp_breakdown if kp['correct_rate'] < 60]
-    if weak_kps:
-        names = '、'.join(kp['kp_name'] for kp in weak_kps[:3])
-        summary_parts.append(f'薄弱知识点：{names}')
-    else:
-        summary_parts.append('全部知识点掌握良好')
-
-    summary_text = '。'.join(summary_parts) + '。'
-
-    # 清理 session + 预批改缓存
-    _cache.delete(session_key)
-    for qid in valid_question_ids:
-        _cache.delete(f'practice:grade:{session_id}:{qid}')
-
-    return Response({
-        'total_score': round(total_score, 1),
-        'max_score': round(max_score_total, 1),
-        'correct_rate': correct_rate,
-        'correct_count': correct_count,
-        'total_questions': len(results),
-        'cache_hits': cache_hits,
-        'results': results,
-        'kp_breakdown': kp_breakdown,
-        'summary_text': summary_text,
-    })
+    total_score = sum(result['score'] for result in results)
+    max_score = sum(result['max_score'] for result in results)
+    correct_rate = round(total_score / max_score * 100, 1) if max_score else 0
+    correct_count = sum(result['is_correct'] for result in results)
+    kp_breakdown = [{'kp_id': pk, 'kp_name': value['kp_name'],
+                     'correct_rate': round(value['correct'] / value['total'] * 100, 1)}
+                    for pk, value in kp_scores.items()]
+    summary = [f'正确率 {correct_rate}%（{correct_count}/{len(results)}）']
+    weak = [kp['kp_name'] for kp in kp_breakdown if kp['correct_rate'] < 60]
+    summary.append('薄弱知识点：' + '、'.join(weak[:3]) if weak else '全部知识点掌握良好')
+    response = {
+        'total_score': round(total_score, 1), 'max_score': round(max_score, 1),
+        'correct_rate': correct_rate, 'correct_count': correct_count,
+        'total_questions': len(results), 'cache_hits': cache_hits, 'results': results,
+        'kp_breakdown': kp_breakdown, 'summary_text': '。'.join(summary) + '。',
+    }
+    from quizzes.ai_workflow import _apply_memorix_status
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=request.user.pk)
+        from users.feature_access import has_learning_feature
+        if not has_learning_feature(user, 'quiz.exam'):
+            return Response({'error': '当前账号已无法提交此练习'}, status=403)
+        prior = PracticeSubmission.objects.filter(user=request.user, session_id=session_id).first()
+        if prior:
+            return replay(prior)
+        # The content scope or questions may have changed while the AI was grading.
+        current_questions = {question.pk: question for question in Question.objects.select_for_update().filter(
+            pk__in=ids, institution_id=scope,
+        ).order_by('pk')}
+        if get_content_institution_id() != scope or len(current_questions) != len(ids):
+            return Response({'error': '题目内容范围已变更，请重新开始练习'}, status=409)
+        for question, text, grade, score, maximum, is_correct, rating in graded:
+            question = current_questions[question.pk]
+            if not text:
+                continue
+            error = grade.get('error_analysis') or {}
+            error_type = error.get('type', '') if isinstance(error, dict) else ''
+            metadata = {key: error.get(key, '') for key in ('reasoning', 'suggested_focus')} if isinstance(error, dict) and error else {}
+            if metadata:
+                metadata['graded_at'] = _timezone.now().isoformat()
+            GradingRecord.objects.create(
+                user=request.user, question=question, score=score, max_score=maximum,
+                is_correct=is_correct, error_type=error_type, error_metadata=metadata,
+                feedback=grade.get('feedback', ''), analysis=grade.get('analysis', ''),
+            )
+            status = _apply_memorix_status(request.user, question, score / maximum if maximum else 0, rating)
+            status.error_type, status.error_metadata = error_type, metadata
+            status.save(update_fields=['error_type', 'error_metadata'])
+        PracticeSubmission.objects.create(user=request.user, session_id=session_id,
+                                          answers_hash=answers_hash, response=response)
+    # A failed cache cleanup must not turn an already committed submission into a 500.
+    try:
+        _cache.delete_many([session_key] + [practice_grade_cache_key(session_id, answer['question_id'], answer['answer']) for answer in answers])
+    except Exception:
+        logger.warning('Practice cache cleanup failed', exc_info=True)
+    return Response(response)
 
 
 # ── Feedback API ─────────────────────────────────────────────────────────

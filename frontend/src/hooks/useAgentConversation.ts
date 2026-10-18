@@ -31,6 +31,7 @@ export interface Message {
   conversation_id?: string;
   conversation_title?: string;
   conversation_project?: number | null;
+  conversation_pinned?: boolean;
   metadata?: Record<string, unknown> & { visual?: VisualData; all_visuals?: VisualData[] };
 }
 
@@ -42,7 +43,10 @@ export interface ConversationSession {
   lastTime: string;
   conversationId?: string;
   projectId?: number | null;
+  isPinned?: boolean;
 }
+
+export interface ConversationPatch { title?: string; is_pinned?: boolean; project_id?: number | null; }
 
 export interface Bot {
   id: number;
@@ -123,6 +127,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const conversationIdRef = useRef(conversationId);
   const sessionIdsRef = useRef(new Map<string, number>());
   const sessionsRevisionRef = useRef(0);
+  const sessionMetadataRef = useRef(new Map<string, ConversationPatch>());
 
   const setConversationId = useCallback((id: string) => {
     conversationIdRef.current = id;
@@ -205,11 +210,12 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     }
     return Array.from(groups, ([key, msgs]) => {
       if (!sessionIdsRef.current.has(key)) sessionIdsRef.current.set(key, sessionIdsRef.current.size);
-      const title = msgs.find(m => m.conversation_title)?.conversation_title || '';
+      const metadata = sessionMetadataRef.current.get(key);
+      const title = metadata?.title ?? msgs.find(m => m.conversation_title)?.conversation_title ?? '';
       const firstUser = msgs.find(m => m.role === 'user');
       const label = title || (firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : '对话');
       const lastMsg = msgs[msgs.length - 1];
-      return { id: sessionIdsRef.current.get(key)!, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id, projectId: lastMsg.conversation_project ?? null };
+      return { id: sessionIdsRef.current.get(key)!, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id, projectId: metadata?.project_id !== undefined ? metadata.project_id : lastMsg.conversation_project ?? null, isPinned: metadata?.is_pinned ?? msgs.some(message => message.conversation_pinned) };
     }).sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
   }, []);
 
@@ -276,6 +282,24 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       toast.error('删除失败，请重试');
     }
   }, [cancelRequest, setConversationId]);
+
+  const handleUpdateSession = useCallback(async (session: ConversationSession, patch: ConversationPatch) => {
+    if (!session.conversationId) return false;
+    ++sessionsRevisionRef.current;
+    try {
+      const { data } = await api.patch<ConversationPatch>(`/ai/conversations/${session.conversationId}/`, patch);
+      ++sessionsRevisionRef.current;
+      sessionMetadataRef.current.set(session.conversationId, { ...sessionMetadataRef.current.get(session.conversationId), ...patch, is_pinned: data.is_pinned, project_id: data.project_id });
+      const updateMessage = (message: Message) => ({ ...message, conversation_title: data.title || message.conversation_title, conversation_project: data.project_id, conversation_pinned: data.is_pinned });
+      setSessions(previous => previous.map(item => item.conversationId === session.conversationId
+        ? { ...item, title: data.title || item.title, label: data.title || item.label, projectId: data.project_id, isPinned: data.is_pinned, messages: item.messages.map(updateMessage) } : item));
+      if (conversationIdRef.current === session.conversationId) {
+        if (data.project_id !== undefined) setProjectId(data.project_id);
+        setMessages(previous => previous.map(updateMessage));
+      }
+      return true;
+    } catch { toast.error('对话保存失败，请重试'); return false; }
+  }, [setProjectId]);
 
   // ── Auto-scroll ──
 
@@ -444,7 +468,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                 setMessages(prev => upsertChatMessage(prev, {
                   _id: id, id: payload.message_id, role: 'assistant',
                   content: finalContent, visible: true,
-                  conversation_title: payload.conversation_title || undefined,
+                  conversation_title: sessionMetadataRef.current.get(requestConversationId)?.title ?? payload.conversation_title ?? undefined,
                   metadata: payload.metadata || undefined,
                 }));
                 streamingId = null;
@@ -457,7 +481,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                   id: payload.message_id,
                   role: 'assistant' as const,
                   content: finalContent,
-                  conversation_title: payload.conversation_title || undefined,
+                  conversation_title: sessionMetadataRef.current.get(requestConversationId)?.title ?? payload.conversation_title ?? undefined,
                   metadata: payload.metadata || undefined,
                   visible: false,
                   timestamp: new Date().toISOString(),
@@ -574,6 +598,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     handleLoadSession,
     handleRefreshSessions,
     handleDeleteSession,
+    handleUpdateSession,
     handleReset,
     handleSkillSelect,
     doSend,

@@ -1,5 +1,5 @@
 from rest_framework import generics, serializers
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from users.views import IsMember
 from .models import AIChatMessage, Conversation, ConversationProject
 
@@ -38,6 +38,39 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
         return ConversationProject.objects.filter(user=self.request.user)
 
 
+class ConversationUpdateSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(max_length=120, required=False)
+    project_id = serializers.PrimaryKeyRelatedField(source='project', queryset=ConversationProject.objects.none(), allow_null=True, required=False)
+
+    class Meta:
+        model = Conversation
+        fields = ('conversation_id', 'title', 'is_pinned', 'project_id')
+        read_only_fields = ('conversation_id',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['project_id'].queryset = ConversationProject.objects.filter(user=self.context['request'].user)
+
+
+class ConversationDetailView(generics.UpdateAPIView):
+    serializer_class = ConversationUpdateSerializer
+    permission_classes = [IsMember]
+    http_method_names = ['patch', 'options']
+
+    def get_object(self):
+        conversation_id = self.kwargs['conversation_id']
+        conversation = Conversation.objects.filter(user=self.request.user, conversation_id=conversation_id).first()
+        if conversation:
+            return conversation
+        message = AIChatMessage.objects.filter(user=self.request.user, conversation_id=conversation_id, bot__isnull=False).first()
+        if not message or Conversation.objects.filter(conversation_id=conversation_id).exists():
+            raise NotFound()
+        conversation, _ = Conversation.objects.get_or_create(
+            user=self.request.user, conversation_id=conversation_id, defaults={'bot_id': message.bot_id},
+        )
+        return conversation
+
+
 def save_new_conversation_project(request, bot, conversation_id):
     serializer = ProjectAssignmentSerializer(data={'project_id': request.data.get('project_id')}, context={'request': request})
     serializer.is_valid(raise_exception=True)
@@ -60,4 +93,3 @@ def add_project_context(user, conversation_id, history):
         return history
     project = conversation.project
     return [{'role': 'user', 'content': f'当前学习项目：{project.name}\n以下是我为本项目填写的学习目标、背景与要求，请在本次对话中参考：\n{project.instructions}'}] + history
-

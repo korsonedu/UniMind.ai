@@ -624,14 +624,10 @@ def generate_conversation_title(conversation_id: str, user_id: int, bot_id: int)
         title = (result or '').strip()[:120]
 
         if title:
-            Conversation.objects.update_or_create(
-                conversation_id=conversation_id,
-                defaults={
-                    'user_id': user_id,
-                    'bot_id': bot_id,
-                    'title': title,
-                },
+            conversation, _ = Conversation.objects.get_or_create(
+                conversation_id=conversation_id, user_id=user_id, defaults={'bot_id': bot_id},
             )
+            Conversation.objects.filter(pk=conversation.pk, title='').update(title=title)
             logger.info("Generated title '%s' for conversation %s", title, conversation_id)
     except Exception:
         logger.exception("Failed to generate title for conversation %s", conversation_id)
@@ -1143,7 +1139,7 @@ def _generate_optimization_suggestions(analysis: dict) -> list[dict]:
 def _store_mutar_suggestions(suggestions: list[dict]):
     """将建议存入 Redis（MUTAR 建议缓存），供后续人工审核或 API 读取。"""
     try:
-        from django_redis import get_redis_connection
+        from core.redis import get_redis_connection
         redis_conn = get_redis_connection("default")
     except Exception:
         logger.warning("_store_mutar_suggestions: Redis unavailable")
@@ -1202,7 +1198,7 @@ def optimize_prompt_task():
 def _read_mutar_suggestions() -> list[dict]:
     """从 Redis 读取最新的 MUTAR 建议批次（最近 5 条）。"""
     try:
-        from django_redis import get_redis_connection
+        from core.redis import get_redis_connection
         redis_conn = get_redis_connection("default")
     except Exception:
         logger.warning("_read_mutar_suggestions: Redis unavailable")
@@ -1267,8 +1263,8 @@ def _handle_bot_suggestion(s: dict):
 def pre_grade_single_question(session_id: str, question_id: int, user_answer: str, user_id: int):
     """异步预批改：单题批改后写 Redis 缓存，供 practice_submit_view 聚合。
 
-    Redis key: practice:grade:{session_id}:{question_id}
-    TTL: 30min（远超 session 的 24h TTL，足够提交窗口）
+    Redis key includes an answer digest, so out-of-order tasks cannot overwrite another answer.
+    TTL: 30min; submit regrades on a cache miss.
     """
     from django.core.cache import cache
     from django.contrib.auth import get_user_model
@@ -1276,13 +1272,18 @@ def pre_grade_single_question(session_id: str, question_id: int, user_answer: st
     from ai_assistant.services.grading_engine import GradingEngine
     from ai_assistant.services.memory_system import MemorySystem
     from quizzes.models import Question
+    from core.utils import get_content_institution_id
+    from ai_assistant.services.practice import practice_grade_cache_key
 
     User = get_user_model()
-    cache_key = f'practice:grade:{session_id}:{question_id}'
+    cache_key = practice_grade_cache_key(session_id, question_id, user_answer)
 
     try:
-        user = User.objects.get(id=user_id)
-        question = Question.objects.get(id=question_id)
+        session = cache.get(f'practice:session:{session_id}')
+        if not session or session['user_id'] != user_id or question_id not in {q['id'] for q in session['questions']}:
+            return
+        user = User.objects.get(id=user_id, is_active=True)
+        question = Question.objects.get(id=question_id, institution_id=get_content_institution_id())
         ai = AIService()
 
         result = GradingEngine.grade(
@@ -1304,7 +1305,7 @@ def pre_grade_single_question(session_id: str, question_id: int, user_answer: st
             'is_correct': result.get('is_correct', False),
             'feedback': result.get('feedback', ''),
             'analysis': result.get('analysis', ''),
-            'memorix_rating': result.get('memorix_rating', 2),
+            'memorix_rating': result.get('memorix_rating', 3 if result.get('is_correct') else 1),
             'error_analysis': result.get('error_analysis'),
             'kp_name': question.knowledge_point.name if question.knowledge_point else '',
             'kp_id': question.knowledge_point_id,

@@ -1,39 +1,54 @@
 import { useId, useState } from 'react';
-import { MagnifyingGlass, Plus, Trash, CaretRight, Folder, DotsThree, PencilSimple, X } from '@phosphor-icons/react';
+import { MagnifyingGlass, Plus, Trash, CaretRight, Folder, DotsThree, PencilSimple, PushPin, X } from '@phosphor-icons/react';
 import { Collapse } from './ui/collapse';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from './ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from './ui/dropdown-menu';
 import type { SessionSidebarProps } from './SessionSidebar';
-import type { ConversationSession } from '@/hooks/useAgentConversation';
+import type { ConversationPatch, ConversationSession } from '@/hooks/useAgentConversation';
 import type { ConversationProjectControls } from '@/hooks/useConversationProjects';
 
 interface Props extends SessionSidebarProps {
   projectControls: ConversationProjectControls;
   onNewInProject: (id: number) => void;
+  onUpdate: (session: ConversationSession, patch: ConversationPatch) => Promise<boolean>;
 }
 
-export default function NativeSessionSidebar({ sessions, activeSessionId, onSelect, onDelete, onNew, projectControls: controls, onNewInProject }: Props) {
+export default function NativeSessionSidebar({ sessions, activeSessionId, onSelect, onDelete, onNew, projectControls: controls, onNewInProject, onUpdate }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [editing, setEditing] = useState<{ id?: number; name: string; instructions: string } | null>(null);
   const [deleting, setDeleting] = useState<{ projectId: number; name: string } | { session: ConversationSession; name: string } | null>(null);
   const [deletingPending, setDeletingPending] = useState(false);
   const [closedProjects, setClosedProjects] = useState<number[]>([]);
+  const [renaming, setRenaming] = useState<{ session: ConversationSession; name: string } | null>(null);
+  const [updating, setUpdating] = useState(false);
   const projectsId = useId();
-  const ordered = [...sessions].reverse();
+  const ordered = [...sessions].reverse().sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
   const filtered = ordered.filter(session => [session.title, session.label, ...session.messages.map(message => message.content)].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
   const uncategorized = ordered.filter(session => !controls.projects.some(project => project.id === session.projectId));
   const select = (session: ConversationSession) => { onSelect(session); setSearchOpen(false); };
+  const update = async (session: ConversationSession, patch: ConversationPatch) => {
+    if (updating) return false;
+    setUpdating(true);
+    try { return await onUpdate(session, patch); }
+    finally { setUpdating(false); }
+  };
   const renderSession = (session: ConversationSession, search = false) => <li key={session.id} data-active={session.id === activeSessionId}>
     <button data-session-select aria-current={session.id === activeSessionId ? 'page' : undefined} onClick={() => select(session)} title={`${session.title || session.label} · ${session.messages.length} 条`}>
-      <span>{session.title || session.label}</span>{search && <span className="um-agent-session-meta">{controls.projects.find(project => project.id === session.projectId)?.name || '未分类'} · {session.lastTime ? new Date(session.lastTime).toLocaleDateString('zh-CN') : ''}</span>}
+      <span>{session.isPinned && <PushPin size={12} className="inline-block mr-1" aria-label="已置顶" />}{session.title || session.label}</span>{search && <span className="um-agent-session-meta">{controls.projects.find(project => project.id === session.projectId)?.name || '未分类'} · {session.lastTime ? new Date(session.lastTime).toLocaleDateString('zh-CN') : ''}</span>}
     </button>
-    {onDelete && <DropdownMenu><DropdownMenuTrigger asChild><button className="um-agent-session-menu um-agent-icon-button" aria-label={`对话菜单：${session.title || session.label}`}><DotsThree size={18} /></button></DropdownMenuTrigger>
-      <DropdownMenuContent className="um-native-menu" align="start">
-        <DropdownMenuItem className="um-agent-menu-danger" onSelect={() => setDeleting({ session, name: session.title || session.label })}><Trash size={15} />删除对话</DropdownMenuItem>
+    <DropdownMenu><DropdownMenuTrigger asChild><button className="um-agent-session-menu um-agent-icon-button" aria-label={`对话菜单：${session.title || session.label}`}><DotsThree size={18} /></button></DropdownMenuTrigger>
+      <DropdownMenuContent className="um-native-menu" align="start" onCloseAutoFocus={event => { if (renaming) event.preventDefault(); }}>
+        <DropdownMenuItem disabled={updating || !session.conversationId} onSelect={() => { setSearchOpen(false); setRenaming({ session, name: session.title || session.label }); }}><PencilSimple size={15} />重命名</DropdownMenuItem>
+        <DropdownMenuItem disabled={updating || !session.conversationId} onSelect={() => void update(session, { is_pinned: !session.isPinned })}><PushPin size={15} />{session.isPinned ? '取消置顶' : '置顶'}</DropdownMenuItem>
+        <DropdownMenuSub><DropdownMenuSubTrigger disabled={updating || controls.error || !session.conversationId}><Folder size={15} className="mr-2" />移动到项目</DropdownMenuSubTrigger><DropdownMenuSubContent className="um-native-menu">
+          <DropdownMenuItem disabled={!session.projectId} onSelect={() => void update(session, { project_id: null })}>未分类</DropdownMenuItem>
+          {controls.projects.map(project => <DropdownMenuItem key={project.id} disabled={session.projectId === project.id} onSelect={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); void update(session, { project_id: project.id }); }}>{project.name}</DropdownMenuItem>)}
+        </DropdownMenuSubContent></DropdownMenuSub>
+        {onDelete && <><DropdownMenuSeparator /><DropdownMenuItem className="um-agent-menu-danger" onSelect={() => setDeleting({ session, name: session.title || session.label })}><Trash size={15} />删除对话</DropdownMenuItem></>}
       </DropdownMenuContent>
-    </DropdownMenu>}
+    </DropdownMenu>
   </li>;
   return <aside className="um-agent-sessions" aria-label="历史对话">
     <header><h2>对话</h2></header>
@@ -74,6 +89,15 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, onSele
       <ul>{uncategorized.map(session => renderSession(session))}</ul>
       {!uncategorized.length && <p className="um-agent-project-hint">暂无对话</p>}
     </nav>
+    <Dialog.Root open={renaming !== null} onOpenChange={open => { if (!open && !updating) setRenaming(null); }}>
+      <Dialog.Portal><Dialog.Overlay className="um-agent-project-overlay" /><Dialog.Content className="um-native-agent um-agent-project-dialog">
+        <Dialog.Title>重命名对话</Dialog.Title><Dialog.Description className="sr-only">为此对话设置一个便于查找的名称。</Dialog.Description>
+        {renaming && <form onSubmit={async event => { event.preventDefault(); if (await update(renaming.session, { title: renaming.name.trim() })) setRenaming(null); }}>
+          <label>对话名称<input autoFocus required maxLength={120} value={renaming.name} disabled={updating} onChange={event => setRenaming({ ...renaming, name: event.target.value })} /></label>
+          <footer><button className="um-agent-button" type="button" disabled={updating} onClick={() => setRenaming(null)}>取消</button><button className="um-agent-button um-agent-button-primary" disabled={updating || !renaming.name.trim()} type="submit">{updating ? '保存中…' : '保存'}</button></footer>
+        </form>}
+      </Dialog.Content></Dialog.Portal>
+    </Dialog.Root>
     <Dialog.Root open={editing !== null} onOpenChange={open => { if (!open && !controls.pending) setEditing(null); }}>
       <Dialog.Portal><Dialog.Overlay className="um-agent-project-overlay" /><Dialog.Content className="um-native-agent um-agent-project-dialog">
         <Dialog.Title>{editing?.id === undefined ? '新建项目' : '项目设置'}</Dialog.Title>

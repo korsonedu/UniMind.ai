@@ -24,7 +24,7 @@ export const XiaoYu = () => {
   const sharedConversationId = useXiaoYuStore(state => state.conversationId);
   return <AgentChatLayout
     appearance="native" layout="inline" inputTourClass="xiaoyu-input"
-    sidebar={props => <NativeSessionSidebar sessions={props.sessions} activeSessionId={props.activeSessionId} onSelect={props.onLoadSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
+    sidebar={props => <NativeSessionSidebar sessions={props.sessions} activeSessionId={props.activeSessionId} onSelect={props.onLoadSession} onUpdate={props.onUpdateSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
     findBot={findAssistantBot}
     skills={SKILLS} typewriterWords={['让小宇分析薄弱知识点', '让小宇安排今天的复习', '让小宇推荐适合的课程', '让小宇看看复习进度']}
     chatPlaceholder="和小宇对话…" resetMessage="已开始新对话"

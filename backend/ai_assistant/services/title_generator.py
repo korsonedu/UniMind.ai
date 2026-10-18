@@ -42,14 +42,11 @@ def sync_generate_title(conversation_id, user_id, bot_id):
         title = result.strip()[:120] if result else ''
 
         if title:
-            Conversation.objects.update_or_create(
-                conversation_id=conversation_id,
-                defaults={
-                    'user_id': user_id,
-                    'bot_id': bot_id,
-                    'title': title,
-                },
+            conversation, _ = Conversation.objects.get_or_create(
+                conversation_id=conversation_id, user_id=user_id, defaults={'bot_id': bot_id},
             )
+            if not Conversation.objects.filter(pk=conversation.pk, title='').update(title=title):
+                return None
             logger.info("Generated title '%s' for conversation %s", title, conversation_id)
             return title
     except Exception:

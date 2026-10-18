@@ -8,7 +8,7 @@ from .views import (
     ActionCardInteractionView,
 )
 from .views_dashboard import XiaoYuDashboardView, ExamWorkbenchDashboardView
-from .views_projects import ProjectListCreateView, ProjectDetailView
+from .views_projects import ConversationDetailView, ProjectListCreateView, ProjectDetailView
 from .views_api import (
     grade_view, profile_view, due_view, stats_view,
     practice_start_view, practice_pre_grade_view, practice_submit_view,
@@ -22,6 +22,7 @@ urlpatterns = [
     path('chat/stream/', AIChatStreamView.as_view(), name='ai-chat-stream'),
     path('history/', AIChatListView.as_view(), name='ai-chat-history'),
     path('conversations/', ConversationListView.as_view(), name='conversation-list'),
+    path('conversations/<uuid:conversation_id>/', ConversationDetailView.as_view(), name='conversation-detail'),
     path('projects/', ProjectListCreateView.as_view(), name='conversation-project-list'),
     path('projects/<int:pk>/', ProjectDetailView.as_view(), name='conversation-project-detail'),
     path('reset/', AIChatResetView.as_view(), name='ai-chat-reset'),

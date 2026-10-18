@@ -54,16 +54,17 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Conversation
-        fields = ('conversation_id', 'title', 'project_id', 'message_count', 'created_at', 'updated_at')
+        fields = ('conversation_id', 'title', 'is_pinned', 'project_id', 'message_count', 'created_at', 'updated_at')
 
 
 class AIChatMessageSerializer(serializers.ModelSerializer):
     conversation_title = serializers.SerializerMethodField()
     conversation_project = serializers.IntegerField(source='_conversation_project', read_only=True, allow_null=True)
+    conversation_pinned = serializers.BooleanField(source='_conversation_pinned', read_only=True, default=False)
 
     class Meta:
         model = AIChatMessage
-        fields = ('id', 'role', 'content', 'timestamp', 'bot', 'metadata', 'feedback', 'conversation_id', 'conversation_title', 'conversation_project')
+        fields = ('id', 'role', 'content', 'timestamp', 'bot', 'metadata', 'feedback', 'conversation_id', 'conversation_title', 'conversation_project', 'conversation_pinned')
 
     def get_conversation_title(self, obj):
         title = getattr(obj, '_conversation_title', None)

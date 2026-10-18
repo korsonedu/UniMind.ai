@@ -220,7 +220,7 @@ def apply_tool_experiences(experiences: list) -> dict:
     """
     应用 tool 维度的经验：调整工具参数 或 记录能力缺口。
 
-    参数级：调已知参数（memorix.alpha, knowledge_tree.topK 等）
+    参数级：保存候选参数，等待接入实际消费方
     能力级：标记为能力缺口，供人工审核后开发
 
     Returns:
@@ -271,7 +271,7 @@ def apply_tool_experiences(experiences: list) -> dict:
 
 
 def _apply_tool_param(experience, param_name: str, param_value) -> dict:
-    """应用单个工具参数。已知参数直接改，未知参数记录待实现。"""
+    """保存候选工具参数；尚无消费方的参数保持待应用。"""
     change = {
         'exp_id': experience.id,
         'param': param_name,
@@ -284,22 +284,17 @@ def _apply_tool_param(experience, param_name: str, param_value) -> dict:
         try:
             val = float(param_value)
             val = max(0.1, min(1.0, val))
-            # 写入环境变量或配置（Memorix 从 settings 读取）
-            from django.conf import settings
-            current = getattr(settings, 'MEMORIX_ALPHA', 0.60)
-            # 安全写 Redis 缓存（Memorix scheduler 读取）
+            # 保存候选值；当前调度器尚未读取此键。
             try:
-                from django_redis import get_redis_connection
+                from core.redis import get_redis_connection
                 redis_conn = get_redis_connection("default")
-                redis_conn.set('memorix:alpha', val)
-                redis_conn.expire('memorix:alpha', 86400 * 30)
+                redis_conn.set('memorix:alpha', val, ex=86400 * 30)
             except Exception:
-                pass
-            change['status'] = 'applied'
-            change['old_value'] = current
+                logger.warning('Failed to persist Memorix parameter', exc_info=True)
+                return change
             logger.info(
-                "experience_applicator: tool param %s %s→%s (exp %d)",
-                param_name, current, val, experience.id,
+                "experience_applicator: stored candidate %s=%s, pending consumer integration (exp %d)",
+                param_name, val, experience.id,
             )
         except (ValueError, TypeError):
             logger.warning("experience_applicator: invalid alpha value %s", param_value)
@@ -310,15 +305,14 @@ def _apply_tool_param(experience, param_name: str, param_value) -> dict:
             val = int(param_value)
             val = max(1, min(20, val))
             try:
-                from django_redis import get_redis_connection
+                from core.redis import get_redis_connection
                 redis_conn = get_redis_connection("default")
-                redis_conn.set('knowledge_tree:topK', val)
-                redis_conn.expire('knowledge_tree:topK', 86400 * 30)
+                redis_conn.set('knowledge_tree:topK', val, ex=86400 * 30)
             except Exception:
-                pass
-            change['status'] = 'applied'
+                logger.warning('Failed to persist knowledge tree parameter', exc_info=True)
+                return change
             logger.info(
-                "experience_applicator: tool param %s → %s (exp %d)",
+                "experience_applicator: stored candidate %s=%s, pending consumer integration (exp %d)",
                 param_name, val, experience.id,
             )
         except (ValueError, TypeError):
