@@ -9,6 +9,11 @@ from quizzes.models import KnowledgePoint
 from .common import content_institution, managed, identity, paginate, delete_files_after_commit
 
 
+def module_knowledge_point(module):
+    return KnowledgePoint.objects.filter(institution_id=module.institution_id, level='sec',
+        name=module.name, parent__parent__name=module.subject).first()
+
+
 class ModuleInput(CourseModuleSerializer):
     def validate(self, attrs):
         subject = attrs.get('subject', self.instance.subject if self.instance else '').strip()
@@ -48,6 +53,8 @@ class CourseInput(serializers.ModelSerializer):
             raise serializers.ValidationError({'module': '模块不属于受管内容范围。'})
         if self.instance and self.instance.institution_id != module.institution_id:
             raise serializers.ValidationError({'module': '课程与模块须属于同一教学机构。'})
+        if not self.instance or self.instance.module_id != module.pk:
+            attrs['knowledge_point'] = module_knowledge_point(module)
         for field in ('album_obj', 'knowledge_point'):
             value = attrs.get(field, getattr(self.instance, field, None))
             if value and value.institution_id != module.institution_id:
@@ -59,6 +66,8 @@ def list_courses(request, data):
     queryset = managed(Course.objects.select_related('module')).order_by('sort_order', 'id')
     if data.get('search'):
         queryset = queryset.filter(title__icontains=str(data['search'])[:200])
+    if data.get('subject'):
+        queryset = queryset.filter(module__subject=str(data['subject'])[:100])
     if data.get('module') == 'unassigned':
         queryset = queryset.filter(module__isnull=True)
     elif data.get('module'):
@@ -126,7 +135,7 @@ def assign_courses(request, data):
     selected = list(queryset)
     if len(selected) != len(ids) or any(item.institution_id != module.institution_id for item in selected):
         raise serializers.ValidationError('全部课程与目标模块须属于同一教学机构。')
-    queryset.update(module=module)
+    queryset.update(module=module, knowledge_point=module_knowledge_point(module))
     return {'id': module.pk, 'updated': len(ids)}
 
 

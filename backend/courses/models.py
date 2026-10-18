@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, router, transaction
 from django.conf import settings
 import uuid
 
@@ -61,40 +61,62 @@ class Course(models.Model):
     def __str__(self):
         return self.title
 
+    @staticmethod
+    def _delete_unused_file(storage, name, using):
+        # 同一对象仍被任一课程字段引用时保留，避免重用同名对象后误删。
+        references = models.Q()
+        for field in ('video_file', 'cover_image', 'courseware', 'reference_materials'):
+            references |= models.Q(**{field: name})
+        if not Course.objects.using(using).filter(references).exists():
+            storage.delete(name)
+
     def save(self, *args, **kwargs):
-        # 如果是更新操作，清理旧文件
-        if self.pk:
-            try:
-                old_instance = Course.objects.get(pk=self.pk)
-                # 清理旧的视频文件
-                if old_instance.video_file and old_instance.video_file != self.video_file:
-                    old_instance.video_file.delete(save=False)
-                # 清理旧的封面图片
-                if old_instance.cover_image and old_instance.cover_image != self.cover_image:
-                    old_instance.cover_image.delete(save=False)
-                # 清理旧的课件
-                if old_instance.courseware and old_instance.courseware != self.courseware:
-                    old_instance.courseware.delete(save=False)
-                # 清理旧的参考资料
-                if old_instance.reference_materials and old_instance.reference_materials != self.reference_materials:
-                    old_instance.reference_materials.delete(save=False)
-            except Course.DoesNotExist:
-                pass
+        using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
+        update_fields = kwargs.get('update_fields')
+        file_fields = ('video_file', 'cover_image', 'courseware', 'reference_materials')
+        if update_fields is not None:
+            file_fields = tuple(field for field in file_fields if field in update_fields)
+        pending = [getattr(self, field) for field in file_fields
+                   if getattr(self, field) and not getattr(self, field)._committed]
+        old_files = []
+        try:
+            with transaction.atomic(using=using):
+                if self.pk and file_fields:
+                    old = Course.objects.using(using).select_for_update().filter(pk=self.pk).first()
+                    if old:
+                        old_files = [getattr(old, field) for field in file_fields if getattr(old, field)]
+                super().save(*args, **kwargs)
+                current_names = {getattr(self, field).name for field in file_fields}
+                for old_file in old_files:
+                    if old_file.name not in current_names:
+                        transaction.on_commit(
+                            lambda f=old_file: self._delete_unused_file(f.storage, f.name, using),
+                            using=using, robust=True,
+                        )
+        except BaseException:
+            # 文件已经上传而数据库保存失败时，仅清理由本次上传产生的未引用对象。
+            for new_file in pending:
+                if new_file._committed:
+                    try:
+                        self._delete_unused_file(new_file.storage, new_file.name, using)
+                    except Exception:
+                        import logging
+                        logging.getLogger(__name__).exception("Failed to clean uploaded course file")
+            raise
 
-        super().save(*args, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        # 删除时清理所有文件
-        if self.video_file:
-            self.video_file.delete(save=False)
-        if self.cover_image:
-            self.cover_image.delete(save=False)
-        if self.courseware:
-            self.courseware.delete(save=False)
-        if self.reference_materials:
-            self.reference_materials.delete(save=False)
-
-        super().delete(*args, **kwargs)
+    def delete(self, using=None, keep_parents=False):
+        using = using or router.db_for_write(type(self), instance=self)
+        files = [getattr(self, field) for field in
+                 ('video_file', 'cover_image', 'courseware', 'reference_materials')
+                 if getattr(self, field)]
+        with transaction.atomic(using=using):
+            result = super().delete(using=using, keep_parents=keep_parents)
+            for file in files:
+                transaction.on_commit(
+                    lambda f=file: self._delete_unused_file(f.storage, f.name, using),
+                    using=using, robust=True,
+                )
+        return result
 
 
 class CourseOutline(models.Model):
@@ -182,13 +204,16 @@ class VideoProgress(models.Model):
 
 
 class CourseTag(models.Model):
-    institution = models.ForeignKey("users.Institution", on_delete=models.CASCADE, related_name="course_tags")
+    institution = models.ForeignKey("users.Institution", on_delete=models.CASCADE, null=True, blank=True, related_name="course_tags")
     name = models.CharField(max_length=50, verbose_name="标签名")
     slug = models.SlugField(max_length=60, verbose_name="URL标识")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ('institution', 'slug')
+        constraints = [
+            models.UniqueConstraint(fields=['slug'], condition=models.Q(institution__isnull=True), name='unique_global_course_tag_slug'),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.slug:

@@ -65,9 +65,12 @@ def bot():
 
 
 def owned_tasks(request):
-    return scoped(ContentPipelineTask).filter(
+    qs = scoped(ContentPipelineTask).filter(
         Q(payload__kind__isnull=True) | ~Q(payload__kind__in=['chat', 'restored', 'notification']) |
         Q(created_by=request.user))
+    from .tasks import expire_stale_teaching_tasks
+    expire_stale_teaching_tasks(qs)
+    return qs
 
 
 def task_object(request, data, lock=False):
@@ -255,6 +258,8 @@ def chat(request, data):
         raise serializers.ValidationError('会话不存在。')
     if not existing:
         Conversation.objects.create(user=request.user, bot=selected_bot, conversation_id=cid, title=message[:120])
+    from .tasks import expire_stale_teaching_tasks
+    expire_stale_teaching_tasks(scoped(ContentPipelineTask).filter(created_by=request.user, payload__conversation_id=str(cid)))
     active = scoped(ContentPipelineTask).filter(created_by=request.user, payload__conversation_id=str(cid), status__in=['pending', 'running']).exclude(request_id=request_key(data)).exists()
     if active:
         raise serializers.ValidationError('此会话仍有任务正在处理，请稍候。')

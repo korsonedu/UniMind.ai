@@ -1,7 +1,13 @@
 import json
 import logging
+import math
 import random
 from typing import Any, Dict, List, Optional
+from datetime import timedelta
+
+from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 
 from ai_engine.ai_service import AIService
 from ai_engine.tools import OUTLINE_ITEMS_SCHEMA, QUESTION_LIST_SCHEMA
@@ -28,8 +34,14 @@ class AICourseService:
 
     def transcribe_video(self, course: Course) -> VideoTranscript:
         transcript, _ = VideoTranscript.objects.get_or_create(course=course)
-        transcript.asr_status = 'processing'
-        transcript.save(update_fields=['asr_status', 'updated_at'])
+        claimed_at = timezone.now()
+        claimed = VideoTranscript.objects.filter(pk=transcript.pk).filter(
+            ~Q(asr_status='processing') | Q(updated_at__lt=claimed_at - timedelta(seconds=5400)),
+        ).update(asr_status='processing', updated_at=claimed_at)
+        if not claimed:
+            transcript.refresh_from_db()
+            return transcript
+        ownership = {'pk': transcript.pk, 'asr_status': 'processing', 'updated_at': claimed_at}
 
         try:
             from django.conf import settings
@@ -42,36 +54,46 @@ class AICourseService:
             finally:
                 _cleanup_temp_video(local_path)
 
-            # 空结果（如 ASR 限流导致全部 chunk 失败）不得标记 completed，
-            # 更不能清掉已有 segments —— raise 让 Celery 重试，旧数据保留
-            if not result.full_text.strip() or not result.segments:
-                raise ValueError("转录结果为空（ASR 可能限流），等待重试")
+            if not isinstance(result.full_text, str) or not result.full_text.strip() or not result.segments:
+                raise ValueError("转录结果为空，等待重试")
+
+            segments = []
+            for idx, seg in enumerate(result.segments):
+                start, end = float(seg.start), float(seg.end)
+                if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end < start:
+                    raise ValueError("转录分段时间无效")
+                if not isinstance(seg.text, str) or not seg.text.strip():
+                    raise ValueError("转录分段文本为空")
+                segment = TranscriptSegment(
+                    transcript=transcript, start_time=start, end_time=end,
+                    text=seg.text, index=idx,
+                )
+                segment.full_clean(exclude=['transcript'], validate_unique=False, validate_constraints=False)
+                segments.append(segment)
 
             transcript.full_text = result.full_text
             transcript.language = result.language
             transcript.asr_provider = provider_name
             transcript.asr_status = 'completed'
             transcript.error_message = ''
-            transcript.save()
+            transcript.full_clean(exclude=['course'], validate_unique=False, validate_constraints=False)
+            with transaction.atomic():
+                if not VideoTranscript.objects.select_for_update().filter(**ownership).exists():
+                    transcript.refresh_from_db()
+                    return transcript
+                transcript.save()
+                transcript.segments.all().delete()
+                TranscriptSegment.objects.bulk_create(segments)
+                transaction.on_commit(lambda: self._schedule_outline_generation(course.id), robust=True)
 
-            transcript.segments.all().delete()
-            TranscriptSegment.objects.bulk_create([
-                TranscriptSegment(
-                    transcript=transcript,
-                    start_time=seg.start,
-                    end_time=seg.end,
-                    text=seg.text,
-                    index=idx,
-                )
-                for idx, seg in enumerate(result.segments)
-            ])
-
-            self._schedule_outline_generation(course.id)
             return transcript
         except Exception as e:
-            transcript.asr_status = 'failed'
-            transcript.error_message = str(e)[:500]
-            transcript.save(update_fields=['asr_status', 'error_message', 'updated_at'])
+            failed = VideoTranscript.objects.filter(**ownership).update(
+                asr_status='failed', error_message=str(e)[:500], updated_at=timezone.now(),
+            )
+            if not failed:
+                transcript.refresh_from_db()
+                return transcript
             logger.exception("ASR failed for course %s", course.id)
             raise
 
@@ -115,8 +137,13 @@ class AICourseService:
             raise ValueError("转录不可用或尚未完成")
 
         outline, _ = CourseOutline.objects.get_or_create(course=course)
-        outline.status = 'generating'
-        outline.save(update_fields=['status', 'updated_at'])
+        claimed_at = timezone.now()
+        claimed = CourseOutline.objects.filter(pk=outline.pk).filter(
+            ~Q(status='generating') | Q(updated_at__lt=claimed_at - timedelta(seconds=600)),
+        ).update(status='generating', updated_at=claimed_at)
+        if not claimed:
+            return []
+        ownership = {'pk': outline.pk, 'status': 'generating', 'updated_at': claimed_at}
 
         try:
             # 构建带时间戳的分段文本，让 AI 能拿到真实的时序信息
@@ -124,9 +151,9 @@ class AICourseService:
             items = self._request_outline_items(transcript_with_timestamps)
             if not items:
                 raise ValueError("大纲生成结果为空，等待重试")
-            outline.items.all().delete()
-            OutlineItem.objects.bulk_create([
-                OutlineItem(
+            replacements = []
+            for idx, item in enumerate(items):
+                replacement = OutlineItem(
                     outline=outline,
                     title=item.get('title') or item.get('chapter') or '',
                     timestamp=float(
@@ -139,18 +166,26 @@ class AICourseService:
                     description=item.get('description') or item.get('summary') or '',
                     index=idx,
                 )
-                for idx, item in enumerate(items)
-            ])
-            outline.status = 'completed'
-            outline.save(update_fields=['status', 'updated_at'])
-
-            # 大纲完成后自动触发出题
-            self._schedule_question_generation(course_id)
+                if not isinstance(replacement.title, str) or not replacement.title.strip():
+                    raise ValueError("大纲标题为空或无效")
+                if not math.isfinite(replacement.timestamp) or replacement.timestamp < 0:
+                    raise ValueError("大纲时间戳无效")
+                replacement.full_clean(exclude=['outline'], validate_unique=False, validate_constraints=False)
+                replacements.append(replacement)
+            with transaction.atomic():
+                if not CourseOutline.objects.select_for_update().filter(**ownership).exists():
+                    return []
+                outline.items.all().delete()
+                OutlineItem.objects.bulk_create(replacements)
+                outline.status = 'completed'
+                outline.save(update_fields=['status', 'updated_at'])
+                transaction.on_commit(lambda: self._schedule_question_generation(course_id), robust=True)
 
             return items
         except Exception as e:
-            outline.status = 'failed'
-            outline.save(update_fields=['status', 'updated_at'])
+            failed = CourseOutline.objects.filter(**ownership).update(status='failed', updated_at=timezone.now())
+            if not failed:
+                return []
             logger.exception("Outline generation failed for course %s", course_id)
             raise
 

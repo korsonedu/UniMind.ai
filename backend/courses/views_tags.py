@@ -1,13 +1,13 @@
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils.text import slugify
 
 from .models import Course, CourseTag, CourseTagRelation
 from .serializers import CourseTagSerializer
 from users.permissions import IsAdmin, IsMember
-from core.utils import apply_institution_filter
+from core.utils import apply_institution_filter, get_content_institution, get_content_institution_id
 
 
 def _assign_tags(course, tag_names, institution):
@@ -40,13 +40,12 @@ class TagListCreateView(generics.ListCreateAPIView):
         return [IsMember()]
 
     def get_queryset(self):
-        inst = self.request.user.institution
-        if not inst:
-            return CourseTag.objects.none()
-        return CourseTag.objects.filter(institution=inst).annotate(course_count=Count('course_relations'))
+        return apply_institution_filter(CourseTag.objects.all(), self.request.user, self.request).annotate(
+            course_count=Count('course_relations', filter=Q(course_relations__course__institution_id=get_content_institution_id())),
+        )
 
     def perform_create(self, serializer):
-        inst = self.request.user.institution
+        inst = get_content_institution()
         name = serializer.validated_data.get('name', '')
         slug = slugify(name)
         base = slug
@@ -62,7 +61,7 @@ class TagDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdmin]
 
     def get_queryset(self):
-        return CourseTag.objects.filter(institution=self.request.user.institution)
+        return apply_institution_filter(CourseTag.objects.all(), self.request.user, self.request)
 
 
 class BatchAssignTagsView(APIView):
@@ -78,7 +77,7 @@ class BatchAssignTagsView(APIView):
         if not course:
             return Response({"error": "Course not found"}, status=404)
 
-        inst = request.user.institution
+        inst = get_content_institution()
         _assign_tags(course, tag_names, inst)
 
         relations = course.tag_relations.select_related('tag').all()

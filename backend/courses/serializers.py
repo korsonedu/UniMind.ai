@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from core.utils import apply_institution_filter, get_content_institution, get_content_institution_id
 from .models import Course, CourseModule, Album, StartupMaterial, CourseTag, CourseTagRelation, VideoProgress
 
 
@@ -11,7 +12,8 @@ class CourseModuleSerializer(serializers.ModelSerializer):
         validators = []
 
     def validate(self, attrs):
-        institution_id = self.instance.institution_id if self.instance else self.context['request'].user.institution_id
+        institution = get_content_institution()
+        institution_id = institution.pk if institution else None
         subject = attrs.get('subject', self.instance.subject if self.instance else '').strip()
         name = attrs.get('name', self.instance.name if self.instance else '')
         if not subject:
@@ -55,7 +57,14 @@ class AlbumCourseBriefSerializer(serializers.ModelSerializer):
 class AlbumSerializer(serializers.ModelSerializer):
     cover_image = RelativeImageField(required=False)
     course_count = serializers.IntegerField(read_only=True, required=False)
-    courses = AlbumCourseBriefSerializer(many=True, read_only=True)
+    courses = serializers.SerializerMethodField()
+
+    def get_courses(self, obj):
+        if self.context.get('course_list_summary'):
+            return []
+        institution_id = get_content_institution_id()
+        courses = [course for course in obj.courses.all() if course.institution_id == institution_id]
+        return AlbumCourseBriefSerializer(courses, many=True, context=self.context).data
 
     class Meta:
         model = Album
@@ -90,26 +99,41 @@ class CourseSerializer(serializers.ModelSerializer):
         return legacy_subject(self.context['_legacy_subject_points'], obj.knowledge_point_id)
 
     def validate(self, attrs):
+        institution = get_content_institution()
+        institution_id = institution.pk if institution else None
         module = attrs.get('module')
         if not self.instance and not module:
             raise serializers.ValidationError({'module': '请选择所属模块。'})
         if 'module' in attrs:
             if module is None:
                 raise serializers.ValidationError({'module': '请选择所属模块。'})
-            institution_id = self.instance.institution_id if self.instance else self.context['request'].user.institution_id
             if module.institution_id != institution_id:
                 raise serializers.ValidationError({'module': '模块不属于当前课程所在机构。'})
+        for field in ('album_obj', 'knowledge_point'):
+            value = attrs.get(field)
+            if value and value.institution_id != institution_id:
+                raise serializers.ValidationError({field: '所选内容不属于当前内容范围。'})
         return attrs
 
     def get_tags(self, obj):
-        relations = obj.tag_relations.select_related('tag').all()
-        return CourseTagSerializer([r.tag for r in relations], many=True).data
+        relations = getattr(obj, 'serialized_tag_relations', None)
+        if relations is None:
+            relations = obj.tag_relations.filter(tag__institution_id=get_content_institution_id()).select_related('tag')
+        tags = []
+        for relation in relations:
+            if hasattr(relation, 'tag_course_count'):
+                relation.tag.course_count = relation.tag_course_count
+            tags.append(relation.tag)
+        return CourseTagSerializer(tags, many=True, context=self.context).data
 
     def get_progress(self, obj):
         """当前用户的观看进度；匿名或无记录返回 None"""
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return None
+        if hasattr(obj, 'serialized_progress'):
+            progress = obj.serialized_progress
+            return {'last_position': progress[0].last_position, 'is_finished': progress[0].is_finished} if progress else None
         return VideoProgress.objects.filter(user=request.user, course_id=obj.id) \
             .values('last_position', 'is_finished').first()
 
@@ -136,9 +160,12 @@ class CourseTagSerializer(serializers.ModelSerializer):
         read_only_fields = ('slug', 'created_at')
 
     def get_course_count(self, obj):
-        return getattr(obj, 'course_count', obj.course_relations.count())
+        count = getattr(obj, 'course_count', None)
+        return count if count is not None else obj.course_relations.filter(course__institution_id=get_content_institution_id()).count()
 
     def get_courses(self, obj):
+        if self.context.get('course_list_summary'):
+            return []
         course_ids = obj.course_relations.values_list('course_id', flat=True)
-        courses = Course.objects.filter(id__in=course_ids).only('id', 'title', 'cover_image')
+        courses = apply_institution_filter(Course.objects.filter(id__in=course_ids), None).only('id', 'title', 'cover_image')
         return AlbumCourseBriefSerializer(courses, many=True).data

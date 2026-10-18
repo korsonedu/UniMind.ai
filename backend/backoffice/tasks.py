@@ -1,5 +1,6 @@
 """Short-poll teaching jobs, discovered by Celery's installed-app autodiscovery."""
 import logging
+from datetime import timedelta
 from types import SimpleNamespace
 
 from celery import shared_task
@@ -13,8 +14,18 @@ from .common import content_institution
 logger = logging.getLogger(__name__)
 
 
+def expire_stale_teaching_tasks(queryset):
+    # Hard limit is 960s; allow a minute for the worker to finish recording failure.
+    return queryset.filter(
+        status='running', started_at__lt=timezone.now() - timedelta(seconds=1020),
+        payload__kind__in=['quick', 'arc', 'bulk', 'chat', 'report'],
+    ).update(status='failed', error_message='任务处理超时或工作进程已退出，请重试。',
+             finished_at=timezone.now(), updated_at=timezone.now())
+
+
 @shared_task(name='backoffice.run_teaching_task', soft_time_limit=900, time_limit=960)
 def run_teaching_task(task_id):
+    expire_stale_teaching_tasks(ContentPipelineTask.objects.filter(pk=task_id))
     # The status claim makes duplicate broker delivery harmless.
     with transaction.atomic():
         task = ContentPipelineTask.objects.select_for_update().select_related('created_by').get(pk=task_id)

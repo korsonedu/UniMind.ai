@@ -5,7 +5,7 @@ from rest_framework import generics, serializers
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.utils import apply_institution_filter
+from core.utils import apply_institution_filter, get_content_institution
 from users.permissions import IsAdmin, IsMember, is_platform_admin, is_institution_admin
 from .models import Course, CourseModule
 from .serializers import CourseModuleSerializer
@@ -26,7 +26,7 @@ class ModuleListCreateView(generics.ListCreateAPIView):
         return CourseModule.objects.filter(pk__in=ids).annotate(course_count=Count('courses'))
 
     def perform_create(self, serializer):
-        serializer.save(institution=self.request.user.institution)
+        serializer.save(institution=get_content_institution())
 
 
 class ModuleDetailView(generics.RetrieveUpdateDestroyAPIView):

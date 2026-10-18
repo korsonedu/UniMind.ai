@@ -1,4 +1,6 @@
+import glob
 import logging
+import math
 import os
 import subprocess
 import tempfile
@@ -36,73 +38,56 @@ class GLMChunkedASRProvider(ASRProvider):
         if not api_key:
             raise ValueError("GLM ASR 需要 api_key，请设置 GLM_ASR_API_KEY 环境变量")
 
-        # 1. 提取音频
-        audio_wav = self._extract_audio(audio_path)
-        # 2. 获取时长
-        total_duration = self._get_duration(audio_wav)
-        # 3. 切分
-        chunk_paths = self._split_audio(audio_wav, chunk_duration, total_duration)
+        chunk_duration = float(chunk_duration)
+        if not math.isfinite(chunk_duration) or not 0 < chunk_duration <= 30:
+            raise ValueError("ASR 分段时长须在 0 到 30 秒之间")
 
-        # 4. 逐段转录
-        all_segments: List[TranscriptSegment] = []
-        full_text_parts: List[str] = []
+        # 工作目录覆盖提取、切分、请求失败路径，整段成功后才返回结果。
+        with tempfile.TemporaryDirectory(prefix="glm_asr_") as work_dir:
+            audio_wav = os.path.join(work_dir, "audio.wav")
+            self._extract_audio(audio_path, audio_wav)
+            total_duration = self._get_duration(audio_wav)
+            chunk_paths = self._split_audio(audio_wav, chunk_duration)
+            if not chunk_paths:
+                raise ValueError("ASR 音频切分结果为空")
 
-        for idx, chunk_path in enumerate(chunk_paths):
-            offset = idx * chunk_duration
-            try:
+            all_segments: List[TranscriptSegment] = []
+            full_text_parts: List[str] = []
+            for idx, chunk_path in enumerate(chunk_paths):
+                offset = idx * chunk_duration
+                # 请求异常直接向上抛出，让任务重试；成功返回的空文本才表示静音。
                 text = self._transcribe_chunk(
                     chunk_path, api_key, base_url, model, timeout
-                )
-                if text.strip():
-                    all_segments.append(
-                        TranscriptSegment(
-                            start=offset,
-                            end=min(offset + chunk_duration, total_duration),
-                            text=text.strip(),
-                        )
-                    )
+                ).strip()
+                if text:
+                    all_segments.append(TranscriptSegment(
+                        start=offset,
+                        end=min(offset + chunk_duration, total_duration),
+                        text=text,
+                    ))
                     full_text_parts.append(text)
-            except Exception as e:
-                logger.warning("GLM ASR chunk %d failed: %s", idx, e)
-            finally:
-                try:
-                    os.remove(chunk_path)
-                except OSError:
-                    pass
+                os.remove(chunk_path)
 
-        # 5. 清理
-        try:
-            os.remove(audio_wav)
-        except OSError:
-            pass
-
-        return TranscriptResult(
-            language="zh",
-            segments=all_segments,
-            full_text="".join(full_text_parts),
-        )
+            return TranscriptResult(
+                language="zh",
+                segments=all_segments,
+                full_text="".join(full_text_parts),
+            )
 
     # ── ffmpeg 工具方法 ─────────────────────────────────────────────
 
-    def _extract_audio(self, video_path: str) -> str:
+    def _extract_audio(self, video_path: str, output_path: str) -> None:
         """ffmpeg: 视频 → 16kHz 单声道 PCM wav"""
-        fd, tmp_path = tempfile.mkstemp(suffix=".wav", prefix="glm_audio_")
-        os.close(fd)
         subprocess.run(
             [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                "-vn",
-                "-acodec", "pcm_s16le",
-                "-ar", "16000",
-                "-ac", "1",
-                tmp_path,
+                "ffmpeg", "-y", "-i", video_path, "-vn",
+                "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+                output_path,
             ],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        return tmp_path
 
     def _get_duration(self, audio_path: str) -> float:
         result = subprocess.run(
@@ -118,28 +103,19 @@ class GLMChunkedASRProvider(ASRProvider):
         )
         return float(result.stdout.strip())
 
-    def _split_audio(self, audio_path: str, chunk_duration: int, total_duration: float) -> List[str]:
-        chunk_paths = []
-        num_chunks = int(total_duration / chunk_duration) + 1
-        for i in range(num_chunks):
-            start = i * chunk_duration
-            fd, chunk_path = tempfile.mkstemp(suffix=".wav", prefix=f"glm_chunk_{i}_")
-            os.close(fd)
-            subprocess.run(
-                [
-                    "ffmpeg", "-y",
-                    "-i", audio_path,
-                    "-ss", str(start),
-                    "-t", str(chunk_duration),
-                    "-acodec", "copy",
-                    chunk_path,
-                ],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            chunk_paths.append(chunk_path)
-        return chunk_paths
+    def _split_audio(self, audio_path: str, chunk_duration: float) -> List[str]:
+        output_pattern = os.path.join(os.path.dirname(audio_path), "chunk_%06d.wav")
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", audio_path, "-acodec", "copy",
+                "-f", "segment", "-segment_time", str(chunk_duration),
+                "-reset_timestamps", "1", output_pattern,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return sorted(glob.glob(os.path.join(os.path.dirname(audio_path), "chunk_*.wav")))
 
     # ── API 调用 ────────────────────────────────────────────────────
 
@@ -178,7 +154,10 @@ class GLMChunkedASRProvider(ASRProvider):
                     response.raise_for_status()
                     data = response.json()
                     # GLM ASR 响应格式：{"text": "转录文本", "id": "...", "model": "..."}
-                    return data.get("text", "")
+                    text = data.get("text")
+                    if not isinstance(text, str):
+                        raise ValueError("GLM ASR 响应缺少文本字段")
+                    return text
             if attempt < 3:
                 time.sleep(10 * (2 ** attempt))  # 10/20/40s
 

@@ -2,9 +2,10 @@
 阿里云 OSS 存储后端 (兼容 Django 6.0)
 """
 import time
+import tempfile
 import oss2
 from django.core.files.storage import Storage
-from django.core.files.base import ContentFile
+from django.core.files import File
 from django.utils.deconstruct import deconstructible
 from django.conf import settings
 from django.core.cache import cache
@@ -23,12 +24,18 @@ class OssMediaStorage(Storage):
         self.bucket = oss2.Bucket(auth, settings.OSS_ENDPOINT, settings.OSS_BUCKET_NAME)
 
     def _open(self, name, mode="rb"):
-        result = self.bucket.get_object(name)
-        return ContentFile(result.read())
+        content = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
+        try:
+            with self.bucket.get_object(name) as result:
+                while chunk := result.read(1024 * 1024):
+                    content.write(chunk)
+            content.seek(0)
+            return File(content, name=name)
+        except BaseException:
+            content.close()
+            raise
 
     def _save(self, name, content):
-        if hasattr(content, "read"):
-            content = content.read()
         self.bucket.put_object(name, content)
         return name
 

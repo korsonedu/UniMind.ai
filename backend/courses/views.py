@@ -18,7 +18,7 @@ from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
 
-from core.utils import apply_institution_filter
+from core.utils import apply_institution_filter, get_content_institution
 
 
 def _get_course_for_user(pk, user, request=None):
@@ -66,12 +66,16 @@ def _get_video_local_path(course) -> str:
     tmp.close()
     url = course.video_file.url
     logger.info("Downloading video from OSS to %s for processing", tmp.name)
-    with _requests.get(url, stream=True, timeout=600) as r:
-        r.raise_for_status()
-        with open(tmp.name, 'wb') as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-    return tmp.name
+    try:
+        with _requests.get(url, stream=True, timeout=600) as r:
+            r.raise_for_status()
+            with open(tmp.name, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        return tmp.name
+    except BaseException:
+        os.remove(tmp.name)
+        raise
 
 def _cleanup_temp_video(path: str):
     """清理 _get_video_local_path 创建的临时文件。如果是 OSS 临时文件则删除。"""
@@ -134,13 +138,20 @@ def _extract_cover_async(course_id: int) -> None:
                 video_src = course.video_file.path
             except NotImplementedError:
                 video_src = course.video_file.url
+            video_name = course.video_file.name
             frame_path = _extract_first_frame(video_src, course.title)
             if not frame_path:
                 return
             try:
-                with open(frame_path, "rb") as f:
-                    filename = f"cover_{course.id}_{uuid.uuid4().hex[:8]}.jpg"
-                    course.cover_image.save(filename, File(f), save=True)
+                from django.db import transaction
+                with transaction.atomic():
+                    current = Course.objects.select_for_update().filter(pk=course_id).first()
+                    if not current or current.cover_image or current.video_file.name != video_name:
+                        return
+                    with open(frame_path, "rb") as f:
+                        filename = f"cover_{current.id}_{uuid.uuid4().hex[:8]}.jpg"
+                        current.cover_image.save(filename, File(f), save=False)
+                    current.save(update_fields=['cover_image'])
             finally:
                 try:
                     os.remove(frame_path)
@@ -181,7 +192,8 @@ class OSSMultipartInitView(APIView):
         if ext not in VIDEO_EXTENSIONS:
             return Response({"error": f"视频上传仅支持视频格式，不支持 {ext}"}, status=400)
 
-        institution_id = request.user.institution_id or "public"
+        institution = get_content_institution()
+        institution_id = institution.pk if institution else "public"
         unique_name = f"{uuid.uuid4().hex}{ext}"
         object_key = f"institutions/{institution_id}/video/{unique_name}"
 
@@ -232,8 +244,9 @@ class OSSMultipartCompleteView(APIView):
         metadata = CourseSerializer(data={'title': title, 'module': request.data.get('module')}, context={'request': request})
         metadata.is_valid(raise_exception=True)
 
-        # 校验 object_key 归属当前用户机构
-        user_inst_id = getattr(request.user, 'institution_id', None)
+        # 校验 object_key 归属当前内容范围
+        institution = get_content_institution()
+        user_inst_id = institution.pk if institution else None
         expected_prefix = f"institutions/{user_inst_id or 'public'}/"
         if not object_key.startswith(expected_prefix):
             return Response({"error": "无权操作此文件"}, status=403)
@@ -316,7 +329,7 @@ class OSSMultipartCompleteView(APIView):
         validate_upload_file(reference_materials, allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
 
         # 存储配额（原子化）
-        inst = request.user.institution
+        inst = get_content_institution()
         total_upload_size = video_size
         for f in (cover_image, courseware, reference_materials):
             if f:
@@ -335,21 +348,15 @@ class OSSMultipartCompleteView(APIView):
         )
         if str(album_obj_id or "").strip() and str(album_obj_id) != "0":
             album_id = _safe_int(album_obj_id, None)
-            if inst and album_id:
-                from courses.models import Album
-                album = Album.objects.filter(id=album_id).first()
-                if not album or album.institution_id != inst.id:
-                    raise ValidationError({"error": "专辑不属于当前机构"})
+            from courses.models import Album
+            if not album_id or not Album.objects.filter(id=album_id, institution=inst).exists():
+                raise ValidationError({"error": "专辑不属于当前内容范围"})
             course.album_obj_id = album_id
         if str(knowledge_point_id or "").strip() and str(knowledge_point_id) != "0":
             kp_id = _safe_int(knowledge_point_id, None)
-            if inst and kp_id:
-                from quizzes.models import KnowledgePoint
-                kp = KnowledgePoint.objects.filter(id=kp_id).first()
-                if not kp:
-                    raise ValidationError({"error": "知识点不存在"})
-                if kp.institution_id and kp.institution_id != inst.id:
-                    raise ValidationError({"error": "知识点不属于当前机构"})
+            from quizzes.models import KnowledgePoint
+            if not kp_id or not KnowledgePoint.objects.filter(id=kp_id, institution=inst).exists():
+                raise ValidationError({"error": "知识点不属于当前内容范围"})
             course.knowledge_point_id = kp_id
         if cover_image:
             course.cover_image = cover_image
@@ -398,8 +405,9 @@ class OSSMultipartAbortView(APIView):
         if not upload_id or not object_key:
             return Response({"error": "缺少 upload_id 或 object_key"}, status=400)
 
-        # 校验 object_key 归属当前用户机构
-        user_inst_id = getattr(request.user, 'institution_id', None)
+        # 校验 object_key 归属当前内容范围
+        institution = get_content_institution()
+        user_inst_id = institution.pk if institution else None
         expected_prefix = f"institutions/{user_inst_id or 'public'}/"
         if not object_key.startswith(expected_prefix):
             return Response({"error": "无权操作此文件"}, status=403)
@@ -425,8 +433,9 @@ class OSSMultipartResignView(APIView):
         if not upload_id or not object_key or total_parts <= 0:
             return Response({"error": "缺少 upload_id / object_key / total_parts"}, status=400)
 
-        # 校验 object_key 归属当前用户机构
-        user_inst_id = getattr(request.user, 'institution_id', None)
+        # 校验 object_key 归属当前内容范围
+        institution = get_content_institution()
+        user_inst_id = institution.pk if institution else None
         expected_prefix = f"institutions/{user_inst_id or 'public'}/"
         if not object_key.startswith(expected_prefix):
             return Response({"error": "无权操作此文件"}, status=403)
@@ -514,14 +523,14 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("file"))
         total_size = sum(f.size for f in self.request.FILES.values() if f)
-        inst = self.request.user.institution
+        inst = get_content_institution()
         check_and_add_storage_usage(inst, total_size)
         serializer.save(institution=inst)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        page = _safe_int(request.query_params.get('page'), 1)
-        page_size = _safe_int(request.query_params.get('page_size'), 10)
+        page = max(1, _safe_int(request.query_params.get('page'), 1))
+        page_size = min(100, max(1, _safe_int(request.query_params.get('page_size'), 10)))
         total = queryset.count()
         offset = (page - 1) * page_size
         paged = queryset[offset:offset + page_size]
@@ -561,7 +570,7 @@ class AlbumListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         validate_upload_file(self.request.FILES.get("cover_image"), allowed_extensions=IMAGE_EXTENSIONS, max_size_bytes=IMAGE_MAX_BYTES)
         total_size = sum(f.size for f in self.request.FILES.values() if f)
-        inst = self.request.user.institution
+        inst = get_content_institution()
         check_and_add_storage_usage(inst, total_size)
         serializer.save(institution=inst)
 
@@ -580,12 +589,13 @@ class AlbumCoursesView(APIView):
 
     def get(self, request, album_id):
         from .access import visible_courses
-        courses = visible_courses(request).filter(album_obj_id=album_id).order_by('sort_order', '-created_at')
+        from .access import course_list_queryset
+        courses = course_list_queryset(visible_courses(request), request).filter(album_obj_id=album_id).order_by('sort_order', '-created_at')
         album = Album.objects.filter(pk=album_id).first() if courses.exists() else None
         if not album:
             return Response({'error': '专辑不存在'}, status=404)
 
-        return Response(CourseSerializer(courses, many=True, context={'request': request}).data)
+        return Response(CourseSerializer(courses, many=True, context={'request': request, 'course_list_summary': True}).data)
 
 class CourseListCreateView(generics.ListCreateAPIView):
     serializer_class = CourseSerializer
@@ -596,9 +606,15 @@ class CourseListCreateView(generics.ListCreateAPIView):
             return [IsAdmin(), HasQuota()]
         return [IsMember()]
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.request.method == 'GET':
+            context['course_list_summary'] = True
+        return context
+
     def get_queryset(self):
         user = self.request.user
-        from .access import visible_courses
+        from .access import visible_courses, course_list_queryset
         qs = visible_courses(self.request) if self.request.method == 'GET' else apply_institution_filter(Course.objects.select_related('module'), user, self.request)
         ordering = self.request.query_params.get('ordering', '-created_at')
         allowed = ('sort_order', '-sort_order', 'created_at', '-created_at', 'title', '-title')
@@ -631,15 +647,15 @@ class CourseListCreateView(generics.ListCreateAPIView):
             from django.db.models import Count
             matching_qs = CourseTagRelation.objects.filter(
                 tag__slug__in=tag,
-                tag__institution=self.request.user.institution,
+                tag__institution=get_content_institution(),
             ).values('course_id').annotate(n=Count('id')).filter(n=len(tag))
-            qs = qs.filter(id__in=[m['course_id'] for m in matching_qs])
-        return qs
+            qs = qs.filter(id__in=matching_qs.values('course_id'))
+        return course_list_queryset(qs, self.request)
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
-        page = _safe_int(request.query_params.get('page'), 1)
-        page_size = _safe_int(request.query_params.get('page_size'), 10)
+        page = max(1, _safe_int(request.query_params.get('page'), 1))
+        page_size = min(100, max(1, _safe_int(request.query_params.get('page_size'), 10)))
         total = queryset.count()
         offset = (page - 1) * page_size
         paged = queryset[offset:offset + page_size]
@@ -658,19 +674,22 @@ class CourseListCreateView(generics.ListCreateAPIView):
         validate_upload_file(files.get("courseware"), allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
         validate_upload_file(files.get("reference_materials"), allowed_extensions=DOCUMENT_EXTENSIONS, max_size_bytes=DOC_MAX_BYTES)
         total_size = sum(f.size for f in files.values() if f)
-        inst = self.request.user.institution
-        check_and_add_storage_usage(inst, total_size)
+        inst = get_content_institution()
 
-        # 支持 OSS 直传：如果提供了 video_file_url，使用 OSS URL
+        # 支持 OSS 直传：使用上传成功的对象路径
         video_file_url = self.request.data.get('video_file_url')
         video_object_key = self.request.data.get('video_object_key')
 
+        if video_file_url and video_object_key:
+            expected_prefix = f"institutions/{inst.pk if inst else 'public'}/"
+            if not isinstance(video_object_key, str) or not video_object_key.startswith(expected_prefix):
+                raise ValidationError({'video_object_key': '无权操作此文件。'})
+        check_and_add_storage_usage(inst, total_size)
         next_order = _next_course_sort_order(inst)
         if video_file_url and video_object_key:
             # OSS 直传模式：URL 已经在 OSS 上
             course = serializer.save(author=self.request.user, institution=inst, sort_order=next_order)
-            # 更新视频文件字段为 OSS URL
-            course.video_file = video_file_url
+            course.video_file = video_object_key
             course.save(update_fields=['video_file'])
         else:
             # 传统上传模式：文件通过后端上传
@@ -686,7 +705,7 @@ class CourseListCreateView(generics.ListCreateAPIView):
             try:
                 tag_names = json.loads(tags_json)
                 from .views_tags import _assign_tags
-                _assign_tags(course, tag_names, self.request.user.institution)
+                _assign_tags(course, tag_names, inst)
             except Exception:
                 pass
 
@@ -779,7 +798,10 @@ class CourseOutlineView(APIView):
 
         from .models import CourseOutline
         outline, _ = CourseOutline.objects.get_or_create(course=course)
-        if outline.status not in ('completed', 'generating'):
+        from datetime import timedelta
+        from django.utils import timezone
+        stale = outline.status == 'generating' and outline.updated_at < timezone.now() - timedelta(seconds=600)
+        if outline.status not in ('completed', 'generating') or stale:
             from .services.task_dispatcher import dispatch_outline_generation
             dispatch_outline_generation(course.id)
         return Response({'status': 'processing'})
