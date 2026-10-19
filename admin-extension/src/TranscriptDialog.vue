@@ -15,7 +15,7 @@ const edits = reactive(new Map<number, string>());
 const page = ref(1);
 const notice = ref('');
 const PAGE_SIZE = 50;
-const SAVE_BATCH = 150;
+const SAVE_BATCH = 50;
 const statusNames: Record<string, string> = { pending: '待处理', processing: '识别中', completed: '已完成', failed: '识别失败', not_available: '暂无字幕' };
 const outlineNames: Record<string, string> = { pending: '待处理', generating: '生成中', completed: '已完成', failed: '生成失败' };
 
