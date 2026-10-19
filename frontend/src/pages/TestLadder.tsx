@@ -25,6 +25,7 @@ import { formatApiErrorToast } from '@/lib/apiError';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
+import { useExamActivityStore } from '@/store/useExamActivityStore';
 
 // Modularized Components
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
@@ -155,8 +156,15 @@ export const TestLadder: React.FC = () => {
     setIsSubmitting(true);
     try {
       const payload = unmasteredQuestions.map(q => ({ question_id: q.id, answer: answers[q.id] }));
-      await api.post('/quizzes/submit-exam/', { answers: payload });
-      toast.success('试卷已提交 AI 批改', { description: '完成后请在通知中心点击查看报告。' });
+      const response = await api.post('/quizzes/submit-exam/', { answers: payload });
+      const examId = Number(response.data?.exam_id);
+      if (Number.isFinite(examId)) {
+        useExamActivityStore.getState().start({
+          examId,
+          total: Number(response.data?.total_questions) || unmasteredQuestions.length,
+        });
+      }
+      toast.success('已提交 AI 批改');
       setIsTestOpen(false);
       fetchGoals();
     } catch (e: unknown) {
@@ -186,7 +194,7 @@ export const TestLadder: React.FC = () => {
           <dl className="um-memorix-stats" aria-label="复习状态"><div><dt>今日待复习</dt><dd>{loadingStates.goals ? '—' : goals.review_goal}<small> 题</small></dd></div><div><dt>接近遗忘</dt><dd>{loadingStates.goals ? '—' : goals.at_risk_count || 0}<small> 题</small></dd></div><div><dt>尚未练习</dt><dd>{loadingStates.goals ? '—' : goals.new_questions}<small> 题</small></dd></div></dl>
         </section>
         <section className="um-practice-setup" aria-label="练习设置">
-        <header className="um-practice-heading"><div><h2>本轮训练</h2><p>{loadingStates.goals ? '正在读取练习建议…' : `建议 ${goals.recommended_questions} 题，预计 ${goals.estimated_minutes} 分钟，含 ${goals.weak_focus_count} 题薄弱强化。`}</p></div><div className="um-practice-heading-actions"><Button variant="ghost" onClick={() => navigate('/tests/review')}>错题复盘<ArrowRight size={15} /></Button>{isMobile && <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" aria-label="提醒设置"><Bell size={16} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="end"><h2>提醒设置</h2><Label>题型提醒<Switch checked={reminderSettings.questionType} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('questionType', enabled))} /></Label><Label>做题结果提醒<Switch checked={reminderSettings.testResult} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('testResult', enabled))} /></Label></PopoverContent></Popover>}</div></header>
+        <header className="um-practice-heading"><div><h2>本轮训练</h2><p>{loadingStates.goals ? '正在读取练习建议…' : `建议 ${goals.recommended_questions} 题，预计 ${goals.estimated_minutes} 分钟，含 ${goals.weak_focus_count} 题薄弱强化。`}</p></div><div className="um-practice-heading-actions"><Button variant="ghost" onClick={() => navigate('/tests/history')}>最近练习<ArrowRight size={15} /></Button><Button variant="ghost" onClick={() => navigate('/tests/review')}>错题复盘<ArrowRight size={15} /></Button>{isMobile && <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" aria-label="提醒设置"><Bell size={16} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="end"><h2>提醒设置</h2><Label>题型提醒<Switch checked={reminderSettings.questionType} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('questionType', enabled))} /></Label><Label>做题结果提醒<Switch checked={reminderSettings.testResult} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('testResult', enabled))} /></Label></PopoverContent></Popover>}</div></header>
           <div className="um-practice-controls">
             <label className="um-practice-count"><span>题数</span><select aria-label="题数" value={isCustomCount ? 'custom' : qCount} onChange={event => { setIsCustomCount(event.target.value === 'custom'); if (event.target.value !== 'custom') setQCount(event.target.value); }}>
               {[...new Set([String(goals.recommended_questions || 5), '3', '5', '10', '20'])].map(value => <option key={value} value={value}>{value} 题</option>)}<option value="custom">自定义</option>

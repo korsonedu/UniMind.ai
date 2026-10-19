@@ -16,6 +16,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
+import { ExamActivityBar } from '@/components/ExamActivityBar';
+import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 
 type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string; mobileLabel: string; feature?: string };
@@ -54,6 +56,7 @@ export const MainLayout: React.FC = () => {
   const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/') && hasFeature('course.video');
   const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage || (location.pathname === '/study' && hasFeature('study.room')));
   const isTourPage = location.pathname === '/xiaoyu';
+  useExamActivity();
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-override', primaryColor);
@@ -138,6 +141,7 @@ export const MainLayout: React.FC = () => {
       </aside>
       <main className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
         isMobileImmersivePage || isMobileStudyPage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+env(safe-area-inset-bottom))] md:pb-0' : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0')}>
+        <ExamActivityBar />
         {!isMobileImmersivePage && !isIntegratedWorkspace && <header className="um-app-global-header sticky top-0 h-12 shrink-0 z-[var(--z-sticky)] flex items-center justify-end gap-2 px-3 md:px-6">{workspaceHeader}</header>}
         <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage || isMobileStudyPage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6', isMobile && !hideMobileBottomNav && !isIntegratedWorkspace && 'pb-20')}>
           <Outlet context={{ workspaceHeader }} />

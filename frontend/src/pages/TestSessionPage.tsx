@@ -20,6 +20,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
 import { useLearningSession } from '@/hooks/useLearningSession';
+import { useExamActivityStore } from '@/store/useExamActivityStore';
 
 const hasAnswer = (val: unknown) => {
   if (typeof val === 'string') return val.trim().length > 0;
@@ -62,7 +63,6 @@ export const TestSessionPage: React.FC = () => {
     return params.toString();
   }, [searchParams, questionLimit, preference]);
   const returnPath = searchParams.get('source') === 'xiaoyu' ? '/xiaoyu' : searchParams.has('ids') ? '/tests/review' : '/tests';
-  const practiceDone = searchParams.get('source') === 'xiaoyu' && searchParams.get('practiceDone') === '1';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -163,9 +163,16 @@ export const TestSessionPage: React.FC = () => {
     setIsSubmitting(true);
     try {
       const payload = unmasteredQuestions.map((q) => ({ question_id: q.id, answer: answers[q.id] }));
-      await api.post('/quizzes/submit-exam/', { answers: payload });
-      toast.success('试卷已提交 AI 批改', { description: '完成后请在通知中心查看报告。' });
-      navigate(practiceDone ? '/xiaoyu?practiceDone=1' : returnPath, { replace: true });
+      const response = await api.post('/quizzes/submit-exam/', { answers: payload });
+      const examId = Number(response.data?.exam_id);
+      if (Number.isFinite(examId)) {
+        useExamActivityStore.getState().start({
+          examId,
+          total: Number(response.data?.total_questions) || unmasteredQuestions.length,
+        });
+      }
+      toast.success('已提交 AI 批改');
+      navigate('/tests', { replace: true });
     } catch (e: unknown) {
       toast.error(formatApiErrorToast(e, '提交失败'));
     } finally {

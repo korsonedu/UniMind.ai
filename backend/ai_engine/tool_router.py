@@ -75,6 +75,11 @@ PLANNER_TOOLS_META = [
         body="获取用户的历史考试记录。参数: user_id(int)=用户ID, limit(int)=返回数量(默认10)。返回：考试名称、时间、得分、题目数。适用于：查看历史成绩、追踪进步趋势。不适用于：查看具体错题、查看知识点掌握率。",
     ),
     ToolMeta(
+        name="get_recent_practice_result",
+        description="获取最近一次练习的批改结果",
+        body="读取用户最近一次习题训练的批改状态、得分、正确率、进度和薄弱知识点。参数: exam_id(int)=练习编号(可选，不传取最近一次)。返回: status、status_text、total_score、max_score、correct_rate、graded_count、total_questions、failed_count、weak_points、href、summary_text。适用于：学生问'刚才练习怎么样''上次考了多少''练习结果出来了吗'。不适用于：重新批改、生成新的分析文字、查看错题列表。",
+    ),
+    ToolMeta(
         name="search_courses",
         description="搜索课程资源",
         body="搜索平台课程。参数: query(str)=搜索关键词, subject(str)=学科(可选)。返回：课程列表含标题、简介、难度。适用于：推荐学习资源、查找视频课程。不适用于：查找题目、查找知识点。",
@@ -333,10 +338,10 @@ PLANNER_INTENT_MAP = {
         ],
     },
     "analysis": {
-        "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告", "难度", "成就", "徽章", "学习报告", "学得怎么样"],
+        "keywords": ["分析", "掌握率", "薄弱", "趋势", "成绩", "正确率", "统计", "报告", "难度", "成就", "徽章", "学习报告", "学得怎么样", "练习结果", "刚才练习", "上次练习", "考了多少", "得分", "多少分"],
         "tools": [
             "get_learning_stats", "get_knowledge_mastery_map",
-            "get_exam_history", "get_knowledge_difficulty_analysis",
+            "get_exam_history", "get_recent_practice_result", "get_knowledge_difficulty_analysis",
             "get_user_weak_points", "get_user_wrong_questions", "render_visual",
             "get_report_card", "get_my_achievements",
         ],

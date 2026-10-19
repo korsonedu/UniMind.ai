@@ -1,0 +1,129 @@
+.exam-activity-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--um-color-border, #e5e5e5);
+  background: var(--um-color-surface, #fff);
+}
+
+.exam-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--um-radius-md, 10px);
+  background: transparent;
+  color: var(--um-color-text, #1c1c1c);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.exam-activity-item:hover {
+  background: var(--um-color-muted, #f5f5f5);
+}
+
+.exam-activity-item:focus-visible {
+  outline: 2px solid var(--um-color-accent, #2563eb);
+  outline-offset: 1px;
+}
+
+.exam-activity-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  color: var(--um-color-accent, #2563eb);
+}
+
+.exam-activity-item.is-completed .exam-activity-icon {
+  color: var(--um-color-success, #16a34a);
+}
+
+.exam-activity-item.is-partial .exam-activity-icon {
+  color: var(--um-color-warning, #d97706);
+}
+
+.exam-activity-item.is-failed .exam-activity-icon {
+  color: var(--um-color-danger, #dc2626);
+}
+
+.exam-activity-spinner {
+  animation: exam-activity-spin 0.9s linear infinite;
+}
+
+.exam-activity-copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exam-activity-title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-activity-meta {
+  color: var(--um-color-muted-foreground, #737373);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.exam-activity-progress {
+  display: block;
+  height: 3px;
+  margin-top: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--um-color-muted, #ececec);
+}
+
+.exam-activity-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--um-color-accent, #2563eb);
+  transition: width 0.3s ease;
+}
+
+.exam-activity-arrow {
+  flex: 0 0 auto;
+  color: var(--um-color-muted-foreground, #737373);
+  font-size: 12px;
+}
+
+.exam-activity-more {
+  padding: 2px 10px 4px;
+  color: var(--um-color-muted-foreground, #737373);
+  font-size: 11px;
+}
+
+@keyframes exam-activity-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (min-width: 768px) {
+  .exam-activity-bar {
+    padding: 7px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exam-activity-spinner {
+    animation: none;
+  }
+  .exam-activity-progress > span {
+    transition: none;
+  }
+}

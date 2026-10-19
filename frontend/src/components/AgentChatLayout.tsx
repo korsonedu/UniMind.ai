@@ -268,7 +268,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
-      if (appearance === 'native' && new URLSearchParams(window.location.search).get('practiceDone') !== '1') setConversationId(crypto.randomUUID());
+      if (appearance === 'native') setConversationId(crypto.randomUUID());
       try {
         const bRes = await api.get('/ai/bots/');
         if (cancelled) return;
@@ -311,16 +311,6 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     init();
     return () => { cancelled = true; };
   }, [appearance, botDisplayName, findBot, groupIntoSessions, processContent, setActiveSessionId, setBot, setConversationId, setInitialized, setMessages, setProjectId, setSessions]);
-
-  // 做题后回到小宇，自动触发判分分析
-  useEffect(() => {
-    if (!initialized) return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('practiceDone') === '1') {
-      window.history.replaceState({}, '', window.location.pathname);
-      setTimeout(() => doSend('帮我分析刚才的练习结果'), 500);
-    }
-  }, [doSend, initialized]);
 
   useEffect(() => {
     const textarea = nativeInputRef.current;

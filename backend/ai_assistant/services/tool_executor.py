@@ -58,6 +58,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'search_articles': lambda a: f"搜索文章「{a.get('query', '')}」",
         'search_knowledge': lambda a: f"搜索知识点「{a.get('query', '')}」",
         'get_practice_questions': lambda a: f"抽取{a.get('kp_name', '')}相关练习题" if a.get('kp_name') else "抽取练习题",
+        'get_recent_practice_result': lambda a: "读取最近一次练习结果",
         'grade_student_answer': lambda a: f"批改题目 #{a.get('question_id', '')}",
         'run_diagnostic': lambda a: "生成诊断题目" if a.get('mode') == 'generate' else "提交诊断答案",
         'quick_generate': lambda a: f"快速生成{a.get('count', 5)}道题",
@@ -127,6 +128,10 @@ def summarize_tool_result(tool_name: str, result) -> str:
         'get_due_reviews': lambda r: f"{r.get('due_count', 0)} 个待复习",
         'get_learning_sessions': lambda r: f"查到 {r.get('total_sessions', 0)} 次学习记录",
         'get_exam_history': lambda r: f"共 {len(r.get('exams', []))} 次考试",
+        'get_recent_practice_result': lambda r: (
+            f"最近练习 {r.get('total_score', 0)}/{r.get('max_score', 0)} · {r.get('status_text', '')}"
+            if r.get('has_result') else r.get('message', '暂无练习记录')
+        ),
         'search_courses': lambda r: f"找到 {len(r.get('courses', []))} 门课程",
         'search_articles': lambda r: f"找到 {len(r.get('articles', []))} 篇文章",
         'quick_generate': lambda r: f"生成 {r.get('count', len(r.get('questions', [])))} 道题",
@@ -605,6 +610,49 @@ class PlannerToolExecutor(BaseToolExecutor):
         from ai_assistant.services.memory_system import MemorySystem
         limit = min(int(args.get('limit', 10)), 20)
         return MemorySystem.query_exam_history(self.user, limit, self.institution)
+
+    def _handle_get_recent_practice_result(self, args: Dict) -> Dict:
+        """Read the user's latest习题训练 result without re-grading or re-analyzing it."""
+        from quizzes.models import QuizExam
+        from quizzes.services.practice_results import exam_result_payload
+
+        exam_id = args.get('exam_id')
+        queryset = QuizExam.objects.filter(user=self.user)
+        if exam_id not in (None, ''):
+            try:
+                exam_id = int(exam_id)
+            except (TypeError, ValueError):
+                return {'has_result': False, 'error': '练习编号无效'}
+            queryset = queryset.filter(pk=exam_id)
+        exam = queryset.order_by('-created_at').first()
+        if not exam:
+            return {'has_result': False, 'message': '还没有练习记录。'}
+
+        payload = exam_result_payload(exam, include_results=False)
+        weak_points = [
+            item['kp_name'] for item in payload.get('kp_breakdown', [])
+            if item.get('kp_name') and item.get('correct_rate', 100) < 60
+        ][:3]
+        result = {
+            'has_result': True,
+            'exam_id': exam.id,
+            'status': exam.status,
+            'status_text': exam.get_status_display(),
+            'total_score': payload.get('total_score', 0),
+            'max_score': payload.get('max_score', 0),
+            'correct_rate': payload.get('correct_rate', 0),
+            'total_questions': payload.get('total_questions', 0),
+            'graded_count': payload.get('graded_count', 0),
+            'failed_count': payload.get('failed_count', 0),
+            'weak_points': weak_points,
+            'href': payload.get('href', f'/tests/results/{exam.id}'),
+            'summary_text': payload.get('summary_text', ''),
+        }
+        visual = {
+            'type': 'practice_result',
+            'payload': result,
+        }
+        return self._attach_visual(result, lambda: visual)
 
     def _handle_search_courses(self, args: Dict) -> Dict:
         """搜索课程库，推荐学习资源。"""

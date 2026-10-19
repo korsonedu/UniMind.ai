@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
-import { Bell, ChatCircle, Info, Brain } from '@phosphor-icons/react';
+import { Bell, ChatCircle, CheckCircle, Info, Brain } from '@phosphor-icons/react';
 import { EmptyState } from '@/components/EmptyState';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import {
@@ -55,6 +55,14 @@ export const NotificationBell = () => {
   const handleItemClick = async (notif: ReturnType<typeof useNotificationStore.getState>['notifications'][number]) => {
     if (!notif.is_read) await markAsRead(notif.id);
     if (notif.link) {
+        if (notif.link.startsWith('/tests?') && notif.link.includes('view_report')) {
+          const legacy = new URL(notif.link, window.location.origin);
+          const examId = legacy.searchParams.get('exam_id');
+          if (examId) {
+            navigate(`/tests/results/${examId}`);
+            return;
+          }
+        }
         if (notif.link.startsWith('/')) navigate(notif.link);
         else window.open(notif.link, '_blank', 'noopener,noreferrer');
     }
@@ -64,6 +72,7 @@ export const NotificationBell = () => {
     switch (type) {
       case 'qa_reply': return <ChatCircle className="h-3 w-3 text-muted-foreground" />;
       case 'memorix_reminder': return <Brain className="h-3 w-3 text-muted-foreground" />;
+      case 'practice_result': return <CheckCircle className="h-3 w-3 text-emerald-600" />;
       default: return <Info className="h-3 w-3 text-muted-foreground" />;
     }
   };

@@ -7,6 +7,7 @@ import { ActionCardsRenderer } from './ActionCardsRenderer';
 import { FunctionGraphRenderer } from './FunctionGraphRenderer';
 import { GradingPreviewCard } from '@/components/GradingPreviewCard';
 import { StudentReportPreview } from '@/components/StudentReportPreview';
+import { PracticeResultCard } from './PracticeResultCard';
 import { PracticeQuizCard } from './PracticeQuizCard';
 
 export interface VisualData {
@@ -25,6 +26,7 @@ const RENDERERS: Record<string, React.ComponentType<{ payload: any }>> = {
   function_graph: FunctionGraphRenderer,
   grading_preview: GradingPreviewCard,
   student_report: StudentReportPreview,
+  practice_result: PracticeResultCard,
   practice_quiz: PracticeQuizCard,
 };
 

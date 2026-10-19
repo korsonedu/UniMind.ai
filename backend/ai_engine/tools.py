@@ -408,6 +408,17 @@ GET_EXAM_HISTORY_SCHEMA = {
     },
 }
 
+GET_RECENT_PRACTICE_RESULT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "exam_id": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "可选，指定某次练习。不传则返回最近一次。",
+        },
+    },
+    "additionalProperties": False,
+}
 
 GET_PRACTICE_QUESTIONS_SCHEMA = {
     "type": "object",
@@ -621,6 +632,8 @@ def get_planner_tools():
             impl_summary="查询 question 表，按知识点/学科/难度过滤，排除已掌握题目。优先返回 UserQuestionStatus 中 wrong_count>0 的薄弱题，再补充新题。随机抽取，返回题目列表（不含答案）。"),
         _make_tool("get_exam_history", "获取用户的考试成绩历史和趋势。用于评估学习进展。", GET_EXAM_HISTORY_SCHEMA,
             impl_summary="查询 exam_record 表 WHERE user_id=current_user，按 created_at 降序返回最近 N 次考试成绩（分数、科目、日期）。"),
+        _make_tool("get_recent_practice_result", "获取用户最近一次习题训练的批改状态、分数和薄弱知识点。学生问“刚才练习怎么样”“上次考了多少”时使用，调用后会展示结果卡片。", GET_RECENT_PRACTICE_RESULT_SCHEMA,
+            impl_summary="查询 QuizExam WHERE user_id=current_user，按 created_at 降序取最近一条；读取习题训练统一结果（状态、得分、正确率、进度、薄弱知识点）。pending 时只返回进度，不伪造分数；结果卡链接 /tests/results/<exam_id>。"),
         _make_tool("render_visual", "在对话中渲染可视化内容和交互选项。需要用户选择目标、方向、强度或补充条件时，使用 action_cards，根据上下文动态填写选项；也支持数学推导、解题步骤、知识图谱和数据统计。纯文字问答无需调用。", RENDER_VISUAL_SCHEMA,
             impl_summary="将可视化数据（type + payload）返回给前端，内联渲染到对话流。action_cards 的选项内容按当前需求动态生成，reply 点击后发送 action.url 中的消息。"),
         _make_tool("grade_student_answer", "批改学生对某道题的回答。传入题目ID和学生答案，返回评分、反馈、解析、变式题推荐和知识点掌握度。用于模拟考试和练习批改场景。", GRADE_STUDENT_ANSWER_SCHEMA,
@@ -840,8 +853,8 @@ RENDER_VISUAL_SCHEMA = {
     "properties": {
         "type": {
             "type": "string",
-            "enum": ["data_card", "latex_derivation", "step_solution", "knowledge_map", "action_cards", "student_report"],
-            "description": "可视化类型。data_card=数据卡片，latex_derivation=数学推导，step_solution=解题步骤，knowledge_map=知识图谱，action_cards=行动引导卡片，student_report=学情报告预览卡片",
+            "enum": ["data_card", "latex_derivation", "step_solution", "knowledge_map", "action_cards", "student_report", "practice_result"],
+            "description": "可视化类型。data_card=数据卡片，latex_derivation=数学推导，step_solution=解题步骤，knowledge_map=知识图谱，action_cards=行动引导卡片，student_report=学情报告预览卡片，practice_result=练习批改结果卡片",
         },
         "payload": {
             "type": "object",
@@ -861,7 +874,8 @@ RENDER_VISUAL_SCHEMA = {
                 "    · input（自由输入）：url 可为空字符串。渲染输入框让用户输入自定义文字后发送。仅在确实需要用户自由输入时使用，能用 single 给选项就不要用 input。\n"
                 "    · rating（1-5 评分）：url 含 {rating} 占位符。渲染 5 个数字按钮，用户点几就发几。用于收集满意度或自评。\n"
                 "  选择原则：导航→导航类；用户做选择→reply+single（优先）或多选→reply+multi；确认信息→reply+acknowledge；自由文本→reply+input（少用）；评分→reply+rating。\n"
-                "• student_report: {student_name: string, date_from?: string, date_to?: string, stats: object, radar: array, daily_activity: array, achievements: array, exams: array} — 学情报告预览卡片"
+                "• student_report: {student_name: string, date_from?: string, date_to?: string, stats: object, radar: array, daily_activity: array, achievements: array, exams: array} — 学情报告预览卡片\n"
+                "• practice_result: {exam_id: number, status: string, status_text: string, total_score: number, max_score: number, correct_rate: number, total_questions: number, graded_count: number, failed_count: number, weak_points: string[], href: string, summary_text: string} — 最近一次练习批改结果卡片"
             ),
         },
         "priority": {
@@ -955,4 +969,3 @@ SAVE_SESSION_NOTE_SCHEMA = {
     },
     "required": ["note_text"],
 }
-

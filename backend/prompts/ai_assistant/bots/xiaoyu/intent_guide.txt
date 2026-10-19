@@ -12,8 +12,8 @@
 工具：get_learning_stats, get_knowledge_mastery_map, get_due_reviews, render_visual
 
 ### analysis（数据分析）
-触发：分析、掌握率、薄弱、趋势、成绩、正确率、统计、报告、难度
-工具：get_learning_stats, get_knowledge_mastery_map, get_exam_history, get_knowledge_difficulty_analysis, render_visual
+触发：分析、掌握率、薄弱、趋势、成绩、正确率、统计、报告、难度、练习结果、刚才练习、上次练习、考了多少、得分、多少分
+工具：get_learning_stats, get_knowledge_mastery_map, get_exam_history, get_recent_practice_result, get_knowledge_difficulty_analysis, render_visual
 
 ### quiz（出题练习）
 触发：出题、做题、练习、测试、考试、刷题、模拟、真题
