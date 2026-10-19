@@ -1,0 +1,28 @@
+.um-not-found-phase {
+  display: grid;
+}
+
+.um-not-found-phase > span {
+  grid-area: 1 / 1;
+  animation: um-not-found-page 24s ease-in-out infinite;
+}
+
+.um-not-found-phase > span + span {
+  opacity: 0;
+  animation-name: um-not-found-answer;
+}
+
+@keyframes um-not-found-page {
+  0%, 30%, 100% { opacity: 1; }
+  45%, 80% { opacity: 0; }
+}
+
+@keyframes um-not-found-answer {
+  0%, 30%, 100% { opacity: 0; }
+  45%, 80% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .um-not-found-phase > span { animation: none; }
+  .um-not-found-phase > span + span { display: none; }
+}

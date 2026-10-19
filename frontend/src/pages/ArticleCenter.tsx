@@ -262,6 +262,7 @@ export const ArticleCenter: React.FC = () => {
           <div className="p-20 flex flex-col items-center justify-center text-center space-y-4">
             <FileText className="h-12 w-12 text-muted-foreground/10" />
             <p className="text-muted-foreground font-bold text-xs uppercase tracking-widest">No articles found</p>
+            {search.trim() && <p className="text-xs italic text-muted-foreground">搜索范围有限，你的求知欲除外。</p>}
           </div>
         ) : viewMode === 'list' ? (
           /* 列表视图 */

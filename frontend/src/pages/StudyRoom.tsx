@@ -386,6 +386,10 @@ export const StudyRoom: React.FC = () => {
           </div>
         </header>
 
+        {onlineUsers.length === 1 && onlineUsers[0].username === user?.username && (
+          <p className="px-5 py-3 text-xs italic text-muted-foreground">包场了。请享用这间略显宽敞的自习室。</p>
+        )}
+
         {/* Messages */}
         <ChatMessageList
           messages={messages}

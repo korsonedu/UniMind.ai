@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from 'sonner';
 import { getLoginPath } from './routing';
 
 const api = axios.create({
@@ -47,6 +48,13 @@ api.interceptors.response.use(
         : 1000 * Math.pow(2, retryCount);
       await new Promise(r => setTimeout(r, delay));
       return api(config);
+    }
+    if (axios.isAxiosError(error) && error.code === 'ERR_NETWORK') {
+      toast.error('网络连接失败', {
+        id: 'network-connection-error',
+        description: '再试一次，反正时间是一种幻觉。——《银河搭车客指南》',
+        classNames: { description: 'italic text-muted-foreground' },
+      });
     }
     return Promise.reject(error);
   }
