@@ -2,6 +2,7 @@ import './previewApi';
 
 /** Controls surround the real App; routes and pages are never substituted. */
 export function PreviewControls() {
+  if (new URLSearchParams(location.search).has('capture')) return null;
   return <div className="um-full-preview-bar">
     <span><span className="um-preview-name">UniMind.ai · 完整应用 · </span>本地示例数据</span>
     <label>身份 <select aria-label="调试身份" defaultValue={sessionStorage.getItem('unimind-preview-role') || 'student'} onChange={event => {
