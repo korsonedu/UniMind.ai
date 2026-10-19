@@ -297,6 +297,7 @@ AI_BULK_GENERATE_MAX_PER_REQUEST = _get_int("AI_BULK_GENERATE_MAX_PER_REQUEST", 
 AI_BULK_GENERATE_CONCURRENCY = _get_int("AI_BULK_GENERATE_CONCURRENCY", 4)
 AI_DIFFICULTY_CHECK_ENABLED = _get_bool("AI_DIFFICULTY_CHECK_ENABLED", default=True)
 QUIZ_EXAM_GRADING_USE_CELERY = _get_bool("QUIZ_EXAM_GRADING_USE_CELERY", default=True)
+COURSE_AI_USE_CELERY = _get_bool("COURSE_AI_USE_CELERY", default=False)
 
 # Memorix-Field: 图扩散记忆调度
 # 论文 field-paper.md §4.1 最优参数
@@ -327,8 +328,16 @@ UNIMIND_CONTENT_INSTITUTION_ID = os.environ.get("UNIMIND_CONTENT_INSTITUTION_ID"
 FILE_UPLOAD_MAX_MEMORY_SIZE = _get_int("FILE_UPLOAD_MAX_MEMORY_SIZE", 209715200)
 
 # ASR 语音转文字
-ASR_DEFAULT_PROVIDER = os.getenv("ASR_DEFAULT_PROVIDER", "dummy")
+ASR_DEFAULT_PROVIDER = os.getenv("ASR_DEFAULT_PROVIDER", "qwen_filetrans")
 ASR_PROVIDER_CONFIG = {
+    "qwen_filetrans": {
+        "api_key": os.getenv("QWEN_ASR_API_KEY", ""),
+        "base_url": os.getenv("QWEN_ASR_BASE_URL", "https://maas.qianwenaiapi.com/api/v1"),
+        "model": os.getenv("QWEN_ASR_MODEL", "qwen-audio-3.1-asr-flash-filetrans"),
+        "timeout": int(os.getenv("QWEN_ASR_TIMEOUT", "60")),
+        "poll_interval": float(os.getenv("QWEN_ASR_POLL_INTERVAL", "3")),
+        "max_wait": int(os.getenv("QWEN_ASR_MAX_WAIT", "3600")),
+    },
     "glm_asr": {
         "api_key": os.getenv("GLM_ASR_API_KEY", ""),
     },

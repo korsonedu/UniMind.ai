@@ -22,7 +22,10 @@ class ASRProvider(ABC):
 
     用户只需实现 transcribe() 方法，返回 TranscriptResult。
     配置通过 settings.ASR_PROVIDER_CONFIG[provider_name] 传入。
+    supports_url=True 的提供者额外实现 transcribe_url()，直接识别远程 URL。
     """
+
+    supports_url = False
 
     def __init__(self, config: Optional[dict] = None):
         self.config = config or {}
@@ -31,6 +34,10 @@ class ASRProvider(ABC):
     def transcribe(self, audio_path: str) -> TranscriptResult:
         """对音频/视频文件执行语音识别，返回带时间戳的分段结果。"""
         ...
+
+    def transcribe_url(self, url: str) -> TranscriptResult:
+        """对可公开访问的音视频 URL 执行语音识别。默认不支持。"""
+        raise NotImplementedError(f"{type(self).__name__} 不支持 URL 方式转录")
 
 
 class ASRProviderRegistry:

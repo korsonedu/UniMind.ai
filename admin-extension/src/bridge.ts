@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 
 export const operations = new Set([
   'meta', 'options', 'courses.list', 'courses.save', 'courses.delete', 'courses.assign',
+  'courses.transcript.get', 'courses.transcript.save', 'courses.transcript.retranscribe', 'courses.outline.regenerate',
   'modules.list', 'modules.save', 'modules.delete', 'students.list', 'students.detail', 'students.access.save',
   'products.list', 'products.save', 'grants.create', 'grants.revoke', 'audit.list',
   'uploads.start', 'uploads.complete', 'uploads.cancel',

@@ -19,3 +19,7 @@ export type QuestionRow = { id: number; text: string; q_type: string; subjective
 export type QuestionDetail = { id?: number; text: string; q_type: string; subjective_type: string | null;
   difficulty_level: string; knowledge_point: number | null; options: string[] | Record<string, string> | null;
   correct_answer: string | null; grading_points: string | null; ai_answer: string | null; rubric: unknown; difficulty?: number };
+export type TranscriptSegment = { id: number; start_time: number; end_time: number; text: string; index: number };
+export type Transcript = { id: number; title: string; status: string; outline_status: string; provider: string | null;
+  error_message: string | null; is_manually_edited: boolean; manual_edited_at: string | null; manual_edited_by_name: string | null;
+  revision: number; full_text: string; segments: TranscriptSegment[] };

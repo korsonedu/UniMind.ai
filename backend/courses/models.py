@@ -152,6 +152,11 @@ class VideoTranscript(models.Model):
     asr_status = models.CharField(max_length=20, choices=ASR_STATUS_CHOICES, default='pending', verbose_name="转录状态")
     asr_provider = models.CharField(max_length=50, blank=True, verbose_name="ASR 提供者")
     error_message = models.TextField(blank=True, verbose_name="错误信息")
+    is_manually_edited = models.BooleanField(default=False, db_index=True, verbose_name="是否人工修订")
+    manual_edited_at = models.DateTimeField(null=True, blank=True, verbose_name="人工修订时间")
+    manual_edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                        related_name='manual_edited_transcripts', verbose_name="人工修订人")
+    revision = models.PositiveIntegerField(default=0, verbose_name="修订版本")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

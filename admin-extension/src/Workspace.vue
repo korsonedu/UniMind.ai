@@ -29,7 +29,9 @@ const operationNames: Record<string, string> = { 'courses.save': '保存课程',
   'ai.config.save': '保存 AI 配置', 'teaching.chat': '教学对话', 'teaching.generate': '生成题目',
   'teaching.report': '生成学情报告', 'teaching.restore': '恢复待审核题目', 'teaching.notification.send': '发送学习提醒',
   'teaching.notification.config.save': '保存通知配置', 'pipeline.review': '审核题目入库',
-  'pipeline.retry': '重试内容任务', 'pipeline.delete': '删除内容任务' };
+  'pipeline.retry': '重试内容任务', 'pipeline.delete': '删除内容任务',
+  'courses.transcript.get': '查看字幕', 'courses.transcript.save': '保存字幕',
+  'courses.transcript.retranscribe': '重新识别字幕', 'courses.outline.regenerate': '重新生成大纲' };
 </script>
 
 <template>

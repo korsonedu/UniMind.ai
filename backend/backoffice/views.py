@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from core.models import SecurityAuditLog
 from .authentication import DirectusAdminAuthentication
 from .common import content_institution, paginate
-from . import courses, people, quizzes, uploads, commerce, teaching
+from . import courses, people, quizzes, uploads, commerce, teaching, transcripts
 
 
 def meta(request, data):
@@ -32,7 +32,8 @@ READS = {'meta': meta, 'options': courses.options, 'courses.list': courses.list_
          'modules.list': courses.list_modules, 'students.list': people.list_students,
          'students.detail': people.student_detail, 'products.list': people.list_products, 'audit.list': audit,
          'knowledge.list': quizzes.list_catalog, 'questions.list': quizzes.list_questions,
-         'questions.detail': quizzes.question_detail}
+         'questions.detail': quizzes.question_detail,
+         'courses.transcript.get': transcripts.get_transcript}
 WRITES = {'courses.save': courses.save_course, 'courses.delete': courses.delete_course,
           'courses.assign': courses.assign_courses, 'modules.save': courses.save_module,
           'modules.delete': courses.delete_module, 'grants.revoke': people.revoke_grant,
@@ -41,7 +42,10 @@ WRITES = {'courses.save': courses.save_course, 'courses.delete': courses.delete_
           'knowledge.save': quizzes.save_catalog, 'knowledge.delete': quizzes.delete_catalog,
           'questions.save': quizzes.save_question, 'questions.delete': quizzes.delete_question,
           'questions.assign': quizzes.assign_questions,
-          'uploads.start': uploads.start, 'uploads.complete': uploads.complete, 'uploads.cancel': uploads.cancel}
+          'uploads.start': uploads.start, 'uploads.complete': uploads.complete, 'uploads.cancel': uploads.cancel,
+          'courses.transcript.save': transcripts.save_transcript,
+          'courses.transcript.retranscribe': transcripts.retranscribe_course,
+          'courses.outline.regenerate': transcripts.regenerate_outline}
 
 READS.update(commerce.READS)
 READS.update(teaching.READS)

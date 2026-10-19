@@ -28,3 +28,10 @@
 .um-admin a.button:hover { background: #f3f6f6; }
 .workspace-section > .muted { margin: 0 0 22px; }
 .workspace-section > .student-summary { padding: 18px 0 4px; }
+.um-admin-dialog.is-wide { width: min(1100px, calc(100vw - 32px)); }
+.um-admin-dialog .transcript-meta { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-bottom: 18px; color: var(--um-muted); font-size: 13px; }
+.um-admin-dialog .transcript-meta strong { color: var(--um-ink); font-weight: 500; }
+.um-admin-dialog .transcript-meta .transcript-changed { color: var(--um-accent); }
+.um-admin-dialog .transcript-table td { vertical-align: top; max-width: none; }
+.um-admin-dialog .transcript-table th:first-child, .um-admin-dialog .transcript-table td.transcript-time { width: 120px; white-space: nowrap; color: var(--um-muted); font-variant-numeric: tabular-nums; }
+.um-admin-dialog .transcript-table textarea { display: block; width: 100%; min-height: 58px; resize: vertical; line-height: 1.55; }

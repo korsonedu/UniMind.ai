@@ -32,27 +32,41 @@ class AICourseService:
 
     # ── 转录 ──────────────────────────────────────────────────────────
 
-    def transcribe_video(self, course: Course) -> VideoTranscript:
+    def transcribe_video(self, course: Course, force: bool = False) -> VideoTranscript:
         transcript, _ = VideoTranscript.objects.get_or_create(course=course)
+        if transcript.is_manually_edited and not force:
+            return transcript
+
         claimed_at = timezone.now()
-        claimed = VideoTranscript.objects.filter(pk=transcript.pk).filter(
-            ~Q(asr_status='processing') | Q(updated_at__lt=claimed_at - timedelta(seconds=5400)),
-        ).update(asr_status='processing', updated_at=claimed_at)
+        claim_filter = ~Q(asr_status='processing') | Q(updated_at__lt=claimed_at - timedelta(seconds=5400))
+        if not force:
+            claim_filter &= Q(manual_edited_at__isnull=True)
+        claimed = VideoTranscript.objects.filter(pk=transcript.pk).filter(claim_filter).update(
+            asr_status='processing', updated_at=claimed_at,
+        )
         if not claimed:
             transcript.refresh_from_db()
             return transcript
         ownership = {'pk': transcript.pk, 'asr_status': 'processing', 'updated_at': claimed_at}
+        if not force:
+            ownership['manual_edited_at__isnull'] = True
 
         try:
             from django.conf import settings
             from courses.views import _get_video_local_path, _cleanup_temp_video
             provider = ASRProviderRegistry.get_default_provider()
             provider_name = getattr(settings, 'ASR_DEFAULT_PROVIDER', 'dummy')
-            local_path = _get_video_local_path(course)
-            try:
-                result = provider.transcribe(local_path)
-            finally:
-                _cleanup_temp_video(local_path)
+            if getattr(provider, 'supports_url', False):
+                video_url = course.video_file.url if course.video_file else ''
+                if not video_url.startswith(('http://', 'https://')):
+                    raise ValueError("Qwen URL ASR 需要配置 OSS：视频文件必须是 HTTP(S) 可访问 URL")
+                result = provider.transcribe_url(video_url)
+            else:
+                local_path = _get_video_local_path(course)
+                try:
+                    result = provider.transcribe(local_path)
+                finally:
+                    _cleanup_temp_video(local_path)
 
             if not isinstance(result.full_text, str) or not result.full_text.strip() or not result.segments:
                 raise ValueError("转录结果为空，等待重试")
@@ -78,9 +92,17 @@ class AICourseService:
             transcript.error_message = ''
             transcript.full_clean(exclude=['course'], validate_unique=False, validate_constraints=False)
             with transaction.atomic():
-                if not VideoTranscript.objects.select_for_update().filter(**ownership).exists():
+                locked = VideoTranscript.objects.select_for_update().filter(**ownership).first()
+                if not locked:
                     transcript.refresh_from_db()
                     return transcript
+                if locked.is_manually_edited and not force:
+                    transcript.refresh_from_db()
+                    return transcript
+                transcript.is_manually_edited = False
+                transcript.manual_edited_at = None
+                transcript.manual_edited_by = None
+                transcript.revision = (locked.revision or 0) + 1
                 transcript.save()
                 transcript.segments.all().delete()
                 TranscriptSegment.objects.bulk_create(segments)

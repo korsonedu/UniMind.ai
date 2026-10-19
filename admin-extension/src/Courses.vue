@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Plus, Pencil, Trash2, RefreshCw, Search, ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { Plus, Pencil, Trash2, RefreshCw, Search, ChevronLeft, ChevronRight, Captions } from 'lucide-vue-next';
 import Dialog from './Dialog.vue';
+import TranscriptDialog from './TranscriptDialog.vue';
 import { useTask } from './api';
 import { upload } from './upload';
 import type { Gateway, Meta, Module, Course, Page } from './types';
@@ -20,6 +21,7 @@ const courseModules = computed(() => modules.value.filter(item => item.subject =
 const target = ref<number | ''>('');
 const selected = ref<number[]>([]);
 const courseForm = ref<Partial<Course>>();
+const transcriptCourse = ref<Course>();
 const moduleForm = ref<Partial<Module>>();
 const deletion = ref<{ kind: 'courses' | 'modules'; id: number; name: string }>();
 const assignment = ref(false);
@@ -90,15 +92,16 @@ function toggleAll(event: Event) {
 <template>
   <section class="workspace-section" :aria-busy="busy">
     <div class="section-heading"><h2>{{ view === 'courses' ? '课程' : '模块' }} <span>{{ view === 'courses' ? courses.total : modules.length }}</span></h2><div class="actions"><button class="icon" title="刷新" :disabled="busy" @click="run(() => load(courses.page))"><RefreshCw :size="17" /></button><button class="primary" :disabled="!canWrite" @click="view === 'courses' ? editCourse() : editModule()"><Plus :size="17" />{{ view === 'courses' ? '新增课程' : '新增模块' }}</button></div></div>
-    <p v-if="error && !courseForm && !moduleForm && !deletion && !assignment" class="error" role="alert">{{ error }}</p>
+    <p v-if="error && !courseForm && !moduleForm && !deletion && !assignment && !transcriptCourse" class="error" role="alert">{{ error }}</p>
     <label class="toolbar">学科<select v-model="subjectFilter" aria-label="筛选学科" :disabled="busy" @change="filter = ''; run(() => load())"><option value="">全部学科</option><option v-for="subject in subjects" :key="subject" :value="subject">{{ subject }}</option></select></label>
     <template v-if="view === 'courses'">
       <form class="toolbar" @submit.prevent="run(() => load())"><label class="search-field"><Search :size="17" /><input v-model="search" aria-label="搜索课程" placeholder="搜索课程名称" /></label><select v-model="filter" aria-label="筛选模块" :disabled="busy" @change="run(() => load())"><option value="">全部模块</option><option value="unassigned">待归类</option><option v-for="item in visibleModules" :key="item.id" :value="item.id">{{ item.subject ? `${item.subject} / ` : '' }}{{ item.name }}</option></select><button type="submit" :disabled="busy">查询</button></form>
       <div v-if="selected.length" class="selection-bar"><span>已选 {{ selected.length }} 门</span><select v-model="target" aria-label="目标模块"><option value="" disabled>选择目标模块</option><option v-for="item in visibleModules" :key="item.id" :value="item.id">{{ item.subject ? `${item.subject} / ` : '' }}{{ item.name }}</option></select><button :disabled="!canWrite || !target" @click="assignment = true">批量归类</button></div>
-      <div class="table-scroll"><table><thead><tr><th class="check"><input type="checkbox" aria-label="选择本页全部课程" :checked="!!courses.items.length && selected.length === courses.items.length" @change="toggleAll" /></th><th>课程名称</th><th>所属学科</th><th>知识地图模块</th><th>视频</th><th>排序</th><th class="right">操作</th></tr></thead><tbody><tr v-for="row in courses.items" :key="row.id"><td><input v-model="selected" type="checkbox" :value="row.id" :aria-label="`选择${row.title}`" /></td><td class="title-cell">{{ row.title }}<small>#{{ row.id }}</small></td><td>{{ row.subject_name || '待归类' }}</td><td><span :class="{ warning: !row.module }">{{ row.module_name || '待归类' }}</span></td><td><span :class="row.video_name ? 'status-good' : 'muted'">{{ row.video_name ? '已上传' : '未上传' }}</span></td><td>{{ row.sort_order }}</td><td><div class="row-actions"><button class="icon" title="编辑课程" :disabled="!canWrite" @click="editCourse(row)"><Pencil :size="16" /></button><button class="icon danger" title="删除课程" :disabled="!canWrite" @click="deletion = { kind: 'courses', id: row.id, name: row.title }; error = ''"><Trash2 :size="16" /></button></div></td></tr><tr v-if="!courses.items.length"><td colspan="7" class="empty">{{ busy ? '加载中' : '暂无课程' }}</td></tr></tbody></table></div>
+      <div class="table-scroll"><table><thead><tr><th class="check"><input type="checkbox" aria-label="选择本页全部课程" :checked="!!courses.items.length && selected.length === courses.items.length" @change="toggleAll" /></th><th>课程名称</th><th>所属学科</th><th>知识地图模块</th><th>视频</th><th>排序</th><th class="right">操作</th></tr></thead><tbody><tr v-for="row in courses.items" :key="row.id"><td><input v-model="selected" type="checkbox" :value="row.id" :aria-label="`选择${row.title}`" /></td><td class="title-cell">{{ row.title }}<small>#{{ row.id }}</small></td><td>{{ row.subject_name || '待归类' }}</td><td><span :class="{ warning: !row.module }">{{ row.module_name || '待归类' }}</span></td><td><span :class="row.video_name ? 'status-good' : 'muted'">{{ row.video_name ? '已上传' : '未上传' }}</span></td><td>{{ row.sort_order }}</td><td><div class="row-actions"><button class="icon" title="字幕" :disabled="busy" @click="transcriptCourse = row; error = ''"><Captions :size="16" /></button><button class="icon" title="编辑课程" :disabled="!canWrite" @click="editCourse(row)"><Pencil :size="16" /></button><button class="icon danger" title="删除课程" :disabled="!canWrite" @click="deletion = { kind: 'courses', id: row.id, name: row.title }; error = ''"><Trash2 :size="16" /></button></div></td></tr><tr v-if="!courses.items.length"><td colspan="7" class="empty">{{ busy ? '加载中' : '暂无课程' }}</td></tr></tbody></table></div>
       <footer class="pagination"><span>共 {{ courses.total }} 门</span><button class="icon" title="上一页" :disabled="busy || courses.page <= 1" @click="run(() => load(courses.page - 1))"><ChevronLeft :size="17" /></button><span>{{ courses.page }}</span><button class="icon" title="下一页" :disabled="busy || courses.page * courses.page_size >= courses.total" @click="run(() => load(courses.page + 1))"><ChevronRight :size="17" /></button></footer>
     </template>
     <div v-else class="table-scroll"><table><thead><tr><th>模块名称</th><th>学科</th><th>课程数</th><th>排序</th><th class="right">操作</th></tr></thead><tbody><tr v-for="row in visibleModules" :key="row.id"><td class="title-cell">{{ row.name }}<small>{{ row.description || `#${row.id}` }}</small></td><td>{{ row.subject || '待归类学科' }}</td><td>{{ row.course_count }}</td><td>{{ row.sort_order }}</td><td><div class="row-actions"><button class="icon" title="编辑模块" :disabled="!canWrite" @click="editModule(row)"><Pencil :size="16" /></button><button class="icon danger" title="删除模块" :disabled="!canWrite" @click="deletion = { kind: 'modules', id: row.id, name: row.name }; error = ''"><Trash2 :size="16" /></button></div></td></tr><tr v-if="!visibleModules.length"><td colspan="5" class="empty">{{ busy ? '加载中' : '暂无模块' }}</td></tr></tbody></table></div>
+    <TranscriptDialog v-if="transcriptCourse" :api="api" :course="transcriptCourse" @close="transcriptCourse = undefined" />
     <Dialog v-if="courseForm" :title="courseForm.id ? '编辑课程' : '新增课程'" :busy="busy" @close="courseForm = undefined">
       <form @submit.prevent="run(saveCourse)">
         <div class="dialog-body">

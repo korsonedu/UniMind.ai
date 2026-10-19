@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 import tempfile
+from unittest import mock
 
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -11,7 +12,8 @@ from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from courses.models import Course, CourseModule
+from core.models import SecurityAuditLog
+from courses.models import Course, CourseModule, TranscriptSegment, VideoTranscript
 from quizzes.models import KnowledgePoint, Question, UserQuestionStatus
 from users.models import User, Institution, LearningProduct, LearningGrant, UserAccessProfile
 
@@ -163,3 +165,130 @@ class BackofficeTests(TestCase):
         self.assertEqual(self.call('knowledge.delete', {'id': point.pk, 'request_id': str(uuid.uuid4())})[0].status_code, 400)
         question.delete()
         self.assertEqual(self.call('knowledge.delete', {'id': point.pk, 'request_id': str(uuid.uuid4())})[0].status_code, 200)
+
+    def transcript_fixture(self, institution=None, asr_status='completed'):
+        course = Course.objects.create(title='Transcript course', institution=institution)
+        transcript = VideoTranscript.objects.create(
+            course=course, full_text='原第一句\n原第二句', asr_status=asr_status,
+            asr_provider='qwen_filetrans')
+        segments = [
+            TranscriptSegment.objects.create(transcript=transcript, start_time=0, end_time=1.5, text='原第一句', index=0),
+            TranscriptSegment.objects.create(transcript=transcript, start_time=1.5, end_time=3, text='原第二句', index=1),
+        ]
+        return course, transcript, segments
+
+    def test_transcript_get_returns_segments(self):
+        course, transcript, segments = self.transcript_fixture()
+        response = self.call('courses.transcript.get', {'id': course.pk})[0]
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['status'], 'completed')
+        self.assertEqual(response.data['provider'], 'qwen_filetrans')
+        self.assertEqual([item['id'] for item in response.data['segments']], [item.pk for item in segments])
+        self.assertEqual([item['text'] for item in response.data['segments']], ['原第一句', '原第二句'])
+        self.assertEqual([item['index'] for item in response.data['segments']], [0, 1])
+        self.assertEqual(response.data['revision'], 0)
+        self.assertEqual(response.data['manual_edited_by_name'], '')
+        missing = Course.objects.create(title='No transcript')
+        response = self.call('courses.transcript.get', {'id': missing.pk})[0]
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['status'], 'not_available')
+        self.assertEqual(response.data['segments'], [])
+        self.assertEqual(response.data['revision'], 0)
+
+    def test_transcript_save_updates_full_text_manual_marker_and_audit(self):
+        course, transcript, segments = self.transcript_fixture()
+        request_id = str(uuid.uuid4())
+        response = self.call('courses.transcript.save', {
+            'id': course.pk, 'revision': 0, 'request_id': request_id,
+            'segments': [{'id': segments[0].pk, 'text': '修订后的第一句'}],
+        })[0]
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['updated'], 1)
+        self.assertEqual(response.data['revision'], 1)
+        transcript.refresh_from_db()
+        segments[0].refresh_from_db()
+        segments[1].refresh_from_db()
+        self.assertEqual(segments[0].text, '修订后的第一句')
+        self.assertEqual(segments[1].text, '原第二句')
+        self.assertEqual(transcript.full_text, '修订后的第一句\n原第二句')
+        self.assertTrue(transcript.is_manually_edited)
+        self.assertEqual(transcript.manual_edited_by_id, self.admins[0].pk)
+        self.assertIsNotNone(transcript.manual_edited_at)
+        log = SecurityAuditLog.objects.get(request_id=request_id)
+        detail = json.loads(log.detail)
+        self.assertEqual(detail['operation'], 'courses.transcript.save')
+        self.assertEqual(detail['target'], course.pk)
+        self.assertEqual(detail['updated'], 1)
+        self.assertNotIn('修订后的第一句', log.detail)
+        detail_response = self.call('courses.transcript.get', {'id': course.pk})[0]
+        self.assertEqual(detail_response.data['manual_edited_by_name'], 'operator0')
+        self.assertEqual(detail_response.data['segments'][0]['text'], '修订后的第一句')
+
+    def test_transcript_save_rejects_stale_revision_and_processing(self):
+        course, transcript, segments = self.transcript_fixture()
+        first = self.call('courses.transcript.save', {
+            'id': course.pk, 'revision': 0, 'request_id': str(uuid.uuid4()),
+            'segments': [{'id': segments[0].pk, 'text': '第一次修订'}],
+        })[0]
+        self.assertEqual(first.status_code, 200, first.data)
+        stale = self.call('courses.transcript.save', {
+            'id': course.pk, 'revision': 0, 'request_id': str(uuid.uuid4()),
+            'segments': [{'id': segments[0].pk, 'text': '过期修订'}],
+        })[0]
+        self.assertEqual(stale.status_code, 400)
+        self.assertIn('字幕已被其他人更新，请刷新后重试', str(stale.data))
+        segments[0].refresh_from_db()
+        self.assertEqual(segments[0].text, '第一次修订')
+        VideoTranscript.objects.filter(pk=transcript.pk).update(asr_status='processing')
+        busy = self.call('courses.transcript.save', {
+            'id': course.pk, 'revision': 1, 'request_id': str(uuid.uuid4()),
+            'segments': [{'id': segments[0].pk, 'text': '处理中修订'}],
+        })[0]
+        self.assertEqual(busy.status_code, 400)
+        self.assertIn('字幕正在重新识别', str(busy.data))
+
+    def test_transcript_rejects_cross_institution_course(self):
+        other = Institution.objects.create(name='Other transcript owner', slug='transcript-owner')
+        course, transcript, segments = self.transcript_fixture(institution=other)
+        self.assertEqual(self.call('courses.transcript.get', {'id': course.pk})[0].status_code, 404)
+        response = self.call('courses.transcript.save', {
+            'id': course.pk, 'revision': 0, 'request_id': str(uuid.uuid4()),
+            'segments': [{'id': segments[0].pk, 'text': '越权修订'}],
+        })[0]
+        self.assertEqual(response.status_code, 404)
+        segments[0].refresh_from_db()
+        self.assertEqual(segments[0].text, '原第一句')
+
+    def test_student_cannot_call_transcript_operations(self):
+        course, transcript, _ = self.transcript_fixture()
+        student_client = APIClient()
+        student_client.credentials(HTTP_AUTHORIZATION='Token ' + Token.objects.create(user=self.student).key)
+        for operation, payload in (
+            ('courses.transcript.get', {'id': course.pk}),
+            ('courses.transcript.save', {'id': course.pk, 'revision': 0, 'segments': [],
+                                         'request_id': str(uuid.uuid4())}),
+            ('courses.transcript.retranscribe', {'id': course.pk, 'request_id': str(uuid.uuid4())}),
+            ('courses.outline.regenerate', {'id': course.pk, 'request_id': str(uuid.uuid4())}),
+        ):
+            response = student_client.post(f'/api/backoffice/operations/{operation}/', payload, format='json')
+            self.assertEqual(response.status_code, 401)
+        transcript.refresh_from_db()
+        self.assertEqual(transcript.revision, 0)
+        self.assertFalse(transcript.is_manually_edited)
+
+    def test_transcript_dispatches_run_after_commit(self):
+        course, transcript, _ = self.transcript_fixture()
+        with mock.patch('courses.services.task_dispatcher.dispatch_transcription') as transcribe, \
+                mock.patch('courses.services.task_dispatcher.dispatch_outline_generation') as outline:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.call('courses.transcript.retranscribe', {
+                    'id': course.pk, 'request_id': str(uuid.uuid4())})[0]
+            transcribe.assert_called_once_with(course.pk, force=True)
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data, {'id': course.pk, 'status': 'processing'})
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.call('courses.outline.regenerate', {
+                    'id': course.pk, 'request_id': str(uuid.uuid4())})[0]
+            outline.assert_called_once_with(course.pk)
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data, {'id': course.pk, 'status': 'processing'})

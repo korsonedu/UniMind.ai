@@ -803,7 +803,11 @@ class CourseOutlineView(APIView):
         stale = outline.status == 'generating' and outline.updated_at < timezone.now() - timedelta(seconds=600)
         if outline.status not in ('completed', 'generating') or stale:
             from .services.task_dispatcher import dispatch_outline_generation
-            dispatch_outline_generation(course.id)
+            try:
+                dispatch_outline_generation(course.id)
+            except Exception as exc:
+                logger.warning("Outline dispatch unavailable for course %s: %s", course.id, exc)
+                return Response({'error': '大纲生成服务暂不可用，请稍后重试'}, status=503)
         return Response({'status': 'processing'})
 
 
@@ -832,6 +836,19 @@ class CourseTranscriptView(APIView):
         if not course:
             return Response({'error': '课程不存在'}, status=404)
 
+        transcript = getattr(course, 'transcript', None)
+        if transcript is not None:
+            if transcript.asr_status != 'failed':
+                return Response({'status': transcript.asr_status})
+            from datetime import timedelta
+            from django.utils import timezone
+            if transcript.updated_at and transcript.updated_at > timezone.now() - timedelta(minutes=10):
+                return Response({'status': 'failed'})
+
         from .services.task_dispatcher import dispatch_transcription
-        dispatch_transcription(course.id)
+        try:
+            dispatch_transcription(course.id)
+        except Exception as exc:
+            logger.warning("Transcription dispatch unavailable for course %s: %s", course.id, exc)
+            return Response({'error': '转录服务暂不可用，请稍后重试'}, status=503)
         return Response({'status': 'processing'})

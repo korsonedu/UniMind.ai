@@ -4,3 +4,4 @@ from .vosk_provider import VoskASRProvider
 from .whisper_provider import OpenAIWhisperProvider
 from .glm_provider import GLMChunkedASRProvider
 from .mimo_provider import MiMoASRProvider
+from .qwen_filetrans_provider import QwenFileTransASRProvider
