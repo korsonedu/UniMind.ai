@@ -8,6 +8,7 @@ TOOL_FEATURES = {
     'get_knowledge_mastery_map': 'full.report', 'get_due_reviews': 'memorix.review',
     'get_knowledge_difficulty_analysis': 'memorix.review',
     'get_practice_questions': 'quiz.exam', 'get_exam_history': 'full.report',
+    'get_learning_sessions': 'basic.stats',
     'render_visual': 'ai.assistant', 'grade_student_answer': 'quiz.exam',
     'run_diagnostic': 'quiz.exam', 'get_report_card': 'full.report',
     'get_my_achievements': 'full.report', 'create_faq_ticket': 'faq.system',

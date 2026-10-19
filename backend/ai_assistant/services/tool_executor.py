@@ -49,6 +49,7 @@ def generate_step_label(tool_name: str, args: dict) -> str:
         'get_user_wrong_questions': lambda a: f"查看{a.get('topic', '')}错题" if a.get('topic') else "查看你的错题记录",
         'lookup_question': lambda a: f"查找题目（ID: {a.get('question_id', '')}）",
         'get_learning_stats': lambda a: "获取学习统计数据",
+        'get_learning_sessions': lambda a: "读取听课和做题时间记录",
         'get_knowledge_mastery_map': lambda a: f"生成{a.get('subject', '')}知识掌握图谱" if a.get('subject') else "生成知识掌握图谱",
         'get_due_reviews': lambda a: "查询到期待复习的题目",
         'get_exam_history': lambda a: "查询考试历史",
@@ -124,6 +125,7 @@ def summarize_tool_result(tool_name: str, result) -> str:
             if (r.get('mastery') or {}).get('kp_count') else "暂无诊断掌握数据"
         ),
         'get_due_reviews': lambda r: f"{r.get('due_count', 0)} 个待复习",
+        'get_learning_sessions': lambda r: f"查到 {r.get('total_sessions', 0)} 次学习记录",
         'get_exam_history': lambda r: f"共 {len(r.get('exams', []))} 次考试",
         'search_courses': lambda r: f"找到 {len(r.get('courses', []))} 门课程",
         'search_articles': lambda r: f"找到 {len(r.get('articles', []))} 篇文章",
@@ -543,6 +545,11 @@ class PlannerToolExecutor(BaseToolExecutor):
     def __init__(self, user, institution=None):
         super().__init__(user, institution)
 
+    def _handle_get_learning_sessions(self, args: Dict) -> Dict:
+        from ai_assistant.services.memory_system import MemorySystem
+        return MemorySystem.query_learning_sessions(
+            self.user, days=args.get('days', 14), kind=args.get('kind', 'all'), limit=args.get('limit', 20))
+
     def _handle_get_learning_stats(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
         from ai_assistant.services.planner_visuals import build_learning_stats_visual
@@ -576,7 +583,7 @@ class PlannerToolExecutor(BaseToolExecutor):
     def _handle_get_practice_questions(self, args: Dict) -> Dict:
         """根据知识点或薄弱点从题库中抽取题目供学生练习。"""
         from ai_assistant.services.memory_system import MemorySystem
-        return MemorySystem.query_practice_questions(
+        result = MemorySystem.query_practice_questions(
             user=self.user,
             kp_name=(args.get('kp_name') or '').strip(),
             subject=(args.get('subject') or '').strip(),
@@ -585,6 +592,14 @@ class PlannerToolExecutor(BaseToolExecutor):
             exclude_mastered=args.get('exclude_mastered', True),
             institution=self.institution,
         )
+        if not result.get('questions'):
+            return result
+        from uuid import uuid4
+        return self._attach_visual(result, lambda: {
+            'type': 'practice_quiz',
+            'payload': {'practice_id': str(uuid4()), 'title': (args.get('kp_name') or args.get('subject') or '随堂练习'),
+                        'questions': result['questions']},
+        })
 
     def _handle_get_exam_history(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem

@@ -15,4 +15,9 @@ export const queryKeys = {
   courses: {
     list: (params: string) => ['courses', 'list', params] as const,
   },
+  exams: {
+    status: (id: number) => ['exams', 'status', id] as const,
+    detail: (id: number) => ['exams', 'detail', id] as const,
+    history: ['exams', 'history'] as const,
+  },
 };

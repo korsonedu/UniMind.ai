@@ -353,6 +353,17 @@ GET_LEARNING_STATS_SCHEMA = {
     "properties": {},
 }
 
+GET_LEARNING_SESSIONS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "days": {"type": "integer", "minimum": 1, "maximum": 30, "default": 14,
+                 "description": "查询最近多少个上海自然日，含今天。"},
+        "kind": {"type": "string", "enum": ["all", "video", "practice"], "default": "all"},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20},
+    },
+    "additionalProperties": False,
+}
+
 GET_KNOWLEDGE_MASTERY_MAP_SCHEMA = {
     "type": "object",
     "properties": {
@@ -396,6 +407,7 @@ GET_EXAM_HISTORY_SCHEMA = {
         },
     },
 }
+
 
 GET_PRACTICE_QUESTIONS_SCHEMA = {
     "type": "object",
@@ -597,13 +609,15 @@ def get_planner_tools():
     planner_only = [
         _make_tool("get_learning_stats", "获取用户学习统计概览（已练题数、最近正确率、连续学习天数、诊断掌握度）。调用后自动在对话中展示学习概览卡片，文字只需解读。", GET_LEARNING_STATS_SCHEMA,
             impl_summary="聚合 UserQuestionStatus（reps>0）：已练题数、最近正确率、累计近似正确率、连续学习天数、诊断掌握度。需要 user_id。"),
+        _make_tool("get_learning_sessions", "查询当前学生实际听课和做题的起止时间、每次时长、前台专注参考时长及每日首次开始时间。用于了解学习时段和习惯，不包含线下学习或自习室计时。", GET_LEARNING_SESSIONS_SCHEMA,
+            impl_summary="只读 LearningSession WHERE user=current_user，按上海自然日筛选最近1至30天开始的记录，按类型汇总，返回每日首次开始时间和最近记录。专注时长仅表示页面可见且窗口获得焦点；各会话时长可能重叠，不解释为真实注意力或直接相加为全天总学习时间。"),
         _make_tool("get_knowledge_mastery_map", "获取用户知识点掌握度地图（基于最近一次诊断），按学科/模块分组。调用后自动展示掌握图谱卡片。", GET_KNOWLEDGE_MASTERY_MAP_SCHEMA,
             impl_summary="查询 UserKnowledgeState，按 subject 返回知识点掌握度（0-100）。支持 subject 过滤。需要 user_id。"),
         _make_tool("get_due_reviews", "获取今日待复习的题目列表（来自间隔重复调度）。调用后自动展示今日复习卡片。", GET_DUE_REVIEWS_SCHEMA,
             impl_summary="查询 UserQuestionStatus 中 next_review_at 到期的题目，按到期时间返回待复习列表和优先级。"),
         _make_tool("get_knowledge_difficulty_analysis", "获取知识点的 Memorix 难度分析，识别薄弱知识点。用于回答'我哪些知识点最薄弱'等问题。", GET_KNOWLEDGE_DIFFICULTY_ANALYSIS_SCHEMA,
             impl_summary="查询 UserQuestionStatus 表，按知识点聚合 avg_difficulty、avg_stability、total_reviews，返回掌握程度和 Memorix 洞察。"),
-        _make_tool("get_practice_questions", "从题库中抽取相关题目供学生练习。支持按知识点、学科、难度筛选，优先返回做错过的题目。用于'给我出几道题''我想练练XX'等场景。", GET_PRACTICE_QUESTIONS_SCHEMA,
+        _make_tool("get_practice_questions", "从题库中抽取相关题目，在聊天中直接展示可作答的练习卡片。支持按知识点、学科、难度筛选，优先返回做错过的题目。调用后无需另行渲染或重复罗列题目。用于'给我出几道题''我想练练XX'等场景。", GET_PRACTICE_QUESTIONS_SCHEMA,
             impl_summary="查询 question 表，按知识点/学科/难度过滤，排除已掌握题目。优先返回 UserQuestionStatus 中 wrong_count>0 的薄弱题，再补充新题。随机抽取，返回题目列表（不含答案）。"),
         _make_tool("get_exam_history", "获取用户的考试成绩历史和趋势。用于评估学习进展。", GET_EXAM_HISTORY_SCHEMA,
             impl_summary="查询 exam_record 表 WHERE user_id=current_user，按 created_at 降序返回最近 N 次考试成绩（分数、科目、日期）。"),

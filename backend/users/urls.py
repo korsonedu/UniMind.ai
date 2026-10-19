@@ -1,4 +1,5 @@
 from django.urls import path
+from .views_activity import LearningSessionView
 from .views_learning import (LearningCatalogView, MyLearningAccessView, LearningProductAdminView,
                              LearningProductDetailView, LearningGrantAdminView, LearningGrantDetailView)
 from .views import (
@@ -67,6 +68,7 @@ urlpatterns = [
     path('sso/callback/', SSOCallbackView.as_view(), name='sso-callback'),
     path('institution/me/sso-config/', RetiredInstitutionView.as_view(), name='institution-sso-config'),
     path('me/', UserDetailView.as_view(), name='user-detail'),
+    path('me/learning-sessions/', LearningSessionView.as_view(), name='learning-session'),
     path('me/update/', UpdateProfileView.as_view(), name='user-update'),
     path('me/tour-dismiss/', TourDismissView.as_view(), name='tour-dismiss'),
     path('me/tour-panel-dismiss/', TourPanelDismissView.as_view(), name='tour-panel-dismiss'),

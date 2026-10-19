@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useInstitutionStore } from './useInstitutionStore';
+import { useExamActivityStore } from './useExamActivityStore';
 
 interface User {
   id: number;
@@ -64,6 +65,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         set({ user: null, token: null });
         useInstitutionStore.getState().clear();
+        useExamActivityStore.getState().clear();
       },
       updateUser: (updatedUser) => set((state) => ({
         user: state.user ? { ...state.user, ...updatedUser } : null

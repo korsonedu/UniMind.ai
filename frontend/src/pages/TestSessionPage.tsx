@@ -19,6 +19,7 @@ import {
 } from '@/lib/learningReminders';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
+import { useLearningSession } from '@/hooks/useLearningSession';
 
 const hasAnswer = (val: unknown) => {
   if (typeof val === 'string') return val.trim().length > 0;
@@ -37,6 +38,9 @@ export const TestSessionPage: React.FC = () => {
   const [empty, setEmpty] = useState(false);
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
   const lastTypeReminderQidRef = useRef<number | null>(null);
+
+  useLearningSession({ enabled: isMobile && !loading && !isSubmitting && questions.length > 0,
+    kind: 'practice', questionIds: questions.map(question => question.id) });
 
   const questionLimit = useMemo(() => {
     const raw = Number.parseInt(searchParams.get('count') || '5', 10);

@@ -10,6 +10,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import { Brain, Clock, Hash, ArrowRight, ArrowLeft, CheckCircle, House } from '@phosphor-icons/react';
+import { useLearningSession } from '@/hooks/useLearningSession';
 
 type Phase = 'welcome' | 'testing' | 'results';
 
@@ -49,6 +50,9 @@ export function DiagnosticTest() {
   const [result, setResult] = useState<DiagnosticResult | null>(null);
   const [isReassessment, setIsReassessment] = useState(false);
   const submittedRef = useRef(false);
+
+  useLearningSession({ enabled: phase === 'testing' && !loading && questions.length > 0,
+    kind: 'practice', questionIds: questions.map(question => question.id) });
 
 
   const handleSubmit = useCallback(async () => {

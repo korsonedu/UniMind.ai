@@ -30,6 +30,11 @@ class ToolMeta:
 
 PLANNER_TOOLS_META = [
     ToolMeta(
+        name="get_learning_sessions",
+        description="查询实际听课、做题记录和学习时段",
+        body="查询当前学生最近1至30个上海自然日的听课、做题记录。参数: days(默认14)、kind(all/video/practice)、limit(默认20,最多50)。返回起止时间、实际播放或练习页面可见时长、前台专注参考时长、每日首次开始时间及分类汇总。适用于：学习习惯、几点开始学习、一次听课多久、听课时长、做题时长。不包含线下学习和自习室计时；不判断真实注意力。",
+    ),
+    ToolMeta(
         name="search_knowledge_tree",
         description="搜索知识树，按主题或编码查找知识点节点",
         body="在知识树中搜索指定主题的节点。参数: query(str)=搜索关键词, subject(str)=学科名(可选)。返回匹配的知识点列表，含 id、name、编码、层级。适用于：需要定位具体知识点、浏览知识结构、确认知识点是否存在。不适用于：查找具体题目、查找课程资源。",
@@ -316,6 +321,10 @@ def _retrieve_candidates(query: str, bot_type: str, top_k: int = 8,
 # ── 关键词匹配 Fallback ───────────────────────────────────────
 
 PLANNER_INTENT_MAP = {
+    "learning_sessions": {
+        "keywords": ["学习习惯", "学习时段", "几点开始", "一次听课", "听课时长", "做题时长", "听了多久", "听课多久", "做了多久", "学习记录"],
+        "tools": ["get_learning_sessions", "render_visual"],
+    },
     "planning": {
         "keywords": ["规划", "安排", "计划", "复习", "备考", "学习计划", "日程", "每周", "今天做什么"],
         "tools": [

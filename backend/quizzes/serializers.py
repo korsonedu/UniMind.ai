@@ -156,7 +156,11 @@ class ExamQuestionResultSerializer(serializers.ModelSerializer):
     question_detail = QuestionSerializer(source='question', read_only=True)
     class Meta:
         model = ExamQuestionResult
-        fields = ('id', 'exam', 'details', 'question', 'user_answer', 'score', 'max_score', 'feedback', 'analysis', 'is_correct', 'question_detail')
+        fields = (
+            'id', 'exam', 'details', 'question', 'position', 'user_answer', 'score', 'max_score',
+            'feedback', 'analysis', 'is_correct', 'status', 'error_type', 'error_metadata',
+            'question_snapshot', 'attempts', 'graded_at', 'question_detail',
+        )
 
 class QuizExamSerializer(serializers.ModelSerializer):
     results = ExamQuestionResultSerializer(many=True, read_only=True)
@@ -164,7 +168,12 @@ class QuizExamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QuizExam
-        fields = ('id', 'user', 'total_score', 'max_score', 'elo_change', 'summary', 'created_at', 'results', 'created_at_fmt')
+        fields = (
+            'id', 'user', 'total_score', 'max_score', 'elo_change', 'summary', 'status',
+            'total_questions', 'graded_count', 'failed_count', 'last_error',
+            'started_at', 'grading_completed_at', 'notified_at', 'created_at',
+            'results', 'created_at_fmt',
+        )
 
 
 class ContentPipelineTaskSerializer(serializers.ModelSerializer):

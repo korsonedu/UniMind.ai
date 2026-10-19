@@ -126,12 +126,26 @@ class UserQuestionStatus(models.Model):
         ]
 
 class QuizExam(models.Model):
+    STATUS_CHOICES = [
+        ('pending', '待批改'),
+        ('grading', '批改中'),
+        ('completed', '已完成'),
+        ('partial', '部分完成'),
+        ('failed', '批改失败'),
+    ]
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='exams')
     total_score = models.FloatField(default=0)
     max_score = models.FloatField(default=0)
     elo_change = models.IntegerField(default=0)
     summary = models.TextField(blank=True, help_text="AI 对整张试卷的综合点评")
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending', db_index=True)
+    total_questions = models.PositiveIntegerField(default=0)
+    graded_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
     grading_completed_at = models.DateTimeField(null=True, blank=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -146,15 +160,33 @@ class PracticeSubmission(models.Model):
 
 
 class ExamQuestionResult(models.Model):
+    STATUS_CHOICES = [
+        ('pending', '待批改'),
+        ('graded', '已批改'),
+        ('failed', '批改失败'),
+    ]
     exam = models.ForeignKey(QuizExam, on_delete=models.CASCADE, related_name='results')
     details = models.JSONField(blank=True, null=True, help_text="主观题采分明细")
     question = models.ForeignKey(Question, on_delete=models.SET_NULL, null=True)
+    position = models.PositiveIntegerField(default=0)
     user_answer = models.TextField()
     score = models.FloatField()
     max_score = models.FloatField()
     feedback = models.TextField(blank=True)
     analysis = models.TextField(blank=True, help_text="思维链分析")
     is_correct = models.BooleanField(default=False)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending', db_index=True)
+    error_type = models.CharField(max_length=32, blank=True, default='')
+    error_metadata = models.JSONField(default=dict, blank=True)
+    question_snapshot = models.JSONField(default=dict, blank=True)
+    attempts = models.PositiveIntegerField(default=0)
+    graded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('exam', 'question')
+        indexes = [
+            models.Index(fields=['exam', 'position']),
+        ]
 
 
 # ── 0013 ContentPipelineTask ──

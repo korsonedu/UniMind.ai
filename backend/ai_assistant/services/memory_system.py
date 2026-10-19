@@ -105,6 +105,36 @@ class MemorySystem:
         return build_learning_stats(user, institution=institution)
 
     @staticmethod
+    def query_learning_sessions(user, days=14, kind='all', limit=20) -> Dict:
+        from datetime import datetime, time
+        from zoneinfo import ZoneInfo
+        from django.db.models import Count, Min, Sum
+        from django.db.models.functions import TruncDate
+        from users.models import LearningSession
+
+        zone = ZoneInfo('Asia/Shanghai')
+        days, limit = max(1, min(int(days), 30)), max(1, min(int(limit), 50))
+        today = timezone.localdate(timezone=zone)
+        since = datetime.combine(today - timedelta(days=days - 1), time.min, tzinfo=zone)
+        until = datetime.combine(today + timedelta(days=1), time.min, tzinfo=zone)
+        sessions = LearningSession.objects.filter(user=user, started_at__gte=since, started_at__lt=until)
+        if kind in ('video', 'practice'):
+            sessions = sessions.filter(kind=kind)
+        totals = list(sessions.values('kind').annotate(session_count=Count('id'),
+            active_seconds=Sum('active_seconds'), focused_seconds=Sum('focused_seconds')).order_by('kind'))
+        starts = sessions.annotate(date=TruncDate('started_at', tzinfo=zone)).values('date').annotate(first=Min('started_at')).order_by('date')
+        records = sessions.order_by('-started_at', '-id').values(
+            'kind', 'course_id', 'question_ids', 'started_at', 'ended_at', 'active_seconds', 'focused_seconds')[:limit]
+        return {
+            'timezone': 'Asia/Shanghai', 'date_from': since.date().isoformat(), 'date_to': today.isoformat(),
+            'total_sessions': sum(item['session_count'] for item in totals), 'totals_by_kind': totals,
+            'daily_first_start': [{'date': item['date'].isoformat(), 'started_at': item['first'].astimezone(zone).isoformat()} for item in starts],
+            'sessions': [{**item, 'started_at': item['started_at'].astimezone(zone).isoformat(),
+                          'ended_at': item['ended_at'].astimezone(zone).isoformat()} for item in records],
+            'notes': '仅统计查询日期内开始的站内听课和做题会话，不含线下学习、自习室计时。听课按实际经过时间，做题按页面可见时间；专注仅为前台窗口参考。各会话可能重叠，分类累计不可直接相加为全天去重时长。无记录不代表没有学习；样本少时不要断言固定习惯。',
+        }
+
+    @staticmethod
     def query_mastery_map(user, subject: Optional[str] = None, institution=None) -> Dict:
         """查询用户知识掌握图谱。"""
         from quizzes.models import UserKnowledgeState
@@ -472,7 +502,7 @@ class MemorySystem:
             "questions": [
                 {
                     "id": q.id,
-                    "text": (q.text or '')[:500],
+                    "text": q.text or '',
                     "q_type": q.q_type,
                     "subjective_type": q.subjective_type or '',
                     "options": q.options or [],

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Check, Spinner, CaretLeft, Target, Clock } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { useLearningSession } from '@/hooks/useLearningSession';
 
 interface QuestionItem {
   id: number;
@@ -78,6 +79,8 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   const [startTime] = useState(Date.now);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [elapsed, setElapsed] = useState(0);
+  useLearningSession({ enabled: phase === 'answering' && questions.length > 0,
+    kind: 'practice', questionIds: questions.map(question => question.id) });
   useEffect(() => {
     if (phase === 'results') return;
     const timer = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);

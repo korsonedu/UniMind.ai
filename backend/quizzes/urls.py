@@ -4,7 +4,7 @@ from .views_question import (
     AdminQuestionListView,
 )
 from .views_exam import (
-    SubmitExamView, ExamDetailView,
+    SubmitExamView, ExamDetailView, ExamStatusView, ExamListView, ExamRetryView,
 )
 from .views_memorix import (
     ToggleFavoriteView, ToggleMasteredView, QuizStatsView,
@@ -39,7 +39,10 @@ urlpatterns = [
     path('questions/', QuestionListView.as_view(), name='question-list'),
     path('questions/<int:pk>/', QuestionDetailView.as_view(), name='question-detail'),
     path('submit-exam/', SubmitExamView.as_view(), name='quiz-submit-exam'),
+    path('exams/', ExamListView.as_view(), name='exam-list'),
     path('exams/<int:pk>/', ExamDetailView.as_view(), name='exam-detail'),
+    path('exams/<int:pk>/status/', ExamStatusView.as_view(), name='exam-status'),
+    path('exams/<int:pk>/retry/', ExamRetryView.as_view(), name='exam-retry'),
     path('stats/', QuizStatsView.as_view(), name='quiz-stats'),
     path('memorix/curve/', MemorixCurveView.as_view(), name='memorix-curve'),
     path('memorix/optimization-history/', MemorixOptimizationHistoryView.as_view(), name='memorix-optimization-history'),

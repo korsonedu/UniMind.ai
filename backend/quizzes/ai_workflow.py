@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List
 
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
@@ -83,6 +83,7 @@ def _grade_answer(question: Question, user_answer: Any) -> Dict[str, Any]:
         'max_score': max_score,
         'feedback': grade_data.get('feedback', '已评阅'),
         'analysis': grade_data.get('analysis', question.ai_answer or ''),
+        'error_analysis': grade_data.get('error_analysis') or {},
         'memorix_rating': memorix_rating,
         'normalized_score': normalized_score,
         'is_correct': normalized_score >= 0.6,
@@ -152,87 +153,234 @@ def validate_exam_answers(user: User, questions_data, request=None, lock=False):
     return questions
 
 
-def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, Any]]):
+def _exam_counts(exam_id: int) -> Dict[str, Any]:
+    return ExamQuestionResult.objects.filter(exam_id=exam_id).aggregate(
+        graded=Count('id', filter=Q(status='graded')),
+        failed=Count('id', filter=Q(status='failed')),
+        pending=Count('id', filter=Q(status='pending')),
+        score=Sum('score', filter=Q(status='graded')),
+        max_score=Sum('max_score', filter=Q(status='graded')),
+    )
+
+
+def _refresh_exam_counts(exam_id: int) -> None:
+    counts = _exam_counts(exam_id)
+    QuizExam.objects.filter(pk=exam_id, status='grading').update(
+        graded_count=counts['graded'] or 0,
+        failed_count=counts['failed'] or 0,
+        total_score=counts['score'] or 0,
+        max_score=counts['max_score'] or 0,
+    )
+
+
+def _mark_item_failed(item_id: int, message: str) -> None:
+    with transaction.atomic():
+        item = ExamQuestionResult.objects.select_for_update().filter(pk=item_id).first()
+        if not item or item.status == 'graded':
+            return
+        item.status = 'failed'
+        item.attempts += 1
+        item.graded_at = timezone.now()
+        item.error_metadata = {'error': str(message)[:1000]}
+        item.save(update_fields=['status', 'attempts', 'graded_at', 'error_metadata'])
+        _refresh_exam_counts(item.exam_id)
+
+
+def _fail_pending_items(exam_id: int, message: str) -> None:
+    with transaction.atomic():
+        items = list(ExamQuestionResult.objects.select_for_update().filter(
+            exam_id=exam_id, status__in=['pending', 'failed'],
+        ))
+        for item in items:
+            item.status = 'failed'
+            item.attempts += 1
+            item.graded_at = timezone.now()
+            item.error_metadata = {'error': str(message)[:1000]}
+        if items:
+            ExamQuestionResult.objects.bulk_update(
+                items, ['status', 'attempts', 'graded_at', 'error_metadata'], batch_size=200,
+            )
+        _refresh_exam_counts(exam_id)
+
+
+def _create_exam_notification(exam_id: int) -> None:
+    exam = QuizExam.objects.select_related('user').filter(pk=exam_id).first()
+    if not exam or not exam.notified_at:
+        return
+    if exam.status == 'completed':
+        title = '练习批改完成'
+        rate = exam.total_score / exam.max_score * 100 if exam.max_score else 0
+        content = f'得分：{exam.total_score}/{exam.max_score}，正确率 {round(rate, 1)}%。点击查看逐题复盘。'
+    elif exam.status == 'partial':
+        title = '练习部分完成'
+        content = f'还有 {exam.failed_count} 题未完成，已完成 {exam.graded_count}/{exam.total_questions} 题。点击查看。'
+    else:
+        title = '练习批改未完成'
+        content = '批改服务暂不可用，请稍后重试。'
+    Notification.objects.create(
+        recipient=exam.user,
+        ntype='practice_result',
+        title=title,
+        content=content,
+        link=f'/tests/results/{exam.id}',
+    )
+
+
+def _finalize_exam(user_id: int, exam_id: int) -> None:
+    with transaction.atomic():
+        exam = QuizExam.objects.select_for_update().filter(id=exam_id, user_id=user_id).first()
+        if not exam:
+            return
+        if exam.status in ('completed', 'partial', 'failed') and exam.grading_completed_at and exam.notified_at:
+            return
+        counts = _exam_counts(exam.id)
+        if counts['pending']:
+            return
+
+        graded_items = list(ExamQuestionResult.objects.filter(
+            exam_id=exam.id, status='graded',
+        ).select_related('question'))
+        total_score = counts['score'] or 0
+        max_score = counts['max_score'] or 0
+        failed = counts['failed'] or 0
+        if not graded_items and failed:
+            exam.status = 'failed'
+            exam.summary = '批改未完成，请稍后重试。'
+        elif not graded_items and not failed:
+            exam.status = 'failed'
+            exam.summary = '本次练习没有可批改的题目。'
+        elif failed:
+            exam.status = 'partial'
+            exam.summary = f'部分题目未完成，已完成 {len(graded_items)} / {exam.total_questions or len(graded_items) + failed} 题。'
+        else:
+            exam.status = 'completed'
+            exam.summary = ''
+
+        exam.total_questions = exam.total_questions or (len(graded_items) + failed)
+        exam.graded_count = len(graded_items)
+        exam.failed_count = failed
+        exam.total_score = round(total_score, 1)
+        exam.max_score = round(max_score, 1)
+        exam.grading_completed_at = timezone.now()
+        update_fields = [
+            'status', 'summary', 'total_questions', 'graded_count', 'failed_count',
+            'total_score', 'max_score', 'grading_completed_at',
+        ]
+
+        if not failed and graded_items:
+            locked_user = User.objects.select_for_update().filter(id=user_id).first()
+            if locked_user:
+                avg_score = total_score / max_score if max_score else 0
+                avg_difficulty = sum(
+                    float(item.question.difficulty or 1000) if item.question_id else 1000
+                    for item in graded_items
+                ) / len(graded_items)
+                elo_change = _calc_elo_change(locked_user.elo_score, avg_score, avg_difficulty)
+                locked_user.elo_score += elo_change
+                locked_user.save(update_fields=['elo_score'])
+                exam.elo_change = elo_change
+                update_fields.append('elo_change')
+        elif exam.elo_change:
+            exam.elo_change = 0
+            update_fields.append('elo_change')
+
+        exam.last_error = f'{failed} 道题未完成' if failed else ''
+        update_fields.append('last_error')
+        notify = exam.notified_at is None
+        if notify:
+            exam.notified_at = timezone.now()
+            update_fields.append('notified_at')
+        exam.save(update_fields=update_fields)
+        if notify:
+            transaction.on_commit(lambda: _create_exam_notification(exam.id), robust=True)
+
+
+def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, Any]] = None):
     user = User.objects.filter(id=user_id).first()
     exam = QuizExam.objects.filter(id=exam_id, user_id=user_id).first()
-    if not user or not user.is_active or not has_learning_feature(user, 'quiz.exam') or not exam or exam.grading_completed_at:
+    if not user or not user.is_active or not has_learning_feature(user, 'quiz.exam') or not exam:
         return
-    # Recheck the current configured boundary before reading answers or grading.
+    if exam.status in ('completed', 'partial', 'failed') and not exam.results.filter(
+        status__in=['pending', 'failed'],
+    ).exists():
+        return
+
     try:
         scope = get_content_institution_id()
-        questions = validate_exam_answers(user, questions_data)
-    except (PermissionDenied, ValidationError):
-        return
-    try:
-        graded_answers = [
-            (questions[int(item['question_id'])], item.get('answer') or '',
-             _grade_answer(questions[int(item['question_id'])], item.get('answer') or ''))
-            for item in questions_data
-        ]
-    except Exception:
-        logger.exception('Exam grading failed: exam_id=%s', exam_id)
-        with transaction.atomic():
-            locked = User.objects.select_for_update().filter(pk=user_id).first()
-            if not locked or not locked.is_active or not has_learning_feature(locked, 'quiz.exam'):
-                return
-            exam = QuizExam.objects.select_for_update().filter(pk=exam_id, user_id=user_id).first()
-            if exam and not exam.grading_completed_at:
-                exam.summary = '批改服务暂不可用，本次未更新学习记录。'
-                exam.save(update_fields=['summary'])
-                Notification.objects.create(
-                    recipient=user, ntype='system', title='试卷批改未完成',
-                    content='批改服务暂不可用，本次未更新学习记录，请稍后重试。',
-                    link=f'/tests?action=view_report&exam_id={exam_id}',
-                )
+    except PermissionDenied as exc:
+        _fail_pending_items(exam_id, str(exc))
+        _finalize_exam(user_id, exam_id)
         return
 
     with transaction.atomic():
-        locked = User.objects.select_for_update().filter(id=user_id).first()
-        if not locked or not locked.is_active or not has_learning_feature(locked, 'quiz.exam'):
-            return
         exam = QuizExam.objects.select_for_update().filter(id=exam_id, user_id=user_id).first()
-        if not exam or exam.grading_completed_at:
+        if not exam:
             return
+        exam.status = 'grading'
+        if not exam.started_at:
+            exam.started_at = timezone.now()
+        exam.save(update_fields=['status', 'started_at'])
+
+    items = list(ExamQuestionResult.objects.filter(exam_id=exam_id).order_by('position', 'id'))
+    if not items:
+        _finalize_exam(user_id, exam_id)
+        return
+
+    for item in items:
+        if item.status == 'graded':
+            continue
         try:
             if get_content_institution_id() != scope:
-                return
-            current_questions = validate_exam_answers(locked, questions_data, lock=True)
-        except (PermissionDenied, ValidationError):
-            return
-        total_score = sum(result['score'] for _, _, result in graded_answers)
-        max_total_score = sum(result['max_score'] for _, _, result in graded_answers)
-        avg_score = total_score / max_total_score if max_total_score > 0 else 0
-        avg_difficulty = sum(float(current_questions[q.pk].difficulty or 1000) for q, _, _ in graded_answers) / len(graded_answers)
-        for question, user_answer, graded in graded_answers:
-            question = current_questions[question.pk]
-            _apply_memorix_status(locked, question, graded['normalized_score'], graded['memorix_rating'])
-            ExamQuestionResult.objects.create(
-                exam=exam, question=question, user_answer=user_answer,
-                score=graded['score'], max_score=graded['max_score'],
-                feedback=graded['feedback'], analysis=graded['analysis'],
-                is_correct=graded['is_correct'],
-            )
-            _queue_experience_verification(user_id, question, graded['score'])
+                raise ValidationError('内容范围已变更')
+            question = Question.objects.select_related('knowledge_point').filter(
+                pk=item.question_id, institution_id=scope,
+            ).first()
+            if not question:
+                raise ValidationError('题目不存在或不在当前内容范围')
+            graded = _grade_answer(question, item.user_answer or '')
+        except Exception as exc:
+            logger.exception('Exam item grading failed: exam_id=%s item_id=%s', exam_id, item.pk)
+            _mark_item_failed(item.pk, str(exc))
+            continue
 
-        elo_change = _calc_elo_change(locked.elo_score, avg_score, avg_difficulty)
-        locked.elo_score += elo_change
-        locked.save(update_fields=['elo_score'])
-        exam.total_score = total_score
-        exam.max_score = max_total_score
-        exam.elo_change = elo_change
-        exam.summary = ''
-        exam.grading_completed_at = timezone.now()
-        exam.save(update_fields=['total_score', 'max_score', 'elo_change', 'summary', 'grading_completed_at'])
-        if len(graded_answers) == 1:
-            title = '特训判分完成'
-            content = f'该题已完成 AI 判分：{total_score}/{max_total_score}。点击查看详解。'
-        else:
-            title = '评估完成'
-            content = f'得分：{total_score}/{max_total_score}。本次测验平均难度：{int(avg_difficulty)}。'
-        Notification.objects.create(
-            recipient=locked, ntype='system', title=title, content=content,
-            link=f'/tests?action=view_report&exam_id={exam.id}',
-        )
+        try:
+            with transaction.atomic():
+                locked = ExamQuestionResult.objects.select_for_update().select_related('question').filter(pk=item.pk).first()
+                if not locked or locked.status == 'graded':
+                    continue
+                question = locked.question
+                if not question or get_content_institution_id() != scope:
+                    raise ValidationError('题目或内容范围已变更')
+                _apply_memorix_status(
+                    user, question, graded['normalized_score'], graded['memorix_rating'],
+                )
+                error = graded.get('error_analysis') or {}
+                locked.score = graded['score']
+                locked.max_score = graded['max_score']
+                locked.feedback = graded['feedback']
+                locked.analysis = graded['analysis']
+                locked.is_correct = graded['is_correct']
+                locked.error_type = error.get('type', '') if isinstance(error, dict) else ''
+                locked.error_metadata = {
+                    key: error.get(key, '')
+                    for key in ('reasoning', 'suggested_focus')
+                } if isinstance(error, dict) and error else {}
+                locked.status = 'graded'
+                locked.attempts += 1
+                locked.graded_at = timezone.now()
+                locked.save(update_fields=[
+                    'score', 'max_score', 'feedback', 'analysis', 'is_correct',
+                    'error_type', 'error_metadata', 'status', 'attempts', 'graded_at',
+                ])
+                _refresh_exam_counts(exam_id)
+                transaction.on_commit(
+                    lambda q=question, s=graded['score']: _queue_experience_verification(user_id, q, s)
+                )
+        except Exception as exc:
+            logger.exception('Exam item commit failed: exam_id=%s item_id=%s', exam_id, item.pk)
+            _mark_item_failed(item.pk, str(exc))
+
+    _finalize_exam(user_id, exam_id)
 
 
 def save_confirmed_questions(questions_data: List[Dict[str, Any]], institution=None) -> int:

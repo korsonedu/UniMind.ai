@@ -3,6 +3,22 @@ from django.db import models
 from django.utils import timezone
 
 
+class LearningSession(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    session_id = models.UUIDField()
+    kind = models.CharField(max_length=10, choices=[('video', '听课'), ('practice', '做题')])
+    course = models.ForeignKey('courses.Course', on_delete=models.SET_NULL, null=True, blank=True)
+    question_ids = models.JSONField(default=list, blank=True)
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(help_text='最近一次实际学习的时间，不含之后的挂机时间')
+    active_seconds = models.PositiveIntegerField(default=0, help_text='实际播放或练习页面可见的秒数')
+    focused_seconds = models.PositiveIntegerField(default=0, help_text='学习期间页面可见且窗口获得焦点的秒数，仅作专注参考')
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'session_id'], name='unique_user_learning_session')]
+        indexes = [models.Index(fields=['user', 'started_at'])]
+
+
 class LearningProduct(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)

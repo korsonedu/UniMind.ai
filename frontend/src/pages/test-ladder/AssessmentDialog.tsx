@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CaretLeft, CaretRight, CheckCircle, Star, Spinner, X } from '@phosphor-icons/react';
 import { processMathContent } from '@/lib/utils';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { useLearningSession } from '@/hooks/useLearningSession';
 
 interface AssessmentProps {
   open: boolean;
@@ -38,6 +39,8 @@ export const AssessmentDialog: React.FC<AssessmentProps> = ({
   gradingMessage
 }) => {
   const isMobile = useIsMobile();
+  useLearningSession({ enabled: open && !isSubmitting && questions.length > 0,
+    kind: 'practice', questionIds: questions.map(question => question.id) });
 
   if (questions.length === 0) return null;
 

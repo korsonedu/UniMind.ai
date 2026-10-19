@@ -9,6 +9,7 @@ import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
+import { useLearningSession } from '@/hooks/useLearningSession';
 import '@/styles/course-lesson.css';
 
 const formatTime = (s: number) => {
@@ -42,6 +43,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [seeking] = useState(false);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const courseId = Number(id);
+
+  useLearningSession({ enabled: !loading && course?.id === courseId && !!course.video_file, kind: 'video', courseId, videoRef });
 
   useEffect(() => {
     const video = videoRef.current;
