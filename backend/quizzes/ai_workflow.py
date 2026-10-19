@@ -345,10 +345,14 @@ def run_exam_grading(user_id: int, exam_id: int, questions_data: List[Dict[str, 
 
         try:
             with transaction.atomic():
-                locked = ExamQuestionResult.objects.select_for_update().select_related('question').filter(pk=item.pk).first()
+                # Do not select_related('question') here: question is nullable,
+                # and PostgreSQL rejects FOR UPDATE on the nullable side of an outer join.
+                locked = ExamQuestionResult.objects.select_for_update().filter(pk=item.pk).first()
                 if not locked or locked.status == 'graded':
                     continue
-                question = locked.question
+                question = Question.objects.select_related('knowledge_point').filter(
+                    pk=locked.question_id, institution_id=scope,
+                ).first()
                 if not question or get_content_institution_id() != scope:
                     raise ValidationError('题目或内容范围已变更')
                 _apply_memorix_status(
