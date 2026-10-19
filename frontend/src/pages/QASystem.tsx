@@ -149,6 +149,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
   const location = useLocation();
   const [replyContent, setReplyContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [isContentExpanded, setIsContentExpanded] = useState(false);
   const user = useAuthStore(s => s.user);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -216,7 +217,13 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
   };
 
   const handleReply = async () => {
-    if (isSubmitting || !replyContent.trim()) return;
+    if (submittingRef.current) return toast.info('正在提交', {
+      id: 'qa-submit-pending',
+      description: '收到了。第二次点击没有让它更收到。',
+      classNames: { description: 'italic text-muted-foreground' },
+    });
+    if (!replyContent.trim()) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     try {
       await api.post('/qa/answers/', { question: question.id, content: replyContent });
@@ -226,6 +233,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
     } catch (e: unknown) {
       toast.error(formatApiErrorToast(e, '回复失败'));
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -400,11 +408,13 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
           <div className="flex gap-1 justify-end sm:justify-start">
             <Button
               onMouseDown={(e) => e.preventDefault()}
-              disabled={isSubmitting || !replyContent.trim()}
+              disabled={!replyContent.trim()}
+              aria-disabled={isSubmitting || !replyContent.trim()}
+              aria-busy={isSubmitting}
               onClick={handleReply}
               size="icon"
               aria-label="发送回复"
-              className="h-9 w-9 rounded-full bg-primary text-primary-foreground shrink-0 hover:opacity-90 send-button"
+              className="h-9 w-9 rounded-full bg-primary text-primary-foreground shrink-0 hover:opacity-90 send-button aria-disabled:cursor-wait aria-disabled:opacity-50"
             >
               {isSubmitting ? <Spinner className="h-4 w-4 animate-spin"/> : <PaperPlaneTilt className="h-4 w-4" />}
             </Button>
@@ -431,6 +441,7 @@ export const QASystem: React.FC = () => {
   const [qContent, setQContent] = useState('');
   const [qFile, setQFile] = useState<File | null>(null);
   const [isPosting, setIsPosting] = useState(false);
+  const postingRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const questionInputRef = useRef<HTMLTextAreaElement>(null);
@@ -497,8 +508,13 @@ export const QASystem: React.FC = () => {
   }, [qContent]);
 
   const handlePost = async () => {
-    if (isPosting) return;
+    if (postingRef.current) return toast.info('正在提交', {
+      id: 'qa-submit-pending',
+      description: '收到了。第二次点击没有让它更收到。',
+      classNames: { description: 'italic text-muted-foreground' },
+    });
     if (!qContent.trim()) return toast.error('请输入问题内容');
+    postingRef.current = true;
     setIsPosting(true);
     const fd = new FormData();
     fd.append('content', qContent);
@@ -514,6 +530,7 @@ export const QASystem: React.FC = () => {
     } catch {
       toast.error('发送失败');
     } finally {
+      postingRef.current = false;
       setIsPosting(false);
     }
   };
@@ -578,7 +595,7 @@ export const QASystem: React.FC = () => {
                   <Paperclip className="h-5 w-5 shrink-0" />
                   <span className="truncate">{qFile ? qFile.name : '添加附件'}</span>
                 </Button>
-                <Button onClick={handlePost} disabled={isPosting || !qContent.trim()} className="um-qa-submit shrink-0 px-4 text-xs">
+                <Button onClick={handlePost} disabled={!qContent.trim()} aria-disabled={isPosting || !qContent.trim()} aria-busy={isPosting} className="um-qa-submit shrink-0 px-4 text-xs aria-disabled:cursor-wait aria-disabled:opacity-50">
                   {isPosting ? <Spinner className="h-4 w-4 animate-spin" /> : '提交问题'}
                 </Button>
               </div>
