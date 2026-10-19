@@ -53,8 +53,9 @@ export const TestLadder: React.FC = () => {
   // Assessment UI State
   const [isTestOpen, setIsTestOpen] = useState(false);
   const [difficulty, setDifficulty] = useState("mixed");
-  const [customQCount, setQCount] = useState("5");
+  const [qCount, setQCount] = useState("5");
   const [isCustomCount, setIsCustomCount] = useState(false);
+  const [qCountEdited, setQCountEdited] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [starting, setStarting] = useState(false);
@@ -74,9 +75,13 @@ export const TestLadder: React.FC = () => {
   });
   const [loadingStates, setLoadingStates] = useState({ goals: true });
 
-  const suggestedCount = Number(goals.recommended_questions);
-  const qCount = isCustomCount || !Number.isFinite(suggestedCount) || suggestedCount <= 0
-    ? customQCount : String(Math.max(1, Math.min(50, suggestedCount)));
+  useEffect(() => {
+    if (qCountEdited) return;
+    const suggestedCount = Number(goals.recommended_questions);
+    if (Number.isFinite(suggestedCount) && suggestedCount > 0) {
+      setQCount(String(Math.max(1, Math.min(50, suggestedCount))));
+    }
+  }, [goals.recommended_questions, qCountEdited]);
 
   const fetchGoals = () => {
 
@@ -119,7 +124,8 @@ export const TestLadder: React.FC = () => {
   const startTest = async () => {
     const parsedCount = Number.parseInt(qCount, 10);
     const normalizedCount = Number.isFinite(parsedCount) ? Math.max(1, Math.min(parsedCount, 50)) : 5;
-    if (`${normalizedCount}` !== qCount) setQCount(`${normalizedCount}`);
+    setQCount(String(normalizedCount));
+    setQCountEdited(true);
 
     const params = new URLSearchParams({ preference });
     if (selectedSubIds.length) params.set('sub_ids', selectedSubIds.join(','));
@@ -196,9 +202,18 @@ export const TestLadder: React.FC = () => {
         <section className="um-practice-setup" aria-label="练习设置">
         <header className="um-practice-heading"><div><h2>本轮训练</h2><p>{loadingStates.goals ? '正在读取练习建议…' : `建议 ${goals.recommended_questions} 题，预计 ${goals.estimated_minutes} 分钟，含 ${goals.weak_focus_count} 题薄弱强化。`}</p></div><div className="um-practice-heading-actions"><Button variant="ghost" onClick={() => navigate('/tests/history')}>最近练习<ArrowRight size={15} /></Button><Button variant="ghost" onClick={() => navigate('/tests/review')}>错题复盘<ArrowRight size={15} /></Button>{isMobile && <Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" aria-label="提醒设置"><Bell size={16} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="end"><h2>提醒设置</h2><Label>题型提醒<Switch checked={reminderSettings.questionType} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('questionType', enabled))} /></Label><Label>做题结果提醒<Switch checked={reminderSettings.testResult} onCheckedChange={enabled => setReminderSettings(updateLearningReminderSetting('testResult', enabled))} /></Label></PopoverContent></Popover>}</div></header>
           <div className="um-practice-controls">
-            <label className="um-practice-count"><span>题数</span><select aria-label="题数" value={isCustomCount ? 'custom' : qCount} onChange={event => { setIsCustomCount(event.target.value === 'custom'); if (event.target.value !== 'custom') setQCount(event.target.value); }}>
+            <label className="um-practice-count"><span>题数</span><select aria-label="题数" value={isCustomCount ? 'custom' : qCount} onChange={event => {
+              const value = event.target.value;
+              setQCountEdited(true);
+              if (value === 'custom') {
+                setIsCustomCount(true);
+                return;
+              }
+              setIsCustomCount(false);
+              setQCount(value);
+            }}>
               {[...new Set([String(goals.recommended_questions || 5), '3', '5', '10', '20'])].map(value => <option key={value} value={value}>{value} 题</option>)}<option value="custom">自定义</option>
-            </select>{isCustomCount && <Input aria-label="自定义题数" type="number" min="1" max="50" value={qCount} onChange={event => setQCount(event.target.value)} />}</label>
+            </select>{isCustomCount && <Input aria-label="自定义题数" type="number" min="1" max="50" value={qCount} onChange={event => { setQCountEdited(true); setQCount(event.target.value); }} />}</label>
             <label>难度<select aria-label="难度" value={difficulty} onChange={event => setDifficulty(event.target.value)}><option value="mixed">混合难度</option><option value="entry">入门</option><option value="easy">简单</option><option value="normal">适当</option><option value="hard">困难</option></select></label>
 
             <div className="um-practice-subject"><span className="um-practice-label">学科范围</span><Popover><PopoverTrigger asChild><Button variant="outline" aria-label="选择学科">{selectedSubIds.length ? `已选 ${selectedSubIds.length} 个学科` : '全部学科'}<CaretDown size={14} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="start"><h2>学科范围</h2>{subjectList.map((subject: { id: number; name: string }) => <Label key={subject.id}><Checkbox checked={selectedSubIds.includes(subject.id)} onCheckedChange={checked => setSelectedSubIds(prev => checked ? [...prev, subject.id] : prev.filter(id => id !== subject.id))} />{subject.name}</Label>)}{!subjectList.length && <p>暂无可选学科</p>}{selectedSubIds.length > 0 && <Button variant="ghost" onClick={() => setSelectedSubIds([])}>清除筛选</Button>}</PopoverContent></Popover></div>
