@@ -595,6 +595,7 @@ export const QASystem: React.FC = () => {
             <div className="py-20 text-center space-y-4">
               <ChatCircleText className="h-12 w-12 mx-auto text-muted-foreground/20" />
               <p className="text-sm text-muted-foreground">暂无相关问题</p>
+              <p className="text-xs italic text-muted-foreground">答案是 42，但我们得先知道问题。——《银河搭车客指南》</p>
             </div>
           ) : (
             questions.map(q => (

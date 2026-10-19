@@ -106,7 +106,7 @@ export const NotificationBell = () => {
         </DropdownMenuLabel>
         <ScrollArea className="h-80">
           {notifications.length === 0 ? (
-            <EmptyState icon={Bell} title="暂无消息通知" className="py-6" />
+            <EmptyState icon={Bell} title="暂无消息通知" description="银河系暂时没有发来新消息。——《银河搭车客指南》" className="py-6 [&>p:last-child]:italic" />
           ) : (
             <div className="p-1 space-y-0.5">
               {notifications.map(notif => (

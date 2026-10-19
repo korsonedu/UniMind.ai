@@ -40,6 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <p className="mt-1.5 text-sm text-muted-foreground">
                 {this.state.error?.message || '发生了未知错误'}
               </p>
+              <p className="mt-2 text-xs italic text-muted-foreground">别慌，宇宙偶尔也会出点小差错。——《银河搭车客指南》</p>
             </div>
             <div className="flex gap-2 justify-center">
               <Button variant="outline" onClick={() => window.location.href = '/'}>
