@@ -3,12 +3,14 @@ import { Sparkle, ThumbsUp, ThumbsDown } from '@phosphor-icons/react';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+import { NoteSources } from '@/pages/notes/NoteSources';
 
 export interface ChatBubbleMessage {
   role: 'user' | 'assistant';
   content: string;
   id?: number;
   feedback?: boolean | null;
+  metadata?: Record<string, unknown>;
 }
 
 interface ChatBubbleProps {
@@ -107,6 +109,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
             </div>
           )}
         </div>
+
+        {!isUser && !isThinking && <NoteSources sources={msg.metadata?.note_sources} content={msg.content} />}
 
         {/* Feedback row — 始终占位，hover 时显示，避免 layout shift */}
         <div className={cn(

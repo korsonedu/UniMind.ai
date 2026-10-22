@@ -63,6 +63,7 @@ interface UseAgentConversationOptions {
   findBot: (bots: Bot[]) => Bot | undefined;
   /** Extra SSE payload fields (appended by doSend automatically) */
   getExtraPayload?: () => Record<string, unknown>;
+  beforeSend?: () => Promise<void>;
   /** Called after SSE 'done' event (outside state updater) */
   onDone?: () => void;
   /** Pure message transform on step done (runs inside setMessages updater, no side effects) */
@@ -91,6 +92,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const onStepQuestionsRef = useRef(options.onStepQuestions);
   const onAllVisualsRef = useRef(options.onAllVisuals);
   const getExtraPayloadRef = useRef(options.getExtraPayload);
+  const beforeSendRef = useRef(options.beforeSend);
 
   const [bot, setBot] = useState<Bot | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -150,9 +152,10 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     onStepQuestionsRef.current = options.onStepQuestions;
     onAllVisualsRef.current = options.onAllVisuals;
     getExtraPayloadRef.current = options.getExtraPayload;
+    beforeSendRef.current = options.beforeSend;
     projectIdRef.current = projectId;
     conversationIdRef.current = conversationId;
-  }, [options.onDone, options.onStepDone, options.onStepDoneEffect, options.onStepQuestions, options.onAllVisuals, options.getExtraPayload, projectId, conversationId]);
+  }, [options.onDone, options.onStepDone, options.onStepDoneEffect, options.onStepQuestions, options.onAllVisuals, options.getExtraPayload, options.beforeSend, projectId, conversationId]);
 
   const hasConversation = activeSessionId !== null || messages.some(m => m.role === 'user');
 
@@ -329,6 +332,17 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
     setLoading(true);
     setTaskList(null);
+
+    try {
+      await beforeSendRef.current?.();
+      if (!isCurrent()) return;
+    } catch (error) {
+      if (isCurrent()) {
+        setLoading(false);
+        toast.error(error instanceof Error ? error.message : '笔记尚未保存，问题已保留，请重试。');
+      }
+      return;
+    }
 
     let msgId = 0;
     const nextId = () => `msg_${++msgId}_${Date.now()}`;

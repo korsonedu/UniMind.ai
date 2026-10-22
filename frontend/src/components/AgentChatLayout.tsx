@@ -74,6 +74,8 @@ export interface AgentChatLayoutProps {
 
   // useAgentConversation callbacks
   getExtraPayload?: () => Record<string, unknown>;
+  beforeSend?: () => Promise<void>;
+  contextPanel?: (props: { bot: Bot | null; conversationId: string }) => React.ReactNode;
   onStepDone?: (step: AgentStep, prev: Message[]) => Message[] | null;
   /** Called after SSE 'done'. Receives refreshSessions; defaults to calling it. */
   onDone?: (refreshSessions: () => void) => void;
@@ -150,7 +152,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     landingTitle, landingDescription, skillTooltip = '技能',
     botDisplayName,
     processContent,
-    getExtraPayload, onStepDone, onDone, onSendReady,
+    getExtraPayload, beforeSend, contextPanel, onStepDone, onDone, onSendReady,
     extractVisualFromStep,
     onQuestionsGenerated,
     onLoadSession, onReset, onDeleteSession,
@@ -189,6 +191,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     enableProjects: appearance === 'native',
     findBot,
     getExtraPayload,
+    beforeSend,
     onDone: () => onDone?.(handleRefreshSessions),
     onStepDone,
     initialConversationId,
@@ -268,7 +271,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
-      if (appearance === 'native') setConversationId(crypto.randomUUID());
+      if (appearance === 'native' && !initialConversationId) setConversationId(crypto.randomUUID());
       try {
         const bRes = await api.get('/ai/bots/');
         if (cancelled) return;
@@ -294,8 +297,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
               setConversationId(lastMsg.conversation_id);
             }
             // 有历史对话时，自动加载最新 session（不限制时间窗口）
-            if (appearance !== 'native' && grouped.length > 0) {
-              const latest = grouped[grouped.length - 1];
+            const requested = initialConversationId && grouped.find(session => session.conversationId === initialConversationId);
+            if (requested || (appearance !== 'native' && grouped.length > 0)) {
+              const latest = requested || grouped[grouped.length - 1];
+              if (latest.conversationId) setConversationId(latest.conversationId);
               setMessages(latest.messages);
               setActiveSessionId(latest.id);
               setProjectId(latest.projectId ?? null);
@@ -411,6 +416,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
       <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset}>
+        {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
           <section className="um-agent-start" aria-label="开始对话">
             <h2 className="um-agent-start-title">{selectedProjectName ? <>我们要在 <Popover open={projectPickerOpen} onOpenChange={open => { setProjectPickerOpen(open); if (!open) setProjectQuery(''); }}>
@@ -421,13 +427,13 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 {!projectControls.projects.some(project => project.name.toLowerCase().includes(projectQuery.trim().toLowerCase())) && <p className="um-agent-project-picker-empty">没有匹配的项目</p>}
                 <button className="um-agent-project-picker-none" onClick={() => selectNewProject(null)}>未分类</button>
               </PopoverContent>
-            </Popover> 中做些什么？</> : '我们要做些什么？'}</h2>
+            </Popover> 中做些什么？</> : contextPanel ? landingTitle : '我们要做些什么？'}</h2>
             <div className="w-full max-w-[680px]">
             <div data-tour={inputTourClass} className="um-agent-composer">
               <textarea ref={nativeInputRef} value={input} onChange={event => setInput(event.target.value)}
                 onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
                 onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
-                placeholder={chatPlaceholder} aria-label="和小宇对话" disabled={loading || !bot} />
+                placeholder={chatPlaceholder} aria-label={`和${botDisplayName}对话`} disabled={loading || !bot} />
               <footer>
                 <Popover open={skillOpen} onOpenChange={setSkillOpen}>
                   <PopoverTrigger asChild><button className="um-agent-button um-agent-task-trigger" aria-label="快捷任务" disabled={loading || !bot}><Plus size={16} />快捷任务</button></PopoverTrigger>
@@ -574,6 +580,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     return (
       <TooltipProvider delayDuration={300}>
         <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset}>
+          {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
           {/* Header */}
