@@ -55,6 +55,9 @@ def record_trajectory(
         return None
 
     # 同步记录
+    from notes.context import conversation_uses_notes
+    if conversation_uses_notes(user_id, conversation_id):
+        return None
     try:
         trajectory = AITrajectory.objects.create(
             user_id=user_id,

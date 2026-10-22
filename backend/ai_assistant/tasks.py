@@ -556,6 +556,10 @@ def record_trajectory_async(
 ):
     """异步记录对话轨迹到数据库，并自动评估 outcome。"""
     from .models import AITrajectory
+    from notes.context import conversation_uses_notes
+
+    if conversation_uses_notes(user_id, conversation_id):
+        return
 
     try:
         trajectory = AITrajectory.objects.create(

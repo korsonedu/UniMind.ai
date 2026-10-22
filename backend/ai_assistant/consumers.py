@@ -111,19 +111,19 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         if hasattr(self, '_agent_task') and not self._agent_task.done():
             await self.send(text_data=json.dumps({'type': 'error', 'message': '请等待当前提问完成。'}, ensure_ascii=False))
             return
-        self._agent_task = asyncio.create_task(self._execute_agent(message, conversation_id, data.get('request_id')))
+        self._agent_task = asyncio.create_task(self._execute_agent(message, conversation_id, data.get('request_id'), data))
 
-    async def _execute_agent(self, message, conversation_id, request_id):
+    async def _execute_agent(self, message, conversation_id, request_id, note_data=None):
         loop = asyncio.get_running_loop()
         try:
-            await loop.run_in_executor(None, self._run_agent, message, loop, conversation_id, request_id)
+            await loop.run_in_executor(None, self._run_agent, message, loop, conversation_id, request_id, note_data)
         except Exception as e:
             logger.exception("Agent WS error: %s", e)
             if not self._cancelled.is_set():
                 await self.send(text_data=json.dumps(
                     {"type": "error", "message": "连接中断，请稍后再试"}, ensure_ascii=False))
 
-    def _run_agent(self, message: str, loop=None, conversation_id=None, request_id=None):
+    def _run_agent(self, message: str, loop=None, conversation_id=None, request_id=None, note_data=None):
         """同步方法，在线程池中执行完整的 agent loop。"""
         import asyncio as _asyncio
         from .models import AIChatMessage
@@ -160,9 +160,18 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         from .views import _reserve_chat_request, _complete_ai_result, _can_use_learning_context
         from users.learning import confirm_ai_call, release_ai_call
         from rest_framework.exceptions import PermissionDenied
+        from notes.context import prepare_note_context, conversation_uses_notes
+        import uuid
+        try:
+            conversation_id = str(uuid.UUID(str(conversation_id))) if conversation_id else str(uuid.uuid4())
+        except ValueError:
+            send_sync({'type': 'error', 'message': '会话 ID 无效。'})
+            return
         try:
             reservation = _reserve_chat_request(self.user, {'message': message, 'conversation_id': conversation_id,
-                                                          'request_id': request_id}, self.bot)
+                                                          'request_id': request_id,
+                                                          'note_ids': (note_data or {}).get('note_ids'),
+                                                          'note_selection': (note_data or {}).get('note_selection', '')}, self.bot)
             if not reservation.acquired:
                 send_sync({**reservation.response, 'type': 'done'} if reservation.status == 'succeeded' else
                           {'type': 'error', 'message': '这条提问仍在处理中，请查看当前会话。'})
@@ -172,7 +181,15 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             return
 
         try:
-            user_msg = self._save_message(self.user, self.bot, 'user', message, conversation_id=conversation_id)
+            note_data = note_data or {}
+            note_context, note_sources = prepare_note_context(
+                self.user, self.bot, conversation_id, message,
+                note_data.get('note_ids'), note_data.get('note_selection', ''),
+            )
+            user_msg = self._save_message(
+                self.user, self.bot, 'user', message, conversation_id=conversation_id,
+                metadata={'notes_context_used': True, 'note_selection': note_data.get('note_selection', '')} if note_context else None,
+            )
 
             from .views import _get_chat_history
             history_msgs = _get_chat_history(
@@ -181,6 +198,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 conversation_id,
                 exclude_ids=(user_msg.id,),
             )
+            agent_history = history_msgs + ([{'role': 'user', 'content': note_context}] if note_context else [])
 
             student_context = ""
             if self.bot.is_exclusive and _can_use_learning_context(self.user):
@@ -206,7 +224,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                     bot=self.bot,
                     user=self.user,
                     message=message,
-                    history=history_msgs,
+                    history=agent_history,
                     institution=self.institution,
                     stream=True,
                     on_step=on_step,
@@ -234,7 +252,9 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ')
             ai_content = ai_content.replace('\\(', ' $ ').replace('\\)', ' $ ')
 
-            msg_metadata = self._build_metadata(tool_executor)
+            msg_metadata = self._build_metadata(tool_executor) or {}
+            if note_sources:
+                msg_metadata['note_sources'] = note_sources
             from .services.chat_dispatch import build_tool_run_done_payload
             done_event = build_tool_run_done_payload(
                 result,
@@ -259,7 +279,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             try:
                 from .services.memory_service import extract_memories_async, extract_memories_with_mem0
                 full_history = history_msgs + [{'role': 'user', 'content': message}]
-                if _can_use_learning_context(self.user):
+                if _can_use_learning_context(self.user) and not conversation_uses_notes(self.user, conversation_id):
                     extract_memories_async(self.user, full_history)
                     extract_memories_with_mem0(self.user, full_history)
             except Exception:

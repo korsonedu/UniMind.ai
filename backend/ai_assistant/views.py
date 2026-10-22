@@ -15,6 +15,7 @@ from .models import AIChatMessage, AgentMemory, Bot, BotVisibility, Conversation
 from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSerializer, ConversationSerializer
 from .utils import get_student_academic_context
 from .views_projects import add_project_context, save_new_conversation_project
+from notes.context import prepare_note_context, conversation_uses_notes
 from django.db import transaction
 from .prompt_sync import (
     delete_bot_prompt_file,
@@ -70,6 +71,7 @@ def _reserve_chat_request(user, data, bot):
     fingerprint = hashlib.sha256(json.dumps({
         'message': data.get('message', '').strip(), 'bot_id': bot.pk,
         'conversation_id': str(data.get('conversation_id') or ''),
+        'note_ids': data.get('note_ids'), 'note_selection': data.get('note_selection', ''),
     }, sort_keys=True).encode()).hexdigest()
     return reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint)
 
@@ -108,7 +110,8 @@ def process_ai_chat(*args, reservation=None, **kwargs):
 
 
 def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=None,
-                    history_limit=10, current_user_message_id=None, reservation=None):
+                    history_limit=10, current_user_message_id=None, reservation=None,
+                    note_context='', note_sources=None):
     history_msgs = _get_chat_history(
         user,
         bot,
@@ -118,6 +121,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
     )
 
     project_history = add_project_context(user, conversation_id, history_msgs)
+    if note_context:
+        project_history = project_history + [{'role': 'user', 'content': note_context}]
 
     student_context = ""
     if bot and bot.is_exclusive and _can_use_learning_context(user):
@@ -164,7 +169,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
             if pending_msg:
                 pending_msg.content = ai_content
                 # 统一 metadata 构建
-                msg_metadata = {}
+                msg_metadata = {'note_sources': note_sources} if note_sources else {}
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
                     msg_metadata['generated_questions'] = tool_executor._last_generated
                 if hasattr(tool_executor, '_last_pipeline_task_id') and tool_executor._last_pipeline_task_id:
@@ -189,7 +194,8 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
             if reservation and _complete_ai_result(res, ai_content, pending_msg.metadata if pending_msg else None):
                 from users.learning import confirm_ai_call
                 confirm_ai_call(reservation, {'done': True, 'full_content': ai_content,
-                                             'message_id': pending_msg_id, 'conversation_id': str(conversation_id)})
+                                             'message_id': pending_msg_id, 'conversation_id': str(conversation_id),
+                                             'metadata': pending_msg.metadata if pending_msg else {}})
         else:
             if pending_msg:
                 pending_msg.content = "AI 助教暂时无法响应，请稍后再试。"
@@ -209,7 +215,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 extract_memories_with_mem0,
             )
             full_history = history_msgs + [{'role': 'user', 'content': user_message}]
-            if _can_use_learning_context(user):
+            if _can_use_learning_context(user) and not conversation_uses_notes(user, conversation_id):
                 extract_memories_async(user, full_history)
                 extract_memories_with_mem0(user, full_history)
         except Exception:
@@ -434,9 +440,14 @@ class AIChatView(APIView):
             # 1. Save User Message
             if bot:
                 save_new_conversation_project(request, bot, conversation_id)
+            note_context, note_sources = prepare_note_context(
+                request.user, bot, conversation_id, user_message,
+                request.data.get('note_ids'), request.data.get('note_selection', ''),
+            )
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
+                metadata={'notes_context_used': True, 'note_selection': request.data.get('note_selection', '')} if note_context else {},
             )
             record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
@@ -454,6 +465,7 @@ class AIChatView(APIView):
                 conversation_id=conversation_id,
                 current_user_message_id=user_msg.id,
                 reservation=reservation,
+                note_context=note_context, note_sources=note_sources,
             )
 
         except BaseException:
@@ -581,9 +593,14 @@ class AIChatStreamView(APIView):
         try:
             # Save user message
             save_new_conversation_project(request, bot, conversation_id)
+            note_context, note_sources = prepare_note_context(
+                request.user, bot, conversation_id, user_message,
+                request.data.get('note_ids'), request.data.get('note_selection', ''),
+            )
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
+                metadata={'notes_context_used': True, 'note_selection': request.data.get('note_selection', '')} if note_context else {},
             )
         
             # Create pending assistant message (for refresh recovery)
@@ -607,6 +624,8 @@ class AIChatStreamView(APIView):
             )
 
             project_history = add_project_context(request.user, conversation_id, history_msgs)
+            if note_context:
+                project_history = project_history + [{'role': 'user', 'content': note_context}]
 
             student_context = ""
             if bot.is_exclusive and _can_use_learning_context(request.user):
@@ -802,7 +821,7 @@ class AIChatStreamView(APIView):
                     is_error = any(p in ai_content for p in error_patterns) if ai_content else False
                 metrics['content_chars'] = len(ai_content)
 
-                metadata = {}
+                metadata = {'note_sources': note_sources} if note_sources else {}
                 visual_count = len(getattr(tool_executor, 'pending_visuals', []) or [])
                 metrics['visual_count'] = visual_count
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:
@@ -891,7 +910,8 @@ class AIChatStreamView(APIView):
                         extract_memories_with_mem0,
                     )
                     full_history = history_msgs + [{'role': 'user', 'content': user_message}]
-                    if await sync_to_async(_can_use_learning_context)(request.user):
+                    if (await sync_to_async(_can_use_learning_context)(request.user)
+                            and not await sync_to_async(conversation_uses_notes)(request.user, conversation_id)):
                         await sync_to_async(extract_memories_async)(request.user, full_history)
                         await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
