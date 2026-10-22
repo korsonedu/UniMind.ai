@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
@@ -7,6 +8,8 @@ from .models import Notebook
 
 
 def accessible_bot(user, bot_id):
+    # WebSocket callers keep user instances across requests; refresh revoked access.
+    user = get_object_or_404(get_user_model().objects.select_related('access_profile'), pk=user.pk, is_active=True)
     if not has_capability(user, 'ai.assistant'):
         raise PermissionDenied('该账号不能使用 Agent。')
     bot_id = serializers.IntegerField(min_value=1).run_validation(bot_id)

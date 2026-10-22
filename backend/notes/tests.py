@@ -3,9 +3,11 @@ import uuid
 import zipfile
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.test import APIClient
 from ai_assistant.models import AIChatMessage, Bot, Conversation
 from users.models import UserAccessProfile
+from .access import accessible_bot
 from .models import AgentNoteBinding, ConversationNoteReference, Note, Notebook, NoteLink
 
 
@@ -140,10 +142,12 @@ class PrivateNotesSmokeTests(TestCase):
     def test_agent_permission_revoked_without_removing_private_notes_access(self):
         own = self.create_note()
         profile, _ = UserAccessProfile.objects.get_or_create(user=self.user)
-        profile.blocked_permissions = ['ai.assistant']
-        profile.save()
-        self.user = get_user_model().objects.get(pk=self.user.pk)
-        self.client.force_authenticate(self.user)
+        cached_profile = self.user.access_profile
+        self.assertEqual(accessible_bot(self.user, self.bot.pk), self.bot)
+        UserAccessProfile.objects.filter(pk=profile.pk).update(blocked_permissions=['ai.assistant'])
+        self.assertEqual(cached_profile.blocked_permissions, [])
+        with self.assertRaises(PermissionDenied):
+            accessible_bot(self.user, self.bot.pk)
         self.assertEqual(self.client.get('/api/notes/items/').status_code, 200)
         self.assertEqual(self.client.post('/api/notes/bindings/', {'bot': self.bot.pk, 'note': own['id']}, format='json').status_code, 403)
 
