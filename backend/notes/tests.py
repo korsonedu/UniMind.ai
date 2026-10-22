@@ -152,14 +152,18 @@ class PrivateNotesSmokeTests(TestCase):
         child = Notebook.objects.create(user=self.user, parent=root, name='目录' * 100)
         target = self.create_note(title='目标' * 100, notebook=child.pk)
         example = self.create_note(title='示例目标', notebook=child.pk)
+        nested = self.create_note(title='二级列表', notebook=child.pk)
+        continuation = self.create_note(title='列表续行', notebook=child.pk)
         code_link = f'[示例](/notes/{example["id"]})'
         code = (f'```markdown\n{code_link}\n```\n\n'
                 f'~~~text\n{code_link}\n~~~\n\n'
                 f'`{code_link}` 与 ``含 ` 符号 {code_link}``\n\n'
                 f'    {code_link}\n\n\t{code_link}\n')
-        content = f'    {code_link}\n\n[正文](/notes/{target["id"]})\n\n' + code
+        listing = (f'- 一级\n    - [二级](/notes/{nested["id"]})\n'
+                   f'      [续行](/notes/{continuation["id"]})\n\n          {code_link}\n')
+        content = f'    {code_link}\n\n[正文](/notes/{target["id"]})\n\n' + listing + '\n普通段落\n\n' + code
         source = self.create_note(title='正文' * 100, notebook=root.pk, content=content)
-        self.assertEqual(list(NoteLink.objects.filter(source_id=source['id']).values_list('target_id', flat=True)), [target['id']])
+        self.assertEqual(set(NoteLink.objects.filter(source_id=source['id']).values_list('target_id', flat=True)), {target['id'], nested['id'], continuation['id']})
         response = self.client.get(f'/api/notes/notebooks/{root.pk}/export/')
         self.assertEqual(response.status_code, 200)
         with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
@@ -168,6 +172,11 @@ class PrivateNotesSmokeTests(TestCase):
             source_path = next(path for path in archive.namelist() if path.endswith(f'-{source["id"]}.md'))
             exported = archive.read(source_path).decode()
             self.assertIn(code, exported)
+            self.assertIn(f'          {code_link}', exported)
+            self.assertNotIn(f'[二级](/notes/{nested["id"]})', exported)
+            self.assertNotIn(f'[续行](/notes/{continuation["id"]})', exported)
+            self.assertIn(f'-{nested["id"]}.md)', exported)
+            self.assertIn(f'-{continuation["id"]}.md)', exported)
             self.assertNotIn(f'[正文](/notes/{target["id"]})', exported)
             self.assertIn(f'-{target["id"]}.md)', exported)
         self.assertEqual(Note.objects.get(pk=source['id']).content, content)

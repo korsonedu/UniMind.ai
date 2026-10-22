@@ -5,11 +5,13 @@ from .models import Note, NoteLink
 NOTE_LINK = re.compile(r'(?<=\]\()(?:/notes/|note:)(\d+)(?=\))')
 CODE_SPAN = re.compile(r'(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)')
 FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})(.*)$')
+LIST_ITEM = re.compile(r'^ *(?:[-+*]|[0-9]{1,9}[.)])(?: +|$)')
 
 
 def note_links(content):
     """Find actual note hrefs, leaving ordinary Markdown code examples alone."""
     fence = None
+    list_indents = []
     prose, masked = [], []
 
     def flush_prose():
@@ -18,8 +20,19 @@ def note_links(content):
         prose.clear()
 
     for line in content.splitlines(keepends=True):
-        marker = FENCE.match(line.rstrip('\r\n'))
-        code = fence is not None or line.startswith(('    ', '\t'))
+        expanded = line.expandtabs(4)
+        indent = len(expanded) - len(expanded.lstrip(' '))
+        if fence is None and expanded.strip():
+            while list_indents and indent < list_indents[-1]:
+                list_indents.pop()
+        base = list_indents[-1] if list_indents else 0
+        code = fence is not None or indent >= base + 4
+        if not code:
+            item = LIST_ITEM.match(expanded)
+            if item:
+                base = item.end()
+                list_indents.append(base)
+        marker = FENCE.match(expanded[base:].rstrip('\r\n'))
         if fence:
             if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not marker[2].strip():
                 fence = None
