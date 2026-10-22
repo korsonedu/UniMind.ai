@@ -32,6 +32,7 @@ class TagNamesField(serializers.ListField):
 
 
 class NoteSerializer(OwnedRelationsMixin, serializers.ModelSerializer):
+    content = serializers.CharField(trim_whitespace=False, allow_blank=True, required=False)
     tags = TagNamesField(child=serializers.CharField(max_length=100), required=False)
     backlinks = serializers.SerializerMethodField()
     version = serializers.IntegerField(min_value=1, required=False)

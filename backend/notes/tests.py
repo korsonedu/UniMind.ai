@@ -6,7 +6,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 from ai_assistant.models import AIChatMessage, Bot, Conversation
 from users.models import UserAccessProfile
-from .models import AgentNoteBinding, ConversationNoteReference, Note, Notebook
+from .models import AgentNoteBinding, ConversationNoteReference, Note, Notebook, NoteLink
 
 
 @override_settings(CACHES={'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}})
@@ -146,3 +146,28 @@ class PrivateNotesSmokeTests(TestCase):
         self.client.force_authenticate(self.user)
         self.assertEqual(self.client.get('/api/notes/items/').status_code, 200)
         self.assertEqual(self.client.post('/api/notes/bindings/', {'bot': self.bot.pk, 'note': own['id']}, format='json').status_code, 403)
+
+    def test_code_examples_and_utf8_export_names(self):
+        root = Notebook.objects.create(user=self.user, name='课程' * 100)
+        child = Notebook.objects.create(user=self.user, parent=root, name='目录' * 100)
+        target = self.create_note(title='目标' * 100, notebook=child.pk)
+        example = self.create_note(title='示例目标', notebook=child.pk)
+        code_link = f'[示例](/notes/{example["id"]})'
+        code = (f'```markdown\n{code_link}\n```\n\n'
+                f'~~~text\n{code_link}\n~~~\n\n'
+                f'`{code_link}` 与 ``含 ` 符号 {code_link}``\n\n'
+                f'    {code_link}\n\n\t{code_link}\n')
+        content = f'    {code_link}\n\n[正文](/notes/{target["id"]})\n\n' + code
+        source = self.create_note(title='正文' * 100, notebook=root.pk, content=content)
+        self.assertEqual(list(NoteLink.objects.filter(source_id=source['id']).values_list('target_id', flat=True)), [target['id']])
+        response = self.client.get(f'/api/notes/notebooks/{root.pk}/export/')
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            for path in archive.namelist():
+                self.assertTrue(all(len(part.encode('utf-8')) <= 255 for part in path.split('/')))
+            source_path = next(path for path in archive.namelist() if path.endswith(f'-{source["id"]}.md'))
+            exported = archive.read(source_path).decode()
+            self.assertIn(code, exported)
+            self.assertNotIn(f'[正文](/notes/{target["id"]})', exported)
+            self.assertIn(f'-{target["id"]}.md)', exported)
+        self.assertEqual(Note.objects.get(pk=source['id']).content, content)
