@@ -49,6 +49,7 @@ const PaymentResult = lazy(() => import('./pages/PaymentResult').then(module => 
 const Checkout = lazy(() => import('./pages/Checkout').then(module => ({ default: module.Checkout })));
 const DiagnosticTest = lazy(() => import('./pages/DiagnosticTest').then(module => ({ default: module.DiagnosticTest })));
 const XiaoYu = lazy(() => import('./pages/XiaoYu').then(module => ({ default: module.XiaoYu })));
+const NotesPage = lazy(() => import('./pages/notes/NotesPage'));
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
 // Default exports — plain lazy() works
@@ -206,6 +207,8 @@ const router = createBrowserRouter([
           { path: "tests/session", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(TestSessionPage)}</FeatureGuard> },
           { path: "tests/results/:examId", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamResultPage)}</FeatureGuard> },
           { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamHistoryPage)}</FeatureGuard> },
+          { path: "notes", element: lazyPage(NotesPage) },
+          { path: "notes/:id", element: lazyPage(NotesPage) },
           { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{lazyPage(XiaoYu)}</FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
           { path: "settings", element: lazyPage(Settings) },

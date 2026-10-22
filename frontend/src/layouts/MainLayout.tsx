@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
-import { BookOpen, Trophy, User as UserIcon, SignOut, CreditCard, ChartBar, ChatCircleText, Robot } from '@phosphor-icons/react';
+import { BookOpen, Trophy, User as UserIcon, SignOut, CreditCard, ChartBar, ChatCircleText, Robot, Notebook } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import '@/styles/app-shell.css';
 type NavItem = { to: string; icon: React.ComponentType<{ className?: string }>; label: string; mobileLabel: string; feature?: string };
 
 const navItems: NavItem[] = [
+  { to: '/notes', icon: Notebook, label: '我的笔记', mobileLabel: '笔记' },
   { to: '/xiaoyu', icon: Robot, label: '小宇', mobileLabel: '小宇', feature: 'ai.assistant' },
   { to: '/report-card', icon: ChartBar, label: '学习记录', mobileLabel: '记录', feature: 'full.report' },
   { to: '/courses', icon: BookOpen, label: '课程中心', mobileLabel: '课程', feature: 'course.video' },
@@ -48,7 +49,7 @@ export const MainLayout: React.FC = () => {
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const isCommunityWorkspace = ['/community', '/qa', '/study'].includes(location.pathname) || location.pathname.startsWith('/qa/');
-  const isIntegratedWorkspace = isCommunityWorkspace
+  const isIntegratedWorkspace = isCommunityWorkspace || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
     || (location.pathname === '/xiaoyu' && hasFeature('ai.assistant'))
     || ((location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname)) && hasFeature('course.video'));
   const isMobileStudyPage = isMobile && location.pathname === '/study';
