@@ -91,6 +91,7 @@ INSTALLED_APPS = [
     "quizzes",
     "study_room",
     "ai_assistant",
+    "notes",
     "faq_system",
     "notifications",
     "core",

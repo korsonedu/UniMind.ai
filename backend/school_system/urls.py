@@ -88,6 +88,8 @@ if _APP_ON('articles'):
     urlpatterns.append(path("api/articles/", include("articles.urls")))
 if _APP_ON('ai_assistant'):
     urlpatterns.append(path("api/ai/", include("ai_assistant.urls")))
+if _APP_ON('notes'):
+    urlpatterns.append(path("api/notes/", include("notes.urls")))
 if _APP_ON('faq_system'):
     urlpatterns.append(path("api/qa/", include("faq_system.urls")))
 if _APP_ON('notifications'):
