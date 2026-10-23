@@ -88,6 +88,7 @@ export default function NotesPage() {
     return () => controller.abort();
   }, [id, load]);
   const run = async (work: () => Promise<void>) => {
+    if (busy || blocker.state !== 'unblocked') return;
     setBusy(true);
     try { await flush(); await work(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : '操作失败，请重试。'); } finally { if (mounted.current) setBusy(false); }
   };
