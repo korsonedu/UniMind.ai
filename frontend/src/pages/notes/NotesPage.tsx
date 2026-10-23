@@ -44,13 +44,13 @@ export default function NotesPage() {
     setTags(previous => [...previous, ...saved.tags.filter(name => !previous.some(tag => tag.name === name)).map((name, index) => ({ id: -Date.now() - index, name }))]);
   }, []);
   const { note, documentKey, dirty, status, error, load, change, flush } = useNoteSave(onSaved);
-  const blocker = useBlocker(dirty);
+  const blocker = useBlocker(dirty || busy);
   const blocking = useRef(false);
   useEffect(() => {
-    if (blocker.state !== 'blocked' || blocking.current) return;
+    if (busy || blocker.state !== 'blocked' || blocking.current) return;
     blocking.current = true;
     void flush().then(() => blocker.proceed()).catch(() => blocker.reset()).finally(() => { blocking.current = false; });
-  }, [blocker, flush]);
+  }, [blocker, busy, flush]);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const reload = useCallback(() => setRefresh(value => value + 1), []);
   useEffect(() => {
@@ -150,7 +150,7 @@ export default function NotesPage() {
         <header className="notes-note-header"><span aria-live="polite">{status}{dirty && status === '已保存' ? ' · 未保存' : ''}</span><div>{hasAI && !note.deleted_at && <button onClick={showDiscussion}><ChatCircleText size={16} />讨论</button>}<button disabled={busy} onClick={() => void run(() => notesApi.export('items', note.id))}>导出</button>{note.deleted_at && <button disabled={busy} onClick={() => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); })}>恢复</button>}<button disabled={busy} className="notes-danger" onClick={removeNote}>{note.deleted_at ? '永久删除' : '移入回收站'}</button></div></header>
         {error && <div className="notes-save-error" role="alert"><p>{error}</p><button onClick={() => void flush().catch(() => {})}>重试保存</button><button onClick={downloadLocal}>下载本地内容</button><button onClick={() => { if (window.confirm('重新加载会丢弃尚未保存的本地修改。请先下载本地内容。继续？')) void notesApi.get(note.id).then(load).catch(() => toast.error('加载失败，本地内容已保留。')); }}>重新加载远端</button></div>}
         {note.deleted_at && <p className="notes-trash-banner">这篇笔记在回收站中，恢复后可继续编辑并供 Agent 参考。</p>}
-        <div className="notes-writing-surface" inert={loading || undefined}><NoteEditor key={`${note.id}:${documentKey}`} note={note} notebooks={notebooks} onChange={change} onOpen={open} onSelection={setSelection} /></div>
+        <div className="notes-writing-surface" inert={loading || busy || undefined}><NoteEditor key={`${note.id}:${documentKey}`} note={note} notebooks={notebooks} onChange={change} onOpen={open} onSelection={setSelection} /></div>
       </> : !loading && !pageError && <div className="notes-welcome"><NotebookIcon size={34} weight="thin" /><h2>把理解留下来</h2><p>整理自己的知识，随时与 Agent 围绕笔记讨论。</p><button onClick={createNote}>写一篇笔记</button></div>}
     </main>
     {discussionMounted && note && !note.deleted_at && hasAI && <aside className={`notes-discussion ${discussion ? '' : 'is-hidden'}`}  aria-label="笔记讨论"><header className="notes-discussion-title"><span>围绕笔记讨论</span><button onClick={() => { setDiscussion(false); setMobileView('editor'); }}>收起</button></header><NotesAgentPanel note={note} notes={allNotes} notebooks={notebooks} beforeSend={flush} selection={selection} clearSelection={() => setSelection('')} openRequest={openRequest} /></aside>}
