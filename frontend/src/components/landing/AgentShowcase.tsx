@@ -11,13 +11,17 @@ const scenes = [
 export function AgentShowcase() {
   const [selected, setSelected] = useState(1);
 
-  return <div className="landing-ui-frame landing-agent-frame landing-agent-showcase">
-    <div className="landing-agent-images" aria-live="polite">
-      {scenes.map((scene, index) => <img key={scene.image} src={`/screenshots/${scene.image}`} alt={`小宇${scene.label}界面，${scene.description}`} width="3840" height="2640" className={index === selected ? 'is-active' : ''} aria-hidden={index !== selected} />)}
+  return <div className="landing-agent-display">
+    <div className="landing-ui-frame landing-agent-frame landing-agent-showcase">
+      <div className="landing-agent-images" aria-live="polite">
+        {scenes.map((scene, index) => <img key={scene.image} src={`/screenshots/${scene.image}`} alt={`小宇${scene.label}界面，${scene.description}`} width="3840" height="2640" className={index === selected ? 'is-active' : ''} aria-hidden={index !== selected} />)}
+      </div>
+      <button type="button" className="landing-agent-launch" onClick={() => setSelected((selected + 1) % scenes.length)} aria-label={`切换功能展示，当前为${scenes[selected].label}`} />
+      {scenes.map((scene, index) => <button key={scene.image} type="button" className="landing-agent-scene" aria-label={`展示${scene.label}`} aria-pressed={index === selected} onClick={() => setSelected(index)} style={{ left: `${93 / 1280 * 100}%`, top: `${(164.25 + index * 34) / 880 * 100}%`, width: `${141 / 1280 * 100}%`, height: `${29.5 / 880 * 100}%` }} />)}
     </div>
-    <button type="button" className="landing-agent-launch" onClick={() => setSelected((selected + 1) % scenes.length)} aria-label={`切换功能展示，当前为${scenes[selected].label}`}>
-      <span className="landing-agent-play">切换展示<ArrowRight size={17} /></span>
-    </button>
-    {scenes.map((scene, index) => <button key={scene.image} type="button" className="landing-agent-scene" aria-label={`展示${scene.label}`} aria-pressed={index === selected} onClick={() => setSelected(index)} style={{ left: `${93 / 1280 * 100}%`, top: `${(164.25 + index * 34) / 880 * 100}%`, width: `${141 / 1280 * 100}%`, height: `${29.5 / 880 * 100}%` }} />)}
+    <nav className="landing-showcase-controls" aria-label="选择小宇展示">
+      {scenes.map((scene, index) => <button key={scene.image} type="button" aria-label={`查看${scene.label}`} aria-pressed={index === selected} onClick={() => setSelected(index)}><span /></button>)}
+      <button type="button" className="landing-showcase-next" aria-label="下一个展示" onClick={() => setSelected((selected + 1) % scenes.length)}><ArrowRight size={17} /></button>
+    </nav>
   </div>;
 }
