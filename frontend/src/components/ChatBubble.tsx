@@ -1,3 +1,4 @@
+import { NoteAttachments } from '@/pages/notes/NoteMentions';
 import React, { useState, useCallback } from 'react';
 import { Sparkle, ThumbsUp, ThumbsDown } from '@phosphor-icons/react';
 import { MarkdownContent } from '@/components/MarkdownContent';
@@ -110,7 +111,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
           )}
         </div>
 
-        {!isUser && !isThinking && <NoteSources sources={msg.metadata?.note_sources} content={msg.content} />}
+        {isUser && <NoteAttachments attachments={msg.metadata?.note_attachments} />}
+      {!isUser && !isThinking && <NoteSources sources={msg.metadata?.note_sources} content={msg.content} />}
 
         {/* Feedback row — 始终占位，hover 时显示，避免 layout shift */}
         <div className={cn(

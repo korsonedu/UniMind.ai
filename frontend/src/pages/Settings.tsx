@@ -1,3 +1,4 @@
+import NoteAISettings from './notes/NoteAISettings';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useState } from 'react';
 import { Card } from '@/components/ui/card';
@@ -229,6 +230,8 @@ export const Settings: React.FC = () => {
               </Button>
             </div>
           </Card>
+
+          <NoteAISettings />
 
           {/* 法律文档链接 */}
           <div className="flex gap-4 text-xs text-muted-foreground ml-1">

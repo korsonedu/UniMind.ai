@@ -53,6 +53,8 @@ export interface Bot {
   name: string;
   avatar: string | null;
   bot_type: string;
+  institution?: number | null;
+  is_active?: boolean;
 }
 
 // ── Hook options ──
@@ -349,8 +351,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     let streamingId: string | null = null;
     let streamingContent = '';
 
+    const userMessageId = nextId();
     if (!silent) {
-      const userMsg: Message = { _id: nextId(), role: 'user', content: text, timestamp: new Date().toISOString(), conversation_id: requestConversationId };
+      const userMsg: Message = { _id: userMessageId, role: 'user', content: text, timestamp: new Date().toISOString(), conversation_id: requestConversationId };
       setMessages(prev => [...prev, userMsg]);
     }
     setInput('');
@@ -378,7 +381,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       })) {
         if (!isCurrent()) return;
         try {
-            if (payload.type === 'message' && payload.content) {
+            if (payload.type === 'user_message') {
+              setMessages(prev => prev.map(message => message._id === userMessageId ? { ...message, id: payload.message_id, metadata: payload.metadata } : message));
+            } else if (payload.type === 'message' && payload.content) {
               if (streamingId) {
                 const id = streamingId;
                 setMessages(prev => upsertChatMessage(prev, {

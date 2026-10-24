@@ -1,3 +1,4 @@
+import { useNoteMentions } from '@/pages/notes/NoteMentions';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
@@ -75,6 +76,7 @@ export interface AgentChatLayoutProps {
   // useAgentConversation callbacks
   getExtraPayload?: () => Record<string, unknown>;
   beforeSend?: () => Promise<void>;
+  enableNoteMentions?: boolean;
   contextPanel?: (props: { bot: Bot | null; conversationId: string }) => React.ReactNode;
   onStepDone?: (step: AgentStep, prev: Message[]) => Message[] | null;
   /** Called after SSE 'done'. Receives refreshSessions; defaults to calling it. */
@@ -152,7 +154,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     landingTitle, landingDescription, skillTooltip = '技能',
     botDisplayName,
     processContent,
-    getExtraPayload, beforeSend, contextPanel, onStepDone, onDone, onSendReady,
+    getExtraPayload, beforeSend, enableNoteMentions = false, contextPanel, onStepDone, onDone, onSendReady,
     extractVisualFromStep,
     onQuestionsGenerated,
     onLoadSession, onReset, onDeleteSession,
@@ -173,6 +175,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const pendingVisualsRef = useRef<VisualData[]>([]);
   const dashboardRef = useRef<HTMLDivElement>(null);
   const nativeInputRef = useRef<HTMLTextAreaElement>(null);
+  const noteMentionsRef = useRef<ReturnType<typeof useNoteMentions> | null>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
   const [aiUsage, setAIUsage] = useState<AIUsage | null>(null);
@@ -190,8 +193,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   } = useAgentConversation({
     enableProjects: appearance === 'native',
     findBot,
-    getExtraPayload,
-    beforeSend,
+    getExtraPayload: () => ({ ...getExtraPayload?.(), ...(enableNoteMentions ? noteMentionsRef.current?.payload() : {}) }),
+    beforeSend: async () => { await beforeSend?.(); await noteMentionsRef.current?.beforeSend(); },
     onDone: () => onDone?.(handleRefreshSessions),
     onStepDone,
     initialConversationId,
@@ -206,6 +209,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     onStepQuestions: onQuestionsGenerated,
     resetMessage,
   });
+  const noteMentions = useNoteMentions({ enabled: enableNoteMentions, disabled: loading, botId: bot?.id, conversationId, input, setInput, textareaRef: nativeInputRef });
+  noteMentionsRef.current = noteMentions;
   const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions);
   const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
 
@@ -430,9 +435,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             </Popover> 中做些什么？</> : contextPanel ? landingTitle : '我们要做些什么？'}</h2>
             <div className="w-full max-w-[680px]">
             <div data-tour={inputTourClass} className="um-agent-composer">
-              <textarea ref={nativeInputRef} value={input} onChange={event => setInput(event.target.value)}
+              {noteMentions.panel}
+              <textarea ref={nativeInputRef} value={input} onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
                 onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
-                onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
+                onKeyDown={event => { if (noteMentions.onKeyDown(event, isComposing)) return; if (event.key === 'Enter' && !event.shiftKey && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
                 placeholder={chatPlaceholder} aria-label={`和${botDisplayName}对话`} disabled={loading || !bot} />
               <footer>
                 <Popover open={skillOpen} onOpenChange={setSkillOpen}>
@@ -694,12 +700,13 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           <div className={cn("shrink-0 px-4 pb-4 pt-2", appearance === 'native' && 'um-agent-chat-input')}>
             <div className="max-w-3xl mx-auto">
               <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
+                {noteMentions.panel}
                 <textarea ref={nativeInputRef} rows={1}
                   value={input}
-                  onChange={e => setInput(e.target.value)}
+                  onChange={e => { setInput(e.target.value); noteMentions.updateQuery(e.target.value, e.target.selectionStart); }}
                   onCompositionStart={() => setIsComposition(true)}
                   onCompositionEnd={() => setIsComposition(false)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !isComposing && !e.nativeEvent.isComposing && !loading && input.trim() && bot) { e.preventDefault(); doSend(input); } }}
+                  onKeyDown={e => { if (noteMentions.onKeyDown(e, isComposing)) return; if (e.key === 'Enter' && !e.shiftKey && !isComposing && !e.nativeEvent.isComposing && !loading && input.trim() && bot) { e.preventDefault(); doSend(input); } }}
                   placeholder={chatPlaceholder}
                   aria-label={`和${botDisplayName}对话`}
                   autoComplete="off"

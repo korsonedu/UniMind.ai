@@ -11,17 +11,16 @@ import { notebookPath, notesApi, type Note, type NoteDraft, type Notebook } from
 
 interface Props {
   note: Note; notebooks: Notebook[]; onChange: (patch: Partial<NoteDraft>) => void;
-  onOpen: (id: number) => void; onSelection: (text: string) => void;
+  onOpen: (id: number) => void;
 }
-export default function NoteEditor({ note, notebooks, onChange, onOpen, onSelection }: Props) {
+export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props) {
   const [dialog, setDialog] = useState<NoteDialogOptions | null>(null);
   const [linkQuery, setLinkQuery] = useState<{ from: number; to: number; query: string } | null>(null);
   const [tagInput, setTagInput] = useState(note.tags.join(', '));
   const [matches, setMatches] = useState<Note[]>([]);
   const [searchFailed, setSearchFailed] = useState(false);
   const changeRef = useRef(onChange);
-  const selectionRef = useRef(onSelection);
-  changeRef.current = onChange; selectionRef.current = onSelection;
+  changeRef.current = onChange;
   const editor = useEditor({
     extensions: [NoteMath, StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: { openOnClick: false } }), Markdown.configure({ html: false }), Placeholder.configure({ placeholder: '开始书写…' })],
     content: note.content,
@@ -32,10 +31,6 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen, onSelect
       const { $from, from } = instance.state.selection;
       const match = $from.parent.textBetween(0, $from.parentOffset).match(/\[\[([^\]]*)$/);
       setLinkQuery(match ? { from: from - match[0].length, to: from, query: match[1] } : null);
-    },
-    onSelectionUpdate: ({ editor: instance }) => {
-      const { from, to } = instance.state.selection;
-      if (from !== to) selectionRef.current(instance.state.doc.textBetween(from, to, '\n').slice(0, 3000));
     },
   });
   useEffect(() => {

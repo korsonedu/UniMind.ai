@@ -6,12 +6,17 @@ export interface Note {
   is_favorite: boolean; version: number; deleted_at: string | null; updated_at: string;
   backlinks: { id: number; title: string }[];
 }
+export type NoteSummary = Pick<Note, 'id' | 'title' | 'notebook' | 'version'>;
+export interface NoteAISetting { enabled: boolean; acknowledged: boolean }
 export interface NoteBinding { id: number; bot: number; note: number | null; notebook: number | null }
 export type NoteDraft = Pick<Note, 'title' | 'content' | 'notebook' | 'tags' | 'is_favorite'>;
 // A write with an unknown outcome must be reviewed, not automatically repeated.
 const writeConfig = { __retryCount: 2, timeout: 30000 };
 export const noteDraft = (note: Note): NoteDraft => ({ title: note.title, content: note.content, notebook: note.notebook, tags: note.tags, is_favorite: note.is_favorite });
 export const notesApi = {
+  aiSettings: () => api.get<NoteAISetting>('/notes/ai-settings/').then(r => r.data),
+  updateAISettings: (enabled: boolean) => api.patch<NoteAISetting>('/notes/ai-settings/', { enabled }, writeConfig).then(r => r.data),
+  lookup: (params: { q?: string; ids?: string } = {}, signal?: AbortSignal) => api.get<NoteSummary[]>('/notes/lookup/', { params, signal }).then(r => r.data),
   list: (params: Record<string, string> = {}, signal?: AbortSignal) => api.get<Note[]>('/notes/items/', { params, signal }).then(r => r.data),
   get: (id: number, signal?: AbortSignal) => api.get<Note>(`/notes/items/${id}/`, { signal }).then(r => r.data),
   create: (notebook: number | null) => api.post<Note>('/notes/items/', { title: '未命名笔记', notebook }, writeConfig).then(r => r.data),
