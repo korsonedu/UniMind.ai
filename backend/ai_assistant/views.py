@@ -97,7 +97,7 @@ def _complete_ai_result(result, content, metadata=None):
     choices = result.get('choices') or []
     if choices and choices[0].get('finish_reason') in ('length', 'content_filter'):
         return False
-    return not any(text in (content or '') for text in ('AI 服务暂时不可用', 'AI 暂时无法响应', 'AI 助教暂时无法响应', 'LLM_API_KEY'))
+    return not any(text in (content or '') for text in ('AI 服务暂时不可用', 'AI 暂时无法响应', 'Agent 暂时无法响应', 'AI 助教暂时无法响应', 'LLM_API_KEY'))
 
 
 def process_ai_chat(*args, reservation=None, **kwargs):
@@ -125,7 +125,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
         project_history = project_history + [{'role': 'user', 'content': note_context}]
 
     student_context = ""
-    if bot and bot.is_exclusive and _can_use_learning_context(user):
+    if bot and bot.bot_type == 'planner' and _can_use_learning_context(user):
         student_context = get_student_academic_context(user)
 
     # 获取记忆上下文 (dual-layer: structured + mem0 semantic + adaptive directives)
@@ -198,7 +198,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                                              'metadata': pending_msg.metadata if pending_msg else {}})
         else:
             if pending_msg:
-                pending_msg.content = "AI 助教暂时无法响应，请稍后再试。"
+                pending_msg.content = "Agent 暂时无法响应，请稍后再试。"
                 pending_msg.save()
 
     except Exception as e:
@@ -628,7 +628,7 @@ class AIChatStreamView(APIView):
                 project_history = project_history + [{'role': 'user', 'content': note_context}]
 
             student_context = ""
-            if bot.is_exclusive and _can_use_learning_context(request.user):
+            if bot.bot_type == 'planner' and _can_use_learning_context(request.user):
                 student_context = get_student_academic_context(request.user)
 
             from ai_assistant.services.memory_service import build_memory_context

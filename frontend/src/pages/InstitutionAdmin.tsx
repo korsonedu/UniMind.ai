@@ -435,7 +435,7 @@ function CreateInstitutionDialog({
             value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
           <Input placeholder="主营业务，如：金融431、CPA、法考、教资等"
             value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} />
-          <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
+          <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、Agent 等多个功能关联，请务必正确填写。</p>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.plan}
@@ -518,7 +518,7 @@ function EditInstitutionDialog({
             value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} />
           <Input placeholder="主营业务，如：金融431、CPA、法考、教资等"
             value={form.business_type} onChange={e => setForm({ ...form, business_type: e.target.value })} />
-          <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、AI 助教等多个功能关联，请务必正确填写。</p>
+          <p className="text-[11px] text-muted-foreground -mt-1">此项与模拟面试、Agent 等多个功能关联，请务必正确填写。</p>
           <div className="grid grid-cols-2 gap-2">
             <select
               value={form.plan}

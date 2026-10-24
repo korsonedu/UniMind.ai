@@ -16,7 +16,6 @@ class BotSerializer(serializers.ModelSerializer):
             'avatar',
             'system_prompt',
             'bot_type',
-            'is_exclusive',
             'is_active',
             'created_at',
             'prompt_template_name',

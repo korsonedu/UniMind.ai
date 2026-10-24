@@ -13,7 +13,6 @@ class Command(BaseCommand):
             defaults={
                 'bot_type': 'planner',
                 'system_prompt': '',  # 由 sync_bot_prompt 从文件填充
-                'is_exclusive': True,
                 'is_active': True,
                 'institution': None,
             },

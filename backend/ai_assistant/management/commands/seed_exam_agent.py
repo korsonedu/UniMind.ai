@@ -13,7 +13,6 @@ class Command(BaseCommand):
             defaults={
                 'name': '工作台',
                 'system_prompt': '',  # 由 sync_bot_prompt 从文件填充
-                'is_exclusive': False,
                 'is_active': True,
                 'institution': None,
             },

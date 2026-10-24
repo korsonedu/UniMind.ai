@@ -63,7 +63,6 @@ class Bot(models.Model):
     avatar = models.ImageField(upload_to='bot_avatars/', blank=True, null=True)
     system_prompt = models.TextField()
     bot_type = models.CharField(max_length=20, choices=BOT_TYPE_CHOICES, default='planner', verbose_name="机器人类型")
-    is_exclusive = models.BooleanField(default=False, verbose_name="是否为专属导师")
     is_active = models.BooleanField(default=True)
     institution = models.ForeignKey(
         'users.Institution', on_delete=models.CASCADE,

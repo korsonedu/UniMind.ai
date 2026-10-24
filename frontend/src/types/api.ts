@@ -151,7 +151,6 @@ export interface Bot {
   bot_type: 'planner' | 'exam_generator';
   system_prompt: string;
   is_active: boolean;
-  is_exclusive: boolean;
   institution: number | null;
   institution_personality: Record<string, unknown>;
 }

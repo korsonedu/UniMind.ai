@@ -35,7 +35,6 @@ class BotProfile:
     executor_class: type               # ToolExecutor 子类
     tools_factory: Callable            # get_planner_tools, etc.
     prompt_dir: str                    # prompts 文件目录名
-    is_exclusive: bool = False         # 是否注入学生学术数据
     force_tool_choice: bool = False    # 是否走工具路由筛选（当前统一用 auto）
     use_intent_router: bool = False    # 是否启用意图预筛选路由
     restore_state: Optional[Callable] = field(default=None, repr=False)  # 状态恢复钩子
@@ -76,7 +75,6 @@ BOT_REGISTRY: dict[str, BotProfile] = {
         executor_class=None,  # 延迟加载
         tools_factory=None,
         prompt_dir='xiaoyu',
-        is_exclusive=True,
         force_tool_choice=True,
         use_intent_router=True,
     ),
@@ -86,7 +84,6 @@ BOT_REGISTRY: dict[str, BotProfile] = {
         executor_class=None,
         tools_factory=None,
         prompt_dir='exam_generator',
-        is_exclusive=False,
         force_tool_choice=True,
         use_intent_router=True,
         restore_state=_restore_exam_cache,
