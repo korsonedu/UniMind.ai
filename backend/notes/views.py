@@ -10,9 +10,10 @@ from ai_assistant.models import AIChatMessage, Conversation
 from core.authentication import CookieTokenAuthentication
 from users.permissions import IsMember, has_capability
 from .access import accessible_bot, notebook_ids
+from .awareness import after_note_save, enqueue, xiaoyu_bot
 from .exports import export_note, export_notebook
 from .links import index_links
-from .models import AgentNoteBinding, ConversationNoteReference, Note, Notebook, Tag
+from .models import AgentNoteBinding, ConversationNoteReference, Note, Notebook, Tag, NoteAISettings, NoteUnderstanding
 from .serializers import BindingSerializer, NoteSerializer, NotebookSerializer
 
 
@@ -51,10 +52,13 @@ class NotebookDetailView(PrivateNotesView, generics.RetrieveUpdateDestroyAPIView
         return self.destroy(request, *args, **kwargs)
 
     def perform_destroy(self, notebook):
+        moved_ids = list(Note.objects.filter(user=notebook.user, notebook=notebook).values_list('pk', flat=True))
         Note.objects.filter(user=notebook.user, notebook=notebook).update(
             notebook=notebook.parent, version=F('version') + 1, updated_at=timezone.now())
         notebook.children.filter(user=notebook.user).update(parent=notebook.parent)
         notebook.delete()
+        for note in Note.objects.filter(pk__in=moved_ids):
+            after_note_save(note)
 
 
 def bound_notes(user, bot):
@@ -87,7 +91,9 @@ class NoteListView(PrivateNotesView, generics.ListCreateAPIView):
 
     @transaction.atomic
     def perform_create(self, serializer):
-        index_links(serializer.save())
+        note = serializer.save()
+        index_links(note)
+        after_note_save(note)
 
 
 class NoteDetailView(PrivateNotesView, generics.RetrieveAPIView):
@@ -116,6 +122,7 @@ class NoteDetailView(PrivateNotesView, generics.RetrieveAPIView):
         if tags is not None:
             NoteSerializer.save_tags(note, tags)
         index_links(note)
+        after_note_save(note)
         return Response(self.get_serializer(note).data)
 
     @transaction.atomic
@@ -128,6 +135,7 @@ class NoteDetailView(PrivateNotesView, generics.RetrieveAPIView):
         else:
             Note.objects.filter(pk=note.pk, deleted_at__isnull=True).update(
                 deleted_at=timezone.now(), updated_at=timezone.now(), version=F('version') + 1)
+            NoteUnderstanding.objects.filter(note=note).update(status='invalid', result={})
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -137,6 +145,7 @@ class RestoreNoteView(PrivateNotesView, APIView):
         Note.objects.filter(pk=pk, deleted_at__isnull=False).update(
             deleted_at=None, updated_at=timezone.now(), version=F('version') + 1)
         note.refresh_from_db()
+        after_note_save(note)
         return Response(NoteSerializer(note, context={'request': request}).data)
 
 
@@ -190,7 +199,7 @@ class BindingDetailView(PrivateNotesView, generics.DestroyAPIView):
 class ReferenceInputSerializer(serializers.Serializer):
     bot = serializers.IntegerField(min_value=1)
     conversation_id = serializers.UUIDField()
-    note_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), required=False)
+    note_ids = serializers.ListField(child=serializers.IntegerField(min_value=1), max_length=30, required=False)
 
 
 class ReferencesView(PrivateNotesView, APIView):
@@ -231,3 +240,47 @@ class ReferencesView(PrivateNotesView, APIView):
 
     def put(self, request):
         return self.handle(request, write=True)
+
+
+class NoteAISettingsView(PrivateNotesView, APIView):
+    @staticmethod
+    def data(settings):
+        return {'enabled': settings.enabled, 'acknowledged': settings.acknowledged}
+
+    def get(self, request):
+        settings = NoteAISettings.objects.filter(user=request.user).first()
+        return Response(self.data(settings) if settings else {'enabled': False, 'acknowledged': False})
+
+    @transaction.atomic
+    def patch(self, request):
+        enabled = serializers.BooleanField().run_validation(request.data.get('enabled'))
+        if enabled and not xiaoyu_bot(request.user):
+            raise PermissionDenied('当前账号不能使用小宇。')
+        settings, _ = NoteAISettings.objects.get_or_create(user=request.user)
+        settings = NoteAISettings.objects.select_for_update().get(pk=settings.pk)
+        changed = settings.enabled != enabled
+        settings.acknowledged = True
+        if changed:
+            settings.enabled = enabled
+            settings.epoch += 1
+            NoteUnderstanding.objects.filter(note__user=request.user).update(status='invalid', result={})
+        settings.save()
+        if enabled:
+            from .tasks import understand_user_notes
+            transaction.on_commit(lambda: enqueue(understand_user_notes, request.user.pk, settings.epoch))
+        return Response(self.data(settings))
+
+
+class NoteLookupView(PrivateNotesView, APIView):
+    def get(self, request):
+        qs = Note.objects.filter(user=request.user, deleted_at__isnull=True)
+        if 'ids' in request.query_params:
+            raw = request.query_params['ids']
+            values = raw.split(',') if raw else []
+            ids = serializers.ListField(child=serializers.IntegerField(min_value=1), max_length=30).run_validation(values)
+            qs = qs.filter(pk__in=ids)
+        else:
+            query = request.query_params.get('q', '').strip()[:300]
+            if query:
+                qs = qs.filter(title__icontains=query)
+        return Response(list(qs.values('id', 'title', 'notebook', 'version')[:30 if 'ids' in request.query_params else 20]))

@@ -161,6 +161,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         from users.learning import confirm_ai_call, release_ai_call
         from rest_framework.exceptions import PermissionDenied
         from notes.context import prepare_note_context, conversation_uses_notes
+        from notes.awareness import note_message_metadata
         import uuid
         try:
             conversation_id = str(uuid.UUID(str(conversation_id))) if conversation_id else str(uuid.uuid4())
@@ -188,7 +189,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             )
             user_msg = self._save_message(
                 self.user, self.bot, 'user', message, conversation_id=conversation_id,
-                metadata={'notes_context_used': True, 'note_selection': note_data.get('note_selection', '')} if note_context else None,
+                metadata=note_message_metadata(note_context, note_sources, note_data.get('note_selection', '')),
             )
 
             from .views import _get_chat_history

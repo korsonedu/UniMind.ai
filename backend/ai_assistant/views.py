@@ -16,6 +16,7 @@ from .serializers import AIChatMessageSerializer, AgentMemorySerializer, BotSeri
 from .utils import get_student_academic_context
 from .views_projects import add_project_context, save_new_conversation_project
 from notes.context import prepare_note_context, conversation_uses_notes
+from notes.awareness import note_message_metadata
 from django.db import transaction
 from .prompt_sync import (
     delete_bot_prompt_file,
@@ -447,7 +448,7 @@ class AIChatView(APIView):
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
-                metadata={'notes_context_used': True, 'note_selection': request.data.get('note_selection', '')} if note_context else {},
+                metadata=note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
             )
             record_event('ai_chat_start', user=request.user, properties={'bot_id': bot_id})
 
@@ -600,7 +601,7 @@ class AIChatStreamView(APIView):
             user_msg = AIChatMessage.objects.create(
                 user=request.user, role='user', content=user_message,
                 bot=bot, conversation_id=conversation_id,
-                metadata={'notes_context_used': True, 'note_selection': request.data.get('note_selection', '')} if note_context else {},
+                metadata=note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
             )
         
             # Create pending assistant message (for refresh recovery)

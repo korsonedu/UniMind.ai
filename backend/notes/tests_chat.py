@@ -48,7 +48,10 @@ class NoteChatSmoke(TransactionTestCase):
         message = AIChatMessage.objects.get(user=self.user, role='assistant', conversation_id=self.conversation_id)
         self.assertEqual(message.metadata['note_sources'][0]['note_id'], self.note.pk)
         self.assertEqual(message.metadata['note_sources'][0]['excerpt'], self.note.content)
-        self.assertTrue(AIChatMessage.objects.get(user=self.user, role='user', conversation_id=self.conversation_id).metadata['notes_context_used'])
+        user_metadata = AIChatMessage.objects.get(user=self.user, role='user', conversation_id=self.conversation_id).metadata
+        self.assertTrue(user_metadata['notes_context_used'])
+        self.assertEqual(user_metadata['note_attachments'], [
+            {'note_id': self.note.pk, 'title': self.note.title, 'version': self.note.version}])
         self.extract.assert_not_called()
         self.note.refresh_from_db()
         self.assertEqual(self.note.content, '久期衡量利率敏感性。')

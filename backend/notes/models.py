@@ -70,3 +70,22 @@ class ConversationNoteReference(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['user', 'bot', 'conversation', 'note'], name='notes_conversation_reference_unique')]
+
+
+class NoteAISettings(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    enabled = models.BooleanField(default=False)
+    acknowledged = models.BooleanField(default=False)
+    epoch = models.PositiveIntegerField(default=0)
+
+
+class NoteUnderstanding(models.Model):
+    note = models.OneToOneField(Note, on_delete=models.CASCADE, related_name='understanding')
+    version = models.PositiveIntegerField()
+    epoch = models.PositiveIntegerField()
+    signature = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, default='pending')
+    result = models.JSONField(default=dict)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    run_id = models.CharField(max_length=36, blank=True, default='')
+    started_at = models.DateTimeField(null=True, blank=True)

@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('ai-settings/', views.NoteAISettingsView.as_view()),
+    path('lookup/', views.NoteLookupView.as_view()),
     path('notebooks/', views.NotebookListView.as_view()),
     path('notebooks/<int:pk>/', views.NotebookDetailView.as_view()),
     path('notebooks/<int:pk>/export/', views.NotebookExportView.as_view()),
