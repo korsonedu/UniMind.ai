@@ -11,13 +11,22 @@ if (!import.meta.env.DEV) throw new Error('Development fixtures only.');
 
 // Local fixtures only. Never persist a preview identity or call a production API.
 useAuthStore.persist.setOptions({ storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } });
-useAuthStore.setState({ user: { id: 0, username: 'preview', nickname: '宇驰', role: 'student', elo_score: 1280, avatar_url: '', avatar_style: '', avatar_seed: '', bio: '', allow_broadcast: false, show_others_broadcast: false, is_member: true, has_completed_initial_assessment: true, institution_id: 0, institution_role: 'student', institution: { id: 0, name: 'UniMind.ai', slug: 'preview', plan: 'growth', plan_label: 'Growth', is_plan_active: true, max_students: 100, student_count: 1, invite_slug: '' }, tour_dismissed_at: new Date().toISOString(), tour_panel_dismissed_at: new Date().toISOString() }, token: null });
+useAuthStore.setState({ user: { id: 0, username: 'learner_demo', nickname: '小林', role: 'student', elo_score: 1680, avatar_url: '', avatar_style: '', avatar_seed: 'learner_demo', bio: '', allow_broadcast: false, show_others_broadcast: false, is_member: true, has_completed_initial_assessment: true, institution_id: 0, institution_role: 'student', institution: { id: 0, name: '演示学习空间', slug: 'demo-learning', plan: 'growth', plan_label: 'Growth', is_plan_active: true, max_students: 100, student_count: 36, invite_slug: '' }, tour_dismissed_at: new Date().toISOString(), tour_panel_dismissed_at: new Date().toISOString() }, token: null });
 const date = (offset = 0) => { const value = new Date(); value.setDate(value.getDate() + offset); return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(value); };
-const memorySeries = [.67, .72, .74, .7, .78, .82, .81, .84].map((predicted, index) => ({ date: date(-28 + index * 4), predicted, actual: [.6, .7, .8, .7, .9, .9, .8, 1][index], count: 10 }));
+// 180 days, 128 active dates, and exactly 2,460 practice attempts.
+const activeDayIndices = [...Array.from({ length: 110 }, (_, index) => Math.floor(index * 161 / 110)), ...Array.from({ length: 18 }, (_, index) => index + 162)];
+const activeDays = activeDayIndices.map(index => date(index - 179));
+const practiceWeights = activeDayIndices.map((_, index) => 13 + index % 13);
+const practiceWeightTotal = practiceWeights.reduce((sum, value) => sum + value, 0);
+const practiceCounts = practiceWeights.map(value => Math.floor(2460 * value / practiceWeightTotal));
+practiceCounts[practiceCounts.length - 1] += 2460 - practiceCounts.reduce((sum, value) => sum + value, 0);
+const heatmapDays = Array.from({ length: 180 }, (_, index) => ({ date: date(index - 179), count: practiceCounts[activeDayIndices.indexOf(index)] || 0 }));
+const memorySeries = heatmapDays.filter(day => day.count > 0).map((day, index) => ({ date: day.date, predicted: Number((.61 + index * .0018 + Math.sin(index * .3) * .02).toFixed(3)), actual: Number((.59 + index * .0021 + Math.sin(index * .3 + .4) * .035).toFixed(3)), count: Math.floor(day.count * .62) }));
+const reviewCount = memorySeries.reduce((sum, item) => sum + item.count, 0);
 const guest = new URLSearchParams(location.search).has('guest');
 const role = sessionStorage.getItem('unimind-preview-role') || 'student';
 const blockedFeatures = new URLSearchParams(location.search).getAll('blocked');
-const user = { ...useAuthStore.getState().user!, id: 1, institution_id: 1, institution: { ...useAuthStore.getState().user!.institution!, id: 1 },
+const user = { ...useAuthStore.getState().user!, email: 'learner_demo@example.com', id: 1, institution_id: 1, institution: { ...useAuthStore.getState().user!.institution!, id: 1 },
   role: (role === 'admin' ? 'admin' : 'student') as 'student' | 'admin', institution_role: role === 'teacher' ? 'owner' : 'student',
   is_admin: role === 'admin', is_institution_admin: role === 'teacher', is_institution_owner: role === 'teacher', is_institution_teacher: role === 'teacher' };
 useAuthStore.setState({ user: guest ? null : user });
@@ -40,14 +49,42 @@ const createExam = (id: number, answers: { question_id: number; answer: string }
   const correctCount = results.filter(item => item.is_correct).length;
   return { id, kind: 'exam', title: '债券定价 · 随堂练习', status: 'completed', created_at: new Date().toISOString(), completed_at: new Date().toISOString(), total_questions: results.length, graded_count: results.length, failed_count: 0, pending_count: 0, total_score: correctCount * 10, max_score: results.length * 10, correct_count: correctCount, correct_rate: results.length ? Math.round(correctCount / results.length * 100) : 0, summary_text: '已完成逐题批改。巩固折现率与债券价格的关系，再尝试解释久期的作用。', kp_breakdown: [{ kp_id: 2, kp_name: '债券定价', correct_rate: results.length ? Math.round(correctCount / results.length * 100) : 0 }], href: `/tests/results/${id}`, results };
 };
-const exams = [createExam(1, [{ question_id: 104, answer: bondQuestions[0].options[0] }, { question_id: 105, answer: bondQuestions[1].options[0] }, { question_id: 106, answer: '10 年期债券的价格更敏感，因为更远期现金流对折现率更敏感。' }])];
-const albums = [{ id: 1, name: '金融学基础' }];
-const courses = ['金融市场与利率', '货币政策的传导', '风险与收益'].map((title, index) => ({ id: index + 1, title, description: index === 0 ? '从资金的时间价值出发，理解利率、现金流与债券定价。' : index === 1 ? '沿着政策利率、银行信贷、资产价格与预期，梳理货币政策的传导。' : '通过国债与企业债的比较，理解风险溢价和投资决策。', subject_name: '金融学', module: index < 2 ? 1 : 2, module_name: index < 2 ? '货币与金融市场' : '风险管理', module_sort_order: index < 2 ? 0 : 1, album: albums[0], tags: ['金融学', '基础'], courseware: 'data:text/plain;charset=utf-8,' + encodeURIComponent('债券定价学习提要\n\n1. 确定各期票息与到期本金。\n2. 用市场收益率折现每笔现金流。\n3. 比较不同收益率下的价格。'), reference_materials: 'data:text/plain;charset=utf-8,' + encodeURIComponent('课后思考\n\n为什么期限越长的债券通常对利率更敏感？\n如何区分票面利率、当前收益率和到期收益率？'), knowledge_points: [2], video_file: '/demos/demo-knowledge.mp4', cover_image: '', created_at: date(-7), knowledge_point: 2, video_url: '', thumbnail: '', duration: 1200 + index * 180, elo_reward: 20, sort_order: index, materials: [], progress: index === 0 ? { last_position: 380, is_finished: false, updated_at: date(-1) } : index === 1 ? { last_position: 1380, is_finished: true, updated_at: date(-2) } : null }));
-const achievements = [{ id: 1, key: 'diagnostic', name: '首次诊断', description: '完成首次学习诊断', icon: '🎯', category: 'diagnostic', category_label: '首次诊断', threshold: 1, is_unlocked: true, unlocked_at: date(-7), progress: 1 }, { id: 2, key: 'streak7', name: '连续学习 7 天', description: '连续学习七天解锁', icon: '📅', category: 'streak', category_label: '连续打卡', threshold: 7, is_unlocked: false, unlocked_at: null, progress: 6 }];
+const examCorrectCounts = [17, 19, 21, 20, 23, 22, 25, 24, 26, 25, 27, 28];
+const examEloChanges = [-6, -2, 4, -1, 9, 5, 14, 10, 16, 12, 20, 24];
+const exams = examCorrectCounts.map((correctCount, index) => {
+  const answers = Array.from({ length: 30 }, (_, position) => {
+    const question = bondQuestions[position % bondQuestions.length];
+    const correct = position * 7 % 30 < correctCount;
+    return { question_id: question.id, answer: question.q_type === 'objective' ? question.options[correct ? 0 : 1] : correct ? '10 年期债券的价格更敏感，因为更远期现金流对折现率更敏感。' : '暂不确定' };
+  });
+  const exam = createExam(12 - index, answers);
+  return { ...exam, title: `债券定价 · 第 ${index + 1} 轮巩固`, total_score: correctCount, max_score: 30, elo_change: examEloChanges[index], results: exam.results.map(result => ({ ...result, score: result.is_correct ? 1 : 0, max_score: 1 })), created_at: `${date(-1 - (11 - index) * 13)}T08:30:00Z`, completed_at: `${date(-1 - (11 - index) * 13)}T08:42:00Z` };
+}).reverse();
+const albums = ['金融学基础', '固定收益与投资', '公司金融', '经济学与分析方法'].map((name, index) => ({ id: index + 1, name }));
+const courseTitles = ['金融市场与利率', '货币政策的传导', '风险与收益', '现金流折现与债券定价', '收益率曲线与期限结构', '久期与利率风险', '资本预算与投资决策', '资本结构与企业价值', '财务报表分析', '市场结构与定价', '宏观经济与政策组合', '统计推断与金融数据'];
+const courseTopics = ['货币市场、资本市场与均衡利率', '政策利率、银行信贷与市场预期', '风险度量、分散投资与风险溢价', '票息、本金与到期收益率', '即期利率、远期利率与预期理论', '久期、凸性与债券价格敏感性', '净现值、内部收益率与项目现金流', '资本成本、融资决策与企业估值', '盈利能力、现金流与经营质量', '竞争结构、边际收益与价格决策', '总需求、总供给与政策传导', '估计、假设检验与回归分析'];
+const completionDates = [12, 27, 43, 59, 76, 92].map(index => activeDays[index]);
+const courses = courseTitles.map((title, index) => {
+  const album = albums[Math.floor(index / 3)];
+  const duration = 2700 + index % 4 * 420;
+  const courseware = 'data:text/plain;charset=utf-8,' + encodeURIComponent(`${title} · 学习讲义\n\n学习目标：${courseTopics[index]}。\n\n一、概念与适用条件\n梳理核心定义，明确变量和假设。\n\n二、推导与例题\n先建立经济直觉，再完成公式推导与数值计算。\n\n三、复习清单\n用自己的话解释关键关系；独立完成例题；记录易混淆的概念。`);
+  const references = 'data:text/plain;charset=utf-8,' + encodeURIComponent(`${title} · 课后练习与阅读提要\n\n1. 整理${courseTopics[index]}之间的逻辑关系。\n2. 改变例题中的一个条件，重新判断结论。\n3. 对照课程讲义，解释计算结果的经济含义。\n\n本资料为虚构演示账号的本地示例，不包含真实学员资料。`);
+  return { id: index + 1, title, description: `围绕${courseTopics[index]}，结合概念讲解、推导和案例练习建立完整理解。`, subject_name: index < 9 ? '金融学' : '经济学', module: album.id, module_name: album.name, module_sort_order: album.id - 1, album, album_name: album.name, tags: [index < 9 ? '金融学' : '经济学', index < 3 ? '基础' : '进阶'], courseware, reference_materials: references, knowledge_points: [index % 7 + 2], video_file: '/demos/demo-knowledge.mp4', cover_image: '', created_at: `${date(-179 + index * 7)}T01:00:00Z`, knowledge_point: index % 7 + 2, video_url: '', thumbnail: '', duration, elo_reward: 20, sort_order: index, materials: [], progress: index < 6 ? { last_position: duration, is_finished: true, updated_at: `${completionDates[index]}T09:20:00Z` } : index < 9 ? { last_position: Math.round(duration * [.63, .32, .18][index - 6]), is_finished: false, updated_at: `${date(-1 - (index - 6) * 2)}T10:15:00Z` } : null };
+});
+const achievements = [
+  { key: 'diagnostic', name: '首次诊断', description: '完成首次学习诊断', category: 'diagnostic', threshold: 1, progress: 1, unlocked: -179 },
+  { key: 'practice100', name: '练习起步', description: '累计完成 100 次练习', category: 'practice', threshold: 100, progress: 2460, unlocked: -163 },
+  { key: 'streak7', name: '连续学习 7 天', description: '连续学习七天', category: 'streak', threshold: 7, progress: 18, unlocked: -11 },
+  { key: 'practice1000', name: '千题积累', description: '累计完成 1,000 次练习', category: 'practice', threshold: 1000, progress: 2460, unlocked: -86 },
+  { key: 'courses6', name: '学以致用', description: '完成六门课程', category: 'course', threshold: 6, progress: 6, unlocked: -45 },
+  { key: 'streak14', name: '连续学习 14 天', description: '连续学习十四天', category: 'streak', threshold: 14, progress: 18, unlocked: -4 },
+  { key: 'streak30', name: '连续学习 30 天', description: '距离三十天的持续积累再近一步', category: 'streak', threshold: 30, progress: 18, unlocked: null },
+  { key: 'practice3000', name: '三千次积累', description: '累计完成 3,000 次练习', category: 'practice', threshold: 3000, progress: 2460, unlocked: null },
+].map((item, index) => ({ id: index + 1, ...item, icon: '', category_label: item.category === 'streak' ? '连续学习' : item.category === 'practice' ? '练习积累' : '学习历程', is_unlocked: item.unlocked !== null, unlocked_at: item.unlocked !== null ? `${date(item.unlocked)}T08:00:00Z` : null }));
 const articles = [{ id: 1, title: '理解货币政策的传导', content: '<p>从政策利率、融资成本与消费投资三个环节理解货币政策。</p>', summary: '政策利率如何影响经济活动', tags: ['金融学'], author_display_name: 'UniMind', created_at: date(-2), updated_at: date(-1), view_count: 36 }];
-const plans: { id: number; content: string; is_completed: boolean }[] = [{ id: 1, content: '复习货币政策', is_completed: false }];
-const messages: { id: number; content: string; timestamp: string; user_detail: typeof user }[] = [{ id: 1, content: '今天准备把债券定价这一章学完，一起专注 25 分钟。', timestamp: `${date()}T07:40:00Z`, user_detail: { ...user, id: 3, nickname: '林同学' } }, { id: 2, content: '刚完成到期复习，继续加油。', timestamp: `${date()}T07:45:00Z`, user_detail: { ...user, id: 4, nickname: '周同学' } }];
-const qaTeacher = { ...user, id: 2, username: 'teacher-preview', nickname: '陈老师' };
+const plans: { id: number; content: string; is_completed: boolean }[] = [{ id: 1, content: '复习货币政策传导与预期渠道', is_completed: true }, { id: 2, content: '完成债券定价的到期复习', is_completed: false }, { id: 3, content: '继续学习资本预算，整理净现值判断条件', is_completed: false }];
+const messages: { id: number; content: string; timestamp: string; user_detail: typeof user }[] = [{ id: 1, content: '今天准备把债券定价这一章学完，一起专注 25 分钟。', timestamp: `${date()}T07:40:00Z`, user_detail: { ...user, id: 3, nickname: '同学 A', username: 'classmate_a_demo', avatar_seed: 'classmate_a_demo' } }, { id: 2, content: '刚完成到期复习，继续加油。', timestamp: `${date()}T07:45:00Z`, user_detail: { ...user, id: 4, nickname: '同学 B', username: 'classmate_b_demo', avatar_seed: 'classmate_b_demo' } }];
+const qaTeacher = { ...user, id: 2, username: 'teacher_demo', email: 'teacher_demo@example.com', nickname: '示例老师', avatar_seed: 'teacher_demo' };
 const qaAnswers = [
   { id: 701, question: 601, content: '先区分政策利率和市场利率。政策利率影响银行的资金成本，再通过信贷、资产价格和预期影响消费与投资。\n\n传导需要时间，也会受到银行放贷意愿与企业投资预期的影响。', is_teacher: true, created_at: `${date()}T02:20:00Z`, user_detail: qaTeacher, likes_count: 3, is_liked: false },
   { id: 702, question: 601, content: '明白了，如果企业对未来收益预期较弱，即使融资成本降低，也可能不增加投资，对吗？', is_teacher: false, created_at: `${date()}T02:30:00Z`, user_detail: user, likes_count: 0, is_liked: false },
@@ -60,23 +97,38 @@ const qaQuestions: Array<{
   likes_count: number; is_liked: boolean; is_followed: boolean;
 }> = [
   { id: 601, content: '政策利率下降后，为什么消费和投资不一定马上增加？\n\n我理解融资成本会降低，但不太清楚银行信贷和市场预期在这里分别起什么作用。', attachment: null, is_solved: true, is_starred: true, created_at: `${date()}T02:00:00Z`, user_detail: user, answers: qaAnswers, first_answer: qaAnswers[0], reply_count: 3, likes_count: 5, is_liked: false, is_followed: false },
-  { id: 602, content: '如何理解现值计算中的折现率？\n\n我在比较两笔未来现金流时有些困惑。未来两年后收到的金额相同，但其中一笔来自国债，另一笔来自企业债券。\n\n如果直接使用相同的折现率，计算出来的现值也会一样。但企业债券的违约风险更高，我感觉这个风险应该在计算中有所体现。\n\n我的问题是：折现率应该只考虑资金的时间价值，还是同时考虑风险补偿？选择折现率时，应该先确定一个无风险利率，再加入风险溢价吗？\n\n另外，如果市场利率变化，已经发行的固定利率债券价格也会变化。这个变化能否直接从现值公式中解释？\n\n希望老师能结合一个简单例子，把现金流、折现率和债券价格之间的关系串起来。', attachment: null, is_solved: false, is_starred: false, created_at: `${date()}T01:00:00Z`, user_detail: { ...user, id: 3, username: 'classmate-preview', nickname: '林同学' }, answers: [], first_answer: null, reply_count: 0, likes_count: 0, is_liked: false, is_followed: false },
+  { id: 602, content: '如何理解现值计算中的折现率？\n\n我在比较两笔未来现金流时有些困惑。未来两年后收到的金额相同，但其中一笔来自国债，另一笔来自企业债券。\n\n如果直接使用相同的折现率，计算出来的现值也会一样。但企业债券的违约风险更高，我感觉这个风险应该在计算中有所体现。\n\n我的问题是：折现率应该只考虑资金的时间价值，还是同时考虑风险补偿？选择折现率时，应该先确定一个无风险利率，再加入风险溢价吗？\n\n另外，如果市场利率变化，已经发行的固定利率债券价格也会变化。这个变化能否直接从现值公式中解释？\n\n希望老师能结合一个简单例子，把现金流、折现率和债券价格之间的关系串起来。', attachment: null, is_solved: false, is_starred: false, created_at: `${date()}T01:00:00Z`, user_detail: { ...user, id: 3, nickname: '同学 A', username: 'classmate_a_demo', avatar_seed: 'classmate_a_demo' }, answers: [], first_answer: null, reply_count: 0, likes_count: 0, is_liked: false, is_followed: false },
 ];
-const notifications = [{ id: 1, ntype: 'exam', title: '你的随堂练习已完成批改', content: '债券定价 · 3 道题，打开查看逐题复盘与下一步建议。', link: '/tests/results/1', is_read: false, created_at: `${date()}T07:30:00Z` }, { id: 2, ntype: 'qa', title: '陈老师回复了你的问题', content: '政策利率与市场融资成本之间，还需要考虑银行信贷和预期。', link: '/qa/601', is_read: true, created_at: `${date()}T02:40:00Z` }];
-const watchLater: { course: number; created_at: string }[] = [{ course: 3, created_at: date() }];
-const courseActivity = Array.from({ length: 28 }, (_, i) => ({ date: date(i - 27), course: i % 2 + 1, watched_seconds: i % 5 ? (i * 211) % 2300 : 0, completions: i === 26 ? 1 : 0, elo_earned: i === 26 ? 20 : 0 }));
-let learningGoal: { title: string; deadline: string; courses: number[] } | null = JSON.parse(sessionStorage.getItem('unimind-preview-goal') || JSON.stringify({ title: '掌握金融市场与利率', deadline: date(14), courses: [1, 2, 3] }));
+const notifications = [{ id: 1, ntype: 'exam', title: '你的随堂练习已完成批改', content: '债券定价 · 3 道题，打开查看逐题复盘与下一步建议。', link: '/tests/results/1', is_read: false, created_at: `${date()}T07:30:00Z` }, { id: 2, ntype: 'qa', title: '示例老师回复了你的问题', content: '政策利率与市场融资成本之间，还需要考虑银行信贷和预期。', link: '/qa/601', is_read: true, created_at: `${date()}T02:40:00Z` }];
+const watchLater: { course: number; created_at: string }[] = [8, 10, 11, 12].map((course, index) => ({ course, created_at: `${date(-index - 1)}T08:00:00Z` }));
+const courseActivity = activeDays.map((day, index) => {
+  const completed = completionDates.indexOf(day);
+  return { date: day, course: completed >= 0 ? completed + 1 : index < 110 ? index % 6 + 1 : index % 3 + 7, watched_seconds: 900 + index * 317 % 1700, completions: completed >= 0 ? 1 : 0, elo_earned: completed >= 0 ? 20 : 0 };
+});
+let learningGoal: { title: string; deadline: string; courses: number[] } | null = JSON.parse(sessionStorage.getItem('unimind-preview-demo-goal') || JSON.stringify({ title: '金融学核心体系 · 第三阶段', deadline: date(21), courses: [1, 2, 3, 4, 5, 6, 7, 8, 9] }));
 const dashboard: DashData = {
-  stats: { streak_days: 6, weekly_activity: 42, accuracy: 82, total_attempted: 236, attempted_questions: 180, total_attempts: 236, last_accuracy: 82, lifetime_accuracy: 79.5, has_attempts: true, is_new_user: new URLSearchParams(location.search).has('new'), today_checked_in: false, checkin_streak: 5, checkin_history: [], unlocked_achievement_count: 3,
-    heatmap_days: Array.from({ length: 28 }, (_, i) => ({ date: date(i - 27), count: i % 5 === 0 ? 0 : (i * 7) % 20 })),
-    next_achievements: [{ key: 'streak7', name: '连续学习 7 天', description: '连续学习七天解锁。', icon: '', category: 'streak' }, { key: 'practice300', name: '完成 300 道练习', description: '累计完成三百道练习解锁。', icon: '', category: 'practice' }],
-  }, reviews: { due_count: 8 }, exams: [{ id: 1, total_score: 82, max_score: 100, percentage: 82, elo_change: 24, created_at: date(-1) }],
+  stats: { streak_days: 18, weekly_activity: heatmapDays.slice(-7).reduce((sum, day) => sum + day.count, 0), accuracy: 82, total_attempted: 2460, attempted_questions: 1280, total_attempts: 2460, last_accuracy: 82, lifetime_accuracy: 79.5, has_attempts: true, is_new_user: new URLSearchParams(location.search).has('new'), today_checked_in: true, checkin_streak: 18, checkin_history: heatmapDays.map(day => ({ date: day.date, checked_in: day.count > 0 })), unlocked_achievement_count: achievements.filter(item => item.is_unlocked).length,
+    heatmap_days: heatmapDays,
+    next_achievements: achievements.filter(item => !item.is_unlocked).map(item => ({ key: item.key, name: item.name, description: item.description, icon: item.icon, category: item.category })),
+  }, reviews: { due_count: 8 }, exams: exams.map(exam => ({ id: exam.id, total_score: exam.total_score, max_score: exam.max_score, percentage: exam.correct_rate, elo_change: exam.elo_change, created_at: exam.created_at })),
 };
 let history: Message[] = buildDemoHistory(date());
-const projectFixtures: { projects: { id: number; name: string; instructions: string }[]; assignments: Record<string, number | null> } = JSON.parse(sessionStorage.getItem('unimind-preview-projects') || '{"projects":[],"assignments":{}}');
+const archivedConversations = [
+  ['净现值与内部收益率', '为什么净现值和内部收益率有时会给出不同结论？', '先比较项目规模和现金流发生的时间。互斥项目需要比较创造的价值；出现多个符号变化时，内部收益率还可能不唯一。', -2],
+  ['资本成本复习', '帮我整理一下加权平均资本成本的计算步骤。', '先区分权益和债务融资，再按市场价值确定权重；债务成本需要考虑税盾。最后核对折现率和现金流口径是否一致。', -8],
+  ['上月学习复盘', '回顾一下我上个月的学习情况。', '你完成了固定收益专题的课程，现金流折现更稳定了。接下来继续巩固久期，并把估值思路迁移到公司金融。', -25],
+  ['收益率曲线的直觉', '向上倾斜的收益率曲线说明什么？', '可以结合未来短期利率预期和期限溢价理解。先把不同期限的收益率放在同一张图上，再区分预期与风险补偿。', -51],
+  ['货币政策的预期渠道', '为什么政策宣布之后，市场会在政策落地前变化？', '资产价格反映对未来现金流和折现率的预期。政策改变预期时，交易和定价就可能先发生变化。', -93],
+  ['建立金融学复习路径', '我想系统复习金融学，应该从哪里开始？', '从资金时间价值开始，接着理解金融市场与利率，再进入固定收益和公司金融。每完成一章，结合课程讲义做一次回忆和练习。', -173],
+] as const;
+history.push(...archivedConversations.flatMap((entry, index): Message[] => {
+  const base = { conversation_id: `demo-archive-${index}`, conversation_title: entry[0], timestamp: `${date(entry[3])}T08:00:00Z` };
+  return [{ ...base, id: 2000 + index * 2, role: 'user', content: entry[1] }, { ...base, id: 2001 + index * 2, role: 'assistant', content: entry[2] }];
+}));
+const projectFixtures: { projects: { id: number; name: string; instructions: string }[]; assignments: Record<string, number | null> } = JSON.parse(sessionStorage.getItem('unimind-preview-demo-projects') || JSON.stringify({ projects: [{ id: 1, name: '金融学系统复习', instructions: '从已有练习记录出发，连接时间价值、固定收益与货币政策。' }, { id: 2, name: '公司金融专题', instructions: '结合课程进度，巩固资本预算、资本成本与企业价值。' }], assignments: { 'demo-plan': 1, 'demo-bond': 1, 'demo-map': 1, 'demo-practice': 1, 'demo-archive-0': 2, 'demo-archive-1': 2 } }));
 const cardInteractions: { id: number; card_action_url: string; completed: boolean }[] = [];
-const saveProjects = () => sessionStorage.setItem('unimind-preview-projects', JSON.stringify(projectFixtures));
-const conversationFixtures: Record<string, { title: string; is_pinned: boolean }> = JSON.parse(sessionStorage.getItem('unimind-preview-conversations') || '{}');
+const saveProjects = () => sessionStorage.setItem('unimind-preview-demo-projects', JSON.stringify(projectFixtures));
+const conversationFixtures: Record<string, { title: string; is_pinned: boolean }> = JSON.parse(sessionStorage.getItem('unimind-preview-demo-conversations') || '{}');
 history = history.map(message => ({ ...message, conversation_project: projectFixtures.assignments[message.conversation_id!] ?? null, conversation_title: conversationFixtures[message.conversation_id!]?.title || message.conversation_title, conversation_pinned: conversationFixtures[message.conversation_id!]?.is_pinned || false }));
 api.defaults.adapter = async config => {
   let data: unknown = {};
@@ -108,14 +160,14 @@ api.defaults.adapter = async config => {
     case '/users/me/achievements/': data = achievements.filter(item => item.is_unlocked); break;
     case '/users/nps/status/': data = { should_show: false }; break;
     case '/users/institution/me/students/ranking/': data = [user]; break;
-    case '/courses/tags/': data = [{ name: '金融学', count: 3 }, { name: '基础', count: 3 }]; break;
+    case '/courses/tags/': data = [...new Set(courses.flatMap(course => course.tags))].map(name => ({ name, count: courses.filter(course => course.tags.includes(name)).length })); break;
     case '/courses/learning-progress/': data = courses.filter(c => c.progress).map(c => ({ course: c.id, ...c.progress, duration: c.duration })); break;
     case '/courses/learning-goal/': {
-      if (config.method === 'put') { learningGoal = { title: payload.title, deadline: payload.deadline, courses: payload.courses }; sessionStorage.setItem('unimind-preview-goal', JSON.stringify(learningGoal)); }
+      if (config.method === 'put') { learningGoal = { title: payload.title, deadline: payload.deadline, courses: payload.courses }; sessionStorage.setItem('unimind-preview-demo-goal', JSON.stringify(learningGoal)); }
       const completed = courses.filter(course => learningGoal?.courses.includes(course.id) && course.progress?.is_finished).length;
       data = learningGoal ? { ...learningGoal, total_courses: learningGoal.courses.length, completed_courses: completed, progress_percent: learningGoal.courses.length ? Math.round(completed / learningGoal.courses.length * 100) : 0 } : null; break;
     }
-    case '/courses/learning-activity/': data = { today: date(), tracking_started_at: date(-28), days: courseActivity, totals: [1, 2].map(course => ({ course, watched_seconds: courseActivity.filter(item => item.course === course).reduce((sum, item) => sum + item.watched_seconds, 0), completions: course === 1 ? 1 : 0, elo_earned: course === 1 ? 20 : 0 })) }; break;
+    case '/courses/learning-activity/': data = { today: date(), tracking_started_at: date(-179), days: courseActivity, totals: courses.map(item => ({ course: item.id, watched_seconds: courseActivity.filter(day => day.course === item.id).reduce((sum, day) => sum + day.watched_seconds, 0), completions: courseActivity.filter(day => day.course === item.id).reduce((sum, day) => sum + day.completions, 0), elo_earned: courseActivity.filter(day => day.course === item.id).reduce((sum, day) => sum + day.elo_earned, 0) })) }; break;
     case '/courses/watch-later/': data = watchLater; break;
     case '/courses/albums/': data = albums; break;
     case '/courses/': {
@@ -124,7 +176,7 @@ api.defaults.adapter = async config => {
     }
     case '/quizzes/knowledge-points/': data = kps; break;
     case '/users/me/knowledge-mastery/': data = { '1': 'learning', '2': 'learning', '3': 'mastered', '4': 'mastered', '5': 'learning', '6': 'learning', '7': 'unlearned', '8': 'learning' }; break;
-    case '/users/me/report-card/': data = { student: { ...user, date_joined: date(-60) }, stats: { total_attempted: 236, total_distinct: 180, correct_count: 148, wrong_count: 42, mastered_count: 128, accuracy: 82.2, study_streak: 6, checkin_streak: 5 }, radar: [{ subject: '金融学', avg_mastery: 72, kp_count: 12 }, { subject: '经济学', avg_mastery: 65, kp_count: 8 }, { subject: '数学', avg_mastery: 84, kp_count: 10 }], daily_activity: dashboard.stats.heatmap_days, exams: dashboard.exams, achievements: achievements.filter(a => a.is_unlocked) }; break;
+    case '/users/me/report-card/': data = { student: { ...user, date_joined: `${date(-179)}T01:00:00Z` }, stats: { total_attempted: 2460, total_distinct: 1280, attempted_questions: 1280, total_attempts: 2460, correct_count: 1050, wrong_count: 230, mastered_count: 980, accuracy: 82, last_accuracy: 82, lifetime_accuracy: 79.5, study_streak: 18, checkin_streak: 18, diagnostic_mastered_count: 22, diagnostic_kp_count: 30 }, radar: [{ subject: '金融学', avg_mastery: 72, kp_count: 12 }, { subject: '经济学', avg_mastery: 65, kp_count: 8 }, { subject: '数学', avg_mastery: 84, kp_count: 10 }], daily_activity: dashboard.stats.heatmap_days, exams: dashboard.exams, achievements: achievements.filter(a => a.is_unlocked) }; break;
     case '/articles/': data = { articles, tag_stats: [{ tag: '金融学', count: 1 }], total_pages: 1 }; break;
     case '/qa/questions/': {
       if (config.method === 'post') {
@@ -155,10 +207,15 @@ api.defaults.adapter = async config => {
     }
     case '/quizzes/favorite/toggle/': { const question = practiceQuestions.find(question => question.id === payload.question_id)!; question.is_favorite = !question.is_favorite; data = { is_favorite: question.is_favorite }; break; }
     case '/quizzes/mastered/toggle/': { const question = practiceQuestions.find(question => question.id === payload.question_id)!; question.is_mastered = !question.is_mastered; data = { is_mastered: question.is_mastered }; break; }
-    case '/quizzes/submit-exam/': { const exam = createExam(Date.now(), payload.answers || []); exams.unshift(exam); data = { exam_id: exam.id, status: exam.status, href: exam.href }; break; }
+    case '/quizzes/submit-exam/': { const exam = createExam(Date.now(), payload.answers || []); exams.unshift({ ...exam, elo_change: 0 }); data = { exam_id: exam.id, status: exam.status, href: exam.href }; break; }
     case '/quizzes/exams/': data = { items: exams }; break;
-    case '/quizzes/memorix/curve/': data = { window_days: 90, time_series: memorySeries, fit_curve: [], metrics: { review_count: 80, rmse: null, mae: null, avg_predicted: .76, avg_actual: .8 }, profile: { last_optimized_at: `${date(-1)}T08:00:00Z`, current_loss: null, total_reviews_used: 80 } }; break;
-    case '/quizzes/memorix/optimization-history/': data = { results: [{ id: 1, improvement_ratio: .045, reviews_used: 60, accepted: true, created_at: `${date(-1)}T08:00:00Z` }] }; break;
+    case '/quizzes/memorix/curve/': {
+      const windowDays = Number(params.get('window_days') || 90);
+      const series = memorySeries.filter(item => item.date >= date(-windowDays));
+      const count = series.reduce((sum, item) => sum + item.count, 0);
+      data = { window_days: windowDays, time_series: series, fit_curve: [], metrics: { review_count: count, rmse: .036, mae: .029, avg_predicted: series.reduce((sum, item) => sum + item.predicted * item.count, 0) / count, avg_actual: series.reduce((sum, item) => sum + item.actual * item.count, 0) / count }, profile: { last_optimized_at: `${date(-1)}T08:00:00Z`, current_loss: .036, total_reviews_used: reviewCount } }; break;
+    }
+    case '/quizzes/memorix/optimization-history/': data = { results: Array.from({ length: 6 }, (_, index) => ({ id: index + 1, improvement_ratio: .045 - index * .004, reviews_used: reviewCount - index * 140, accepted: true, created_at: `${date(-1 - index * 14)}T08:00:00Z` })) }; break;
     case '/quizzes/wrong-questions/insights/': data = { overview: { wrong_questions: 2, wrong_attempts: 5 }, recommended_drills: [{ drill_type: 'cause', drill_key: 'concept', drill_label: '概念理解', question_count: 2, question_ids: [103, 101], recommended_questions: 2 }, { drill_type: 'knowledge_point', drill_key: '2', drill_label: '货币政策', question_count: 2, question_ids: [103, 101], recommended_questions: 2 }], cause_breakdown: [{ cause_key: 'concept', cause_label: '概念理解', question_count: 2, wrong_attempts: 5, ratio: 1 }], knowledge_point_breakdown: [{ knowledge_point_id: 2, knowledge_point_name: '货币政策', question_count: 2, avg_wrong_count: 2.5 }] }; break;
     case '/payments/orders/': data = []; break;
     default:
@@ -194,7 +251,7 @@ api.defaults.adapter = async config => {
         if ('project_id' in payload) projectFixtures.assignments[id] = payload.project_id;
         data = { conversation_id: id, title: metadata.title, is_pinned: metadata.is_pinned, project_id: projectFixtures.assignments[id] ?? null };
         history = history.map(message => message.conversation_id === id ? { ...message, conversation_title: metadata.title, conversation_pinned: metadata.is_pinned, conversation_project: projectFixtures.assignments[id] ?? null } : message);
-        sessionStorage.setItem('unimind-preview-conversations', JSON.stringify(conversationFixtures));
+        sessionStorage.setItem('unimind-preview-demo-conversations', JSON.stringify(conversationFixtures));
         saveProjects();
       }
       else if (/^\/ai\/projects\/\d+\/$/.test(path)) {
@@ -206,9 +263,9 @@ api.defaults.adapter = async config => {
       else if (/^\/courses\/\d+\/outline\/$/.test(path)) data = { status: 'completed', items: ['课程导入', '利率的基本含义', '名义利率与实际利率', '资金的时间价值', '债券价格与收益率', '期限结构', '风险溢价', '政策利率', '金融市场的联系', '案例讨论', '本节回顾', '思考与练习'].map((title, index) => ({ index, title, timestamp: index * 90, description: index === 0 ? '从一笔未来现金流出发，理解债券估值的思路。' : '' })) };
       else if (/^\/courses\/\d+\/transcript\/$/.test(path)) data = { status: 'completed', segments: [{ start: 0, end: 90, text: '债券的价格取决于未来现金流及其折现率。市场收益率上升时，现金流的现值会下降。' }], full_text: '债券的价格取决于未来现金流及其折现率。市场收益率上升时，现金流的现值会下降。' };
       else if (/^\/courses\/\d+\/progress\/$/.test(path)) data = { elo_added: 0 };
-      else if (/^\/courses\/\d+\/$/.test(path)) data = { ...courses.find(c => c.id === Number(path.split('/')[2])), video_file: '/demos/demo-knowledge.mp4', ...{ ai_outline_enabled: true, courseware: 'data:text/plain,UniMind%20local%20preview%20courseware', reference_materials: 'data:text/plain,UniMind%20local%20preview%20references', description: '从资金时间价值、市场收益率与现金流折现，理解债券定价。视频与资料使用本地演示素材。' } };
+      else if (/^\/courses\/\d+\/$/.test(path)) data = { ...courses.find(c => c.id === Number(path.split('/')[2])), video_file: '/demos/demo-knowledge.mp4', ai_outline_enabled: true };
       else if (/^\/courses\/\d+\/watch-later\/$/.test(path)) { const course = Number(path.split('/')[2]); if (config.method === 'delete') { const index = watchLater.findIndex(item => item.course === course); if (index >= 0) watchLater.splice(index, 1); } else { const item = { course, created_at: new Date().toISOString() }; if (!watchLater.some(item => item.course === course)) watchLater.push(item); data = item; } }
-      else if (/^\/courses\/albums\/\d+\/courses\/$/.test(path)) data = courses;
+      else if (/^\/courses\/albums\/\d+\/courses\/$/.test(path)) data = courses.filter(course => course.album.id === Number(path.split('/')[3]));
       else if (/^\/articles\/\d+\/$/.test(path)) data = articles[0];
       else if (/^\/users\/plans\/\d+\/$/.test(path)) { const plan = plans.find(p => p.id === Number(path.split('/')[3])); if (plan && payload) Object.assign(plan, payload); data = plan; }
       else throw new AxiosError('此操作需要连接真实后端', 'PREVIEW_UNAVAILABLE', config, undefined, { data: { detail: '此操作需要连接真实后端' }, status: 501, statusText: 'Preview', headers: {}, config });

@@ -10,18 +10,18 @@ const price = (yieldPercent: number, years: number) => Array.from({ length: year
 
 export const agentDemoScenes: DemoScene[] = [
   {
-    id: 'demo-plan', title: '把今天学什么，安排清楚',
+    id: 'demo-plan', title: '今天的学习安排',
     prompt: '小宇，我今天有 45 分钟。结合最近的学习情况，帮我安排一下。',
     answer: '你最近的练习正确率是 82%，但「债券定价」和「货币政策传导」还不稳定。我建议先处理 8 道到期复习，再用图像理解利率与价格的关系，最后做一组短练习。\n\n这 45 分钟，我们把一个薄弱点真正解决。',
     tools: [
-      { name: 'get_learning_stats', label: '读取学习记录', summary: '已分析 236 次练习与最近 14 天学习记录', visual: { type: 'data_card', payload: { title: '你的学习状态', subtitle: '最近 7 天', items: [{ label: '练习正确率', value: '82% · ↑ 11%', trend: 'up' }, { label: '连续学习', value: '6 天' }, { label: '本周练习', value: '42 题' }], note: '根据演示账号的学习记录生成。' } } },
+      { name: 'get_learning_stats', label: '读取学习记录', summary: '已分析 2,460 次练习与近 180 天学习记录', visual: { type: 'data_card', payload: { title: '你的学习状态', subtitle: '最近 7 天', items: [{ label: '练习正确率', value: '82% · ↑ 11%', trend: 'up' }, { label: '连续学习', value: '18 天' }, { label: '本周练习', value: '179 题' }], note: '根据演示账号的学习记录生成。' } } },
       { name: 'get_user_weak_points', label: '定位薄弱知识', summary: '债券定价 48% · 货币政策传导 56%' },
       { name: 'get_due_reviews', label: '检查到期复习', summary: '找到 8 道到期题目，预计 10 分钟' },
       { name: 'render_visual', label: '安排今天的学习', summary: '已生成 45 分钟学习路径', visual: { type: 'action_cards', payload: { title: '今天的 45 分钟', cards: [action('01 先把到期知识稳住 · 10 分钟', '8 道 Memorix 到期复习，先回忆，再看解析。', 'review', '/tests?mode=review', '开始复习'), action('02 看懂债券价格曲线 · 15 分钟', '从现金流与折现率出发，用一张图理解反向关系。', 'chart', '用图像讲解债券价格与收益率的关系', '一起看图', 'reply'), action('03 用 3 道题检查理解 · 20 分钟', '从直觉判断到计算，再到完整解释。', 'quiz', '给我一组债券定价练习', '开始随堂练习', 'reply')] } } },
     ],
   },
   {
-    id: 'demo-bond', title: '让抽象概念，看得见',
+    id: 'demo-bond', title: '利率与债券价格',
     prompt: '为什么市场利率上升，债券价格反而下降？画图帮我理解。',
     answer: '债券未来付给你的现金流没有变，变的是你今天愿意为它支付多少钱。市场收益率越高，同一笔未来现金流折算到今天就越少。\n\n看这张图：同样是面值 1,000 元、票面利率 4% 的债券，期限越长，价格对收益率变化越敏感。',
     tools: [
@@ -31,7 +31,7 @@ export const agentDemoScenes: DemoScene[] = [
     ],
   },
   {
-    id: 'demo-map', title: '找到知识之间的连接',
+    id: 'demo-map', title: '债券定价的知识关系',
     prompt: '我总把利率、债券、风险溢价混在一起。能把它们的关系整理出来吗？',
     answer: '它们围绕同一个问题连接起来：未来的钱，今天值多少？\n\n你对「现金流」和「资金时间价值」已经比较熟悉，可以从这两个支点出发。先补上折现率，再看债券定价，最后理解风险溢价为什么会改变价格。图中偏暖的节点是这次优先补齐的部分。',
     tools: [
@@ -41,7 +41,7 @@ export const agentDemoScenes: DemoScene[] = [
     ],
   },
   {
-    id: 'demo-practice', title: '从理解，到真正做对',
+    id: 'demo-practice', title: '债券定价练习',
     prompt: '刚才的曲线我看懂了。给我几道债券定价题，看看我是不是真的会了。',
     answer: '好，我们按「判断方向 → 代入计算 → 解释原因」练 3 道。你可以直接在这里作答，提交后查看逐题反馈。\n\n这组题会特别检查你是否把票面利率和市场收益率区分开。',
     tools: [

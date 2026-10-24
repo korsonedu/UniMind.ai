@@ -174,7 +174,7 @@ const RootRedirect = () => {
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
 
-  return <Suspense fallback={<PageLoader />}><Landing /></Suspense>;
+  return <Suspense fallback={<div className="min-h-dvh bg-[#080b0f]" aria-hidden="true" />}><Landing /></Suspense>;
 };
 
 const lazyPage = (Component: React.ComponentType) => (
