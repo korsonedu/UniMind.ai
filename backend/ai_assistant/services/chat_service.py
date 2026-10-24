@@ -10,13 +10,12 @@ class AssistantChatService:
     def build_system_prompt(cls, bot, student_context: str = '') -> str:
         """从文件加载 system prompt，fallback 到 DB。"""
         if not bot:
-            return '你是UniMind.ai的AI学术助教。'
+            return '你是 UniMind.ai 的学习 Agent。'
 
         from ai_assistant.prompt_sync import load_system_prompt
         prompt = load_system_prompt(bot)
 
-        if bot.is_exclusive:
-            prompt = prompt.replace('{student_context}', student_context or '暂无学业画像。')
+        prompt = prompt.replace('{student_context}', student_context or '暂无学业画像。')
         return prompt
 
     @classmethod
@@ -65,34 +64,6 @@ class AssistantChatService:
         adaptive_section = f"\n\n{adaptive_directives}" if adaptive_directives else ''
         variant_section = f"\n\n{variant_suffix}" if variant_suffix else ''
         return base + memory_section + tool_guide + intent_guide + personality_section + adaptive_section + variant_section
-
-    @classmethod
-    def chat_with_assistant(
-        cls,
-        ai,
-        bot,
-        history_messages: Sequence[Dict[str, str]],
-        user_message: str,
-        student_context: str = '',
-    ):
-        system_prompt = cls.build_system_prompt(bot, student_context)
-
-        messages = [{'role': 'system', 'content': system_prompt}]
-
-        for msg in history_messages or []:
-            role = str(msg.get('role', '')).strip()
-            content = str(msg.get('content', '')).strip()
-            if role in {'user', 'assistant'} and content:
-                messages.append({'role': role, 'content': content})
-
-        messages.append({'role': 'user', 'content': user_message})
-
-        return ai.call_ai(
-            messages,
-            temperature=0.6,
-            max_tokens=2500,
-            operation='assistant.chat',
-        )
 
     @classmethod
     def chat_with_assistant_agent(

@@ -293,14 +293,6 @@ class AIService:
     # ── Chat / Assistant ─────────────────────────────────────────
 
     @classmethod
-    def chat_with_assistant(cls, bot, history_messages, user_message, student_context=''):
-        from ai_assistant.services.chat_service import AssistantChatService
-        return AssistantChatService.chat_with_assistant(
-            cls, bot=bot, history_messages=history_messages,
-            user_message=user_message, student_context=student_context,
-        )
-
-    @classmethod
     def chat_with_assistant_agent(cls, bot, history_messages, user_message,
                                    tool_executor, student_context='',
                                    memory_context='', on_step=None,

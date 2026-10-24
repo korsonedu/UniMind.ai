@@ -201,7 +201,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             agent_history = history_msgs + ([{'role': 'user', 'content': note_context}] if note_context else [])
 
             student_context = ""
-            if self.bot.is_exclusive and _can_use_learning_context(self.user):
+            if self.bot.bot_type == 'planner' and _can_use_learning_context(self.user):
                 student_context = get_student_academic_context(self.user)
 
             memory_context = ""
@@ -246,7 +246,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 ai_content = result['choices'][0]['message']['content'] or ''
                 _quota_earned = True
             else:
-                ai_content = "AI 助教暂时无法响应，请稍后再试。"
+                ai_content = "Agent 暂时无法响应，请稍后再试。"
                 _quota_earned = False
 
             ai_content = ai_content.replace('\\[', ' $$ ').replace('\\]', ' $$ ')
@@ -309,7 +309,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.exception("Agent execution error: %s", e)
             try:
-                on_step({"type": "error", "message": "AI 助教暂时无法响应，请稍后再试"})
+                on_step({"type": "error", "message": "Agent 暂时无法响应，请稍后再试"})
             except AgentCancelled:
                 pass
         finally:

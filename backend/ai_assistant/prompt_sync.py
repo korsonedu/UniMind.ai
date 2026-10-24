@@ -51,7 +51,7 @@ def load_system_prompt(bot) -> str:
     content = read_prompt_file(bot, 'system_prompt.txt')
     if content:
         return content
-    return bot.system_prompt or '你是UniMind.ai的AI学术助教。'
+    return bot.system_prompt or '你是 UniMind.ai 的学习 Agent。'
 
 
 def load_tool_guide(bot) -> str:

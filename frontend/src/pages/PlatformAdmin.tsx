@@ -17,7 +17,6 @@ import api from '@/lib/api';
 import { toast } from 'sonner';
 
 // ── sub-panels ──
-import { BotSection } from './maintenance/BotSection';
 import { NotificationSection } from './maintenance/NotificationSection';
 import { KnowledgeSystemPanel } from './maintenance/KnowledgeSystemPanel';
 import InstitutionAdmin from './InstitutionAdmin';
@@ -137,15 +136,11 @@ const ContentTab: React.FC = () => (
       <TabsTrigger value="prompts" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
         Prompt 模板
       </TabsTrigger>
-      <TabsTrigger value="bots" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
-        AI Bot
-      </TabsTrigger>
       <TabsTrigger value="knowledge" className="rounded-xl px-3 py-1.5 text-[11px] font-medium data-[state=active]:bg-[#0071E3] data-[state=active]:text-white text-[#6E6E73]">
         知识体系
       </TabsTrigger>
     </TabsList>
     <TabsContent value="prompts"><PromptTemplatesAdmin /></TabsContent>
-    <TabsContent value="bots"><BotSection /></TabsContent>
     <TabsContent value="knowledge"><KnowledgeSystemPanel /></TabsContent>
   </Tabs>
 );
