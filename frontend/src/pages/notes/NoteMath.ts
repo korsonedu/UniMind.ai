@@ -1,5 +1,7 @@
 import { InputRule, Node } from '@tiptap/core';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 interface MathToken { content: string; markup: string }
 interface InlineState {
@@ -26,6 +28,15 @@ export const NoteMath = Node.create({
     return ['span', { 'data-note-math': '', 'data-latex': node.attrs.latex, 'data-delimiter': node.attrs.delimiter, class: 'notes-math' }, `${node.attrs.delimiter}${node.attrs.latex}${node.attrs.delimiter}`];
   },
   renderText({ node }) { return `${node.attrs.delimiter}${node.attrs.latex}${node.attrs.delimiter}`; },
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('span');
+      dom.className = 'notes-math';
+      dom.contentEditable = 'false';
+      katex.render(node.attrs.latex, dom, { throwOnError: false, displayMode: node.attrs.delimiter === '$$' });
+      return { dom };
+    };
+  },
   addInputRules() {
     return [new InputRule({
       find: /(\${1,2})([^$\n]+)\1$/,

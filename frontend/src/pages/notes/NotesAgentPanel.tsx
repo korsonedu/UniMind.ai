@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import { notesApi, notebookPath, type Note, type Notebook, type NoteBinding } from '@/lib/notes';
 import { useXiaoYuStore } from '@/store/useXiaoYuStore';
 import { toast } from 'sonner';
+import { ArrowClockwise, Link as LinkIcon, LinkBreak, Plus, X } from '@phosphor-icons/react';
 
 interface ReferenceState { key: string; ready: boolean; ids: number[]; bot: number; conversationId: string }
 interface Props {
@@ -49,15 +50,15 @@ export default function NotesAgentPanel(props: Props) {
       <select aria-label="选择只读 Agent" value={botId ?? ''} onChange={e => { reference.current = null; seed.current = props.note.id; setSessionControls(null); setBotId(Number(e.target.value)); }}>
         {!bots.length && <option value="">{botError ? 'Agent 加载失败' : '加载 Agent…'}</option>}{bots.map(bot => <option key={bot.id} value={bot.id}>{bot.name}</option>)}
       </select>
-      {botError && <button onClick={loadBots}>重试</button>}
-      {sessionControls && <button onClick={() => sessionControls.newConversation()}>新会话</button>}
+      {botError && <button aria-label="重新加载 Agent" title="重试" onClick={loadBots}><ArrowClockwise size={17} /></button>}
+      {sessionControls && <button aria-label="新会话" title="新会话" onClick={() => sessionControls.newConversation()}><Plus size={19} /></button>}
       {sessionControls && <select aria-label="切换讨论会话" value={sessionControls.activeSessionId ?? ''} onChange={e => {
         seed.current = null; reference.current = null;
         const session = sessionControls.sessions.find(s => s.id === Number(e.target.value));
         if (session) sessionControls.loadSession(session);
       }}><option value="" disabled>新会话</option>{[...sessionControls.sessions].reverse().map(session => <option key={session.id} value={session.id}>{session.title || session.label}</option>)}</select>}
     </div>
-    {botId && currentBot ? <AgentChatLayout key={botId} appearance="native" layout="inline" findBot={findBot} skills={[]} typewriterWords={[]} chatPlaceholder="围绕笔记提问…" landingTitle="笔记讨论" landingDescription="Agent 只读参考，不会修改笔记。" botDisplayName={currentBot.name}
+    {botId && currentBot ? <AgentChatLayout key={botId} appearance="native" layout="inline" findBot={findBot} skills={[]} typewriterWords={[]} chatPlaceholder="围绕笔记提问…" landingTitle="笔记讨论" landingDescription="" botDisplayName={currentBot.name}
       initialConversationId={currentBot.name === '小宇' ? initialConversationId.current : undefined}
       onSessionsReady={sessionsReady}
       onReset={resetConversation}
@@ -126,19 +127,16 @@ function ReferenceContext({ bot, conversationId, note, notes, notebooks, selecti
     try { await action(); loadBindings(); setSource(''); } catch { toast.error('长期关联更新失败，请重试。'); } finally { setBindingBusy(false); }
   };
   return <div className="notes-reference-context">
-    <p>只读参考 · Agent 无法编辑你的笔记</p>
     <div className="notes-row"><strong>本次会话参考</strong><span>{ready ? `${ids.length} 篇` : '暂停发问'}</span></div>
-    {error ? <p role="alert" className="notes-error">{error} <button onClick={() => setRetry(value => value + 1)}>重试加载</button></p> : !ready && <p>正在同步参考…</p>}
-    <div className="notes-reference-chips">{ids.map(id => <span key={id}>{notes.find(item => item.id === id)?.title || (id === note.id ? note.title : `笔记 ${id}`)}<button aria-label={`移除参考笔记 ${id}`} disabled={!ready} onClick={() => void replace(ids.filter(value => value !== id))}>×</button></span>)}</div>
+    {error ? <p role="alert" className="notes-error">{error} <button aria-label="重试加载参考" title="重试" onClick={() => setRetry(value => value + 1)}><ArrowClockwise size={16} /></button></p> : !ready && <p>正在同步参考…</p>}
+    <div className="notes-reference-chips">{ids.map(id => <span key={id}>{notes.find(item => item.id === id)?.title || (id === note.id ? note.title : `笔记 ${id}`)}<button aria-label={`移除参考笔记 ${id}`} disabled={!ready} onClick={() => void replace(ids.filter(value => value !== id))}><X size={14} /></button></span>)}</div>
     <details><summary>添加参考笔记</summary><input aria-label="搜索参考笔记" placeholder="搜索笔记" value={query} onChange={e => setQuery(e.target.value)} /><select aria-label="添加会话参考" value="" disabled={!ready} onChange={e => { if (e.target.value) void replace([...ids, Number(e.target.value)]); }}><option value="">选择笔记…</option>{notes.filter(item => !ids.includes(item.id) && `${item.title} ${item.content}`.toLowerCase().includes(query.toLowerCase())).map(item => <option key={item.id} value={item.id}>{item.title || '未命名笔记'} · {notebookPath(item.notebook, notebooks)}</option>)}</select></details>
-    {selection && <div className="notes-selected-text"><span>本次提问重点（{selection.length}/3000）</span><button onClick={clearSelection}>清除</button><blockquote>{selection}</blockquote></div>}
+    {selection && <div className="notes-selected-text"><span>本次提问重点（{selection.length}/3000）</span><button aria-label="清除选中片段" title="清除" onClick={clearSelection}><X size={16} /></button><blockquote>{selection}</blockquote></div>}
     <details><summary>长期关联 · {bindings.length} 项</summary>
-      {bindingError && <p className="notes-error">关联加载失败。<button onClick={loadBindings}>重试</button></p>}
-      {bindings.map(binding => <div className="notes-row" key={binding.id}><span>{binding.note ? `笔记：${notes.find(item => item.id === binding.note)?.title || binding.note}` : `笔记本：${notebookPath(binding.notebook, notebooks)}（含子目录）`}</span><button disabled={bindingBusy} onClick={() => void changeBinding(() => notesApi.unbind(binding.id))}>解除</button></div>)}
+      {bindingError && <p className="notes-error">关联加载失败。<button aria-label="重新加载关联" title="重试" onClick={loadBindings}><ArrowClockwise size={16} /></button></p>}
+      {bindings.map(binding => <div className="notes-row" key={binding.id}><span>{binding.note ? `笔记：${notes.find(item => item.id === binding.note)?.title || binding.note}` : `笔记本：${notebookPath(binding.notebook, notebooks)}（含子目录）`}</span><button aria-label="解除关联" title="解除关联" disabled={bindingBusy} onClick={() => void changeBinding(() => notesApi.unbind(binding.id))}><LinkBreak size={17} /></button></div>)}
       <select aria-label="选择长期关联来源" value={source} onChange={e => setSource(e.target.value)}><option value="">选择笔记或笔记本…</option><optgroup label="笔记">{notes.map(item => <option key={item.id} value={`note:${item.id}`}>{item.title || '未命名笔记'}</option>)}</optgroup><optgroup label="笔记本（含子目录）">{notebooks.map(book => <option key={book.id} value={`notebook:${book.id}`}>{notebookPath(book.id, notebooks)}</option>)}</optgroup></select>
-      <button disabled={!source || bindingBusy || bindingError} onClick={() => { const [kind, id] = source.split(':'); void changeBinding(() => notesApi.bind(bot.id, kind === 'note' ? { note: Number(id) } : { notebook: Number(id) })); }}>关联到 {bot.name}</button>
-      <small>关联范围取并集。解除一项后，同一笔记可能仍由其他笔记本或临时参考提供。回收站内容不参与读取。</small>
+      <button aria-label={`关联到 ${bot.name}`} title={`关联到 ${bot.name}`} disabled={!source || bindingBusy || bindingError} onClick={() => { const [kind, id] = source.split(':'); void changeBinding(() => notesApi.bind(bot.id, kind === 'note' ? { note: Number(id) } : { notebook: Number(id) })); }}><LinkIcon size={18} /></button>
     </details>
-    <small>移除参考只影响之后的检索。若要排除旧讨论的影响，请新建会话。</small>
   </div>;
 }
