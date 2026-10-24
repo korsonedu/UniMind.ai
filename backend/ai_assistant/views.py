@@ -84,7 +84,8 @@ def _duplicate_chat_response(reservation, *, stream=False):
     if stream:
         import json
         from django.http import StreamingHttpResponse
-        return StreamingHttpResponse([f"data: {json.dumps(reservation.response, ensure_ascii=False)}\n\n"],
+        events = ([reservation.response['user_message']] if reservation.response.get('user_message') else []) + [reservation.response]
+        return StreamingHttpResponse([f"data: {json.dumps(event, ensure_ascii=False)}\n\n" for event in events],
                                      content_type='text/event-stream')
     return Response({'status': 'completed', **reservation.response})
 
@@ -705,6 +706,8 @@ class AIChatStreamView(APIView):
                 )
 
             try:
+                user_event = {'type': 'user_message', 'message_id': user_msg.id, 'metadata': user_msg.metadata}
+                yield f"data: {json.dumps(user_event, ensure_ascii=False)}\n\n"
                 history_msgs, messages, tools, tool_executor, profile, sse_variant_name = await sync_to_async(_sync_setup)()
                 metrics['setup_ms'] = int((time.monotonic() - started_at) * 1000)
 
@@ -886,6 +889,7 @@ class AIChatStreamView(APIView):
                     has_intermediate=_sent_any_message,
                     message_id=pending_msg.id,
                 )
+                done_payload['user_message'] = user_event
                 if metadata:
                     done_payload['metadata'] = metadata
                 if conv_title:

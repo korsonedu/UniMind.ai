@@ -77,12 +77,29 @@ class NoteChatSmoke(TransactionTestCase):
         response = self.client.post('/api/ai/chat/stream/', self.payload, format='json')
 
         async def consume():
-            return [chunk async for chunk in response.streaming_content]
+            stream = response.streaming_content
+            first = await anext(stream)
+            setup.assert_not_called()
+            return [first] + [chunk async for chunk in stream]
 
-        output = b''.join(async_to_sync(consume)()).decode()
+        chunks = async_to_sync(consume)()
+        user_event = json.loads(chunks[0].decode().removeprefix('data: ').strip())
+        user_msg = AIChatMessage.objects.get(user=self.user, role='user', conversation_id=self.conversation_id)
+        self.assertEqual(user_event, {'type': 'user_message', 'message_id': user_msg.pk, 'metadata': user_msg.metadata})
+        self.assertEqual(json.loads(chunks[-1].decode().removeprefix('data: ').strip())['user_message'], user_event)
+        output = b''.join(chunks).decode()
         self.assertIn('note_sources', output)
         self.assertIn(self.note.content, setup.call_args.kwargs['history'][-1]['content'])
         self.assert_saved()
+
+    def test_sse_cached_retry_replays_authoritative_user_snapshot_first(self):
+        from ai_assistant.views import _duplicate_chat_response
+        user_event = {'type': 'user_message', 'message_id': 12, 'metadata': {'note_attachments': [
+            {'note_id': self.note.pk, 'title': self.note.title, 'version': self.note.version}]}}
+        cached = {'type': 'done', 'user_message': user_event, 'full_content': '历史回答'}
+        response = _duplicate_chat_response(SimpleNamespace(status='succeeded', response=cached), stream=True)
+        events = [json.loads(chunk.decode().removeprefix('data: ').strip()) for chunk in response.streaming_content]
+        self.assertEqual(events, [user_event, cached])
 
     def test_websocket_uses_and_persists_read_only_sources(self):
         from channels.routing import URLRouter

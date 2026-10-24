@@ -53,11 +53,12 @@ def prepare_note_context(user, bot, conversation_id, message, note_ids=None, sel
     else:
         note_ids = list(references.order_by('id').values_list('note_id', flat=True))
 
-    bindings = list(AgentNoteBinding.objects.filter(user=user, bot=bot).values('note_id', 'notebook_id'))
+    is_xiaoyu = bool(xiaoyu_bot(user, bot))
+    bindings = [] if is_xiaoyu else list(AgentNoteBinding.objects.filter(user=user, bot=bot).values('note_id', 'notebook_id'))
     bound_notes = [item['note_id'] for item in bindings if item['note_id']]
     folders = notebook_ids(user, [item['notebook_id'] for item in bindings if item['notebook_id']])
     settings = NoteAISettings.objects.filter(user=user, enabled=True).first()
-    automatic = bool(settings and xiaoyu_bot(user, bot))
+    automatic = bool(settings and is_xiaoyu)
     available = Note.objects.filter(user=user, deleted_at__isnull=True)
     if not automatic:
         available = available.filter(Q(pk__in=note_ids + bound_notes) | Q(notebook_id__in=folders))

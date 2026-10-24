@@ -12,7 +12,7 @@ from ai_assistant.models import Bot
 from users.models import UserAccessProfile
 from .awareness import content_signature, note_message_metadata, schedule_note
 from .context import prepare_note_context
-from .models import Note, NoteAISettings, NoteUnderstanding
+from .models import AgentNoteBinding, Note, NoteAISettings, NoteUnderstanding
 from .tasks import understand_note, validated_result
 
 
@@ -63,6 +63,18 @@ class NoteAwarenessSmoke(TestCase):
         self.assertEqual(note_message_metadata('context', sources)['note_attachments'], [
             {'note_id': self.note.pk, 'title': '久期', 'version': 1}])
         self.model.assert_not_called()
+
+    def test_disabled_xiaoyu_ignores_legacy_binding_but_other_agents_keep_it(self):
+        AgentNoteBinding.objects.create(user=self.user, bot=self.bot, note=self.note)
+        AgentNoteBinding.objects.create(user=self.user, bot=self.other_bot, note=self.note)
+        self.assertEqual(self.context(), ('', []))
+        self.assertEqual(self.context(bot=self.other_bot)[1][0]['kind'], 'permanent')
+        self.enable()
+        self.assertEqual(self.context()[1][0]['kind'], 'automatic')
+        self.client.patch('/api/notes/ai-settings/', {'enabled': False}, format='json')
+        self.assertEqual(self.context(), ('', []))
+        self.assertEqual(self.context(note_ids=[self.note.pk])[1][0]['kind'], 'temporary')
+        self.assertEqual(self.context(bot=self.other_bot)[1][0]['kind'], 'permanent')
 
     def test_enabled_understanding_retrieval_dedup_and_other_agent_scope(self):
         settings = self.enable()
