@@ -26,18 +26,18 @@ export function LearningInstrument() {
       <nav className="li-tabs" aria-label="探索小宇的工具">
         {modes.map(item => <button key={item.id} type="button" aria-pressed={mode === item.id} onClick={() => setMode(item.id)}>{item.label}</button>)}
       </nav>
-      <div className="li-copy" key={mode}>
+      <div className="li-copy">
         <p>{current.description}</p>
         <div className="li-capabilities">{current.capabilities.map(capability => <span key={capability}>{capability}</span>)}</div>
       </div>
     </div>
-    <div className={`li-scene li-scene-${mode}`}>
+    <div className="li-scene">
       <div className="li-art" role="img" aria-label={`${current.label}的动态线图`}><IntelligenceField mode={mode} /></div>
-      <div className="li-surfaces" key={mode} aria-live="polite">
-        {current.screens.map(({ image, crop: [x, y, width, height] }, index) => <div key={image} className={`li-surface ${index ? 'li-surface-rear' : 'li-surface-front'}`} style={{ aspectRatio: `${width} / ${height}` }}>
-          <img src={`/screenshots/${image}`} alt={`${current.label}${index ? '的相关学习记录' : '的小宇界面'}`} loading="lazy" style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
+      {modes.map(item => <div key={item.id} className={`li-surfaces li-surfaces-${item.id}${mode === item.id ? ' is-active' : ''}`} aria-hidden={mode !== item.id}>
+        {item.screens.map(({ image, crop: [x, y, width, height] }, index) => <div key={image} className={`li-surface ${index ? 'li-surface-rear' : 'li-surface-front'}`} style={{ aspectRatio: `${width} / ${height}` }}>
+          <img src={`/screenshots/${image}`} alt={`${item.label}${index ? '的相关界面' : '的功能展示'}`} style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
         </div>)}
-      </div>
+      </div>)}
     </div>
   </div>;
 }

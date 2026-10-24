@@ -25,11 +25,13 @@ export function Landing() {
       <section className="landing-hero landing-wrap" id="agent">
         <div className="landing-hero-copy">
           <h1><span className="landing-hero-invitation">和小宇一起</span><span className="landing-hero-statement"><span>将人工智能</span><span>转化为人类智慧</span></span></h1>
+          <p className="landing-hero-description"><span>查资料、画图讲解、练习与复习，</span><span>和小宇一起把问题弄清楚。</span></p>
           <Link to={entry} className="landing-button">开始对话<ArrowUpRight size={18} /></Link>
         </div>
-        <div className="landing-hero-visual" id="agent-preview" aria-label="小宇对话界面">
-          <AgentShowcase />
-        </div>
+      </section>
+
+      <section className="landing-agent landing-wrap" id="agent-preview" aria-label="小宇对话界面">
+        <AgentShowcase />
       </section>
 
       <section className="landing-experience" id="tools" aria-label="探索小宇的工具"><LearningInstrument /></section>
