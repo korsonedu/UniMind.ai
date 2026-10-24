@@ -146,15 +146,15 @@ const RootRedirect = () => {
 
   const { data: userData, isLoading, isError } = useQuery({
     queryKey: queryKeys.user.me,
-    queryFn: () => api.get('/users/me/').then(r => r.data),
+    queryFn: ({ signal }) => api.get('/users/me/', { signal }).then(r => r.data),
     enabled: hasHydrated,
     retry: false,
   });
 
   // Sync auth store with query result
   useEffect(() => {
-    if (userData) setAuth(userData, null);
-  }, [userData, setAuth]);
+    if (userData && !isError) setAuth(userData, null);
+  }, [userData, isError, setAuth]);
 
   // On auth failure, log out and check invite status
   useEffect(() => {
@@ -170,7 +170,7 @@ const RootRedirect = () => {
 
   if (!hasHydrated || isLoading) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
-  if (userData) return <Outlet />;
+  if (userData && !isError) return <Outlet />;
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
 

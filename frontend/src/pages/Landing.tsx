@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight } from '@phosphor-icons/react';
 import { AgentShowcase } from '@/components/landing/AgentShowcase';
 import { LandingEntrance } from '@/components/landing/LandingEntrance';
+import { LandingCoda } from '@/components/landing/LandingCoda';
 import { LearningInstrument } from '@/components/landing/LearningInstrument';
 import { useAuthStore } from '@/store/useAuthStore';
 import { COPYRIGHT_YEAR } from '@/constants/version';
@@ -17,6 +18,46 @@ export function Landing() {
     const page = pageRef.current;
     if (!page || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const layers = [...page.querySelectorAll<HTMLElement>('[data-landing-depth]')];
+    let magnet: HTMLElement | null = null;
+    let magnetBounds: DOMRect | null = null;
+    const resetMagnet = () => {
+      magnet?.style.removeProperty('--magnet-x');
+      magnet?.style.removeProperty('--magnet-y');
+      magnet = null; magnetBounds = null;
+    };
+    const moveMagnet = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      const target = event.target instanceof Element ? event.target.closest<HTMLElement>('.landing-button,.landing-nav-entry,.landing-showcase-next') : null;
+      if (target !== magnet) { resetMagnet(); magnet = target; magnetBounds = target?.getBoundingClientRect() || null; }
+      if (!magnet || !magnetBounds) return;
+      const x = Math.max(-8, Math.min(8, (event.clientX - magnetBounds.left - magnetBounds.width / 2) * .16));
+      const y = Math.max(-6, Math.min(6, (event.clientY - magnetBounds.top - magnetBounds.height / 2) * .25));
+      magnet.style.setProperty('--magnet-x', `${x.toFixed(2)}px`);
+      magnet.style.setProperty('--magnet-y', `${y.toFixed(2)}px`);
+    };
+    const leaveMagnet = (event: PointerEvent) => {
+      if (!(event.relatedTarget instanceof Node) || !magnet?.contains(event.relatedTarget)) resetMagnet();
+    };
+    const traceNav = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      const link = event.target instanceof Element ? event.target.closest<HTMLElement>('.landing-header nav a') : null;
+      if (!link || (event.relatedTarget instanceof Node && link.contains(event.relatedTarget))) return;
+      const header = page.querySelector<HTMLElement>('.landing-header')!;
+      const box = header.getBoundingClientRect();
+      const target = link.getBoundingClientRect();
+      const x = target.left + target.width / 2 - box.left;
+      const bottom = box.height - 10;
+      const end = Math.min(bottom - 4, target.bottom - box.top + 4);
+      header.querySelectorAll<SVGPathElement>('.landing-nav-fiber path').forEach((path, index) => {
+        path.setAttribute('d', `M18 ${box.height / 2} Q18 ${bottom} 48 ${bottom} H${x - 16} Q${x} ${bottom} ${x} ${end}`);
+        path.getAnimations().forEach(animation => animation.cancel());
+        path.animate(index ? [
+          { strokeDashoffset: .08, opacity: 0 }, { opacity: 1, offset: .12 },
+          { opacity: 1, offset: .8 }, { strokeDashoffset: -1, opacity: 0 },
+        ] : [{ strokeDashoffset: 1, opacity: 0 }, { strokeDashoffset: 0, opacity: .28, offset: .7 }, { opacity: 0 }],
+        { duration: 1000, easing: 'ease-in-out', fill: 'both' });
+      });
+    };
     let frame = 0;
     const paint = () => {
       frame = 0;
@@ -29,20 +70,30 @@ export function Landing() {
       page.style.setProperty('--floor-shift', `${Math.min(48, window.scrollY * .018)}px`);
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(paint); };
+    const scroll = () => { resetMagnet(); schedule(); };
     paint();
-    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('scroll', scroll, { passive: true });
     window.addEventListener('resize', schedule);
+    page.addEventListener('pointermove', moveMagnet, { passive: true });
+    page.addEventListener('pointerout', leaveMagnet);
+    page.addEventListener('pointerover', traceNav);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', schedule);
+      resetMagnet();
+      window.removeEventListener('scroll', scroll);
       window.removeEventListener('resize', schedule);
+      page.removeEventListener('pointermove', moveMagnet);
+      page.removeEventListener('pointerout', leaveMagnet);
+      page.removeEventListener('pointerover', traceNav);
     };
   }, []);
 
   return <div ref={pageRef} className="um-landing">
     <LandingEntrance />
-    <div className="landing-atmosphere" aria-hidden="true"><div className="landing-background" /><div className="landing-light-sweep" /><div className="landing-floor-reflection" /></div>
+    <svg className="landing-fx-defs" aria-hidden="true" width="0" height="0"><defs><filter id="landing-glass-warp" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB"><feTurbulence type="fractalNoise" baseFrequency=".012 .035" numOctaves="1" seed="8" result="distortion" /><feDisplacementMap in="SourceGraphic" in2="distortion" scale="24" xChannelSelector="R" yChannelSelector="G" /></filter></defs></svg>
+    <div className="landing-atmosphere" aria-hidden="true"><div className="landing-background" /><div className="landing-refraction" /><div className="landing-light-sweep" /><div className="landing-floor-reflection" /></div>
     <header className="landing-header landing-wrap">
+      <svg className="landing-nav-fiber" aria-hidden="true"><path pathLength="1" /><path pathLength="1" /></svg>
       <Link to="/" aria-label="UniMind 首页" className="landing-brand"><img src="/Unimind_logo_wide.png" alt="UniMind.ai" width="150" height="34" /></Link>
       <nav aria-label="首页导航">
         <div className="landing-nav-links"><a href="#tools">探索小宇</a><a href="#workspace">学习空间</a><Link to="/pricing">AI 加量</Link></div>
@@ -77,6 +128,7 @@ export function Landing() {
       </section>
 
       <section className="landing-start landing-wrap">
+        <LandingCoda />
         <h2>试着问小宇一个问题。</h2>
         <Link to={entry} className="landing-button">{user ? '回到小宇' : '开始体验'}<ArrowUpRight size={19} /></Link>
       </section>

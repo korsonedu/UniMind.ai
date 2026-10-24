@@ -3,7 +3,7 @@
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 import { clientsClaim } from 'workbox-core';
 import { registerRoute } from 'workbox-routing';
-import { NetworkFirst } from 'workbox-strategies';
+import { NetworkFirst, NetworkOnly } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Parameters<typeof precacheAndRoute>[0] };
@@ -16,6 +16,10 @@ cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
 // API runtime caching
+registerRoute(
+  ({ url }) => url.pathname === '/api/users/me/',
+  new NetworkOnly(),
+);
 registerRoute(
   /^https?:\/\/.*\/api\/.*/i,
   new NetworkFirst({

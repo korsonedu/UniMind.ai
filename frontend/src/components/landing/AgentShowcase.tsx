@@ -29,6 +29,7 @@ export function AgentShowcase() {
       <button type="button" className="landing-agent-launch" onClick={() => select((selected + 1) % scenes.length)} aria-label={`切换功能展示，当前为${scenes[selected].label}`} />
       {scenes.map((scene, index) => <button key={scene.image} type="button" className="landing-agent-scene" aria-label={`展示${scene.label}`} aria-pressed={index === selected} onClick={() => select(index)} style={{ left: `${93 / 1280 * 100}%`, top: `${(164.25 + index * 34) / 880 * 100}%`, width: `${141 / 1280 * 100}%`, height: `${29.5 / 880 * 100}%` }} />)}
     </div>
+    <div className="landing-ripple-floor" aria-hidden="true">{scenes.map((scene, index) => <span key={scene.image} className={selected === index ? 'is-active' : ''} />)}</div>
     <nav className="landing-showcase-controls" aria-label="选择小宇展示">
       {scenes.map((scene, index) => <button key={scene.image} type="button" aria-label={`查看${scene.label}`} aria-pressed={index === selected} onClick={() => select(index)}><span /></button>)}
       <button type="button" className="landing-showcase-next" aria-label="下一个展示" onClick={() => select((selected + 1) % scenes.length)}><ArrowRight size={17} /></button>

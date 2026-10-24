@@ -48,7 +48,7 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
     let lastFrame = 0;
     let phase = .4;
     const weights: number[] = MODES.map((_, index) => index === modeRef.current ? 1 : 0);
-    const pointer = { x: 0, y: 0, targetX: 0, targetY: 0 };
+    const pointer = { x: 0, y: 0, targetX: 0, targetY: 0, localX: 0, localY: 0, force: 0, targetForce: 0, velocity: 0 };
 
     const schedule = () => {
       if (!raf && visible && !document.hidden) raf = requestAnimationFrame(draw);
@@ -69,8 +69,12 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
       const mobile = window.innerWidth <= 900;
       const scale = Math.min(width * (mobile ? .32 : .245), height * .38);
       const perspective = 4 / (4 - z * .35);
-      return [width * (mobile ? .5 : .66) + x * scale * perspective,
-        height * .48 + y * scale * perspective, z];
+      const screenX = width * (mobile ? .5 : .66) + x * scale * perspective;
+      const screenY = height * .48 + y * scale * perspective;
+      const dx = pointer.localX - screenX, dy = pointer.localY - screenY;
+      const radius = Math.min(width, height) * .35;
+      const attraction = Math.exp(-(dx * dx + dy * dy) / (radius * radius)) * pointer.force * .32;
+      return [screenX + dx * attraction, screenY + dy * attraction, z];
     };
 
     function draw(time: number) {
@@ -88,6 +92,8 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
       });
       pointer.x += ((reduced ? 0 : pointer.targetX) - pointer.x) * .06;
       pointer.y += ((reduced ? 0 : pointer.targetY) - pointer.y) * .06;
+      pointer.velocity = (pointer.velocity + ((reduced ? 0 : pointer.targetForce) - pointer.force) * .08) * .78;
+      pointer.force = reduced ? 0 : pointer.force + pointer.velocity;
       context!.clearRect(0, 0, width, height);
 
       // Each contour retains its depth, rather than flattening into a uniform grid.
@@ -179,11 +185,14 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
       context.setTransform(ratio, 0, 0, ratio, 0, 0); schedule();
     };
     const move = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
       const rect = parent.getBoundingClientRect();
+      pointer.localX = event.clientX - rect.left; pointer.localY = event.clientY - rect.top;
+      pointer.targetForce = 1;
       pointer.targetX = (event.clientX - rect.left) / Math.max(1, rect.width) - .5;
       pointer.targetY = (event.clientY - rect.top) / Math.max(1, rect.height) - .5;
     };
-    const leave = () => { pointer.targetX = 0; pointer.targetY = 0; };
+    const leave = () => { pointer.targetX = 0; pointer.targetY = 0; pointer.targetForce = 0; };
     const visibility = () => {
       if (document.hidden || !visible) { cancelAnimationFrame(raf); raf = 0; }
       else { lastFrame = 0; schedule(); }

@@ -13,11 +13,12 @@ export function LandingEntrance() {
     if (!context) { setPhase('done'); return; }
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const samples = window.innerWidth <= 700 ? 34 : 65;
+    const glyphs = ['0', '1', '{', '}', '<', '>', '/', ';', ':', '=', '()', '[]', '=>', '&&'];
     const particles = Array.from({ length: samples * 8 }, (_, index) => ({
       u: (index % samples) / (samples - 1),
       arm: Math.floor(index / samples) * Math.PI / 4,
       escape: index * 2.39996323,
-      radius: .7 + (Math.sin(index * 37.3) + 1) * .45,
+      size: 7 + (Math.sin(index * 37.3) + 1) * 2,
       warm: index % 37 === 0,
     }));
     let width = 0, height = 0, frame = 0, elapsed = 0, previousTime = 0;
@@ -51,12 +52,12 @@ export function LandingEntrance() {
       });
       const pixels = ink.getImageData(0, 0, width, height).data;
       const points: typeof letters = [];
-      for (let y = 0; y < height; y += 3) {
-        for (let x = 0; x < width; x += 3) {
+      for (let y = 0; y < height; y += 5) {
+        for (let x = 0; x < width; x += 5) {
           if (pixels[(y * width + x) * 4 + 3] > 90) points.push({ x, y });
         }
       }
-      const step = Math.max(1, Math.ceil(points.length / (width <= 700 ? 1000 : 1900)));
+      const step = Math.max(1, Math.ceil(points.length / (width <= 700 ? 650 : 1400)));
       letters = points.filter((_, index) => index % step === 0);
     };
 
@@ -73,6 +74,7 @@ export function LandingEntrance() {
       const centerX = width * .5, centerY = height * .48;
       const seconds = elapsed / 1000;
       context.clearRect(0, 0, width, height);
+      context.textAlign = 'center'; context.textBaseline = 'middle';
       context.fillStyle = `rgba(8, 11, 15, ${cover})`;
       context.fillRect(0, 0, width, height);
 
@@ -122,22 +124,21 @@ export function LandingEntrance() {
           context.strokeStyle = `rgba(192, 213, 231, ${opacity * .08 * (1 - burst) * (1 - letterform) ** 2})`;
           context.lineWidth = .45; context.stroke();
         }
-        context.beginPath(); context.arc(point.x, point.y, particle.radius, 0, Math.PI * 2);
+        context.font = `${particle.size * (1 - letterform * .4)}px ui-monospace, SFMono-Regular, Consolas, monospace`;
         context.fillStyle = particle.warm ? `rgba(174, 220, 255, ${alpha})` : `rgba(223, 234, 244, ${alpha})`;
-        context.fill();
+        context.fillText(glyphs[(index + (letterform < .9 ? Math.floor(elapsed / 110) : 0)) % glyphs.length], point.x, point.y);
       });
       const letterOpacity = ease((elapsed - 1450) / 300) * (1 - ease((elapsed - 2350) / 550));
       if (letterOpacity > 0) {
         context.fillStyle = `rgba(218, 234, 247, ${letterOpacity * .82})`;
-        context.beginPath();
+        context.font = '5px ui-monospace, SFMono-Regular, Consolas, monospace';
         letters.forEach((letter, index) => {
           const angle = index * 2.39996323;
           const distance = Math.hypot(width, height) * spread;
           const x = letter.x + Math.cos(angle) * distance;
           const y = letter.y + Math.sin(angle) * distance;
-          context.moveTo(x + .8, y); context.arc(x, y, .8, 0, Math.PI * 2);
+          context.fillText(glyphs[index % glyphs.length], x, y);
         });
-        context.fill();
       }
       previous = points;
       if (!formed && elapsed >= 1550) { formed = true; setPhase('form'); }

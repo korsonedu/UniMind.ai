@@ -45,6 +45,7 @@ export function LearningInstrument() {
           <img className="landing-scan-outline" src={`/screenshots/${image}`} alt="" aria-hidden="true" style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
           <span className="landing-scan-beam" aria-hidden="true" />
         </div>)}
+        <div className="li-ripple-floor" aria-hidden="true"><span /></div>
       </div>)}
     </div>
   </div>;

@@ -23,7 +23,7 @@ practiceCounts[practiceCounts.length - 1] += 2460 - practiceCounts.reduce((sum, 
 const heatmapDays = Array.from({ length: 180 }, (_, index) => ({ date: date(index - 179), count: practiceCounts[activeDayIndices.indexOf(index)] || 0 }));
 const memorySeries = heatmapDays.filter(day => day.count > 0).map((day, index) => ({ date: day.date, predicted: Number((.61 + index * .0018 + Math.sin(index * .3) * .02).toFixed(3)), actual: Number((.59 + index * .0021 + Math.sin(index * .3 + .4) * .035).toFixed(3)), count: Math.floor(day.count * .62) }));
 const reviewCount = memorySeries.reduce((sum, item) => sum + item.count, 0);
-const guest = new URLSearchParams(location.search).has('guest');
+let guest = new URLSearchParams(location.search).has('guest') || sessionStorage.getItem('unimind-preview-signed-out') === '1';
 const role = sessionStorage.getItem('unimind-preview-role') || 'student';
 const blockedFeatures = new URLSearchParams(location.search).getAll('blocked');
 const user = { ...useAuthStore.getState().user!, email: 'learner_demo@example.com', id: 1, institution_id: 1, institution: { ...useAuthStore.getState().user!.institution!, id: 1 },
@@ -138,6 +138,7 @@ api.defaults.adapter = async config => {
   const params = new URLSearchParams(url.search);
   Object.entries(config.params || {}).forEach(([key, value]) => params.set(key, String(value)));
   switch (path) {
+    case '/users/logout/': guest = true; sessionStorage.setItem('unimind-preview-signed-out', '1'); data = { status: 'ok' }; break;
     case '/users/me/': if (guest) throw new AxiosError('Guest preview', 'PREVIEW_GUEST', config, undefined, { data: {}, status: 401, statusText: 'Unauthorized', headers: {}, config }); data = user; break;
     case '/users/check-invite/': data = { has_invite: false }; break;
     case '/users/learning/access/': data = { is_course_student: true, ai_usage: { used: 12, limit: 100, remaining: 88, base_remaining: 88, addon_remaining: 0, configured: true, unlimited: false, resets_at: `${date(7)}T00:00:00+08:00` }, addons: [] }; break;
