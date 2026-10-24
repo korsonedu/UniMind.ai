@@ -19,23 +19,31 @@ const modes = [
 
 export function LearningInstrument() {
   const [mode, setMode] = useState<typeof modes[number]['id']>('plan');
+  const [previous, setPrevious] = useState<typeof mode | null>(null);
   const current = modes.find(item => item.id === mode)!;
+  const select = (next: typeof mode) => {
+    if (next === mode) return;
+    setPrevious(mode);
+    setMode(next);
+  };
 
-  return <div className="learning-instrument">
+  return <div className={`learning-instrument${previous !== null ? ' has-switched' : ''}`}>
     <div className="li-content">
       <nav className="li-tabs" aria-label="探索小宇的工具">
-        {modes.map(item => <button key={item.id} type="button" aria-pressed={mode === item.id} onClick={() => setMode(item.id)}>{item.label}</button>)}
+        {modes.map(item => <button key={item.id} type="button" aria-pressed={mode === item.id} onClick={() => select(item.id)}>{item.label}</button>)}
       </nav>
       <div className="li-copy">
         <p>{current.description}</p>
         <div className="li-capabilities">{current.capabilities.map(capability => <span key={capability}>{capability}</span>)}</div>
       </div>
     </div>
-    <div className="li-scene">
+    <div className="li-scene" data-landing-depth>
       <div className="li-art" role="img" aria-label={`${current.label}的动态线图`}><IntelligenceField mode={mode} /></div>
-      {modes.map(item => <div key={item.id} className={`li-surfaces li-surfaces-${item.id}${mode === item.id ? ' is-active' : ''}`} aria-hidden={mode !== item.id}>
+      {modes.map(item => <div key={item.id} className={`li-surfaces li-surfaces-${item.id}${mode === item.id ? ' is-active' : previous === item.id ? ' is-leaving' : ''}`} aria-hidden={mode !== item.id}>
         {item.screens.map(({ image, crop: [x, y, width, height] }, index) => <div key={image} className={`li-surface ${index ? 'li-surface-rear' : 'li-surface-front'}`} style={{ aspectRatio: `${width} / ${height}` }}>
-          <img src={`/screenshots/${image}`} alt={`${item.label}${index ? '的相关界面' : '的功能展示'}`} style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
+          <img className="li-capture" src={`/screenshots/${image}`} alt={`${item.label}${index ? '的相关界面' : '的功能展示'}`} style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
+          <img className="landing-scan-outline" src={`/screenshots/${image}`} alt="" aria-hidden="true" style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
+          <span className="landing-scan-beam" aria-hidden="true" />
         </div>)}
       </div>)}
     </div>

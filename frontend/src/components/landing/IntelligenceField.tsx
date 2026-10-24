@@ -23,10 +23,13 @@ function geometry(u: number, v: number, mode: number): Point {
 export function IntelligenceField({ mode }: { mode: Mode }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const modeRef = useRef(MODES.indexOf(mode));
+  const pulseRef = useRef(0);
   const redrawRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    modeRef.current = MODES.indexOf(mode);
+    const next = MODES.indexOf(mode);
+    if (next !== modeRef.current) pulseRef.current = 1;
+    modeRef.current = next;
     redrawRef.current?.();
   }, [mode]);
 
@@ -76,6 +79,8 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
       if (!reduced && time - lastFrame < 32) { schedule(); return; }
       const elapsed = Math.min(time - lastFrame, 64);
       lastFrame = time;
+      const pulse = reduced ? 0 : pulseRef.current;
+      pulseRef.current = Math.max(0, pulse - elapsed / 1450);
       if (!reduced) phase += elapsed / 1000;
       weights.forEach((weight, index) => {
         const target = index === modeRef.current ? 1 : 0;
@@ -102,6 +107,20 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
         context!.lineWidth = cross ? .6 : .8;
         context!.stroke();
       });
+
+      if (pulse > 0) {
+        const front = (1 - pulse) * contours.length;
+        context!.save(); context!.shadowColor = '#c0e3ff'; context!.shadowBlur = 12;
+        contours.forEach(({ points }, index) => {
+          const intensity = Math.max(0, 1 - Math.abs(index - front) / 3) * Math.sin(pulse * Math.PI);
+          if (intensity < .02) return;
+          context!.beginPath();
+          points.forEach(([x, y], point) => { if (point) context!.lineTo(x, y); else context!.moveTo(x, y); });
+          context!.strokeStyle = `rgba(215, 239, 255, ${intensity})`;
+          context!.lineWidth = 1.8; context!.stroke();
+        });
+        context!.restore();
+      }
 
       // Only a compressed, fading portion of the live geometry reaches the floor.
       const floor = height * .77;
@@ -142,9 +161,12 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
       context!.restore();
       [0, 2.1, 4.3].forEach((offset, index) => {
         const [x, y] = project(head + offset, pathV + index * .8);
-        context!.beginPath(); context!.arc(x, y, index ? 2 : 3.2, 0, TAU);
+        const energy = pulse * Math.max(0, Math.cos((1 - pulse) * TAU - offset));
+        context!.save(); context!.shadowColor = '#b8e4ff'; context!.shadowBlur = energy * 18;
+        context!.beginPath(); context!.arc(x, y, (index ? 2 : 3.2) + energy * 3, 0, TAU);
         context!.fillStyle = index ? '#c3d2df' : '#bae0ff'; context!.fill();
         context!.strokeStyle = '#ffffff'; context!.lineWidth = 1.5; context!.stroke();
+        context!.restore();
       });
       if (!reduced) schedule();
     }
