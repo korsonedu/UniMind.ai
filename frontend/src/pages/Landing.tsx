@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from '@phosphor-icons/react';
 import { AgentShowcase } from '@/components/landing/AgentShowcase';
@@ -10,7 +11,35 @@ import '@/styles/landing.css';
 export function Landing() {
   const user = useAuthStore(state => state.user);
   const entry = user ? '/xiaoyu' : '/register';
-  return <div className="um-landing">
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const layers = [...page.querySelectorAll<HTMLElement>('[data-landing-depth]')];
+    let frame = 0;
+    const paint = () => {
+      frame = 0;
+      const height = window.innerHeight;
+      layers.forEach(layer => {
+        const rect = layer.getBoundingClientRect();
+        const depth = Math.max(-1, Math.min(1, (height / 2 - rect.top - rect.height / 2) / ((height + rect.height) / 2)));
+        layer.style.setProperty('--scene-depth', depth.toFixed(3));
+      });
+      page.style.setProperty('--floor-shift', `${Math.min(48, window.scrollY * .018)}px`);
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(paint); };
+    paint();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, []);
+
+  return <div ref={pageRef} className="um-landing">
     <LandingEntrance />
     <div className="landing-atmosphere" aria-hidden="true"><div className="landing-background" /><div className="landing-light-sweep" /><div className="landing-floor-reflection" /></div>
     <header className="landing-header landing-wrap">
@@ -24,13 +53,13 @@ export function Landing() {
     <main>
       <section className="landing-hero landing-wrap" id="agent">
         <div className="landing-hero-copy">
-          <h1><span className="landing-hero-invitation">和小宇一起</span><span className="landing-hero-statement"><span>将人工智能</span><span>转化为人类智慧</span></span></h1>
+          <h1 aria-label="和小宇一起，将人工智能转化为人类智慧"><span className="landing-hero-invitation">和小宇一起</span><span className="landing-hero-statement"><span data-text="将人工智能">将人工智能</span><span data-text="转化为人类智慧">转化为人类智慧</span></span></h1>
           <p className="landing-hero-description"><span>查资料、画图讲解、练习与复习，</span><span>和小宇一起把问题弄清楚。</span></p>
           <Link to={entry} className="landing-button">开始对话<ArrowUpRight size={18} /></Link>
         </div>
       </section>
 
-      <section className="landing-agent landing-wrap" id="agent-preview" aria-label="小宇对话界面">
+      <section className="landing-agent landing-wrap" id="agent-preview" aria-label="小宇对话界面" data-landing-depth>
         <AgentShowcase />
       </section>
 
@@ -39,10 +68,10 @@ export function Landing() {
       <section className="landing-product landing-wrap" id="workspace" aria-label="学习空间界面">
         <figure className="landing-product-main">
           <figcaption><div><span>课程与资料</span><p>课程、课件与学习进度，放在一起。</p></div><Link to="/courses">浏览课程<ArrowUpRight size={18} /></Link></figcaption>
-          <div className="landing-product-stage"><div className="landing-ui-frame"><img src="/screenshots/landing-workspace-demo.webp" alt="虚构学员小林的课程、课件、学习进度与历史活动" width="3840" height="3660" loading="lazy" /></div></div>
+          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-workspace-demo.webp" alt="虚构学员小林的课程、课件、学习进度与历史活动" width="3840" height="3660" loading="lazy" /></div></div>
         </figure>
         <figure className="landing-product-secondary">
-          <div className="landing-product-stage"><div className="landing-ui-frame"><img src="/screenshots/landing-learning-records-demo.webp" alt="虚构学员的练习表现、知识掌握和历史考试记录" width="3840" height="2400" loading="lazy" /></div></div>
+          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-learning-records-demo.webp" alt="虚构学员的练习表现、知识掌握和历史考试记录" width="3840" height="2400" loading="lazy" /></div></div>
           <figcaption><span>学习记录</span><p>查看练习表现，<br />了解知识掌握情况。</p><Link to="/report-card">查看学习记录<ArrowUpRight size={18} /></Link></figcaption>
         </figure>
       </section>
