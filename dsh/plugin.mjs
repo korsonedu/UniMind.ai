@@ -17,7 +17,10 @@ export async function apply(ctx) {
     if (!response.ok) throw new Error(`UniMind request failed (${response.status})`);
     return response.json();
   };
-  const context = await request('/api/ai/dsh/context/', { message: process.env.UNIMIND_DSH_MESSAGE || '' });
+  const context = await request('/api/ai/dsh/context/', {
+    message: process.env.UNIMIND_DSH_MESSAGE || '',
+    recent_messages: JSON.parse(process.env.UNIMIND_DSH_RECENT_MESSAGES || '[]'),
+  });
   ctx.systemPrompt.section({ name: 'unimind:persona', order: 0, complete: true, text: context.system_prompt, interpolate: false });
   ctx.systemPrompt.context({
     name: 'unimind:student-memory', order: 100, required: true, interpolate: false,

@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 
 type Health = { sdk: string; backend_configured: boolean; model_configured: boolean; mode: string };
 type LocalSession = { id: string; notice: string; updated_at: string; messages: { role: string; content: string; mode?: string }[] };
-type Turn = { content: string; session: LocalSession; gateway: { model: string; requests: { status: string; tool_results: number; usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }[] } };
+type Turn = { content: string; session: LocalSession; routing: Context['routing']; gateway: { model: string; requests: { status: string; tool_results: number; usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }[] } };
 type Context = {
   student: { id: number; name: string };
   memory: { version: string; items: { id: number; key: string; value: string }[] };
   tools: { function: { name: string; description: string } }[];
   permitted_tool_count: number;
+  routing: { catalog_count: number; candidate_count: number; pending_names: string[]; candidate_schema_bytes: number; executable_schema_bytes: number };
 };
 
 async function request<T>(path: string, data?: Record<string, unknown>): Promise<T> {
@@ -60,7 +61,7 @@ export default function DshM0() {
       setContext(latest);
       if (chat) {
         const result = await request<Turn>('/chat', { message, session_id: session?.id });
-        selectSession(result.session); setTurn(result);
+        selectSession(result.session); setTurn(result); setContext({ ...latest, routing: result.routing });
       }
     } catch (err) { setError(err instanceof Error ? err.message : '调用失败'); }
     finally { setBusy(false); }
@@ -88,6 +89,7 @@ export default function DshM0() {
         <div><p className="mb-2 text-xs tracking-widest text-black/45">UNIMIND / M0</p>
           <h1 className="text-3xl font-semibold">学习界面与 AI 运行时分开验证</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-black/55">本地开发入口。使用隔离的验证账号和合成数据；{health?.mode === 'deepseek-official' ? '模型使用 DeepSeek 官方 API，经本地任务网关限量调用。' : '模型端为本地协议模拟。'}当前验证不代表正式教学效果或生产发布。</p>
+          <p className="mt-2 max-w-2xl text-xs leading-6 text-black/45">产品基线：DSH 作为服务端 harness；网页和 UniMind 桌面客户端共用 AI 服务。本页连接本机开发服务，当前仅开放已验证的只读工具。</p>
         </div>
         <a className="text-sm underline underline-offset-4" href="/courses">进入普通课程界面 →</a>
       </header>
@@ -137,12 +139,14 @@ export default function DshM0() {
             <p className="mt-3 text-sm text-black/55">{context ? `${context.student.name} · #${context.student.id}` : '读取后显示；凭据由 Host 持有'}</p>
           </section>
           <section><h2 className="font-semibold">学生长期记忆</h2>
-            {context?.memory.items.length ? context.memory.items.map(item => <p key={item.id} className="mt-3 text-sm leading-6"><span className="text-black/45">{item.key}：</span>{item.value}</p>) : <p className="mt-3 text-sm text-black/45">尚未读取记忆</p>}
+            {context?.memory.items.length ? context.memory.items.map(item => <p key={item.id} className="mt-3 text-sm leading-6"><span className="text-black/45">{item.key}：</span>{item.value}</p>) : <p className="mt-3 text-sm text-black/45">{context ? '当前没有有效的长期记忆' : '尚未读取记忆'}</p>}
             {context && <p className="mt-3 break-all font-mono text-[10px] text-black/35">版本 {context.memory.version}</p>}
           </section>
           <section><h2 className="font-semibold">本轮候选工具</h2>
-            <p className="mt-2 text-xs text-black/45">{context ? `${context.tools.length} 个候选 / ${context.permitted_tool_count} 个允许的只读工具` : '按权限与问题选择'}</p>
+            <p className="mt-2 text-xs leading-6 text-black/45">{context?.routing ? `已鉴权目录 ${context.routing.catalog_count} 个，本轮候选 ${context.routing.candidate_count} 个；当前可执行 ${context.tools.length} / ${context.permitted_tool_count} 个只读工具。` : '按权限与问题选择'}</p>
             <ul className="mt-3 space-y-2">{context?.tools.map(tool => <li key={tool.function.name} className="break-all border-t border-black/5 pt-2 font-mono text-xs">{tool.function.name}</li>)}</ul>
+            {context?.routing && <p className="mt-3 text-xs leading-6 text-black/45">候选 Schema {context.routing.candidate_schema_bytes} bytes；本轮实际开放 Schema {context.routing.executable_schema_bytes} bytes。模型意图分类尚待接入 DSH。</p>}
+            {!!context?.routing?.pending_names.length && <details className="mt-3 text-xs leading-6 text-black/50"><summary>候选中 {context.routing.pending_names.length} 项尚未迁移执行</summary><p className="mt-2 break-all font-mono">{context.routing.pending_names.join('、')}</p></details>}
           </section>
         </aside>
       </div>

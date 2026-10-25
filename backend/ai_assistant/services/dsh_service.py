@@ -7,7 +7,7 @@ from django.conf import settings
 from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 
 from ai_engine.tool_permissions import filter_tools
-from ai_engine.tool_router import PLANNER_INTENT_MAP
+from ai_engine.tool_router import classify_intent_keywords, route_tools
 from ai_engine.tool_run import validate_arguments
 from ai_engine.config import get_model_for_task
 from ai_engine.tools import get_planner_tools
@@ -34,20 +34,22 @@ def memory_snapshot(user):
     return {'version': hashlib.sha256(text.encode()).hexdigest(), 'items': rows}
 
 
-def permitted_tools(user):
-    definitions = [t for t in get_planner_tools() if t['function']['name'] in M0_TOOLS]
+def student_catalog(user):
+    # Retired Agent note writes stay excluded even when legacy permissions allow them.
+    definitions = [t for t in get_planner_tools() if t['function']['name'] != 'save_session_note']
     return filter_tools('planner', None, definitions, user=user)
 
 
-def build_context(user, message):
-    allowed = permitted_tools(user)
-    names = {'get_learning_stats'}
-    for group in PLANNER_INTENT_MAP.values():
-        if any(word in message.lower() for word in group['keywords']):
-            names.update(group['tools'])
-    if not message.strip():
-        names.update(M0_TOOLS)
-    selected = [t for t in allowed if t['function']['name'] in names]
+def permitted_tools(user):
+    return [t for t in student_catalog(user) if t['function']['name'] in M0_TOOLS]
+
+
+def build_context(user, message, recent_messages=None):
+    catalog = student_catalog(user)
+    candidates = route_tools(message, catalog, recent_messages=recent_messages,
+                             bot_type='planner', intent_classifier=classify_intent_keywords)
+    selected = [t for t in candidates if t['function']['name'] in M0_TOOLS]
+    allowed = [t for t in catalog if t['function']['name'] in M0_TOOLS]
     return {
         'protocol': 'unimind.dsh.m0.v1',
         'student': {'id': user.pk, 'name': user.nickname or user.username},
@@ -55,7 +57,16 @@ def build_context(user, message):
         'tools': selected,
         'permitted_tool_count': len(allowed),
         'permissions_version': hashlib.sha256(json.dumps(allowed, sort_keys=True).encode()).hexdigest(),
-        'route': 'keywords-and-workflow-groups',
+        'route': 'shared-router-keywords-workflow',
+        'routing': {
+            'catalog_count': len(catalog), 'candidate_count': len(candidates),
+            'candidate_names': [t['function']['name'] for t in candidates],
+            'pending_names': [t['function']['name'] for t in candidates if t['function']['name'] not in M0_TOOLS],
+            'candidate_schema_bytes': len(json.dumps(candidates, ensure_ascii=False).encode()),
+            'executable_schema_bytes': len(json.dumps(selected, ensure_ascii=False).encode()),
+            'model_intent': 'pending-dsh-migration',
+            'semantic_retrieval': 'available-for-large-catalogs' if len(catalog) > 32 else 'not-used-small-catalog',
+        },
         'model_policy': {
             'operation': 'assistant.chat.planner', 'tier': 'fast',
             'model': get_model_for_task('assistant.chat.planner')['model'],

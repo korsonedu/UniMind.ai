@@ -76,7 +76,7 @@ def backend_fixture():
     server.serve_forever()
 
 
-def model_fixture():
+def model_fixture(status=200):
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from threading import Thread
     requests = []
@@ -88,6 +88,12 @@ def model_fixture():
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             requests.append(body)
+            if status != 200:
+                self.send_response(status)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"type":"error","error":{"type":"fixture_error","message":"unavailable"}}')
+                return
             has_result = any(block.get('type') == 'tool_result'
                              for m in body.get('messages', []) if isinstance(m.get('content'), list)
                              for block in m['content'])

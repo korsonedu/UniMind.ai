@@ -32,6 +32,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
     allowed_tools = {t['function']['name'] for t in context['tools']}
     capability = secrets.token_urlsafe(32)
     requests = []
+    fatal_status = None
     lock = Lock()
     expires = monotonic() + TASK_TIMEOUT_SECONDS
     task_id = secrets.token_hex(12)
@@ -80,6 +81,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
             self.wfile.write(body)
 
         def do_POST(self):
+            nonlocal fatal_status
             if self.path != '/v1/messages':
                 return self.reject(404, 'path_denied')
             credential = self.headers.get('x-api-key', '') or self.headers.get('Authorization', '').removeprefix('Bearer ')
@@ -90,6 +92,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
             if not lock.acquire(blocking=False):
                 return self.reject(429, 'task_busy')
             try:
+                if fatal_status is not None:
+                    return self.reject(fatal_status, 'upstream_non_retryable')
                 if len(requests) >= policy['max_requests']:
                     return self.reject(429, 'task_request_budget_exhausted')
                 try:
@@ -139,6 +143,9 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
                     with connection.getresponse() as response:
                         if response.status != 200:
                             record['status'] = f'upstream_http_{response.status}'
+                            if 400 <= response.status < 500 and response.status not in (408, 409, 429):
+                                fatal_status = response.status
+                                return self.reject(response.status, 'upstream_non_retryable')
                             return self.reject(502, 'upstream_unavailable')
                         if 'text/event-stream' not in response.headers.get('Content-Type', ''):
                             record['status'] = 'invalid_protocol'

@@ -48,7 +48,7 @@ class SessionStore:
 
     def create(self, context):
         state = {'id': uuid4().hex, 'context_version': context_version(context),
-                 'runtime_id': uuid4().hex, 'runtime_ready': False, 'dirty': False,
+                 'runtime_id': uuid4().hex, 'runtime_ready': False, 'runtime_start': 0, 'dirty': False,
                  'messages': [], 'notice': '', 'updated_at': datetime.now(timezone.utc).isoformat()}
         self.save(context, state)
         return state
@@ -60,7 +60,7 @@ class SessionStore:
             raise SessionUnavailable() from None
         if state['id'] != session_id:
             raise SessionUnavailable()
-        if state['dirty'] or state['context_version'] != context_version(context):
+        if state['dirty'] or 'runtime_start' not in state or state['context_version'] != context_version(context):
             self.invalidate(context, state)
         return state
 
@@ -69,7 +69,7 @@ class SessionStore:
         if home.exists():
             shutil.rmtree(home)
         state.update(context_version=context_version(context), runtime_id=uuid4().hex,
-                     runtime_ready=False, dirty=False,
+                     runtime_ready=False, runtime_start=len(state['messages']), dirty=False,
                      notice='记忆、工具权限或运行状态已变化，模型上下文已重建；原聊天仅保留供查看。')
         self.save(context, state)
 

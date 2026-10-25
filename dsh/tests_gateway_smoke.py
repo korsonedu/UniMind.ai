@@ -44,6 +44,26 @@ def slow_fixture():
 
 
 class GatewaySmoke(unittest.TestCase):
+    def test_insufficient_balance_is_not_retried_upstream(self):
+        upstream, calls = model_fixture(status=402)
+        context = {'model_policy': {'operation': 'assistant.chat.planner', 'tier': 'fast',
+                   'model': 'deepseek-v4-flash', 'max_requests': 4, 'max_tokens': 128, 'max_request_bytes': 4096}, 'tools': []}
+        try:
+            with task_gateway(context, f'http://127.0.0.1:{upstream.server_port}/v1/messages',
+                              'SYNTHETIC_SECRET', 'local-protocol-smoke') as gateway:
+                for _ in range(2):
+                    request = Request(gateway['url'] + '/messages', json.dumps({'model': 'deepseek-v4-flash',
+                        'stream': True, 'max_tokens': 128, 'messages': []}).encode(), {'x-api-key': gateway['credential']})
+                    with self.assertRaises(HTTPError) as error:
+                        urlopen(request, timeout=5)
+                    with error.exception:
+                        self.assertEqual(error.exception.code, 402)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(gateway['requests'][0]['status'], 'upstream_http_402')
+        finally:
+            upstream.shutdown()
+            upstream.server_close()
+
     def check_interrupted_stream(self, deadline):
         upstream, ready = slow_fixture()
         context = {'model_policy': {'operation': 'assistant.chat.planner', 'tier': 'fast',

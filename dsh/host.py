@@ -56,6 +56,15 @@ def run_session_turn(message, model_config, session_id):
     context = backend_request('/api/ai/dsh/context/', {'message': message})
     context['runtime_source'] = model_config['mode']
     state = SESSIONS.load(context, session_id) if session_id else SESSIONS.create(context)
+    recent = [{'role': m['role'], 'content': m['content'][-1000:]} for m in state['messages'][state['runtime_start']:][-6:]] if state['runtime_ready'] else []
+    if recent:
+        context = backend_request('/api/ai/dsh/context/', {'message': message, 'recent_messages': recent})
+        context['runtime_source'] = model_config['mode']
+        if context_version(context) != state['context_version']:
+            SESSIONS.invalidate(context, state)
+            recent = []
+            context = backend_request('/api/ai/dsh/context/', {'message': message})
+            context['runtime_source'] = model_config['mode']
     state['dirty'] = True
     SESSIONS.save(context, state)
     home = SESSIONS.directory(context, state['id']) / 'runtime'
@@ -75,10 +84,13 @@ def run_session_turn(message, model_config, session_id):
                 'UNIMIND_API_URL': os.environ.get('UNIMIND_API_URL', 'http://127.0.0.1:8000'),
                 'UNIMIND_AUTH_TOKEN': os.environ.get('UNIMIND_AUTH_TOKEN', ''),
                 'UNIMIND_DSH_MESSAGE': message,
+                'UNIMIND_DSH_RECENT_MESSAGES': json.dumps(recent, ensure_ascii=False),
             },
         ) as harness:
             session = harness.resume_session(state['runtime_id']) if state['runtime_ready'] else harness.start_session(state['runtime_id'])
             result = session.run(message)
+    if any(r['status'] == 'upstream_http_402' for r in gateway['requests']):
+        raise HostConfigurationError('DeepSeek 官方接口返回 402（余额不足），请检查账户余额；本轮未完成。')
     if not result.final_response:
         raise RuntimeError('DSH turn did not produce a response')
     if not gateway['requests'] or any(r['status'] != 'completed' for r in gateway['requests']):
@@ -98,7 +110,7 @@ def run_session_turn(message, model_config, session_id):
         'content': result.final_response,
         'finish_reason': result.finish_reason,
         'session_id': state['id'], 'session': SESSIONS.public(state),
-        'mode': gateway['mode'], 'gateway': usage,
+        'mode': gateway['mode'], 'gateway': usage, 'routing': context['routing'],
     }
 
 

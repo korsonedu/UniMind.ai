@@ -13,9 +13,42 @@ from sessions import SessionStore, SessionUnavailable
 
 
 class SessionSmoke(unittest.TestCase):
+    def test_old_transcript_stays_out_after_rebuilt_turn(self):
+        context = {'student': {'id': 1}, 'memory': {'version': 'old'}, 'permissions_version': 'allowed',
+                   'model_policy': {'model': 'test', 'operation': 'assistant.chat.planner', 'max_tokens': 128},
+                   'system_prompt': 'test', 'routing': {}, 'runtime_source': 'local-protocol-smoke'}
+        @contextmanager
+        def gateway(*_args):
+            yield {'url': 'http://127.0.0.1:1/v1', 'credential': 'SYNTHETIC_TASK', 'mode': 'local-protocol-smoke',
+                   'task_id': 'test-task', 'requests': [{'status': 'completed'}]}
+        with TemporaryDirectory() as temp:
+            store = SessionStore(temp)
+            state = store.create(context)
+            state.update(messages=[{'role': 'user', 'content': 'OLD_PRIVATE_MEMORY 请批改'},
+                                   {'role': 'assistant', 'content': '确认继续批改吗？'}], runtime_ready=True)
+            store.save(context, state)
+            context['memory']['version'] = 'corrected'
+            calls = []
+            def backend(_path, body):
+                calls.append(body)
+                return deepcopy(context)
+            harness = MagicMock()
+            for method in ('start_session', 'resume_session'):
+                getattr(harness.__enter__.return_value, method).return_value.run.return_value = SimpleNamespace(final_response='fresh answer', finish_reason='stop')
+            config = {'url': 'http://127.0.0.1:1/v1/messages', 'key': 'SYNTHETIC_KEY', 'mode': 'local-protocol-smoke'}
+            with patch.object(host, 'SESSIONS', store), patch.object(host, 'backend_request', backend), \
+                    patch.object(host, 'task_gateway', gateway), patch.object(host, 'DeepSeekHarness', return_value=harness):
+                host.run_turn('fresh question', config, state['id'])
+                calls.clear()
+                result = host.run_turn('继续', config, state['id'])
+            routed = [m for call in calls for m in call.get('recent_messages', [])]
+            self.assertEqual([m['content'] for m in routed], ['fresh question', 'fresh answer'])
+            self.assertNotIn('OLD_PRIVATE_MEMORY', json.dumps(routed))
+            self.assertIn('OLD_PRIVATE_MEMORY', json.dumps(result['session']['messages']))
+
     def test_official_turn_keeps_session_state(self):
         context = {'student': {'id': 1}, 'memory': {'version': 'initial'}, 'permissions_version': 'allowed',
-                   'model_policy': {'model': 'test', 'operation': 'assistant.chat.planner', 'max_tokens': 128}, 'system_prompt': 'test'}
+                   'model_policy': {'model': 'test', 'operation': 'assistant.chat.planner', 'max_tokens': 128}, 'system_prompt': 'test', 'routing': {}}
         @contextmanager
         def gateway(*_args):
             yield {'url': 'http://127.0.0.1:1/v1', 'credential': 'SYNTHETIC_TASK', 'mode': 'deepseek-official',
