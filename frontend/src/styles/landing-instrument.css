@@ -8,6 +8,8 @@
 .li-tabs button:hover { color: #dbe6f0; }
 .li-copy { max-width: 350px; min-height: 175px; margin: 30px 0 0 25px; }
 .li-copy p { margin: 0; color: #9aa8b8; font-size: clamp(17px,1.5vw,21px); line-height: 1.85; text-wrap: balance; }
+.li-copy p [data-glyph] { position: relative; color: transparent; }
+.li-copy p [data-glyph]::after { content: attr(data-glyph); position: absolute; inset: 0; color: #bad9ef; text-align: center; font-family: ui-monospace,SFMono-Regular,Consolas,monospace; }
 .li-capabilities { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 25px; color: #c0cedc; font-size: 12px; }
 .li-scene { position: relative; min-width: 0; height: 620px; isolation: isolate; perspective: 1400px; }
 .li-scene::before { content: ''; position: absolute; inset: 12% -5% 4%; background: radial-gradient(ellipse at 58% 58%,#6b94b91a,transparent 62%); pointer-events: none; }
@@ -51,4 +53,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .li-tabs button,.li-tabs button::before,.li-surfaces,.li-surface-front::after { transition: none; }
+  .li-copy p [data-glyph] { color: inherit; }
+  .li-copy p [data-glyph]::after { display: none; }
 }

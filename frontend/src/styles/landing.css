@@ -78,6 +78,11 @@
 .is-active > .landing-capture { clip-path: inset(0); }
 .landing-scan-outline { filter: grayscale(1) invert(1) contrast(2); mix-blend-mode: screen; opacity: 0; pointer-events: none; }
 .landing-scan-beam { position: absolute; z-index: 3; top: 0; bottom: 0; left: -2%; width: 1px; opacity: 0; background: #d9f1ff; box-shadow: 0 0 12px 3px #c3e8ff70,0 0 35px 7px #b9dfff18; pointer-events: none; transition: left 1s ease; }
+.landing-dissolve { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; }
+.landing-dissolve[data-running='true'] { opacity: 1; }
+.landing-agent-image:has(> .landing-dissolve[data-running='true']) > .landing-capture,.li-surface:has(> .landing-dissolve[data-running='true']) > .li-capture { visibility: hidden; }
+.landing-agent-image::after,.li-surface::before { content: ''; position: absolute; z-index: 4; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; }
+.has-switched .landing-agent-image.is-active::after,.has-switched .li-surfaces.is-active .li-surface::before { animation: landing-edge-spectrum 1.3s ease both; }
 .landing-ripple-floor { position: absolute; z-index: -1; left: 10%; right: 10%; bottom: -32px; height: 110px; transform: perspective(500px) rotateX(68deg); pointer-events: none; }
 .landing-ripple-floor > span,.li-ripple-floor > span { position: absolute; inset: 0; border: 1px solid #c4e5fa80; border-radius: 50%; box-shadow: 0 0 12px #b6dcf51a,inset 0 0 12px #b6dcf50d; opacity: 0; }
 .has-switched .landing-ripple-floor > span.is-active,.has-switched .li-surfaces.is-active .li-ripple-floor > span { animation: landing-water-ripple 1.8s 1.05s both; }
@@ -105,6 +110,7 @@
 @keyframes landing-beam-scan { 0%,100% { opacity: 0; } 12%,75% { opacity: .8; } }
 @keyframes landing-refraction-drift { to { clip-path: polygon(185% 0,205% 0,165% 100%,145% 100%); } }
 @keyframes landing-water-ripple { 0% { opacity: 0; transform: scale(.15); } 16% { opacity: .5; } 100% { opacity: 0; transform: scale(1.45); } }
+@keyframes landing-edge-spectrum { 0%,100% { opacity: 0; box-shadow: inset 0 0 transparent; } 20% { opacity: .9; box-shadow: inset 3px 0 #9edaff,inset -2px 0 #c9d6ff,inset 0 1px #f2faff; transform: skewX(.15deg); } 55% { opacity: .65; box-shadow: inset -2px 0 #9edaff,inset 3px 0 #d8e7ff,inset 0 -1px #e6f6ff; transform: skewX(-.1deg); } }
 .landing-entrance { position: fixed; inset: 0; z-index: 100; display: block; width: 100%; height: 100%; pointer-events: none; }
 .um-landing:has(.landing-entrance) { z-index: 60; }
 @keyframes landing-header-reveal { from { opacity: 0; filter: blur(6px); transform: translateY(-12px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
@@ -165,6 +171,8 @@
   [data-landing-depth] { --scene-depth: 0 !important; }
   .landing-floor-reflection { transform: scaleY(-1); }
   .landing-refraction,.landing-nav-fiber,.landing-ripple-floor,.li-ripple-floor,.landing-coda canvas { display: none; }
+  .landing-dissolve,.landing-agent-image::after,.li-surface::before { display: none; }
+  .landing-agent-image > .landing-capture,.li-surface > .li-capture { visibility: visible !important; }
   .landing-coda img { opacity: 1; }
   .landing-button,.landing-header .landing-nav-entry,.landing-showcase-controls .landing-showcase-next { --magnet-x: 0px !important; --magnet-y: 0px !important; }
 }

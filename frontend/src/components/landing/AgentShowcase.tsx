@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight } from '@phosphor-icons/react';
+import { ScreenshotDissolve } from './ScreenshotDissolve';
 
 const scenes = [
   { label: '学习安排', image: 'landing-agent-plan-demo.webp', description: '根据学习记录安排复习与练习' },
@@ -24,6 +25,7 @@ export function AgentShowcase() {
           <img className="landing-capture" src={`/screenshots/${scene.image}`} alt={`小宇${scene.label}界面，${scene.description}`} width="3840" height="2640" />
           <img className="landing-scan-outline" src={`/screenshots/${scene.image}`} alt="" aria-hidden="true" width="3840" height="2640" />
           <span className="landing-scan-beam" aria-hidden="true" />
+          <ScreenshotDissolve active={index === selected} />
         </div>)}
       </div>
       <button type="button" className="landing-agent-launch" onClick={() => select((selected + 1) % scenes.length)} aria-label={`切换功能展示，当前为${scenes[selected].label}`} />

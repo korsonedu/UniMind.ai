@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { IntelligenceField } from './IntelligenceField';
+import { ScreenshotDissolve } from './ScreenshotDissolve';
 import '@/styles/landing-instrument.css';
 
 const modes = [
@@ -21,6 +22,27 @@ export function LearningInstrument() {
   const [mode, setMode] = useState<typeof modes[number]['id']>('plan');
   const [previous, setPrevious] = useState<typeof mode | null>(null);
   const current = modes.find(item => item.id === mode)!;
+  const lastMode = useRef(mode);
+  const [decode, setDecode] = useState({ mode, progress: 1, tick: 0 });
+  useEffect(() => {
+    if (lastMode.current === mode) return;
+    lastMode.current = mode;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDecode({ mode, progress: 1, tick: 0 }); return;
+    }
+    const started = performance.now();
+    let frame = 0, last = 0;
+    const draw = (time: number) => {
+      const progress = document.hidden ? 1 : Math.min(1, (time - started) / 720);
+      if (time - last > 40 || progress === 1) {
+        last = time; setDecode({ mode, progress, tick: Math.floor((time - started) / 45) });
+      }
+      if (progress < 1) frame = requestAnimationFrame(draw);
+    };
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [mode]);
+  const progress = decode.mode === mode ? decode.progress : 0;
   const select = (next: typeof mode) => {
     if (next === mode) return;
     setPrevious(mode);
@@ -33,7 +55,8 @@ export function LearningInstrument() {
         {modes.map(item => <button key={item.id} type="button" aria-pressed={mode === item.id} onClick={() => select(item.id)}>{item.label}</button>)}
       </nav>
       <div className="li-copy">
-        <p>{current.description}</p>
+        <p data-decoding={progress < 1}><span className="sr-only">{current.description}</span><span aria-hidden="true">{Array.from(current.description).map((character, index, characters) =>
+          <span key={index} data-glyph={index / characters.length >= progress ? ['0', '1', '{', '}', '/', '∷', '<', '>'][(index + decode.tick) % 8] : undefined}>{character}</span>)}</span></p>
         <div className="li-capabilities">{current.capabilities.map(capability => <span key={capability}>{capability}</span>)}</div>
       </div>
     </div>
@@ -44,6 +67,7 @@ export function LearningInstrument() {
           <img className="li-capture" src={`/screenshots/${image}`} alt={`${item.label}${index ? '的相关界面' : '的功能展示'}`} style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
           <img className="landing-scan-outline" src={`/screenshots/${image}`} alt="" aria-hidden="true" style={{ width: `${1280 / width * 100}%`, left: `${-x / width * 100}%`, top: `${-y / height * 100}%` }} />
           <span className="landing-scan-beam" aria-hidden="true" />
+          <ScreenshotDissolve active={mode === item.id} />
         </div>)}
         <div className="li-ripple-floor" aria-hidden="true"><span /></div>
       </div>)}

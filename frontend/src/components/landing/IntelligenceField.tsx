@@ -114,6 +114,25 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
         context!.stroke();
       });
 
+      if (!reduced) {
+        const glyphs = ['0', '1', '{', '}', '/', '<', '>', '=>'];
+        context!.save(); context!.font = `${window.innerWidth <= 700 ? 9 : 11}px ui-monospace, SFMono-Regular, Consolas, monospace`;
+        context!.textAlign = 'center'; context!.textBaseline = 'middle';
+        for (let stream = 0; stream < 7; stream++) {
+          const u = phase * (.45 + stream * .025) + stream * .87;
+          const v = (stream * 3 + 1) / 20 * TAU;
+          for (let tail = 4; tail >= 0; tail--) {
+            const point = project(u - tail * .11, v), next = project(u - tail * .11 + .025, v);
+            context!.save(); context!.translate(point[0], point[1]);
+            context!.rotate(Math.atan2(next[1] - point[1], next[0] - point[0]));
+            context!.fillStyle = `rgba(193, 225, 249, ${(1 - tail / 5) * Math.max(.3, .85 + point[2] * .12)})`;
+            context!.fillText(glyphs[(stream + tail + Math.floor(phase * 2)) % glyphs.length], 0, 0);
+            context!.restore();
+          }
+        }
+        context!.restore();
+      }
+
       if (pulse > 0) {
         const front = (1 - pulse) * contours.length;
         context!.save(); context!.shadowColor = '#c0e3ff'; context!.shadowBlur = 12;

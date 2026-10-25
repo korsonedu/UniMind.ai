@@ -27,3 +27,5 @@ Mock 位于 `src/dev/previewApi.ts` 和 `src/dev/agentDemoFixtures.ts`，仅开�
 首页游客预览：`/?preview=1&guest=1&capture=1`。学生演示：`/courses?preview=1&capture=hd`、`/report-card?preview=1&capture=hd`、`/xiaoyu?preview=1&capture=hd`。
 
 开屏与页尾使用代码字符风暴，分别聚成主标语与 Logo，再散开；系统开启减少动态效果时直接展示静态内容。游客页面保留背景折射、点线弹性形变、截图落地涟漪、导航光纤和按钮磁吸。开发预览退出后会保留游客状态，切换调试身份可重新进入模拟账号。
+
+功能切换时，说明文字在原有字位上解码，截图通过局部 Canvas 将原图碎片转为代码字符，再聚合成新图；点线图上的字符沿曲面流动，截图边缘短暂出现冰蓝折光。动效限于展示区域，转场后恢复原始 WebP；减少动态效果时直接显示静态文字和截图。
