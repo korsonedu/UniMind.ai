@@ -119,7 +119,7 @@ export function Landing() {
       <section className="landing-product landing-wrap" id="workspace" aria-label="学习空间界面">
         <figure className="landing-product-main">
           <figcaption><div><span>课程与资料</span><p>课程、课件与学习进度，放在一起。</p></div><Link to="/courses">浏览课程<ArrowUpRight size={18} /></Link></figcaption>
-          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-workspace-demo.webp" alt="虚构学员小林的课程、课件、学习进度与历史活动" width="3840" height="3660" loading="lazy" /></div></div>
+          <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-workspace-desktop-demo.webp" alt="虚构学员小林的课程、课件、学习进度与历史活动" width="4800" height="3000" loading="lazy" /></div></div>
         </figure>
         <figure className="landing-product-secondary">
           <div className="landing-product-stage" data-landing-depth><div className="landing-ui-frame"><img src="/screenshots/landing-learning-records-demo.webp" alt="虚构学员的练习表现、知识掌握和历史考试记录" width="3840" height="2400" loading="lazy" /></div></div>

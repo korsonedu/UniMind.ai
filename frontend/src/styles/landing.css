@@ -63,6 +63,7 @@
 .landing-showcase-next:hover { background: #b3d6f01c; }
 .landing-agent .landing-agent-frame { transform: perspective(1800px) rotateY(-3deg) rotateX(2deg); transform-origin: center; }
 .landing-product-stage { position: relative; perspective: 1800px; padding: 32px 3% 48px; }
+.landing-product-main .landing-product-stage { width: min(100%,calc((100svh - 200px) * 1.6)); margin-inline: auto; }
 .landing-product-stage::before { content: ''; position: absolute; inset: 5% -8% 0; background: radial-gradient(ellipse at 50% 60%,#8fb8d620,transparent 65%); border-bottom: 1px solid #bddef016; pointer-events: none; }
 .landing-product-stage .landing-ui-frame { position: relative; transform: translateY(calc(var(--scene-depth,0) * -22px)) rotateX(calc(3deg + var(--scene-depth,0) * -3deg)) rotateY(-3deg); transition: transform .35s ease-out; box-shadow: 15px calc(38px + var(--scene-depth,0) * 15px) 90px -30px #000, 0 0 0 8px #bdd7ef05; }
 .landing-product-secondary .landing-ui-frame { transform: translateY(calc(var(--scene-depth,0) * -16px)) rotateX(calc(3deg + var(--scene-depth,0) * -3deg)) rotateY(6deg) rotateZ(-2deg); }
