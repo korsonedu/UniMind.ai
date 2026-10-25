@@ -47,6 +47,7 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
     let raf = 0;
     let lastFrame = 0;
     let phase = .4;
+    let cosTurn = 1, sinTurn = 0, cosTilt = 1, sinTilt = 0, scale = 0, centerX = 0;
     const weights: number[] = MODES.map((_, index) => index === modeRef.current ? 1 : 0);
     const pointer = { x: 0, y: 0, targetX: 0, targetY: 0, localX: 0, localY: 0, force: 0, targetForce: 0, velocity: 0 };
 
@@ -54,46 +55,48 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
       if (!raf && visible && !document.hidden) raf = requestAnimationFrame(draw);
     };
     const project = (u: number, v: number): Point => {
-      const point: Point = [0, 0, 0];
-      weights.forEach((weight, index) => {
-        if (weight < .001) return;
+      let px = 0, py = 0, pz = 0;
+      for (let index = 0; index < weights.length; index++) {
+        const weight = weights[index];
+        if (weight < .001) continue;
         const shape = geometry(u, v, index);
-        shape.forEach((value, axis) => { point[axis] += value * weight; });
-      });
-      const turn = -.48 + phase * .085 + pointer.x * .18;
-      const tilt = .46 + pointer.y * .15;
-      const x = point[0] * Math.cos(turn) - point[2] * Math.sin(turn);
-      const depth = point[0] * Math.sin(turn) + point[2] * Math.cos(turn);
-      const y = point[1] * Math.cos(tilt) - depth * Math.sin(tilt);
-      const z = point[1] * Math.sin(tilt) + depth * Math.cos(tilt);
-      const mobile = window.innerWidth <= 900;
-      const scale = Math.min(width * (mobile ? .32 : .245), height * .38);
+        px += shape[0] * weight; py += shape[1] * weight; pz += shape[2] * weight;
+      }
+      const x = px * cosTurn - pz * sinTurn;
+      const depth = px * sinTurn + pz * cosTurn;
+      const y = py * cosTilt - depth * sinTilt;
+      const z = py * sinTilt + depth * cosTilt;
       const perspective = 4 / (4 - z * .35);
-      const screenX = width * (mobile ? .5 : .66) + x * scale * perspective;
+      const screenX = centerX + x * scale * perspective;
       const screenY = height * .48 + y * scale * perspective;
       const dx = pointer.localX - screenX, dy = pointer.localY - screenY;
       const radius = Math.min(width, height) * .35;
-      const attraction = Math.exp(-(dx * dx + dy * dy) / (radius * radius)) * pointer.force * .32;
+      const attraction = pointer.force > .001 ? Math.exp(-(dx * dx + dy * dy) / (radius * radius)) * pointer.force * .32 : 0;
       return [screenX + dx * attraction, screenY + dy * attraction, z];
     };
 
     function draw(time: number) {
       raf = 0;
       if (!visible || document.hidden || !width || !height) return;
-      if (!reduced && time - lastFrame < 32) { schedule(); return; }
       const elapsed = Math.min(time - lastFrame, 64);
       lastFrame = time;
       const pulse = reduced ? 0 : pulseRef.current;
       pulseRef.current = Math.max(0, pulse - elapsed / 1450);
       if (!reduced) phase += elapsed / 1000;
+      const blend = 1 - Math.exp(-elapsed / 300);
       weights.forEach((weight, index) => {
         const target = index === modeRef.current ? 1 : 0;
-        weights[index] = reduced ? target : weight + (target - weight) * .065;
+        weights[index] = reduced ? target : weight + (target - weight) * blend;
       });
-      pointer.x += ((reduced ? 0 : pointer.targetX) - pointer.x) * .06;
-      pointer.y += ((reduced ? 0 : pointer.targetY) - pointer.y) * .06;
-      pointer.velocity = (pointer.velocity + ((reduced ? 0 : pointer.targetForce) - pointer.force) * .08) * .78;
-      pointer.force = reduced ? 0 : pointer.force + pointer.velocity;
+      pointer.x += ((reduced ? 0 : pointer.targetX) - pointer.x) * blend;
+      pointer.y += ((reduced ? 0 : pointer.targetY) - pointer.y) * blend;
+      const step = elapsed / 32;
+      pointer.velocity = (pointer.velocity + ((reduced ? 0 : pointer.targetForce) - pointer.force) * .08 * step) * Math.pow(.78, step);
+      pointer.force = reduced ? 0 : pointer.force + pointer.velocity * step;
+      const turn = -.48 + phase * .085 + pointer.x * .18, tilt = .46 + pointer.y * .15;
+      cosTurn = Math.cos(turn); sinTurn = Math.sin(turn); cosTilt = Math.cos(tilt); sinTilt = Math.sin(tilt);
+      const mobile = window.innerWidth <= 900;
+      scale = Math.min(width * (mobile ? .32 : .245), height * .38); centerX = width * (mobile ? .5 : .66);
       context!.clearRect(0, 0, width, height);
 
       // Each contour retains its depth, rather than flattening into a uniform grid.
@@ -135,12 +138,14 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
 
       if (pulse > 0) {
         const front = (1 - pulse) * contours.length;
-        context!.save(); context!.shadowColor = '#c0e3ff'; context!.shadowBlur = 12;
+        context!.save();
         contours.forEach(({ points }, index) => {
           const intensity = Math.max(0, 1 - Math.abs(index - front) / 3) * Math.sin(pulse * Math.PI);
           if (intensity < .02) return;
           context!.beginPath();
           points.forEach(([x, y], point) => { if (point) context!.lineTo(x, y); else context!.moveTo(x, y); });
+          context!.strokeStyle = `rgba(192, 227, 255, ${intensity * .16})`;
+          context!.lineWidth = 5; context!.stroke();
           context!.strokeStyle = `rgba(215, 239, 255, ${intensity})`;
           context!.lineWidth = 1.8; context!.stroke();
         });
@@ -175,14 +180,14 @@ export function IntelligenceField({ mode }: { mode: Mode }) {
         context!.lineWidth = 1.25; context!.stroke();
       }
       // White specular light travels along the surface, independent of the ice-blue route.
-      context!.save(); context!.shadowColor = 'rgba(255, 255, 255, .7)'; context!.shadowBlur = 7;
-      for (let segment = 0; segment < 40; segment++) {
-        const start = project(head * 1.3 - segment * .04, pathV + 1.5);
-        const end = project(head * 1.3 - (segment + 1) * .04, pathV + 1.5);
-        context!.beginPath(); context!.moveTo(start[0], start[1]); context!.lineTo(end[0], end[1]);
-        context!.strokeStyle = `rgba(255, 255, 255, ${Math.sin(segment / 40 * Math.PI) * .9})`;
-        context!.lineWidth = 1.6; context!.stroke();
-      }
+      context!.save();
+      const highlight = Array.from({ length: 41 }, (_, segment) => project(head * 1.3 - segment * .04, pathV + 1.5));
+      const shine = context!.createLinearGradient(highlight[0][0], highlight[0][1], highlight[40][0], highlight[40][1]);
+      shine.addColorStop(0, '#ffffff00'); shine.addColorStop(.5, '#ffffffe6'); shine.addColorStop(1, '#ffffff00');
+      context!.beginPath();
+      highlight.forEach(([x, y], index) => { if (index) context!.lineTo(x, y); else context!.moveTo(x, y); });
+      context!.strokeStyle = shine; context!.globalAlpha = .16; context!.lineWidth = 4; context!.stroke();
+      context!.globalAlpha = 1; context!.lineWidth = 1.6; context!.stroke();
       context!.restore();
       [0, 2.1, 4.3].forEach((offset, index) => {
         const [x, y] = project(head + offset, pathV + index * .8);

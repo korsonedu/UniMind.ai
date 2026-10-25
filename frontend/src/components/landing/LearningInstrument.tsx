@@ -23,26 +23,35 @@ export function LearningInstrument() {
   const [previous, setPrevious] = useState<typeof mode | null>(null);
   const current = modes.find(item => item.id === mode)!;
   const lastMode = useRef(mode);
-  const [decode, setDecode] = useState({ mode, progress: 1, tick: 0 });
+  const copyRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     if (lastMode.current === mode) return;
     lastMode.current = mode;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setDecode({ mode, progress: 1, tick: 0 }); return;
-    }
+    const paragraph = copyRef.current;
+    if (!paragraph || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const characters = [...paragraph.querySelectorAll<HTMLElement>('[data-decode-char]')];
+    const glyphs = ['0', '1', '{', '}', '/', '∷', '<', '>'];
     const started = performance.now();
     let frame = 0, last = 0;
+    const clear = () => {
+      characters.forEach(character => character.removeAttribute('data-glyph'));
+      paragraph.dataset.decoding = 'false';
+    };
     const draw = (time: number) => {
-      const progress = document.hidden ? 1 : Math.min(1, (time - started) / 720);
-      if (time - last > 40 || progress === 1) {
-        last = time; setDecode({ mode, progress, tick: Math.floor((time - started) / 45) });
+      const progress = document.hidden ? 1 : Math.min(1, (time - started) / 540);
+      if (time - last >= 32 || time === started || progress === 1) {
+        last = time;
+        characters.forEach((character, index) => {
+          if (index / characters.length < progress) character.removeAttribute('data-glyph');
+          else character.dataset.glyph = glyphs[(index + Math.floor((time - started) / 45)) % glyphs.length];
+        });
+        paragraph.dataset.decoding = String(progress < 1);
       }
       if (progress < 1) frame = requestAnimationFrame(draw);
     };
-    frame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frame);
+    draw(started);
+    return () => { cancelAnimationFrame(frame); clear(); };
   }, [mode]);
-  const progress = decode.mode === mode ? decode.progress : 0;
   const select = (next: typeof mode) => {
     if (next === mode) return;
     setPrevious(mode);
@@ -55,8 +64,8 @@ export function LearningInstrument() {
         {modes.map(item => <button key={item.id} type="button" aria-pressed={mode === item.id} onClick={() => select(item.id)}>{item.label}</button>)}
       </nav>
       <div className="li-copy">
-        <p data-decoding={progress < 1}><span className="sr-only">{current.description}</span><span aria-hidden="true">{Array.from(current.description).map((character, index, characters) =>
-          <span key={index} data-glyph={index / characters.length >= progress ? ['0', '1', '{', '}', '/', '∷', '<', '>'][(index + decode.tick) % 8] : undefined}>{character}</span>)}</span></p>
+        <p ref={copyRef}><span className="sr-only">{current.description}</span><span aria-hidden="true">{Array.from(current.description).map((character, index) =>
+          <span key={index} data-decode-char>{character}</span>)}</span></p>
         <div className="li-capabilities">{current.capabilities.map(capability => <span key={capability}>{capability}</span>)}</div>
       </div>
     </div>

@@ -14,7 +14,7 @@
 .li-scene { position: relative; min-width: 0; height: 620px; isolation: isolate; perspective: 1400px; }
 .li-scene::before { content: ''; position: absolute; inset: 12% -5% 4%; background: radial-gradient(ellipse at 58% 58%,#6b94b91a,transparent 62%); pointer-events: none; }
 .li-art { position: absolute; inset: 30% -10% -12% -35%; z-index: -1; opacity: .95; pointer-events: none; transform: translateY(calc(var(--scene-depth,0) * 28px)); transition: transform .35s ease-out; }
-.li-surfaces { position: absolute; inset: 0; transform-style: preserve-3d; opacity: 0; transform: translate3d(12%,calc(18px + var(--scene-depth,0) * -18px),-180px) rotateY(-14deg) rotateZ(4deg); pointer-events: none; transition: opacity .85s ease,transform 1.1s cubic-bezier(.16,1,.3,1); }
+.li-surfaces { position: absolute; inset: 0; transform-style: preserve-3d; opacity: 0; transform: translate3d(12%,calc(18px + var(--scene-depth,0) * -18px),-180px) rotateY(-14deg) rotateZ(4deg); pointer-events: none; transition: opacity .72s ease,transform .9s cubic-bezier(.22,1,.36,1); }
 .li-surfaces.is-active { z-index: 2; opacity: 1; transform: translate3d(0,calc(var(--scene-depth,0) * -18px),0); }
 .li-surfaces.is-leaving { z-index: 1; transform: translate3d(-12%,calc(-15px + var(--scene-depth,0) * -18px),-260px) rotateY(20deg) rotateZ(-5deg); }
 .li-ripple-floor { position: absolute; z-index: -1; top: 67%; left: 0; width: 78%; height: 130px; transform: perspective(600px) rotateX(70deg); pointer-events: none; }

@@ -4,7 +4,7 @@
 .landing-background::before { content: ''; position: absolute; inset: 0; background: url('/images/landing-tech-background.webp') center 42% / cover no-repeat; filter: invert(1) grayscale(.9) brightness(.7); opacity: .55; }
 .landing-background::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, #080b0fe6 0%, #080b0f99 24%, #080b0f1a 59%, #080b0f80 100%); }
 .landing-fx-defs { position: absolute; pointer-events: none; }
-.landing-refraction { position: absolute; inset: 0; opacity: .6; clip-path: polygon(-45% 0,-25% 0,-65% 100%,-85% 100%); animation: landing-refraction-drift 22s linear infinite; }
+.landing-refraction { position: absolute; inset: 0; opacity: .6; clip-path: polygon(40% 0,60% 0,20% 100%,0 100%); transform: translate3d(-85%,0,0); will-change: transform; animation: landing-refraction-drift 22s linear infinite; }
 .landing-refraction::before { content: ''; position: absolute; inset: 0; background: url('/images/landing-tech-background.webp') center 42% / cover no-repeat; filter: url('#landing-glass-warp') invert(1) grayscale(.9) brightness(.8); opacity: .7; }
 .landing-refraction::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg,#080b0fe6 0%,#080b0f99 24%,#080b0f1a 59%,#080b0f80 100%); }
 .landing-light-sweep { position: absolute; inset: -35% -50%; background: linear-gradient(112deg, transparent 43%, #ffffff00 46%, #d7e9f34d 49%, #c4e6ff26 50%, #ffffff00 54%, transparent 57%); mix-blend-mode: screen; animation: landing-light-flow 16s ease-in-out infinite; }
@@ -70,24 +70,24 @@
 .landing-agent-frame { border-color: #b8cfdf30; border-radius: 16px; box-shadow: 0 35px 110px -44px #000, 0 0 70px -48px #b3d8f32e, inset 0 1px #ffffff12; }
 .landing-agent-showcase { position: relative; aspect-ratio: 1280 / 880; }
 .landing-agent-images { position: absolute; inset: 0; perspective: 1400px; transform-style: preserve-3d; }
-.landing-agent-image { position: absolute; inset: 0; opacity: 0; transform: translate3d(10%,4%,-180px) rotateY(-14deg) rotateZ(3deg); pointer-events: none; transition: opacity .85s ease,transform 1.1s cubic-bezier(.16,1,.3,1); }
+.landing-agent-image { position: absolute; inset: 0; opacity: 0; transform: translate3d(10%,4%,-180px) rotateY(-14deg) rotateZ(3deg); pointer-events: none; transition: opacity .72s ease,transform .9s cubic-bezier(.22,1,.36,1); }
 .landing-agent-image.is-active { z-index: 2; opacity: 1; transform: translate3d(0,0,0); }
 .landing-agent-image.is-leaving { z-index: 1; transform: translate3d(-12%,-3%,-240px) rotateY(18deg) rotateZ(-4deg); }
 .landing-agent-image img { position: absolute; inset: 0; height: 100%; pointer-events: none; }
 .landing-capture { clip-path: inset(0 100% 0 0); transition: clip-path .9s .15s cubic-bezier(.25,.6,.25,1); }
 .is-active > .landing-capture { clip-path: inset(0); }
 .landing-scan-outline { filter: grayscale(1) invert(1) contrast(2); mix-blend-mode: screen; opacity: 0; pointer-events: none; }
-.landing-scan-beam { position: absolute; z-index: 3; top: 0; bottom: 0; left: -2%; width: 1px; opacity: 0; background: #d9f1ff; box-shadow: 0 0 12px 3px #c3e8ff70,0 0 35px 7px #b9dfff18; pointer-events: none; transition: left 1s ease; }
+.landing-scan-beam { position: absolute; z-index: 3; inset: 0; opacity: 0; background: linear-gradient(90deg,transparent calc(50% - 10px),#b9dfff20 calc(50% - 3px),#d9f1ff 50%,#b9dfff20 calc(50% + 3px),transparent calc(50% + 10px)); pointer-events: none; transform: translate3d(-55%,0,0); }
 .landing-dissolve { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; }
 .landing-dissolve[data-running='true'] { opacity: 1; }
-.landing-agent-image:has(> .landing-dissolve[data-running='true']) > .landing-capture,.li-surface:has(> .landing-dissolve[data-running='true']) > .li-capture { visibility: hidden; }
-.landing-agent-image::after,.li-surface::before { content: ''; position: absolute; z-index: 4; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; }
-.has-switched .landing-agent-image.is-active::after,.has-switched .li-surfaces.is-active .li-surface::before { animation: landing-edge-spectrum 1.3s ease both; }
+.landing-agent-image:has(> .landing-dissolve[data-running]) > .landing-capture,.li-surface:has(> .landing-dissolve[data-running]) > .li-capture { clip-path: inset(0); transition: none; will-change: opacity; }
+.landing-agent-image::after,.li-surface::before { content: ''; position: absolute; z-index: 4; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; box-shadow: inset 2px 0 #9edaff,inset -2px 0 #c9d6ff,inset 0 1px #f2faff; }
+.has-switched .landing-agent-image.is-active::after,.has-switched .li-surfaces.is-active .li-surface::before { animation: landing-edge-spectrum .9s ease both; }
 .landing-ripple-floor { position: absolute; z-index: -1; left: 10%; right: 10%; bottom: -32px; height: 110px; transform: perspective(500px) rotateX(68deg); pointer-events: none; }
 .landing-ripple-floor > span,.li-ripple-floor > span { position: absolute; inset: 0; border: 1px solid #c4e5fa80; border-radius: 50%; box-shadow: 0 0 12px #b6dcf51a,inset 0 0 12px #b6dcf50d; opacity: 0; }
-.has-switched .landing-ripple-floor > span.is-active,.has-switched .li-surfaces.is-active .li-ripple-floor > span { animation: landing-water-ripple 1.8s 1.05s both; }
+.has-switched .landing-ripple-floor > span.is-active,.has-switched .li-surfaces.is-active .li-ripple-floor > span { animation: landing-water-ripple 1.8s .9s both; }
 .has-switched .is-active > .landing-scan-outline,.has-switched .is-active .li-surface > .landing-scan-outline { animation: landing-outline-scan 1.1s both; }
-.has-switched .is-active > .landing-scan-beam,.has-switched .is-active .li-surface > .landing-scan-beam { left: 102%; animation: landing-beam-scan 1s both; }
+.has-switched .is-active > .landing-scan-beam,.has-switched .is-active .li-surface > .landing-scan-beam { animation: landing-beam-scan .9s both; }
 .landing-agent-launch { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
 .landing-agent-launch:focus-visible { outline: 2px solid #b6d7ef; outline-offset: -4px; }
 .landing-agent-scene { position: absolute; z-index: 2; padding: 0; border: 0; border-radius: 5px; background: transparent; cursor: pointer; }
@@ -107,10 +107,10 @@
 @keyframes landing-light-flow { 0%, 100% { opacity: .1; transform: translateX(-25%); } 50% { opacity: .3; transform: translateX(25%); } }
 @keyframes landing-metal-sheen { from { background-position: 180% 0; } to { background-position: -80% 0; } }
 @keyframes landing-outline-scan { 0% { opacity: 0; } 18% { opacity: .8; } 65% { opacity: .35; } 100% { opacity: 0; } }
-@keyframes landing-beam-scan { 0%,100% { opacity: 0; } 12%,75% { opacity: .8; } }
-@keyframes landing-refraction-drift { to { clip-path: polygon(185% 0,205% 0,165% 100%,145% 100%); } }
+@keyframes landing-beam-scan { 0% { opacity: 0; transform: translate3d(-55%,0,0); } 12%,75% { opacity: .8; } 100% { opacity: 0; transform: translate3d(55%,0,0); } }
+@keyframes landing-refraction-drift { to { transform: translate3d(145%,0,0); } }
 @keyframes landing-water-ripple { 0% { opacity: 0; transform: scale(.15); } 16% { opacity: .5; } 100% { opacity: 0; transform: scale(1.45); } }
-@keyframes landing-edge-spectrum { 0%,100% { opacity: 0; box-shadow: inset 0 0 transparent; } 20% { opacity: .9; box-shadow: inset 3px 0 #9edaff,inset -2px 0 #c9d6ff,inset 0 1px #f2faff; transform: skewX(.15deg); } 55% { opacity: .65; box-shadow: inset -2px 0 #9edaff,inset 3px 0 #d8e7ff,inset 0 -1px #e6f6ff; transform: skewX(-.1deg); } }
+@keyframes landing-edge-spectrum { 0%,100% { opacity: 0; transform: translateX(0); } 20% { opacity: .9; transform: translateX(-.8px); } 55% { opacity: .65; transform: translateX(.8px); } }
 .landing-entrance { position: fixed; inset: 0; z-index: 100; display: block; width: 100%; height: 100%; pointer-events: none; }
 .um-landing:has(.landing-entrance) { z-index: 60; }
 @keyframes landing-header-reveal { from { opacity: 0; filter: blur(6px); transform: translateY(-12px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
