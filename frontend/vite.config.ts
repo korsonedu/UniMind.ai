@@ -48,6 +48,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/dsh-m0': {
+        target: 'http://127.0.0.1:8791',
+        rewrite: route => route.replace(/^\/dsh-m0/, ''),
+      },
       '^/api/': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

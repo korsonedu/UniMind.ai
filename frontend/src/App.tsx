@@ -184,6 +184,7 @@ const lazyPage = (Component: React.ComponentType) => (
 );
 
 const router = createBrowserRouter([
+  ...(import.meta.env.DEV ? [{ path: '/dev/dsh', element: lazyPage(lazy(() => import('./pages/DshM0'))) }] : []),
   ...legacyRoutes.map(([path, to]) => ({ path, element: <LegacyRedirect to={to} /> })),
   {
     path: "/",

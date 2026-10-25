@@ -201,6 +201,7 @@ CSRF_TRUSTED_ORIGINS = _get_list("CSRF_TRUSTED_ORIGINS")
 
 # The account rollout is opt-in. No credentials are stored in the frontend.
 ACCOUNT_ENABLED = _get_bool("ACCOUNT_ENABLED")
+UNIMIND_DSH_ENABLED = _get_bool("UNIMIND_DSH_ENABLED")
 ACCOUNT_CENTER_ORIGIN = os.getenv("ACCOUNT_CENTER_ORIGIN", "http://localhost:8000" if DEBUG else "https://unimind-ai.com").rstrip('/')
 ACCOUNT_WEBSITE_ORIGINS = _get_list("ACCOUNT_WEBSITE_ORIGINS", ["http://127.0.0.1:4321", "http://localhost:4321"] if DEBUG else ["https://www.korsonedu.com"])
 ACCOUNT_UNIMIND_ORIGIN = os.getenv("ACCOUNT_UNIMIND_ORIGIN", "http://localhost:5173" if DEBUG else "https://unimind-ai.com").rstrip('/')

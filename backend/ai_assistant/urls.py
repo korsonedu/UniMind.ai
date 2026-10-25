@@ -9,6 +9,7 @@ from .views import (
 )
 from .views_dashboard import XiaoYuDashboardView, ExamWorkbenchDashboardView
 from .views_projects import ConversationDetailView, ProjectListCreateView, ProjectDetailView
+from .views_dsh import DshContextView, DshToolView
 from .views_api import (
     grade_view, profile_view, due_view, stats_view,
     practice_start_view, practice_pre_grade_view, practice_submit_view,
@@ -16,6 +17,8 @@ from .views_api import (
 )
 
 urlpatterns = [
+    path('dsh/context/', DshContextView.as_view(), name='dsh-context'),
+    path('dsh/tools/<str:name>/', DshToolView.as_view(), name='dsh-tool'),
     path('dashboard/', XiaoYuDashboardView.as_view(), name='xiaoyu-dashboard'),
     path('workbench/dashboard/', ExamWorkbenchDashboardView.as_view(), name='exam-workbench-dashboard'),
     path('chat/', AIChatView.as_view(), name='ai-chat'),

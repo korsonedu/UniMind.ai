@@ -179,3 +179,5 @@ backups/
 skills-lock.json
 .claude/skills/
 .hermes/
+.m0-venv/
+.m0-state/
