@@ -12,6 +12,24 @@ from tempfile import TemporaryDirectory, gettempdir
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def official_config(python, env_path):
+    # Parse with the existing backend dependency; the credential stays in a private pipe.
+    source = """
+import json, sys
+from dotenv import dotenv_values
+from urllib.parse import urlsplit
+values = dotenv_values(sys.argv[1])
+endpoint = values.get('LLM_BASE_URL') or 'https://api.deepseek.com/v1/chat/completions'
+if urlsplit(endpoint).hostname != 'api.deepseek.com':
+    raise SystemExit('Existing model source is not DeepSeek official')
+key = values.get('LLM_API_KEY')
+if not key:
+    raise SystemExit('Existing official credential is missing')
+print(json.dumps({'url': 'https://api.deepseek.com/anthropic/v1/messages', 'key': key, 'mode': 'deepseek-official'}))
+"""
+    return json.loads(subprocess.check_output([python, '-c', source, str(Path(env_path).resolve())], text=True))
+
+
 def fixture_database():
     marker = os.environ.get('UNIMIND_M0_FIXTURE_DB', '')
     path = Path(marker).resolve() if marker else None
@@ -107,6 +125,7 @@ def main():
     parser.add_argument('--backend-fixture', action='store_true')
     parser.add_argument('--backend-python')
     parser.add_argument('--serve', action='store_true', help='Keep isolated fixtures and loopback Host alive for the React page')
+    parser.add_argument('--official-env', help='Use the authorized DeepSeek official credential in this existing backend .env')
     args = parser.parse_args()
     if args.backend_fixture:
         return backend_fixture()
@@ -141,24 +160,34 @@ def main():
                 'UNIMIND_DSH_MODEL_URL': f'http://127.0.0.1:{model.server_port}/v1',
             })
             from host import run_turn
-            result = run_turn('查询我的学习统计，并按我的讲解偏好说明。')
-            assert len(calls) == 2, f'Expected one tool round; got {len(calls)} model requests; result={result}'
-            first = json.dumps(calls[0], ensure_ascii=False)
-            assert '先举例再给公式' in first
-            assert 'OTHER_STUDENT_PRIVATE' not in first
-            names = {t['name'] for t in calls[0].get('tools', [])}
-            assert names and names <= {'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points', 'search_courses', 'search_asr'}, names
-            tool_results = [b for m in calls[1]['messages'] if isinstance(m.get('content'), list)
-                            for b in m['content'] if b.get('type') == 'tool_result']
-            assert tool_results and 'attempted_questions' in json.dumps(tool_results)
-            assert result['content'] and result['mode'] == 'local-protocol-smoke'
-            print(json.dumps({'runtime': 'actual-dsh-sdk', 'model': 'local-deterministic-protocol-fixture',
-                              'backend': 'actual-django-isolated-sqlite', 'model_requests': len(calls),
-                              'tools': sorted(names), 'memory_isolated': True,
-                              'tool_result_received': True, 'content': result['content']}, ensure_ascii=False), flush=True)
+            config = official_config(args.backend_python, args.official_env) if args.official_env else None
+            result = run_turn('请调用工具查询我的实际学习统计，再按我的讲解偏好用三句话解释。没有学习记录时说明暂无记录，不要编造。', config)
+            assert result['content']
+            if config:
+                assert any(r['tool_results'] for r in result['gateway']['requests']), 'Official model did not return a tool result'
+                assert all(r['usage_complete'] for r in result['gateway']['requests']), 'Official usage is incomplete'
+                print(json.dumps({'runtime': 'actual-dsh-sdk', 'backend': 'actual-django-isolated-sqlite',
+                                  'model': 'deepseek-official', 'gateway': result['gateway'],
+                                  'content': result['content']}, ensure_ascii=False), flush=True)
+            else:
+                assert len(calls) == 2, f'Expected one tool round; got {len(calls)} model requests'
+                first = json.dumps(calls[0], ensure_ascii=False)
+                assert '先举例再给公式' in first
+                assert 'OTHER_STUDENT_PRIVATE' not in first
+                names = {t['name'] for t in calls[0].get('tools', [])}
+                assert names and names <= {'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points', 'search_courses', 'search_asr'}, names
+                tool_results = [b for m in calls[1]['messages'] if isinstance(m.get('content'), list)
+                                for b in m['content'] if b.get('type') == 'tool_result']
+                assert tool_results and 'attempted_questions' in json.dumps(tool_results)
+                print(json.dumps({'runtime': 'actual-dsh-sdk', 'model': 'local-deterministic-protocol-fixture',
+                                  'backend': 'actual-django-isolated-sqlite', 'model_requests': len(calls),
+                                  'tools': sorted(names), 'memory_isolated': True,
+                                  'tool_result_received': True, 'gateway': result['gateway'],
+                                  'content': result['content']}, ensure_ascii=False), flush=True)
             if args.serve:
                 from http.server import ThreadingHTTPServer
                 from host import Handler
+                Handler.model_config = config
                 print('M0 Host ready: http://127.0.0.1:8791; all student data are temporary fixtures.', flush=True)
                 ThreadingHTTPServer(('127.0.0.1', 8791), Handler).serve_forever()
         finally:

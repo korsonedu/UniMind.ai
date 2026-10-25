@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
-type Health = { sdk: string; backend_configured: boolean; model_configured: boolean };
+type Health = { sdk: string; backend_configured: boolean; model_configured: boolean; mode: string };
+type Turn = { content: string; gateway: { model: string; requests: { status: string; tool_results: number; usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }[] } };
 type Context = {
   student: { id: number; name: string };
   memory: { version: string; items: { id: number; key: string; value: string }[] };
@@ -22,6 +23,7 @@ export default function DshM0() {
   const [context, setContext] = useState<Context | null>(null);
   const [message, setMessage] = useState('查询我的学习统计，并根据我的讲解偏好解释结果。');
   const [answer, setAnswer] = useState('');
+  const [turn, setTurn] = useState<Turn | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -34,11 +36,14 @@ export default function DshM0() {
 
   const run = async (chat: boolean) => {
     setBusy(true); setError('');
-    if (chat) setAnswer('');
+    if (chat) { setAnswer(''); setTurn(null); }
     try {
       const latest = await request<Context>('/context', message);
       setContext(latest);
-      if (chat) setAnswer((await request<{ content: string }>('/chat', message)).content);
+      if (chat) {
+        const result = await request<Turn>('/chat', message);
+        setAnswer(result.content); setTurn(result);
+      }
     } catch (err) { setError(err instanceof Error ? err.message : '调用失败'); }
     finally { setBusy(false); }
   };
@@ -48,7 +53,7 @@ export default function DshM0() {
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-black/10 pb-6">
         <div><p className="mb-2 text-xs tracking-widest text-black/45">UNIMIND / M0</p>
           <h1 className="text-3xl font-semibold">学习界面与 AI 运行时分开验证</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-black/55">本地开发入口。使用隔离的验证账号和合成数据；模型端为协议夹具，不代表真实模型教学效果或生产发布。</p>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-black/55">本地开发入口。使用隔离的验证账号和合成数据；{health?.mode === 'deepseek-official' ? '模型使用 DeepSeek 官方 API，经本地任务网关限量调用。' : '模型端为本地协议模拟。'}当前验证不代表正式教学效果或生产发布。</p>
         </div>
         <a className="text-sm underline underline-offset-4" href="/courses">进入普通课程界面 →</a>
       </header>
@@ -57,7 +62,7 @@ export default function DshM0() {
         {[
           ['独立 React 界面', '已运行'],
           ['本地 Host', health ? `SDK ${health.sdk}` : '未连接'],
-          ['业务与协议端点', health?.backend_configured && health.model_configured ? '已配置，等待验证' : '尚未完整配置'],
+          ['模型来源', health?.backend_configured && health.model_configured ? (health.mode === 'deepseek-official' ? 'DeepSeek 官方 · 任务网关' : '本地协议模拟 · 任务网关') : '尚未完整配置'],
         ].map(([label, value]) => <div key={label} className="border border-black/10 bg-white p-5">
           <p className="text-xs text-black/45">{label}</p><p className="mt-3 font-medium">{value}</p>
         </div>)}
@@ -71,11 +76,16 @@ export default function DshM0() {
             className="min-h-32 w-full resize-y border border-black/15 bg-[#fafaf9] p-3 text-sm leading-6" />
           <div className="flex flex-wrap gap-3 text-sm">
             <button disabled={busy || !health?.backend_configured} onClick={() => void run(false)} className="border border-black/20 px-4 py-2 disabled:opacity-40">读取本人记忆与工具</button>
-            <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-black px-4 py-2 text-white disabled:opacity-40">{busy ? '正在验证…' : '运行 DSH 协议链路'}</button>
+            <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-black px-4 py-2 text-white disabled:opacity-40">{busy ? '正在验证…' : health?.mode === 'deepseek-official' ? '调用官方模型' : '运行 DSH 协议链路'}</button>
             <button onClick={() => void refresh()} className="px-2 py-2 text-black/55 underline">刷新连接</button>
           </div>
           {error && <p role="alert" className="border-l-2 border-amber-600 bg-amber-50 p-3 text-sm leading-6">{error}</p>}
           {answer && <div aria-label="小宇结果" className="whitespace-pre-wrap border-t border-black/10 pt-5 text-sm leading-7">{answer}</div>}
+          {turn && <p className="border-t border-black/10 pt-3 text-xs leading-6 text-black/50" aria-label="网关用量">
+            {turn.gateway.model} · {turn.gateway.requests.length} 次请求 · {turn.gateway.requests.reduce((sum, r) => sum + r.tool_results, 0)} 个工具结果<br />
+            总输入 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.input_tokens || 0) + (r.usage.cache_read_input_tokens || 0) + (r.usage.cache_creation_input_tokens || 0), 0)} / 输出 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.output_tokens || 0), 0)} tokens。<br />
+            输入明细：未缓存 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.input_tokens || 0), 0)} / 缓存读取 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.cache_read_input_tokens || 0), 0)} / 缓存创建 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.cache_creation_input_tokens || 0), 0)}。<br />最多 4 次请求，每次输出 1024 tokens。未接正式扣费。
+          </p>}
         </section>
 
         <aside className="space-y-6 border border-black/10 bg-white p-6">

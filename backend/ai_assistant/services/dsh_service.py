@@ -9,6 +9,7 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 from ai_engine.tool_permissions import filter_tools
 from ai_engine.tool_router import PLANNER_INTENT_MAP
 from ai_engine.tool_run import validate_arguments
+from ai_engine.config import get_model_for_task
 from ai_engine.tools import get_planner_tools
 from ai_assistant.models import AgentMemory
 from .tool_executor import PlannerToolExecutor, set_permitted_tools
@@ -54,6 +55,11 @@ def build_context(user, message):
         'tools': selected,
         'permitted_tool_count': len(allowed),
         'route': 'keywords-and-workflow-groups',
+        'model_policy': {
+            'operation': 'assistant.chat.planner', 'tier': 'fast',
+            'model': get_model_for_task('assistant.chat.planner')['model'],
+            'max_requests': 4, 'max_tokens': 1024, 'max_request_bytes': 65536,
+        },
         'system_prompt': (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/dsh_system_prompt.txt').read_text(),
     }
 

@@ -2,13 +2,14 @@
 
 首条只读链路：独立 React 验证页 → 本机 Host → 官方 DSH SDK/学习插件 → Django 的本人记忆与学习工具。
 
-这是 M0 开发验证，尚未接入正式模型网关、正式学生服务或桌面安装包。模型端使用本机确定性协议夹具；它验证实际 DSH 的消息、记忆和工具往返，不证明真实模型的路由或教学质量。
+这是 M0 开发验证，尚未接入正式学生服务或桌面安装包。支持本机确定性协议模拟和经授权的 DeepSeek 官方模型；二者都经过本地单任务网关。真实模型链路可运行也不证明教学质量或正式网关已经完成。
 
 ## 当前组成
 
 - `plugin.mjs`：实际 Cordis 插件，注册 Django 返回的只读工具和本人记忆上下文。
 - `profile.patch.yml`：针对安装版 `0.2.1rc2`，禁用终端、文件、计划模式、子 Agent、搜索及默认遥测。
 - `host.py`：只绑定 `127.0.0.1:8791` 的单学生验证 Host。凭据仅在 Host/子进程环境中，不返回浏览器。
+- `gateway.py`：每轮临时任务网关，凭据随实例失效；上游密钥只留在网关，DSH 收到一次性任务凭据。限制模型、工具、请求次数和输入输出，不对上游错误自动重试或切换模型。
 - `smoke.py`：启动临时 SQLite/Django 和本机模型协议夹具，验证实际 DSH 工具调用；退出时清理。
 - `frontend/src/pages/DshM0.tsx`：仅开发模式 `/dev/dsh`，正式路由不启用。
 - `/api/ai/dsh/context/`、`/api/ai/dsh/tools/<name>/`：由 `UNIMIND_DSH_ENABLED` 控制，默认关闭。
@@ -43,6 +44,21 @@ npm run dev -- --host 127.0.0.1 --port 5175 --strictPort
 
 访问 [M0 验证页](http://127.0.0.1:5175/dev/dsh)。读取记忆与候选工具，然后运行协议链路。Host 未启动时界面应清楚显示状态，普通 React 业务入口仍保留。该入口与临时学生数据不是正式课程服务。
 
+用户已授权使用当前工作机的 DeepSeek 官方配置。要验证真实模型，将现有 `.env` 路径交给启动器，不把文件复制到 worktree，也不把密钥写进命令或页面：
+
+```sh
+.m0-venv/bin/python dsh/smoke.py \
+  --backend-python /Users/eular/Desktop/科晟开发/UniMind/UniMindCode/backend/.venv/bin/python \
+  --official-env /Users/eular/Desktop/科晟开发/UniMind/UniMindCode/backend/.env \
+  --serve
+```
+
+启动器只从现有配置读取密钥，并校验原来源是 DeepSeek 官方；按官方 [Anthropic 兼容接口](https://api-docs.deepseek.com/guides/anthropic_api/) 使用固定地址。业务与模型两种令牌互不替代；业务令牌仅用于本机隔离 Django。正式来源与模拟来源在页面分别标注。
+
+任务策略由 Django 固定为 `assistant.chat.planner` 的 fast 路由，沿用现有模型选择；每轮最多 4 次模型请求，每次请求体最多 64 KiB、输出最多 1024 tokens，任务 90 秒失效。网关禁止模型升级、额外工具和上游跳转；包括失败在内的上游尝试都占用次数。没有备用供应商，不声称具备自动 fallback。
+
+真实调用的逐请求 usage 写入忽略目录 `.m0-state/gateway-usage.jsonl`，含任务 ID、模型、状态、时间、输入输出与缓存 tokens，不存提示词、回答或学生记忆。任务到期或 Host 退出时主动中断已连接的上下游 socket，等待处理线程终结后再写审计；不完整 usage 保留未知状态，不按零成本结算。页面总输入按未缓存、缓存读取、缓存创建相加，并保留明细，口径见 [Messages 用量定义](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)。当前是单任务技术预算，未接正式学生周期额度、人民币费用上限或业务扣费；本机用户也可修改原型，不能作为正式客户端的可信收费边界。
+
 成功证据应包含实际 SDK、隔离 Django、两次模型协议请求、真实学习统计工具返回及本人记忆隔离。已观察到安装版使用 `/v1/messages`；不能用 OpenAI SSE 夹具替代这一格式。
 
 ## 后端冒烟
@@ -59,9 +75,11 @@ ACCOUNT_ENABLED=false ACCOUNT_RSA_KEY_PATH='' ACCOUNT_DEV_LOCAL_CACHE=true \
 
 离线 Host 边界检查：在 worktree 根目录运行 `.m0-venv/bin/python dsh/tests_smoke.py`。覆盖错误响应不泄露 Token、禁止业务请求跳转，以及 fixture 拒绝未隔离的数据库。fixture 子进程在 Django 初始化前检查父进程创建的临时 SQLite 路径，不能直接指向默认或环境中的业务数据库。
 
+网关 HTTP 冒烟：`.m0-venv/bin/python dsh/tests_gateway_smoke.py`。仅连接本机模型模拟，检查错误凭据、模型升级、输出/输入越限、额外工具、次数耗尽、实际 SSE 用量，以及部分行持续传输时的期限中断和退出后的完整审计。
+
 ## 后续门槛
 
-1. 公司模型网关：任务准入、预算、次数结算和模型策略，完成前 Host 拒绝连接外部模型来源。
+1. 公司服务端网关：将本机原型移至可信服务端，接通正式任务准入、周期额度、费用预算与结算；不能把本机一次性凭据视为正式跨端授权。
 2. 每轮动态工具选择及实际问法质量验证；当前为启动本轮时按关键词与工作流组选择的有限集合。
 3. 完整会话恢复、记忆失效重建、删除与业务记录分离。
 4. 公司 Electron 壳、受限 IPC、凭据存储、签名安装与更新。

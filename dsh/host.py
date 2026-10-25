@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from deepseek_harness import DeepSeekHarness
+from gateway import task_gateway
 
 
 ROOT = Path(__file__).resolve().parent
@@ -38,17 +39,26 @@ def backend_request(path, body):
         return json.load(response)
 
 
-def run_turn(message):
-    # Until the real gateway is implemented, only a loopback protocol fixture is allowed.
-    model_url = os.environ.get('UNIMIND_DSH_MODEL_URL', '')
-    if urlsplit(model_url).hostname not in ('127.0.0.1', 'localhost', '::1'):
-        raise HostConfigurationError('M0 尚未接入正式网关；当前只允许本机协议冒烟端点。')
-    with TemporaryDirectory(prefix='unimind-dsh-') as home:
+def run_turn(message, model_config=None):
+    if model_config is None:
+        model_url = os.environ.get('UNIMIND_DSH_MODEL_URL', '')
+        if urlsplit(model_url).hostname not in ('127.0.0.1', 'localhost', '::1'):
+            raise HostConfigurationError('请通过隔离验证启动器配置模型来源。')
+        model_config = {'url': model_url.rstrip('/') + '/messages',
+                        'key': 'local-protocol-fixture', 'mode': 'local-protocol-smoke'}
+    context = backend_request('/api/ai/dsh/context/', {'message': message})
+    audit_path = None
+    if model_config['mode'] == 'deepseek-official':
+        state = ROOT.parent / '.m0-state'
+        state.mkdir(exist_ok=True)
+        audit_path = state / 'gateway-usage.jsonl'
+    with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path) as gateway, \
+            TemporaryDirectory(prefix='unimind-dsh-') as home:
         with DeepSeekHarness(
             dsh_home=home, cwd=home, patches=(str(ROOT / 'profile.patch.yml'),),
-            provider='deepseek-official', model='deepseek-flash',
-            base_url=model_url, api_key='local-protocol-fixture', max_tokens=1024,
-            request_timeout_seconds=40, initialize_timeout_seconds=20,
+            provider='deepseek-official', model=context['model_policy']['model'],
+            base_url=gateway['url'], api_key=gateway['credential'], max_tokens=context['model_policy']['max_tokens'],
+            request_timeout_seconds=90, initialize_timeout_seconds=20,
             env={
                 'UNIMIND_API_URL': os.environ.get('UNIMIND_API_URL', 'http://127.0.0.1:8000'),
                 'UNIMIND_AUTH_TOKEN': os.environ.get('UNIMIND_AUTH_TOKEN', ''),
@@ -56,17 +66,23 @@ def run_turn(message):
             },
         ) as harness:
             result = harness.run(message)
-            if not result.final_response:
-                raise RuntimeError('DSH turn did not produce a response')
-            return {
-                'content': result.final_response,
-                'finish_reason': result.finish_reason,
-                'session_id': result.session_id,
-                'mode': 'local-protocol-smoke',
-            }
+    if not result.final_response:
+        raise RuntimeError('DSH turn did not produce a response')
+    if not gateway['requests'] or any(r['status'] != 'completed' for r in gateway['requests']):
+        raise RuntimeError('Gateway turn did not complete')
+    usage = {'operation': context['model_policy']['operation'], 'mode': gateway['mode'],
+             'model': context['model_policy']['model'], 'requests': gateway['requests'], 'task_id': gateway['task_id']}
+    return {
+        'content': result.final_response,
+        'finish_reason': result.finish_reason,
+        'session_id': result.session_id,
+        'mode': gateway['mode'], 'gateway': usage,
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
+    model_config = None
+
     def log_message(self, *_args):
         pass  # Do not log cookies, user prompts or tokens.
 
@@ -85,8 +101,8 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, {
             'sdk': importlib.metadata.version('deepseek-harness-sdk'),
             'backend_configured': bool(os.environ.get('UNIMIND_AUTH_TOKEN')),
-            'model_configured': bool(os.environ.get('UNIMIND_DSH_MODEL_URL')),
-            'mode': 'local-protocol-smoke',
+            'model_configured': bool(self.model_config or os.environ.get('UNIMIND_DSH_MODEL_URL')),
+            'mode': self.model_config['mode'] if self.model_config else 'local-protocol-smoke',
         })
 
     def do_POST(self):
@@ -107,7 +123,7 @@ class Handler(BaseHTTPRequestHandler):
             message = data.get('message', '')
             if not isinstance(message, str) or len(message) > 4000:
                 return self.reply(400, {'error': 'invalid_message'})
-            result = backend_request('/api/ai/dsh/context/', {'message': message}) if self.path == '/context' else run_turn(message)
+            result = backend_request('/api/ai/dsh/context/', {'message': message}) if self.path == '/context' else run_turn(message, self.model_config)
             return self.reply(200, result)
         except HostConfigurationError as exc:
             return self.reply(400, {'error': str(exc)})
