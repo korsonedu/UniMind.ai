@@ -1,12 +1,26 @@
 /** M0 plugin: backend owns identity, memory and tool permission checks. */
+import type { Context } from '@deepseek-ai/cordis';
+import type {} from '@deepseek-ai/dsh-tools';
+import type {} from '@deepseek-ai/dsh-system-prompt';
+
+type ToolDefinition = Parameters<Context['tools']['register']>[0];
+type ToolSchema = Pick<ToolDefinition, 'name' | 'description' | 'parameters'>;
+type ToolValue = Parameters<ToolDefinition['output']['render']>[1];
+type BridgeContext = {
+  system_prompt: string;
+  student: unknown;
+  memory: { version: string };
+  tools: { function: ToolSchema }[];
+};
+
 export const name = 'unimind-learning-m0';
 export const inject = ['tools', 'systemPrompt'];
 
-export async function apply(ctx) {
+export async function apply(ctx: Context) {
   const backend = process.env.UNIMIND_API_URL;
   const token = process.env.UNIMIND_AUTH_TOKEN;
   if (!backend || !token) throw new Error('UniMind backend credentials are not configured');
-  const request = async (path, body, signal) => {
+  const request = async <T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> => {
     const response = await fetch(new URL(path, backend), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Token ${token}` },
@@ -17,7 +31,7 @@ export async function apply(ctx) {
     if (!response.ok) throw new Error(`UniMind request failed (${response.status})`);
     return response.json();
   };
-  const context = await request('/api/ai/dsh/context/', {
+  const context = await request<BridgeContext>('/api/ai/dsh/context/', {
     message: process.env.UNIMIND_DSH_MESSAGE || '',
     recent_messages: JSON.parse(process.env.UNIMIND_DSH_RECENT_MESSAGES || '[]'),
   });
@@ -31,7 +45,14 @@ export async function apply(ctx) {
       ...definition,
       output: {
         schema: { type: 'object', additionalProperties: true },
-        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+        render: (_args, value) => {
+          const { visual, ...data } = value as Record<string, ToolValue>;
+          return [{ type: 'text', text: JSON.stringify(data) }];
+        },
+        presentationMeta: (_args, value) => {
+          const result = value as Record<string, ToolValue>;
+          return { unimindCard: result.error ? null : result.visual ?? null };
+        },
       },
       timeoutMs: 15000,
       isConcurrencySafe: () => true,

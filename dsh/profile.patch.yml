@@ -26,4 +26,4 @@
 - { id: otel, disabled: true }
 - insert:
     - id: unimind-learning-m0
-      name: ./plugin.mjs
+      name: ./plugin.ts

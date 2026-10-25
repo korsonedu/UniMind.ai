@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 
 type Health = { sdk: string; backend_configured: boolean; model_configured: boolean; mode: string };
-type LocalSession = { id: string; notice: string; updated_at: string; messages: { role: string; content: string; mode?: string }[] };
+type LocalSession = { id: string; notice: string; updated_at: string; messages: { role: string; content: string; mode?: string; cards?: DshCard[] }[] };
 type Turn = { content: string; session: LocalSession; routing: Context['routing']; gateway: { model: string; requests: { status: string; tool_results: number; usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }[] } };
 type Context = {
   student: { id: number; name: string };
@@ -79,7 +80,8 @@ export default function DshM0() {
 
   const exportSession = () => {
     if (!session) return;
-    const url = URL.createObjectURL(new Blob([JSON.stringify({ id: session.id, updated_at: session.updated_at, messages: session.messages }, null, 2)], { type: 'application/json' }));
+    const messages = session.messages.map(({ role, content, mode }) => ({ role, content, mode }));
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ id: session.id, updated_at: session.updated_at, messages }, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = `unimind-m0-${session.id}.json`; link.click(); URL.revokeObjectURL(url);
   };
 
@@ -118,7 +120,7 @@ export default function DshM0() {
           {error && <p role="alert" className="border-l-2 border-amber-600 bg-amber-50 p-3 text-sm leading-6">{error}</p>}
           <div className="flex flex-wrap gap-4 border-t border-black/10 pt-3 text-xs text-black/55">
             <button disabled={busy || !health?.backend_configured} onClick={() => void manageSession('new')}>新会话</button>
-            <button disabled={busy || !session} onClick={exportSession}>导出可见对话</button>
+            <button disabled={busy || !session} onClick={exportSession}>导出对话文字</button>
             <button disabled={busy || !session} onClick={() => void manageSession('delete')}>删除本地会话</button>
           </div>
           {session && <p className="break-all font-mono text-[10px] text-black/40">会话 {session.id} · {session.messages.length} 条消息</p>}
@@ -126,6 +128,10 @@ export default function DshM0() {
           <section aria-label="聊天记录" className="space-y-5">{session?.messages.map((item, index) => <div key={index} className="border-t border-black/10 pt-4">
             <p className="mb-2 text-xs text-black/40">{item.role === 'user' ? '我' : `小宇 · ${item.mode === 'deepseek-official' ? '官方模型' : '本地协议模拟'}`}</p>
             <p className="whitespace-pre-wrap text-sm leading-7">{item.content}</p>
+            {!!item.cards?.length && <div className="mt-4 space-y-4">
+              <p className="text-xs text-black/40">业务工具返回的结果快照；最新状态请打开详情。</p>
+              {item.cards.map((card, cardIndex) => <DshToolCard key={`${card.tool}-${cardIndex}`} card={card} />)}
+            </div>}
           </div>)}</section>
           {turn && <p className="border-t border-black/10 pt-3 text-xs leading-6 text-black/50" aria-label="网关用量">
             {turn.gateway.model} · {turn.gateway.requests.length} 次请求 · {turn.gateway.requests.reduce((sum, r) => sum + r.tool_results, 0)} 个工具结果<br />

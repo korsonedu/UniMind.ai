@@ -19,7 +19,7 @@ def context_version(context):
     root = Path(__file__).parent
     value = [context['student']['id'], context['memory']['version'], context['permissions_version'],
              context['model_policy'], context['system_prompt'], context.get('runtime_source'), version('deepseek-harness-sdk'),
-             (root / 'plugin.mjs').read_text(), (root / 'profile.patch.yml').read_text()]
+             (root / 'plugin.ts').read_text(), (root / 'profile.patch.yml').read_text()]
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 

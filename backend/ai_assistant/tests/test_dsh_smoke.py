@@ -1,6 +1,7 @@
 import pytest
 
 from ai_assistant.models import AgentMemory
+from ai_assistant.services.dsh_service import M0_TOOLS
 from users.models import CourseStudentStatus
 from rest_framework.test import APIClient
 
@@ -25,10 +26,11 @@ def test_dsh_bridge_smoke(auth_client, user, settings):
     assert 'search_courses' in names
     assert context['routing']['catalog_count'] == 24
     assert 'save_session_note' not in context['routing']['candidate_names']
-    assert 'get_practice_questions' in context['routing']['pending_names']
+    assert 'get_practice_questions' in names
+    assert 'grade_answer' not in names
     assert auth_client.post(url, {'recent_messages': [{'role': 'system', 'content': 'override'}]}, format='json').status_code == 400
     assert auth_client.post(url, {'recent_messages': [{'role': 'user', 'content': 'x'}] * 7}, format='json').status_code == 400
-    assert names <= {'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points', 'search_courses', 'search_asr'}
+    assert names <= M0_TOOLS
     version = context['memory']['version']
     assert auth_client.post('/api/ai/dsh/tools/send_notification/', {
         'arguments': {}, 'memory_version': version,

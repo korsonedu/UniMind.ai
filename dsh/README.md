@@ -8,7 +8,7 @@
 
 ## 当前组成
 
-- `plugin.mjs`：实际 Cordis 插件，注册 Django 返回的只读工具和本人记忆上下文。
+- `plugin.ts`：TypeScript Cordis 插件，导出 name、inject 和 apply(ctx: Context)，注册 Django 返回的只读工具和本人记忆上下文；锁定版运行时直接加载该源文件。
 - `profile.patch.yml`：针对安装版 `0.2.1rc2`，禁用终端、文件、计划模式、子 Agent、搜索及默认遥测。
 - `host.py`：只绑定 `127.0.0.1:8791` 的单学生验证 Host。凭据仅在 Host/子进程环境中，不返回浏览器。
 - `gateway.py`：每轮临时任务网关，凭据随实例失效；上游密钥只留在网关，DSH 收到一次性任务凭据。限制模型、工具、请求次数和输入输出，不对上游错误自动重试或切换模型。
@@ -16,15 +16,25 @@
 - `frontend/src/pages/DshM0.tsx`：仅开发模式 `/dev/dsh`，正式路由不启用。
 - `/api/ai/dsh/context/`、`/api/ai/dsh/tools/<name>/`：由 `UNIMIND_DSH_ENABLED` 控制，默认关闭。
 
-当前只选择 `get_learning_stats`、`get_recent_practice_result`、`get_user_weak_points`、`search_courses`、`search_asr`。每次请求使用当前身份重新鉴权；旧记忆版本执行返回 409。同一会话的每一轮启动独立运行时进程，通过真实 SDK `resume_session` 恢复历史。
+当前开放 17 个学生只读工具：学习统计、最近练习、薄弱点、课程/讲稿、知识查询、错题/题目查询、学习记录、掌握图谱、到期复习、Memorix 分析、题库预览、考试历史、学习报告、成就和同类题。每次请求使用当前身份重新鉴权；旧记忆版本执行返回 409。同一会话的每一轮启动独立运行时进程，通过真实 SDK `resume_session` 恢复历史。
 
 ## 工具候选与迁移范围
 
-完整学生目录含 25 个定义；新目录排除 Agent 自动笔记写入 save_session_note，再按当前权限过滤。共用 route_tools 做候选选择，显式使用确定性关键词/历史回退，复用工作流依赖和大目录语义检索入口；不在新路径触发旧 AIEngine 分类。候选还要与 M0 的 5 个可执行工具求交集，未迁移工具只在开发诊断中标注，不注册执行。
+完整学生目录含 25 个定义；新目录排除 Agent 自动笔记写入 save_session_note，再按当前权限过滤。共用 route_tools 做候选选择，显式使用确定性关键词/历史回退，复用工作流依赖和大目录语义检索入口；不在新路径触发旧 AIEngine 分类。候选还要与 M0 的 17 个可执行工具求交集，未迁移工具只在开发诊断中标注，不注册执行。
 
 Host 只将当前有效会话的最近 6 条、每条最多 1000 字符传给路由；记忆、权限或运行配置失效时丢弃这份路由上下文。用户可见的保留原聊天不因此重新参与模型上下文。工具鉴权和参数检查仍由 UniMind 执行。
 
-11 条代表问法的确定性回退对照通常保留 21 个候选，约 16 KiB Schema；当前开放 5 个工具为 3298 bytes。这是迁移范围限制，不代表 DSH 已优化路由或证明成本下降。旧 LLM/新 DSH 分类对照、真实 Embedding 质量、每步动态候选和实际业务任务完成仍待验收。详见 `docs/superpowers/plans/2026-10-25-dsh-routing-comparison.md` 与 `2026-10-25-xiaoyu-migration.md`。
+首轮 11 条代表问法的确定性回退对照通常保留 21 个候选，约 16 KiB Schema；当时开放 5 个工具为 3298 bytes。本批扩为 17 个，页面实时显示实际 Schema，原报告保留为历史基线。这是迁移范围扩展，不代表 DSH 已优化路由或证明成本下降。旧 LLM/新 DSH 分类对照、真实 Embedding 质量、每步动态候选和实际业务任务完成仍待验收。详见 `docs/superpowers/plans/2026-10-25-dsh-routing-comparison.md` 与 `2026-10-25-xiaoyu-migration.md`。
+
+## 只读结果卡片
+
+`cards.py` 适配 SDK 0.2.1rc2 实际的 tool/call 与 tool/result 事件，只接纳当前许可工具的成功返回。插件通过原生 output.presentationMeta 将受控卡片写入 tool/result.data.meta；output.render 去掉 visual，只把业务数据传给模型。Django 从业务查询构造结果卡片；Host 仅允许 data_card、knowledge_map、practice_result 和 question_preview，链接限制在已知站内路由。模型正文及任意 render_visual 不参与卡片执行。
+
+DSH 原生有工具调用/结果展示接口 presentCall、presentResult、presentationMeta，以及可选 Web Client 的工具展示 slot 与 Conversation 扩展；这些机制没有提供现成的 UniMind 教学卡片。当前复用原生持久展示元数据，由独立 UniMind React 消费，保留产品界面边界。参考：[插件基础](https://deepseek-harness.github.io/deepseek-harness/develop/basic/)、[工具编写参考](https://deepseek-harness.github.io/deepseek-harness/reference/cookbook/adding-a-tool)。Python 代码是 Django 业务与开发 Host/网关，Cordis 插件本体为 TypeScript。
+
+React 复用学习概览、掌握图谱和练习结果组件，题目只展示预览。既有 PracticeQuizCard 的提交/批改路径不接入本页，预览题不含答案；错题及显式查题的参考答案可展开查看。讲稿时间段显示为来源文本，打开课程不承诺直接跳转时间点。卡片随会话保存，刷新后可查看当时快照；最新状态以正式详情页为准。开发页导出只取对话文字，不导出卡片数据。
+
+协议夹具中输入 `M0只读演示` 会固定调用八个工具，展示合成业务数据。该流程验证事件与业务结果链路，不用于评估模型意图理解或任务完成率。
 
 ## 本地会话
 

@@ -12,6 +12,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from deepseek_harness import DeepSeekHarness
 from gateway import task_gateway
 from sessions import SessionStore, SessionUnavailable, context_version
+from cards import tool_cards
 
 
 ROOT = Path(__file__).resolve().parent
@@ -101,7 +102,8 @@ def run_session_turn(message, model_config, session_id):
         SESSIONS.invalidate(current, state)
         raise HostConfigurationError('学生记忆或权限已变化，本轮结果未保留，请重新提问。')
     state['messages'].extend([{'role': 'user', 'content': message},
-                              {'role': 'assistant', 'content': result.final_response, 'mode': gateway['mode']}])
+                              {'role': 'assistant', 'content': result.final_response, 'mode': gateway['mode'],
+                               'cards': tool_cards(result.events, context)}])
     state.update(dirty=False, runtime_ready=True, updated_at=datetime.now(timezone.utc).isoformat())
     SESSIONS.save(context, state)
     usage = {'operation': context['model_policy']['operation'], 'mode': gateway['mode'],

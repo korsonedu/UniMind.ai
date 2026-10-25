@@ -13,11 +13,16 @@ from ai_engine.config import get_model_for_task
 from ai_engine.tools import get_planner_tools
 from ai_assistant.models import AgentMemory
 from .tool_executor import PlannerToolExecutor, set_permitted_tools
+from .dsh_cards import build_tool_card
 
 
 M0_TOOLS = frozenset({
     'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points',
     'search_courses', 'search_asr',
+    'search_knowledge_tree', 'get_user_wrong_questions', 'lookup_question',
+    'get_learning_sessions', 'get_knowledge_mastery_map', 'get_due_reviews',
+    'get_knowledge_difficulty_analysis', 'get_practice_questions', 'get_exam_history',
+    'get_report_card', 'get_my_achievements', 'search_similar_questions',
 })
 
 
@@ -37,6 +42,9 @@ def memory_snapshot(user):
 def student_catalog(user):
     # Retired Agent note writes stay excluded even when legacy permissions allow them.
     definitions = [t for t in get_planner_tools() if t['function']['name'] != 'save_session_note']
+    for tool in definitions:
+        if tool['function']['name'] == 'get_practice_questions':
+            tool['function']['description'] = '从题库读取题目并展示只读预览。学生自行进入习题训练作答；本工具不提交答案、不触发批改。'
     return filter_tools('planner', None, definitions, user=user)
 
 
@@ -88,4 +96,9 @@ def execute_tool(user, name, arguments, memory_version):
     executor = PlannerToolExecutor(user)
     set_permitted_tools(executor, [definition])
     executor._allowed_tool_names = {name}
-    return json.loads(executor(name, arguments))
+    result = json.loads(executor(name, arguments))
+    if not result.get('error'):
+        card = build_tool_card(name, result)
+        if card:
+            result['visual'] = card
+    return result

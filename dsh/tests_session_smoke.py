@@ -16,7 +16,7 @@ class SessionSmoke(unittest.TestCase):
     def test_old_transcript_stays_out_after_rebuilt_turn(self):
         context = {'student': {'id': 1}, 'memory': {'version': 'old'}, 'permissions_version': 'allowed',
                    'model_policy': {'model': 'test', 'operation': 'assistant.chat.planner', 'max_tokens': 128},
-                   'system_prompt': 'test', 'routing': {}, 'runtime_source': 'local-protocol-smoke'}
+                   'system_prompt': 'test', 'routing': {}, 'tools': [], 'runtime_source': 'local-protocol-smoke'}
         @contextmanager
         def gateway(*_args):
             yield {'url': 'http://127.0.0.1:1/v1', 'credential': 'SYNTHETIC_TASK', 'mode': 'local-protocol-smoke',
@@ -34,7 +34,7 @@ class SessionSmoke(unittest.TestCase):
                 return deepcopy(context)
             harness = MagicMock()
             for method in ('start_session', 'resume_session'):
-                getattr(harness.__enter__.return_value, method).return_value.run.return_value = SimpleNamespace(final_response='fresh answer', finish_reason='stop')
+                getattr(harness.__enter__.return_value, method).return_value.run.return_value = SimpleNamespace(final_response='fresh answer', finish_reason='stop', events=[])
             config = {'url': 'http://127.0.0.1:1/v1/messages', 'key': 'SYNTHETIC_KEY', 'mode': 'local-protocol-smoke'}
             with patch.object(host, 'SESSIONS', store), patch.object(host, 'backend_request', backend), \
                     patch.object(host, 'task_gateway', gateway), patch.object(host, 'DeepSeekHarness', return_value=harness):
@@ -48,7 +48,7 @@ class SessionSmoke(unittest.TestCase):
 
     def test_official_turn_keeps_session_state(self):
         context = {'student': {'id': 1}, 'memory': {'version': 'initial'}, 'permissions_version': 'allowed',
-                   'model_policy': {'model': 'test', 'operation': 'assistant.chat.planner', 'max_tokens': 128}, 'system_prompt': 'test', 'routing': {}}
+                   'model_policy': {'model': 'test', 'operation': 'assistant.chat.planner', 'max_tokens': 128}, 'system_prompt': 'test', 'routing': {}, 'tools': []}
         @contextmanager
         def gateway(*_args):
             yield {'url': 'http://127.0.0.1:1/v1', 'credential': 'SYNTHETIC_TASK', 'mode': 'deepseek-official',
@@ -57,7 +57,7 @@ class SessionSmoke(unittest.TestCase):
             root = Path(temp) / 'dsh'
             root.mkdir()
             harness = MagicMock()
-            harness.__enter__.return_value.start_session.return_value.run.return_value = SimpleNamespace(final_response='test answer', finish_reason='stop')
+            harness.__enter__.return_value.start_session.return_value.run.return_value = SimpleNamespace(final_response='test answer', finish_reason='stop', events=[])
             with patch.object(host, 'ROOT', root), patch.object(host, 'SESSIONS', SessionStore(Path(temp) / 'sessions')), \
                     patch.object(host, 'backend_request', side_effect=lambda *_args: deepcopy(context)), \
                     patch.object(host, 'task_gateway', gateway), patch.object(host, 'DeepSeekHarness', return_value=harness):
