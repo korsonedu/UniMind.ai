@@ -159,6 +159,9 @@ def main():
                 'UNIMIND_AUTH_TOKEN': identity['token'],
                 'UNIMIND_DSH_MODEL_URL': f'http://127.0.0.1:{model.server_port}/v1',
             })
+            import host
+            from sessions import SessionStore
+            host.SESSIONS = SessionStore(Path(state) / 'sessions')
             from host import run_turn
             config = official_config(args.backend_python, args.official_env) if args.official_env else None
             result = run_turn('请调用工具查询我的实际学习统计，再按我的讲解偏好用三句话解释。没有学习记录时说明暂无记录，不要编造。', config)
@@ -184,6 +187,45 @@ def main():
                                   'tools': sorted(names), 'memory_isolated': True,
                                   'tool_result_received': True, 'gateway': result['gateway'],
                                   'content': result['content']}, ensure_ascii=False), flush=True)
+                # Restart the Host interpreter as well as DSH; only the local files survive.
+                restore = """
+import json, sys
+import host
+from sessions import SessionStore
+host.SESSIONS = SessionStore(sys.argv[1])
+print(json.dumps(host.run_turn(**json.load(sys.stdin)), ensure_ascii=False))
+"""
+                resumed = json.loads(subprocess.check_output([sys.executable, '-c', restore, str(Path(state) / 'sessions')],
+                    cwd=str(ROOT / 'dsh'), input=json.dumps({'message': '接着解释上一轮的结果。', 'session_id': result['session_id']}),
+                    text=True, stderr=subprocess.PIPE))
+                history = json.dumps(calls[2]['messages'], ensure_ascii=False)
+                assert '没有学习记录时说明暂无记录' in history and result['content'] in history
+                assert resumed['session_id'] == result['session_id'] and len(resumed['session']['messages']) == 4
+                assert resumed['gateway']['requests'][0]['tool_results'] == 0
+                print(json.dumps({'native_session_restored': True, 'visible_messages': 4, 'sdk_processes': 2, 'host_processes': 2}), flush=True)
+                from urllib.request import Request, urlopen
+                memory_id = host.backend_request('/api/ai/dsh/context/', {})['memory']['items'][0]['id']
+                memory_url = os.environ['UNIMIND_API_URL'] + f'/api/ai/memories/{memory_id}/'
+                def change_memory(method, body=None):
+                    request = Request(memory_url, json.dumps(body).encode() if body is not None else None,
+                                      {'Authorization': 'Token ' + identity['token'], 'Content-Type': 'application/json'}, method=method)
+                    with urlopen(request, timeout=5) as response:
+                        assert response.status in (200, 204)
+                start = len(calls)
+                change_memory('PATCH', {'value': '先给定义再用数字例子'})
+                corrected = run_turn('请查询学习统计。', session_id=result['session_id'])
+                fresh = json.dumps(calls[start], ensure_ascii=False)
+                assert '先给定义再用数字例子' in fresh and '先举例再给公式' not in fresh
+                assert '没有学习记录时说明暂无记录' not in fresh
+                assert len(corrected['session']['messages']) == 6 and corrected['session']['notice']
+                start = len(calls)
+                change_memory('DELETE')
+                deleted = run_turn('请查询学习统计。', session_id=result['session_id'])
+                fresh = json.dumps(calls[start], ensure_ascii=False)
+                assert '先给定义再用数字例子' not in fresh and '先举例再给公式' not in fresh
+                assert len(deleted['session']['messages']) == 8
+                print(json.dumps({'memory_correction_rebuilt_context': True, 'memory_deletion_rebuilt_context': True,
+                                  'original_transcript_retained': True}), flush=True)
             if args.serve:
                 from http.server import ThreadingHTTPServer
                 from host import Handler

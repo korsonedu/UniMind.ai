@@ -118,7 +118,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
                 record = {'request': len(requests) + 1, 'model': policy['model'],
                           'status': 'started', 'usage': {}, 'usage_complete': False,
                           'tool_results': sum(b.get('type') == 'tool_result'
-                              for m in body.get('messages', []) if isinstance(m.get('content'), list)
+                              for m in body.get('messages', [])[-1:] if isinstance(m.get('content'), list)
                               for b in m['content'] if isinstance(b, dict))}
                 requests.append(record)  # Failures consume the attempt; no invisible retries.
                 started = monotonic()
@@ -169,7 +169,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
                         record['status'] = 'completed' if record['usage_complete'] else ('interrupted' if stopping.is_set() else 'incomplete')
                 except Exception:
                     record['status'] = 'interrupted'
-                    if not streaming:
+                    if not streaming and not stopping.is_set():
                         self.reject(502, 'upstream_unavailable')
                 finally:
                     connection.close()

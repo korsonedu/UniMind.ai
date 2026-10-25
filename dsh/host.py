@@ -2,18 +2,20 @@
 import importlib.metadata
 import json
 import os
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from deepseek_harness import DeepSeekHarness
 from gateway import task_gateway
+from sessions import SessionStore, SessionUnavailable, context_version
 
 
 ROOT = Path(__file__).resolve().parent
+SESSIONS = SessionStore(ROOT.parent / '.m0-state' / 'sessions')
 
 
 class HostConfigurationError(Exception):
@@ -39,7 +41,12 @@ def backend_request(path, body):
         return json.load(response)
 
 
-def run_turn(message, model_config=None):
+def run_turn(message, model_config=None, session_id=None):
+    with SESSIONS.lock:
+        return run_session_turn(message, model_config, session_id)
+
+
+def run_session_turn(message, model_config, session_id):
     if model_config is None:
         model_url = os.environ.get('UNIMIND_DSH_MODEL_URL', '')
         if urlsplit(model_url).hostname not in ('127.0.0.1', 'localhost', '::1'):
@@ -47,15 +54,20 @@ def run_turn(message, model_config=None):
         model_config = {'url': model_url.rstrip('/') + '/messages',
                         'key': 'local-protocol-fixture', 'mode': 'local-protocol-smoke'}
     context = backend_request('/api/ai/dsh/context/', {'message': message})
+    context['runtime_source'] = model_config['mode']
+    state = SESSIONS.load(context, session_id) if session_id else SESSIONS.create(context)
+    state['dirty'] = True
+    SESSIONS.save(context, state)
+    home = SESSIONS.directory(context, state['id']) / 'runtime'
+    home.mkdir(mode=0o700, exist_ok=True)
     audit_path = None
     if model_config['mode'] == 'deepseek-official':
-        state = ROOT.parent / '.m0-state'
-        state.mkdir(exist_ok=True)
-        audit_path = state / 'gateway-usage.jsonl'
-    with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path) as gateway, \
-            TemporaryDirectory(prefix='unimind-dsh-') as home:
+        audit_directory = ROOT.parent / '.m0-state'
+        audit_directory.mkdir(exist_ok=True)
+        audit_path = audit_directory / 'gateway-usage.jsonl'
+    with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path) as gateway:
         with DeepSeekHarness(
-            dsh_home=home, cwd=home, patches=(str(ROOT / 'profile.patch.yml'),),
+            dsh_home=str(home), cwd=str(home), patches=(str(ROOT / 'profile.patch.yml'),),
             provider='deepseek-official', model=context['model_policy']['model'],
             base_url=gateway['url'], api_key=gateway['credential'], max_tokens=context['model_policy']['max_tokens'],
             request_timeout_seconds=90, initialize_timeout_seconds=20,
@@ -65,17 +77,27 @@ def run_turn(message, model_config=None):
                 'UNIMIND_DSH_MESSAGE': message,
             },
         ) as harness:
-            result = harness.run(message)
+            session = harness.resume_session(state['runtime_id']) if state['runtime_ready'] else harness.start_session(state['runtime_id'])
+            result = session.run(message)
     if not result.final_response:
         raise RuntimeError('DSH turn did not produce a response')
     if not gateway['requests'] or any(r['status'] != 'completed' for r in gateway['requests']):
         raise RuntimeError('Gateway turn did not complete')
+    current = backend_request('/api/ai/dsh/context/', {'message': message})
+    current['runtime_source'] = model_config['mode']
+    if context_version(current) != state['context_version']:
+        SESSIONS.invalidate(current, state)
+        raise HostConfigurationError('学生记忆或权限已变化，本轮结果未保留，请重新提问。')
+    state['messages'].extend([{'role': 'user', 'content': message},
+                              {'role': 'assistant', 'content': result.final_response, 'mode': gateway['mode']}])
+    state.update(dirty=False, runtime_ready=True, updated_at=datetime.now(timezone.utc).isoformat())
+    SESSIONS.save(context, state)
     usage = {'operation': context['model_policy']['operation'], 'mode': gateway['mode'],
              'model': context['model_policy']['model'], 'requests': gateway['requests'], 'task_id': gateway['task_id']}
     return {
         'content': result.final_response,
         'finish_reason': result.finish_reason,
-        'session_id': result.session_id,
+        'session_id': state['id'], 'session': SESSIONS.public(state),
         'mode': gateway['mode'], 'gateway': usage,
     }
 
@@ -111,7 +133,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(403, {'error': 'origin_denied'})
         if self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
             return self.reply(415, {'error': 'json_required'})
-        if self.path not in ('/context', '/chat'):
+        if self.path not in ('/context', '/chat', '/session/read', '/session/new', '/session/delete'):
             return self.reply(404, {'error': 'not_found'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
@@ -123,8 +145,23 @@ class Handler(BaseHTTPRequestHandler):
             message = data.get('message', '')
             if not isinstance(message, str) or len(message) > 4000:
                 return self.reply(400, {'error': 'invalid_message'})
-            result = backend_request('/api/ai/dsh/context/', {'message': message}) if self.path == '/context' else run_turn(message, self.model_config)
+            session_id = data.get('session_id')
+            if self.path.startswith('/session/'):
+                with SESSIONS.lock:
+                    context = backend_request('/api/ai/dsh/context/', {})
+                    context['runtime_source'] = self.model_config['mode'] if self.model_config else 'local-protocol-smoke'
+                    if self.path == '/session/new':
+                        result = SESSIONS.public(SESSIONS.create(context))
+                    elif self.path == '/session/delete':
+                        SESSIONS.delete(context, session_id)
+                        result = {'deleted': True}
+                    else:
+                        result = SESSIONS.public(SESSIONS.load(context, session_id))
+            else:
+                result = backend_request('/api/ai/dsh/context/', {'message': message}) if self.path == '/context' else run_turn(message, self.model_config, session_id)
             return self.reply(200, result)
+        except SessionUnavailable:
+            return self.reply(404, {'error': '本机会话不存在或不属于当前账号，请开启新会话。'})
         except HostConfigurationError as exc:
             return self.reply(400, {'error': str(exc)})
         except HTTPError as exc:

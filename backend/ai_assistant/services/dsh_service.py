@@ -54,6 +54,7 @@ def build_context(user, message):
         'memory': memory_snapshot(user),
         'tools': selected,
         'permitted_tool_count': len(allowed),
+        'permissions_version': hashlib.sha256(json.dumps(allowed, sort_keys=True).encode()).hexdigest(),
         'route': 'keywords-and-workflow-groups',
         'model_policy': {
             'operation': 'assistant.chat.planner', 'tier': 'fast',
