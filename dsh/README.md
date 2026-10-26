@@ -175,3 +175,13 @@ POST /api/ai/dsh/chat/stream/ 沿用相同 Cookie、参数、request_id、额度
 Django 使用 async iterator，模型、文件锁与 ORM 位于独立同步任务线程。队列固定 64 项；慢客户端可丢暂态片段，终止事件会腾出暂态空间，生产线程无需等待客户端即可清理连接。完全未消费响应不会启动任务；断开已启动传输只关闭页面接收，任务仍按既有规则结算，SDK 子进程保留 120 秒父进程上限。手动恢复沿用同一 request_id，不自动补发新任务。
 
 实际验证使用 Daphne ASGI；普通 WSGI 会缓冲 async iterator，不作为实时证据。site_smoke 的本地协议夹具每 150ms 输出一段，验证至少三段正文、首段先于 done、正文拼接与 DSH 最终回答一致、原生工具状态/卡片、跨 JSON/SSE 幂等及失败释放。浏览器截图 .m0-state/m0-live-stream-proof.png 捕获到生成中片段；停止接收后恢复同一任务，仅追加原任务对应两条消息。以上不代表真实模型质量或生产代理/容量验收。
+
+## DSH 评分任务（独立开关，默认关闭）
+
+UNIMIND_DSH_GRADING_ENABLED 开启时，AIService 仅对 quizzes.grade_question 和 quizzes.objective_analysis 改走服务端 DSH。既有题干/评分点提示词与后处理继续使用；主观 pro/2500 tokens/temperature .2，客观解析 fast/2000/.4，均一次模型请求上限。collector 成功即 concludeTurn；评分 profile 关闭 llm-retry，失败不回旧模型，客观解析失败可沿用确定性反馈。
+
+structured_plugin.ts 为实际 Cordis 模块，只注册指定 collector；无学生回调凭据、长期记忆、学习工具、文件/终端工具。任务由私有 stdin 传入，SDK home 位于私有临时目录并在结束删除，与聊天共用四个 SDK 槽位。父进程超时或中断先终止整个进程组。源码使用现有 jsonschema 并在 backend/requirements.txt 明确锁定；SDK 接收支持的 Schema 子集，后端仍完整校验。
+
+既有练习 UI 经 GET /api/ai/practice/session/<id>/ 读取自己已创建的会话，避免再次抽题而提交旧 ID；已完成结果刷新可恢复。此接口复核身份、归属与当前题目范围，并区分整卷考试提交事实。提交按题数给每题130秒等待，不自动重试该写请求；DSH 开启时 Celery 预批改150/180秒，关闭时保持60/90秒。原业务事务决定成绩/ Memorix/PracticeSubmission，一次失败不写半份结果。独立 chat 周额度不因一次评分再扣。
+
+本地实际 SDK/ASGI 与合成主观题已验证一次 pro 请求、8/10、重复提交一次落库、他人拒绝、暂态错误不重试/不落分，以及客观确定性0分。浏览器显示逐题反馈并刷新恢复。真实模型质量、Celery生产运行、并发容量和正式开关启用未验收；详见 2026-10-26-dsh-grading.md。

@@ -1181,9 +1181,12 @@ def _handle_bot_suggestion(s: dict):
     )
 
 
+from django.conf import settings as _dsh_settings
+
+
 @shared_task(
-    soft_time_limit=60,
-    time_limit=90,
+    soft_time_limit=150 if getattr(_dsh_settings, "UNIMIND_DSH_GRADING_ENABLED", False) else 60,
+    time_limit=180 if getattr(_dsh_settings, "UNIMIND_DSH_GRADING_ENABLED", False) else 90,
     acks_late=True,
 )
 def pre_grade_single_question(session_id: str, question_id: int, user_answer: str, user_id: int):

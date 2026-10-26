@@ -38,7 +38,7 @@ api.interceptors.response.use(
     // Retry on 429 (rate limit) and network errors, max 2 retries
     const config = error.config;
     const retryCount = config.__retryCount || 0;
-    const isRetryable = error.response?.status === 429 || !error.response;
+    const isRetryable = config.url !== '/ai/practice/submit/' && (error.response?.status === 429 || !error.response);
     if (isRetryable && retryCount < 2) {
       config.__retryCount = retryCount + 1;
       // Respect Retry-After header if present, otherwise exponential backoff

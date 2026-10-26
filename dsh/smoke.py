@@ -97,6 +97,14 @@ def backend_fixture():
         from users.models import WeeklyAIQuotaConfig
         WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
         CourseStudentStatus.objects.create(user=other, is_course_student=True)
+        if settings.UNIMIND_DSH_GRADING_ENABLED:
+            grading_kp = KnowledgePoint.objects.create(name='M0主观评阅', code='M0-GRADING', subject='金融431')
+            Question.objects.create(knowledge_point=grading_kp, q_type='subjective', subjective_type='short',
+                text='合成主观题：解释久期对债券利率风险的含义。', grading_points='解释敏感程度5分；说明方向5分。',
+                correct_answer='久期衡量价格对利率的敏感程度，久期越长越敏感。')
+            objective_kp = KnowledgePoint.objects.create(name='M0客观评阅', code='M0-GRADING-OBJECTIVE', subject='金融431')
+            Question.objects.create(knowledge_point=objective_kp, q_type='objective', text='合成客观题：久期越长越敏感？',
+                options=['是', '否'], correct_answer='A')
     from django.core.wsgi import get_wsgi_application
 
     class Quiet(WSGIRequestHandler):
@@ -194,7 +202,14 @@ def model_fixture(status=200):
                     if isinstance(value, dict) and value.get('group'):
                         discovered = value['group']
             tools = None
-            if demo:
+            collectors = {tool.get('name') for tool in body.get('tools', [])}
+            if 'submit_grading_result' in collectors:
+                tools = [('submit_grading_result', {'score': 8, 'feedback': '合成评分：方向正确，补充敏感度解释。',
+                    'analysis': '合成示范：久期越长，对利率变化越敏感。', 'memorix_rating': 3, 'error_analysis': None})]
+            elif 'submit_objective_analysis' in collectors:
+                tools = [('submit_objective_analysis', {'why_correct': '合成解释：选项A符合定义。',
+                    'why_wrong': '合成提醒：请核对敏感度方向。', 'pitfalls': '区分方向和程度。'})]
+            elif demo:
                 if not has_result:
                     tools = [('find_learning_tools', {'group': 'resources'}), ('get_learning_stats', {}),
                              ('get_recent_practice_result', {'exam_id': 1}), ('get_knowledge_mastery_map', {})]

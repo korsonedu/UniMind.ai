@@ -13,6 +13,21 @@ import host
 from sessions import SessionStore, SessionUnavailable
 
 
+def reserve_slot(stack, state_dir):
+    slots = Path(state_dir) / '.slots'
+    slots.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for index in range(4):
+        slot = os.fdopen(os.open(slots / str(index), os.O_CREAT | os.O_RDWR, 0o600), 'a')
+        try:
+            fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            slot.close()
+            continue
+        stack.enter_context(slot)
+        return True
+    return False
+
+
 def execute(payload, on_event=None):
     os.environ.update({'UNIMIND_API_URL': payload['api_url'], 'UNIMIND_AUTH_TOKEN': payload['token'],
                        'UNIMIND_DSH_AUTH_SCHEME': 'DSH',
@@ -30,18 +45,7 @@ def execute(payload, on_event=None):
             return {'status': 409, 'error': '当前学习会话仍在处理中，请稍后重试。'}
         action = payload['action']
         if action == 'chat':
-            slots = Path(payload['state_dir']) / '.slots'
-            slots.mkdir(mode=0o700, parents=True, exist_ok=True)
-            for index in range(4):
-                slot = os.fdopen(os.open(slots / str(index), os.O_CREAT | os.O_RDWR, 0o600), 'a')
-                try:
-                    fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    slot.close()
-                    continue
-                stack.enter_context(slot)
-                break
-            else:
+            if not reserve_slot(stack, payload['state_dir']):
                 return {'status': 503, 'error': 'AI 服务繁忙，请稍后重试。'}
             new_session = payload['create_session']
             session_id = host.SESSIONS.create(context, payload['session_id'])['id'] if new_session else payload['session_id']

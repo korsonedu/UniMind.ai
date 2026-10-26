@@ -1,0 +1,6 @@
+# Loaded after the base restricted profile; collector replaces the learning plugin.
+- { id: unimind-learning-m0, disabled: true }
+- { id: llm-retry, disabled: true }
+- insert:
+    - id: unimind-structured-task
+      name: ./structured_plugin.ts

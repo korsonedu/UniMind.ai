@@ -28,10 +28,13 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
     if not upstream_key:
         raise ValueError('Missing upstream credential')
     policy = context['model_policy']
-    if (policy['operation'] != 'assistant.chat.planner' or policy['tier'] != 'fast'
-            or not 1 <= policy['max_requests'] <= 4 or not 1 <= policy['max_tokens'] <= 1024
-            or not 1 <= policy['max_request_bytes'] <= 65536):
-        raise ValueError('Unsupported M0 task policy')
+    budgets = {'assistant.chat.planner': ('fast', 4, 1024),
+               'quizzes.grade_question': ('pro', 1, 2500),
+               'quizzes.objective_analysis': ('fast', 1, 2000)}
+    budget = budgets.get(policy['operation'])
+    if (not budget or policy['tier'] != budget[0] or not 1 <= policy['max_requests'] <= budget[1]
+            or not 1 <= policy['max_tokens'] <= budget[2] or not 1 <= policy['max_request_bytes'] <= 65536):
+        raise ValueError('Unsupported task policy')
     allowed_tools = {t['function']['name'] for t in context.get('available_tools', context['tools']) + context['tools']}
     capability = secrets.token_urlsafe(32)
     requests = []
@@ -122,6 +125,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                     'stream', 'temperature', 'top_p', 'stop_sequences',
                 }}
                 body['thinking'] = {'type': 'disabled'}
+                if policy['operation'] in ('quizzes.grade_question', 'quizzes.objective_analysis'):
+                    body['temperature'] = 0.2 if policy['operation'] == 'quizzes.grade_question' else 0.4
                 record = {'request': len(requests) + 1, 'model': policy['model'],
                           'tool_count': len(tools), 'tool_schema_bytes': len(json.dumps(tools, ensure_ascii=False).encode()),
                           'status': 'started', 'usage': {}, 'usage_complete': False,

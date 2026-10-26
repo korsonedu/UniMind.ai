@@ -138,6 +138,7 @@ const legacyRoutes = [
 
 const RootRedirect = () => {
 
+  const storeUser = useAuthStore(s => s.user);
   const setAuth = useAuthStore(s => s.setAuth);
   const logout = useAuthStore(s => s.logout);
   const hasHydrated = useAuthStore.persist.hasHydrated();
@@ -170,7 +171,10 @@ const RootRedirect = () => {
 
   if (!hasHydrated || isLoading) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
-  if (userData && !isError) return <Outlet />;
+  if (userData && !isError) {
+    if (storeUser?.id !== userData.id) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+    return <Outlet />;
+  }
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
 

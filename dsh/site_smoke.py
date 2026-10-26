@@ -27,7 +27,7 @@ def main():
     with TemporaryDirectory(prefix='unimind-m0-smoke-') as state:
         env = {**os.environ, 'ACCOUNT_ENABLED': 'false', 'ACCOUNT_RSA_KEY_PATH': '',
                'ACCOUNT_DEV_LOCAL_CACHE': 'true', 'UNIMIND_DSH_ENABLED': 'true',
-               'UNIMIND_DSH_SITE_ENABLED': 'true', 'UNIMIND_DSH_PYTHON': sys.executable,
+               'UNIMIND_DSH_SITE_ENABLED': 'true', 'UNIMIND_DSH_GRADING_ENABLED': 'true', 'UNIMIND_DSH_PYTHON': sys.executable,
                'UNIMIND_DSH_STATE_DIR': str(Path(state) / 'sessions'),
                'UNIMIND_DSH_FIXTURE_URL': f'http://127.0.0.1:{model.server_port}/v1/messages',
                'UNIMIND_CONTENT_INSTITUTION_ID': 'global', 'DB_ENGINE': 'django.db.backends.sqlite3',
@@ -48,7 +48,7 @@ def main():
             base = f'http://127.0.0.1:{identity["port"]}'
 
             def request(token, path, body):
-                req = Request(base + '/api/ai/dsh/' + path + '/', json.dumps(body).encode(),
+                req = Request(base + (path if path.startswith('/api/') else '/api/ai/dsh/' + path + '/'), None if body is None else json.dumps(body).encode(),
                     {'Content-Type': 'application/json', 'Authorization': 'Token ' + token})
                 try:
                     with urlopen(req, timeout=130) as response:
@@ -125,6 +125,38 @@ def main():
             count = len(calls)
             assert request(identity['token'], 'chat', streaming) == (200, result_stream)
             assert len(calls) == count
+            status, practice = request(identity['token'], '/api/ai/practice/start/', {'kp_name': 'M0主观评阅', 'count': 1})
+            assert status == 200 and practice['questions'], (status, practice)
+            read_url = f'/api/ai/practice/session/{practice["session_id"]}/'
+            assert request(identity['token'], read_url, None)[1]['questions'] == practice['questions']
+            assert request(identity['other_token'], read_url, None)[0] == 403
+            practice_body = {'session_id': practice['session_id'], 'answers': [
+                {'question_id': practice['questions'][0]['id'], 'answer': '久期越长，价格对利率变化越敏感。'}]}
+            assert request(identity['other_token'], '/api/ai/practice/submit/', practice_body)[0] == 403
+            count = len(calls)
+            status, grade = request(identity['token'], '/api/ai/practice/submit/', practice_body)
+            assert status == 200 and grade['total_score'] == 8, (status, grade)
+            assert len(calls) == count + 1, 'native concludeTurn must end after one collector call'
+            assert calls[-1]['model'] == 'deepseek-v4-pro' and calls[-1]['temperature'] == 0.2
+            assert [tool['name'] for tool in calls[-1]['tools']] == ['submit_grading_result']
+            assert 'OTHER_STUDENT_PRIVATE' not in json.dumps(calls[-1], ensure_ascii=False)
+            assert request(identity['token'], '/api/ai/practice/submit/', practice_body) == (200, grade)
+            assert len(calls) == count + 1
+            assert request(identity['token'], read_url, None)[1]['result'] == grade
+            status, objective = request(identity['token'], '/api/ai/practice/start/', {'kp_name': 'M0客观评阅', 'count': 1})
+            assert status == 200, (status, objective)
+            status, objective_grade = request(identity['token'], '/api/ai/grading/grade/', {
+                'question_id': objective['questions'][0]['id'], 'user_answer': 'B'})
+            assert status == 200 and objective_grade['score'] == 0, (status, objective_grade)
+            assert [tool['name'] for tool in calls[-1]['tools']] == ['submit_objective_analysis']
+            status, failed_practice = request(identity['token'], '/api/ai/practice/start/', {'kp_name': 'M0主观评阅', 'count': 1})
+            assert status == 200, (status, failed_practice)
+            model.response_status = 503
+            failed_grade_calls = len(calls)
+            status, _ = request(identity['token'], '/api/ai/practice/submit/', {
+                **practice_body, 'session_id': failed_practice['session_id']})
+            assert status == 503
+            assert len(calls) == failed_grade_calls + 1, 'grading must not retry transient provider failures'
             model.response_status = 422
             files = set((Path(state) / 'sessions').rglob('transcript.json'))
             failed = {'message': '查询学习统计。', 'request_id': str(uuid4())}
@@ -139,16 +171,21 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE','school_system.settings')
 import django
 django.setup()
 from users.models import WeeklyAIUsage, AIUsageReservation
+from quizzes.models import GradingRecord, PracticeSubmission
 print(json.dumps({'calls': list(WeeklyAIUsage.objects.order_by('user_id').values_list('ai_calls',flat=True)),
+    'graded_records': GradingRecord.objects.filter(user__username='m0-student',question__knowledge_point__name='M0主观评阅').count(),
+    'practice_submissions': PracticeSubmission.objects.filter(user__username='m0-student').count(),
     'failed_released': AIUsageReservation.objects.get(request_id=sys.argv[2]).status == 'released',
     'deleted_responses': list(AIUsageReservation.objects.filter(user__username='m0-student',status='succeeded',response__deleted=True).values_list('response',flat=True))}))
 """
             ledger = json.loads(subprocess.check_output([args.backend_python, '-c', source,
                 str(ROOT / 'backend'), failed['request_id']], env=env, text=True))
+            assert ledger['graded_records'] == ledger['practice_submissions'] == 1, ledger
             assert ledger['calls'] == [3, 1] and ledger['failed_released'], ledger
             assert len(ledger['deleted_responses']) == 2
             assert all(response == {'engine': 'dsh', 'session_id': sid, 'deleted': True} for response in ledger['deleted_responses'])
-            print(json.dumps({'site_authentication': True, 'asgi_stream_before_completion': True, 'stream_replay_no_extra_call': True, 'parallel_students_isolated': True,
+            print(json.dumps({'site_authentication': True, 'subjective_dsh_grade_saved_once': True,
+                'objective_score_deterministic': True, 'failed_grade_not_saved': True, 'asgi_stream_before_completion': True, 'stream_replay_no_extra_call': True, 'parallel_students_isolated': True,
                 'native_session_resumed': True, 'cross_student_session_denied': True,
                 'idempotent_without_extra_model_call': True, 'weekly_calls': ledger['calls'],
                 'failed_call_released': True, 'session_and_cached_text_deleted': True,
@@ -160,7 +197,8 @@ print(json.dumps({'calls': list(WeeklyAIUsage.objects.order_by('user_id').values
                 print(json.dumps({'site_fixture': base, 'browser_entry': '/dev/dsh?source=site',
                     'synthetic_login_a': '/api/ai/dsh-fixture/student-a/',
                     'synthetic_login_b': '/api/ai/dsh-fixture/student-b/',
-                    'synthetic_logout': '/api/ai/dsh-fixture/logout/'}, ensure_ascii=False), flush=True)
+                    'synthetic_logout': '/api/ai/dsh-fixture/logout/',
+                    'browser_practice': f'/xiaoyu/practice/{failed_practice["session_id"]}'}, ensure_ascii=False), flush=True)
                 signal.pause()
         except Exception:
             diagnostics.flush()

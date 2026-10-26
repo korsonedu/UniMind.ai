@@ -7,5 +7,5 @@
     "noEmit": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["plugin.ts"]
+  "include": ["plugin.ts", "structured_plugin.ts"]
 }

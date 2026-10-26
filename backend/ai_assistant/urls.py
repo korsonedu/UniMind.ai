@@ -12,7 +12,7 @@ from .views_projects import ConversationDetailView, ProjectListCreateView, Proje
 from .views_dsh import DshContextView, DshToolView, DshChatView, DshSessionView, DshStatusView, DshChatStreamView
 from .views_api import (
     grade_view, profile_view, due_view, stats_view,
-    practice_start_view, practice_pre_grade_view, practice_submit_view,
+    practice_start_view, practice_pre_grade_view, practice_submit_view, practice_session_view,
     feedback_view,
 )
 
@@ -51,6 +51,7 @@ urlpatterns = [
     path('memory/stats/', stats_view, name='memory-stats'),
 
     # Practice session
+    path('practice/session/<str:session_id>/', practice_session_view, name='practice-session'),
     path('practice/start/', practice_start_view, name='practice-start'),
     path('practice/pre-grade/', practice_pre_grade_view, name='practice-pre-grade'),
     path('practice/submit/', practice_submit_view, name='practice-submit'),
