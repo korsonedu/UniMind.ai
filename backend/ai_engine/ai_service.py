@@ -74,7 +74,8 @@ class AIService:
         强制模型输出符合 JSON Schema 的结构化数据。
         替代 simple_chat_text + extract_json 的脆弱模式。
         """
-        if getattr(settings, 'UNIMIND_DSH_GRADING_ENABLED', False) and operation in ('quizzes.grade_question', 'quizzes.objective_analysis'):
+        if (getattr(settings, 'UNIMIND_DSH_GRADING_ENABLED', False) and operation in ('quizzes.grade_question', 'quizzes.objective_analysis')
+                or getattr(settings, 'UNIMIND_DSH_TEACHING_ENABLED', False) and operation == 'quizzes.preview_parse'):
             from ai_assistant.services.dsh_tasks import run_structured
             from ai_assistant.services.dsh_runtime import DshUnavailable
             try:

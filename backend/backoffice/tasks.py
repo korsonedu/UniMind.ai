@@ -4,6 +4,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 
 from celery import shared_task
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -18,7 +19,7 @@ def expire_stale_teaching_tasks(queryset):
     # Hard limit is 960s; allow a minute for the worker to finish recording failure.
     return queryset.filter(
         status='running', started_at__lt=timezone.now() - timedelta(seconds=1020),
-        payload__kind__in=['quick', 'arc', 'bulk', 'chat', 'report'],
+        payload__kind__in=['quick', 'arc', 'bulk', 'parse', 'chat', 'report'],
     ).update(status='failed', error_message='任务处理超时或工作进程已退出，请重试。',
              finished_at=timezone.now(), updated_at=timezone.now())
 
@@ -34,6 +35,7 @@ def run_teaching_task(task_id):
         task.status = 'running'
         task.started_at = timezone.now()
         task.save(update_fields=['status', 'started_at', 'updated_at'])
+    kind = None
     try:
         from .teaching import student_detail, validate_kps
         scope = content_institution(required=True)
@@ -61,6 +63,20 @@ def run_teaching_task(task_id):
                 validate_kps([question.get('kp_id')])
             task.result = {'questions': questions}
             task.status = 'review'
+        elif kind == 'parse':
+            if not getattr(settings, 'UNIMIND_DSH_TEACHING_ENABLED', False):
+                raise ValueError('DSH 教研解析已关闭。')
+            ids = validate_kps(args.get('kp_ids'))
+            if len(ids) != 1:
+                raise ValueError('解析任务缺少唯一考点。')
+            from ai_engine.ai_service import AIService
+            parsed = AIService.parse_questions_from_text(args['raw_text'])
+            if not parsed:
+                raise ValueError('未解析出有效候选题，请人工录入或分批重试。')
+            kp_name = KnowledgePoint.objects.filter(institution=scope, pk=ids[0]).values_list('name', flat=True).first() or f'考点 #{ids[0]}'
+            task.result = {'questions': [{**item, 'kp_id': ids[0], 'kp_name': kp_name, 'question': item['text'],
+                'answer': item['correct_answer'], 'explanation': item.get('analysis', '')} for item in parsed]}
+            task.status = 'review'
         elif kind == 'bulk':
             from quizzes.services.bulk_pipeline import _execute_bulk_pipeline, DEFAULT_DIFFICULTY_DIST, DEFAULT_TYPE_DIST
             _execute_bulk_pipeline(task, args['subject'], args.get('count', 500),
@@ -78,11 +94,23 @@ def run_teaching_task(task_id):
         task.progress = 100
         task.finished_at = timezone.now()
         task.save(update_fields=['result', 'status', 'progress', 'finished_at', 'updated_at'])
-    except Exception:
+    except Exception as exc:
         logger.exception('Teaching task failed: %s', task.pk)
         # Keep provider messages and traceback out of the browser.
+        message = '任务执行失败，请核对参数后重试；详细原因已记录在服务日志。'
+        if kind == 'parse':
+            from ai_assistant.services.dsh_runtime import DshUnavailable
+            if isinstance(exc, DshUnavailable):
+                message = '解析服务暂时不可用或未返回有效结果，材料可继续人工录入。'
+            elif isinstance(exc, ValueError) and str(exc) in {
+                'DSH 教研解析已关闭。', '解析任务缺少唯一考点。',
+                '未解析出有效候选题，请人工录入或分批重试。',
+            }:
+                message = str(exc)
+            else:
+                message = '解析任务执行失败，请稍后重试或人工录入。'
         ContentPipelineTask.objects.filter(pk=task.pk).update(status='failed',
-            error_message='任务执行失败，请核对参数后重试；详细原因已记录在服务日志。', finished_at=timezone.now())
+            error_message=message, finished_at=timezone.now())
 
 
 def run_chat(task):

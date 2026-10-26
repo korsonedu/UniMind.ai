@@ -1,4 +1,4 @@
-"""One temporary DSH grading task, no persistent student session or callbacks."""
+"""One temporary DSH structured task, no persistent student session or callbacks."""
 from contextlib import ExitStack
 import json
 from pathlib import Path
@@ -29,7 +29,7 @@ def execute(payload):
                 provider='deepseek-official', model=context['model_policy']['model'],
                 base_url=gateway['url'], api_key=gateway['credential'], max_tokens=context['model_policy']['max_tokens'],
                 request_timeout_seconds=90, initialize_timeout_seconds=20,
-                env={'UNIMIND_DSH_STRUCTURED_TOOL': json.dumps(tool, ensure_ascii=False)}) as harness:
+                env={'UNIMIND_DSH_TASK_INSTRUCTION': context['task_instruction'], 'UNIMIND_DSH_STRUCTURED_TOOL': json.dumps(tool, ensure_ascii=False)}) as harness:
                 result = harness.run(payload['prompt'])
         if result.finish_reason != 'completed' or not gateway['requests'] or any(request['status'] != 'completed' for request in gateway['requests']):
             raise RuntimeError('Incomplete structured task')
@@ -51,5 +51,5 @@ if __name__ == '__main__':
     try:
         response = {'status': 200, 'result': execute(json.load(sys.stdin))}
     except Exception:
-        response = {'status': 503, 'error': 'DSH 评分任务未完成。'}
+        response = {'status': 503, 'error': 'DSH 结构化任务未完成。'}
     print(json.dumps(response, ensure_ascii=False, allow_nan=False))

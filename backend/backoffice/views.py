@@ -18,6 +18,7 @@ from . import courses, people, quizzes, uploads, commerce, teaching, transcripts
 def meta(request, data):
     return {'operator': {'id': request.user.pk, 'name': request.user.nickname or request.user.username},
             'content_configured': bool(settings.UNIMIND_CONTENT_INSTITUTION_ID),
+            'teaching_parse_enabled': getattr(settings, 'UNIMIND_DSH_TEACHING_ENABLED', False),
             'uploads_enabled': bool(settings.OSS_BUCKET_NAME and settings.OSS_ACCESS_KEY_ID and settings.OSS_ACCESS_KEY_SECRET and settings.OSS_ENDPOINT)}
 
 

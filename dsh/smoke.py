@@ -210,6 +210,11 @@ def model_fixture(status=200):
             elif 'submit_objective_analysis' in collectors:
                 tools = [('submit_objective_analysis', {'why_correct': '合成解释：选项A符合定义。',
                     'why_wrong': '合成提醒：请核对敏感度方向。', 'pitfalls': '区分方向和程度。'})]
+            elif 'submit_questions' in collectors:
+                tools = [('submit_questions', {'questions': [{'question': '合成录入题：久期反映什么？',
+                    'q_type': 'subjective', 'subjective_type': 'short', 'options': None,
+                    'answer': '合成答案：债券价格对利率变化的敏感度。',
+                    'grading_points': ['利率敏感度'], 'difficulty_level': 'normal'}]})]
             elif demo:
                 if not has_result:
                     tools = [('find_learning_tools', {'group': 'resources'}), ('get_learning_stats', {}),

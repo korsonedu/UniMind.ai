@@ -11,7 +11,7 @@ export type Person = { id: number; username: string; email: string; nickname: st
 export type AIUsage = { used: number; limit: number | null; remaining: number | null; resets_at: string; configured: boolean; unlimited: boolean };
 export type AddonProduct = { id?: number; name: string; description: string; price_cents: number | null; ai_calls: number | null; validity_days: number | null; is_active: boolean; sort_order: number; configured?: boolean };
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number };
-export type Meta = { operator: { id: number; name: string }; content_configured: boolean; uploads_enabled: boolean };
+export type Meta = { operator: { id: number; name: string }; content_configured: boolean; teaching_parse_enabled?: boolean; uploads_enabled: boolean };
 export type KnowledgeNode = { id: number; name: string; code: string | null; level: string; parent: number | null;
   subject: string | null; description: string; order: number; question_count: number };
 export type QuestionRow = { id: number; text: string; q_type: string; subjective_type: string | null;
