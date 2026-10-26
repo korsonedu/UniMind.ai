@@ -22,11 +22,35 @@ TITLE_SCHEMA = {
     'additionalProperties': False,
 }
 
+MEMORY_EXTRACTION_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'memories': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'memory_type': {'type': 'string', 'enum': ['preference', 'academic', 'interaction', 'teacher_context']},
+                    'key': {'type': 'string'},
+                    'value': {'type': 'string'},
+                    'confidence': {'type': 'number'},
+                    'evidence': {'type': 'string'},
+                },
+                'required': ['memory_type', 'key', 'value', 'confidence', 'evidence'],
+                'additionalProperties': False,
+            },
+        },
+    },
+    'required': ['memories'],
+    'additionalProperties': False,
+}
+
 TASKS = {
     'quizzes.grade_question': ('submit_grading_result', 'pro', 2500, GRADING_RESULT_SCHEMA),
     'quizzes.preview_parse': ('submit_questions', 'fast', 3200, QUESTION_LIST_SCHEMA),
     'quizzes.objective_analysis': ('submit_objective_analysis', 'fast', 2000, OBJECTIVE_ANALYSIS_SCHEMA),
     'assistant.title': ('submit_title', 'fast', 64, TITLE_SCHEMA),
+    'assistant.memory_extract': ('submit_memories', 'fast', 800, MEMORY_EXTRACTION_SCHEMA),
 }
 
 
@@ -83,6 +107,7 @@ def run_structured(operation, prompt):
     instructions = {
         'quizzes.preview_parse': '你是科晟教研录入助手。只解析给定资料中的题目、选项、答案和评分点，保持原意，不自行补写缺失的答案；不能确认的内容留空交给人工复核。',
         'assistant.title': '你是对话标题生成器。根据用户和助手的第一轮内容生成不超过15个字的标题。只输出标题，不加引号或前缀。',
+        'assistant.memory_extract': '你是学生长期记忆提取助手。只提取用户亲口明确陈述的稳定偏好、学业背景和交互习惯；不提取助手建议、假设、未确认计划或临时情绪。每条记忆必须附用户原话作为 evidence，找不到原话就不输出。',
     }
     context['task_instruction'] = instructions.get(operation, '你是科晟课程评阅老师。严格按给定题目、参考答案和评分点评阅。')
     root = Path(state_dir)

@@ -218,7 +218,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
             )
             full_history = history_msgs + [{'role': 'user', 'content': user_message}]
             if _can_use_learning_context(user) and not conversation_uses_notes(user, conversation_id):
-                extract_memories_async(user, full_history)
+                extract_memories_async(user, full_history, str(conversation_id))
                 extract_memories_with_mem0(user, full_history)
         except Exception:
             logger.warning("Memory extraction failed (polling)", exc_info=True)
@@ -917,7 +917,7 @@ class AIChatStreamView(APIView):
                     full_history = history_msgs + [{'role': 'user', 'content': user_message}]
                     if (await sync_to_async(_can_use_learning_context)(request.user)
                             and not await sync_to_async(conversation_uses_notes)(request.user, conversation_id)):
-                        await sync_to_async(extract_memories_async)(request.user, full_history)
+                        await sync_to_async(extract_memories_async)(request.user, full_history, str(conversation_id))
                         await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     logger.warning("Memory extraction failed (SSE)", exc_info=True)
