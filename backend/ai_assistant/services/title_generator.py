@@ -28,12 +28,12 @@ def _generate_title_via_dsh(prompt):
     return str(result.get('title') or '').strip()[:TITLE_MAX_CHARS]
 
 
-def sync_generate_title(conversation_id, user_id, bot_id):
+def sync_generate_title(conversation_id, user_id, bot_id, *, expected_title=''):
     """Synchronously generate a conversation title from the first exchange."""
     from ..models import Conversation, AIChatMessage as Msg
 
     try:
-        if Conversation.objects.filter(conversation_id=conversation_id, title__gt='').exists():
+        if Conversation.objects.filter(conversation_id=conversation_id, user_id=user_id, bot_id=bot_id).exclude(title=expected_title).exists():
             return None
 
         msgs = list(
@@ -54,7 +54,7 @@ def sync_generate_title(conversation_id, user_id, bot_id):
 
         if getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False):
             try:
-                title = _generate_title_via_dsh(prompt)
+                title = _generate_title_via_dsh(prompt) or _fallback_title(user_msg)
             except Exception:
                 logger.warning("DSH title generation failed for conversation %s", conversation_id, exc_info=True)
                 title = _fallback_title(user_msg)
@@ -71,7 +71,7 @@ def sync_generate_title(conversation_id, user_id, bot_id):
             conversation, _ = Conversation.objects.get_or_create(
                 conversation_id=conversation_id, user_id=user_id, defaults={'bot_id': bot_id},
             )
-            if not Conversation.objects.filter(pk=conversation.pk, title='').update(title=title):
+            if not Conversation.objects.filter(pk=conversation.pk, title=expected_title).update(title=title):
                 return None
             logger.info("Generated title '%s' for conversation %s", title, conversation_id)
             return title

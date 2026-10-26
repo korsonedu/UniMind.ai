@@ -33,7 +33,7 @@ def execute(payload, on_event=None):
                        'UNIMIND_DSH_AUTH_SCHEME': 'DSH',
                        'UNIMIND_DSH_AUDIT_DIR': str(Path(payload['state_dir']).parent / 'usage')})
     host.SESSIONS = SessionStore(payload['state_dir'])
-    context = host.backend_request('/api/ai/dsh/context/', {})
+    context = host.backend_request('/api/ai/dsh/context/', {'message': payload.get('message', '')})
     context['runtime_source'] = payload['runtime_source']
     owner = host.SESSIONS.directory(context, uuid4().hex).parent
     owner.mkdir(mode=0o700, parents=True, exist_ok=True)

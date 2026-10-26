@@ -42,7 +42,11 @@ class DshContextView(APIView):
             raise NotFound()
         data = ContextInput(data=request.data)
         data.is_valid(raise_exception=True)
-        return Response(build_context(request.user, **data.validated_data))
+        context = build_context(request.user, **data.validated_data)
+        if isinstance(request.auth, dict) and request.auth.get('chat_context'):
+            from .services.dsh_xiaoyu import task_context
+            context['system_prompt'] += task_context(request.user, request.auth['chat_context'], data.validated_data['message'])
+        return Response(context)
 
 
 class DshToolView(APIView):

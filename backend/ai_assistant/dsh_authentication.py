@@ -11,10 +11,11 @@ SALT = 'unimind.dsh.readonly-task.v1'
 MAX_AGE = 120
 
 
-def make_task_token(user, reservation=None):
+def make_task_token(user, reservation=None, *, chat_context=None):
     return signing.dumps({'user': user.pk, 'purpose': SALT,
                           'reservation': reservation.pk if reservation else None,
-                          'attempt': str(reservation.attempt_id) if reservation else ''}, salt=SALT)
+                          'attempt': str(reservation.attempt_id) if reservation else '',
+                          'chat_context': chat_context}, salt=SALT)
 
 
 class DshTaskAuthentication(BaseAuthentication):

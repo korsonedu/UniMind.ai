@@ -32,6 +32,7 @@ export async function* readChatStream({
 
   const decoder = new TextDecoder();
   let leftover = '';
+  let completed = false;
 
   try {
     while (true) {
@@ -54,6 +55,7 @@ export async function* readChatStream({
         } catch {
           continue;
         }
+        if (payload.done) completed = true;
         yield payload;
         if (!isCurrent()) {
           await reader.cancel();
@@ -61,6 +63,7 @@ export async function* readChatStream({
         }
       }
     }
+    if (isCurrent() && !completed) throw new Error('回答尚未确认完成，请重试以恢复同一请求。');
   } finally {
     try {
       await reader.cancel();

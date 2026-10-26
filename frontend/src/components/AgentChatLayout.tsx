@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import ChatBubble from '@/components/ChatBubble';
 import { ToolStepMessage } from '@/components/AgentStepCard';
+import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
 import {
   useAgentConversation,
@@ -646,6 +647,12 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   // 只用 toolStep.visual 渲染，避免与 done 消息的 metadata visual 重复渲染。
                   // metadata visual 仅用于填充 visual state（split 模式右面板），不在 inline 流中二次展示。
                   // 历史消息已在 init 时将 metadata visual 转换为 toolStep，所以历史也能正常渲染。
+                  if (msg.role === 'assistant' && Array.isArray(msg.metadata?.dsh_cards)) {
+                    return <React.Fragment key={msg._id || i}>
+                      {(msg.metadata.dsh_cards as DshCard[]).map((card, index) => <DshToolCard key={index} card={card} />)}
+                      {msg.content && <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} />}
+                    </React.Fragment>;
+                  }
                   const stepVisuals = msg.toolStep?.visuals?.length
                     ? msg.toolStep.visuals
                     : (msg.toolStep?.visual ? [msg.toolStep.visual] : []);

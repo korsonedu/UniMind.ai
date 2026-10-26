@@ -128,6 +128,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const abortRef = useRef<AbortController | null>(null);
   const revealRef = useRef<ReturnType<typeof createRevealQueue> | null>(null);
   const sendCountRef = useRef(0);
+  const pendingSendRef = useRef<{ key: string; id: string; text: string; userMessageId?: string } | null>(null);
   const conversationIdRef = useRef(conversationId);
   const sessionIdsRef = useRef(new Map<string, number>());
   const sessionsRevisionRef = useRef(0);
@@ -145,6 +146,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     revealRef.current?.dispose();
     revealRef.current = null;
     setLoading(false);
+    if (pendingSendRef.current) setInput(pendingSendRef.current.text);
   }, []);
 
   useEffect(() => {
@@ -350,11 +352,21 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     const nextId = () => `msg_${++msgId}_${Date.now()}`;
     let streamingId: string | null = null;
     let streamingContent = '';
+    let completed = false;
 
-    const userMessageId = nextId();
+    const body = {
+      message: text, bot_id: bot.id, conversation_id: requestConversationId,
+      ...(options.enableProjects ? { project_id: projectIdRef.current } : {}),
+      ...(getExtraPayloadRef.current?.() ?? {}),
+    };
+    const key = JSON.stringify(body);
+    const pending: NonNullable<typeof pendingSendRef.current> = pendingSendRef.current?.key === key ? pendingSendRef.current : { key, id: crypto.randomUUID(), text };
+    pendingSendRef.current = pending;
+    const userMessageId = pending.userMessageId || nextId();
+    pending.userMessageId = userMessageId;
     if (!silent) {
       const userMsg: Message = { _id: userMessageId, role: 'user', content: text, timestamp: new Date().toISOString(), conversation_id: requestConversationId };
-      setMessages(prev => [...prev, userMsg]);
+      setMessages(prev => prev.some(row => row._id === userMessageId) ? prev : [...prev, userMsg]);
     }
     setInput('');
 
@@ -368,14 +380,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
     try {
       for await (const payload of readChatStream({
-        body: {
-          request_id: crypto.randomUUID(),
-          message: text,
-          bot_id: bot.id,
-          conversation_id: requestConversationId,
-          ...(options.enableProjects ? { project_id: projectIdRef.current } : {}),
-          ...(getExtraPayloadRef.current?.() ?? {}),
-        },
+        body: { ...body, request_id: pending.id },
         signal: controller.signal,
         isCurrent,
       })) {
@@ -465,6 +470,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                   onStepQuestionsRef.current?.(step.questions);
                 }
               }
+            } else if (payload.type === 'text_reset') {
+              if (streamingId) {
+                const id = streamingId; setMessages(prev => prev.filter(message => message._id !== id));
+              }
+              streamingId = null; streamingContent = '';
             } else if (payload.type === 'text_delta') {
               if (!payload.delta) continue;
               streamingId ??= nextId();
@@ -478,9 +488,12 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             } else if (payload.type === 'error') {
               toast.error(payload.message || 'AI 调用失败');
             } else if (payload.done) {
+              if (!payload.is_error) { completed = true; pendingSendRef.current = null; }
               setTaskList(prev => completeToolRun(prev, payload.run_id));
               const finalContent = payload.full_content || '';
               if (payload.is_error) {
+                if (streamingId) { const id = streamingId; setMessages(prev => prev.filter(message => message._id !== id)); }
+                streamingId = null; streamingContent = ''; setInput(text);
                 toast.error(finalContent || 'AI 调用失败');
               } else if (finalContent && streamingId) {
                 const id = streamingId;
@@ -538,6 +551,9 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       toast.error(msg.includes('HTTP') || err instanceof TypeError ? '服务暂时不可用，请稍后再试' : msg);
       setInput(text);
     } finally {
+      if (!completed && streamingId) {
+        const id = streamingId; setMessages(prev => prev.filter(message => message._id !== id));
+      }
       reveal.dispose();
       if (revealRef.current === reveal) revealRef.current = null;
       if (isCurrent()) {

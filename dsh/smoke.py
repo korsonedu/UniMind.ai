@@ -57,7 +57,7 @@ def backend_fixture():
     from django.contrib.auth import get_user_model
     from rest_framework.authtoken.models import Token
     from users.models import CourseStudentStatus
-    from ai_assistant.models import AgentMemory
+    from ai_assistant.models import AgentMemory, Bot
     from courses.models import Course
     from courses.models import VideoTranscript, TranscriptSegment
     from quizzes.models import KnowledgePoint, Question, UserQuestionStatus, UserKnowledgeState, QuizExam, ExamQuestionResult
@@ -65,6 +65,7 @@ def backend_fixture():
     from django.utils import timezone
     from datetime import timedelta
     from uuid import uuid4
+    Bot.objects.create(name='小宇', bot_type='planner', system_prompt='科晟小宇隔离合成验证。')
     user = get_user_model().objects.create_user(username='m0-student', nickname='M0 验证学生')
     other = get_user_model().objects.create_user(username='m0-other')
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
@@ -215,6 +216,11 @@ def model_fixture(status=200):
                     'q_type': 'subjective', 'subjective_type': 'short', 'options': None,
                     'answer': '合成答案：债券价格对利率变化的敏感度。',
                     'grading_points': ['利率敏感度'], 'difficulty_level': 'normal'}]})]
+            elif 'submit_title' in collectors:
+                tools = [('submit_title', {'title': '合成学习概览'})]
+            elif 'submit_memories' in collectors:
+                tools = [('submit_memories', {'memories': [{'memory_type': 'preference', 'key': '讲解顺序',
+                    'value': '喜欢先举例', 'confidence': .9, 'evidence': '我喜欢先举例'}]})]
             elif demo:
                 if not has_result:
                     tools = [('find_learning_tools', {'group': 'resources'}), ('get_learning_stats', {}),

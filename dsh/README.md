@@ -217,3 +217,12 @@ UNIMIND_DSH_MEMORY_ENABLED 开启时，每轮完整对话后的长期记忆提�
 GET /api/ai/dsh/sessions/ 沿用站点身份和默认关闭开关，返回当前用户标识与最近最多50项会话元数据：id、首条用户消息最多60字摘要、updated_at、message_count。按业务源/账号目录隔离，拒绝目录和 transcript 文件符号链接，坏文件不阻断其余有效条目。不返回消息数组、原生状态或凭据；不调用模型、不扣问答次数。
 
 站点开发页可在没有标签页 session_id 的情况下选择并恢复服务器历史。身份变化/刷新/取消清空旧列表与在途请求，status/list 和 read/status 校验用户一致；待确认提问期间禁用切换，删除后移除入口。新标签页恢复原两条消息与学情卡已在实际浏览器验收，截图 .m0-state/m0-server-session-list-proof.png。这里只完成同一服务器身份下的发现/恢复，正式留存、分页、目录容量与跨节点同步仍需验收。
+
+
+## 正式小宇界面接入（2026-10-27）
+
+/xiaoyu 继续使用 UniMind 现有 React 聊天页、原会话侧栏和项目/笔记引用。DSH 是服务器 harness；不再把 DshM0 调试页当作正式产品页，也不再用 VITE_DSH_XIAOYU_ENABLED 决定产品形态。
+
+UNIMIND_DSH_XIAOYU_ENABLED（默认 false）在既有 /api/ai/chat/stream/ 选择平台小宇的 DSH 路径，同时要求 UNIMIND_DSH_ENABLED、UNIMIND_DSH_SITE_ENABLED 及既有 Python/loopback/state 配置。启用后运行失败明确报错，不自动重试旧模型。成功回答、卡片和 session id 存入原 Django 历史；额度复用原预留和确认。删除会话同步清除原生状态及缓存正文。
+
+UNIMIND_DSH_TITLE_ENABLED 和 UNIMIND_DSH_MEMORY_ENABLED 分别接入已迁移任务；关闭时本路径使用首句标题且不自动提取记忆。笔记关联会话不提取记忆。记忆启用前须执行已有 0031 迁移。13 项定向冒烟、实际 SDK/ASGI、原小宇浏览器发送/历史卡片恢复及生产构建通过；官方来源已恢复可用，并完成一次合成数据的真实模型、标题和记忆冒烟，问答扣次 1。没有生产发布，详情见 2026-10-27-dsh-xiaoyu-integration 计划。

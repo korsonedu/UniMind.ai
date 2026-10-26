@@ -5,6 +5,7 @@ import logging
 import time
 from asgiref.sync import sync_to_async
 from django.utils.decorators import method_decorator
+from django.conf import settings
 from django.db import models, close_old_connections
 from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin, IsMemberOrReadOnlyList
 from rest_framework import generics, permissions, serializers
@@ -532,6 +533,14 @@ class AIChatResetView(APIView):
         qs = AIChatMessage.objects.filter(user=request.user)
         if bot_id:
             qs = qs.filter(bot_id=bot_id)
+        if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
+            from .services.dsh_xiaoyu import delete_state
+            from .services.dsh_runtime import site_request_lock
+            with site_request_lock(request.user), transaction.atomic():
+                delete_state(request.user, qs)
+                qs.delete()
+                Conversation.objects.filter(user=request.user, **({'bot_id': bot_id} if bot_id else {})).delete()
+            return Response({'status': 'cleared'})
         qs.delete()
         return Response({'status': 'cleared'})
 
@@ -544,6 +553,15 @@ class AIChatDeleteConversationView(APIView):
         conversation_id = request.data.get('conversation_id')
         if not conversation_id:
             return Response({'error': 'conversation_id is required'}, status=400)
+        qs = AIChatMessage.objects.filter(user=request.user, conversation_id=conversation_id)
+        if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
+            from .services.dsh_xiaoyu import delete_state
+            from .services.dsh_runtime import site_request_lock
+            with site_request_lock(request.user), transaction.atomic():
+                delete_state(request.user, qs)
+                deleted, _ = qs.delete()
+                Conversation.objects.filter(user=request.user, conversation_id=conversation_id).delete()
+            return Response({'status': 'deleted', 'count': deleted})
         with transaction.atomic():
             deleted, _ = AIChatMessage.objects.filter(
                 user=request.user, conversation_id=conversation_id
@@ -585,6 +603,12 @@ class AIChatStreamView(APIView):
 
         if not _user_can_access_bot(request.user, bot):
             return Response({'error': '无权使用此机器人'}, status=403)
+
+        from django.conf import settings
+        if (getattr(settings, 'UNIMIND_DSH_XIAOYU_ENABLED', False)
+                and bot.bot_type == 'planner' and bot.institution_id is None and bot.name == '小宇'):
+            from .services.dsh_xiaoyu import response
+            return response(request, bot, conversation_id, user_message)
 
         sync_bot_prompt(bot)
 

@@ -67,7 +67,7 @@ def quota_write_lock():
         raise DshUnavailable('数据服务繁忙或运行环境不可用，请稍后重试。') from None
 
 
-def run_site_action(user, action, *, message='', session_id=None, reservation=None, on_event=None):
+def run_site_action(user, action, *, message='', session_id=None, reservation=None, on_event=None, chat_context=None):
     python = getattr(settings, 'UNIMIND_DSH_PYTHON', '')
     api_url = getattr(settings, 'UNIMIND_DSH_API_URL', '')
     state_dir = getattr(settings, 'UNIMIND_DSH_STATE_DIR', '')
@@ -92,7 +92,7 @@ def run_site_action(user, action, *, message='', session_id=None, reservation=No
     create_session = action == 'new' or (action == 'chat' and not session_id)
     session_id = uuid4().hex if create_session else session_id
     payload = {'action': action, 'message': message, 'session_id': session_id, 'api_url': api_url,
-               'state_dir': state_dir, 'token': make_task_token(user, reservation), 'model': model,
+               'state_dir': state_dir, 'token': make_task_token(user, reservation, chat_context=chat_context), 'model': model,
                'create_session': create_session,
                'runtime_source': 'local-protocol-smoke' if getattr(settings, 'UNIMIND_DSH_FIXTURE_URL', '') else 'deepseek-official'}
     worker = Path(settings.BASE_DIR).parent / 'dsh' / 'worker.py'

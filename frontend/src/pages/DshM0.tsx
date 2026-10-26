@@ -5,7 +5,7 @@ import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 type Health = { sdk?: string; backend_configured: boolean; model_configured: boolean; mode: string; student?: { id: number; name: string } };
 type Pending = { message: string; session_id?: string; request_id: string };
 const urlSite = new URLSearchParams(window.location.search).get('source') === 'site';
-const site = urlSite || import.meta.env.VITE_DSH_XIAOYU_ENABLED === 'true';
+const site = urlSite;
 const defaultMessage = '查询我的学习统计，并根据我的讲解偏好解释结果。';
 class RequestError extends Error {
   status: number;

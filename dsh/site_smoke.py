@@ -27,7 +27,8 @@ def main():
     with TemporaryDirectory(prefix='unimind-m0-smoke-') as state:
         env = {**os.environ, 'ACCOUNT_ENABLED': 'false', 'ACCOUNT_RSA_KEY_PATH': '',
                'ACCOUNT_DEV_LOCAL_CACHE': 'true', 'UNIMIND_DSH_ENABLED': 'true',
-               'UNIMIND_DSH_SITE_ENABLED': 'true', 'UNIMIND_DSH_GRADING_ENABLED': 'true', 'UNIMIND_DSH_PYTHON': sys.executable,
+               'UNIMIND_DSH_SITE_ENABLED': 'true', 'UNIMIND_DSH_XIAOYU_ENABLED': 'true',
+               'UNIMIND_DSH_TITLE_ENABLED': 'true', 'UNIMIND_DSH_MEMORY_ENABLED': 'true', 'UNIMIND_DSH_GRADING_ENABLED': 'true', 'UNIMIND_DSH_PYTHON': sys.executable,
                'UNIMIND_DSH_STATE_DIR': str(Path(state) / 'sessions'),
                'UNIMIND_DSH_FIXTURE_URL': f'http://127.0.0.1:{model.server_port}/v1/messages',
                'UNIMIND_CONTENT_INSTITUTION_ID': 'global', 'DB_ENGINE': 'django.db.backends.sqlite3',
@@ -191,6 +192,37 @@ print(json.dumps({'calls': list(WeeklyAIUsage.objects.order_by('user_id').values
             assert ledger['calls'] == [3, 1] and ledger['failed_released'], ledger
             assert len(ledger['deleted_responses']) == 2
             assert all(response == {'engine': 'dsh', 'session_id': sid, 'deleted': True} for response in ledger['deleted_responses'])
+            model.response_status = 200
+            bots_status, bots = request(identity['token'], '/api/ai/bots/', None)
+            rows = bots if isinstance(bots, list) else bots.get('results', [])
+            bot = next(row for row in rows if row['name'] == '小宇' and row['bot_type'] == 'planner')
+            cid = str(uuid4())
+            official_body = {'message': '查询学习统计，我喜欢先举例。', 'request_id': str(uuid4()),
+                             'bot_id': bot['id'], 'conversation_id': cid}
+            def official_stream(body, token=identity['token']):
+                req = Request(base + '/api/ai/chat/stream/', json.dumps(body).encode(),
+                    {'Content-Type': 'application/json', 'Authorization': 'Token ' + token})
+                with urlopen(req, timeout=180) as response:
+                    return [json.loads(line[6:]) for line in response if line.startswith(b'data: ')]
+            official = official_stream(official_body)
+            done = official[-1]
+            assert done.get('done') and done.get('engine') == 'dsh', official
+            assert done['metadata']['dsh_cards'] and done['conversation_title'] == '合成学习概览'
+            count_before_replay = len(calls)
+            assert official_stream(official_body)[-1] == done
+            assert len(calls) == count_before_replay
+            status, history = request(identity['token'], '/api/ai/history/?conversation_id=' + cid, None)
+            history_rows = history if isinstance(history, list) else history.get('results', [])
+            assert status == 200 and len(history_rows) == 2, (status, history)
+            assert any(row.get('metadata', {}).get('dsh_cards') for row in history_rows)
+            status, _ = request(identity['token'], '/api/ai/delete-conversation/', {'conversation_id': cid})
+            assert status == 200
+            deleted_turn = official_stream(official_body)[-1]
+            assert deleted_turn.get('is_error'), deleted_turn
+            assert len(calls) == count_before_replay
+            print(json.dumps({'official_xiaoyu_stream': True, 'native_title': True,
+                'owned_database_history': True, 'official_replay_no_extra_model': True,
+                'official_delete_tombstone': True}), flush=True)
             print(json.dumps({'site_authentication': True, 'subjective_dsh_grade_saved_once': True,
                 'objective_score_deterministic': True, 'failed_grade_not_saved': True, 'asgi_stream_before_completion': True, 'stream_replay_no_extra_call': True, 'parallel_students_isolated': True,
                 'native_session_resumed': True, 'cross_student_session_denied': True,
