@@ -65,6 +65,32 @@ class SessionSmoke(unittest.TestCase):
                 self.assertEqual(len(result['session']['messages']), 2)
                 self.assertEqual(result['content'], 'test answer')
 
+    def test_owned_session_metadata_and_source_scope(self):
+        context = {'student': {'id': 1}, 'memory': {'version': 'initial'}, 'permissions_version': 'allowed',
+                   'model_policy': {'model': 'test'}, 'system_prompt': 'PRIVATE_INTERNAL_PROMPT'}
+        with TemporaryDirectory() as temp, patch.dict('os.environ', {'UNIMIND_API_URL': 'http://127.0.0.1:8000'}):
+            store = SessionStore(temp)
+            a = store.create(context)
+            a['messages'] = [{'role': 'user', 'content': 'A_USER_TITLE'}, {'role': 'assistant', 'content': 'PRIVATE_BODY'}]
+            store.save(context, a)
+            other = deepcopy(context); other['student']['id'] = 2
+            b = store.create(other)
+            b['messages'] = [{'role': 'user', 'content': 'OTHER_STUDENT_PRIVATE'}]
+            store.save(other, b)
+            owner = store.directory(context, a['id']).parent
+            bad = owner / ('c' * 32); bad.mkdir(); (bad / 'transcript.json').write_text('not json')
+            (owner / ('d' * 32)).symlink_to(store.directory(other, b['id']), target_is_directory=True)
+            linked_file = owner / b['id']; linked_file.mkdir()
+            (linked_file / 'transcript.json').symlink_to(store.directory(other, b['id']) / 'transcript.json')
+            rows = store.list_sessions(context)
+            self.assertEqual(rows, [{'id': a['id'], 'title': 'A_USER_TITLE', 'updated_at': a['updated_at'], 'message_count': 2}])
+            self.assertNotIn('PRIVATE_BODY', json.dumps(rows))
+            self.assertNotIn('OTHER_STUDENT_PRIVATE', json.dumps(rows))
+            with patch.dict('os.environ', {'UNIMIND_API_URL': 'http://127.0.0.1:8001'}):
+                self.assertEqual(store.list_sessions(context), [])
+            store.delete(context, a['id'])
+            self.assertEqual(store.list_sessions(context), [])
+
     def test_local_lifecycle(self):
         context = {'student': {'id': 1}, 'memory': {'version': 'initial'}, 'permissions_version': 'allowed',
                    'model_policy': {'model': 'test'}, 'system_prompt': 'SYNTHETIC_INTERNAL_PROMPT'}

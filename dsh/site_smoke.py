@@ -95,6 +95,12 @@ def main():
                 assert not ('先举例再给公式' in body and 'OTHER_STUDENT_PRIVATE' in body)
                 assert not ('SITE_A_42' in body and 'SITE_B_86' in body)
             count = len(calls)
+            sessions_a = request(identity['token'], 'sessions', None)[1]['sessions']
+            sessions_b = request(identity['other_token'], 'sessions', None)[1]['sessions']
+            assert {row['id'] for row in sessions_a} == {result_a['session_id']}
+            assert {row['id'] for row in sessions_b} == {result_b['session_id']}
+            assert 'SITE_B_86' not in json.dumps(sessions_a, ensure_ascii=False)
+            assert len(calls) == count
             assert request(identity['token'], 'chat', a) == (200, result_a)
             assert len(calls) == count
             sid = result_a['session_id']
@@ -111,6 +117,7 @@ def main():
             assert request(identity['token'], 'session/delete', {'session_id': sid}) == (200, {'deleted': True})
             assert not list((Path(state) / 'sessions').rglob(f'{sid}/transcript.json'))
             assert request(identity['token'], 'chat', a)[0] == 410
+            assert request(identity['token'], 'sessions', None)[1]['sessions'] == []
             assert request(identity['other_token'], 'session/read', {'session_id': result_b['session_id']})[0] == 200
             streaming = {'message': '查询学习统计，流式验证。', 'request_id': str(uuid4())}
             events, times = request_stream(identity['token'], streaming)

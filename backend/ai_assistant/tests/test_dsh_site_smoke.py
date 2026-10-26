@@ -48,10 +48,15 @@ def test_site_quota_and_idempotency(auth_client, user, settings, tmp_path):
     url = '/api/ai/dsh/chat/'
     body = {'message': '查询学习统计', 'request_id': str(uuid4()), 'model': 'client-cannot-select'}
     assert auth_client.post(url, body, format='json').status_code == 404
+    assert auth_client.get('/api/ai/dsh/sessions/').status_code == 404
     settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = True
     settings.UNIMIND_DSH_STATE_DIR = str(tmp_path / 'site-state')
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
     assert APIClient().post(url, body, format='json').status_code == 401
+    assert APIClient().get('/api/ai/dsh/sessions/').status_code == 401
+    with patch('ai_assistant.views_dsh.run_site_action', return_value={'sessions': []}) as runtime:
+        assert auth_client.get('/api/ai/dsh/sessions/').json() == {'student_id': user.pk, 'sessions': []}
+        assert runtime.call_args.args == (user, 'list')
     with site_request_lock(user):
         assert auth_client.post(url, body, format='json').status_code == 409
     assert not AIUsageReservation.objects.filter(user=user).exists()

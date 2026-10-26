@@ -55,6 +55,8 @@ def execute(payload, on_event=None):
                 if new_session:
                     shutil.rmtree(host.SESSIONS.directory(context, session_id))
                 raise
+        elif action == 'list':
+            result = {'sessions': host.SESSIONS.list_sessions(context)}
         elif action == 'new':
             result = host.SESSIONS.public(host.SESSIONS.create(context, payload['session_id']))
         elif action == 'read':

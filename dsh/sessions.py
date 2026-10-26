@@ -76,6 +76,31 @@ class SessionStore:
     def public(self, state):
         return {key: state[key] for key in ('id', 'messages', 'notice', 'updated_at')}
 
+    def list_sessions(self, context):
+        owner = self.directory(context, '0' * 32).parent
+        if not owner.exists():
+            return []
+        rows = []
+        for entry in owner.iterdir():
+            if not re.fullmatch('[0-9a-f]{32}', entry.name):
+                continue
+            try:
+                directory = self.directory(context, entry.name)
+                transcript = directory / 'transcript.json'
+                if transcript.is_symlink() or transcript.resolve() != directory.resolve() / 'transcript.json':
+                    continue
+                state = json.loads(transcript.read_text())
+                if (not isinstance(state, dict) or state.get('id') != entry.name
+                        or not isinstance(state.get('messages'), list) or not isinstance(state.get('updated_at'), str)):
+                    continue
+                title = next((message['content'][:60].strip() for message in state['messages']
+                              if isinstance(message, dict) and message.get('role') == 'user' and isinstance(message.get('content'), str)), '')
+                rows.append({'id': entry.name, 'title': title or '新会话',
+                             'updated_at': state['updated_at'], 'message_count': len(state['messages'])})
+            except (OSError, ValueError, SessionUnavailable):
+                continue
+        return sorted(rows, key=lambda row: row['updated_at'], reverse=True)[:50]
+
     def delete(self, context, session_id):
         self.load(context, session_id)
         shutil.rmtree(self.directory(context, session_id))

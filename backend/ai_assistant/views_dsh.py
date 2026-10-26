@@ -144,6 +144,12 @@ class DshChatStreamView(DshSiteView):
         return response
 
 
+class DshSessionListView(DshSiteView):
+    def get(self, request):
+        with site_request_lock(request.user):
+            return Response({**run_site_action(request.user, 'list'), 'student_id': request.user.pk})
+
+
 class DshSessionView(DshSiteView):
     def post(self, request, action):
         data = SessionInput(data=request.data)

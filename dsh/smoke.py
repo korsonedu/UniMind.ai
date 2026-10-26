@@ -121,6 +121,7 @@ def backend_fixture():
         from django.core.asgi import get_asgi_application
         from daphne.server import Server
         with socket.socket() as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind(('127.0.0.1', int(os.environ.get('UNIMIND_M0_FIXTURE_PORT', '0'))))
             port = probe.getsockname()[1]
         settings.UNIMIND_DSH_API_URL = f'http://127.0.0.1:{port}'

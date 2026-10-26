@@ -11,6 +11,7 @@ class RequestError extends Error {
   constructor(message: string, status: number) { super(message); this.status = status; }
 }
 type LocalSession = { id: string; notice: string; updated_at: string; messages: { role: string; content: string; mode?: string; cards?: DshCard[] }[] };
+type SavedSession = { id: string; title: string; updated_at: string; message_count: number };
 type Turn = { content: string; session: LocalSession; routing: Context['routing']; gateway: { model: string; requests: { status: string; tool_count: number; tool_schema_bytes: number; tool_results: number; usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }[] } };
 type Context = {
   student: { id: number; name: string };
@@ -76,6 +77,7 @@ export default function DshM0() {
   const [context, setContext] = useState<Context | null>(null);
   const [message, setMessage] = useState(defaultMessage);
   const [session, setSession] = useState<LocalSession | null>(null);
+  const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [turn, setTurn] = useState<Turn | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -89,6 +91,10 @@ export default function DshM0() {
 
   const selectSession = (value: LocalSession | null) => {
     setSession(value);
+    if (site && value) setSavedSessions(rows => [{ id: value.id,
+      title: value.messages.find(message => message.role === 'user')?.content.slice(0, 60).trim() || '新会话',
+      updated_at: value.updated_at, message_count: value.messages.length }, ...rows.filter(row => row.id !== value.id)]
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 50));
     if (!storageKey.current) return;
     if (value) storage.setItem(storageKey.current, value.id);
     else storage.removeItem(storageKey.current);
@@ -103,7 +109,7 @@ export default function DshM0() {
   const clearIdentity = () => {
     operation.current?.abort();
     selectSession(null); storageKey.current = site ? null : 'unimind-dsh-m0-session';
-    setHealth(null); setContext(null); setTurn(null); setRetry(null); setMessage(defaultMessage); setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool('');
+    setHealth(null); setContext(null); setTurn(null); setSavedSessions([]); setRetry(null); setMessage(defaultMessage); setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool('');
   };
   const report = (err: unknown, signal: AbortSignal) => {
     if (signal.aborted) return;
@@ -113,7 +119,7 @@ export default function DshM0() {
 
   const refresh = async () => {
     const signal = begin();
-    setHealth(null); setSession(null); setContext(null); setTurn(null);
+    setHealth(null); setSession(null); setContext(null); setTurn(null); setSavedSessions([]);
     try {
       const status = await request<Health>(site ? '/status' : '/health', undefined, signal);
       if (signal.aborted) return;
@@ -126,6 +132,12 @@ export default function DshM0() {
         storageKey.current = key;
       }
       setHealth(site ? { ...status, backend_configured: true } : status);
+      if (site) {
+        const saved = await request<{ student_id: number; sessions: SavedSession[] }>('/sessions', undefined, signal);
+        if (signal.aborted) return;
+        if (saved.student_id !== status.student?.id) { clearIdentity(); setError('账号已变化，请刷新连接。'); return; }
+        setSavedSessions(saved.sessions);
+      }
       const id = storageKey.current && storage.getItem(storageKey.current);
       if (id) {
         try {
@@ -189,12 +201,33 @@ export default function DshM0() {
     } finally { if (!signal.aborted) { setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool(''); } }
   };
 
+  const loadSession = async (id: string) => {
+    if (!id) return;
+    const signal = begin();
+    setSession(null); setContext(null); setTurn(null);
+    try {
+      const restored = await request<LocalSession>('/session/read', { session_id: id }, signal);
+      const current = await request<Health>('/status', undefined, signal);
+      if (signal.aborted) return;
+      if (current.student?.id !== health?.student?.id) { clearIdentity(); setError('账号已变化，请刷新连接。'); return; }
+      selectSession(restored);
+    } catch (err) {
+      if (!signal.aborted && err instanceof RequestError && [404, 410].includes(err.status)) {
+        setSavedSessions(rows => rows.filter(row => row.id !== id));
+      }
+      report(err, signal);
+    } finally { if (!signal.aborted) setBusy(false); }
+  };
+
   const manageSession = async (action: 'new' | 'delete') => {
     if (action === 'delete' && !window.confirm('删除验证聊天及模型上下文？长期记忆和已发生的用量记录分别保留。')) return;
     const signal = begin();
     try {
       const result = await request<LocalSession>(`/session/${action}`, { session_id: session?.id }, signal);
-      if (!signal.aborted) { selectSession(action === 'new' ? result : null); setTurn(null); setRetry(null); }
+      if (!signal.aborted) {
+        if (action === 'delete') setSavedSessions(rows => rows.filter(row => row.id !== session?.id));
+        selectSession(action === 'new' ? result : null); setTurn(null); setRetry(null);
+      }
     } catch (err) { report(err, signal); }
     finally { if (!signal.aborted) setBusy(false); }
   };
@@ -277,6 +310,16 @@ export default function DshM0() {
           <section><h2 className="font-semibold">当前验证身份</h2>
             <p className="mt-3 text-sm text-black/55">{context ? `${context.student.name} · #${context.student.id}` : health?.student ? `${health.student.name} · #${health.student.id}` : site ? '请先登录站点' : '读取后显示；凭据由 Host 持有'}</p>
           </section>
+          {site && <section>
+            <label htmlFor="dsh-saved-session" className="font-semibold">服务端会话</label>
+            <select id="dsh-saved-session" className="mt-3 w-full border border-black/15 bg-white p-2 text-sm"
+              value={session?.id || ''} disabled={busy || !!retry || !health?.backend_configured || !savedSessions.length}
+              onChange={event => void loadSession(event.target.value)}>
+              <option value="">选择已有会话（最近 50 项）</option>
+              {savedSessions.map(row => <option key={row.id} value={row.id}>{row.title} · {row.message_count} 条</option>)}
+            </select>
+            <p className="mt-2 text-xs leading-6 text-black/45">{savedSessions.length ? '同一账号可从服务器恢复；读取不会调用模型或扣问答次数。' : '当前账号暂无可发现的服务端会话。'}</p>
+          </section>}
           <section><h2 className="font-semibold">学生长期记忆</h2>
             {context?.memory.items.length ? context.memory.items.map(item => <p key={item.id} className="mt-3 text-sm leading-6"><span className="text-black/45">{item.key}：</span>{item.value}</p>) : <p className="mt-3 text-sm text-black/45">{context ? '当前没有有效的长期记忆' : '尚未读取记忆'}</p>}
             {context && <p className="mt-3 break-all font-mono text-[10px] text-black/35">版本 {context.memory.version}</p>}
