@@ -1,6 +1,7 @@
 """Opt-in DSH callbacks and site entry; reuse the existing AI call ledger."""
 import hashlib
 import json
+from urllib.parse import urlsplit
 from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import NotFound, ValidationError
@@ -8,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.settings import api_settings
 from rest_framework.views import APIView
 
+from ai_engine.config import get_model_for_task
 from users.permissions import IsMember
 from .dsh_authentication import DshTaskAuthentication
 from .services.dsh_service import build_context, execute_tool
@@ -72,6 +74,21 @@ class DshSiteView(APIView):
         super().initial(request, *args, **kwargs)
         if not (getattr(settings, 'UNIMIND_DSH_ENABLED', False) and getattr(settings, 'UNIMIND_DSH_SITE_ENABLED', False)):
             raise NotFound()
+
+
+class DshStatusView(DshSiteView):
+    def get(self, request):
+        fixture = getattr(settings, 'UNIMIND_DSH_FIXTURE_URL', '')
+        if fixture:
+            configured = (settings.DEBUG and urlsplit(fixture).scheme == 'http'
+                          and urlsplit(fixture).hostname in ('127.0.0.1', 'localhost', '::1'))
+            mode = 'local-protocol-smoke' if configured else 'unavailable'
+        else:
+            config = get_model_for_task('assistant.chat.planner')
+            configured = urlsplit(config['base_url']).hostname == 'api.deepseek.com' and bool(config['api_key'])
+            mode = 'deepseek-official' if configured else 'unavailable'
+        return Response({'student': {'id': request.user.pk, 'name': request.user.nickname or request.user.username},
+                         'mode': mode, 'model_configured': configured})
 
 
 class DshChatView(DshSiteView):

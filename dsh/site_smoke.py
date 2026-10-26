@@ -19,6 +19,8 @@ from smoke import ROOT, model_fixture
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--backend-python', required=True)
+    parser.add_argument('--serve', action='store_true')
+    parser.add_argument('--port', type=int, default=0)
     args = parser.parse_args()
     model, calls = model_fixture()
     with TemporaryDirectory(prefix='unimind-m0-smoke-') as state:
@@ -29,7 +31,8 @@ def main():
                'UNIMIND_DSH_FIXTURE_URL': f'http://127.0.0.1:{model.server_port}/v1/messages',
                'UNIMIND_CONTENT_INSTITUTION_ID': 'global', 'DB_ENGINE': 'django.db.backends.sqlite3',
                'UNIMIND_M0_FIXTURE_DB': str(Path(state) / 'db.sqlite3'), 'DB_NAME': str(Path(state) / 'db.sqlite3'),
-               'ALLOWED_HOSTS': '127.0.0.1,localhost', 'DJANGO_ENV': 'development'}
+               'ALLOWED_HOSTS': '127.0.0.1,localhost', 'DJANGO_ENV': 'development',
+               'UNIMIND_M0_FIXTURE_PORT': str(args.port)}
         diagnostics = open(Path(state) / 'backend.log', 'w+')
         backend = subprocess.Popen([args.backend_python, str(ROOT / 'dsh' / 'smoke.py'), '--backend-fixture'],
             env=env, stdout=subprocess.PIPE, stderr=diagnostics, text=True)
@@ -122,6 +125,14 @@ print(json.dumps({'calls': list(WeeklyAIUsage.objects.order_by('user_id').values
                 'failed_call_released': True, 'session_and_cached_text_deleted': True,
                 'runtime_capacity_denied_without_model_call': True, 'failed_new_session_cleaned': True,
                 'model': 'local-protocol-fixture', 'runtime': 'actual-dsh-sdk'}, ensure_ascii=False), flush=True)
+            if args.serve:
+                import signal
+                model.response_status = 200
+                print(json.dumps({'site_fixture': base, 'browser_entry': '/dev/dsh?source=site',
+                    'synthetic_login_a': '/api/ai/dsh-fixture/student-a/',
+                    'synthetic_login_b': '/api/ai/dsh-fixture/student-b/',
+                    'synthetic_logout': '/api/ai/dsh-fixture/logout/'}, ensure_ascii=False), flush=True)
+                signal.pause()
         except Exception:
             diagnostics.flush()
             diagnostics.seek(0)

@@ -135,7 +135,7 @@ ACCOUNT_ENABLED=false ACCOUNT_RSA_KEY_PATH='' ACCOUNT_DEV_LOCAL_CACHE=true \
 
 ## 站点身份与额度入口（默认关闭）
 
-站点可通过 POST /api/ai/dsh/chat/ 提交 message、UUID request_id 和可选 session_id。使用现有站点 Cookie/Token 认证；请求不能选择模型、学生、Python、路径或回调来源。POST /api/ai/dsh/session/new/、read/、delete/ 管理当前学生的会话。当前正式小宇入口没有切换，开发页 /dev/dsh 仍连接单学生本机 Host；站点 API 的独立验收见下方命令。
+站点可通过 POST /api/ai/dsh/chat/ 提交 message、UUID request_id 和可选 session_id。使用现有站点 Cookie/Token 认证；请求不能选择模型、学生、Python、路径或回调来源。POST /api/ai/dsh/session/new/、read/、delete/ 管理当前学生的会话。当前正式小宇入口没有切换。开发页 /dev/dsh 保留单学生本机 Host；/dev/dsh?source=site 明确使用站点 Cookie 调用上述 API，不会失败后回落 Host。GET /api/ai/dsh/status/ 返回当前学生和已配置模型来源，无法通过来源校验时禁用模型调用；它不保证供应商账户余额或实际 SDK 可用。
 
 需由服务端配置 UNIMIND_DSH_ENABLED、UNIMIND_DSH_SITE_ENABLED、UNIMIND_DSH_PYTHON（独立 SDK Python 绝对路径）、UNIMIND_DSH_API_URL（固定 loopback 业务地址）和 UNIMIND_DSH_STATE_DIR（私有绝对路径）。本轮未修改实际 .env 或开通正式服务。正常模式仅使用现有 DeepSeek 官方配置；UNIMIND_DSH_FIXTURE_URL 只允许 DEBUG 下的显式本机协议服务。
 
@@ -153,3 +153,14 @@ Django 为聊天任务签发 120 秒回调凭据，仅供 context/tools 使用�
 ```
 
 启动临时数据库和两个合成学生，通过真实站点认证、独立 worker、实际 DSH 与 Django 回调验证隔离、恢复、幂等、额度、失败及删除。不访问付费模型，不使用真实学生数据。新增的默认关闭入口未部署。
+
+
+## 站点 React 验证
+
+实际站点冒烟加 --serve --port 8000 可保留临时服务；Vite 仍使用既有 /api 代理。通过 /api/ai/dsh-fixture/student-a/ 或 student-b/ 设置仅属于临时数据库的 HttpOnly Cookie，然后进入 /dev/dsh?source=site。这些启动路径只存在于隔离 fixture 的 WSGI 包装层，不在业务 URL 中，也不会打印 Token。/api/ai/dsh-fixture/logout/ 清除合成 Cookie；drop-next-chat/ 用于模拟真实服务端完成、但浏览器响应丢失的情况。
+
+站点页使用 Cookie fetch，避免既有 axios 的自动重试和 30 秒默认超时。未确认返回时保留内存中的同一问题、会话和 request_id，手动恢复不会重新创建另一轮；整页重载不承诺恢复未确认请求。已知会话 ID 在 sessionStorage 按当前学生分开保存，正文、卡片、记忆和请求正文不写浏览器存储。刷新只恢复当前学生的会话。
+
+当前页面的退出事件、身份 Store 变化、跨窗口 auth-storage 变化会立即清空内存中的身份、聊天、记忆、卡片和标签页索引，并中止本页请求；焦点恢复时另向服务端复核。旧异步结果不回填。取消页面请求不会撤销可能已完成的服务端任务，也不承诺取消已发生的模型用量。当前仍为整轮 JSON 返回，没有实时流式文字。
+
+来源依据服务端配置校验，未配置、未授权地址或非 DEBUG 的 fixture 不标成官方模型，也不会开放调用。默认关闭、权益和会话失败保留后端状态；404 有时沿用 DRF 的通用 detail，进一步细分提示为后置文案小项。实施和验收见 2026-10-26-dsh-site-ui.md。

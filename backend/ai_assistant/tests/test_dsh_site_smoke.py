@@ -125,3 +125,34 @@ def test_delete_cache_failure_can_be_retried(auth_client, user, settings, tmp_pa
         assert auth_client.post('/api/ai/dsh/session/delete/', {'session_id': sid}, format='json').status_code == 200
     reservation.refresh_from_db()
     assert reservation.response == {'engine': 'dsh', 'session_id': sid, 'deleted': True}
+
+
+@pytest.mark.django_db
+def test_site_status_cookie_and_source(user, settings):
+    from rest_framework.authtoken.models import Token
+    client = APIClient()
+    client.cookies['auth_token'] = Token.objects.get_or_create(user=user)[0].key
+    url = '/api/ai/dsh/status/'
+    assert client.get(url).status_code == 404
+    settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = True
+    assert APIClient().get(url).status_code == 401
+    settings.DEBUG = True
+    settings.UNIMIND_DSH_FIXTURE_URL = 'http://127.0.0.1:8912/v1/messages'
+    result = client.get(url)
+    assert result.status_code == 200
+    assert result.json() == {'student': {'id': user.pk, 'name': user.nickname or user.username},
+                             'mode': 'local-protocol-smoke', 'model_configured': True}
+    settings.DEBUG = False
+    assert client.get(url).json()['mode'] == 'unavailable'
+    assert client.get(url).json()['model_configured'] is False
+    settings.UNIMIND_DSH_FIXTURE_URL = ''
+    with patch('ai_assistant.views_dsh.get_model_for_task', return_value={'base_url': 'https://api.deepseek.com/v1/chat/completions', 'api_key': ''}):
+        assert client.get(url).json()['mode'] == 'unavailable'
+    with patch('ai_assistant.views_dsh.get_model_for_task', return_value={'base_url': 'https://unapproved.invalid/v1', 'api_key': 'SYNTHETIC_SECRET'}):
+        assert client.get(url).json()['model_configured'] is False
+    with patch('ai_assistant.views_dsh.get_model_for_task', return_value={'base_url': 'https://api.deepseek.com/v1/chat/completions', 'api_key': 'SYNTHETIC_SECRET'}):
+        assert client.get(url).json()['mode'] == 'deepseek-official'
+        assert 'SYNTHETIC_SECRET' not in client.get(url).content.decode()
+    client.credentials(HTTP_AUTHORIZATION='DSH ' + make_task_token(user))
+    client.cookies.clear()
+    assert client.get(url).status_code == 401

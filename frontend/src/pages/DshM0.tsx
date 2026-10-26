@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
 import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 
-type Health = { sdk: string; backend_configured: boolean; model_configured: boolean; mode: string };
+type Health = { sdk?: string; backend_configured: boolean; model_configured: boolean; mode: string; student?: { id: number; name: string } };
+type Pending = { message: string; session_id?: string; request_id: string };
+const site = new URLSearchParams(window.location.search).get('source') === 'site';
+const defaultMessage = '查询我的学习统计，并根据我的讲解偏好解释结果。';
+class RequestError extends Error {
+  status: number;
+  constructor(message: string, status: number) { super(message); this.status = status; }
+}
 type LocalSession = { id: string; notice: string; updated_at: string; messages: { role: string; content: string; mode?: string; cards?: DshCard[] }[] };
 type Turn = { content: string; session: LocalSession; routing: Context['routing']; gateway: { model: string; requests: { status: string; tool_count: number; tool_schema_bytes: number; tool_results: number; usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }[] } };
 type Context = {
@@ -12,70 +20,141 @@ type Context = {
   routing: { catalog_count: number; candidate_count: number; pending_names: string[]; candidate_schema_bytes: number; executable_schema_bytes: number; available_schema_bytes: number; initial_group: string; max_visible_tools: number; selected_calls?: string[] };
 };
 
-async function request<T>(path: string, data?: Record<string, unknown>): Promise<T> {
-  const response = await fetch(`/dsh-m0${path}`, data === undefined ? undefined : {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+async function request<T>(path: string, data?: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  const base = site ? `${(import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '')}/ai/dsh` : '/dsh-m0';
+  const response = await fetch(`${base}${path}${site ? '/' : ''}`, {
+    credentials: 'include', signal,
+    ...(data === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || '本地服务暂不可用');
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const fallback = response.status === 401 ? '请先登录站点，当前页面的学生数据已清除。'
+      : response.status === 403 ? '当前账号没有此项学习权益。'
+      : response.status === 404 ? '入口尚未启用，或会话不存在。'
+      : response.status === 409 ? '当前账号仍有任务处理中，请稍后重试。' : '服务暂不可用，请稍后重试。';
+    throw new RequestError(response.status === 401 ? fallback : result.error || result.detail || fallback, response.status);
+  }
   return result;
 }
 
 export default function DshM0() {
   const [health, setHealth] = useState<Health | null>(null);
   const [context, setContext] = useState<Context | null>(null);
-  const [message, setMessage] = useState('查询我的学习统计，并根据我的讲解偏好解释结果。');
+  const [message, setMessage] = useState(defaultMessage);
   const [session, setSession] = useState<LocalSession | null>(null);
   const [turn, setTurn] = useState<Turn | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const refreshing = useRef(false);
+  const [retry, setRetry] = useState<Pending | null>(null);
+  const operation = useRef<AbortController | null>(null);
+  const storageKey = useRef<string | null>(site ? null : 'unimind-dsh-m0-session');
+  const storage = site ? sessionStorage : localStorage;
 
   const selectSession = (value: LocalSession | null) => {
     setSession(value);
-    if (value) localStorage.setItem('unimind-dsh-m0-session', value.id);
-    else localStorage.removeItem('unimind-dsh-m0-session');
+    if (!storageKey.current) return;
+    if (value) storage.setItem(storageKey.current, value.id);
+    else storage.removeItem(storageKey.current);
+  };
+  const begin = () => {
+    operation.current?.abort();
+    const controller = new AbortController();
+    operation.current = controller;
+    setBusy(true); setError('');
+    return controller.signal;
+  };
+  const clearIdentity = () => {
+    operation.current?.abort();
+    selectSession(null); storageKey.current = site ? null : 'unimind-dsh-m0-session';
+    setHealth(null); setContext(null); setTurn(null); setRetry(null); setMessage(defaultMessage); setBusy(false);
+  };
+  const report = (err: unknown, signal: AbortSignal) => {
+    if (signal.aborted) return;
+    if (site && err instanceof RequestError && [401, 403].includes(err.status)) clearIdentity();
+    setError(err instanceof Error ? err.message : '调用失败');
   };
 
   const refresh = async () => {
-    if (refreshing.current) return;
-    refreshing.current = true;
-    setBusy(true); setError(''); setSession(null); setContext(null); setTurn(null);
+    const signal = begin();
+    setHealth(null); setSession(null); setContext(null); setTurn(null);
     try {
-      setHealth(await request<Health>('/health'));
-      const id = localStorage.getItem('unimind-dsh-m0-session');
-      if (id) {
-        try { selectSession(await request<LocalSession>('/session/read', { session_id: id })); }
-        catch (err) { selectSession(null); setError(err instanceof Error ? err.message : '本机会话不可用'); }
+      const status = await request<Health>(site ? '/status' : '/health', undefined, signal);
+      if (signal.aborted) return;
+      if (site) {
+        const key = `unimind-dsh-site-session:${status.student!.id}`;
+        if (storageKey.current !== key) {
+          if (storageKey.current) storage.removeItem(storageKey.current);
+          setRetry(null); setMessage(defaultMessage);
+        }
+        storageKey.current = key;
       }
-    }
-    catch { setHealth(null); setError('Host 尚未启动。课程和普通业务界面仍可独立使用。'); }
-    finally { refreshing.current = false; setBusy(false); }
+      setHealth(site ? { ...status, backend_configured: true } : status);
+      const id = storageKey.current && storage.getItem(storageKey.current);
+      if (id) {
+        try {
+          const restored = await request<LocalSession>('/session/read', { session_id: id }, signal);
+          if (!signal.aborted) selectSession(restored);
+        } catch (err) {
+          if (signal.aborted) return;
+          if (err instanceof RequestError && [404, 410].includes(err.status)) selectSession(null);
+          report(err, signal);
+        }
+      }
+    } catch (err) { report(err, signal); }
+    finally { if (!signal.aborted) setBusy(false); }
   };
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+    if (!site) return () => operation.current?.abort();
+    const logout = () => { clearIdentity(); setError('登录状态已变化，请刷新连接后继续。'); };
+    const focus = () => { void refresh(); };
+    const storageChange = (event: StorageEvent) => { if (event.key === 'auth-storage' || event.key === null) logout(); };
+    const unsubscribe = useAuthStore.subscribe((state, previous) => {
+      if (previous.user && previous.user.id !== state.user?.id) logout();
+    });
+    window.addEventListener('auth:logout', logout);
+    window.addEventListener('focus', focus);
+    window.addEventListener('storage', storageChange);
+    return () => {
+      operation.current?.abort(); unsubscribe();
+      window.removeEventListener('auth:logout', logout); window.removeEventListener('focus', focus); window.removeEventListener('storage', storageChange);
+    };
+  }, []);
 
   const run = async (chat: boolean) => {
-    setBusy(true); setError('');
+    const signal = begin();
     if (chat) setTurn(null);
     try {
-      const latest = await request<Context>('/context', { message });
+      const body: Pending = site && retry ? retry : { message, session_id: session?.id, request_id: crypto.randomUUID() };
+      const latest = await request<Context>('/context', { message: body.message }, signal);
+      if (signal.aborted) return;
+      if (site && latest.student.id !== health?.student?.id) { clearIdentity(); setError('账号已变化，请刷新连接。'); return; }
       setContext(latest);
       if (chat) {
-        const result = await request<Turn>('/chat', { message, session_id: session?.id });
-        selectSession(result.session); setTurn(result); setContext({ ...latest, routing: result.routing });
+        if (site) setRetry(body);
+        const result = await request<Turn>('/chat', body, signal);
+        if (site) {
+          const current = await request<Health>('/status', undefined, signal);
+          if (signal.aborted) return;
+          if (current.student?.id !== latest.student.id) { clearIdentity(); setError('账号已变化，请刷新连接。'); return; }
+        }
+        if (signal.aborted) return;
+        selectSession(result.session); setTurn(result); setContext({ ...latest, routing: result.routing }); setRetry(null);
       }
-    } catch (err) { setError(err instanceof Error ? err.message : '调用失败'); }
-    finally { setBusy(false); }
+    } catch (err) {
+      if (!signal.aborted && err instanceof RequestError && [400, 401, 403, 404, 410].includes(err.status)) setRetry(null);
+      report(err, signal);
+    } finally { if (!signal.aborted) setBusy(false); }
   };
 
   const manageSession = async (action: 'new' | 'delete') => {
-    if (action === 'delete' && !window.confirm('删除本地验证聊天及模型上下文？长期记忆和已发生的用量记录分别保留。')) return;
-    setBusy(true); setError('');
+    if (action === 'delete' && !window.confirm('删除验证聊天及模型上下文？长期记忆和已发生的用量记录分别保留。')) return;
+    const signal = begin();
     try {
-      const result = await request<LocalSession>(`/session/${action}`, { session_id: session?.id });
-      selectSession(action === 'new' ? result : null); setTurn(null);
-    } catch (err) { setError(err instanceof Error ? err.message : '会话操作失败'); }
-    finally { setBusy(false); }
+      const result = await request<LocalSession>(`/session/${action}`, { session_id: session?.id }, signal);
+      if (!signal.aborted) { selectSession(action === 'new' ? result : null); setTurn(null); setRetry(null); }
+    } catch (err) { report(err, signal); }
+    finally { if (!signal.aborted) setBusy(false); }
   };
 
   const exportSession = () => {
@@ -90,8 +169,8 @@ export default function DshM0() {
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-black/10 pb-6">
         <div><p className="mb-2 text-xs tracking-widest text-black/45">UNIMIND / M0</p>
           <h1 className="text-3xl font-semibold">学习界面与 AI 运行时分开验证</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-black/55">本地开发入口。使用隔离的验证账号和合成数据；{health?.mode === 'deepseek-official' ? '模型使用 DeepSeek 官方 API，经本地任务网关限量调用。' : '模型端为本地协议模拟。'}当前验证不代表正式教学效果或生产发布。</p>
-          <p className="mt-2 max-w-2xl text-xs leading-6 text-black/45">产品基线：DSH 作为服务端 harness；网页和 UniMind 桌面客户端共用 AI 服务。本页连接本机开发服务，当前仅开放已验证的只读工具。</p>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-black/55">{site ? '站点接入验证，使用当前登录身份；' : '本地开发入口。使用隔离的验证账号和合成数据；'}{health?.mode === 'deepseek-official' ? '模型使用 DeepSeek 官方 API，经本地任务网关限量调用。' : health?.mode === 'local-protocol-smoke' ? '模型端为本地协议模拟。' : health?.mode === 'unavailable' ? '模型尚未配置可用的授权来源。' : '模型来源尚未连接。'}当前验证不代表正式教学效果或生产发布。</p>
+          <p className="mt-2 max-w-2xl text-xs leading-6 text-black/45">产品基线：DSH 作为服务端 harness；网页和 UniMind 桌面客户端共用 AI 服务。{site ? '本页经站点身份进入隔离 DSH 进程。' : '本页连接本机开发服务。'}当前仅开放已验证的只读工具。</p>
         </div>
         <a className="text-sm underline underline-offset-4" href="/courses">进入普通课程界面 →</a>
       </header>
@@ -99,7 +178,7 @@ export default function DshM0() {
       <section className="grid gap-4 sm:grid-cols-3" aria-label="连接状态">
         {[
           ['独立 React 界面', '已运行'],
-          ['本地 Host', health ? `SDK ${health.sdk}` : '未连接'],
+          [site ? '站点入口' : '本地 Host', health ? (site ? '当前账号已连接' : `SDK ${health.sdk}`) : '未连接'],
           ['模型来源', health?.backend_configured && health.model_configured ? (health.mode === 'deepseek-official' ? 'DeepSeek 官方 · 任务网关' : '本地协议模拟 · 任务网关') : '尚未完整配置'],
         ].map(([label, value]) => <div key={label} className="border border-black/10 bg-white p-5">
           <p className="text-xs text-black/45">{label}</p><p className="mt-3 font-medium">{value}</p>
@@ -110,18 +189,19 @@ export default function DshM0() {
         <section className="space-y-4 border border-black/10 bg-white p-6">
           <h2 className="font-semibold">小宇只读链路</h2>
           <label className="block text-sm text-black/60" htmlFor="dsh-message">本轮问题</label>
-          <textarea id="dsh-message" value={message} onChange={event => setMessage(event.target.value)} maxLength={4000}
+          <textarea id="dsh-message" value={message} disabled={busy || !!retry} onChange={event => setMessage(event.target.value)} maxLength={4000}
             className="min-h-32 w-full resize-y border border-black/15 bg-[#fafaf9] p-3 text-sm leading-6" />
           <div className="flex flex-wrap gap-3 text-sm">
-            <button disabled={busy || !health?.backend_configured} onClick={() => void run(false)} className="border border-black/20 px-4 py-2 disabled:opacity-40">读取本人记忆与工具</button>
-            <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-black px-4 py-2 text-white disabled:opacity-40">{busy ? '正在验证…' : health?.mode === 'deepseek-official' ? '调用官方模型' : '运行 DSH 协议链路'}</button>
+            <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void run(false)} className="border border-black/20 px-4 py-2 disabled:opacity-40">读取本人记忆与工具</button>
+            <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-black px-4 py-2 text-white disabled:opacity-40">{busy ? '正在验证…' : retry ? '恢复这次提问（同一请求）' : health?.mode === 'deepseek-official' ? '调用官方模型' : site ? '通过站点运行 DSH' : '运行 DSH 协议链路'}</button>
             <button disabled={busy} onClick={() => void refresh()} className="px-2 py-2 text-black/55 underline disabled:opacity-40">刷新连接与会话</button>
           </div>
+          {retry && !busy && <p className="text-xs leading-6 text-black/50">这次提问尚未确认返回。恢复会使用相同请求 ID；页面取消或刷新不会撤销服务端任务。此页不会自动重试。</p>}
           {error && <p role="alert" className="border-l-2 border-amber-600 bg-amber-50 p-3 text-sm leading-6">{error}</p>}
           <div className="flex flex-wrap gap-4 border-t border-black/10 pt-3 text-xs text-black/55">
-            <button disabled={busy || !health?.backend_configured} onClick={() => void manageSession('new')}>新会话</button>
+            <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void manageSession('new')}>新会话</button>
             <button disabled={busy || !session} onClick={exportSession}>导出对话文字</button>
-            <button disabled={busy || !session} onClick={() => void manageSession('delete')}>删除本地会话</button>
+            <button disabled={busy || !!retry || !session} onClick={() => void manageSession('delete')}>{site ? '删除站点会话' : '删除本地会话'}</button>
           </div>
           {session && <p className="break-all font-mono text-[10px] text-black/40">会话 {session.id} · {session.messages.length} 条消息</p>}
           {session?.notice && <p className="bg-amber-50 p-3 text-xs leading-6">{session.notice}</p>}
@@ -138,13 +218,13 @@ export default function DshM0() {
             各请求工具数 / Schema：{turn.gateway.requests.map((r, i) => `#${i + 1} ${r.tool_count} 项 / ${r.tool_schema_bytes} bytes`).join(' → ')}<br />
             工具调用轨迹：{turn.routing.selected_calls?.join(' → ') || '无工具调用'}<br />
             总输入 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.input_tokens || 0) + (r.usage.cache_read_input_tokens || 0) + (r.usage.cache_creation_input_tokens || 0), 0)} / 输出 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.output_tokens || 0), 0)} tokens。<br />
-            输入明细：未缓存 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.input_tokens || 0), 0)} / 缓存读取 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.cache_read_input_tokens || 0), 0)} / 缓存创建 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.cache_creation_input_tokens || 0), 0)}。<br />最多 4 次请求，每次输出 1024 tokens。未接正式扣费。
+            输入明细：未缓存 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.input_tokens || 0), 0)} / 缓存读取 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.cache_read_input_tokens || 0), 0)} / 缓存创建 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.cache_creation_input_tokens || 0), 0)}。<br />最多 4 次请求，每次输出 1024 tokens。{site ? '完整成功的回答使用既有周问答额度。' : '未接正式扣费。'}
           </p>}
         </section>
 
         <aside className="space-y-6 border border-black/10 bg-white p-6">
           <section><h2 className="font-semibold">当前验证身份</h2>
-            <p className="mt-3 text-sm text-black/55">{context ? `${context.student.name} · #${context.student.id}` : '读取后显示；凭据由 Host 持有'}</p>
+            <p className="mt-3 text-sm text-black/55">{context ? `${context.student.name} · #${context.student.id}` : health?.student ? `${health.student.name} · #${health.student.id}` : site ? '请先登录站点' : '读取后显示；凭据由 Host 持有'}</p>
           </section>
           <section><h2 className="font-semibold">学生长期记忆</h2>
             {context?.memory.items.length ? context.memory.items.map(item => <p key={item.id} className="mt-3 text-sm leading-6"><span className="text-black/45">{item.key}：</span>{item.value}</p>) : <p className="mt-3 text-sm text-black/45">{context ? '当前没有有效的长期记忆' : '尚未读取记忆'}</p>}

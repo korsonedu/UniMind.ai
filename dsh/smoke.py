@@ -106,7 +106,38 @@ def backend_fixture():
     class ThreadedServer(ThreadingMixIn, WSGIServer):
         daemon_threads = True
 
-    server = make_server('127.0.0.1', 0, get_wsgi_application(), server_class=ThreadedServer, handler_class=Quiet)
+    application = get_wsgi_application()
+    drop_next_chat = [False]
+    def browser_fixture(environ, start_response):
+        path = environ.get('PATH_INFO', '')
+        identities = {'/api/ai/dsh-fixture/student-a/': user, '/api/ai/dsh-fixture/student-b/': other}
+        if settings.UNIMIND_DSH_SITE_ENABLED and path == '/api/ai/dsh-fixture/drop-next-chat/':
+            drop_next_chat[0] = True
+            start_response('200 OK', [('Content-Type', 'application/json')])
+            return [b'{"next_chat_response":"will_be_dropped_after_completion"}']
+        if settings.UNIMIND_DSH_SITE_ENABLED and path in (*identities, '/api/ai/dsh-fixture/logout/'):
+            # This application exists only after fixture_database() validates a new temporary DB.
+            value = Token.objects.get_or_create(user=identities[path])[0].key if path in identities else ''
+            cookie = f'auth_token={value}; HttpOnly; SameSite=Lax; Path=/' + ('; Max-Age=0' if not value else '')
+            start_response('302 Found', [('Location', '/dev/dsh?source=site'), ('Set-Cookie', cookie), ('Content-Length', '0')])
+            return [b'']
+        if settings.UNIMIND_DSH_SITE_ENABLED and path == '/api/ai/dsh/chat/' and drop_next_chat[0]:
+            drop_next_chat[0] = False
+            captured = []
+            def capture(status, headers, exc_info=None):
+                captured.append(status)
+            response = application(environ, capture)
+            try:
+                b''.join(response)  # Complete the real task and ledger before losing its response.
+            finally:
+                if hasattr(response, 'close'):
+                    response.close()
+            start_response('503 Service Unavailable', [('Content-Type', 'application/json')])
+            return [b'{"error":"Synthetic delivery failure after server completion"}']
+        return application(environ, start_response)
+
+    server = make_server('127.0.0.1', int(os.environ.get('UNIMIND_M0_FIXTURE_PORT', '0')), browser_fixture,
+                        server_class=ThreadedServer, handler_class=Quiet)
     settings.UNIMIND_DSH_API_URL = f'http://127.0.0.1:{server.server_port}'
     print('READY ' + json.dumps({'port': server.server_port, 'token': token.key, 'other_token': other_token.key}), flush=True)
     server.serve_forever()
