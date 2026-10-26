@@ -58,7 +58,8 @@ class DshToolView(APIView):
             raise NotFound()
         data = ToolInput(data=request.data)
         data.is_valid(raise_exception=True)
-        return Response(execute_tool(request.user, name, **data.validated_data))
+        source = request.auth.get('reservation') if isinstance(request.auth, dict) else None
+        return Response(execute_tool(request.user, name, **data.validated_data, source=source))
 
 
 class SiteChatInput(serializers.Serializer):
@@ -177,3 +178,19 @@ class DshSessionView(DshSiteView):
                 else:
                     raise
             return Response(result)
+
+
+class DshConfirmView(DshSiteView):
+    def post(self, request):
+        from .services.dsh_actions import confirm
+        return Response(confirm(request.user, request.data))
+
+
+class DshSubmissionView(DshSiteView):
+    def get(self, request, request_id):
+        from django.shortcuts import get_object_or_404
+        from .models import DshSubmission
+        from .services.dsh_actions import check_feature
+        row = get_object_or_404(DshSubmission, user=request.user, request_id=request_id)
+        check_feature(request.user, row.kind)
+        return Response(row.response)

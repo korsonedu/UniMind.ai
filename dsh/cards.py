@@ -1,10 +1,10 @@
-"""Adapt verified SDK tool events into a small set of read-only UniMind cards."""
+"""Adapt verified SDK tool events into a bounded set of UniMind cards."""
 import json
 import re
 
 
-CARD_TYPES = {'data_card', 'knowledge_map', 'practice_result', 'question_preview', 'practice_quiz'}
-INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic|study)')
+CARD_TYPES = {'data_card', 'knowledge_map', 'practice_result', 'question_preview', 'practice_quiz', 'diagnostic_quiz', 'faq_draft'}
+INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic|study|qa)')
 
 
 def safe_links(value):

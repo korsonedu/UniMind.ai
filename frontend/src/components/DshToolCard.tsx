@@ -1,3 +1,4 @@
+import { DshActionCard, type ActionPayload } from './DshActionCard';
 import { Link } from 'react-router-dom';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
@@ -8,6 +9,7 @@ export type DshCard = VisualData & { tool: string };
 type Question = { id?: number; text: string; kp_name?: string; options?: string[] | Record<string, string>; answer?: string };
 
 export function DshToolCard({ card }: { card: DshCard }) {
+  if (card.type === 'diagnostic_quiz' || card.type === 'faq_draft') return <DshActionCard payload={card.payload as unknown as ActionPayload} />;
   if (card.type === 'question_preview') {
     const questions = card.payload.questions as Question[];
     return <div className="space-y-4 rounded-xl border border-black/10 p-4">

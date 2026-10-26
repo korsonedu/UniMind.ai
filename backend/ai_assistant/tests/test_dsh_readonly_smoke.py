@@ -54,7 +54,7 @@ def test_readonly_student_queries(user, settings):
     context = build_context(user, '')
     assert set(calls) <= {t['function']['name'] for t in context['available_tools']}
     assert len(context['tools']) <= 8
-    assert set(calls) | {'get_study_status', 'get_focus_history'} == {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']}
+    assert set(calls) | {'get_study_status', 'get_focus_history', 'run_diagnostic', 'create_faq_ticket'} == {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']}
     original = (QuizExam.objects.count(), UserQuestionStatus.objects.count(), LearningSession.objects.count())
     results = {}
     for name, arguments in calls.items():

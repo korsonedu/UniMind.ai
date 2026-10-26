@@ -165,6 +165,16 @@ class MemoryExtractionLog(models.Model):
         indexes = [models.Index(fields=['user', 'created_at'])]
 
 
+class DshSubmission(models.Model):
+    """学生明确确认的诊断或答疑结果，独立于模型调用额度。"""
+    request_id = models.UUIDField(primary_key=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    kind = models.CharField(max_length=16, choices=[('diagnostic', '诊断'), ('faq', '答疑')])
+    fingerprint = models.CharField(max_length=64)
+    response = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class ActionCardInteraction(models.Model):
     """追踪学生通过 Action Card 的交互行为（点击、完成）。
 

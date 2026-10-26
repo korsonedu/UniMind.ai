@@ -1,4 +1,4 @@
-"""M0 read-only bridge. Identity and data access stay in Django."""
+"""Student bridge. Identity, data access and confirmed writes stay in Django."""
 import hashlib
 import json
 from pathlib import Path
@@ -19,7 +19,7 @@ from .dsh_routing import grouped_tools
 
 M0_TOOLS = frozenset({
     'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points',
-    'get_study_status', 'get_focus_history',
+    'get_study_status', 'get_focus_history', 'run_diagnostic', 'create_faq_ticket',
     'search_courses', 'search_asr',
     'search_knowledge_tree', 'get_user_wrong_questions', 'lookup_question',
     'get_learning_sessions', 'get_knowledge_mastery_map', 'get_due_reviews',
@@ -45,6 +45,12 @@ def student_catalog(user):
     # Retired Agent note writes stay excluded even when legacy permissions allow them.
     definitions = [t for t in get_planner_tools() if t['function']['name'] != 'save_session_note']
     for tool in definitions:
+        if tool['function']['name'] == 'run_diagnostic':
+            tool['function']['description'] = '准备首次诊断作答卡片，学生自行作答并确认提交后才评分。已完成首次诊断的学生进入原诊断页重新评估。本工具不接受或提交答案。'
+            tool['function']['parameters'] = {'type': 'object', 'properties': {'mode': {'type': 'string', 'enum': ['generate']}}, 'required': ['mode'], 'additionalProperties': False}
+        if tool['function']['name'] == 'create_faq_ticket':
+            tool['function']['description'] = '准备人工答疑草稿，尚未发布；学生核对、编辑并明确确认后才能发布。本工具不创建已提交工单。'
+            tool['function']['parameters'] = {**tool['function']['parameters'], 'additionalProperties': False}
         if tool['function']['name'] == 'get_practice_questions':
             tool['function']['description'] = '从题库读取题目并展示可作答的练习卡片。学生直接在卡片内作答和提交，提交走站内练习接口并触发后台批改；本工具本身不提交答案。'
     return filter_tools('planner', None, definitions, user=user)
@@ -89,7 +95,7 @@ def build_context(user, message, recent_messages=None):
     }
 
 
-def execute_tool(user, name, arguments, memory_version):
+def execute_tool(user, name, arguments, memory_version, source=None):
     definition = next((t for t in permitted_tools(user) if t['function']['name'] == name), None)
     if definition is None:
         raise PermissionDenied('当前账号无权使用此 M0 工具。')
@@ -98,6 +104,12 @@ def execute_tool(user, name, arguments, memory_version):
     error = validate_arguments(definition['function']['parameters'], arguments)
     if error:
         raise ValidationError({'arguments': error})
+    if name == 'run_diagnostic':
+        from .dsh_actions import prepare_diagnostic
+        return prepare_diagnostic(user, source)
+    if name == 'create_faq_ticket':
+        from .dsh_actions import prepare_faq
+        return prepare_faq(user, arguments, source)
     executor = PlannerToolExecutor(user)
     set_permitted_tools(executor, [definition])
     executor._allowed_tool_names = {name}

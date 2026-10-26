@@ -242,6 +242,13 @@ def model_fixture(status=200):
                     tools = [('find_learning_tools', {'group': 'resources'})]
                 elif discovered == 'resources':
                     tools = [('search_courses', {'query': 'M0久期'})]
+            elif '诊断确认冒烟' in prompt:
+                if not has_result:
+                    tools = [('run_diagnostic', {'mode': 'generate'})]
+            elif '人工答疑确认冒烟' in prompt:
+                if not has_result:
+                    tools = [('create_faq_ticket', {'question_text': '合成人工答疑问题：久期如何理解？',
+                        'context_summary': '合成背景：已看过课程，希望老师补充说明。', 'reason': 'student_request'})]
             elif 'M0专注迁移' in prompt:
                 if not has_result:
                     tools = [('get_study_status', {}), ('get_focus_history', {'days': 7})]

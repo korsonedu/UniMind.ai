@@ -3,13 +3,14 @@ from ai_engine.tool_router import classify_intent_keywords
 
 
 GROUPS = {
+    'support': ('人工答疑', '准备需要学生核对确认的人工答疑草稿，不自动发布。', ('create_faq_ticket',)),
     'focus': ('自习专注', '查自习室当前专注状态与每日专注历史，区别于听课和做题记录。', (
         'get_study_status', 'get_focus_history', 'get_learning_sessions')),
     'resources': ('课程与知识来源', '查课程、视频讲稿及知识点。', (
         'search_courses', 'search_asr', 'search_knowledge_tree')),
-    'practice': ('题目与复习', '查错题、题目、到期复习，预览练习题及同类题。', (
+    'practice': ('题目与复习', '查错题、题目、到期复习、练习题和同类题，准备首次诊断作答卡。', (
         'get_user_wrong_questions', 'lookup_question', 'get_due_reviews',
-        'get_practice_questions', 'search_similar_questions', 'search_knowledge_tree')),
+        'get_practice_questions', 'search_similar_questions', 'search_knowledge_tree', 'run_diagnostic')),
     'progress': ('学习进度与结果', '查实际学习时段、统计、最近练习、历史成绩、报告及成就。', (
         'get_learning_stats', 'get_learning_sessions', 'get_recent_practice_result',
         'get_exam_history', 'get_report_card', 'get_my_achievements', 'get_knowledge_mastery_map')),
@@ -33,6 +34,10 @@ def grouped_tools(allowed, message, recent_messages=None):
         initial = 'mastery'
     if any(word in message for word in ('自习', '专注', '番茄钟')):
         initial = 'focus'
+    if any(word in message for word in ('诊断', '初始评估')):
+        initial = 'practice'
+    if any(word in message for word in ('人工', '老师答疑', '工单')):
+        initial = 'support'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:
