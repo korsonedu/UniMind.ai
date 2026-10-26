@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
+import { PracticeResultCard, type PracticeResultPayload } from '@/pages/xiaoyu/visuals/PracticeResultCard';
 
 export type DshCard = VisualData & { tool: string };
 type Question = { id?: number; text: string; kp_name?: string; options?: string[] | Record<string, string>; answer?: string };
@@ -21,6 +22,7 @@ export function DshToolCard({ card }: { card: DshCard }) {
       <Link to="/tests" className="inline-block text-xs underline underline-offset-4">进入习题训练 →</Link>
     </div>;
   }
-  if (!['data_card', 'knowledge_map', 'practice_result'].includes(card.type)) return null;
+  if (card.type === 'practice_result') return <PracticeResultCard payload={card.payload as unknown as PracticeResultPayload} snapshot />;
+  if (!['data_card', 'knowledge_map'].includes(card.type)) return null;
   return <InlineVisualCard visual={card} />;
 }

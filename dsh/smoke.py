@@ -88,6 +88,7 @@ def backend_fixture():
         total_questions=1, graded_count=1, summary='合成练习结果，仅供链路验证。')
     ExamQuestionResult.objects.create(exam=exam, question=question, user_answer='A', score=8,
         max_score=10, is_correct=True, status='graded')
+    QuizExam.objects.create(user=user, status='grading', total_questions=2, graded_count=0)
     token = Token.objects.create(user=user)
     from django.core.wsgi import get_wsgi_application
 
@@ -130,10 +131,12 @@ def model_fixture(status=200):
             else:
                 tools = [('get_learning_stats', {})]
                 if demo:
-                    tools += [('get_recent_practice_result', {}), ('get_due_reviews', {}),
+                    tools += [('get_recent_practice_result', {'exam_id': 1}), ('get_due_reviews', {}),
                               ('search_courses', {'query': 'M0久期'}), ('search_asr', {'query': '久期'}),
                               ('get_user_wrong_questions', {}), ('get_practice_questions', {'kp_name': 'M0久期', 'limit': 2}),
                               ('get_knowledge_mastery_map', {})]
+                if 'M0批改快照' in json.dumps(latest, ensure_ascii=False):
+                    tools = [('get_recent_practice_result', {})]
                 blocks = [({'type': 'tool_use', 'id': f'm0-call-{index}', 'name': name, 'input': {}},
                     {'type': 'input_json_delta', 'partial_json': json.dumps(arguments)})
                     for index, (name, arguments) in enumerate(tools)]

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-interface PracticeResultPayload {
+export interface PracticeResultPayload {
   exam_id: number;
   status: 'pending' | 'grading' | 'completed' | 'partial' | 'failed';
   status_text: string;
@@ -18,7 +18,7 @@ interface PracticeResultPayload {
 const isActive = (status: PracticeResultPayload['status']) =>
   status === 'pending' || status === 'grading';
 
-export function PracticeResultCard({ payload }: { payload: PracticeResultPayload }) {
+export function PracticeResultCard({ payload, snapshot = false }: { payload: PracticeResultPayload; snapshot?: boolean }) {
   const active = isActive(payload.status);
   const score = payload.max_score
     ? `${payload.total_score}/${payload.max_score}`
@@ -57,7 +57,7 @@ export function PracticeResultCard({ payload }: { payload: PracticeResultPayload
               style={{ width: `${payload.total_questions ? Math.min(100, (payload.graded_count / payload.total_questions) * 100) : 0}%` }}
             />
           </div>
-          <p className="text-xs text-muted-foreground">批改完成后会自动更新，先继续做别的事也可以。</p>
+          <p className="text-xs text-muted-foreground">{snapshot ? '这是查询时的批改进度，打开详情查看最新状态。' : '批改完成后会自动更新，先继续做别的事也可以。'}</p>
         </div>
       )}
 

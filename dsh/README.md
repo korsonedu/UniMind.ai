@@ -36,6 +36,8 @@ React 复用学习概览、掌握图谱和练习结果组件，题目只展示�
 
 协议夹具中输入 `M0只读演示` 会固定调用八个工具，展示合成业务数据。该流程验证事件与业务结果链路，不用于评估模型意图理解或任务完成率。
 
+输入 `M0批改快照` 查询合成的批改中记录。DSH 结果卡明确提示这是查询时的进度，通过详情页查看最新状态，不承诺自动刷新；普通练习结果卡保留原有行为。
+
 ## 本地会话
 
 `sessions.py` 将用户可见对话与原生 DSH 运行上下文分开，按业务源地址和当前学生 ID 隔离目录。独立 Host 使用 `.m0-state/sessions`；隔离验证启动器改用临时目录，退出时清理，避免合成账号的历史混入后续验证。浏览器只保存随机会话 ID，刷新后经 Host 重新鉴权读取本人记录。
@@ -54,6 +56,15 @@ uv pip install --python .m0-venv/bin/python -r dsh/requirements.txt
 ```
 
 SDK 自带运行时，不依赖系统 Node 22。前端使用项目既有依赖；开发工具链可使用已提供的 Node 24。
+
+插件类型检查在独立的 `dsh/` 目录运行：
+
+```sh
+npm ci --ignore-scripts --no-audit --no-fund
+npm run typecheck
+```
+
+依赖及 lockfile 锁定官方 DSH `0.2.1-rc.2`、Cordis `4.0.5`、TypeScript `5.9.3` 和 Node 24 声明，对应 Python SDK `0.2.1rc2`。NodeNext 严格检查开启，未跳过第三方声明检查。显式补入同版本 `dsh-attachment`，因为官方 LLM 声明引用它。npm 的 `latest` 标签曾指向早期预览版本，不能据此混装。依赖只用于开发检查，插件的运行时导入仍全部为 type import；不改变已锁定的 SDK 可执行文件。
 
 ## 运行协议冒烟与验证页
 
