@@ -11,6 +11,21 @@ from ai_engine.tools import GRADING_RESULT_SCHEMA
 from ai_assistant.services.dsh_runtime import DshUnavailable
 
 
+def test_objective_option_text_matches_the_answer_key():
+    from quizzes.ai_workflow import _grade_answer
+    from quizzes.models import Question
+    for options in (['越敏感', '越不敏感'], {'A': '越敏感', 'B': '越不敏感'}):
+        question = Question(q_type='objective', options=options, correct_answer='A')
+        with patch('quizzes.ai_workflow.AIService.grade_question', return_value={'score': 0}) as grade:
+            assert _grade_answer(question, '越敏感')['score'] == 10
+            assert grade.call_args.kwargs['user_answer'] == 'A'
+            assert grade.call_args.kwargs['correct_answer'] == 'A'
+            assert _grade_answer(question, 'A')['is_correct']
+            grade.return_value = {'score': 10}
+            assert _grade_answer(question, '越不敏感')['score'] == 0
+            assert _grade_answer(question, '')['score'] == 0
+
+
 def test_grading_opt_in_and_no_model_fallback(settings, monkeypatch):
     from ai_engine.config import get_model_for_task
     monkeypatch.setenv('LLM_MODEL', 'legacy-custom-model')

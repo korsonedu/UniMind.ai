@@ -180,6 +180,8 @@ Django 使用 async iterator，模型、文件锁与 ORM 位于独立同步任�
 
 get_practice_questions 现在返回 practice_quiz 卡片，复用现有 PracticeQuizCard。题目由服务端按内容范围抽取，卡片不含答案；学生在卡片内作答，提交走 /quizzes/submit-exam/，以 submission_id 和答案哈希幂等，后台评分沿用既有 QuizExam 事务与 DSH 评分开关。聊天内旧的 grade_student_answer 写工具仍不开放。未验收真实评分质量、生产提交量和正式权益。
 
+2026-10-27 本机 /xiaoyu 已用 DeepSeek 官方真实模型与合成题库验证抽题、选项作答和 10/10 结果。修正夹具题型为 objective，并在评分入口沿用既有归一化，把页面提交的选项正文与题库答案字母统一后比较；客观分数仍由服务端确定。截图 .m0-state/m0-real-deepseek-practice-proof.png；不据此推定主观评分质量或生产容量已验收。
+
 
 ## 正式小宇入口与回退（默认关闭）
 

@@ -76,7 +76,7 @@ def backend_fixture():
     transcript = VideoTranscript.objects.create(course=course, asr_status='completed')
     TranscriptSegment.objects.create(transcript=transcript, start_time=60, end_time=90,
         text='合成讲稿：久期反映债券价格对利率变化的敏感程度。', index=0)
-    question = Question.objects.create(knowledge_point=kp, q_type='single_choice',
+    question = Question.objects.create(knowledge_point=kp, q_type='objective',
         text='合成题：其他条件相同时，久期越长，债券价格对利率变动是否越敏感？',
         options=['越敏感', '越不敏感'], correct_answer='A')
     status = UserQuestionStatus.objects.create(user=user, question=question, wrong_count=2,

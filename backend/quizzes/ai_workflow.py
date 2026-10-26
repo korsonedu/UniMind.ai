@@ -54,10 +54,15 @@ def _calc_elo_change(user_elo: int, score_ratio: float, difficulty: float) -> in
 
 def _grade_answer(question: Question, user_answer: Any) -> Dict[str, Any]:
     max_score = question.get_max_score()
+    correct_answer = question.correct_answer
+    if question.q_type == 'objective':
+        options = AIService.normalize_options(question.options)
+        user_answer = AIService.normalize_objective_answer(user_answer, options)
+        correct_answer = AIService.normalize_objective_answer(correct_answer, options)
     grade_data = AIService.grade_question(
         question_text=question.text,
         user_answer=user_answer,
-        correct_answer=question.correct_answer,
+        correct_answer=correct_answer,
         q_type=question.q_type,
         max_score=max_score,
         grading_points=question.grading_points,
@@ -71,7 +76,7 @@ def _grade_answer(question: Question, user_answer: Any) -> Dict[str, Any]:
     # 客观题以标准答案比对为准，避免模型漂移
     if question.q_type == 'objective':
         user_choice = AIService.normalize_objective_answer(user_answer)
-        correct_choice = AIService.normalize_objective_answer(question.correct_answer)
+        correct_choice = AIService.normalize_objective_answer(correct_answer)
         score_val = float(max_score if user_choice and user_choice == correct_choice else 0)
 
     normalized_score = score_val / max_score if max_score > 0 else 0
