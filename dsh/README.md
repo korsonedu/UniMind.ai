@@ -226,3 +226,10 @@ GET /api/ai/dsh/sessions/ 沿用站点身份和默认关闭开关，返回当前
 UNIMIND_DSH_XIAOYU_ENABLED（默认 false）在既有 /api/ai/chat/stream/ 选择平台小宇的 DSH 路径，同时要求 UNIMIND_DSH_ENABLED、UNIMIND_DSH_SITE_ENABLED 及既有 Python/loopback/state 配置。启用后运行失败明确报错，不自动重试旧模型。成功回答、卡片和 session id 存入原 Django 历史；额度复用原预留和确认。删除会话同步清除原生状态及缓存正文。
 
 UNIMIND_DSH_TITLE_ENABLED 和 UNIMIND_DSH_MEMORY_ENABLED 分别接入已迁移任务；关闭时本路径使用首句标题且不自动提取记忆。笔记关联会话不提取记忆。记忆启用前须执行已有 0031 迁移。13 项定向冒烟、实际 SDK/ASGI、原小宇浏览器发送/历史卡片恢复及生产构建通过；官方来源已恢复可用，并完成一次合成数据的真实模型、标题和记忆冒烟，问答扣次 1。没有生产发布，详情见 2026-10-27-dsh-xiaoyu-integration 计划。
+
+
+## 自习专注能力（2026-10-27）
+
+新增 get_study_status、get_focus_history，当前 19 个已迁移业务工具。focus 组与其他组分开，模型每次最多 8 个候选；仍检查本人身份及 study.room 权限，未开放笔记写入。状态与历史生成服务端 data_card，唯一新增链接 /study。卡片区分自习计时和听课/做题记录，到期 Redis 快照展示已结束说明，沿用原计时到期的确定性落库。实际 SDK 和隔离数据库验证两张卡片；当前 Redis 以合成快照代替，尚未验收正式 Redis。
+
+长期记忆候选落库前重新锁定原会话并确认原用户消息仍在，日志与候选共同提交。原会话在模型处理期间被删除时不接受迟到候选；已确认的长期记忆仍由用户单独管理，不把删除对话等同于自动删除所有记忆。

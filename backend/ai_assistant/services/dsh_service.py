@@ -19,6 +19,7 @@ from .dsh_routing import grouped_tools
 
 M0_TOOLS = frozenset({
     'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points',
+    'get_study_status', 'get_focus_history',
     'search_courses', 'search_asr',
     'search_knowledge_tree', 'get_user_wrong_questions', 'lookup_question',
     'get_learning_sessions', 'get_knowledge_mastery_map', 'get_due_reviews',

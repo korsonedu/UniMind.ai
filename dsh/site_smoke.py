@@ -208,6 +208,21 @@ print(json.dumps({'calls': list(WeeklyAIUsage.objects.order_by('user_id').values
             done = official[-1]
             assert done.get('done') and done.get('engine') == 'dsh', official
             assert done['metadata']['dsh_cards'] and done['conversation_title'] == '合成学习概览'
+            # Finish the independent memory task before comparing model-call counts.
+            memory_probe = """
+import os, sys, time
+sys.path.insert(0, sys.argv[1]); os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'school_system.settings')
+import django; django.setup()
+from ai_assistant.models import MemoryExtractionLog
+for attempt in range(100):
+    if MemoryExtractionLog.objects.filter(conversation_id=sys.argv[2]).exists():
+        break
+    time.sleep(.1)
+else:
+    raise RuntimeError('Synthetic memory extraction did not settle')
+"""
+            subprocess.run([args.backend_python, '-c', memory_probe, str(ROOT / 'backend'), cid],
+                           env=env, check=True, timeout=20, stdout=subprocess.DEVNULL)
             count_before_replay = len(calls)
             assert official_stream(official_body)[-1] == done
             assert len(calls) == count_before_replay
@@ -223,6 +238,15 @@ print(json.dumps({'calls': list(WeeklyAIUsage.objects.order_by('user_id').values
             print(json.dumps({'official_xiaoyu_stream': True, 'native_title': True,
                 'owned_database_history': True, 'official_replay_no_extra_model': True,
                 'official_delete_tombstone': True}), flush=True)
+            focus_status, focus = request(identity['token'], 'chat', {
+                'message': 'M0专注迁移：查询我的自习专注状态和最近七天历史。', 'request_id': str(uuid4())})
+            assert focus_status == 200, (focus_status, focus)
+            focus_cards = focus['session']['messages'][-1]['cards']
+            assert {card['tool'] for card in focus_cards} == {'get_study_status', 'get_focus_history'}, focus_cards
+            assert all(card['payload']['cta']['link'] == '/study' for card in focus_cards)
+            assert 'OTHER_PRIVATE_FOCUS' not in json.dumps(focus)
+            print(json.dumps({'native_focus_tools': True, 'focus_cards': len(focus_cards),
+                'redis_snapshot': 'synthetic-none', 'scope': 'current-student'}), flush=True)
             print(json.dumps({'site_authentication': True, 'subjective_dsh_grade_saved_once': True,
                 'objective_score_deterministic': True, 'failed_grade_not_saved': True, 'asgi_stream_before_completion': True, 'stream_replay_no_extra_call': True, 'parallel_students_isolated': True,
                 'native_session_resumed': True, 'cross_student_session_denied': True,

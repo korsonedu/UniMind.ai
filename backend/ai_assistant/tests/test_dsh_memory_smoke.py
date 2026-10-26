@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from django.test import TestCase, override_settings
 
-from ai_assistant.models import AgentMemory, MemoryExtractionLog
+from ai_assistant.models import AgentMemory, MemoryExtractionLog, Bot, Conversation, AIChatMessage
 from ai_assistant.services.memory_service import _extract_memories_via_dsh, _merge_memory_candidates
 from users.models import User
 
@@ -19,6 +19,10 @@ class DshMemorySmoke(TestCase):
             {'role': 'user', 'content': '我喜欢先看具体例子再看公式推导'},
             {'role': 'assistant', 'content': '明白，我会先用例子引入。'},
         ]
+        bot = Bot.objects.create(name='小宇', bot_type='planner', system_prompt='合成记忆验证')
+        self.conversation = Conversation.objects.create(user=self.user, bot=bot, conversation_id=self.conversation_id)
+        AIChatMessage.objects.create(user=self.user, bot=bot, conversation_id=self.conversation_id,
+            role='user', content=self.history[0]['content'])
         self.candidate = {
             'memory_type': 'preference',
             'key': '讲解风格',
@@ -73,6 +77,15 @@ class DshMemorySmoke(TestCase):
         with patch('ai_assistant.services.dsh_tasks.run_structured', side_effect=RuntimeError('offline')), \
              patch('django.db.connections.close_all'):
             _extract_memories_via_dsh(self.user.id, self.history, self.conversation_id)
+        self.assertFalse(MemoryExtractionLog.objects.exists())
+
+    def test_deleted_source_during_model_call_cannot_create_memories(self):
+        def deleted_source(*args):
+            self.conversation.delete()
+            return {'memories': [self.candidate]}
+        with patch('ai_assistant.services.dsh_tasks.run_structured', side_effect=deleted_source), patch('django.db.connections.close_all'):
+            _extract_memories_via_dsh(self.user.id, self.history, self.conversation_id)
+        self.assertFalse(AgentMemory.objects.exists())
         self.assertFalse(MemoryExtractionLog.objects.exists())
 
     @override_settings(UNIMIND_DSH_MEMORY_ENABLED=True)

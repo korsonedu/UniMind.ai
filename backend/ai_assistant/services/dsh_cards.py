@@ -1,4 +1,5 @@
 """User-visible cards derived from authorized business results, never model HTML."""
+import time
 
 
 def data_card(title, items, cta=None, note=''):
@@ -38,6 +39,24 @@ def build_tool_card(name, result):
         titles = {'lookup_question': '题目与参考答案', 'get_user_wrong_questions': '我的错题',
                   'search_similar_questions': '同类题预览'}
         return {'type': 'question_preview', 'payload': {'title': titles[name], 'questions': questions}}
+    if name == 'get_study_status':
+        current = result.get('current_session') or {}
+        expired = (current.get('status') == 'active' and current.get('timer_end_ts')
+                   and current['timer_end_ts'] <= time.time())
+        if expired:
+            return data_card('自习专注状态', [item('当前状态', '本次自习计时已到期'),
+                item('今日专注', f"{result.get('today_total_focus_minutes', 0)} 分钟"),
+                item('昨日专注', f"{result.get('yesterday_total_focus_minutes', 0)} 分钟")],
+                ('进入自习室', '/study'), '已到期任务计入今日汇总；仅统计自习室计时。')
+        return data_card('自习专注状态', [item('当前任务', current.get('task_name') or '暂无进行中的自习'),
+            item('本次已专注', f"{result.get('current_elapsed_minutes', 0)} 分钟"),
+            item('今日专注', f"{result.get('today_total_focus_minutes', 0)} 分钟"),
+            item('昨日专注', f"{result.get('yesterday_total_focus_minutes', 0)} 分钟")],
+            ('进入自习室', '/study'), '仅统计自习室计时，不包含听课、做题记录或线下学习。')
+    if name == 'get_focus_history':
+        return data_card('自习专注历史', [item(row['date'], f"{row['focus_minutes']} 分钟 · {row['sessions_count']} 次")
+            for row in result.get('history', [])[-30:]], ('进入自习室', '/study'),
+            '仅汇总已结束的自习计时；当前进行中的任务请查看自习专注状态。')
     if name == 'get_learning_sessions':
         return data_card('实际学习记录', [item(f"{s['started_at'][:16]} · {'听课' if s['kind'] == 'video' else '做题'}",
             f"{round(s['active_seconds'] / 60, 1)} 分钟") for s in result.get('sessions', [])[:10]],

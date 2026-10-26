@@ -3,6 +3,8 @@ from ai_engine.tool_router import classify_intent_keywords
 
 
 GROUPS = {
+    'focus': ('自习专注', '查自习室当前专注状态与每日专注历史，区别于听课和做题记录。', (
+        'get_study_status', 'get_focus_history', 'get_learning_sessions')),
     'resources': ('课程与知识来源', '查课程、视频讲稿及知识点。', (
         'search_courses', 'search_asr', 'search_knowledge_tree')),
     'practice': ('题目与复习', '查错题、题目、到期复习，预览练习题及同类题。', (
@@ -29,6 +31,8 @@ def grouped_tools(allowed, message, recent_messages=None):
                'qa': 'practice', 'grading': 'practice', 'coach': 'progress'}.get(intent, '')
     if any(word in message for word in ('薄弱', '掌握率', '掌握度', '难度分析', '稳定性')):
         initial = 'mastery'
+    if any(word in message for word in ('自习', '专注', '番茄钟')):
+        initial = 'focus'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:

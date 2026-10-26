@@ -81,6 +81,12 @@ def backend_fixture():
         options=['越敏感', '越不敏感'], correct_answer='A')
     status = UserQuestionStatus.objects.create(user=user, question=question, wrong_count=2,
         reps=3, difficulty=7, stability=2)
+    from study_room.models import StudySession
+    from study_room import session_manager
+    # Only this guarded temporary fixture substitutes an absent current Redis snapshot.
+    session_manager.get_session = lambda user_id: None
+    StudySession.objects.create(user=user, status='ended', ended_at=timezone.now(), total_focus_seconds=1500)
+    StudySession.objects.create(user=other, status='ended', ended_at=timezone.now(), total_focus_seconds=5940, task_name='OTHER_PRIVATE_FOCUS')
     now = timezone.now()
     UserQuestionStatus.objects.filter(pk=status.pk).update(next_review_at=now-timedelta(days=1))
     UserKnowledgeState.objects.create(user=user, knowledge_point=kp, mastery_score=40)
@@ -236,6 +242,9 @@ def model_fixture(status=200):
                     tools = [('find_learning_tools', {'group': 'resources'})]
                 elif discovered == 'resources':
                     tools = [('search_courses', {'query': 'M0久期'})]
+            elif 'M0专注迁移' in prompt:
+                if not has_result:
+                    tools = [('get_study_status', {}), ('get_focus_history', {'days': 7})]
             elif not has_result:
                 tools = [('get_recent_practice_result', {})] if 'M0批改快照' in prompt else [('get_learning_stats', {})]
                 if tools[0][0] not in {t['name'] for t in body.get('tools', [])}:

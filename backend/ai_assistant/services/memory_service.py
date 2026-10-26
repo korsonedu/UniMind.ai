@@ -5,7 +5,6 @@ import os
 import threading
 from datetime import timedelta
 from django.conf import settings
-from django.db import IntegrityError
 from django.utils import timezone
 from django.db.models import F
 from ..models import AgentMemory, MemoryExtractionLog
@@ -201,12 +200,20 @@ def _extract_memories_via_dsh(user_id, conversation_history, conversation_id):
         candidates = result.get('memories') if isinstance(result, dict) else []
         if not isinstance(candidates, list):
             candidates = []
-        saved = _merge_memory_candidates(user, candidates, user_message, conversation_key)
-        try:
-            MemoryExtractionLog.objects.create(user=user, conversation_id=conversation_key, message_hash=message_hash,
-                candidate_count=len(candidates), saved_count=saved)
-        except IntegrityError:
-            pass
+        from django.db import transaction
+        from ..models import Conversation, AIChatMessage
+        with transaction.atomic():
+            conversation = Conversation.objects.select_for_update().filter(user=user, conversation_id=conversation_key).first()
+            if not conversation or not AIChatMessage.objects.filter(user=user, conversation_id=conversation_key,
+                    role='user', content=user_message).exists():
+                return  # Deleting the source while the model runs must also discard late candidates.
+            log, created = MemoryExtractionLog.objects.get_or_create(user=user, conversation_id=conversation_key,
+                message_hash=message_hash, defaults={'candidate_count': len(candidates)})
+            if not created:
+                return
+            saved = _merge_memory_candidates(user, candidates, user_message, conversation_key)
+            log.saved_count = saved
+            log.save(update_fields=['saved_count'])
         logger.info("Extracted %d DSH memories for user %s", saved, user_id)
     except Exception:
         logger.exception("DSH memory extraction error for user %s", user_id)
