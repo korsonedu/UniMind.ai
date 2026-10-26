@@ -107,7 +107,7 @@ def run_structured(operation, prompt):
     instructions = {
         'quizzes.preview_parse': '你是科晟教研录入助手。只解析给定资料中的题目、选项、答案和评分点，保持原意，不自行补写缺失的答案；不能确认的内容留空交给人工复核。',
         'assistant.title': '你是对话标题生成器。根据用户和助手的第一轮内容生成不超过15个字的标题。只输出标题，不加引号或前缀。',
-        'assistant.memory_extract': '你是学生长期记忆提取助手。只提取用户亲口明确陈述的稳定偏好、学业背景和交互习惯；不提取助手建议、假设、未确认计划或临时情绪。每条记忆必须附用户原话作为 evidence，找不到原话就不输出。',
+        'assistant.memory_extract': '你是学生长期记忆提取助手。只提取用户亲口明确陈述的稳定偏好、学业背景和交互习惯；不提取助手建议、假设、未确认计划或临时情绪。每条记忆必须附用户原话作为 evidence。单次提问、人工答疑、查资料、准备草稿或本次发布前确认的操作要求不构成长期记忆，不从问题知识点推断学业背景。仅提取明确自述的长期事实；没有合格事实也必须调用提交工具返回 memories=[]。',
     }
     context['task_instruction'] = instructions.get(operation, '你是科晟课程评阅老师。严格按给定题目、参考答案和评分点评阅。')
     root = Path(state_dir)
