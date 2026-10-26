@@ -3,7 +3,7 @@ import json
 import re
 
 
-CARD_TYPES = {'data_card', 'knowledge_map', 'practice_result', 'question_preview'}
+CARD_TYPES = {'data_card', 'knowledge_map', 'practice_result', 'question_preview', 'practice_quiz'}
 INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic)')
 
 

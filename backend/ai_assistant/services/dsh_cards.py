@@ -16,7 +16,7 @@ def item(label, value, link=None):
 
 
 def build_tool_card(name, result):
-    if name in {'get_learning_stats', 'get_knowledge_mastery_map', 'get_due_reviews', 'get_recent_practice_result'}:
+    if name in {'get_learning_stats', 'get_knowledge_mastery_map', 'get_due_reviews', 'get_recent_practice_result', 'get_practice_questions'}:
         return result.get('visual')
     if name == 'search_courses':
         return data_card('相关课程', [item(c['title'], '打开课程', f"/course/{int(c['id'])}")
@@ -26,7 +26,7 @@ def build_tool_card(name, result):
         return data_card('课程讲稿来源', [item(f"{s['course_title']} · {s['start_time']}～{s['end_time']}",
             s['text'], f"/course/{int(s['course_id'])}") for s in result.get('segments', [])[:10]],
             note='' if result.get('segments') else '没有找到匹配片段。')
-    if name in {'lookup_question', 'get_user_wrong_questions', 'get_practice_questions', 'search_similar_questions'}:
+    if name in {'lookup_question', 'get_user_wrong_questions', 'search_similar_questions'}:
         rows = [result] if name == 'lookup_question' else result.get('questions', [])
         questions = []
         for row in rows[:10]:
@@ -36,7 +36,7 @@ def build_tool_card(name, result):
                 question['answer'] = row.get('correct_answer', row.get('answer', ''))
             questions.append(question)
         titles = {'lookup_question': '题目与参考答案', 'get_user_wrong_questions': '我的错题',
-                  'get_practice_questions': '题库练习预览', 'search_similar_questions': '同类题预览'}
+                  'search_similar_questions': '同类题预览'}
         return {'type': 'question_preview', 'payload': {'title': titles[name], 'questions': questions}}
     if name == 'get_learning_sessions':
         return data_card('实际学习记录', [item(f"{s['started_at'][:16]} · {'听课' if s['kind'] == 'video' else '做题'}",

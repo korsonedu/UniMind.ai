@@ -45,7 +45,7 @@ def student_catalog(user):
     definitions = [t for t in get_planner_tools() if t['function']['name'] != 'save_session_note']
     for tool in definitions:
         if tool['function']['name'] == 'get_practice_questions':
-            tool['function']['description'] = '从题库读取题目并展示只读预览。学生自行进入习题训练作答；本工具不提交答案、不触发批改。'
+            tool['function']['description'] = '从题库读取题目并展示可作答的练习卡片。学生直接在卡片内作答和提交，提交走站内练习接口并触发后台批改；本工具本身不提交答案。'
     return filter_tools('planner', None, definitions, user=user)
 
 

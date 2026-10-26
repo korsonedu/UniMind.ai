@@ -30,7 +30,7 @@ Host 只将当前有效会话的最近 6 条、每条最多 1000 字符传给初
 
 ## 只读结果卡片
 
-`cards.py` 适配 SDK 0.2.1rc2 实际的 tool/call 与 tool/result 事件，只接纳当前许可工具的成功返回。插件通过原生 output.presentationMeta 将受控卡片写入 tool/result.data.meta；output.render 去掉 visual，只把业务数据传给模型。Django 从业务查询构造结果卡片；Host 仅允许 data_card、knowledge_map、practice_result 和 question_preview，链接限制在已知站内路由。模型正文及任意 render_visual 不参与卡片执行。
+`cards.py` 适配 SDK 0.2.1rc2 实际的 tool/call 与 tool/result 事件，只接纳当前许可工具的成功返回。插件通过原生 output.presentationMeta 将受控卡片写入 tool/result.data.meta；output.render 去掉 visual，只把业务数据传给模型。Django 从业务查询构造结果卡片；Host 仅允许 data_card、knowledge_map、practice_result、question_preview 和 practice_quiz，链接限制在已知站内路由。模型正文及任意 render_visual 不参与卡片执行。
 
 DSH 原生有工具调用/结果展示接口 presentCall、presentResult、presentationMeta，以及可选 Web Client 的工具展示 slot 与 Conversation 扩展；这些机制没有提供现成的 UniMind 教学卡片。当前复用原生持久展示元数据，由独立 UniMind React 消费，保留产品界面边界。参考：[插件基础](https://deepseek-harness.github.io/deepseek-harness/develop/basic/)、[工具编写参考](https://deepseek-harness.github.io/deepseek-harness/reference/cookbook/adding-a-tool)。Python 代码是 Django 业务与开发 Host/网关，Cordis 插件本体为 TypeScript。
 
@@ -175,6 +175,11 @@ POST /api/ai/dsh/chat/stream/ 沿用相同 Cookie、参数、request_id、额度
 Django 使用 async iterator，模型、文件锁与 ORM 位于独立同步任务线程。队列固定 64 项；慢客户端可丢暂态片段，终止事件会腾出暂态空间，生产线程无需等待客户端即可清理连接。完全未消费响应不会启动任务；断开已启动传输只关闭页面接收，任务仍按既有规则结算，SDK 子进程保留 120 秒父进程上限。手动恢复沿用同一 request_id，不自动补发新任务。
 
 实际验证使用 Daphne ASGI；普通 WSGI 会缓冲 async iterator，不作为实时证据。site_smoke 的本地协议夹具每 150ms 输出一段，验证至少三段正文、首段先于 done、正文拼接与 DSH 最终回答一致、原生工具状态/卡片、跨 JSON/SSE 幂等及失败释放。浏览器截图 .m0-state/m0-live-stream-proof.png 捕获到生成中片段；停止接收后恢复同一任务，仅追加原任务对应两条消息。以上不代表真实模型质量或生产代理/容量验收。
+
+## 可作答练习卡
+
+get_practice_questions 现在返回 practice_quiz 卡片，复用现有 PracticeQuizCard。题目由服务端按内容范围抽取，卡片不含答案；学生在卡片内作答，提交走 /quizzes/submit-exam/，以 submission_id 和答案哈希幂等，后台评分沿用既有 QuizExam 事务与 DSH 评分开关。聊天内旧的 grade_student_answer 写工具仍不开放。未验收真实评分质量、生产提交量和正式权益。
+
 
 ## DSH 评分任务（独立开关，默认关闭）
 

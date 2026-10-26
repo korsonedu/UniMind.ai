@@ -70,7 +70,9 @@ def test_readonly_student_queries(user, settings):
     assert results['search_courses']['visual']['payload']['items'][0]['action_link'] == f'/course/{course.pk}'
     assert results['search_asr']['visual']['payload']['items'][0]['value'] == 'M0久期片段'
     assert results['get_recent_practice_result']['visual']['type'] == 'practice_result'
-    assert results['get_practice_questions']['visual']['type'] == 'question_preview'
+    assert results['get_practice_questions']['visual']['type'] == 'practice_quiz'
+    assert results['get_practice_questions']['visual']['payload']['practice_id']
+    assert results['get_practice_questions']['visual']['payload']['questions']
     assert private_course.pk not in [c['id'] for c in results['search_courses']['courses']]
     assert 'correct_answer' not in json.dumps(results['get_practice_questions'])
     assert execute_tool(user, 'lookup_question', {'question_id': private_question.pk}, context['memory']['version']).get('error')

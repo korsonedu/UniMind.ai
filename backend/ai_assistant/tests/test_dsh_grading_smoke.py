@@ -82,6 +82,7 @@ def test_practice_reads_the_owned_session_and_saved_result(auth_client, user, se
     from quizzes.models import Question, PracticeSubmission
     from users.models import CourseStudentStatus
     from uuid import uuid4
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     question = Question.objects.create(text='合成原会话题目')
     sid = uuid4().hex

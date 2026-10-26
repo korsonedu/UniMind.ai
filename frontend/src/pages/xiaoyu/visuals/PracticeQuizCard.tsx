@@ -11,7 +11,7 @@ import { useExamActivityStore, isActiveExamStatus, type ExamActivityStatus } fro
 import { useLearningSession } from '@/hooks/useLearningSession';
 import '@/styles/inline-practice.css';
 
-interface PracticeQuestion {
+export interface PracticeQuestion {
   id: number;
   text: string;
   q_type: string;
@@ -19,7 +19,7 @@ interface PracticeQuestion {
   kp_name?: string;
 }
 
-interface PracticePayload {
+export interface PracticePayload {
   practice_id: string;
   title: string;
   questions: PracticeQuestion[];
