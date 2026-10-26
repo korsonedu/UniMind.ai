@@ -18,7 +18,7 @@ def safe_links(value):
 
 
 def tool_cards(events, context):
-    allowed = {t['function']['name'] for t in context['tools']}
+    allowed = {t['function']['name'] for t in context.get('available_tools', context['tools'])}
     calls, cards = {}, []
     for event in events:
         data = event.get('data', {})

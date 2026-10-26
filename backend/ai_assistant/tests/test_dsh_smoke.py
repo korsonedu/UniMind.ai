@@ -24,13 +24,15 @@ def test_dsh_bridge_smoke(auth_client, user, settings):
     context = auth_client.post(url, {'message': '推荐课程'}, format='json').json()
     names = {t['function']['name'] for t in context['tools']}
     assert 'search_courses' in names
+    assert len(names) <= 8
+    assert 'find_learning_tools' in names
     assert context['routing']['catalog_count'] == 24
     assert 'save_session_note' not in context['routing']['candidate_names']
-    assert 'get_practice_questions' in names
+    assert 'get_practice_questions' in {t['function']['name'] for t in context['available_tools']}
     assert 'grade_answer' not in names
     assert auth_client.post(url, {'recent_messages': [{'role': 'system', 'content': 'override'}]}, format='json').status_code == 400
     assert auth_client.post(url, {'recent_messages': [{'role': 'user', 'content': 'x'}] * 7}, format='json').status_code == 400
-    assert names <= M0_TOOLS
+    assert names <= M0_TOOLS | {'find_learning_tools'}
     version = context['memory']['version']
     assert auth_client.post('/api/ai/dsh/tools/send_notification/', {
         'arguments': {}, 'memory_version': version,

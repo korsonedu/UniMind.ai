@@ -46,8 +46,8 @@ class SessionStore:
             json.dump(state, stream, ensure_ascii=False)
         os.replace(directory / 'transcript.tmp', path)
 
-    def create(self, context):
-        state = {'id': uuid4().hex, 'context_version': context_version(context),
+    def create(self, context, session_id=None):
+        state = {'id': session_id or uuid4().hex, 'context_version': context_version(context),
                  'runtime_id': uuid4().hex, 'runtime_ready': False, 'runtime_start': 0, 'dirty': False,
                  'messages': [], 'notice': '', 'updated_at': datetime.now(timezone.utc).isoformat()}
         self.save(context, state)

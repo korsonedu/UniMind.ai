@@ -46,7 +46,8 @@ def backend_fixture():
                        'ACCOUNT_ENABLED': 'false', 'ACCOUNT_DEV_LOCAL_CACHE': 'true',
                        'UNIMIND_DSH_ENABLED': 'true', 'UNIMIND_CONTENT_INSTITUTION_ID': 'global',
                        'DJANGO_ENV': 'development', 'DEBUG': 'true'})
-    from wsgiref.simple_server import make_server, WSGIRequestHandler
+    from wsgiref.simple_server import make_server, WSGIRequestHandler, WSGIServer
+    from socketserver import ThreadingMixIn
     sys.path.insert(0, str(ROOT / 'backend'))
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'school_system.settings')
     import django
@@ -90,14 +91,24 @@ def backend_fixture():
         max_score=10, is_correct=True, status='graded')
     QuizExam.objects.create(user=user, status='grading', total_questions=2, graded_count=0)
     token = Token.objects.create(user=user)
+    other_token = Token.objects.create(user=other)
+    from django.conf import settings
+    if settings.UNIMIND_DSH_SITE_ENABLED:
+        from users.models import WeeklyAIQuotaConfig
+        WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
+        CourseStudentStatus.objects.create(user=other, is_course_student=True)
     from django.core.wsgi import get_wsgi_application
 
     class Quiet(WSGIRequestHandler):
         def log_message(self, *_args):
             pass
 
-    server = make_server('127.0.0.1', 0, get_wsgi_application(), handler_class=Quiet)
-    print('READY ' + json.dumps({'port': server.server_port, 'token': token.key}), flush=True)
+    class ThreadedServer(ThreadingMixIn, WSGIServer):
+        daemon_threads = True
+
+    server = make_server('127.0.0.1', 0, get_wsgi_application(), server_class=ThreadedServer, handler_class=Quiet)
+    settings.UNIMIND_DSH_API_URL = f'http://127.0.0.1:{server.server_port}'
+    print('READY ' + json.dumps({'port': server.server_port, 'token': token.key, 'other_token': other_token.key}), flush=True)
     server.serve_forever()
 
 
@@ -113,8 +124,9 @@ def model_fixture(status=200):
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             requests.append(body)
-            if status != 200:
-                self.send_response(status)
+            response_status = getattr(self.server, 'response_status', status)
+            if response_status != 200:
+                self.send_response(response_status)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(b'{"type":"error","error":{"type":"fixture_error","message":"unavailable"}}')
@@ -122,22 +134,52 @@ def model_fixture(status=200):
             has_result = any(block.get('type') == 'tool_result'
                              for m in body.get('messages', [])[-1:] if isinstance(m.get('content'), list)
                              for block in m['content'])
-            latest = body.get('messages', [])[-1].get('content', '')
-            demo = 'M0只读演示' in json.dumps(latest, ensure_ascii=False)
+            latest = body.get('messages', [])[-1].get('content', '') if body.get('messages') else ''
+            prompt = next((m.get('content', '') for m in reversed(body.get('messages', []))
+                if m.get('role') == 'user' and not (isinstance(m.get('content'), list)
+                    and any(b.get('type') == 'tool_result' for b in m['content']))), '')
+            prompt = json.dumps(prompt, ensure_ascii=False)
+            demo = 'M0只读演示：学习统计。' in prompt
+            discovered = ''
             if has_result:
+                for result in latest:
+                    content = result.get('content', '')
+                    if isinstance(content, list):
+                        content = ''.join(b.get('text', '') for b in content if b.get('type') == 'text')
+                    try:
+                        value = json.loads(content)
+                    except (ValueError, TypeError):
+                        continue
+                    if isinstance(value, dict) and value.get('group'):
+                        discovered = value['group']
+            tools = None
+            if demo:
+                if not has_result:
+                    tools = [('find_learning_tools', {'group': 'resources'}), ('get_learning_stats', {}),
+                             ('get_recent_practice_result', {'exam_id': 1}), ('get_knowledge_mastery_map', {})]
+                elif discovered == 'resources':
+                    tools = [('find_learning_tools', {'group': 'practice'}),
+                             ('search_courses', {'query': 'M0久期'}), ('search_asr', {'query': '久期'})]
+                elif discovered == 'practice':
+                    tools = [('get_user_wrong_questions', {}), ('get_practice_questions', {'kp_name': 'M0久期', 'limit': 2}),
+                             ('get_due_reviews', {})]
+            elif 'M0工具发现' in prompt:
+                if not has_result:
+                    tools = [('find_learning_tools', {'group': 'resources'})]
+                elif discovered == 'resources':
+                    tools = [('search_courses', {'query': 'M0久期'})]
+            elif not has_result:
+                tools = [('get_recent_practice_result', {})] if 'M0批改快照' in prompt else [('get_learning_stats', {})]
+                if tools[0][0] not in {t['name'] for t in body.get('tools', [])}:
+                    tools = [('find_learning_tools', {'group': 'progress'})]
+            elif discovered == 'progress':
+                tools = [('get_learning_stats', {})]
+            if tools is None:
                 blocks = [({'type': 'text', 'text': ''}, {'type': 'text_delta',
                     'text': '本地协议模拟已完成工具往返；下方卡片来自隔离 Django 数据库的合成数据，不代表真实模型的判断。'})]
                 finish = 'end_turn'
             else:
-                tools = [('get_learning_stats', {})]
-                if demo:
-                    tools += [('get_recent_practice_result', {'exam_id': 1}), ('get_due_reviews', {}),
-                              ('search_courses', {'query': 'M0久期'}), ('search_asr', {'query': '久期'}),
-                              ('get_user_wrong_questions', {}), ('get_practice_questions', {'kp_name': 'M0久期', 'limit': 2}),
-                              ('get_knowledge_mastery_map', {})]
-                if 'M0批改快照' in json.dumps(latest, ensure_ascii=False):
-                    tools = [('get_recent_practice_result', {})]
-                blocks = [({'type': 'tool_use', 'id': f'm0-call-{index}', 'name': name, 'input': {}},
+                blocks = [({'type': 'tool_use', 'id': f'm0-call-{len(requests)}-{index}', 'name': name, 'input': {}},
                     {'type': 'input_json_delta', 'partial_json': json.dumps(arguments)})
                     for index, (name, arguments) in enumerate(tools)]
                 finish = 'tool_use'
@@ -276,14 +318,25 @@ print(json.dumps(host.run_turn(**json.load(sys.stdin)), ensure_ascii=False))
                 assert len(deleted['session']['messages']) == 8
                 print(json.dumps({'memory_correction_rebuilt_context': True, 'memory_deletion_rebuilt_context': True,
                                   'original_transcript_retained': True}), flush=True)
-                demo = run_turn('M0只读演示：查询学习统计、最近练习、到期复习、课程讲稿、错题、题库预览和掌握图谱。')
+                demo = run_turn('M0只读演示：学习统计。')
                 cards = demo['session']['messages'][-1]['cards']
                 assert len(cards) == 8, [(c['tool'], c['type']) for c in cards]
+                assert len(demo['gateway']['requests']) == 4
+                assert all(r['tool_count'] <= 8 for r in demo['gateway']['requests'])
                 previews = [c for c in cards if c['tool'] == 'get_practice_questions']
                 assert previews[0]['type'] == 'question_preview' and 'answer' not in json.dumps(previews[0]['payload'])
                 assert any(c['type'] == 'practice_result' and c['payload']['total_score'] == 8 for c in cards)
                 print(json.dumps({'readonly_cards': len(cards), 'card_types': sorted({c['type'] for c in cards}),
                     'practice_preview_without_answer': True, 'business_card_source': 'actual-django-synthetic-data'}, ensure_ascii=False), flush=True)
+                start = len(calls)
+                discovered = run_turn('M0工具发现')
+                assert len(calls) - start == 3
+                assert {t['name'] for t in calls[start]['tools']} == {'find_learning_tools'}
+                assert {t['name'] for t in calls[start+1]['tools']} == {'find_learning_tools', 'search_courses', 'search_asr', 'search_knowledge_tree'}
+                assert discovered['session']['messages'][-1]['cards'][0]['tool'] == 'search_courses'
+                print(json.dumps({'native_group_discovery': True, 'model_requests': 3,
+                    'max_visible_tools': max(r['tool_count'] for r in discovered['gateway']['requests']),
+                    'selected_calls': discovered['routing']['selected_calls']}, ensure_ascii=False), flush=True)
             if args.serve:
                 from http.server import ThreadingHTTPServer
                 from host import Handler

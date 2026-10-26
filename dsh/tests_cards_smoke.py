@@ -18,6 +18,8 @@ class CardsSmoke(unittest.TestCase):
 
         context = {'tools': [{'function': {'name': 'search_courses'}}]}
         self.assertEqual(tool_cards(events(), context), [{'tool': 'search_courses', **visual}])
+        discovered = {'tools': [{'function': {'name': 'find_learning_tools'}}], 'available_tools': context['tools']}
+        self.assertEqual(tool_cards(events(), discovered), [{'tool': 'search_courses', **visual}])
         self.assertEqual(tool_cards(events(name='render_visual'), context), [])
         self.assertEqual(tool_cards(events(error=True), context), [])
         self.assertEqual(tool_cards(events(value={'error': 'denied', 'visual': visual}), context), [])

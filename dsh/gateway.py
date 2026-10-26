@@ -29,7 +29,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
             or not 1 <= policy['max_requests'] <= 4 or not 1 <= policy['max_tokens'] <= 1024
             or not 1 <= policy['max_request_bytes'] <= 65536):
         raise ValueError('Unsupported M0 task policy')
-    allowed_tools = {t['function']['name'] for t in context['tools']}
+    allowed_tools = {t['function']['name'] for t in context.get('available_tools', context['tools']) + context['tools']}
     capability = secrets.token_urlsafe(32)
     requests = []
     fatal_status = None
@@ -106,7 +106,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
                             or not 0 < body['max_tokens'] <= policy['max_tokens']):
                         return self.reject(403, 'model_policy_denied')
                     tools = body.get('tools', [])
-                    if not isinstance(tools, list) or any(not isinstance(t, dict) or 'type' in t
+                    if not isinstance(tools, list) or len(tools) > 8 or any(not isinstance(t, dict) or 'type' in t
                             or t.get('name') not in allowed_tools for t in tools):
                         return self.reject(403, 'tool_policy_denied')
                 except (ValueError, TypeError):
@@ -120,6 +120,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
                 }}
                 body['thinking'] = {'type': 'disabled'}
                 record = {'request': len(requests) + 1, 'model': policy['model'],
+                          'tool_count': len(tools), 'tool_schema_bytes': len(json.dumps(tools, ensure_ascii=False).encode()),
                           'status': 'started', 'usage': {}, 'usage_complete': False,
                           'tool_results': sum(b.get('type') == 'tool_result'
                               for m in body.get('messages', [])[-1:] if isinstance(m.get('content'), list)

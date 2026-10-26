@@ -36,7 +36,7 @@ def backend_request(path, body):
     if urlsplit(base).hostname not in ('127.0.0.1', 'localhost', '::1'):
         raise HostConfigurationError('M0 业务接口仅允许本机隔离服务。')
     request = Request(base.rstrip('/') + path, json.dumps(body).encode(), {
-        'Content-Type': 'application/json', 'Authorization': 'Token ' + token,
+        'Content-Type': 'application/json', 'Authorization': ('DSH ' if os.environ.get('UNIMIND_DSH_AUTH_SCHEME') == 'DSH' else 'Token ') + token,
     }, method='POST')
     with build_opener(NoRedirect()).open(request, timeout=15) as response:
         return json.load(response)
@@ -72,7 +72,7 @@ def run_session_turn(message, model_config, session_id):
     home.mkdir(mode=0o700, exist_ok=True)
     audit_path = None
     if model_config['mode'] == 'deepseek-official':
-        audit_directory = ROOT.parent / '.m0-state'
+        audit_directory = Path(os.environ.get('UNIMIND_DSH_AUDIT_DIR', ROOT.parent / '.m0-state'))
         audit_directory.mkdir(exist_ok=True)
         audit_path = audit_directory / 'gateway-usage.jsonl'
     with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path) as gateway:
@@ -94,6 +94,8 @@ def run_session_turn(message, model_config, session_id):
         raise HostConfigurationError('DeepSeek 官方接口返回 402（余额不足），请检查账户余额；本轮未完成。')
     if not result.final_response:
         raise RuntimeError('DSH turn did not produce a response')
+    if result.finish_reason != 'completed':
+        raise HostConfigurationError('本轮未完整完成，请重新提问；未保存为成功对话。')
     if not gateway['requests'] or any(r['status'] != 'completed' for r in gateway['requests']):
         raise RuntimeError('Gateway turn did not complete')
     current = backend_request('/api/ai/dsh/context/', {'message': message})
@@ -108,11 +110,13 @@ def run_session_turn(message, model_config, session_id):
     SESSIONS.save(context, state)
     usage = {'operation': context['model_policy']['operation'], 'mode': gateway['mode'],
              'model': context['model_policy']['model'], 'requests': gateway['requests'], 'task_id': gateway['task_id']}
+    routing = {**context['routing'], 'selected_calls': [event['data']['name'] for event in result.events
+               if event.get('type') == 'tool/call']}
     return {
         'content': result.final_response,
         'finish_reason': result.finish_reason,
         'session_id': state['id'], 'session': SESSIONS.public(state),
-        'mode': gateway['mode'], 'gateway': usage, 'routing': context['routing'],
+        'mode': gateway['mode'], 'gateway': usage, 'routing': routing,
     }
 
 

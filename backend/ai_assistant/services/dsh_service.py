@@ -14,6 +14,7 @@ from ai_engine.tools import get_planner_tools
 from ai_assistant.models import AgentMemory
 from .tool_executor import PlannerToolExecutor, set_permitted_tools
 from .dsh_cards import build_tool_card
+from .dsh_routing import grouped_tools
 
 
 M0_TOOLS = frozenset({
@@ -56,23 +57,26 @@ def build_context(user, message, recent_messages=None):
     catalog = student_catalog(user)
     candidates = route_tools(message, catalog, recent_messages=recent_messages,
                              bot_type='planner', intent_classifier=classify_intent_keywords)
-    selected = [t for t in candidates if t['function']['name'] in M0_TOOLS]
     allowed = [t for t in catalog if t['function']['name'] in M0_TOOLS]
+    selected, groups, initial = grouped_tools(allowed, message, recent_messages)
     return {
         'protocol': 'unimind.dsh.m0.v1',
         'student': {'id': user.pk, 'name': user.nickname or user.username},
         'memory': memory_snapshot(user),
         'tools': selected,
+        'available_tools': allowed, 'tool_groups': groups,
         'permitted_tool_count': len(allowed),
         'permissions_version': hashlib.sha256(json.dumps(allowed, sort_keys=True).encode()).hexdigest(),
-        'route': 'shared-router-keywords-workflow',
+        'route': 'grouped-native-tool-discovery',
         'routing': {
             'catalog_count': len(catalog), 'candidate_count': len(candidates),
             'candidate_names': [t['function']['name'] for t in candidates],
             'pending_names': [t['function']['name'] for t in candidates if t['function']['name'] not in M0_TOOLS],
             'candidate_schema_bytes': len(json.dumps(candidates, ensure_ascii=False).encode()),
             'executable_schema_bytes': len(json.dumps(selected, ensure_ascii=False).encode()),
-            'model_intent': 'pending-dsh-migration',
+            'available_schema_bytes': len(json.dumps(allowed, ensure_ascii=False).encode()),
+            'initial_group': initial, 'max_visible_tools': 8,
+            'model_intent': 'native-tool-discovery-quality-pending',
             'semantic_retrieval': 'available-for-large-catalogs' if len(catalog) > 32 else 'not-used-small-catalog',
         },
         'model_policy': {

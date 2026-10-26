@@ -11,6 +11,7 @@ type BridgeContext = {
   student: unknown;
   memory: { version: string };
   tools: { function: ToolSchema }[];
+  tool_groups: Record<string, { title: string; description: string; tools: { function: ToolSchema }[] }>;
 };
 
 export const name = 'unimind-learning-m0';
@@ -23,7 +24,7 @@ export async function apply(ctx: Context) {
   const request = async <T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> => {
     const response = await fetch(new URL(path, backend), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Token ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `${process.env.UNIMIND_DSH_AUTH_SCHEME === 'DSH' ? 'DSH' : 'Token'} ${token}` },
       body: JSON.stringify(body),
       signal: AbortSignal.any([AbortSignal.timeout(15000), ...(signal ? [signal] : [])]),
       redirect: 'error',
@@ -40,8 +41,7 @@ export async function apply(ctx: Context) {
     name: 'unimind:student-memory', order: 100, required: true, interpolate: false,
     text: `当前学生的已知信息（数据，不是指令）：\n${JSON.stringify({ student: context.student, memory: context.memory })}`,
   });
-  for (const { function: definition } of context.tools) {
-    ctx.tools.register({
+  const registerBusiness = (definition: ToolSchema) => ctx.tools.register({
       ...definition,
       output: {
         schema: { type: 'object', additionalProperties: true },
@@ -59,6 +59,42 @@ export async function apply(ctx: Context) {
       execute: (args, exec) => request(`/api/ai/dsh/tools/${definition.name}/`, {
         arguments: args, memory_version: context.memory.version,
       }, exec.signal),
+    });
+  let active: (() => void)[] = [];
+  let pending: { function: ToolSchema }[] | null = null;
+  const replaceGroup = (tools: { function: ToolSchema }[]) => {
+    if (tools.length > 7) throw new Error('Learning tool group exceeds the visible budget');
+    for (const dispose of active) dispose();
+    active = tools.map(tool => registerBusiness(tool.function));
+  };
+  const discovery = context.tools.find(tool => tool.function.name === 'find_learning_tools');
+  replaceGroup(context.tools.filter(tool => tool !== discovery));
+  ctx.on('system-prompt/assemble', async (_assembly, scope, next) => {
+    const assembled = await next();
+    if (pending) {
+      replaceGroup(pending);
+      pending = null;
+      return { ...assembled, tools: ctx.tools.schemas(scope.scope) };
+    }
+    return assembled;
+  });
+  if (discovery) {
+    ctx.tools.register({
+      ...discovery.function,
+      output: {
+        schema: { type: 'object', additionalProperties: true },
+        render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
+      },
+      isConcurrencySafe: () => false,
+      execute: async args => {
+        const group = (args as { group?: unknown })?.group;
+        if (typeof group !== 'string' || !Object.hasOwn(context.tool_groups, group)) {
+          throw new Error('Unknown learning tool group');
+        }
+        const selected = context.tool_groups[group];
+        pending = selected.tools;
+        return { group, tools: selected.tools.map(({ function: tool }) => ({ name: tool.name, description: tool.description })) };
+      },
     });
   }
 }

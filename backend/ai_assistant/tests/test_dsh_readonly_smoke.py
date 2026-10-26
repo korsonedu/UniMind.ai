@@ -52,7 +52,9 @@ def test_readonly_student_queries(user, settings):
         'get_report_card': {}, 'get_my_achievements': {}, 'search_similar_questions': {'kp_code': 'M0-KP'},
     }
     context = build_context(user, '')
-    assert set(calls) <= {t['function']['name'] for t in context['tools']}
+    assert set(calls) <= {t['function']['name'] for t in context['available_tools']}
+    assert len(context['tools']) <= 8
+    assert set(calls) == {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']}
     original = (QuizExam.objects.count(), UserQuestionStatus.objects.count(), LearningSession.objects.count())
     results = {}
     for name, arguments in calls.items():

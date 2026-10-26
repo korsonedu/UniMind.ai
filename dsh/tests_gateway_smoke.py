@@ -44,6 +44,34 @@ def slow_fixture():
 
 
 class GatewaySmoke(unittest.TestCase):
+    def test_discovered_tools_obey_visible_limit(self):
+        upstream, calls = model_fixture()
+        tools = [{'function': {'name': f'learning_{index}'}} for index in range(9)]
+        context = {'model_policy': {'operation': 'assistant.chat.planner', 'tier': 'fast',
+                   'model': 'deepseek-v4-flash', 'max_requests': 2, 'max_tokens': 128, 'max_request_bytes': 4096},
+                   'tools': tools[:1], 'available_tools': tools}
+        try:
+            with task_gateway(context, f'http://127.0.0.1:{upstream.server_port}/v1/messages',
+                              'SYNTHETIC_SECRET', 'local-protocol-smoke') as gateway:
+                body = {'model': 'deepseek-v4-flash', 'stream': True, 'max_tokens': 128,
+                        'messages': [{'role': 'user', 'content': 'hello'}],
+                        'tools': [tool['function'] for tool in tools]}
+                def request():
+                    return Request(gateway['url'] + '/messages', json.dumps(body).encode(), {'x-api-key': gateway['credential']})
+                with self.assertRaises(HTTPError) as error:
+                    urlopen(request(), timeout=5)
+                with error.exception:
+                    self.assertEqual(error.exception.code, 403)
+                self.assertEqual(calls, [])
+                body['tools'] = [tools[-1]['function']]
+                with urlopen(request(), timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    response.read()
+                self.assertEqual(gateway['requests'][0]['tool_count'], 1)
+        finally:
+            upstream.shutdown()
+            upstream.server_close()
+
     def test_insufficient_balance_is_not_retried_upstream(self):
         upstream, calls = model_fixture(status=402)
         context = {'model_policy': {'operation': 'assistant.chat.planner', 'tier': 'fast',

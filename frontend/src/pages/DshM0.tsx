@@ -3,13 +3,13 @@ import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 
 type Health = { sdk: string; backend_configured: boolean; model_configured: boolean; mode: string };
 type LocalSession = { id: string; notice: string; updated_at: string; messages: { role: string; content: string; mode?: string; cards?: DshCard[] }[] };
-type Turn = { content: string; session: LocalSession; routing: Context['routing']; gateway: { model: string; requests: { status: string; tool_results: number; usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }[] } };
+type Turn = { content: string; session: LocalSession; routing: Context['routing']; gateway: { model: string; requests: { status: string; tool_count: number; tool_schema_bytes: number; tool_results: number; usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } }[] } };
 type Context = {
   student: { id: number; name: string };
   memory: { version: string; items: { id: number; key: string; value: string }[] };
   tools: { function: { name: string; description: string } }[];
   permitted_tool_count: number;
-  routing: { catalog_count: number; candidate_count: number; pending_names: string[]; candidate_schema_bytes: number; executable_schema_bytes: number };
+  routing: { catalog_count: number; candidate_count: number; pending_names: string[]; candidate_schema_bytes: number; executable_schema_bytes: number; available_schema_bytes: number; initial_group: string; max_visible_tools: number; selected_calls?: string[] };
 };
 
 async function request<T>(path: string, data?: Record<string, unknown>): Promise<T> {
@@ -135,6 +135,8 @@ export default function DshM0() {
           </div>)}</section>
           {turn && <p className="border-t border-black/10 pt-3 text-xs leading-6 text-black/50" aria-label="网关用量">
             {turn.gateway.model} · {turn.gateway.requests.length} 次请求 · {turn.gateway.requests.reduce((sum, r) => sum + r.tool_results, 0)} 个工具结果<br />
+            各请求工具数 / Schema：{turn.gateway.requests.map((r, i) => `#${i + 1} ${r.tool_count} 项 / ${r.tool_schema_bytes} bytes`).join(' → ')}<br />
+            工具调用轨迹：{turn.routing.selected_calls?.join(' → ') || '无工具调用'}<br />
             总输入 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.input_tokens || 0) + (r.usage.cache_read_input_tokens || 0) + (r.usage.cache_creation_input_tokens || 0), 0)} / 输出 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.output_tokens || 0), 0)} tokens。<br />
             输入明细：未缓存 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.input_tokens || 0), 0)} / 缓存读取 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.cache_read_input_tokens || 0), 0)} / 缓存创建 {turn.gateway.requests.reduce((sum, r) => sum + (r.usage.cache_creation_input_tokens || 0), 0)}。<br />最多 4 次请求，每次输出 1024 tokens。未接正式扣费。
           </p>}
@@ -148,11 +150,11 @@ export default function DshM0() {
             {context?.memory.items.length ? context.memory.items.map(item => <p key={item.id} className="mt-3 text-sm leading-6"><span className="text-black/45">{item.key}：</span>{item.value}</p>) : <p className="mt-3 text-sm text-black/45">{context ? '当前没有有效的长期记忆' : '尚未读取记忆'}</p>}
             {context && <p className="mt-3 break-all font-mono text-[10px] text-black/35">版本 {context.memory.version}</p>}
           </section>
-          <section><h2 className="font-semibold">本轮候选工具</h2>
-            <p className="mt-2 text-xs leading-6 text-black/45">{context?.routing ? `已鉴权目录 ${context.routing.catalog_count} 个，本轮候选 ${context.routing.candidate_count} 个；当前可执行 ${context.tools.length} / ${context.permitted_tool_count} 个只读工具。` : '按权限与问题选择'}</p>
+          <section><h2 className="font-semibold">本轮初始工具</h2>
+            <p className="mt-2 text-xs leading-6 text-black/45">{context?.routing ? `已鉴权目录 ${context.routing.catalog_count} 个，旧共享候选 ${context.routing.candidate_count} 个；初始提供 ${context.tools.length} 个工具（含发现），本人可用 ${context.permitted_tool_count} 个只读业务工具。` : '按权限与问题选择'}</p>
             <ul className="mt-3 space-y-2">{context?.tools.map(tool => <li key={tool.function.name} className="break-all border-t border-black/5 pt-2 font-mono text-xs">{tool.function.name}</li>)}</ul>
-            {context?.routing && <p className="mt-3 text-xs leading-6 text-black/45">候选 Schema {context.routing.candidate_schema_bytes} bytes；本轮实际开放 Schema {context.routing.executable_schema_bytes} bytes。模型意图分类尚待接入 DSH。</p>}
-            {!!context?.routing?.pending_names.length && <details className="mt-3 text-xs leading-6 text-black/50"><summary>候选中 {context.routing.pending_names.length} 项尚未迁移执行</summary><p className="mt-2 break-all font-mono">{context.routing.pending_names.join('、')}</p></details>}
+            {context?.routing && <p className="mt-3 text-xs leading-6 text-black/45">初始组：{context.routing.initial_group || '按需发现'}。每次最多 {context.routing.max_visible_tools} 个工具，发现后切换分组。<br />初始 Schema {context.routing.executable_schema_bytes} bytes；完整业务许可 Schema {context.routing.available_schema_bytes} bytes。真实模型选择质量尚待验证。</p>}
+            {!!context?.routing?.pending_names.length && <details className="mt-3 text-xs leading-6 text-black/50"><summary>旧候选中 {context.routing.pending_names.length} 项尚未开放</summary><p className="mt-2 break-all font-mono">{context.routing.pending_names.join('、')}</p></details>}
           </section>
         </aside>
       </div>

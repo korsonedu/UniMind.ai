@@ -34,7 +34,7 @@ class SessionSmoke(unittest.TestCase):
                 return deepcopy(context)
             harness = MagicMock()
             for method in ('start_session', 'resume_session'):
-                getattr(harness.__enter__.return_value, method).return_value.run.return_value = SimpleNamespace(final_response='fresh answer', finish_reason='stop', events=[])
+                getattr(harness.__enter__.return_value, method).return_value.run.return_value = SimpleNamespace(final_response='fresh answer', finish_reason='completed', events=[])
             config = {'url': 'http://127.0.0.1:1/v1/messages', 'key': 'SYNTHETIC_KEY', 'mode': 'local-protocol-smoke'}
             with patch.object(host, 'SESSIONS', store), patch.object(host, 'backend_request', backend), \
                     patch.object(host, 'task_gateway', gateway), patch.object(host, 'DeepSeekHarness', return_value=harness):
@@ -57,7 +57,7 @@ class SessionSmoke(unittest.TestCase):
             root = Path(temp) / 'dsh'
             root.mkdir()
             harness = MagicMock()
-            harness.__enter__.return_value.start_session.return_value.run.return_value = SimpleNamespace(final_response='test answer', finish_reason='stop', events=[])
+            harness.__enter__.return_value.start_session.return_value.run.return_value = SimpleNamespace(final_response='test answer', finish_reason='completed', events=[])
             with patch.object(host, 'ROOT', root), patch.object(host, 'SESSIONS', SessionStore(Path(temp) / 'sessions')), \
                     patch.object(host, 'backend_request', side_effect=lambda *_args: deepcopy(context)), \
                     patch.object(host, 'task_gateway', gateway), patch.object(host, 'DeepSeekHarness', return_value=harness):
