@@ -29,6 +29,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
         raise ValueError('Missing upstream credential')
     policy = context['model_policy']
     budgets = {'assistant.chat.planner': ('fast', 4, 1024),
+               'assistant.title': ('fast', 1, 64),
                'quizzes.preview_parse': ('fast', 1, 3200),
                'quizzes.grade_question': ('pro', 1, 2500),
                'quizzes.objective_analysis': ('fast', 1, 2000)}
@@ -126,7 +127,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                     'stream', 'temperature', 'top_p', 'stop_sequences',
                 }}
                 body['thinking'] = {'type': 'disabled'}
-                if policy['operation'] in ('quizzes.grade_question', 'quizzes.objective_analysis', 'quizzes.preview_parse'):
+                if policy['operation'] in ('quizzes.grade_question', 'quizzes.objective_analysis', 'quizzes.preview_parse', 'assistant.title'):
                     body['temperature'] = 0.4 if policy['operation'] == 'quizzes.objective_analysis' else 0.2
                 record = {'request': len(requests) + 1, 'model': policy['model'],
                           'tool_count': len(tools), 'tool_schema_bytes': len(json.dumps(tools, ensure_ascii=False).encode()),

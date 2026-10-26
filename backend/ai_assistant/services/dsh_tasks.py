@@ -15,10 +15,18 @@ from ai_engine.tools import GRADING_RESULT_SCHEMA, OBJECTIVE_ANALYSIS_SCHEMA, QU
 from .dsh_runtime import DshUnavailable
 
 
+TITLE_SCHEMA = {
+    'type': 'object',
+    'properties': {'title': {'type': 'string'}},
+    'required': ['title'],
+    'additionalProperties': False,
+}
+
 TASKS = {
     'quizzes.grade_question': ('submit_grading_result', 'pro', 2500, GRADING_RESULT_SCHEMA),
     'quizzes.preview_parse': ('submit_questions', 'fast', 3200, QUESTION_LIST_SCHEMA),
     'quizzes.objective_analysis': ('submit_objective_analysis', 'fast', 2000, OBJECTIVE_ANALYSIS_SCHEMA),
+    'assistant.title': ('submit_title', 'fast', 64, TITLE_SCHEMA),
 }
 
 
@@ -72,8 +80,11 @@ def run_structured(operation, prompt):
     context = {'model_policy': {'operation': operation, 'tier': tier, 'model': config['model'],
                                'max_requests': 1, 'max_tokens': tokens, 'max_request_bytes': 65536},
                'tools': [{'function': {'name': name, 'description': '提交本次结构化结果', 'parameters': wire}}]}
-    context['task_instruction'] = ('你是科晟教研录入助手。只解析给定资料中的题目、选项、答案和评分点，保持原意，不自行补写缺失的答案；不能确认的内容留空交给人工复核。'
-        if operation == 'quizzes.preview_parse' else '你是科晟课程评阅老师。严格按给定题目、参考答案和评分点评阅。')
+    instructions = {
+        'quizzes.preview_parse': '你是科晟教研录入助手。只解析给定资料中的题目、选项、答案和评分点，保持原意，不自行补写缺失的答案；不能确认的内容留空交给人工复核。',
+        'assistant.title': '你是对话标题生成器。根据用户和助手的第一轮内容生成不超过15个字的标题。只输出标题，不加引号或前缀。',
+    }
+    context['task_instruction'] = instructions.get(operation, '你是科晟课程评阅老师。严格按给定题目、参考答案和评分点评阅。')
     root = Path(state_dir)
     tasks = root / '.tasks'
     environment = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR') if key in os.environ}

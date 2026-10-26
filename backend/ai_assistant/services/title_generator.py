@@ -1,12 +1,31 @@
 """
 Synchronous conversation title generation.
 Called inline from SSE view after first assistant response completes.
-No Celery dependency — fast LLM call (< 2s) for a short title.
+Uses the server DSH task when enabled; otherwise keeps the legacy model path.
 """
 import logging
+
+from django.conf import settings
+
 from ai_service import AIService
 
 logger = logging.getLogger(__name__)
+
+TITLE_MAX_CHARS = 15
+
+
+def _fallback_title(user_msg):
+    """Deterministic short title when the DSH task is unavailable."""
+    return ' '.join(str(getattr(user_msg, 'content', '') or '').split())[:TITLE_MAX_CHARS]
+
+
+def _generate_title_via_dsh(prompt):
+    from ai_assistant.services.dsh_tasks import run_structured
+
+    result = run_structured('assistant.title', prompt)
+    if not isinstance(result, dict):
+        return ''
+    return str(result.get('title') or '').strip()[:TITLE_MAX_CHARS]
 
 
 def sync_generate_title(conversation_id, user_id, bot_id):
@@ -33,13 +52,20 @@ def sync_generate_title(conversation_id, user_id, bot_id):
             "为以上对话生成一个简短标题（≤15个字），直接输出标题，不要引号、不要前缀。"
         )
 
-        ai = AIService()
-        result = ai.simple_chat_text(
-            system_prompt="你是标题生成器。为对话生成简短标题（≤15字），直接输出标题。",
-            user_prompt=prompt,
-            operation='assistant.chat.title',
-        )
-        title = result.strip()[:120] if result else ''
+        if getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False):
+            try:
+                title = _generate_title_via_dsh(prompt)
+            except Exception:
+                logger.warning("DSH title generation failed for conversation %s", conversation_id, exc_info=True)
+                title = _fallback_title(user_msg)
+        else:
+            ai = AIService()
+            result = ai.simple_chat_text(
+                system_prompt="你是标题生成器。为对话生成简短标题（≤15字），直接输出标题。",
+                user_prompt=prompt,
+                operation='assistant.chat.title',
+            )
+            title = result.strip()[:120] if result else ''
 
         if title:
             conversation, _ = Conversation.objects.get_or_create(
