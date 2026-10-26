@@ -9,6 +9,7 @@ import subprocess
 from contextlib import contextmanager
 from urllib.parse import urlsplit
 from uuid import uuid4
+from threading import Thread
 
 from django.conf import settings
 from django.db import connection, OperationalError
@@ -66,7 +67,7 @@ def quota_write_lock():
         raise DshUnavailable('数据服务繁忙或运行环境不可用，请稍后重试。') from None
 
 
-def run_site_action(user, action, *, message='', session_id=None, reservation=None):
+def run_site_action(user, action, *, message='', session_id=None, reservation=None, on_event=None):
     python = getattr(settings, 'UNIMIND_DSH_PYTHON', '')
     api_url = getattr(settings, 'UNIMIND_DSH_API_URL', '')
     state_dir = getattr(settings, 'UNIMIND_DSH_STATE_DIR', '')
@@ -98,6 +99,9 @@ def run_site_action(user, action, *, message='', session_id=None, reservation=No
     environment = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR') if key in os.environ}
     reserved = None
     completed = False
+    event_write = None
+    event_reader = None
+    event_thread = None
     try:
         if create_session:
             owner = hashlib.sha256(json.dumps([api_url, user.pk]).encode()).hexdigest()
@@ -106,8 +110,27 @@ def run_site_action(user, action, *, message='', session_id=None, reservation=No
             candidate = directory / session_id
             candidate.mkdir(mode=0o700)
             reserved = candidate
+        if on_event:
+            event_read, event_write = os.pipe()
+            environment['UNIMIND_DSH_EVENT_FD'] = str(event_write)
+            event_reader = os.fdopen(event_read, 'r')
+            def receive_events():
+                try:
+                    for line in event_reader:
+                        if len(line) <= 65536:
+                            event = json.loads(line)
+                            if isinstance(event, dict) and event.get('type') in ('step', 'text_delta', 'tool_status'):
+                                on_event(event)
+                except (ValueError, OSError):
+                    pass
+            event_thread = Thread(target=receive_events, daemon=True)
         with subprocess.Popen([python, str(worker)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                              stderr=subprocess.DEVNULL, env=environment, start_new_session=True) as process:
+                              stderr=subprocess.DEVNULL, env=environment, start_new_session=True,
+                              pass_fds=(event_write,) if event_write is not None else ()) as process:
+            if event_write is not None:
+                os.close(event_write)
+                event_write = None
+                event_thread.start()
             try:
                 output, _ = process.communicate(json.dumps(payload).encode(), timeout=120)
             except subprocess.TimeoutExpired:
@@ -131,6 +154,12 @@ def run_site_action(user, action, *, message='', session_id=None, reservation=No
     except (OSError, ValueError, KeyError, TypeError):
         raise DshUnavailable() from None
     finally:
+        if event_write is not None:
+            os.close(event_write)
+        if event_thread and event_thread.ident:
+            event_thread.join(timeout=2)
+        if event_reader:
+            event_reader.close()
         if reserved is not None and not completed and reserved.exists():
             try:
                 shutil.rmtree(reserved)

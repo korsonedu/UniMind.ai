@@ -13,6 +13,7 @@ from deepseek_harness import DeepSeekHarness
 from gateway import task_gateway
 from sessions import SessionStore, SessionUnavailable, context_version
 from cards import tool_cards
+from streaming import tool_status
 
 
 ROOT = Path(__file__).resolve().parent
@@ -42,12 +43,12 @@ def backend_request(path, body):
         return json.load(response)
 
 
-def run_turn(message, model_config=None, session_id=None):
+def run_turn(message, model_config=None, session_id=None, on_event=None):
     with SESSIONS.lock:
-        return run_session_turn(message, model_config, session_id)
+        return run_session_turn(message, model_config, session_id, on_event)
 
 
-def run_session_turn(message, model_config, session_id):
+def run_session_turn(message, model_config, session_id, on_event=None):
     if model_config is None:
         model_url = os.environ.get('UNIMIND_DSH_MODEL_URL', '')
         if urlsplit(model_url).hostname not in ('127.0.0.1', 'localhost', '::1'):
@@ -75,7 +76,7 @@ def run_session_turn(message, model_config, session_id):
         audit_directory = Path(os.environ.get('UNIMIND_DSH_AUDIT_DIR', ROOT.parent / '.m0-state'))
         audit_directory.mkdir(exist_ok=True)
         audit_path = audit_directory / 'gateway-usage.jsonl'
-    with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path) as gateway:
+    with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path, **({'on_event': on_event} if on_event else {})) as gateway:
         with DeepSeekHarness(
             dsh_home=str(home), cwd=str(home), patches=(str(ROOT / 'profile.patch.yml'),),
             provider='deepseek-official', model=context['model_policy']['model'],
@@ -89,7 +90,14 @@ def run_session_turn(message, model_config, session_id):
             },
         ) as harness:
             session = harness.resume_session(state['runtime_id']) if state['runtime_ready'] else harness.start_session(state['runtime_id'])
-            result = session.run(message)
+            calls = {}
+            allowed = {t['function']['name'] for t in context.get('available_tools', []) + context['tools']}
+            def notify(notification):
+                if notification.method == 'session.event' and notification.payload.get('sessionId') == state['runtime_id']:
+                    public = tool_status(notification.payload.get('event', {}), allowed, calls)
+                    if on_event and public:
+                        on_event(public)
+            result = session.run(message, **({'on_notification': notify} if on_event else {}))
     if any(r['status'] == 'upstream_http_402' for r in gateway['requests']):
         raise HostConfigurationError('DeepSeek 官方接口返回 402（余额不足），请检查账户余额；本轮未完成。')
     if not result.final_response:

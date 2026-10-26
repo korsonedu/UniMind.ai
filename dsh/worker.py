@@ -7,12 +7,13 @@ import shutil
 from pathlib import Path
 import sys
 from uuid import uuid4
+from threading import Lock
 
 import host
 from sessions import SessionStore, SessionUnavailable
 
 
-def execute(payload):
+def execute(payload, on_event=None):
     os.environ.update({'UNIMIND_API_URL': payload['api_url'], 'UNIMIND_AUTH_TOKEN': payload['token'],
                        'UNIMIND_DSH_AUTH_SCHEME': 'DSH',
                        'UNIMIND_DSH_AUDIT_DIR': str(Path(payload['state_dir']).parent / 'usage')})
@@ -45,7 +46,7 @@ def execute(payload):
             new_session = payload['create_session']
             session_id = host.SESSIONS.create(context, payload['session_id'])['id'] if new_session else payload['session_id']
             try:
-                result = host.run_turn(payload['message'], payload['model'], session_id)
+                result = host.run_turn(payload['message'], payload['model'], session_id, on_event)
             except Exception:
                 if new_session:
                     shutil.rmtree(host.SESSIONS.directory(context, session_id))
@@ -63,8 +64,19 @@ def execute(payload):
 
 
 if __name__ == '__main__':
+    event_stream = None
+    event_lock = Lock()
+    def emit(event):
+        if event_stream:
+            with event_lock:
+                event_stream.write(json.dumps(event, ensure_ascii=False) + '\n')
+                event_stream.flush()
     try:
-        response = execute(json.load(sys.stdin))
+        fd = os.environ.get('UNIMIND_DSH_EVENT_FD')
+        if fd:
+            os.set_inheritable(int(fd), False)
+            event_stream = os.fdopen(int(fd), 'w')
+        response = execute(json.load(sys.stdin), emit if event_stream else None)
     except SessionUnavailable:
         response = {'status': 404, 'error': '会话不存在或不属于当前账号。'}
     except host.HostConfigurationError as exc:

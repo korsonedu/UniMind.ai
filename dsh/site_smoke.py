@@ -23,6 +23,7 @@ def main():
     parser.add_argument('--port', type=int, default=0)
     args = parser.parse_args()
     model, calls = model_fixture()
+    model.stream_delay = 0.15
     with TemporaryDirectory(prefix='unimind-m0-smoke-') as state:
         env = {**os.environ, 'ACCOUNT_ENABLED': 'false', 'ACCOUNT_RSA_KEY_PATH': '',
                'ACCOUNT_DEV_LOCAL_CACHE': 'true', 'UNIMIND_DSH_ENABLED': 'true',
@@ -58,6 +59,19 @@ def main():
                             return exc.code, json.load(exc)
                         except ValueError:
                             return exc.code, {'error': 'non_json_error'}
+
+            def request_stream(token, body):
+                from time import monotonic
+                req = Request(base + '/api/ai/dsh/chat/stream/', json.dumps(body).encode(),
+                    {'Content-Type': 'application/json', 'Authorization': 'Token ' + token})
+                events, times = [], []
+                with urlopen(req, timeout=130) as response:
+                    assert 'text/event-stream' in response.headers['Content-Type']
+                    for line in response:
+                        if line.startswith(b'data: '):
+                            events.append(json.loads(line[6:]))
+                            times.append(monotonic())
+                return events, times
 
             a = {'message': '查询学习统计，临时代号 SITE_A_42。', 'request_id': str(uuid4())}
             b = {'message': '查询学习统计，临时代号 SITE_B_86。', 'request_id': str(uuid4())}
@@ -98,11 +112,25 @@ def main():
             assert not list((Path(state) / 'sessions').rglob(f'{sid}/transcript.json'))
             assert request(identity['token'], 'chat', a)[0] == 410
             assert request(identity['other_token'], 'session/read', {'session_id': result_b['session_id']})[0] == 200
+            streaming = {'message': '查询学习统计，流式验证。', 'request_id': str(uuid4())}
+            events, times = request_stream(identity['token'], streaming)
+            assert events[-1]['type'] == 'done', events
+            result_stream = events[-1]['result']
+            first_text = next(index for index, event in enumerate(events) if event['type'] == 'text_delta')
+            assert sum(event['type'] == 'text_delta' for event in events) >= 3
+            assert times[-1] - times[first_text] >= 0.2, 'ASGI must deliver provisional text before task settlement'
+            assert ''.join(event['text'] for event in events if event['type'] == 'text_delta') == result_stream['content']
+            assert any(event['type'] == 'tool_status' for event in events)
+            assert result_stream['session']['messages'][-1]['cards']
+            count = len(calls)
+            assert request(identity['token'], 'chat', streaming) == (200, result_stream)
+            assert len(calls) == count
             model.response_status = 422
             files = set((Path(state) / 'sessions').rglob('transcript.json'))
             failed = {'message': '查询学习统计。', 'request_id': str(uuid4())}
-            status, _ = request(identity['token'], 'chat', failed)
-            assert status == 503
+            failed_events, _ = request_stream(identity['token'], failed)
+            assert failed_events[-1]['type'] == 'error' and failed_events[-1]['status'] == 503
+            assert not any(event['type'] == 'done' for event in failed_events)
             assert set((Path(state) / 'sessions').rglob('transcript.json')) == files
             source = """
 import json, os, sys
@@ -113,13 +141,14 @@ django.setup()
 from users.models import WeeklyAIUsage, AIUsageReservation
 print(json.dumps({'calls': list(WeeklyAIUsage.objects.order_by('user_id').values_list('ai_calls',flat=True)),
     'failed_released': AIUsageReservation.objects.get(request_id=sys.argv[2]).status == 'released',
-    'deleted_responses': list(AIUsageReservation.objects.filter(user__username='m0-student',status='succeeded').values_list('response',flat=True))}))
+    'deleted_responses': list(AIUsageReservation.objects.filter(user__username='m0-student',status='succeeded',response__deleted=True).values_list('response',flat=True))}))
 """
             ledger = json.loads(subprocess.check_output([args.backend_python, '-c', source,
                 str(ROOT / 'backend'), failed['request_id']], env=env, text=True))
-            assert ledger['calls'] == [2, 1] and ledger['failed_released'], ledger
+            assert ledger['calls'] == [3, 1] and ledger['failed_released'], ledger
+            assert len(ledger['deleted_responses']) == 2
             assert all(response == {'engine': 'dsh', 'session_id': sid, 'deleted': True} for response in ledger['deleted_responses'])
-            print(json.dumps({'site_authentication': True, 'parallel_students_isolated': True,
+            print(json.dumps({'site_authentication': True, 'asgi_stream_before_completion': True, 'stream_replay_no_extra_call': True, 'parallel_students_isolated': True,
                 'native_session_resumed': True, 'cross_student_session_denied': True,
                 'idempotent_without_extra_model_call': True, 'weekly_calls': ledger['calls'],
                 'failed_call_released': True, 'session_and_cached_text_deleted': True,

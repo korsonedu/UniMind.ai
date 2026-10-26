@@ -44,6 +44,30 @@ def slow_fixture():
 
 
 class GatewaySmoke(unittest.TestCase):
+    def test_live_text_callback_is_filtered(self):
+        from streaming import text_delta
+        self.assertIsNone(text_delta({'type': 'content_block_delta', 'delta': {'type': 'thinking_delta', 'thinking': 'PRIVATE_REASONING'}}))
+        self.assertIsNone(text_delta({'type': 'content_block_delta', 'delta': {'type': 'input_json_delta', 'partial_json': 'PRIVATE_ARGS'}}))
+        self.assertEqual(text_delta({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': '正文'}}), {'type': 'text_delta', 'text': '正文'})
+        upstream, _calls = model_fixture()
+        context = {'model_policy': {'operation': 'assistant.chat.planner', 'tier': 'fast',
+                   'model': 'deepseek-v4-flash', 'max_requests': 1, 'max_tokens': 128, 'max_request_bytes': 4096}, 'tools': []}
+        events = []
+        try:
+            with task_gateway(context, f'http://127.0.0.1:{upstream.server_port}/v1/messages',
+                              'SYNTHETIC_SECRET', 'local-protocol-smoke', on_event=events.append) as gateway:
+                body = {'model': 'deepseek-v4-flash', 'stream': True, 'max_tokens': 128,
+                        'messages': [{'role': 'user', 'content': [{'type': 'tool_result', 'tool_use_id': 'test', 'content': 'synthetic'}]}]}
+                with urlopen(Request(gateway['url'] + '/messages', json.dumps(body).encode(),
+                             {'x-api-key': gateway['credential']}), timeout=5) as response:
+                    response.read()
+                self.assertEqual(events[0], {'type': 'step', 'step': 1})
+                self.assertTrue(any(event['type'] == 'text_delta' for event in events))
+                self.assertNotIn('SYNTHETIC_SECRET', json.dumps(events))
+        finally:
+            upstream.shutdown()
+            upstream.server_close()
+
     def test_discovered_tools_obey_visible_limit(self):
         upstream, calls = model_fixture()
         tools = [{'function': {'name': f'learning_{index}'}} for index in range(9)]

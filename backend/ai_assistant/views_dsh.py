@@ -91,36 +91,57 @@ class DshStatusView(DshSiteView):
                          'mode': mode, 'model_configured': configured})
 
 
+def complete_chat(user, body, on_event=None):
+    with site_request_lock(user):
+        fingerprint = hashlib.sha256(json.dumps({'engine': 'dsh', 'message': body['message'],
+                                                 'session_id': body['session_id']}, sort_keys=True).encode()).hexdigest()
+        with quota_write_lock():
+            reservation = reserve_ai_call(user, body['request_id'], fingerprint=fingerprint)
+        if not reservation.acquired:
+            if reservation.status == 'pending':
+                error = DshUnavailable({'error': '这条提问仍在处理中。'})
+                error.status_code = 409
+                raise error
+            if reservation.response.get('deleted'):
+                error = DshUnavailable({'error': '该会话已删除。'})
+                error.status_code = 410
+                raise error
+            return reservation.response
+        try:
+            result = run_site_action(user, 'chat', message=body['message'],
+                                     session_id=body['session_id'], reservation=reservation,
+                                     **({'on_event': on_event} if on_event else {}))
+            if result.get('finish_reason') != 'completed' or not result.get('content', '').strip():
+                raise DshUnavailable('本轮回答未完整完成，未扣除问答额度。')
+            result.update(request_id=str(reservation.request_id), engine='dsh')
+            with quota_write_lock():
+                confirmed = confirm_ai_call(reservation, response=result)
+            if confirmed.status != 'succeeded' or confirmed.attempt_id != reservation.attempt_id:
+                raise DshUnavailable()
+            return result
+        finally:
+            with quota_write_lock():
+                release_ai_call(reservation)
+
+
 class DshChatView(DshSiteView):
     def post(self, request):
         data = SiteChatInput(data=request.data)
         data.is_valid(raise_exception=True)
-        body = data.validated_data
-        with site_request_lock(request.user):
-            fingerprint = hashlib.sha256(json.dumps({'engine': 'dsh', 'message': body['message'],
-                                                     'session_id': body['session_id']}, sort_keys=True).encode()).hexdigest()
-            with quota_write_lock():
-                reservation = reserve_ai_call(request.user, body['request_id'], fingerprint=fingerprint)
-            if not reservation.acquired:
-                if reservation.status == 'pending':
-                    return Response({'error': '这条提问仍在处理中。'}, status=409)
-                if reservation.response.get('deleted'):
-                    return Response({'error': '该会话已删除。'}, status=410)
-                return Response(reservation.response)
-            try:
-                result = run_site_action(request.user, 'chat', message=body['message'],
-                                         session_id=body['session_id'], reservation=reservation)
-                if result.get('finish_reason') != 'completed' or not result.get('content', '').strip():
-                    raise DshUnavailable('本轮回答未完整完成，未扣除问答额度。')
-                result.update(request_id=str(reservation.request_id), engine='dsh')
-                with quota_write_lock():
-                    confirmed = confirm_ai_call(reservation, response=result)
-                if confirmed.status != 'succeeded' or confirmed.attempt_id != reservation.attempt_id:
-                    raise DshUnavailable()
-                return Response(result)
-            finally:
-                with quota_write_lock():
-                    release_ai_call(reservation)
+        return Response(complete_chat(request.user, data.validated_data))
+
+
+class DshChatStreamView(DshSiteView):
+    def post(self, request):
+        from django.http import StreamingHttpResponse
+        from .services.dsh_stream import stream_events
+        data = SiteChatInput(data=request.data)
+        data.is_valid(raise_exception=True)
+        response = StreamingHttpResponse(stream_events(lambda emit: complete_chat(request.user, data.validated_data, emit)),
+                                         content_type='text/event-stream')
+        response['Cache-Control'] = 'no-store'
+        response['X-Accel-Buffering'] = 'no'
+        return response
 
 
 class DshSessionView(DshSiteView):

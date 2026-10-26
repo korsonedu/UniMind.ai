@@ -37,6 +37,40 @@ async function request<T>(path: string, data?: Record<string, unknown>, signal?:
   return result;
 }
 
+type StreamEvent = { type: string; text?: string; step?: number; name?: string; status?: string | number; error?: string; result?: Turn };
+async function streamTurn(body: Pending, signal: AbortSignal, emit: (event: StreamEvent) => void): Promise<Turn> {
+  const base = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+  const response = await fetch(`${base}/ai/dsh/chat/stream/`, {
+    method: 'POST', credentials: 'include', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw new RequestError(result.error || result.detail || '站点流式入口暂不可用。', response.status);
+  }
+  if (!response.body || !response.headers.get('Content-Type')?.includes('text/event-stream')) throw new Error('未收到有效的实时响应。');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error('连接已结束，回答尚未确认完成；请恢复同一请求。');
+      buffer += decoder.decode(value, { stream: true });
+      if (buffer.length > 3 * 1024 * 1024) throw new Error('实时响应超出显示范围。');
+      let end;
+      while ((end = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, end); buffer = buffer.slice(end + 2);
+        if (!frame.startsWith('data: ')) continue;
+        const event = JSON.parse(frame.slice(6)) as StreamEvent;
+        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+        if (event.type === 'done' && event.result) return event.result;
+        if (event.type === 'error') throw new RequestError(event.error || '本轮未完成。', Number(event.status) || 503);
+        emit(event);
+      }
+    }
+  } finally { await reader.cancel().catch(() => undefined); }
+}
+
 export default function DshM0() {
   const [health, setHealth] = useState<Health | null>(null);
   const [context, setContext] = useState<Context | null>(null);
@@ -46,6 +80,9 @@ export default function DshM0() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState<Pending | null>(null);
+  const [liveText, setLiveText] = useState('');
+  const [liveStep, setLiveStep] = useState(0);
+  const [liveTool, setLiveTool] = useState('');
   const operation = useRef<AbortController | null>(null);
   const storageKey = useRef<string | null>(site ? null : 'unimind-dsh-m0-session');
   const storage = site ? sessionStorage : localStorage;
@@ -60,13 +97,13 @@ export default function DshM0() {
     operation.current?.abort();
     const controller = new AbortController();
     operation.current = controller;
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setLiveText(''); setLiveStep(0); setLiveTool('');
     return controller.signal;
   };
   const clearIdentity = () => {
     operation.current?.abort();
     selectSession(null); storageKey.current = site ? null : 'unimind-dsh-m0-session';
-    setHealth(null); setContext(null); setTurn(null); setRetry(null); setMessage(defaultMessage); setBusy(false);
+    setHealth(null); setContext(null); setTurn(null); setRetry(null); setMessage(defaultMessage); setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool('');
   };
   const report = (err: unknown, signal: AbortSignal) => {
     if (signal.aborted) return;
@@ -132,7 +169,12 @@ export default function DshM0() {
       setContext(latest);
       if (chat) {
         if (site) setRetry(body);
-        const result = await request<Turn>('/chat', body, signal);
+        const result = site ? await streamTurn(body, signal, event => {
+          if (signal.aborted) return;
+          if (event.type === 'step') { setLiveStep(event.step || 0); setLiveText(''); }
+          if (event.type === 'text_delta') setLiveText(text => (text + (event.text || '')).slice(0, 65536));
+          if (event.type === 'tool_status') setLiveTool(`${event.name} · ${event.status === 'running' ? '查询中' : '已返回'}`);
+        }) : await request<Turn>('/chat', body, signal);
         if (site) {
           const current = await request<Health>('/status', undefined, signal);
           if (signal.aborted) return;
@@ -144,7 +186,7 @@ export default function DshM0() {
     } catch (err) {
       if (!signal.aborted && err instanceof RequestError && [400, 401, 403, 404, 410].includes(err.status)) setRetry(null);
       report(err, signal);
-    } finally { if (!signal.aborted) setBusy(false); }
+    } finally { if (!signal.aborted) { setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool(''); } }
   };
 
   const manageSession = async (action: 'new' | 'delete') => {
@@ -196,6 +238,15 @@ export default function DshM0() {
             <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-black px-4 py-2 text-white disabled:opacity-40">{busy ? '正在验证…' : retry ? '恢复这次提问（同一请求）' : health?.mode === 'deepseek-official' ? '调用官方模型' : site ? '通过站点运行 DSH' : '运行 DSH 协议链路'}</button>
             <button disabled={busy} onClick={() => void refresh()} className="px-2 py-2 text-black/55 underline disabled:opacity-40">刷新连接与会话</button>
           </div>
+          {site && busy && <button className="text-xs underline text-black/55" onClick={() => {
+            operation.current?.abort(); setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool('');
+            setError('已停止接收。服务端任务可能仍在处理，恢复会使用同一请求。');
+          }}>停止接收</button>}
+          {site && busy && liveStep > 0 && <section aria-label="实时回答" aria-live="polite" className="border-l-2 border-black/20 pl-4 text-sm leading-7">
+            <p className="text-xs text-black/45">小宇正在生成 · 第 {liveStep} 步{liveTool ? ` · ${liveTool}` : ''}</p>
+            <p className="whitespace-pre-wrap">{liveText || '正在查询和组织回答…'}</p>
+            <p className="text-xs text-black/40">完成后保存完整回答；当前片段尚未确认。</p>
+          </section>}
           {retry && !busy && <p className="text-xs leading-6 text-black/50">这次提问尚未确认返回。恢复会使用相同请求 ID；页面取消或刷新不会撤销服务端任务。此页不会自动重试。</p>}
           {error && <p role="alert" className="border-l-2 border-amber-600 bg-amber-50 p-3 text-sm leading-6">{error}</p>}
           <div className="flex flex-wrap gap-4 border-t border-black/10 pt-3 text-xs text-black/55">

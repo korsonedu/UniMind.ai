@@ -12,11 +12,14 @@ from time import monotonic
 from urllib.parse import urlsplit
 
 
+from streaming import text_delta
+
+
 TASK_TIMEOUT_SECONDS = 90
 
 
 @contextmanager
-def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
+def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_event=None):
     target = urlsplit(upstream_url)
     official = upstream_url == 'https://api.deepseek.com/anthropic/v1/messages'
     fixture = target.scheme == 'http' and target.hostname in ('127.0.0.1', 'localhost', '::1')
@@ -125,6 +128,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
                           'tool_results': sum(b.get('type') == 'tool_result'
                               for m in body.get('messages', [])[-1:] if isinstance(m.get('content'), list)
                               for b in m['content'] if isinstance(b, dict))}
+                if on_event:
+                    on_event({'type': 'step', 'step': record['request']})
                 requests.append(record)  # Failures consume the attempt; no invisible retries.
                 started = monotonic()
                 streaming = False
@@ -166,6 +171,9 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None):
                                 raise RuntimeError('Response budget exceeded')
                             if line.startswith(b'data: '):
                                 event = json.loads(line[6:])
+                                public = text_delta(event)
+                                if on_event and public:
+                                    on_event(public)
                                 usage = event.get('usage', event.get('message', {}).get('usage', {}))
                                 record['usage'].update({k: v for k, v in usage.items()
                                     if k in ('input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens')

@@ -107,37 +107,47 @@ def backend_fixture():
         daemon_threads = True
 
     application = get_wsgi_application()
-    drop_next_chat = [False]
-    def browser_fixture(environ, start_response):
-        path = environ.get('PATH_INFO', '')
-        identities = {'/api/ai/dsh-fixture/student-a/': user, '/api/ai/dsh-fixture/student-b/': other}
-        if settings.UNIMIND_DSH_SITE_ENABLED and path == '/api/ai/dsh-fixture/drop-next-chat/':
-            drop_next_chat[0] = True
-            start_response('200 OK', [('Content-Type', 'application/json')])
-            return [b'{"next_chat_response":"will_be_dropped_after_completion"}']
-        if settings.UNIMIND_DSH_SITE_ENABLED and path in (*identities, '/api/ai/dsh-fixture/logout/'):
-            # This application exists only after fixture_database() validates a new temporary DB.
-            value = Token.objects.get_or_create(user=identities[path])[0].key if path in identities else ''
-            cookie = f'auth_token={value}; HttpOnly; SameSite=Lax; Path=/' + ('; Max-Age=0' if not value else '')
-            start_response('302 Found', [('Location', '/dev/dsh?source=site'), ('Set-Cookie', cookie), ('Content-Length', '0')])
-            return [b'']
-        if settings.UNIMIND_DSH_SITE_ENABLED and path == '/api/ai/dsh/chat/' and drop_next_chat[0]:
-            drop_next_chat[0] = False
-            captured = []
-            def capture(status, headers, exc_info=None):
-                captured.append(status)
-            response = application(environ, capture)
-            try:
-                b''.join(response)  # Complete the real task and ledger before losing its response.
-            finally:
-                if hasattr(response, 'close'):
-                    response.close()
-            start_response('503 Service Unavailable', [('Content-Type', 'application/json')])
-            return [b'{"error":"Synthetic delivery failure after server completion"}']
-        return application(environ, start_response)
-
-    server = make_server('127.0.0.1', int(os.environ.get('UNIMIND_M0_FIXTURE_PORT', '0')), browser_fixture,
-                        server_class=ThreadedServer, handler_class=Quiet)
+    if settings.UNIMIND_DSH_SITE_ENABLED:
+        import socket
+        from asgiref.sync import sync_to_async
+        from django.core.asgi import get_asgi_application
+        from daphne.server import Server
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1', int(os.environ.get('UNIMIND_M0_FIXTURE_PORT', '0'))))
+            port = probe.getsockname()[1]
+        settings.UNIMIND_DSH_API_URL = f'http://127.0.0.1:{port}'
+        asgi = get_asgi_application()
+        drop_next_chat = [False]
+        async def browser_fixture(scope, receive, send):
+            path = scope.get('path', '')
+            identities = {'/api/ai/dsh-fixture/student-a/': user, '/api/ai/dsh-fixture/student-b/': other}
+            if path == '/api/ai/dsh-fixture/drop-next-chat/':
+                drop_next_chat[0] = True
+                await send({'type': 'http.response.start', 'status': 200, 'headers': [(b'content-type', b'application/json')]})
+                await send({'type': 'http.response.body', 'body': b'{"next_chat_response":"will_be_dropped_after_completion"}'})
+                return
+            if path in (*identities, '/api/ai/dsh-fixture/logout/'):
+                # Only reachable after fixture_database() validates a newly created temporary DB.
+                value = await sync_to_async(lambda: Token.objects.get_or_create(user=identities[path])[0].key)() if path in identities else ''
+                cookie = f'auth_token={value}; HttpOnly; SameSite=Lax; Path=/' + ('; Max-Age=0' if not value else '')
+                await send({'type': 'http.response.start', 'status': 302, 'headers': [(b'location', b'/dev/dsh?source=site'), (b'set-cookie', cookie.encode())]})
+                await send({'type': 'http.response.body', 'body': b''})
+                return
+            if path in ('/api/ai/dsh/chat/', '/api/ai/dsh/chat/stream/') and drop_next_chat[0]:
+                drop_next_chat[0] = False
+                async def discard(_message):
+                    pass
+                await asgi(scope, receive, discard)
+                await send({'type': 'http.response.start', 'status': 503, 'headers': [(b'content-type', b'application/json')]})
+                await send({'type': 'http.response.body', 'body': b'{"error":"Synthetic delivery failure after server completion"}'})
+                return
+            await asgi(scope, receive, send)
+        def ready():
+            print('READY ' + json.dumps({'port': port, 'token': token.key, 'other_token': other_token.key}), flush=True)
+        Server(browser_fixture, endpoints=[f'tcp:port={port}:interface=127.0.0.1'], ready_callable=ready,
+               verbosity=0, action_logger=lambda *_args: None).run()
+        return
+    server = make_server('127.0.0.1', 0, application, server_class=ThreadedServer, handler_class=Quiet)
     settings.UNIMIND_DSH_API_URL = f'http://127.0.0.1:{server.server_port}'
     print('READY ' + json.dumps({'port': server.server_port, 'token': token.key, 'other_token': other_token.key}), flush=True)
     server.serve_forever()
@@ -220,11 +230,13 @@ def model_fixture(status=200):
                  'stop_sequence': None, 'usage': {'input_tokens': 20, 'output_tokens': 0}}},
             ]
             for index, (block, delta) in enumerate(blocks):
-                events.extend([
-                    {'type': 'content_block_start', 'index': index, 'content_block': block},
-                    {'type': 'content_block_delta', 'index': index, 'delta': delta},
-                    {'type': 'content_block_stop', 'index': index},
-                ])
+                events.append({'type': 'content_block_start', 'index': index, 'content_block': block})
+                fragments = [delta]
+                if delta.get('type') == 'text_delta' and getattr(self.server, 'stream_delay', 0):
+                    text = delta['text']
+                    fragments = [{**delta, 'text': text[offset:offset + 10]} for offset in range(0, len(text), 10)]
+                events.extend({'type': 'content_block_delta', 'index': index, 'delta': fragment} for fragment in fragments)
+                events.append({'type': 'content_block_stop', 'index': index})
             events += [
                 {'type': 'message_delta', 'delta': {'stop_reason': finish, 'stop_sequence': None}, 'usage': {'output_tokens': 10}},
                 {'type': 'message_stop'},
@@ -234,6 +246,10 @@ def model_fixture(status=200):
             self.end_headers()
             for event in events:
                 self.wfile.write((f'event: {event["type"]}\ndata: ' + json.dumps(event, ensure_ascii=False) + '\n\n').encode())
+                self.wfile.flush()
+                if event.get('delta', {}).get('type') == 'text_delta' and getattr(self.server, 'stream_delay', 0):
+                    from threading import Event
+                    Event().wait(self.server.stream_delay)
 
     server = ThreadingHTTPServer(('127.0.0.1', 0), Model)
     Thread(target=server.serve_forever, daemon=True).start()

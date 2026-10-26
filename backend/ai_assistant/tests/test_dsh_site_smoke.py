@@ -156,3 +156,84 @@ def test_site_status_cookie_and_source(user, settings):
     client.credentials(HTTP_AUTHORIZATION='DSH ' + make_task_token(user))
     client.cookies.clear()
     assert client.get(url).status_code == 401
+
+
+@pytest.mark.django_db(transaction=True)
+def test_site_stream_is_live_and_idempotent(auth_client, user, settings, tmp_path):
+    from asgiref.sync import async_to_sync
+    from threading import Event
+    settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = True
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path / 'stream-state')
+    WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
+    body = {'message': '合成流式提问', 'request_id': str(uuid4())}
+    finish = Event()
+    result = {'content': '完整回答', 'finish_reason': 'completed', 'session_id': 'd' * 32}
+    def runtime(*_args, on_event=None, **_kwargs):
+        on_event({'type': 'step', 'step': 1})
+        on_event({'type': 'text_delta', 'text': '临时正文'})
+        assert finish.wait(5), 'consumer did not receive a live event'
+        return dict(result)
+    async def consume(response, live=False):
+        frames = []
+        async for frame in response.streaming_content:
+            if frame.startswith(b'data: '):
+                event = json.loads(frame[6:])
+                frames.append(event)
+                if live and event['type'] == 'text_delta':
+                    assert not finish.is_set()
+                    finish.set()
+        return frames
+    with patch('ai_assistant.views_dsh.run_site_action', side_effect=runtime) as mocked:
+        response = auth_client.post('/api/ai/dsh/chat/stream/', body, format='json')
+        assert response.status_code == 200 and response.is_async
+        events = async_to_sync(consume)(response, True)
+        assert [event['type'] for event in events] == ['step', 'text_delta', 'done']
+        assert events[-1]['result']['content'] == '完整回答'
+        again = auth_client.post('/api/ai/dsh/chat/stream/', body, format='json')
+        assert async_to_sync(consume)(again)[-1] == events[-1]
+        assert mocked.call_count == 1
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+    with patch('ai_assistant.views_dsh.run_site_action', side_effect=DshUnavailable()):
+        failed = auth_client.post('/api/ai/dsh/chat/stream/', {**body, 'request_id': str(uuid4())}, format='json')
+        assert [event['type'] for event in async_to_sync(consume)(failed)] == ['error']
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+
+
+def test_stream_terminal_does_not_wait_for_slow_consumer():
+    from asgiref.sync import async_to_sync
+    import asyncio
+    from threading import Event
+    from ai_assistant.services.dsh_stream import stream_events
+    continue_task, cleaned = Event(), Event()
+    cleanup_calls = []
+    def cleanup():
+        cleanup_calls.append(True)
+        if len(cleanup_calls) == 2:
+            cleaned.set()
+    def action(emit):
+        emit({'type': 'step', 'step': 1})
+        assert continue_task.wait(2)
+        for _ in range(100):
+            emit({'type': 'text_delta', 'text': '合成片段'})
+        return {'content': '完整结果'}
+    async def consume():
+        unused = stream_events(action)
+        await unused.aclose()
+        assert cleanup_calls == [], 'unconsumed response must not start a task'
+        stream = stream_events(action)
+        try:
+            assert b'"step"' in await anext(stream)
+            continue_task.set()
+            assert await asyncio.to_thread(cleaned.wait, 1), 'completed producer must release ORM even if consumer stalls'
+            events = [json.loads(frame[6:]) async for frame in stream]
+            assert len(events) <= 64 and events[-1] == {'type': 'done', 'result': {'content': '完整结果'}}
+        finally:
+            await stream.aclose()
+        cleanup_calls.clear(); cleaned.clear(); continue_task.clear()
+        disconnected = stream_events(action)
+        assert b'"step"' in await anext(disconnected)
+        await disconnected.aclose()
+        continue_task.set()
+        assert await asyncio.to_thread(cleaned.wait, 1), 'disconnected task must still finish cleanup'
+    with patch('ai_assistant.services.dsh_stream.close_old_connections', side_effect=cleanup):
+        async_to_sync(consume)()
