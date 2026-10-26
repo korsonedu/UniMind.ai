@@ -181,6 +181,11 @@ Django 使用 async iterator，模型、文件锁与 ORM 位于独立同步任�
 get_practice_questions 现在返回 practice_quiz 卡片，复用现有 PracticeQuizCard。题目由服务端按内容范围抽取，卡片不含答案；学生在卡片内作答，提交走 /quizzes/submit-exam/，以 submission_id 和答案哈希幂等，后台评分沿用既有 QuizExam 事务与 DSH 评分开关。聊天内旧的 grade_student_answer 写工具仍不开放。未验收真实评分质量、生产提交量和正式权益。
 
 
+## 正式小宇入口与回退（默认关闭）
+
+前端构建变量 VITE_DSH_XIAOYU_ENABLED 默认 false，/xiaoyu 直接渲染旧页。开启后先请求 /api/ai/dsh/status/：后端 UNIMIND_DSH_ENABLED 与 UNIMIND_DSH_SITE_ENABLED 同时开启且模型可用时渲染 DshM0 的 production 模式；404、超时、401/403 或 mode=unavailable 自动回退旧页。正式模式隐藏开发调试面板，保留发送、停止、恢复、历史会话、结果卡片和导出/删除。旧页代码不删除，两个后端开关任一关闭即可整体回退。未验收真实模型质量与生产流量。
+
+
 ## DSH 评分任务（独立开关，默认关闭）
 
 UNIMIND_DSH_GRADING_ENABLED 开启时，AIService 仅对 quizzes.grade_question 和 quizzes.objective_analysis 改走服务端 DSH。既有题干/评分点提示词与后处理继续使用；主观 pro/2500 tokens/temperature .2，客观解析 fast/2000/.4，均一次模型请求上限。collector 成功即 concludeTurn；评分 profile 关闭 llm-retry，失败不回旧模型，客观解析失败可沿用确定性反馈。

@@ -4,7 +4,8 @@ import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 
 type Health = { sdk?: string; backend_configured: boolean; model_configured: boolean; mode: string; student?: { id: number; name: string } };
 type Pending = { message: string; session_id?: string; request_id: string };
-const site = new URLSearchParams(window.location.search).get('source') === 'site';
+const urlSite = new URLSearchParams(window.location.search).get('source') === 'site';
+const site = urlSite || import.meta.env.VITE_DSH_XIAOYU_ENABLED === 'true';
 const defaultMessage = '查询我的学习统计，并根据我的讲解偏好解释结果。';
 class RequestError extends Error {
   status: number;
@@ -72,10 +73,10 @@ async function streamTurn(body: Pending, signal: AbortSignal, emit: (event: Stre
   } finally { await reader.cancel().catch(() => undefined); }
 }
 
-export default function DshM0() {
+export default function DshM0({ production = false }: { production?: boolean }) {
   const [health, setHealth] = useState<Health | null>(null);
   const [context, setContext] = useState<Context | null>(null);
-  const [message, setMessage] = useState(defaultMessage);
+  const [message, setMessage] = useState(() => production ? '' : defaultMessage);
   const [session, setSession] = useState<LocalSession | null>(null);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [turn, setTurn] = useState<Turn | null>(null);
@@ -109,7 +110,7 @@ export default function DshM0() {
   const clearIdentity = () => {
     operation.current?.abort();
     selectSession(null); storageKey.current = site ? null : 'unimind-dsh-m0-session';
-    setHealth(null); setContext(null); setTurn(null); setSavedSessions([]); setRetry(null); setMessage(defaultMessage); setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool('');
+    setHealth(null); setContext(null); setTurn(null); setSavedSessions([]); setRetry(null); setMessage(production ? '' : defaultMessage); setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool('');
   };
   const report = (err: unknown, signal: AbortSignal) => {
     if (signal.aborted) return;
@@ -127,7 +128,7 @@ export default function DshM0() {
         const key = `unimind-dsh-site-session:${status.student!.id}`;
         if (storageKey.current !== key) {
           if (storageKey.current) storage.removeItem(storageKey.current);
-          setRetry(null); setMessage(defaultMessage);
+          setRetry(null); setMessage(production ? '' : defaultMessage);
         }
         storageKey.current = key;
       }
@@ -242,15 +243,17 @@ export default function DshM0() {
   return <main className="min-h-screen bg-[#f7f7f5] px-6 py-10 text-[#202020]">
     <div className="mx-auto max-w-5xl space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-black/10 pb-6">
-        <div><p className="mb-2 text-xs tracking-widest text-black/45">UNIMIND / M0</p>
-          <h1 className="text-3xl font-semibold">学习界面与 AI 运行时分开验证</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-black/55">{site ? '站点接入验证，使用当前登录身份；' : '本地开发入口。使用隔离的验证账号和合成数据；'}{health?.mode === 'deepseek-official' ? '模型使用 DeepSeek 官方 API，经本地任务网关限量调用。' : health?.mode === 'local-protocol-smoke' ? '模型端为本地协议模拟。' : health?.mode === 'unavailable' ? '模型尚未配置可用的授权来源。' : '模型来源尚未连接。'}当前验证不代表正式教学效果或生产发布。</p>
-          <p className="mt-2 max-w-2xl text-xs leading-6 text-black/45">产品基线：DSH 作为服务端 harness；网页和 UniMind 桌面客户端共用 AI 服务。{site ? '本页经站点身份进入隔离 DSH 进程。' : '本页连接本机开发服务。'}当前仅开放已验证的只读工具。</p>
+        <div><p className="mb-2 text-xs tracking-widest text-black/45">{production ? 'UNIMIND' : 'UNIMIND / M0'}</p>
+          <h1 className="text-3xl font-semibold">{production ? '小宇' : '学习界面与 AI 运行时分开验证'}</h1>
+          {!production && <>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-black/55">{site ? '站点接入验证，使用当前登录身份；' : '本地开发入口。使用隔离的验证账号和合成数据；'}{health?.mode === 'deepseek-official' ? '模型使用 DeepSeek 官方 API，经本地任务网关限量调用。' : health?.mode === 'local-protocol-smoke' ? '模型端为本地协议模拟。' : health?.mode === 'unavailable' ? '模型尚未配置可用的授权来源。' : '模型来源尚未连接。'}当前验证不代表正式教学效果或生产发布。</p>
+            <p className="mt-2 max-w-2xl text-xs leading-6 text-black/45">产品基线：DSH 作为服务端 harness；网页和 UniMind 桌面客户端共用 AI 服务。{site ? '本页经站点身份进入隔离 DSH 进程。' : '本页连接本机开发服务。'}当前仅开放已验证的只读工具。</p>
+          </>}
         </div>
         <a className="text-sm underline underline-offset-4" href="/courses">进入普通课程界面 →</a>
       </header>
 
-      <section className="grid gap-4 sm:grid-cols-3" aria-label="连接状态">
+      {!production && <section className="grid gap-4 sm:grid-cols-3" aria-label="连接状态">
         {[
           ['独立 React 界面', '已运行'],
           [site ? '站点入口' : '本地 Host', health ? (site ? '当前账号已连接' : `SDK ${health.sdk}`) : '未连接'],
@@ -258,18 +261,28 @@ export default function DshM0() {
         ].map(([label, value]) => <div key={label} className="border border-black/10 bg-white p-5">
           <p className="text-xs text-black/45">{label}</p><p className="mt-3 font-medium">{value}</p>
         </div>)}
-      </section>
+      </section>}
 
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <div className={production ? 'grid gap-6' : 'grid gap-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]'}>
         <section className="space-y-4 border border-black/10 bg-white p-6">
-          <h2 className="font-semibold">小宇只读链路</h2>
+          {!production && <h2 className="font-semibold">小宇只读链路</h2>}
+          {production && <div className="flex flex-wrap items-center gap-3 text-sm">
+            <select aria-label="历史会话" className="min-w-48 border border-black/15 bg-white p-2"
+              value={session?.id || ''} disabled={busy || !!retry || !health?.backend_configured || !savedSessions.length}
+              onChange={event => void loadSession(event.target.value)}>
+              <option value="">{savedSessions.length ? '历史会话' : '暂无历史会话'}</option>
+              {savedSessions.map(row => <option key={row.id} value={row.id}>{row.title} · {row.message_count} 条</option>)}
+            </select>
+            <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void manageSession('new')} className="border border-black/20 px-3 py-2 disabled:opacity-40">新会话</button>
+          </div>}
           <label className="block text-sm text-black/60" htmlFor="dsh-message">本轮问题</label>
           <textarea id="dsh-message" value={message} disabled={busy || !!retry} onChange={event => setMessage(event.target.value)} maxLength={4000}
+            placeholder={production ? '问小宇任何备考问题…' : undefined}
             className="min-h-32 w-full resize-y border border-black/15 bg-[#fafaf9] p-3 text-sm leading-6" />
           <div className="flex flex-wrap gap-3 text-sm">
-            <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void run(false)} className="border border-black/20 px-4 py-2 disabled:opacity-40">读取本人记忆与工具</button>
-            <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-black px-4 py-2 text-white disabled:opacity-40">{busy ? '正在验证…' : retry ? '恢复这次提问（同一请求）' : health?.mode === 'deepseek-official' ? '调用官方模型' : site ? '通过站点运行 DSH' : '运行 DSH 协议链路'}</button>
-            <button disabled={busy} onClick={() => void refresh()} className="px-2 py-2 text-black/55 underline disabled:opacity-40">刷新连接与会话</button>
+            {!production && <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void run(false)} className="border border-black/20 px-4 py-2 disabled:opacity-40">读取本人记忆与工具</button>}
+            <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-black px-4 py-2 text-white disabled:opacity-40">{busy ? (production ? '正在回答…' : '正在验证…') : retry ? '恢复这次提问（同一请求）' : production ? '发送' : health?.mode === 'deepseek-official' ? '调用官方模型' : site ? '通过站点运行 DSH' : '运行 DSH 协议链路'}</button>
+            {!production && <button disabled={busy} onClick={() => void refresh()} className="px-2 py-2 text-black/55 underline disabled:opacity-40">刷新连接与会话</button>}
           </div>
           {site && busy && <button className="text-xs underline text-black/55" onClick={() => {
             operation.current?.abort(); setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool('');
@@ -287,17 +300,17 @@ export default function DshM0() {
             <button disabled={busy || !session} onClick={exportSession}>导出对话文字</button>
             <button disabled={busy || !!retry || !session} onClick={() => void manageSession('delete')}>{site ? '删除站点会话' : '删除本地会话'}</button>
           </div>
-          {session && <p className="break-all font-mono text-[10px] text-black/40">会话 {session.id} · {session.messages.length} 条消息</p>}
+          {!production && session && <p className="break-all font-mono text-[10px] text-black/40">会话 {session.id} · {session.messages.length} 条消息</p>}
           {session?.notice && <p className="bg-amber-50 p-3 text-xs leading-6">{session.notice}</p>}
           <section aria-label="聊天记录" className="space-y-5">{session?.messages.map((item, index) => <div key={index} className="border-t border-black/10 pt-4">
-            <p className="mb-2 text-xs text-black/40">{item.role === 'user' ? '我' : `小宇 · ${item.mode === 'deepseek-official' ? '官方模型' : '本地协议模拟'}`}</p>
+            <p className="mb-2 text-xs text-black/40">{item.role === 'user' ? '我' : production ? '小宇' : `小宇 · ${item.mode === 'deepseek-official' ? '官方模型' : '本地协议模拟'}`}</p>
             <p className="whitespace-pre-wrap text-sm leading-7">{item.content}</p>
             {!!item.cards?.length && <div className="mt-4 space-y-4">
               <p className="text-xs text-black/40">业务工具返回的结果快照；最新状态请打开详情。</p>
               {item.cards.map((card, cardIndex) => <DshToolCard key={`${card.tool}-${cardIndex}`} card={card} />)}
             </div>}
           </div>)}</section>
-          {turn && <p className="border-t border-black/10 pt-3 text-xs leading-6 text-black/50" aria-label="网关用量">
+          {!production && turn && <p className="border-t border-black/10 pt-3 text-xs leading-6 text-black/50" aria-label="网关用量">
             {turn.gateway.model} · {turn.gateway.requests.length} 次请求 · {turn.gateway.requests.reduce((sum, r) => sum + r.tool_results, 0)} 个工具结果<br />
             各请求工具数 / Schema：{turn.gateway.requests.map((r, i) => `#${i + 1} ${r.tool_count} 项 / ${r.tool_schema_bytes} bytes`).join(' → ')}<br />
             工具调用轨迹：{turn.routing.selected_calls?.join(' → ') || '无工具调用'}<br />
@@ -306,7 +319,7 @@ export default function DshM0() {
           </p>}
         </section>
 
-        <aside className="space-y-6 border border-black/10 bg-white p-6">
+        {!production && <aside className="space-y-6 border border-black/10 bg-white p-6">
           <section><h2 className="font-semibold">当前验证身份</h2>
             <p className="mt-3 text-sm text-black/55">{context ? `${context.student.name} · #${context.student.id}` : health?.student ? `${health.student.name} · #${health.student.id}` : site ? '请先登录站点' : '读取后显示；凭据由 Host 持有'}</p>
           </section>
@@ -330,7 +343,7 @@ export default function DshM0() {
             {context?.routing && <p className="mt-3 text-xs leading-6 text-black/45">初始组：{context.routing.initial_group || '按需发现'}。每次最多 {context.routing.max_visible_tools} 个工具，发现后切换分组。<br />初始 Schema {context.routing.executable_schema_bytes} bytes；完整业务许可 Schema {context.routing.available_schema_bytes} bytes。真实模型选择质量尚待验证。</p>}
             {!!context?.routing?.pending_names.length && <details className="mt-3 text-xs leading-6 text-black/50"><summary>旧候选中 {context.routing.pending_names.length} 项尚未开放</summary><p className="mt-2 break-all font-mono">{context.routing.pending_names.join('、')}</p></details>}
           </section>
-        </aside>
+        </aside>}
       </div>
     </div>
   </main>;
