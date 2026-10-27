@@ -77,6 +77,8 @@ class TenantMemoryManager:
 
     def add(self, user_id: int, message: str | list[dict], metadata: dict = None):
         """Add a memory. mem0 auto-extracts and deduplicates."""
+        if getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
+            return
         meta = metadata or {}
         meta["institution_id"] = self.institution_id
         try:

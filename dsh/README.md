@@ -185,6 +185,8 @@ get_practice_questions 现在返回 practice_quiz 卡片，复用现有 Practice
 
 ## 正式小宇入口与回退（默认关闭）
 
+此段记录 2026-10-26 的中间入口，已由下方“正式小宇界面接入（2026-10-27）”替代；当前页面不由 VITE_DSH_XIAOYU_ENABLED 选择壳，使用服务端开关。
+
 前端构建变量 VITE_DSH_XIAOYU_ENABLED 默认 false，/xiaoyu 直接渲染旧页。开启后先请求 /api/ai/dsh/status/：后端 UNIMIND_DSH_ENABLED 与 UNIMIND_DSH_SITE_ENABLED 同时开启且模型可用时渲染 DshM0 的 production 模式；404、超时、401/403 或 mode=unavailable 自动回退旧页。正式模式隐藏开发调试面板，保留发送、停止、恢复、历史会话、结果卡片和导出/删除。旧页代码不删除，两个后端开关任一关闭即可整体回退。未验收真实模型质量与生产流量。
 
 

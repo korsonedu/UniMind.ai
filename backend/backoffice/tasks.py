@@ -26,6 +26,12 @@ def expire_stale_teaching_tasks(queryset):
 
 @shared_task(name='backoffice.run_teaching_task', soft_time_limit=900, time_limit=960)
 def run_teaching_task(task_id):
+    from ai_assistant.services.dsh_scope import teaching_job
+    with teaching_job(task_id):
+        return _run_teaching_task(task_id)
+
+
+def _run_teaching_task(task_id):
     expire_stale_teaching_tasks(ContentPipelineTask.objects.filter(pk=task_id))
     # The status claim makes duplicate broker delivery harmless.
     with transaction.atomic():
@@ -91,6 +97,8 @@ def run_teaching_task(task_id):
             run_chat(task)
         else:
             raise ValueError('此任务没有可执行的处理器。')
+        from ai_assistant.services.dsh_scope import check_teaching_task
+        check_teaching_task()
         task.progress = 100
         task.finished_at = timezone.now()
         task.save(update_fields=['result', 'status', 'progress', 'finished_at', 'updated_at'])

@@ -123,40 +123,16 @@ class Command(BaseCommand):
         return ''
 
     def _call_llm(self, system_msg, user_msg):
-        import os
-        import httpx
-        from django.conf import settings as django_settings
-
-        api_key = os.getenv('LLM_API_KEY', '')
-        base_url = os.getenv('LLM_BASE_URL', 'https://api.deepseek.com/v1/chat/completions')
-        model = getattr(django_settings, 'LLM_MODEL', 'deepseek-v4-flash') or 'deepseek-v4-flash'
-
+        from ai_engine.ai_service import AIService
         try:
-            resp = httpx.post(
-                base_url,
-                json={
-                    'model': model,
-                    'messages': [
-                        {'role': 'system', 'content': system_msg},
-                        {'role': 'user', 'content': user_msg},
-                    ],
-                    'temperature': 0.1,
-                    'max_tokens': 256,
-                },
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                },
-                timeout=30,
+            content = AIService.simple_chat_text(
+                system_prompt=system_msg, user_prompt=user_msg, temperature=0.1,
+                max_tokens=256, operation='quizzes.backfill_question_kp',
             )
-            resp.raise_for_status()
-            data = resp.json()
-            content = data['choices'][0]['message']['content'].strip()
-        except Exception as e:
-            self.stderr.write(f" ❌ LLM: {e}")
+        except Exception:
+            self.stderr.write(" ❌ LLM: 知识点匹配服务暂不可用")
             return {}
-
-        return self._parse_json(content)
+        return self._parse_json(content) if content else {}
 
     def _parse_json(self, content):
         content = content.strip()

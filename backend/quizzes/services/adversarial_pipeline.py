@@ -225,6 +225,8 @@ def _execute_pipeline(task: ContentPipelineTask, kps: List[KnowledgePoint], q_pe
     _update_task(task, 95, f"审计完成：{difficulty_mismatches} 难度不匹配, {answer_errors} 答案存疑", stage_log, "classify_done")
 
     # ── 写入结果 ──
+    from ai_assistant.services.dsh_scope import check_teaching_task
+    check_teaching_task()
     task.result = {
         "questions": reviewed,
         "stages": stage_log,
@@ -308,6 +310,8 @@ def _classifier_batch_report(questions: List[Dict], kps: List[KnowledgePoint], d
 
 
 def _update_task(task, progress, status_text, stage_log, stage_name):
+    from ai_assistant.services.dsh_scope import check_teaching_task
+    check_teaching_task()
     task.progress = progress
     # 创建新 dict 确保 Django JSONField 变更检测生效
     task.payload = {

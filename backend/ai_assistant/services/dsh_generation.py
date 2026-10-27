@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 import secrets
 from threading import Thread
 
@@ -12,6 +13,7 @@ from jsonschema import validate
 from ai_engine.config import get_model_for_task, get_model_tier_for_operation
 from .dsh_runtime import DshUnavailable
 from .dsh_tasks import run_structured
+from .dsh_scope import generation_scope, current_execution, check_execution
 
 
 TEXT_SCHEMA = {'type': 'object', 'properties': {'text': {'type': 'string'}},
@@ -30,7 +32,7 @@ def enabled(operation):
 
 
 @contextmanager
-def callbacks(tools, executor):
+def callbacks(tools, executor, execution=None):
     if not tools:
         yield None
         return
@@ -56,9 +58,11 @@ def callbacks(tools, executor):
                     raise ValueError()
                 arguments = json.loads(self.rfile.read(size))
                 validate(arguments, definitions[name]['parameters'])
-                if hasattr(executor, 'check_dsh_scope'):
-                    executor.check_dsh_scope()
-                result = executor(name, arguments)
+                with generation_scope(execution):
+                    if hasattr(executor, 'check_dsh_scope'):
+                        executor.check_dsh_scope()
+                    result = executor(name, arguments)
+                    check_execution(execution)
                 if isinstance(result, str):
                     result = json.loads(result)
                 if len(json.dumps(result).encode()) > 2 * 1024 * 1024:
@@ -72,7 +76,10 @@ def callbacks(tools, executor):
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     server.daemon_threads = False
@@ -81,13 +88,16 @@ def callbacks(tools, executor):
     try:
         yield {'url': f'http://127.0.0.1:{server.server_port}', 'token': token}
     finally:
+        if execution:
+            execution['cancelled'].set()
         server.shutdown()
         server.server_close()
         thread.join()
 
 
+@generation_scope()
 def generate(messages, operation, *, schema=None, tool_name='submit_result',
-             tools=(), executor=None, max_tokens=8192, max_requests=5):
+             tools=(), executor=None, max_tokens=8192, max_requests=5, temperature=.7):
     from backoffice.teaching_executor import TeachingExecutor
     tools = list(tools or [])
     if tools:
@@ -99,16 +109,19 @@ def generate(messages, operation, *, schema=None, tool_name='submit_result',
         elif not names <= {'lookup_knowledge_point_definition', 'search_similar_questions'}:
             raise DshUnavailable('此旧工具执行器尚未授权用于 DSH。')
     config = get_model_for_task(operation)
+    if not math.isfinite(temperature) or not 0 <= temperature <= 2:
+        raise DshUnavailable('任务温度参数无效。')
     groups = {}
     if len(tools) > 6:
         groups = {str(index // 6): tools[index:index + 6] for index in range(0, len(tools), 6)}
-    with callbacks(tools, executor) as bridge:
+    with callbacks(tools, executor, current_execution()) as bridge:
         internal = {'operation': operation, 'schema': TEXT_SCHEMA if schema is None else schema,
                     'name': tool_name if schema is not None else 'submit_text',
                     'tier': get_model_tier_for_operation(operation) or 'fast',
                     'tokens': min(max(1, int(max_tokens)), 8192),
                     'max_requests': min(max(1, int(max_requests)), 8) if tools else 1,
                     'thinking': config.get('thinking'), 'tools': tools, 'groups': groups,
+                    'deadline': current_execution()['deadline'], 'temperature': temperature,
                     'bridge': bridge,
                     'instruction': '\n'.join(str(row.get('content') or '') for row in messages if row.get('role') == 'system')}
         prompt = json.dumps([row for row in messages if row.get('role') != 'system'], ensure_ascii=False)

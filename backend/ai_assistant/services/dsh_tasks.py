@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+from time import monotonic
 from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
 
@@ -13,6 +14,7 @@ from jsonschema import validate, ValidationError as SchemaError
 from ai_engine.config import get_model_for_task, FALLBACK_FAST
 from ai_engine.tools import GRADING_RESULT_SCHEMA, OBJECTIVE_ANALYSIS_SCHEMA, QUESTION_LIST_SCHEMA
 from .dsh_runtime import DshUnavailable
+from .dsh_scope import generation_scope, current_execution
 
 
 TITLE_SCHEMA = {
@@ -72,6 +74,7 @@ def wire_schema(schema):
     return result
 
 
+@generation_scope()
 def run_structured(operation, prompt, *, internal=None):
     if (operation not in TASKS and not (operation == 'server.generate' and internal)
             or not isinstance(prompt, str) or len(prompt.encode()) > 48000):
@@ -115,11 +118,13 @@ def run_structured(operation, prompt, *, internal=None):
         'assistant.memory_extract': '你是学生长期记忆提取助手。只提取用户亲口明确陈述的稳定偏好、学业背景和交互习惯；不提取助手建议、假设、未确认计划或临时情绪。每条记忆必须附用户原话作为 evidence。单次提问、人工答疑、查资料、准备草稿或本次发布前确认的操作要求不构成长期记忆，不从问题知识点推断学业背景。仅提取明确自述的长期事实；没有合格事实也必须调用提交工具返回 memories=[]。',
     }
     context['task_instruction'] = instructions.get(operation, '你是科晟课程评阅老师。严格按给定题目、参考答案和评分点评阅。')
+    context['model_policy']['deadline'] = current_execution()['deadline']
     if internal:
         if len(internal['instruction'].encode()) > 16000:
             raise DshUnavailable('系统任务材料过长。')
         context['task_instruction'] = internal['instruction']
         context['model_policy'].update(max_requests=internal['max_requests'], task_operation=internal['operation'], thinking=internal['thinking'])
+        context['model_policy']['temperature'] = internal['temperature']
         context['research_tools'] = [{**tool, 'function': {**tool['function'], 'parameters': wire_schema(tool['function']['parameters'])}} for tool in internal['tools']]
         by_name = {tool['function']['name']: tool for tool in context['research_tools']}
         context['research_groups'] = {key: [by_name[tool['function']['name']] for tool in group] for key, group in internal['groups'].items()}
@@ -139,7 +144,7 @@ def run_structured(operation, prompt, *, internal=None):
             with subprocess.Popen([python, str(worker)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, env=environment, start_new_session=True) as process:
                 try:
-                    output, _ = process.communicate(json.dumps(payload).encode(), timeout=300 if internal else 120)
+                    output, _ = process.communicate(json.dumps(payload).encode(), timeout=max(.01, min(120, current_execution()['deadline'] - monotonic() + 2)))
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.communicate()

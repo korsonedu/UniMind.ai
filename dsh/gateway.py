@@ -44,7 +44,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
     requests = []
     fatal_status = None
     lock = Lock()
-    expires = monotonic() + TASK_TIMEOUT_SECONDS
+    expires = min(monotonic() + TASK_TIMEOUT_SECONDS, policy.get('deadline', float('inf')))
     task_id = secrets.token_hex(12)
     stopping = Event()
     io_lock = Lock()
@@ -129,6 +129,8 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                     'stream', 'temperature', 'top_p', 'stop_sequences',
                 }}
                 body['thinking'] = {'type': 'disabled'}
+                if policy['operation'] == 'server.generate':
+                    body['temperature'] = policy.get('temperature', .7)
                 if policy['operation'] == 'server.generate' and policy.get('thinking') in ('low', 'high', 'max'):
                     body['thinking'] = {'type': 'enabled'}
                     body['output_config'] = {'effort': policy['thinking']}
