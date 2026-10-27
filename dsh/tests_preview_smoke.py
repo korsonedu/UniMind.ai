@@ -1,5 +1,6 @@
 """Small offline guards for the persistent synthetic preview."""
 from pathlib import Path
+import os
 import sqlite3
 import subprocess
 import sys
@@ -11,6 +12,15 @@ import preview
 
 
 class PreviewSmoke(unittest.TestCase):
+    def test_preview_discards_inherited_service_credentials_and_dotenv(self):
+        with patch.dict(os.environ, {'PATH': '/bin', 'FEISHU_NOTIFY_PASSWORD': 'sentinel',
+                                    'OSS_ACCESS_KEY_ID': 'sentinel', 'SENTRY_DSN': 'sentinel'}):
+            preview.isolate_environment()
+            self.assertEqual(os.environ['PATH'], '/bin')
+            self.assertEqual(os.environ['PYTHON_DOTENV_DISABLED'], '1')
+            for name in ('FEISHU_NOTIFY_PASSWORD', 'OSS_ACCESS_KEY_ID', 'SENTRY_DSN'):
+                self.assertNotIn(name, os.environ)
+
     def test_state_cannot_escape_the_ignored_preview_root(self):
         with TemporaryDirectory() as folder, patch.object(preview, 'ROOT', Path(folder)):
             root = Path(folder).resolve()

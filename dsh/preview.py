@@ -17,6 +17,13 @@ ROOT = Path(__file__).resolve().parent.parent
 STUDENTS = {'student-a': 'm0-student', 'student-b': 'm0-other'}
 
 
+def isolate_environment():
+    runtime = {name: os.environ[name] for name in ('PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SYSTEMROOT')
+               if name in os.environ}
+    os.environ.clear()
+    os.environ.update(runtime, PYTHON_DOTENV_DISABLED='1')
+
+
 def preview_state(value):
     root = ROOT.resolve()
     candidate = Path(value) if Path(value).is_absolute() else root / value
@@ -25,7 +32,7 @@ def preview_state(value):
     state = candidate.resolve()
     if not state.is_relative_to(root / '.m0-state') or state == root / '.m0-state':
         raise ValueError('Preview state must be a directory below .m0-state.')
-    if any((state / name).is_symlink() for name in ('db.sqlite3', 'sessions', 'redis.log', 'runtime.json', '.preview.lock')):
+    if any((state / name).is_symlink() for name in ('db.sqlite3', 'sessions', 'media', 'redis.log', 'runtime.json', '.preview.lock')):
         raise ValueError('Preview files cannot use symbolic links.')
     return state
 
@@ -76,6 +83,7 @@ def main():
     parser.add_argument('--sdk-python', type=Path, default=ROOT / '.m0-venv/bin/python')
     parser.add_argument('--port', type=int, default=8000)
     args = parser.parse_args()
+    isolate_environment()
     state = preview_state(args.state_dir)
     database = state / 'db.sqlite3'
     existing = database.exists()
@@ -143,6 +151,14 @@ def main():
                 django.setup()
                 from django.conf import settings
                 from django.core.management import call_command
+                settings.FEISHU_NOTIFY_PASSWORD = ''
+                settings.EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+                settings.MEDIA_ROOT = str(state / 'media')
+                settings.MEDIA_URL = '/media/'
+                settings.STORAGES = {
+                    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+                    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+                }
                 settings.DATABASES['default'].setdefault('OPTIONS', {}).update(timeout=20, transaction_mode='IMMEDIATE')
                 settings.CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
                 settings.CELERY_TASK_ALWAYS_EAGER = True
