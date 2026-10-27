@@ -1,0 +1,48 @@
+name: desktop-windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/unimind-dsh-m0']
+    paths: ['frontend/src-tauri/**', 'frontend/package*.json', '.github/workflows/desktop-windows.yml']
+  pull_request:
+    paths: ['frontend/src-tauri/**', 'frontend/package*.json', '.github/workflows/desktop-windows.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.94.1 --profile minimal --target x86_64-pc-windows-msvc
+          rustup override set 1.94.1
+      - name: Check desktop URL boundaries on Windows
+        run: cargo test --manifest-path frontend/src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc --lib
+      - name: Build unsigned NSIS candidate
+        working-directory: frontend
+        run: npm run tauri:build -- --target x86_64-pc-windows-msvc --bundles nsis
+      - name: Record installer hashes
+        shell: pwsh
+        run: |
+          Get-ChildItem frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe | Get-FileHash -Algorithm SHA256 | Format-List | Out-File windows-sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UniMind-Windows-x64-${{ github.sha }}
+          path: |
+            frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+            windows-sha256.txt
+          if-no-files-found: error
+          retention-days: 14
