@@ -40,9 +40,12 @@ class TagListCreateView(generics.ListCreateAPIView):
         return [IsMember()]
 
     def get_queryset(self):
-        return apply_institution_filter(CourseTag.objects.all(), self.request.user, self.request).annotate(
-            course_count=Count('course_relations', filter=Q(course_relations__course__institution_id=get_content_institution_id())),
-        )
+        from .access import visible_courses, has_full_course_access
+        visible = visible_courses(self.request)
+        tags = apply_institution_filter(CourseTag.objects.all(), self.request.user, self.request)
+        if not has_full_course_access(self.request.user):
+            tags = tags.filter(course_relations__course__in=visible).distinct()
+        return tags.annotate(course_count=Count('course_relations', filter=Q(course_relations__course__in=visible)))
 
     def perform_create(self, serializer):
         inst = get_content_institution()

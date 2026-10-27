@@ -63,7 +63,9 @@ class AlbumSerializer(serializers.ModelSerializer):
         if self.context.get('course_list_summary'):
             return []
         institution_id = get_content_institution_id()
-        courses = [course for course in obj.courses.all() if course.institution_id == institution_id]
+        from .access import visible_courses
+        visible_ids = set(visible_courses(self.context['request']).values_list('pk', flat=True))
+        courses = [course for course in obj.courses.all() if course.institution_id == institution_id and course.pk in visible_ids]
         return AlbumCourseBriefSerializer(courses, many=True, context=self.context).data
 
     class Meta:

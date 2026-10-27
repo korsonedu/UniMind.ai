@@ -58,17 +58,19 @@ def seed_database():
     from django.contrib.auth import get_user_model
     from rest_framework.authtoken.models import Token
     from ai_assistant.models import Bot
-    from courses.models import Course
+    from courses.models import Course, CourseModule
     from quizzes.models import KnowledgePoint, Question
     from users.models import CourseStudentStatus, WeeklyAIQuotaConfig
     Bot.objects.create(name='小宇', bot_type='planner', system_prompt='科晟小宇隔离合成预览。')
     for username in STUDENTS.values():
         user = get_user_model().objects.create_user(username=username, nickname='合成预览学生')
-        CourseStudentStatus.objects.create(user=user, is_course_student=True)
+        CourseStudentStatus.objects.create(user=user, is_course_student=username == STUDENTS['student-b'])
         Token.objects.create(user=user)
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
     kp = KnowledgePoint.objects.create(name='M0久期', code='M0-DURATION', subject='金融431')
     Course.objects.create(title='M0久期课程（合成样例）', description='隔离数据，不是正式课程。', knowledge_point=kp)
+    public = CourseModule.objects.create(name='M0公开体验', subject='金融431', is_public=True)
+    Course.objects.create(title='M0公开课（合成样例）', module=public, description='用于注册学生权限预览，不是正式课程。')
     Question.objects.create(knowledge_point=kp, q_type='objective',
         text='合成题：其他条件相同时，久期越长，债券价格对利率变动是否越敏感？',
         options=['越敏感', '越不敏感'], correct_answer='A')

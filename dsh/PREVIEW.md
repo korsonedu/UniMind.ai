@@ -17,7 +17,7 @@
 
 不需要真实模型时省略 `--model deepseek` 和 `--backend-env`，默认使用明确标识的协议夹具。协议夹具不理解自然语言，不能用它判断小宇回答质量。`--port` 默认 8000；Redis 单独启动且退出时关闭，Celery 使用进程内任务和 memory broker。
 
-启动器丢弃继承的业务环境变量并禁止自动加载 `.env`；只有显式指定的 DeepSeek 来源和密钥会进入模型网关。飞书 SMTP 密码为空，Django 邮件使用内存后端，附件写入当前合成目录的 `media/`，不会复用真实邮件或 OSS。SDK、数据库、会话和媒体目录拒绝链接逃逸；此启动器只用于隔离预览。
+启动器丢弃继承的业务环境变量并禁止自动加载 `.env`；只有显式指定的 DeepSeek 来源和密钥会进入模型网关。飞书 SMTP 密码为空，Django 邮件使用内存后端，附件写入当前合成目录的 `media/`，不会复用真实邮件或 OSS。数据库、会话和媒体目录拒绝链接逃逸；此启动器只用于隔离预览。
 
 另一个终端在 `frontend` 中启动界面：
 
@@ -25,7 +25,7 @@
 npm run dev -- --host 127.0.0.1 --port 5175 --strictPort
 ```
 
-已运行同一端口时无需重复启动。打开 `http://127.0.0.1:5175/api/ai/dsh-preview/student-b/` 进入第二个合成账号；`student-a` 进入第一个账号。入口只在 `preview.py` 的包装层存在，不属于生产 Django URL。Cookie 为 HttpOnly，不在 URL 或日志中输出 Token。预览服务只能绑定 loopback，不可作为公开服务。
+已运行同一端口时无需重复启动。打开 `http://127.0.0.1:5175/api/ai/dsh-preview/student-b/` 进入合成课程学员；`student-a` 为合成注册学生，只能观看标为公开的模块。新目录初始化包含一门公开合成课和一门课程学员合成课，只有现有持久预览另放入5秒合成视频与本地课件供播放验证。入口只在 `preview.py` 的包装层存在，不属于生产 Django URL。Cookie 为 HttpOnly，不在 URL 或日志中输出 Token。预览服务只能绑定 loopback，不可作为公开服务。
 
 ## macOS Preview App
 

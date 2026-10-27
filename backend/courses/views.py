@@ -17,6 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
+from .access import HasFullCourseAccess
 
 from core.utils import apply_institution_filter, get_content_institution
 
@@ -515,7 +516,7 @@ class StartupMaterialListCreateView(generics.ListCreateAPIView):
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
-        return [IsMember()]
+        return [IsMember(), HasFullCourseAccess()]
 
     def get_queryset(self):
         return apply_institution_filter(StartupMaterial.objects.all().order_by('-created_at'), self.request.user, self.request)
@@ -546,7 +547,7 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
-        return [IsMember()]
+        return [IsMember(), HasFullCourseAccess()]
 
     def get_queryset(self):
         return apply_institution_filter(StartupMaterial.objects.all(), self.request.user, self.request)
@@ -554,11 +555,11 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
 class AlbumListCreateView(generics.ListCreateAPIView):
     serializer_class = AlbumSerializer
     def get_queryset(self):
-        from django.db.models import Count
+        from django.db.models import Count, Q
         from django.db.models import Prefetch
         from .access import visible_courses
         visible = visible_courses(self.request)
-        qs = Album.objects.annotate(course_count=Count('courses')).prefetch_related(Prefetch('courses', queryset=visible)).order_by('-created_at')
+        qs = Album.objects.annotate(course_count=Count('courses', filter=Q(courses__in=visible))).prefetch_related(Prefetch('courses', queryset=visible)).order_by('-created_at')
         from users.permissions import is_platform_admin, is_institution_admin
         if is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             return apply_institution_filter(qs, self.request.user, self.request)
@@ -581,7 +582,13 @@ class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [IsMember()]
 
     def get_queryset(self):
-        return apply_institution_filter(Album.objects.all(), self.request.user, self.request)
+        from django.db.models import Count, Q, Prefetch
+        from .access import visible_courses, has_full_course_access
+        visible = visible_courses(self.request)
+        albums = apply_institution_filter(Album.objects.all(), self.request.user, self.request)
+        if self.request.method == 'GET' and not has_full_course_access(self.request.user):
+            albums = albums.filter(pk__in=visible.values_list('album_obj_id', flat=True))
+        return albums.annotate(course_count=Count('courses', filter=Q(courses__in=visible))).prefetch_related(Prefetch('courses', queryset=visible))
 
 
 class AlbumCoursesView(APIView):
@@ -769,7 +776,8 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CourseOutlineView(APIView):
-    permission_classes = [IsMember]
+    def get_permissions(self):
+        return [IsMember()] if self.request.method == 'GET' else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
         course = _get_course_for_user(pk, request.user, request)
@@ -812,7 +820,8 @@ class CourseOutlineView(APIView):
 
 
 class CourseTranscriptView(APIView):
-    permission_classes = [IsMember]
+    def get_permissions(self):
+        return [IsMember()] if self.request.method == 'GET' else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
         course = _get_course_for_user(pk, request.user, request)

@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import { CheckInFireworks } from '@/components/CheckInFireworks';
 import { LearningOverview, type DashData } from './LearningOverview';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { LearningCalendar } from './LearningCalendar';
 import { dateOffset, learningDuration } from './learningDates';
 import { LEARNING_TIME_ZONE, learningDate, playbackTime, type Course, type CourseProgress, type LearningActivity, type WatchLater } from './types';
@@ -38,6 +39,8 @@ function progressLabel(record?: CourseProgress) {
 
 export function CoursePortal({ courses, progress, loading, error, activity, activityError, onRetryActivity, queue, queueLoading, queueError, queuePending, onQueueChange, onRetryQueue, filter, onRetry, onClear, onOpen }: PortalProps) {
   const name = useAuthStore(state => state.user?.nickname || state.user?.username || '同学');
+  const features = useInstitutionStore(state => state.features);
+  const hasReport = features.includes('full.report');
   const [now, setNow] = useState(() => new Date());
   const [tab, setTab] = useState('unfinished');
   const [dash, setDash] = useState<DashData | null>(null);
@@ -46,12 +49,13 @@ export function CoursePortal({ courses, progress, loading, error, activity, acti
   const [checkInBurst, setCheckInBurst] = useState(0);
   const [dashboardVersion, setDashboardVersion] = useState(0);
   useEffect(() => {
+    if (!hasReport) { setDash(null); setDashError(false); return; }
     const controller = new AbortController();
     api.get<DashData>('/ai/dashboard/', { signal: controller.signal })
       .then(response => { setDash(response.data); setDashError(false); })
       .catch(() => { if (!controller.signal.aborted) setDashError(true); });
     return () => controller.abort();
-  }, [dashboardVersion]);
+  }, [dashboardVersion, hasReport]);
   const handleCheckIn = async () => {
     if (checkingIn || !dash || dashError || dash.stats.today_checked_in) return;
     setCheckingIn(true);
@@ -99,7 +103,7 @@ export function CoursePortal({ courses, progress, loading, error, activity, acti
 
   return <div className="um-course-content um-course-portal">
     <CheckInFireworks burst={checkInBurst} />
-    <header className="um-portal-welcome"><div><h1>{greeting}，{name}</h1><time dateTime={today}>{new Intl.DateTimeFormat('zh-CN', { timeZone: LEARNING_TIME_ZONE, month: 'long', day: 'numeric', weekday: 'long' }).format(now)}</time></div><div className="um-portal-checkin"><span className="um-course-muted">{dash && !dashError ? `连续打卡 ${dash.stats.checkin_streak} 天` : '每日打卡'}</span><button type="button" className="um-course-button" onClick={handleCheckIn} disabled={checkingIn || !dash || dashError || dash.stats.today_checked_in}>{checkingIn ? '打卡中…' : dash?.stats.today_checked_in ? '已打卡' : '今日打卡'}</button></div></header>
+    <header className="um-portal-welcome"><div><h1>{greeting}，{name}</h1><time dateTime={today}>{new Intl.DateTimeFormat('zh-CN', { timeZone: LEARNING_TIME_ZONE, month: 'long', day: 'numeric', weekday: 'long' }).format(now)}</time></div>{hasReport && <div className="um-portal-checkin"><span className="um-course-muted">{dash && !dashError ? `连续打卡 ${dash.stats.checkin_streak} 天` : '每日打卡'}</span><button type="button" className="um-course-button" onClick={handleCheckIn} disabled={checkingIn || !dash || dashError || dash.stats.today_checked_in}>{checkingIn ? '打卡中…' : dash?.stats.today_checked_in ? '已打卡' : '今日打卡'}</button></div>}</header>
     {hour < 6 && <p className="mb-5 text-xs italic text-muted-foreground">明天的你委托我提醒：现在已经是明天了。</p>}
     {filter && <div className="um-portal-filter"><span>当前范围：{filter}</span><button type="button" className="um-course-text-button" onClick={onClear}>清除筛选<X size={13} /></button></div>}
     <div className="um-portal-upper">
@@ -118,7 +122,7 @@ export function CoursePortal({ courses, progress, loading, error, activity, acti
       {tab === 'later' && !queueLoading && !queueError && queued.length > 0 && <p className="mb-3 text-xs italic text-muted-foreground">薛定谔的知识：在做题之前，你既会又不会。</p>}
       {tab === 'later' && queueLoading ? <p role="status" className="um-course-muted">正在读取稍后观看…</p> : tab !== 'later' && tab !== 'all' && (loading || error) ? <p className="um-course-muted">{loading ? '正在读取观看记录…' : '重试观看记录后可查看。'}</p> : <><ul className="um-portal-video-list">{selectedCourses.map(course => <li key={course.id}><div className="um-portal-video-glyph" aria-hidden="true"><Play size={15} /></div><div className="um-portal-video-info"><button type="button" className="um-course-course-link" onClick={() => onOpen(course, course.video_file ? 'video' : 'materials')}>{course.title}</button><p>{loading || error ? '—' : progressLabel(byProgress.get(course.id))}</p><div className="um-course-material-links">{course.courseware && <a href={course.courseware} target="_blank" rel="noopener noreferrer">教学课件</a>}{course.reference_materials && <a href={course.reference_materials} target="_blank" rel="noopener noreferrer">参考资料</a>}</div></div>{tab === 'later' ? <button type="button" className="um-portal-icon-button" aria-label={`移出稍后观看：${course.title}`} disabled={queueDisabled(course)} onClick={() => onQueueChange(course, true)}><X size={15} /></button> : course.video_file ? queueButton(course) : null}<button type="button" className="um-course-button" onClick={() => onOpen(course, course.video_file ? 'video' : 'materials')}>{!course.video_file ? '资料' : byProgress.get(course.id)?.is_finished ? '重看' : '观看'}</button></li>)}</ul>{!selectedCourses.length && <p className="um-portal-empty">{tab === 'all' ? '当前范围没有课程' : tab === 'unfinished' ? '暂无未看完视频' : tab === 'watched' ? '暂无观看记录' : '暂无稍后观看'}</p>}{tab === 'later' && !queueLoading && !queueError && queue.length === 0 && <p className="text-xs italic text-muted-foreground">这里还没有“收藏了就等于学会了”的知识。</p>}</>}
     </section>
-    <LearningOverview data={dash} error={dashError} onRetry={() => setDashboardVersion(value => value + 1)} />
-    <nav className="um-portal-tools" aria-label="学习快捷入口"><Link to="/xiaoyu">小宇 Agent<ArrowUpRight size={14} /></Link><Link to="/tests">题库练习<ArrowUpRight size={14} /></Link><Link to="/qa">答疑中心<ArrowUpRight size={14} /></Link><Link to="/study">自习室<ArrowUpRight size={14} /></Link></nav>
+    {hasReport && <LearningOverview data={dash} error={dashError} onRetry={() => setDashboardVersion(value => value + 1)} />}
+    <nav className="um-portal-tools" aria-label="学习快捷入口"><Link to="/xiaoyu">小宇 Agent<ArrowUpRight size={14} /></Link>{features.includes('quiz.exam') && <Link to="/tests">题库练习<ArrowUpRight size={14} /></Link>}{features.includes('faq.system') && <Link to="/qa">答疑中心<ArrowUpRight size={14} /></Link>}{features.includes('study.room') && <Link to="/study">自习室<ArrowUpRight size={14} /></Link>}</nav>
   </div>;
 }
