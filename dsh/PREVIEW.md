@@ -56,3 +56,9 @@ macOS arm64 的 Preview 和 HTTPS 发布构建均已生成，分别约25 MiB和9
 网页和桌面使用相同的服务端会话和正式提交事实；客户端草稿仍按用户隔离。实际课程视频、正式账号登录、签名分发和生产并发需要另用授权环境验收，不能用合成数据推定已完成。
 
 一次独立复核发现继承真实邮件/OSS 配置和拒绝所有新窗口两处缺口，已修复。哨兵验证确认 `.env` 不加载、SMTP 不调用、默认存储为本地；重启后原16条消息保留。资源 URL 的3项 Rust 冒烟通过，本人合成课件200、匿名401。解锁后已在修复版 App 实际点击门户课件链接，共享登录的“UniMind · 课程与附件”窗口显示合成SVG正文，截图 `.m0-state/m0-desktop-resource-proof.png`。用户现已确认必须支持Windows，Windows安装包与验收继续推进，不能以当前macOS结果代替。
+
+## 学员批次与 Windows 候选
+
+管理后台学员页可创建多个服务批次，为学员选择当前批次；“我的服务”显示本人届别、服务期、考试日与生效状态。批次不预填正式年度或日期，未设置考试日须明确显示。两个批次并存、改绑、停用及恢复已在独立合成管理库和实际组件验证，未变更生产学员。
+
+Windows x64为必需交付，沿用同一HTTPS薄壳。`.github/workflows/desktop-windows.yml`提供Windows 2022上的3项URL冒烟、无签名NSIS构建与SHA256留档，尚未推送或触发。当前仓库公开，候选代码尚在本地，先在macOS按[Tauri交叉构建说明](https://v2.tauri.app/distribute/windows-installer/)准备cargo-xwin、LLVM、NSIS与MSVC目标。交叉编译产物不能代替Windows实际安装、登录、课件及会话验收。
