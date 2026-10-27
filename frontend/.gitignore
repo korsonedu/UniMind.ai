@@ -13,8 +13,14 @@ dist-ssr
 *.local
 *.tsbuildinfo
 
-# Tauri
+# Tauri (legacy shell)
 src-tauri/target
+
+# Electron shell
+electron/node_modules
+electron/dist
+electron/release
+electron/release-preview
 
 # Editor directories and files
 .vscode/*

@@ -1,0 +1,27 @@
+{
+  "name": "unimind-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "UniMind Electron thin shell",
+  "author": "Korson",
+  "main": "dist/main.cjs",
+  "type": "commonjs",
+  "scripts": {
+    "compile": "esbuild main.ts --bundle --platform=node --format=cjs --target=node20 --external:electron --outfile=dist/main.cjs && esbuild security.test.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/security.test.cjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test dist/security.test.cjs",
+    "build": "npm run compile && npm run typecheck && npm test",
+    "start": "electron dist/main.cjs",
+    "dev": "UNIMIND_DESKTOP_URL=http://127.0.0.1:5173 electron dist/main.cjs",
+    "preview": "UNIMIND_DESKTOP_PREVIEW=1 electron dist/main.cjs",
+    "pack": "npm run build && electron-builder --config electron-builder.yml --dir",
+    "dist": "npm run build && electron-builder --config electron-builder.yml",
+    "dist:win": "npm run build && electron-builder --config electron-builder.yml --win nsis",
+    "dist:preview": "npm run build && electron-builder --config electron-builder.preview.yml"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2"
+  }
+}

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
   push:
     branches: ['codex/unimind-dsh-m0']
-    paths: ['frontend/src-tauri/**', 'frontend/package*.json', '.github/workflows/desktop-windows.yml']
+    paths: ['frontend/electron/**', 'frontend/package*.json', '.github/workflows/desktop-windows.yml']
   pull_request:
-    paths: ['frontend/src-tauri/**', 'frontend/package*.json', '.github/workflows/desktop-windows.yml']
+    paths: ['frontend/electron/**', 'frontend/package*.json', '.github/workflows/desktop-windows.yml']
 
 permissions:
   contents: read
@@ -21,28 +21,25 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install frontend dependencies
-        working-directory: frontend
+          cache-dependency-path: frontend/electron/package-lock.json
+      - name: Install desktop dependencies
+        working-directory: frontend/electron
         run: npm ci
-      - name: Install pinned Rust toolchain
-        run: |
-          rustup toolchain install 1.94.1 --profile minimal --target x86_64-pc-windows-msvc
-          rustup override set 1.94.1
-      - name: Check desktop URL boundaries on Windows
-        run: cargo test --manifest-path frontend/src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc --lib
       - name: Build unsigned NSIS candidate
-        working-directory: frontend
-        run: npm run tauri:build -- --target x86_64-pc-windows-msvc --bundles nsis
+        working-directory: frontend/electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run dist:win
       - name: Record installer hashes
         shell: pwsh
+        working-directory: frontend/electron
         run: |
-          Get-ChildItem frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe | Get-FileHash -Algorithm SHA256 | Format-List | Out-File windows-sha256.txt
+          Get-ChildItem release/*-setup.exe | Get-FileHash -Algorithm SHA256 | Format-List | Out-File windows-sha256.txt
       - uses: actions/upload-artifact@v4
         with:
           name: UniMind-Windows-x64-${{ github.sha }}
           path: |
-            frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
-            windows-sha256.txt
+            frontend/electron/release/*-setup.exe
+            frontend/electron/windows-sha256.txt
           if-no-files-found: error
           retention-days: 14

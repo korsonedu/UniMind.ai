@@ -10,7 +10,13 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "electron:build": "npm --prefix electron run build",
+    "electron:dev": "npm --prefix electron run dev",
+    "electron:preview": "npm --prefix electron run preview",
+    "electron:pack": "npm --prefix electron run pack",
+    "electron:dist": "npm --prefix electron run dist",
+    "electron:dist:win": "npm --prefix electron run dist:win"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

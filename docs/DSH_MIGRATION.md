@@ -4,7 +4,7 @@
 
 ## 产品与运行位置
 
-UniMind 保留现有 React 学习界面和 Django 业务。DSH 是服务器上的 AI harness。浏览器和已构建的 Tauri 薄桌面候选只访问 UniMind API，不安装 DSH，不获得模型密钥。课程播放、原业务详情、练习与真人答疑可以独立于 AI 会话运行。桌面与可重复预览的启动方法见 [PREVIEW.md](../dsh/PREVIEW.md)。
+UniMind 保留现有 React 学习界面和 Django 业务。DSH 是服务器上的 AI harness。浏览器和已构建的 Electron 薄桌面候选只访问 UniMind API，不安装 DSH，不获得模型密钥。课程播放、原业务详情、练习与真人答疑可以独立于 AI 会话运行。桌面与可重复预览的启动方法见 [PREVIEW.md](../dsh/PREVIEW.md)。
 
 ## 现有能力的去向
 

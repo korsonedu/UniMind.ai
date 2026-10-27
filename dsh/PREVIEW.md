@@ -1,6 +1,6 @@
 # UniMind 网页与薄桌面预览
 
-桌面复用仓库已有 Tauri 壳；网页和桌面显示同一份 React，并访问同源 UniMind API。DSH、模型密钥、学生数据和评分任务留在服务端。客户端不包含 DSH SDK，不开放原生业务命令。
+桌面使用 Electron 薄壳；网页和桌面显示同一份 React，并访问同源 UniMind API。DSH、模型密钥、学生数据和评分任务留在服务端。客户端不包含 DSH SDK，不开放原生业务命令。原 Tauri 壳保留为历史实现，不再作为交付路径。
 
 ## 当前本机启动方式
 
@@ -27,21 +27,41 @@ npm run dev -- --host 127.0.0.1 --port 5175 --strictPort
 
 已运行同一端口时无需重复启动。打开 `http://127.0.0.1:5175/api/ai/dsh-preview/student-b/` 进入合成课程学员；`student-a` 为合成注册学生，只能观看标为公开的模块。新目录初始化包含一门公开合成课和一门课程学员合成课，只有现有持久预览另放入5秒合成视频与本地课件供播放验证。入口只在 `preview.py` 的包装层存在，不属于生产 Django URL。Cookie 为 HttpOnly，不在 URL 或日志中输出 Token。预览服务只能绑定 loopback，不可作为公开服务。
 
-## macOS Preview App
+## Electron 薄壳
 
-在 `frontend` 中执行：
+桌面壳位于 `frontend/electron`，使用 Electron 45，加载与网页相同的远端 UniMind UI。DSH、模型密钥、学生数据和评分任务留在服务端，客户端不包含 DSH SDK 或 Node 业务命令。
+
+首次安装与构建：
 
 ```sh
-npm run tauri:build -- --debug --bundles app --config src-tauri/tauri.preview.conf.json
+cd frontend/electron
+npm install
+npm run build
 ```
 
-构建需要 Rust 1.90 或更新版本；本机使用 Rust 1.94.1。Rust Tauri、前端 API 和 CLI 均已锁定到兼容的 2.12 系列，避免原 2.11/2.12 混用导致构建拒绝。没有修改主仓库共享 node_modules。
+预览（先按上文启动后端和 Vite）：
 
-输出为 `frontend/src-tauri/target/debug/bundle/macos/UniMind Preview.app`。先启动上述前后端，再打开 App。Preview 使用独立的应用标识和窗口标题，启动时登录合成账号；它访问 loopback 页面，不代表正式登录或生产服务已交付。首次加载期间等待本机服务完成响应。
+```sh
+npm run preview
+```
 
-发布构建使用 `npm run tauri:build -- --bundles app`，入口为后端现有配置中的 `https://unimind-ai.com`。该域名已只读确认 HTTPS 返回 200。发布代码拒绝 HTTP 来源；开发 HTTP 仅允许 loopback。主窗口只能同源导航；课件和附件的现有新窗口链接使用共享登录会话的受限资源窗口，允许 HTTPS 和开发站点同源 HTTP，拒绝凭据地址、file/javascript 等协议，资源窗口不能继续弹窗。原生命令均关闭，不提供本地 Agent、插件市场或系统权限。远程 UI 的配置方式依据 [Tauri 配置说明](https://v2.tauri.app/reference/config/)，权限边界依据 [Capabilities](https://v2.tauri.app/security/capabilities/)。
+macOS 预览包：
 
-正式网站仍需完成对应后端发布与开关验收，才能在正式客户端使用新 DSH；桌面壳构建不会改变生产网站。Apple Developer ID 签名、公证及正式更新渠道需要单独交付；此处不声称已可公开分发。Windows 安装包尚未在 Windows 环境构建或验收。
+```sh
+npm run dist:preview
+```
+
+预期输出 `release-preview/mac-arm64/UniMind Preview.app`。Preview 使用独立应用标识和窗口标题，加载 loopback 合成页面，不代表正式登录或生产服务已交付。
+
+macOS 发布包：
+
+```sh
+npm run dist
+```
+
+预期输出 `release/` 下的 DMG 和 ZIP，入口为 `https://unimind-ai.com`。本机已生成并校验 `release/UniMind-0.1.0-arm64-mac.zip`；DMG 在下载 dmgbuild/7zip 阶段因网络中断未完成，需重试。发布代码拒绝 HTTP 来源；开发 HTTP 仅允许 loopback。主窗口只能同源导航；课件和附件的新窗口链接使用共享登录会话的受限资源窗口，允许 HTTPS 和开发站点同源 HTTP，拒绝凭据地址、file/javascript 等协议，资源窗口不能继续弹窗。`contextIsolation` 和 `sandbox` 开启，`nodeIntegration` 关闭，没有 preload；权限请求默认拒绝，不提供本地 Agent、插件市场或系统权限。
+
+正式网站仍需完成对应后端发布与开关验收，才能在正式客户端使用新 DSH；桌面壳构建不会改变生产网站。Apple Developer ID 签名、公证及正式更新渠道需要单独交付；此处不声称已可公开分发。
 
 ## 实际验收
 
@@ -51,7 +71,15 @@ npm run tauri:build -- --debug --bundles app --config src-tauri/tauri.preview.co
 - 网页已提交练习现在通过本人 submission 查询恢复服务器上的原考试编号和作答，桌面可直接显示原 10/10；恢复没有创建新考试、重新评分或扣次。查询失败时禁用提交并提供重试，不能把读取失败当成“尚未交卷”。
 - 截图在忽略目录 `.m0-state/m0-desktop-course-proof.png`、`m0-desktop-chat-proof.png`。
 
+以下为 Tauri 历史证据，保留作对照。
+
 macOS arm64 的 Preview 和 HTTPS 发布构建均已生成，分别约25 MiB和9 MiB；构建产物仅为本机候选。签名检查显示只有 ad-hoc 签名、无 Team ID；本机可用签名身份为0，未做 Developer ID 签名或公证。ZIP 位于 `.m0-state/artifacts/`，跨端成绩截图为 `.m0-state/m0-desktop-practice-restore-proof.png`。
+
+### Electron 迁移验收
+
+- `frontend/electron` 的 `npm run build` 通过：esbuild 编译、TypeScript 类型检查和 3 项 URL 边界测试。
+- `npm run pack` 生成 `frontend/electron/release/mac-arm64/UniMind.app`，约 253 MiB，应用标识 `com.korsonedu.unimind.desktop`；实际启动后加载 `https://unimind-ai.com` 落地页，截图 `.m0-state/m0-electron-macos-proof.png`。
+- 当前只有 ad-hoc 签名，无 Developer ID；Electron 下的合成登录、课程播放、流式、资源窗口和跨端练习恢复仍待复验；Windows 安装包和实机验收未完成。
 
 网页和桌面使用相同的服务端会话和正式提交事实；客户端草稿仍按用户隔离。实际课程视频、正式账号登录、签名分发和生产并发需要另用授权环境验收，不能用合成数据推定已完成。
 
@@ -61,4 +89,4 @@ macOS arm64 的 Preview 和 HTTPS 发布构建均已生成，分别约25 MiB和9
 
 管理后台学员页可创建多个服务批次，为学员选择当前批次；“我的服务”显示本人届别、服务期、考试日与生效状态。批次不预填正式年度或日期，未设置考试日须明确显示。两个批次并存、改绑、停用及恢复已在独立合成管理库和实际组件验证，未变更生产学员。
 
-Windows x64为必需交付，沿用同一HTTPS薄壳。`.github/workflows/desktop-windows.yml`提供Windows 2022上的3项URL冒烟、无签名NSIS构建与SHA256留档，尚未推送或触发。当前仓库公开，候选代码尚在本地，先在macOS按[Tauri交叉构建说明](https://v2.tauri.app/distribute/windows-installer/)准备cargo-xwin、LLVM、NSIS与MSVC目标。交叉编译产物不能代替Windows实际安装、登录、课件及会话验收。
+Windows x64 为必需交付，沿用同一 Electron HTTPS 薄壳。`.github/workflows/desktop-windows.yml` 在 Windows 2022 上安装 `frontend/electron` 依赖，执行 `npm run dist:win`，生成无签名 NSIS 候选并记录 SHA256；尚未推送或触发。Windows 实际安装、登录、课件播放和会话恢复仍须在真实 Windows 环境验收，不能以 macOS 构建替代。

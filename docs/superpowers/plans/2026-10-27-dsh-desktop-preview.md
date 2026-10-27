@@ -1,5 +1,7 @@
 # 薄桌面与可重复本机预览
 
+> 历史说明：本计划的 Tauri 桌面路径已由 Electron 迁移替代，见 2026-10-27-desktop-electron.md。以下记录保留作对照。
+
 > 使用 superpowers:executing-plans 连续执行，仅必要冒烟，最后一次独立复核。
 
 **Goal:** 把现有 Tauri 壳做成可启动的 UniMind 薄客户端，并用仓库中的启动器替代 /tmp 临时预览脚本。
