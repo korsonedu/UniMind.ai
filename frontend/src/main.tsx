@@ -6,6 +6,7 @@ import './styles/native-agent.css'
 import './styles/course-workspace.css'
 import './styles/course-portal.css'
 import './styles/disclosure.css'
+import './styles/ui-refinements.css'
 import { initializeSystemAppearance } from './store/useSystemStore'
 import { registerSW } from 'virtual:pwa-register'
 

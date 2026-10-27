@@ -163,7 +163,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
               streamingContent += payload.delta;
               const message: XiaoYuMessage = {
                 _id: streamingId, role: 'assistant', content: streamingContent,
-                visible: true, timestamp: new Date().toISOString(),
+                visible: true, streaming: true, timestamp: new Date().toISOString(),
               };
               setMessages((prev: XiaoYuMessage[]) => upsertChatMessage(prev, message));
             } else if (payload.type === 'error') {
@@ -176,7 +176,7 @@ export function useXiaoYuEngine({ enabled }: UseXiaoYuEngineOptions) {
                 const id = streamingId;
                 setMessages((prev: XiaoYuMessage[]) => upsertChatMessage(prev, {
                   _id: id, id: payload.message_id, role: 'assistant',
-                  content: finalContent, visible: true, timestamp: new Date().toISOString(),
+                  content: finalContent, visible: true, streaming: false, timestamp: new Date().toISOString(),
                   conversation_title: payload.conversation_title || undefined,
                   metadata: payload.metadata || undefined,
                 }));

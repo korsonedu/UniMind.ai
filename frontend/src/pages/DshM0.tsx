@@ -240,14 +240,14 @@ export default function DshM0({ production = false }: { production?: boolean }) 
     const link = document.createElement('a'); link.href = url; link.download = `unimind-m0-${session.id}.json`; link.click(); URL.revokeObjectURL(url);
   };
 
-  return <main className="min-h-screen bg-[#f7f7f5] px-6 py-10 text-[#202020]">
+  return <main className="min-h-screen bg-background px-6 py-10 text-[#202020]">
     <div className="mx-auto max-w-5xl space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-black/10 pb-6">
-        <div><p className="mb-2 text-xs tracking-widest text-black/45">{production ? 'UNIMIND' : 'UNIMIND / M0'}</p>
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-6">
+        <div><p className="mb-2 text-xs tracking-widest text-muted-foreground">{production ? 'UNIMIND' : 'UNIMIND / M0'}</p>
           <h1 className="text-3xl font-semibold">{production ? '小宇' : '学习界面与 AI 运行时分开验证'}</h1>
           {!production && <>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-black/55">{site ? '站点接入验证，使用当前登录身份；' : '本地开发入口。使用隔离的验证账号和合成数据；'}{health?.mode === 'deepseek-official' ? '模型使用 DeepSeek 官方 API，经本地任务网关限量调用。' : health?.mode === 'local-protocol-smoke' ? '模型端为本地协议模拟。' : health?.mode === 'unavailable' ? '模型尚未配置可用的授权来源。' : '模型来源尚未连接。'}当前验证不代表正式教学效果或生产发布。</p>
-            <p className="mt-2 max-w-2xl text-xs leading-6 text-black/45">产品基线：DSH 作为服务端 harness；网页和 UniMind 桌面客户端共用 AI 服务。{site ? '本页经站点身份进入隔离 DSH 进程。' : '本页连接本机开发服务。'}当前仅开放已验证的只读工具。</p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{site ? '站点接入验证，使用当前登录身份；' : '本地开发入口。使用隔离的验证账号和合成数据；'}{health?.mode === 'deepseek-official' ? '模型使用 DeepSeek 官方 API，经本地任务网关限量调用。' : health?.mode === 'local-protocol-smoke' ? '模型端为本地协议模拟。' : health?.mode === 'unavailable' ? '模型尚未配置可用的授权来源。' : '模型来源尚未连接。'}当前验证不代表正式教学效果或生产发布。</p>
+            <p className="mt-2 max-w-2xl text-xs leading-6 text-muted-foreground">产品基线：DSH 作为服务端 harness；网页和 UniMind 桌面客户端共用 AI 服务。{site ? '本页经站点身份进入隔离 DSH 进程。' : '本页连接本机开发服务。'}当前仅开放已验证的只读工具。</p>
           </>}
         </div>
         <a className="text-sm underline underline-offset-4" href="/courses">进入普通课程界面 →</a>
@@ -258,59 +258,59 @@ export default function DshM0({ production = false }: { production?: boolean }) 
           ['独立 React 界面', '已运行'],
           [site ? '站点入口' : '本地 Host', health ? (site ? '当前账号已连接' : `SDK ${health.sdk}`) : '未连接'],
           ['模型来源', health?.backend_configured && health.model_configured ? (health.mode === 'deepseek-official' ? 'DeepSeek 官方 · 任务网关' : '本地协议模拟 · 任务网关') : '尚未完整配置'],
-        ].map(([label, value]) => <div key={label} className="border border-black/10 bg-white p-5">
-          <p className="text-xs text-black/45">{label}</p><p className="mt-3 font-medium">{value}</p>
+        ].map(([label, value]) => <div key={label} className="border border-border bg-card p-5">
+          <p className="text-xs text-muted-foreground">{label}</p><p className="mt-3 font-medium">{value}</p>
         </div>)}
       </section>}
 
       <div className={production ? 'grid gap-6' : 'grid gap-6 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]'}>
-        <section className="space-y-4 border border-black/10 bg-white p-6">
+        <section className="space-y-4 border border-border bg-card p-6">
           {!production && <h2 className="font-semibold">小宇只读链路</h2>}
           {production && <div className="flex flex-wrap items-center gap-3 text-sm">
-            <select aria-label="历史会话" className="min-w-48 border border-black/15 bg-white p-2"
+            <select aria-label="历史会话" className="min-w-48 border border-border/70 bg-card p-2"
               value={session?.id || ''} disabled={busy || !!retry || !health?.backend_configured || !savedSessions.length}
               onChange={event => void loadSession(event.target.value)}>
               <option value="">{savedSessions.length ? '历史会话' : '暂无历史会话'}</option>
               {savedSessions.map(row => <option key={row.id} value={row.id}>{row.title} · {row.message_count} 条</option>)}
             </select>
-            <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void manageSession('new')} className="border border-black/20 px-3 py-2 disabled:opacity-40">新会话</button>
+            <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void manageSession('new')} className="border border-border px-3 py-2 disabled:opacity-40">新会话</button>
           </div>}
-          <label className="block text-sm text-black/60" htmlFor="dsh-message">本轮问题</label>
+          <label className="block text-sm text-foreground/60" htmlFor="dsh-message">本轮问题</label>
           <textarea id="dsh-message" value={message} disabled={busy || !!retry} onChange={event => setMessage(event.target.value)} maxLength={4000}
             placeholder={production ? '问小宇任何备考问题…' : undefined}
-            className="min-h-32 w-full resize-y border border-black/15 bg-[#fafaf9] p-3 text-sm leading-6" />
+            className="min-h-32 w-full resize-y border border-border/70 bg-muted/30 p-3 text-sm leading-6" />
           <div className="flex flex-wrap gap-3 text-sm">
-            {!production && <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void run(false)} className="border border-black/20 px-4 py-2 disabled:opacity-40">读取本人记忆与工具</button>}
-            <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-black px-4 py-2 text-white disabled:opacity-40">{busy ? (production ? '正在回答…' : '正在验证…') : retry ? '恢复这次提问（同一请求）' : production ? '发送' : health?.mode === 'deepseek-official' ? '调用官方模型' : site ? '通过站点运行 DSH' : '运行 DSH 协议链路'}</button>
-            {!production && <button disabled={busy} onClick={() => void refresh()} className="px-2 py-2 text-black/55 underline disabled:opacity-40">刷新连接与会话</button>}
+            {!production && <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void run(false)} className="border border-border px-4 py-2 disabled:opacity-40">读取本人记忆与工具</button>}
+            <button disabled={busy || !health?.backend_configured || !health?.model_configured} onClick={() => void run(true)} className="bg-foreground px-4 py-2 text-background disabled:opacity-40">{busy ? (production ? '正在回答…' : '正在验证…') : retry ? '恢复这次提问（同一请求）' : production ? '发送' : health?.mode === 'deepseek-official' ? '调用官方模型' : site ? '通过站点运行 DSH' : '运行 DSH 协议链路'}</button>
+            {!production && <button disabled={busy} onClick={() => void refresh()} className="px-2 py-2 text-muted-foreground underline disabled:opacity-40">刷新连接与会话</button>}
           </div>
-          {site && busy && <button className="text-xs underline text-black/55" onClick={() => {
+          {site && busy && <button className="text-xs underline text-muted-foreground" onClick={() => {
             operation.current?.abort(); setBusy(false); setLiveText(''); setLiveStep(0); setLiveTool('');
             setError('已停止接收。服务端任务可能仍在处理，恢复会使用同一请求。');
           }}>停止接收</button>}
-          {site && busy && liveStep > 0 && <section aria-label="实时回答" aria-live="polite" className="border-l-2 border-black/20 pl-4 text-sm leading-7">
-            <p className="text-xs text-black/45">小宇正在生成 · 第 {liveStep} 步{liveTool ? ` · ${liveTool}` : ''}</p>
+          {site && busy && liveStep > 0 && <section aria-label="实时回答" aria-live="polite" className="border-l-2 border-border pl-4 text-sm leading-7">
+            <p className="text-xs text-muted-foreground">小宇正在生成 · 第 {liveStep} 步{liveTool ? ` · ${liveTool}` : ''}</p>
             <p className="whitespace-pre-wrap">{liveText || '正在查询和组织回答…'}</p>
-            <p className="text-xs text-black/40">完成后保存完整回答；当前片段尚未确认。</p>
+            <p className="text-xs text-muted-foreground/80">完成后保存完整回答；当前片段尚未确认。</p>
           </section>}
-          {retry && !busy && <p className="text-xs leading-6 text-black/50">这次提问尚未确认返回。恢复会使用相同请求 ID；页面取消或刷新不会撤销服务端任务。此页不会自动重试。</p>}
+          {retry && !busy && <p className="text-xs leading-6 text-muted-foreground">这次提问尚未确认返回。恢复会使用相同请求 ID；页面取消或刷新不会撤销服务端任务。此页不会自动重试。</p>}
           {error && <p role="alert" className="border-l-2 border-amber-600 bg-amber-50 p-3 text-sm leading-6">{error}</p>}
-          <div className="flex flex-wrap gap-4 border-t border-black/10 pt-3 text-xs text-black/55">
+          <div className="flex flex-wrap gap-4 border-t border-border pt-3 text-xs text-muted-foreground">
             <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void manageSession('new')}>新会话</button>
             <button disabled={busy || !session} onClick={exportSession}>导出对话文字</button>
             <button disabled={busy || !!retry || !session} onClick={() => void manageSession('delete')}>{site ? '删除站点会话' : '删除本地会话'}</button>
           </div>
-          {!production && session && <p className="break-all font-mono text-[10px] text-black/40">会话 {session.id} · {session.messages.length} 条消息</p>}
+          {!production && session && <p className="break-all font-mono text-[10px] text-muted-foreground/80">会话 {session.id} · {session.messages.length} 条消息</p>}
           {session?.notice && <p className="bg-amber-50 p-3 text-xs leading-6">{session.notice}</p>}
-          <section aria-label="聊天记录" className="space-y-5">{session?.messages.map((item, index) => <div key={index} className="border-t border-black/10 pt-4">
-            <p className="mb-2 text-xs text-black/40">{item.role === 'user' ? '我' : production ? '小宇' : `小宇 · ${item.mode === 'deepseek-official' ? '官方模型' : '本地协议模拟'}`}</p>
+          <section aria-label="聊天记录" className="space-y-5">{session?.messages.map((item, index) => <div key={index} className="border-t border-border pt-4">
+            <p className="mb-2 text-xs text-muted-foreground/80">{item.role === 'user' ? '我' : production ? '小宇' : `小宇 · ${item.mode === 'deepseek-official' ? '官方模型' : '本地协议模拟'}`}</p>
             <p className="whitespace-pre-wrap text-sm leading-7">{item.content}</p>
             {!!item.cards?.length && <div className="mt-4 space-y-4">
-              <p className="text-xs text-black/40">业务工具返回的结果快照；最新状态请打开详情。</p>
+              <p className="text-xs text-muted-foreground/80">业务工具返回的结果快照；最新状态请打开详情。</p>
               {item.cards.map((card, cardIndex) => <DshToolCard key={`${card.tool}-${cardIndex}`} card={card} />)}
             </div>}
           </div>)}</section>
-          {!production && turn && <p className="border-t border-black/10 pt-3 text-xs leading-6 text-black/50" aria-label="网关用量">
+          {!production && turn && <p className="border-t border-border pt-3 text-xs leading-6 text-muted-foreground" aria-label="网关用量">
             {turn.gateway.model} · {turn.gateway.requests.length} 次请求 · {turn.gateway.requests.reduce((sum, r) => sum + r.tool_results, 0)} 个工具结果<br />
             各请求工具数 / Schema：{turn.gateway.requests.map((r, i) => `#${i + 1} ${r.tool_count} 项 / ${r.tool_schema_bytes} bytes`).join(' → ')}<br />
             工具调用轨迹：{turn.routing.selected_calls?.join(' → ') || '无工具调用'}<br />
@@ -319,29 +319,29 @@ export default function DshM0({ production = false }: { production?: boolean }) 
           </p>}
         </section>
 
-        {!production && <aside className="space-y-6 border border-black/10 bg-white p-6">
+        {!production && <aside className="space-y-6 border border-border bg-card p-6">
           <section><h2 className="font-semibold">当前验证身份</h2>
-            <p className="mt-3 text-sm text-black/55">{context ? `${context.student.name} · #${context.student.id}` : health?.student ? `${health.student.name} · #${health.student.id}` : site ? '请先登录站点' : '读取后显示；凭据由 Host 持有'}</p>
+            <p className="mt-3 text-sm text-muted-foreground">{context ? `${context.student.name} · #${context.student.id}` : health?.student ? `${health.student.name} · #${health.student.id}` : site ? '请先登录站点' : '读取后显示；凭据由 Host 持有'}</p>
           </section>
           {site && <section>
             <label htmlFor="dsh-saved-session" className="font-semibold">服务端会话</label>
-            <select id="dsh-saved-session" className="mt-3 w-full border border-black/15 bg-white p-2 text-sm"
+            <select id="dsh-saved-session" className="mt-3 w-full border border-border/70 bg-card p-2 text-sm"
               value={session?.id || ''} disabled={busy || !!retry || !health?.backend_configured || !savedSessions.length}
               onChange={event => void loadSession(event.target.value)}>
               <option value="">选择已有会话（最近 50 项）</option>
               {savedSessions.map(row => <option key={row.id} value={row.id}>{row.title} · {row.message_count} 条</option>)}
             </select>
-            <p className="mt-2 text-xs leading-6 text-black/45">{savedSessions.length ? '同一账号可从服务器恢复；读取不会调用模型或扣问答次数。' : '当前账号暂无可发现的服务端会话。'}</p>
+            <p className="mt-2 text-xs leading-6 text-muted-foreground">{savedSessions.length ? '同一账号可从服务器恢复；读取不会调用模型或扣问答次数。' : '当前账号暂无可发现的服务端会话。'}</p>
           </section>}
           <section><h2 className="font-semibold">学生长期记忆</h2>
-            {context?.memory.items.length ? context.memory.items.map(item => <p key={item.id} className="mt-3 text-sm leading-6"><span className="text-black/45">{item.key}：</span>{item.value}</p>) : <p className="mt-3 text-sm text-black/45">{context ? '当前没有有效的长期记忆' : '尚未读取记忆'}</p>}
-            {context && <p className="mt-3 break-all font-mono text-[10px] text-black/35">版本 {context.memory.version}</p>}
+            {context?.memory.items.length ? context.memory.items.map(item => <p key={item.id} className="mt-3 text-sm leading-6"><span className="text-muted-foreground">{item.key}：</span>{item.value}</p>) : <p className="mt-3 text-sm text-muted-foreground">{context ? '当前没有有效的长期记忆' : '尚未读取记忆'}</p>}
+            {context && <p className="mt-3 break-all font-mono text-[10px] text-foreground/35">版本 {context.memory.version}</p>}
           </section>
           <section><h2 className="font-semibold">本轮初始工具</h2>
-            <p className="mt-2 text-xs leading-6 text-black/45">{context?.routing ? `已鉴权目录 ${context.routing.catalog_count} 个，旧共享候选 ${context.routing.candidate_count} 个；初始提供 ${context.tools.length} 个工具（含发现），本人可用 ${context.permitted_tool_count} 个只读业务工具。` : '按权限与问题选择'}</p>
-            <ul className="mt-3 space-y-2">{context?.tools.map(tool => <li key={tool.function.name} className="break-all border-t border-black/5 pt-2 font-mono text-xs">{tool.function.name}</li>)}</ul>
-            {context?.routing && <p className="mt-3 text-xs leading-6 text-black/45">初始组：{context.routing.initial_group || '按需发现'}。每次最多 {context.routing.max_visible_tools} 个工具，发现后切换分组。<br />初始 Schema {context.routing.executable_schema_bytes} bytes；完整业务许可 Schema {context.routing.available_schema_bytes} bytes。真实模型选择质量尚待验证。</p>}
-            {!!context?.routing?.pending_names.length && <details className="mt-3 text-xs leading-6 text-black/50"><summary>旧候选中 {context.routing.pending_names.length} 项尚未开放</summary><p className="mt-2 break-all font-mono">{context.routing.pending_names.join('、')}</p></details>}
+            <p className="mt-2 text-xs leading-6 text-muted-foreground">{context?.routing ? `已鉴权目录 ${context.routing.catalog_count} 个，旧共享候选 ${context.routing.candidate_count} 个；初始提供 ${context.tools.length} 个工具（含发现），本人可用 ${context.permitted_tool_count} 个只读业务工具。` : '按权限与问题选择'}</p>
+            <ul className="mt-3 space-y-2">{context?.tools.map(tool => <li key={tool.function.name} className="break-all border-t border-border/60 pt-2 font-mono text-xs">{tool.function.name}</li>)}</ul>
+            {context?.routing && <p className="mt-3 text-xs leading-6 text-muted-foreground">初始组：{context.routing.initial_group || '按需发现'}。每次最多 {context.routing.max_visible_tools} 个工具，发现后切换分组。<br />初始 Schema {context.routing.executable_schema_bytes} bytes；完整业务许可 Schema {context.routing.available_schema_bytes} bytes。真实模型选择质量尚待验证。</p>}
+            {!!context?.routing?.pending_names.length && <details className="mt-3 text-xs leading-6 text-muted-foreground"><summary>旧候选中 {context.routing.pending_names.length} 项尚未开放</summary><p className="mt-2 break-all font-mono">{context.routing.pending_names.join('、')}</p></details>}
           </section>
         </aside>}
       </div>

@@ -1,0 +1,84 @@
+/* Cross-surface UI refinements: layered neutrals, focus, motion and numeric stability. */
+.um-course-workspace,
+.um-native-agent,
+.um-agent-workspace {
+  --um-color-surface: var(--um-surface-1);
+  --um-color-toolbar: var(--um-surface-2);
+  --um-color-context: var(--um-surface-3);
+  --um-color-rail: var(--um-surface-4);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--um-weight-regular);
+}
+
+.um-course-workspace svg,
+.um-native-agent svg,
+.um-agent-workspace svg {
+  vertical-align: -0.125em;
+}
+
+.dark .um-course-workspace :is(.font-normal),
+.dark .um-native-agent :is(.font-normal) { font-weight: var(--um-weight-regular); }
+.dark .um-course-workspace :is(.font-medium),
+.dark .um-native-agent :is(.font-medium) { font-weight: var(--um-weight-medium); }
+.dark .um-course-workspace :is(.font-semibold, .font-bold),
+.dark .um-native-agent :is(.font-semibold, .font-bold) { font-weight: var(--um-weight-semibold); }
+
+.um-course-prose p,
+.um-lesson-description p,
+.um-native-chat-bubble .prose p,
+.um-agent-workspace .prose p {
+  text-wrap: pretty;
+}
+
+.um-app-shell :is(button, a):focus-visible,
+.um-course-workspace :is(button, a, select, input, textarea, [tabindex]):focus-visible,
+.um-course-drawer :is(button, a, select, input, textarea, [tabindex]):focus-visible,
+.um-native-agent :is(button, a, select, input, textarea, [tabindex]):focus-visible,
+.um-agent-workspace :is(button, a, select, input, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--um-color-accent),
+    0 0 0 4px color-mix(in srgb, var(--um-color-accent) 20%, transparent);
+}
+
+.um-course-search:focus-within {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--um-color-accent),
+    0 0 0 4px color-mix(in srgb, var(--um-color-accent) 20%, transparent);
+}
+
+.um-directory-resize:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--um-color-accent);
+}
+
+@keyframes um-stream-in {
+  from { opacity: 0; filter: blur(6px); transform: translateY(1px); }
+  to { opacity: 1; filter: blur(0); transform: none; }
+}
+
+.um-streaming-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.um-streaming-text > span {
+  display: inline;
+  animation: um-stream-in 120ms ease-out both;
+}
+
+@keyframes um-like-pop {
+  0% { transform: scale(.86); }
+  55% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+.um-qa-like[aria-pressed='true'] svg {
+  animation: um-like-pop 380ms cubic-bezier(.34, 1.56, .64, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .um-streaming-text > span,
+  .um-qa-like[aria-pressed='true'] svg {
+    animation: none;
+  }
+}

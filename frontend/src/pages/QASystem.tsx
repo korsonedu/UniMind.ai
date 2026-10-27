@@ -340,7 +340,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
             {isImageAttachment ? (
               <div className="um-qa-attachment-image rounded-xl overflow-hidden border border-border/50 max-w-sm group/img relative">
                 <img src={question.attachment} alt="问题附件" className="w-full h-auto max-h-[300px] object-contain" loading="lazy" />
-                <a href={question.attachment} target="_blank" rel="noreferrer" aria-label="查看原图" className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-lg opacity-100 md:opacity-0 group-hover/img:opacity-100 focus:opacity-100 transition-opacity">
+                <a href={question.attachment} target="_blank" rel="noreferrer" aria-label="查看原图" className="absolute top-2 right-2 p-1.5 bg-[#0b0d10]/50 text-white rounded-lg opacity-100 md:opacity-0 group-hover/img:opacity-100 focus:opacity-100 transition-opacity">
                   <Paperclip className="h-3.5 w-3.5" />
                 </a>
               </div>

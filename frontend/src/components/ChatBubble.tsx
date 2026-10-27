@@ -24,6 +24,7 @@ interface ChatBubbleProps {
   botAvatar?: string;
   /** Hide avatar and use tighter spacing */
   compact?: boolean;
+  streaming?: boolean;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
@@ -34,6 +35,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
   botGradient = 'from-violet-500 to-indigo-500',
   botAvatar,
   compact = false,
+  streaming = false,
   native = false,
 }) => {
   const [feedback, setFeedback] = useState<boolean | null | undefined>(msg.feedback);
@@ -106,7 +108,13 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
               // KaTeX display math spacing
               "prose-[.katex-display]:my-2 prose-[.katex-display]:overflow-x-auto",
             )}>
-              <MarkdownContent content={msg.content} />
+              {streaming ? (
+                <div className="um-streaming-text" aria-live="polite">
+                  {Array.from(msg.content).map((char, charIndex) => (
+                    <span key={charIndex} style={{ animationDelay: `${Math.min(charIndex, 20) * 30}ms` }}>{char}</span>
+                  ))}
+                </div>
+              ) : <MarkdownContent content={msg.content} />}
             </div>
           )}
         </div>

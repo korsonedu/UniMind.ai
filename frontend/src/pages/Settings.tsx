@@ -106,16 +106,16 @@ export const Settings: React.FC = () => {
         <div className="lg:col-span-4 space-y-6">
           <Card className="border-none shadow-sm rounded-3xl bg-card p-8 flex flex-col items-center text-center border border-border/30">
             <div className="relative group">
-              <Avatar className="h-32 w-32 border-4 border-white shadow-lg ring-1 ring-black/5">
+              <Avatar className="h-32 w-32 border-4 border-background shadow-lg ring-1 ring-black/5">
                 <AvatarImage src={previewUrl} />
                 <AvatarFallback className="text-4xl font-bold">{(profile.nickname || user?.username || "?")[0]}</AvatarFallback>
               </Avatar>
               <Sheet>
-                <SheetTrigger asChild><button aria-label="Change avatar" className="absolute bottom-0 right-0 bg-black text-white p-2.5 rounded-full shadow-sm border-4 border-white transition-transform hover:scale-110"><Camera className="h-4 w-4" /></button></SheetTrigger>
-                <SheetContent side="right" className="rounded-l-[2.5rem] border-none bg-white/95 backdrop-blur-2xl shadow-2xl w-[450px]">
+                <SheetTrigger asChild><button aria-label="Change avatar" className="absolute bottom-0 right-0 bg-foreground text-background p-2.5 rounded-full shadow-sm border-4 border-background transition-transform hover:scale-110"><Camera className="h-4 w-4" /></button></SheetTrigger>
+                <SheetContent side="right" className="rounded-l-[2.5rem] border-none bg-card/95 backdrop-blur-2xl shadow-2xl w-[450px]">
                   <SheetHeader className="p-8 border-b border-border/30"><SheetTitle className="text-2xl font-bold text-left">化身实验室</SheetTitle></SheetHeader>
                   <div className="p-8 space-y-10">
-                    <div className="flex justify-center py-10 bg-muted rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-white shadow-lg"><AvatarImage src={previewUrl} /></Avatar></div>
+                    <div className="flex justify-center py-10 bg-muted rounded-[2rem]"><Avatar className="h-44 w-44 border-8 border-background shadow-lg"><AvatarImage src={previewUrl} /></Avatar></div>
                     <div className="space-y-6 text-left">
                       <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">风格选择</Label>
                         <Select value={avatar.style} onValueChange={(v) => setAvatar({...avatar, style: v})}>
@@ -125,7 +125,7 @@ export const Settings: React.FC = () => {
                           </SelectContent>
                         </Select></div>
                       <div className="space-y-3"><Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">特征种子 (Seed)</Label>
-                        <div className="flex gap-3"><Input value={avatar.seed} onChange={e => setAvatar({ ...avatar, seed: e.target.value })} className="bg-muted border-none h-12 rounded-2xl font-bold" /><Button variant="outline" onClick={() => setAvatar({...avatar, seed: Math.random().toString(36).substring(7)})} className="rounded-2xl h-12 w-12 border-black/5"><ArrowCounterClockwise className="h-4 w-4" /></Button></div></div>
+                        <div className="flex gap-3"><Input value={avatar.seed} onChange={e => setAvatar({ ...avatar, seed: e.target.value })} className="bg-muted border-none h-12 rounded-2xl font-bold" /><Button variant="outline" onClick={() => setAvatar({...avatar, seed: Math.random().toString(36).substring(7)})} className="rounded-2xl h-12 w-12 border-border/60"><ArrowCounterClockwise className="h-4 w-4" /></Button></div></div>
                     </div>
                   </div>
                 </SheetContent>
@@ -139,8 +139,8 @@ export const Settings: React.FC = () => {
              <div className="space-y-6 text-left">
                 <h4 className="text-[10px] font-bold uppercase tracking-widest opacity-40 ml-1">安全与重置</h4>
                 <div className="space-y-4">
-                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">修改邮箱</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder='New Email' autoComplete="email" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">Update</Button></div></div>
-                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">安全密码</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder='Old Password' autoComplete="current-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder='New Password' autoComplete="new-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-black text-white h-10 px-4 text-[10px] font-bold uppercase tracking-widest">Reset</Button></div></div>
+                   <div className="space-y-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">修改邮箱</Label><div className="flex gap-2"><Input value={email} onChange={e => setEmail(e.target.value)} placeholder='New Email' autoComplete="email" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4" /><Button onClick={handleUpdateEmail} className="rounded-xl bg-foreground text-background h-10 px-4 text-[10px] font-bold uppercase tracking-widest">Update</Button></div></div>
+                   <div className="space-y-2 pt-2"><Label className="text-[10px] font-bold opacity-40 ml-1 uppercase">安全密码</Label><Input type="password" value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} placeholder='Old Password' autoComplete="current-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 mb-2" /><div className="flex gap-2"><Input type="password" value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} placeholder='New Password' autoComplete="new-password" spellCheck={false} className="bg-muted border-none h-10 rounded-xl text-xs font-bold px-4 flex-1" /><Button onClick={handleUpdatePassword} className="rounded-xl bg-foreground text-background h-10 px-4 text-[10px] font-bold uppercase tracking-widest">Reset</Button></div></div>
                 </div>
              </div>
           </Card>
@@ -178,7 +178,7 @@ export const Settings: React.FC = () => {
                  <Label className="text-xs font-bold uppercase tracking-widest opacity-40 ml-1">个人履历 / Bio</Label>
                  <textarea value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-muted border-none rounded-2xl p-6 min-h-[250px] focus:outline-none focus:ring-1 focus:ring-black/10 font-bold text-sm leading-relaxed" placeholder='写下你的学术格言与研究方向...' />
                </div>
-               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-black text-white rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><FloppyDisk className="mr-2 h-4 w-4" /> 保存所有个人资料</Button>
+               <Button onClick={handleSaveProfile} disabled={loading} className="w-full h-14 bg-foreground text-background rounded-2xl font-bold shadow transition-all hover:scale-[1.01]"><FloppyDisk className="mr-2 h-4 w-4" /> 保存所有个人资料</Button>
              </div>
           </Card>
 

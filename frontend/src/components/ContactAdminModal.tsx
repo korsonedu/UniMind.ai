@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Envelope, ChatCircle, Copy } from '@phosphor-icons/react';
+import { Envelope, ChatCircle, Copy, Check } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 interface ContactAdminModalProps {
@@ -13,9 +14,17 @@ const CONTACT_EMAIL = 'eular@unimind-ai.com';
 const CONTACT_WECHAT = 'Korsonedu';
 
 export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdminModalProps) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
   const copyText = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
-      .then(() => toast.success(`${label} 已复制`))
+      .then(() => {
+        setCopied(label);
+        if (copyTimer.current) clearTimeout(copyTimer.current);
+        copyTimer.current = setTimeout(() => setCopied(null), 2500);
+        toast.success(`${label} 已复制`);
+      })
       .catch(() => toast.error(`复制${label}失败，请手动复制`));
   };
 
@@ -45,9 +54,10 @@ export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdmi
               variant="ghost"
               size="icon"
               className="h-8 w-8 rounded-lg shrink-0"
+              aria-label={copied === '邮箱' ? '邮箱已复制' : '复制邮箱'}
               onClick={() => copyText(CONTACT_EMAIL, '邮箱')}
             >
-              <Copy className="h-3.5 w-3.5" />
+              {copied === '邮箱' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
             </Button>
           </div>
 
@@ -64,9 +74,10 @@ export function ContactAdminModal({ open, onOpenChange, planLabel }: ContactAdmi
               variant="ghost"
               size="icon"
               className="h-8 w-8 rounded-lg shrink-0"
+              aria-label={copied === '微信号' ? '微信号已复制' : '复制微信号'}
               onClick={() => copyText(CONTACT_WECHAT, '微信号')}
             >
-              <Copy className="h-3.5 w-3.5" />
+              {copied === '微信号' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
             </Button>
           </div>
         </div>

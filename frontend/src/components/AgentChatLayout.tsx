@@ -650,7 +650,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   if (msg.role === 'assistant' && Array.isArray(msg.metadata?.dsh_cards)) {
                     return <React.Fragment key={msg._id || i}>
                       {(msg.metadata.dsh_cards as DshCard[]).map((card, index) => <DshToolCard key={index} card={card} />)}
-                      {msg.content && <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} />}
+                      {msg.content && <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} />}
                     </React.Fragment>;
                   }
                   const stepVisuals = msg.toolStep?.visuals?.length
@@ -668,7 +668,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                           />
                         ))}
                         {msg.content && (
-                          <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} />
+                          <ChatBubble native={appearance === 'native'} msg={msg} isUser={false} index={i} streaming={msg.streaming} />
                         )}
                       </React.Fragment>
                     );
@@ -685,7 +685,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     return <ToolStepMessage key={msg._id || i} step={step} index={i} />;
                   }
                   // 普通消息 → ChatBubble
-                  return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} />;
+                  return <ChatBubble native={appearance === 'native'} key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} streaming={msg.streaming} />;
                 })}
                 {loading && (
                   <ChatBubble native={appearance === 'native'} msg={{ role: 'assistant', content: '' }} isUser={false} isThinking index={messages.length} />
@@ -802,7 +802,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
           <div className="shrink-0 px-4 pt-3 pb-2 flex items-center gap-2.5 border-b border-border/30">
             {conversationTitle ? (
-              <span className="text-xs text-black/70 flex-1 truncate">{conversationTitle}</span>
+              <span className="text-xs text-foreground/70 flex-1 truncate">{conversationTitle}</span>
             ) : (
               <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shrink-0">
                 <Sparkle className="h-3.5 w-3.5 text-primary-foreground" />
@@ -853,7 +853,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 msg.toolStep ? (
                   <ToolStepMessage key={msg._id || i} step={msg.toolStep} index={i} />
                 ) : (
-                  <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} compact />
+                  <ChatBubble key={msg._id || i} msg={msg} isUser={msg.role === 'user'} index={i} compact streaming={msg.streaming} />
                 )
               ))}
               {loading && (

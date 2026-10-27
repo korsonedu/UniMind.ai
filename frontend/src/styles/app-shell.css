@@ -9,10 +9,8 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-directory-resize:focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: -2px; }
 .um-directory-content { overflow: hidden; transition: opacity 140ms ease; }
 .um-directory-content[aria-hidden='true'] { opacity: 0; visibility: hidden; transition: opacity 140ms ease, visibility 0s 220ms; }
-[data-directory-animated='true'] .um-agent-directory { transition: width 220ms cubic-bezier(.22,1,.36,1); }
-.um-course-workspace[data-directory-animated='true'] { transition: grid-template-columns 220ms cubic-bezier(.22,1,.36,1); }
 @media (prefers-reduced-motion: reduce) {
-  .um-directory-content, .um-directory-content[aria-hidden='true'], [data-directory-animated='true'] .um-agent-directory, .um-course-workspace[data-directory-animated='true'] { transition: none; }
+  .um-directory-content, .um-directory-content[aria-hidden='true'] { transition: none; }
 }
 .um-app-brand { height: 48px; align-items: center; margin-bottom: 12px; }
 .um-app-rail a[aria-current='page'] { background: var(--um-color-selected); color: var(--um-color-accent); border: 0; box-shadow: none; }

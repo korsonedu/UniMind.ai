@@ -33,6 +33,7 @@ export interface Message {
   conversation_project?: number | null;
   conversation_pinned?: boolean;
   metadata?: Record<string, unknown> & { visual?: VisualData; all_visuals?: VisualData[] };
+  streaming?: boolean;
 }
 
 export interface ConversationSession {
@@ -481,7 +482,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               streamingContent += payload.delta;
               const message: Message & { _id: string } = {
                 _id: streamingId, role: 'assistant', content: streamingContent,
-                visible: true, timestamp: new Date().toISOString(),
+                visible: true, streaming: true, timestamp: new Date().toISOString(),
                 conversation_id: conversationIdRef.current,
               };
               setMessages(prev => upsertChatMessage(prev, message));
@@ -499,7 +500,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                 const id = streamingId;
                 setMessages(prev => upsertChatMessage(prev, {
                   _id: id, id: payload.message_id, role: 'assistant',
-                  content: finalContent, visible: true,
+                  content: finalContent, visible: true, streaming: false,
                   conversation_title: sessionMetadataRef.current.get(requestConversationId)?.title ?? payload.conversation_title ?? undefined,
                   metadata: payload.metadata || undefined,
                 }));

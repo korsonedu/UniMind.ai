@@ -74,7 +74,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
       </div>
 
       {/* ── Right Form Panel ── */}
-      <div className="flex flex-col items-center justify-center bg-white dark:bg-black px-6 py-12 lg:px-16 lg:py-16">
+      <div className="flex flex-col items-center justify-center bg-white dark:bg-[#0b0d10] px-6 py-12 lg:px-16 lg:py-16">
         <div className="w-full max-w-[400px]">
           {/* Mobile-only logo */}
           <div className="lg:hidden flex flex-col items-center gap-4 mb-10">
