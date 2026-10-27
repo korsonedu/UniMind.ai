@@ -92,6 +92,19 @@ class ExamDetailView(APIView):
         return Response(exam_result_payload(exam))
 
 
+class ExamSubmissionView(APIView):
+    permission_classes = [IsMember]
+
+    def get(self, request, submission_id):
+        submission = get_object_or_404(PracticeSubmission, user=request.user, session_id=submission_id)
+        saved = submission.response if isinstance(submission.response, dict) else {}
+        exam = get_object_or_404(QuizExam, user=request.user, pk=saved.get('exam_id'))
+        return Response({'exam_id': exam.pk, 'answers': [
+            {'position': item.position, 'answer': item.user_answer}
+            for item in exam.results.order_by('position', 'id')
+        ]})
+
+
 class ExamStatusView(APIView):
     permission_classes = [IsMember]
 

@@ -4,14 +4,15 @@
   "version": "0.1.0",
   "identifier": "com.korsonedu.unimind.desktop",
   "build": {
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "frontendDist": "https://unimind-ai.com",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeDevCommand": "npm run dev -- --host 127.0.0.1 --port 5173 --strictPort"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
+        "create": false,
         "title": "UniMind",
         "width": 1200,
         "height": 800,
