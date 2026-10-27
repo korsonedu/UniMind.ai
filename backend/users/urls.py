@@ -7,12 +7,11 @@ from .views import (
     TourDismissView, TourPanelDismissView,
     OnlineUserListView, UpdateEmailView, UpdatePasswordView,
     DailyPlanListView, DailyPlanDetailView,
-    ActivateMembershipView,
     BIAnalyticsView,
     MyKnowledgeMasteryView, SendVerificationCodeView, LogoutView,
     DiagnosticGenerateView, DiagnosticSubmitView, DiagnosticReassessView,
-    AnalyticsDashboardView, AnalyticsExportView, PlatformRevenueView, NPSSubmitView, NPSStatusView,
-    AccountDeleteView, DataExportView, FeedbackSubmitView,
+    AnalyticsDashboardView, AnalyticsExportView, PlatformRevenueView,
+    AccountDeleteView, DataExportView,
     AvatarProxyView,
     UserCheckInView, AchievementListView, UserAchievementView,
     StudentReportCardView, StudentReportCardPDFView,
@@ -24,31 +23,18 @@ from .views_admin import (
 from .views_institution import (
     InstitutionDashboardView, PlatformAdminInstitutionOverviewView, RetiredInstitutionView,
     InstitutionListView, InstitutionDetailView,
-    InstitutionActivateView, InstitutionDeactivateView,
-    InstitutionChangePlanView,
     InstitutionStudentListView, InstitutionStudentDetailView,
     InstitutionStudentStatsView, InstitutionStudentResetPasswordView,
     InstitutionStudentRankingView,
-    InstitutionFeatureView, InstitutionPreviewView,
-    InstitutionSelfUpdateView,
-    CheckInviteView, RegenerateInviteSlugView,
-    PlanInviteCodeListView, PlanInviteCodeGenerateView, PlanInviteCodeDeactivateView,
-    UpdateDirectionsView,
-    InstitutionJoinByInviteSlugView,
-    InstitutionMemberListView, InstitutionMemberRoleView,
+    InstitutionFeatureView,
+    PlanInviteCodeListView,
+    InstitutionMemberListView,
     InstitutionAuditLogView, InstitutionNotificationConfigView,
-    InstitutionBulkInitView,
     InstitutionBusinessDashboardView, InstitutionDataExportView,
     InstitutionStudentHealthView,
-    InstitutionInviteListView, InstitutionInviteDetailView,
-    InstitutionJoinRequestListView, InstitutionJoinRequestReviewView,
+    InstitutionJoinRequestListView,
 )
-from .views_api import (
-    APIKeyListCreateView, APIKeyDetailView,
-)
-from .views_sso import (
-    SSOAuthorizeView, SSOCallbackView, SSOConfigView,
-)
+from .views_sso import SSOAuthorizeView, SSOCallbackView
 
 urlpatterns = [
     path('learning/catalog/', LearningCatalogView.as_view(), name='learning-catalog'),
@@ -80,8 +66,6 @@ urlpatterns = [
     path('me/diagnostic/generate/', DiagnosticGenerateView.as_view(), name='diagnostic-generate'),
     path('me/diagnostic/submit/', DiagnosticSubmitView.as_view(), name='diagnostic-submit'),
     path('me/diagnostic/reassess/', DiagnosticReassessView.as_view(), name='diagnostic-reassess'),
-    path('nps/submit/', NPSSubmitView.as_view(), name='nps-submit'),
-    path('nps/status/', NPSStatusView.as_view(), name='nps-status'),
 
     # System
     path('online/', OnlineUserListView.as_view(), name='online-users'),
@@ -158,7 +142,6 @@ urlpatterns = [
     # Account management (P0: 个保法合规)
     path('me/delete/', AccountDeleteView.as_view(), name='account-delete'),
     path('me/data-export/', DataExportView.as_view(), name='data-export'),
-    path('feedback/', FeedbackSubmitView.as_view(), name='feedback-submit'),
 
     # Avatar proxy
     path('avatar/<str:style>/<str:seed>/', AvatarProxyView.as_view(), name='avatar-proxy'),

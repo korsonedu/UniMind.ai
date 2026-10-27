@@ -1,4 +1,4 @@
-"""Tests for account deletion, data export, feedback, legal API."""
+"""Tests for account deletion, data export, legal API."""
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -63,30 +63,6 @@ class TestDataExport:
             auth_client.get('/api/users/me/data-export/')
         resp = auth_client.get('/api/users/me/data-export/')
         assert resp.status_code == 429
-
-
-@pytest.mark.django_db
-@pytest.mark.django_db
-class TestFeedback:
-    def test_submit_requires_auth(self, api_client):
-        resp = api_client.post('/api/users/feedback/', {'content': 'test'})
-        assert resp.status_code in (401, 403)
-
-    def test_submit_empty_content(self, auth_client):
-        resp = auth_client.post('/api/users/feedback/', {'content': ''})
-        assert resp.status_code == 400
-
-    def test_submit_success(self, auth_client, user):
-        resp = auth_client.post('/api/users/feedback/', {
-            'category': 'bug',
-            'content': '测试反馈',
-            'contact': 'test@test.com',
-        })
-        assert resp.status_code == 200
-        assert resp.data['status'] == 'ok'
-
-        from core.models import Feedback
-        assert Feedback.objects.filter(user=user, content='测试反馈').exists()
 
 
 @pytest.mark.django_db

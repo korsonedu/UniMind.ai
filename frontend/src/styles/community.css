@@ -32,7 +32,6 @@
 .um-community .um-study-input { border-top: 0; }
 .um-community .um-study-composer { border-color: transparent; box-shadow: none; }
 .um-community .um-study-composer:focus-within { border-color: var(--um-color-focus); }
-body:has(.um-community-content.is-study) { --um-feedback-bottom: 120px; }
 
 @media (max-width: 1100px) and (min-width: 768px) {
   .um-community { grid-template-columns: 164px minmax(0, 1fr); }

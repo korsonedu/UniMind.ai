@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .admin_base import PlatformModelAdmin
-from .models import PromptTemplate, PromptQualityLog, LegalDocument, Feedback
+from .models import PromptTemplate, PromptQualityLog, LegalDocument
 
 admin.site.site_header = 'UniMind 统一管理后台'
 admin.site.site_title = 'UniMind 管理'
@@ -22,4 +22,4 @@ class PromptQualityLogAdmin(PlatformModelAdmin):
     date_hierarchy = 'created_at'
 
 
-admin.site.register([LegalDocument, Feedback], PlatformModelAdmin)
+admin.site.register(LegalDocument, PlatformModelAdmin)

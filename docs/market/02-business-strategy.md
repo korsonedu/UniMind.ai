@@ -1,6 +1,8 @@
 # UniMind — 商业策略与市场
 
-> 内部决策与投资人参考。定价、商业模式、竞争壁垒、路线图的单一事实来源。
+> 历史参考（2026-10-25 标记）：本文保留历史 B 端商业策略与套餐，不作为当前销售承诺、授权规范或操作指南。文中套餐价格、教师/机构角色、旧页面地址、效果数字和计划须重新核实。当前范围见 [README](../../README.md)、[管理扩展](../../admin-extension/README.md) 和 [单平台边界](../tech/architecture/SINGLE_PLATFORM_TRANSITION.md)；本次本地清理尚未部署。
+
+> 历史内部策略稿，不再作为当前定价、商业模式或发布状态的事实来源。
 > 版本 2.0 · 2026-07-05 | 整合自 product_strategy + business_model + investor report + pricing
 
 ---

@@ -1,5 +1,7 @@
 # UniMind 商业计划书 · 文字稿
 
+> 历史参考（2026-10-25 标记）：本文保留历史商业计划书，不作为当前销售承诺、授权规范或操作指南。文中套餐价格、教师/机构角色、旧页面地址、效果数字和计划须重新核实。当前范围见 [README](../../README.md)、[管理扩展](../../admin-extension/README.md) 和 [单平台边界](../tech/architecture/SINGLE_PLATFORM_TRANSITION.md)；本次本地清理尚未部署。
+
 > 2026 年 7 月 | 机密
 
 ---

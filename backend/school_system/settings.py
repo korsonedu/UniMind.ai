@@ -320,8 +320,6 @@ MEMORIX_FIELD_DECAY = float(os.getenv("MEMORIX_FIELD_DECAY", "0.02"))     # α: 
 MEMORIX_FIELD_BETA_E = float(os.getenv("MEMORIX_FIELD_BETA_E", "0.005"))  # βe: 扩散强度
 MEMORIX_FIELD_BETA_A = float(os.getenv("MEMORIX_FIELD_BETA_A", "0.5"))    # βa: 评分放大系数
 MEMORIX_FIELD_ETA = float(os.getenv("MEMORIX_FIELD_ETA", "0.02"))         # η:  复习转移系数
-# 以下为 Phase 0 遗留（加性评分 α 权重，已弃用；保留兼容）
-MEMORIX_FIELD_ALPHA = float(os.getenv("MEMORIX_FIELD_ALPHA", "0.60"))
 MEMORIX_REC_ENABLED = _get_bool("MEMORIX_REC_ENABLED", default=False)     # 再巩固窗口（暂关，等 u 向量稳定后再启）
 MEMORIX_REC_TAU = float(os.getenv("MEMORIX_REC_TAU", "0.042"))
 MEMORIX_REC_K = float(os.getenv("MEMORIX_REC_K", "1.2"))
@@ -418,18 +416,6 @@ CELERY_BEAT_SCHEDULE = {
     "check-subscription-expiry-daily": {
         "task": "payments.tasks.check_subscription_expiry",
         "schedule": 86400.0,  # 24 hours
-    },
-    "notify-trial-expiring-daily": {
-        "task": "users.tasks.notify_trial_expiring",
-        "schedule": 86400.0,
-    },
-    "send-membership-expiry-reminders-daily": {
-        "task": "users.tasks.send_membership_expiry_reminders",
-        "schedule": 86400.0,
-    },
-    "send-expiry-reminders-daily": {
-        "task": "notifications.tasks_reminder.send_expiry_reminders",
-        "schedule": 86400.0,
     },
     "check-performance-drops-daily": {
         "task": "users.tasks.check_performance_drops",

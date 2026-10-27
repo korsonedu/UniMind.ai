@@ -1,5 +1,7 @@
 # UniMind 企业版本地部署指南
 
+> 历史参考（2026-10-25 标记）：本文保留历史企业版交付与部署方案，不作为当前销售承诺、授权规范或操作指南。文中套餐价格、教师/机构角色、旧页面地址、效果数字和计划须重新核实。当前范围见 [README](../README.md)、[管理扩展](../admin-extension/README.md) 和 [单平台边界](tech/architecture/SINGLE_PLATFORM_TRANSITION.md)；本次本地清理尚未部署。
+
 > 企业版 = 源码交付 + 客户自行部署运维 + 可选付费技术支持。
 > 核心引擎（Memorix、AI 管线、Agent 运行时）与 SaaS 版共享同一代码库。
 

@@ -21,9 +21,6 @@ import api from '@/lib/api';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
-const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
-import { FeedbackButton } from './components/FeedbackButton';
-
 
 // Lazy-loaded pages — named exports need .then() wrapper
 const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
@@ -270,13 +267,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <Toaster position="top-center" richColors />
-        <Suspense fallback={null}>
-          <NPSSurvey />
-        </Suspense>
         <XiaoYuEngineBridge />
         <StudyRoomWsBridge />
         <RouterProvider router={router} />
-        <FeedbackButton />
       </ErrorBoundary>
     </QueryClientProvider>
   );

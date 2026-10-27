@@ -29,64 +29,6 @@ def check_membership_expiry():
     logger.info("check_membership_expiry: %s users downgraded", count)
 
 
-@shared_task(soft_time_limit=60, time_limit=120)
-def notify_trial_expiring():
-    """提前 3 天提醒试用即将到期，提前 1 天再次提醒。"""
-    from notifications.models import Notification
-
-    now = timezone.now()
-    for days_left in (3, 1):
-        target_date = now + timedelta(days=days_left)
-        users = User.objects.filter(
-            is_member=True,
-            membership_source='trial',
-            membership_expires_at__date=target_date.date(),
-        )
-        for user in users:
-            Notification.objects.create(
-                recipient=user,
-                ntype='system',
-                title='试用即将到期' if days_left == 3 else '试用明天到期',
-                content=f'您的 {days_left} 天免费试用即将结束，到期后将降级为 Free 方案。升级方案即可保留全部功能。',
-                link='/settings/billing',
-            )
-        if users:
-            logger.info("notify_trial_expiring: %s users notified for %s days left", users.count(), days_left)
-
-
-@shared_task(soft_time_limit=120, time_limit=180)
-def send_membership_expiry_reminders():
-    """提前 7/3/1 天给付费会员发邮件提醒续费。"""
-    from core.email_service import send_email
-
-    now = timezone.now()
-    for days_left in (7, 3, 1):
-        target_date = now + timedelta(days=days_left)
-        users = User.objects.filter(
-            is_member=True,
-            membership_source__iregex=r'^(payment|subscription:)',
-            membership_expires_at__date=target_date.date(),
-        )
-        for user in users:
-            tier_labels = {'starter': 'Starter', 'growth': 'Growth', 'enterprise': 'Enterprise'}
-            label = tier_labels.get(user.membership_tier, user.membership_tier)
-            subject = f'UniMind {label} 版即将到期（{days_left}天后）'
-            body = (
-                f'您好，{user.nickname or user.email}：\n\n'
-                f'您的 UniMind {label} 会员将于 '
-                f'{user.membership_expires_at.strftime("%Y年%m月%d日")} 到期，剩余 {days_left} 天。\n\n'
-                f'到期后将降级为 Free 方案，部分功能将受限。\n'
-                f'请登录 UniMind 及时续费以保持服务不中断。\n\n'
-                f'UniMind.ai 团队'
-            )
-            try:
-                send_email(user.email, subject, body)
-            except Exception:
-                logger.warning("send_membership_expiry_reminders: failed to email %s", user.email, exc_info=True)
-        if users:
-            logger.info("send_membership_expiry_reminders: %s emails sent for %s days left", users.count(), days_left)
-
-
 @shared_task(soft_time_limit=300, time_limit=360)
 def check_performance_drops():
     """每日运行：检测各机构 KP 正确率本周 vs 上周下降 >15% → 通知老师/机构主。"""
