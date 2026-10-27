@@ -801,7 +801,7 @@ class CourseOutlineView(APIView):
             return Response({'error': '课程不存在'}, status=404)
 
         transcript = getattr(course, 'transcript', None)
-        if not transcript or transcript.asr_status != 'completed':
+        if not transcript or transcript.asr_status != 'completed' or not (transcript.full_text or '').strip():
             return Response({'error': '请先完成语音转录'}, status=400)
 
         from .models import CourseOutline
