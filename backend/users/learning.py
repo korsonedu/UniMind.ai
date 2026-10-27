@@ -28,18 +28,33 @@ def has_legacy_membership(user):
 
 
 def is_course_student(user):
-    status = CourseStudentStatus.objects.filter(user=user).values_list('is_course_student', flat=True).first()
+    status = CourseStudentStatus.objects.select_related('cohort').filter(user=user).first()
     if status is not None:
-        return status
+        return status.is_course_student and (status.cohort_id is None or status.cohort.state == 'active')
     # Historical grants remain evidence of existing access until an administrator decides.
     return has_legacy_membership(user) or active_grants(user).exists()
 
 
+def cohort_info(user):
+    status = CourseStudentStatus.objects.select_related('cohort').filter(user=user).first()
+    if not status or not status.cohort_id:
+        return None
+    cohort = status.cohort
+    return {'id': cohort.pk, 'name': cohort.name, 'target_year': cohort.target_year,
+            'exam_date': cohort.exam_date.isoformat() if cohort.exam_date else None,
+            'starts_on': cohort.starts_on.isoformat(), 'ends_on': cohort.ends_on.isoformat(),
+            'is_active': cohort.is_active, 'state': cohort.state, 'service_active': status.is_course_student and cohort.state == 'active',
+            'updated_at': cohort.updated_at.isoformat()}
+
+
 @transaction.atomic
-def set_course_student_status(user, is_student, *, actor=None):
+def set_course_student_status(user, is_student, *, actor=None, cohort_id=...):
     get_user_model().objects.select_for_update().get(pk=user.pk)
+    defaults = {'is_course_student': bool(is_student), 'updated_by': actor}
+    if cohort_id is not ...:
+        defaults['cohort_id'] = cohort_id
     status, _ = CourseStudentStatus.objects.update_or_create(
-        user=user, defaults={'is_course_student': bool(is_student), 'updated_by': actor})
+        user=user, defaults=defaults)
     return status
 
 

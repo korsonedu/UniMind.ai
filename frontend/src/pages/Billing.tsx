@@ -24,10 +24,13 @@ export function BillingPage() {
   useEffect(load, []);
   const usagePercent = access?.ai_usage.limit ? Math.min(100, Math.round(access.ai_usage.used / access.ai_usage.limit * 100)) : 0;
   const status: Record<string, string> = { paid: '已支付', pending: '待支付', refunded: '已退款', expired: '已过期', cancelled: '已取消' };
+  const cohortStates: Record<string, string> = { active: '服务中', scheduled: '尚未开始', expired: '已结束', disabled: '已停用' };
   return <main className="max-w-4xl mx-auto py-6 space-y-8">
     <header className="flex flex-wrap justify-between items-center gap-4"><h1 className="text-2xl font-semibold">我的服务</h1><div className="flex gap-3"><Button variant="outline" onClick={() => setContactOpen(true)}>联系我们</Button><Button asChild variant="outline"><Link to="/pricing">AI 加量<ArrowRight size={16} /></Link></Button></div></header>
     {error ? <div role="alert"><p>{error}</p><Button variant="outline" onClick={load}>重试</Button></div> : !access ? <p role="status">正在加载…</p> : <>
-      <section><h2 className="font-medium">当前身份</h2><p className="mt-3">{access.ai_usage.unlimited ? '管理员' : access.is_course_student ? '课程学员' : '非课程学员'}</p><p className="mt-2 text-sm text-muted-foreground">{access.is_course_student ? '课程服务由科晟线下安排，学员状态由管理员调整。' : '可以使用小宇问答。课程服务请联系科晟，购买 AI 加量不会开通课程。'}</p></section>
+      <section><h2 className="font-medium">当前身份</h2><p className="mt-3">{access.ai_usage.unlimited ? '管理员' : access.is_course_student ? '课程学员' : '注册学生'}</p><p className="mt-2 text-sm text-muted-foreground">{access.is_course_student ? '课程服务由科晟线下安排，学员状态与服务批次由管理员调整。' : '可以观看公开课并使用有限小宇问答。课程服务请联系科晟，购买 AI 加量不会开通课程。'}</p>
+        {access.cohort ? <div className="mt-3 space-y-1 text-sm"><p>{access.cohort.name} · {access.cohort.target_year}届 · {cohortStates[access.cohort.state]}</p><p>服务日期：{access.cohort.starts_on} 至 {access.cohort.ends_on}（上海日期，含结束当日）</p><p>实际考试日期：{access.cohort.exam_date || '待教研设置'}</p>{!access.cohort.service_active && <p className="text-muted-foreground">该批次当前未向此账号提供全权益，历史学习记录保留。</p>}</div> : access.is_course_student && <p className="mt-3 text-sm text-muted-foreground">沿用原手工课程授权，尚未分配年度批次；请联系科晟核对服务日期。</p>}
+      </section>
       <section className="border-y py-6"><h2 className="font-medium">本周 AI 问答</h2>
         <p className="mt-3 text-2xl tabular-nums">{access.ai_usage.used}<span className="text-sm text-muted-foreground"> / {access.ai_usage.unlimited ? '不限' : access.ai_usage.configured ? access.ai_usage.limit : '待配置'} 次基础额度</span></p>
         {access.ai_usage.configured && !access.ai_usage.unlimited && <div className="mt-4 space-y-2"><div className="flex justify-between text-sm text-muted-foreground"><span>基础额度已用</span><span className="tabular-nums">{usagePercent}%</span></div><Progress value={usagePercent} role="progressbar" aria-label="本周基础额度使用进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={usagePercent} aria-valuetext={`已用 ${access.ai_usage.used} / ${access.ai_usage.limit} 次基础额度`} /></div>}

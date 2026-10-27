@@ -679,6 +679,6 @@ from .models_commercial import (
     InstitutionAuditLog,
 )
 from .models_learning import (
-    LearningSession, LearningProduct, LearningGrant, LearningUsage, CourseStudentStatus, WeeklyAIQuotaConfig,
+    LearningSession, LearningProduct, LearningGrant, LearningUsage, StudentCohort, CourseStudentStatus, WeeklyAIQuotaConfig,
     AIAddonProduct, AIAddonGrant, WeeklyAIUsage, AIUsageReservation,
 )

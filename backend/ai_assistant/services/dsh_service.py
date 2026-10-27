@@ -61,6 +61,8 @@ def permitted_tools(user):
 
 
 def build_context(user, message, recent_messages=None):
+    from users.learning import cohort_info
+    cohort = cohort_info(user)
     catalog = student_catalog(user)
     candidates = route_tools(message, catalog, recent_messages=recent_messages,
                              bot_type='planner', intent_classifier=classify_intent_keywords)
@@ -68,12 +70,12 @@ def build_context(user, message, recent_messages=None):
     selected, groups, initial = grouped_tools(allowed, message, recent_messages)
     return {
         'protocol': 'unimind.dsh.m0.v1',
-        'student': {'id': user.pk, 'name': user.nickname or user.username},
+        'student': {'id': user.pk, 'name': user.nickname or user.username, 'cohort': cohort},
         'memory': memory_snapshot(user),
         'tools': selected,
         'available_tools': allowed, 'tool_groups': groups,
         'permitted_tool_count': len(allowed),
-        'permissions_version': hashlib.sha256(json.dumps(allowed, sort_keys=True).encode()).hexdigest(),
+        'permissions_version': hashlib.sha256(json.dumps({'tools': allowed, 'cohort': cohort}, sort_keys=True).encode()).hexdigest(),
         'route': 'grouped-native-tool-discovery',
         'routing': {
             'catalog_count': len(catalog), 'candidate_count': len(candidates),
