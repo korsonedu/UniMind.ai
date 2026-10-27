@@ -33,9 +33,10 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                'assistant.memory_extract': ('fast', 1, 800),
                'quizzes.preview_parse': ('fast', 1, 3200),
                'quizzes.grade_question': ('pro', 1, 2500),
-               'quizzes.objective_analysis': ('fast', 1, 2000)}
+               'quizzes.objective_analysis': ('fast', 1, 2000),
+               'server.generate': (('fast', 'pro'), 8, 8192)}
     budget = budgets.get(policy['operation'])
-    if (not budget or policy['tier'] != budget[0] or not 1 <= policy['max_requests'] <= budget[1]
+    if (not budget or policy['tier'] not in (budget[0] if isinstance(budget[0], tuple) else (budget[0],)) or not 1 <= policy['max_requests'] <= budget[1]
             or not 1 <= policy['max_tokens'] <= budget[2] or not 1 <= policy['max_request_bytes'] <= 65536):
         raise ValueError('Unsupported task policy')
     allowed_tools = {t['function']['name'] for t in context.get('available_tools', context['tools']) + context['tools']}
@@ -128,9 +129,14 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                     'stream', 'temperature', 'top_p', 'stop_sequences',
                 }}
                 body['thinking'] = {'type': 'disabled'}
+                if policy['operation'] == 'server.generate' and policy.get('thinking') in ('low', 'high', 'max'):
+                    body['thinking'] = {'type': 'enabled'}
+                    body['output_config'] = {'effort': policy['thinking']}
+                    body.pop('temperature', None)
                 if policy['operation'] in ('quizzes.grade_question', 'quizzes.objective_analysis', 'quizzes.preview_parse', 'assistant.title', 'assistant.memory_extract'):
                     body['temperature'] = 0.4 if policy['operation'] == 'quizzes.objective_analysis' else 0.2
                 record = {'request': len(requests) + 1, 'model': policy['model'],
+                          'operation': policy.get('task_operation', policy['operation']), 'tier': policy['tier'],
                           'tool_count': len(tools), 'tool_schema_bytes': len(json.dumps(tools, ensure_ascii=False).encode()),
                           'status': 'started', 'usage': {}, 'usage_complete': False,
                           'tool_results': sum(b.get('type') == 'tool_result'

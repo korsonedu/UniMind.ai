@@ -258,6 +258,8 @@ def model_fixture(status=200):
                     tools = [('find_learning_tools', {'group': 'progress'})]
             elif discovered == 'progress':
                 tools = [('get_learning_stats', {})]
+            if callable(getattr(self.server, 'tool_response', None)):
+                tools = self.server.tool_response(body)
             if tools is None:
                 blocks = [({'type': 'text', 'text': ''}, {'type': 'text_delta',
                     'text': '本地协议模拟已完成工具往返；下方卡片来自隔离 Django 数据库的合成数据，不代表真实模型的判断。'})]

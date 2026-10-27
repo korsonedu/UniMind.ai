@@ -51,7 +51,7 @@ def get_memories_for_injection(user, limit=10):
 def extract_memories_async(user, conversation_history, conversation_id=None):
     """后台线程：从对话中提取记忆。"""
     from ai_assistant.utils import _THREAD_POOL
-    if getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False):
+    if getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
         _THREAD_POOL.submit(_extract_memories_via_dsh, user.id, conversation_history, conversation_id)
     else:
         _THREAD_POOL.submit(_extract_memories_worker, user.id, conversation_history)
@@ -262,7 +262,7 @@ def _parse_extraction_result(content):
 
 def extract_memories_with_mem0(user, conversation_history):
     """Use mem0 to extract and store memories from conversation."""
-    if getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False):
+    if getattr(settings, 'UNIMIND_DSH_MEMORY_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
         return
     if not USE_MEM0:
         return

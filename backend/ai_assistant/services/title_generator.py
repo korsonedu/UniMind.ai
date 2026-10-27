@@ -52,7 +52,7 @@ def sync_generate_title(conversation_id, user_id, bot_id, *, expected_title=''):
             "为以上对话生成一个简短标题（≤15个字），直接输出标题，不要引号、不要前缀。"
         )
 
-        if getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False):
+        if getattr(settings, 'UNIMIND_DSH_TITLE_ENABLED', False) or getattr(settings, 'UNIMIND_DSH_GENERATION_ENABLED', False):
             try:
                 title = _generate_title_via_dsh(prompt) or _fallback_title(user_msg)
             except Exception:

@@ -57,6 +57,9 @@ TASKS = {
 def wire_schema(schema):
     """Lower nullable unions to the installed SDK's supported equivalent."""
     result = deepcopy(schema)
+    bounds = {key: result.pop(key) for key in ('minimum', 'maximum') if key in result}
+    if bounds:
+        result['description'] = (result.get('description', '') + ' ' + json.dumps(bounds)).strip()
     if isinstance(result.get('type'), list):
         types = result.pop('type')
         return {'oneOf': [wire_schema({**result, 'type': kind}) if kind != 'null' else {'type': 'null'} for kind in types]}
@@ -69,27 +72,29 @@ def wire_schema(schema):
     return result
 
 
-def run_structured(operation, prompt):
-    if operation not in TASKS or not isinstance(prompt, str) or len(prompt.encode()) > 48000:
+def run_structured(operation, prompt, *, internal=None):
+    if (operation not in TASKS and not (operation == 'server.generate' and internal)
+            or not isinstance(prompt, str) or len(prompt.encode()) > 48000):
         raise DshUnavailable('结构化任务类型或材料范围无效。')
-    name, tier, tokens, original = TASKS[operation]
+    name, tier, tokens, original = ((internal['name'], internal['tier'], internal['tokens'], internal['schema'])
+                                   if internal else TASKS[operation])
     schema = deepcopy(original)
     if operation == 'quizzes.grade_question':
         schema['properties']['error_analysis']['type'] = ['object', 'null']
     wire = wire_schema(schema)
     if operation == 'quizzes.grade_question':
         rating = wire['properties']['memorix_rating']
-        rating.pop('minimum'); rating.pop('maximum')
         rating['enum'] = [1, 2, 3, 4]
-    if operation == 'quizzes.preview_parse':
+    array_result = operation == 'quizzes.preview_parse' or schema.get('type') == 'array'
+    if array_result:
         wire = {'type': 'object', 'properties': {'questions': wire}, 'required': ['questions'], 'additionalProperties': False}
     python = getattr(settings, 'UNIMIND_DSH_PYTHON', '')
     state_dir = getattr(settings, 'UNIMIND_DSH_STATE_DIR', '')
     if (not python or not Path(python).is_absolute() or not Path(python).is_file()
             or not state_dir or not Path(state_dir).is_absolute()):
         raise DshUnavailable('尚未配置服务端 DSH 任务环境。')
-    config = get_model_for_task(operation)
-    if tier == 'fast':
+    config = get_model_for_task(internal['operation'] if internal else operation)
+    if tier == 'fast' and not internal:
         override = os.getenv('AI_MODEL_OBJECTIVE_ANALYSIS') if operation == 'quizzes.objective_analysis' else None
         config['model'] = override or os.getenv('AI_MODEL_FAST') or FALLBACK_FAST
     fixture = getattr(settings, 'UNIMIND_DSH_FIXTURE_URL', '')
@@ -110,6 +115,18 @@ def run_structured(operation, prompt):
         'assistant.memory_extract': '你是学生长期记忆提取助手。只提取用户亲口明确陈述的稳定偏好、学业背景和交互习惯；不提取助手建议、假设、未确认计划或临时情绪。每条记忆必须附用户原话作为 evidence。单次提问、人工答疑、查资料、准备草稿或本次发布前确认的操作要求不构成长期记忆，不从问题知识点推断学业背景。仅提取明确自述的长期事实；没有合格事实也必须调用提交工具返回 memories=[]。',
     }
     context['task_instruction'] = instructions.get(operation, '你是科晟课程评阅老师。严格按给定题目、参考答案和评分点评阅。')
+    if internal:
+        if len(internal['instruction'].encode()) > 16000:
+            raise DshUnavailable('系统任务材料过长。')
+        context['task_instruction'] = internal['instruction']
+        context['model_policy'].update(max_requests=internal['max_requests'], task_operation=internal['operation'], thinking=internal['thinking'])
+        context['research_tools'] = [{**tool, 'function': {**tool['function'], 'parameters': wire_schema(tool['function']['parameters'])}} for tool in internal['tools']]
+        by_name = {tool['function']['name']: tool for tool in context['research_tools']}
+        context['research_groups'] = {key: [by_name[tool['function']['name']] for tool in group] for key, group in internal['groups'].items()}
+        context['bridge'] = internal['bridge']
+        context['available_tools'] = context['tools'] + internal['tools']
+        if internal['groups']:
+            context['available_tools'].append({'function': {'name': 'find_teaching_tools'}})
     root = Path(state_dir)
     tasks = root / '.tasks'
     environment = {key: os.environ[key] for key in ('PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR') if key in os.environ}
@@ -122,7 +139,7 @@ def run_structured(operation, prompt):
             with subprocess.Popen([python, str(worker)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, env=environment, start_new_session=True) as process:
                 try:
-                    output, _ = process.communicate(json.dumps(payload).encode(), timeout=120)
+                    output, _ = process.communicate(json.dumps(payload).encode(), timeout=300 if internal else 120)
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.communicate()
@@ -138,7 +155,7 @@ def run_structured(operation, prompt):
             if not isinstance(response, dict) or response.get('status') != 200:
                 raise ValueError()
             result = response['result']
-            if operation == 'quizzes.preview_parse':
+            if array_result:
                 if not isinstance(result, dict) or set(result) != {'questions'}:
                     raise ValueError()
                 result = result['questions']

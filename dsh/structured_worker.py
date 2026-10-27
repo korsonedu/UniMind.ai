@@ -29,7 +29,9 @@ def execute(payload):
                 provider='deepseek-official', model=context['model_policy']['model'],
                 base_url=gateway['url'], api_key=gateway['credential'], max_tokens=context['model_policy']['max_tokens'],
                 request_timeout_seconds=90, initialize_timeout_seconds=20,
-                env={'UNIMIND_DSH_TASK_INSTRUCTION': context['task_instruction'], 'UNIMIND_DSH_STRUCTURED_TOOL': json.dumps(tool, ensure_ascii=False)}) as harness:
+                reasoning_effort=context['model_policy'].get('thinking'),
+                env={'UNIMIND_DSH_TASK_INSTRUCTION': context['task_instruction'], 'UNIMIND_DSH_STRUCTURED_TOOL': json.dumps(tool, ensure_ascii=False),
+                     'UNIMIND_DSH_RESEARCH': json.dumps({key: context.get(key) for key in ('research_tools', 'research_groups', 'bridge')}, ensure_ascii=False)}) as harness:
                 result = harness.run(payload['prompt'])
         if result.finish_reason != 'completed' or not gateway['requests'] or any(request['status'] != 'completed' for request in gateway['requests']):
             raise RuntimeError('Incomplete structured task')

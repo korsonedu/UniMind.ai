@@ -249,6 +249,12 @@ class AIEngine:
         tools / tool_choice: OpenAI 兼容的 function calling 参数。
         不传则行为与之前完全一致。
         """
+        from ai_assistant.services.dsh_generation import enabled, generate, chat_result
+        if enabled(operation):
+            if tools:
+                from ai_assistant.services.dsh_runtime import DshUnavailable
+                raise DshUnavailable('工具调用须使用受控的 DSH 执行器。')
+            return chat_result(generate(messages, operation, max_tokens=max_tokens))
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from .config import get_model_tier_for_operation
         started_at = time.monotonic()
@@ -551,6 +557,9 @@ class AIEngine:
         "auto"（即不传 tool_choice）。当 thinking 开启时自动降级为 "auto"，
         并通过 prompt 引导模型调用工具，同时保留 content fallback。
         """
+        from ai_assistant.services.dsh_generation import enabled, generate
+        if enabled(operation):
+            return generate(messages, operation, schema=schema, tool_name=tool_name, max_tokens=max_tokens)
         # DeepSeek/OpenAI function calling 要求 parameters schema 顶层 type 必须为 object，
         # 对于 array schema，自动包裹一层 object 并在提取后解包。
         _is_array_schema = schema.get('type') == 'array'
@@ -646,6 +655,10 @@ class AIEngine:
 
         tool_executor: callable(tool_name, arguments_dict) -> str
         """
+        from ai_assistant.services.dsh_generation import enabled, generate, chat_result
+        if enabled(operation):
+            return chat_result(generate(messages, operation, tools=tools, executor=tool_executor,
+                                        max_tokens=max_tokens, max_requests=max_tool_rounds))
         from .tool_run import ToolRunCoordinator
 
         all_messages = list(messages)
@@ -737,6 +750,10 @@ class AIEngine:
         on_message: callable(text) — 有 tool_calls 的轮次，通过此回调发送中间消息
         返回: {"content": str, "run_id": str} 最后一轮文本和请求级 Tool Run ID
         """
+        from ai_assistant.services.dsh_generation import enabled
+        if enabled(operation):
+            from ai_assistant.services.dsh_runtime import DshUnavailable
+            raise DshUnavailable('旧流式 Agent 已停用，请使用小宇 DSH 会话入口或教研任务。')
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from .config import get_model_tier_for_operation
         from .tool_run import ToolRunCoordinator
@@ -1074,6 +1091,11 @@ class AIEngine:
         tool_executor:  callable(tool_name, arguments_dict) -> str   研究工具执行器
         schema/tool_name/tool_description: 最终提交工具的 JSON Schema
         """
+        from ai_assistant.services.dsh_generation import enabled, generate
+        if enabled(operation):
+            return generate(messages, operation, schema=schema, tool_name=tool_name,
+                            tools=research_tools, executor=tool_executor, max_tokens=max_tokens,
+                            max_requests=max_tool_rounds)
         submit_tool = cls._tool_def(tool_name, tool_description, schema)
         all_tools = list(research_tools) + [submit_tool]
         all_messages = list(messages)
@@ -1142,6 +1164,10 @@ class AIEngine:
     @classmethod
     def call_ai_stream(cls, messages, temperature=0.7, max_tokens=8192, operation='general', max_retries=None):
         """流式 AI 调用，yield 每个 delta.content 片段。支持重试。"""
+        from ai_assistant.services.dsh_generation import enabled, generate
+        if enabled(operation):
+            yield generate(messages, operation, max_tokens=max_tokens)['text']
+            return
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from .config import get_model_tier_for_operation
 

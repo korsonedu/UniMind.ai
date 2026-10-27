@@ -127,7 +127,7 @@ def run_chat(task):
     executor = TeachingExecutor(user)
     tools = get_bot_profile('exam_generator').tools_factory()
     # Models cannot invoke a legacy handler even if they invent its name.
-    tools = [item for item in tools if item['function']['name'] != 'save_questions_to_bank']
+    tools = [item for item in tools if item['function']['name'] not in ('save_questions_to_bank', 'render_visual')]
     set_permitted_tools(executor, tools)
     executor._allowed_tool_names = {item['function']['name'] for item in tools}
     prompt = AssistantChatService._build_agent_system_prompt(bot, '', '', executor.institution)
@@ -144,6 +144,7 @@ def run_chat(task):
     executor.on_step = progress
     response = AIEngine.call_ai_with_tools(messages=messages, tools=tools, tool_executor=executor,
         tool_choice='auto', temperature=0.6, max_tokens=2500, operation='assistant.chat.exam_generator', max_tool_rounds=8)
+    executor.check_dsh_scope()
     content = response['choices'][0]['message']['content'] or ''
     visuals = executor.pop_pending_visuals()
     if not content.strip() and (executor.generated_batches or visuals):
