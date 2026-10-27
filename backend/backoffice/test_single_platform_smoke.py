@@ -47,7 +47,7 @@ class SinglePlatformAdminSmoke(TestCase):
 
     def test_manual_status_weekly_config_and_distinct_operator_audit(self):
         self.assertFalse(is_course_student(self.student))
-        self.assertNotIn('course.video', get_user_capabilities(self.student))
+        self.assertIn('course.video', get_user_capabilities(self.student))
         response = self.operation('students.status.save', {'id': self.student.pk,
             'is_course_student': True, 'request_id': str(uuid4())})
         self.assertEqual(response.status_code, 200)

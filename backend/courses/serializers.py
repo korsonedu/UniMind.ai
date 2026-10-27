@@ -163,11 +163,15 @@ class CourseTagSerializer(serializers.ModelSerializer):
 
     def get_course_count(self, obj):
         count = getattr(obj, 'course_count', None)
-        return count if count is not None else obj.course_relations.filter(course__institution_id=get_content_institution_id()).count()
+        if count is not None:
+            return count
+        from .access import visible_courses
+        return obj.course_relations.filter(course__in=visible_courses(self.context['request'])).count()
 
     def get_courses(self, obj):
         if self.context.get('course_list_summary'):
             return []
         course_ids = obj.course_relations.values_list('course_id', flat=True)
-        courses = apply_institution_filter(Course.objects.filter(id__in=course_ids), None).only('id', 'title', 'cover_image')
+        from .access import visible_courses
+        courses = visible_courses(self.context['request']).filter(id__in=course_ids).only('id', 'title', 'cover_image')
         return AlbumCourseBriefSerializer(courses, many=True).data

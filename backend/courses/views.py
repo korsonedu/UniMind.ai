@@ -392,7 +392,7 @@ class OSSMultipartCompleteView(APIView):
         except Exception:
             pass
 
-        return Response(CourseSerializer(course).data, status=201)
+        return Response(CourseSerializer(course, context={'request': request}).data, status=201)
 
 
 @_upload_rl
