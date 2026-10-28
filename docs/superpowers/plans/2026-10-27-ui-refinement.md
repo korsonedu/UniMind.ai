@@ -8,7 +8,7 @@ Base: 3893d6a。包括用户4cc80ad/5eb261c及10月28日主仓库6处增量；�
 - [x] 完成全局功能区和页面控件Portal、标题/面包屑、目录折叠、主题与聚焦、生成图标；实际DOM功能区top0/height48、主区top50；真实输入框parent border0/outline none、textarea outline/shadow none，暗色正文400。
 - [x] 合入用户流式平滑器并保留流式标记，轮次重置丢弃旧pump，完成后停止及定稿；只对末尾4字做100ms、最多30ms的局部渐显。组合合成样例640字补齐后blurred0；不用模型做此验证。
 - [x] 合入用户练习卡片去重与侧栏58px/36px按钮/36px品牌尺寸；DSH模型render同步只留题目元信息，完整卡片不变，1项定向反例RED→GREEN；TS类型检查和前端构建通过，Electron原有3项URL冒烟通过，Python合并文件语法通过。
-- [ ] 唯一独立复核增量，必要修复后提交、记录；保持Windows构建/实机与生产发布边界。
+- [x] 唯一独立复核完成，发现账户菜单、手机笔记、独立TypeScript依赖、重定向校验4处Important；折叠关闭仍可见的问题按实际影响升为Important，同一次直接修复。用户明确要求停止测试/复现，修复后未追加检查或复审；保持Windows与生产边界。
 
 ## Review Focus
 

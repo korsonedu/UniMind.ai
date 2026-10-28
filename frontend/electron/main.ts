@@ -45,8 +45,11 @@ function openResourceWindow(target: string, development: boolean): void {
   window.webContents.on('will-navigate', (event, url) => {
     if (!validResource(sourceUrl, url, development)) event.preventDefault();
   });
+  window.webContents.on('will-redirect', event => {
+    if (!validResource(sourceUrl, event.url, development)) event.preventDefault();
+  });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  void window.loadURL(target);
+  void window.loadURL(target).catch(() => {});
 }
 
 function createMainWindow(): void {
@@ -76,6 +79,9 @@ function createMainWindow(): void {
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!sameOrigin(source, url)) event.preventDefault();
   });
+  mainWindow.webContents.on('will-redirect', event => {
+    if (event.isMainFrame && !sameOrigin(source, event.url)) event.preventDefault();
+  });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (validResource(source, url, development)) openResourceWindow(url, development);
     return { action: 'deny' };
@@ -85,7 +91,7 @@ function createMainWindow(): void {
     dialog.showErrorBox('UniMind 无法连接', `加载失败：${description || code}`);
   });
   mainWindow.on('closed', () => { mainWindow = null; });
-  void mainWindow.loadURL(source);
+  void mainWindow.loadURL(source).catch(() => {});
   if (!app.isPackaged) mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 

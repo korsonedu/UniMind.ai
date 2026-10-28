@@ -140,7 +140,7 @@ export default function NotesPage() {
     </aside>
     <main className="notes-main" aria-busy={loading}>
       <WorkspaceToolbar className="notes-note-header">
-        <button className="um-agent-icon-button" aria-label="切换笔记目录" onClick={() => { setDirectoryHidden(old => !old); setMobileView(old => old === 'directory' ? 'editor' : 'directory'); }}><SidebarSimple size={18} /></button>
+        <button className="um-agent-icon-button" aria-label="切换笔记目录" onClick={() => { const hidden = window.matchMedia('(max-width:900px)').matches ? mobileView === 'directory' : !directoryHidden; setDirectoryHidden(hidden); setMobileView(hidden ? 'editor' : 'directory'); }}><SidebarSimple size={18} /></button>
         <WorkspaceTrail title={note?.title || (note ? '未命名笔记' : '全部笔记')} crumbs={[{ label: '笔记', to: '/notes' }, ...(note ? [{ label: notebookPath(note.notebook, notebooks) }] : [])]} />
         <div><span aria-live="polite" className="notes-save-status">{note ? `${status}${dirty && status === '已保存' ? ' · 未保存' : ''}` : ''}</span>{note && !pageError && <><button aria-label="导出笔记" title="导出笔记" disabled={busy} onClick={() => void run(() => notesApi.export('items', note.id))}><Export size={19} /></button>{note.deleted_at && <button aria-label="恢复笔记" title="恢复笔记" disabled={busy} onClick={() => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); })}><ArrowCounterClockwise size={19} /></button>}<button aria-label={note.deleted_at ? '永久删除' : '移入回收站'} title={note.deleted_at ? '永久删除' : '移入回收站'} disabled={busy} className="notes-danger" onClick={removeNote}><Trash size={19} /></button></>}</div>
       </WorkspaceToolbar>

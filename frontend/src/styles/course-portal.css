@@ -211,7 +211,7 @@
 .um-course-facets select { min-width: 0; width: 100%; font: inherit; font-size: 13px; color: var(--um-color-text); padding: 6px; background: var(--um-color-surface); border: 1px solid var(--um-color-border); border-radius: 7px; }
 .um-course-tree-label { font-size: 13px; }
 .um-course-tree-label > span:last-child:not(:first-child) { color: var(--um-color-text-muted); }
-.um-course-tree-album > .um-collapse-root > .um-collapse > ul { margin-left: 16px; padding-left: 6px; border-left: 1px solid var(--um-color-border); }
+.um-course-tree-album > .um-collapse-root > .um-collapse > .um-collapse-content > ul { margin-left: 16px; padding-left: 6px; border-left: 1px solid var(--um-color-border); }
 .um-course-tree-album .um-course-tree-toggle { width: 22px; }
 .um-course-tree-album .um-course-list-item { padding: 8px 6px; }
 .um-course-detail { max-width: 1200px; }
