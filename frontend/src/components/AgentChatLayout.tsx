@@ -421,7 +421,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset}>
+      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} title={conversationTitle || '新对话'}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
           <section className="um-agent-start" aria-label="开始对话">
@@ -586,7 +586,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset}>
+        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} title={conversationTitle || '新对话'}>
           {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>

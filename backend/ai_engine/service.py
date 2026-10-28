@@ -971,13 +971,52 @@ class AIEngine:
 
             for outcome in outcomes:
                 name = outcome.call.name
+                tool_content = outcome.result
+                practice_card = False
+
+                if not outcome.failed and name == 'get_practice_questions':
+                    try:
+                        data = json.loads(tool_content)
+                    except (json.JSONDecodeError, TypeError):
+                        data = None
+                    if isinstance(data, dict) and isinstance(data.get('visual'), dict):
+                        practice_card = True
+                        # 卡片已带题干和选项；模型侧副本只留元信息，从源头避免复述。
+                        questions = data.pop('questions', None)
+                        visual_payload = data['visual'].get('payload')
+                        if isinstance(visual_payload, dict):
+                            visual_payload.pop('questions', None)
+                        if isinstance(questions, list):
+                            data['question_count'] = len(questions)
+                            data['questions'] = [
+                                {
+                                    "id": q.get("id"),
+                                    "kp_name": q.get("kp_name"),
+                                    "difficulty_level": q.get("difficulty_level"),
+                                    "is_review": q.get("is_review"),
+                                }
+                                for q in questions if isinstance(q, dict)
+                            ]
+                            if isinstance(visual_payload, dict):
+                                visual_payload['question_count'] = len(questions)
+                        tool_content = json.dumps(data, ensure_ascii=False, default=str)
+
                 all_messages.append({
                     "role": "tool",
-                    "content": outcome.result,
+                    "content": tool_content,
                     "tool_call_id": outcome.call.call_id,
                 })
 
-                if not outcome.failed and name in ('quick_generate', 'bulk_generate_questions'):
+                if practice_card:
+                    all_messages.append({
+                        "role": "system",
+                        "content": (
+                            "练习题卡片已在当前对话中展示，学生可直接在卡片内作答和提交。"
+                            "你的回复只需一句话简短引导，不要复述题干、选项或答案，"
+                            "也不要再调用 render_visual 为同一组题生成跳转卡片。"
+                        ),
+                    })
+                elif not outcome.failed and name in ('quick_generate', 'bulk_generate_questions'):
                     all_messages.append({
                         "role": "system",
                         "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",

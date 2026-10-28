@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useSystemStore } from '@/store/useSystemStore';
 import { ArrowCounterClockwise, FloppyDisk, Camera, CreditCard, ArrowRight } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { Link } from 'react-router-dom';
@@ -41,6 +42,8 @@ const AVATAR_STYLES: Record<string, string> = {
 };
 
 export const Settings: React.FC = () => {
+  const theme = useSystemStore(s => s.theme);
+  const setTheme = useSystemStore(s => s.setTheme);
   const user = useAuthStore(s => s.user);
   const updateUser = useAuthStore(s => s.updateUser);
   const [loading, setLoading] = useState(false);
@@ -167,6 +170,12 @@ export const Settings: React.FC = () => {
         </div>
 
         <div className="lg:col-span-8 space-y-8">
+          <section className="flex items-center justify-between rounded-xl bg-muted/40 px-6 py-4">
+            <label htmlFor="appearance" className="text-sm font-medium">界面外观</label>
+            <select id="appearance" className="um-focus-field rounded-lg bg-background px-3 py-2 text-sm" value={theme} onChange={event => setTheme(event.target.value as 'light' | 'dark')}>
+              <option value="light">浅色</option><option value="dark">深色</option>
+            </select>
+          </section>
           <Card className="border-none shadow-sm rounded-3xl bg-card overflow-hidden p-10 border border-border/30">
              <div className="space-y-8 text-left">
                <div className="space-y-3">

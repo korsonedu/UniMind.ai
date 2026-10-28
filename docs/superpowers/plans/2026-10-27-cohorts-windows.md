@@ -4,7 +4,7 @@
 
 **Goal:** 落实用户新确认的“年度可设置、两批学员同时存在、支持Windows”。
 
-**Architecture:** 新增 StudentCohort，CourseStudentStatus 绑定当前服务批次；多个批次分别判断服务有效期，不设全站默认考试年。React/Directus共用现有Django授权和后台桥；Windows复用现有Tauri薄壳，DSH不进客户端。
+**Architecture:** 新增 StudentCohort，CourseStudentStatus 绑定当前服务批次；多个批次分别判断服务有效期，不设全站默认考试年。React/Directus共用现有Django授权和后台桥；Windows复用 Electron 薄壳，DSH不进客户端。
 
 **Spec:** 用户2026-10-27答复；完整规划的服务年度、有效期和公司客户端交付要求。
 
@@ -39,8 +39,9 @@
 
 **Files:** .github/workflows/desktop-windows.yml、dsh/PREVIEW.md、迁移和发布说明。
 
-- [ ] Windows原生runner执行3项URL冒烟并生成NSIS x64候选，保存安装包hash和构建证据；不能执行时记录具体阻塞，继续其余工作。
-- [ ] 一次独立复核本阶段增量并修复重要发现；精确提交、更新规划与产物说明，保留主仓库用户修改。
+- [ ] 生成NSIS x64候选，保存安装包hash和构建证据。公开仓库尚未推送，先按官方方式本机交叉构建；不能执行时记录具体阻塞。
+- [ ] Windows原生runner的3项URL冒烟与实际安装、登录、会话/课件验证须有真实Windows环境，不能用macOS或交叉编译代替。
+- [x] 一次独立复核本阶段增量，Critical/Important为0；保留主仓库用户修改。构建产物与最终记录继续补齐。
 
 ## 当前证据
 
@@ -49,3 +50,7 @@
 独立合成管理库中，真实People/Cohorts组件经现有签名桥创建2027/2028两个有效批次，为合成学员分配A并在保持授权开启时改绑B；同库React“我的服务”由2027届/2027-01-31更新到2028届/2028-01-31。截图m0-two-cohorts-admin-proof、m0-cohort-assigned-proof、m0-cohort-service-a-proof、m0-cohort-service-b-proof。
 
 原生小宇真实模型读取主合成预览的当前批次2027届/2026-11-26，明确考试日未设置，额度190→189，未提取长期记忆；截图m0-cohort-dsh-proof。以上日期都是显式合成配置，不是正式默认值。
+
+唯一独立复核覆盖d6cd2e3..3893d6a，未发现代码阻塞项，Windows实际运行仍是交付条件。主仓库HEAD与原dirty patch SHA256再次核对一致，未修改用户工作区。
+
+后续用户提交4cc80ad已将当前桌面壳改为Electron，保留Tauri作为历史候选。Windows交付以该提交的Electron NSIS workflow为准；旧Rust/SDK交叉构建不再推进。仅停止本任务旧SDK下载，官方LLVM分段文件SHA256已核验，但不再安装为当前产品依赖。当前服务批次实现与复核结果不受壳迁移影响。

@@ -47,6 +47,13 @@ export async function apply(ctx: Context) {
         schema: { type: 'object', additionalProperties: true },
         render: (_args, value) => {
           const { visual, ...data } = value as Record<string, ToolValue>;
+          if (definition.name === 'get_practice_questions' && visual && Array.isArray(data.questions)) {
+            const questions = data.questions.filter((question): question is Record<string, ToolValue> =>
+              !!question && typeof question === 'object' && !Array.isArray(question));
+            data.question_count = questions.length;
+            data.questions = questions.map(({ id, kp_name, difficulty_level, is_review }) =>
+              ({ id, kp_name, difficulty_level, is_review }));
+          }
           return [{ type: 'text', text: JSON.stringify(data) }];
         },
         presentationMeta: (_args, value) => {

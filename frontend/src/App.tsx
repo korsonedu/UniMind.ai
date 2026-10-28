@@ -12,7 +12,6 @@ const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ defaul
 const CommunityLayout = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityLayout })));
 const CommunityEntry = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityEntry })));
 import { useAuthStore } from './store/useAuthStore';
-import { useSystemStore } from './store/useSystemStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
 import { FeatureGuard } from './components/FeatureGuard';
 import { XiaoyuRoute } from './pages/XiaoyuRoute';
@@ -86,12 +85,7 @@ const PageLoader = () => (
 const RequireAuth = ({ children }: { children: ReactNode }) => {
   const user = useAuthStore(s => s.user);
   const location = useLocation();
-  const { theme, setTheme } = useSystemStore();
-
   useEffect(() => {
-    if (user && theme !== 'light') {
-      setTheme('light');
-    }
     // PWA push subscription — deferred to avoid blocking render
     if (user) {
       const timer = setTimeout(() => {
@@ -99,7 +93,7 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [user, theme, setTheme]);
+  }, [user]);
 
   if (!user) return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
   return children;

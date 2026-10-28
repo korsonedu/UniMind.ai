@@ -1,5 +1,7 @@
 appId: com.korsonedu.unimind.preview
 productName: UniMind Preview
+extraMetadata:
+  productName: UniMind Preview
 copyright: Copyright © 2026 Korson
 directories:
   output: release-preview

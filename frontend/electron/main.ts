@@ -68,6 +68,8 @@ function createMainWindow(): void {
     fullscreen: false,
     show: false,
     title: previewMode() ? 'UniMind Preview · 合成数据' : 'UniMind',
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 18 } } : { titleBarOverlay: true }),
     webPreferences: SECURE_WEB_PREFERENCES,
   });
   mainWindow.once('ready-to-show', () => mainWindow?.show());

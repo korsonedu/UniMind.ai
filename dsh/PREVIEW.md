@@ -90,3 +90,15 @@ macOS arm64 的 Preview 和 HTTPS 发布构建均已生成，分别约25 MiB和9
 管理后台学员页可创建多个服务批次，为学员选择当前批次；“我的服务”显示本人届别、服务期、考试日与生效状态。批次不预填正式年度或日期，未设置考试日须明确显示。两个批次并存、改绑、停用及恢复已在独立合成管理库和实际组件验证，未变更生产学员。
 
 Windows x64 为必需交付，沿用同一 Electron HTTPS 薄壳。`.github/workflows/desktop-windows.yml` 在 Windows 2022 上安装 `frontend/electron` 依赖，执行 `npm run dist:win`，生成无签名 NSIS 候选并记录 SHA256；尚未推送或触发。Windows 实际安装、登录、课件播放和会话恢复仍须在真实 Windows 环境验收，不能以 macOS 构建替代。
+
+### 可以实时查看的 Electron Preview
+
+启动5175的Vite和隔离后端后，在 `frontend/electron` 执行 `npm run compile` 和 `npx electron-builder --config electron-builder.preview.yml --dir`，打开 `release-preview/mac-arm64/UniMind Preview.app`。该窗口加载本机页面，React/CSS通过Vite热更新，不必每次重打包。修改Electron主进程才需要编译并重启App。
+
+预览配置需将 `extraMetadata.productName` 设为 `UniMind Preview`；只有builder的显示名称不足以被 `app.getName()` 识别。实际曾打开线上站，修正后已在原生窗口确认 `127.0.0.1:5175` 的合成登录和课程界面。截图 `.m0-state/m0-electron-hot-preview-proof.png`。此包仍未正式签名，不能当公开分发版本。
+
+本轮样式保留用户课程/桌面改动，统一四层微明度表面与焦点双环；暗色正文400→360，避免原240过细。外观选择位于个人设置，刷新后保持，不再被登录守卫强制浅色。实际浏览器读取到暗色输入字重360、无outline、2px/5px双层阴影与tabular-nums；复制确认出现后恢复原按钮。目录键盘调整208→224生效；真实模型合成问答完成，不把未捕获的中间帧当作完整动效运行证据。
+
+2026-10-28按用户最新截图收敛：原生窗口使用隐藏标题带和原生窗口按钮，页面工具共享顶部空间；主导航56px、历史目录默认192px。生图导航以单张透明PNG的CSS mask使用，桌面图框28px、移动24px，实际字形更小。暗色正文恢复400常规字重，旧降40方案由用户新反馈覆盖。流式blur降至1px；实际聊天框外层border0/outline none，输入本身outline/shadow none，仅外层使用极淡阴影，截图m0-subtle-focus-final-proof.png。此前2px/5px双环的验证属于已替换中间方案。
+
+顶部结构最终为圆角主区上方的48px功能区，整合返回/前进、侧栏开关、当前对话/课程/笔记标题与面包屑、页面操作和账户。该区复用页面原有控件，不在主区内重复标题条。流式不再累计逐字延迟：每批最多末尾4字在100ms内渐显，错开最多30ms，新批次取消旧动画。受控合成快速追加75字时仅4字模糊，已出现文字filter none。

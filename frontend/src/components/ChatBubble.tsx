@@ -6,6 +6,23 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { NoteSources } from '@/pages/notes/NoteSources';
 
+function StreamingText({ content }: { content: string }) {
+  const root = React.useRef<HTMLDivElement>(null);
+  const previous = React.useRef('');
+  React.useLayoutEffect(() => {
+    const start = content.startsWith(previous.current) ? Array.from(previous.current).length : 0;
+    previous.current = content;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const children = Array.from(root.current?.children ?? []);
+    const animations = children.slice(Math.max(start, children.length - 4)).map((child, index) =>
+      child.animate([{ opacity: .8, filter: 'blur(1px)' }, { opacity: 1, filter: 'blur(0)' }], {
+        duration: 100, delay: index * 10, easing: 'ease-out', fill: 'backwards',
+      }));
+    return () => animations.forEach(animation => animation.cancel());
+  }, [content]);
+  return <div ref={root} className="um-streaming-text" aria-live="polite">{Array.from(content).map((char, index) => char === '\n' ? <br key={index} /> : <span key={index}>{char}</span>)}</div>;
+}
+
 export interface ChatBubbleMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -109,11 +126,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
               "prose-[.katex-display]:my-2 prose-[.katex-display]:overflow-x-auto",
             )}>
               {streaming ? (
-                <div className="um-streaming-text" aria-live="polite">
-                  {Array.from(msg.content).map((char, charIndex) => (
-                    <span key={charIndex} style={{ animationDelay: `${Math.min(charIndex, 20) * 30}ms` }}>{char}</span>
-                  ))}
-                </div>
+                <StreamingText content={msg.content} />
               ) : <MarkdownContent content={msg.content} />}
             </div>
           )}

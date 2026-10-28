@@ -106,7 +106,7 @@
 
 /* Global Dark Mode Style Fixes */
 .dark body {
-  background-color: #08080a;
+  background-color: var(--um-surface-4);
 }
 
 /* Dark mode semantic overrides */

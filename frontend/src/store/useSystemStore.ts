@@ -22,7 +22,7 @@ const applyThemeClass = (theme: ThemeMode) => {
 
 const applyPrimaryColorVar = (color: string) => {
   if (typeof document === 'undefined') return;
-  document.documentElement.style.setProperty('--primary-override', color || '#000000');
+  document.documentElement.style.setProperty('--primary-override', color || '#4f5fa6');
 };
 
 const readPersistedSystemState = (): Partial<SystemState> | null => {
@@ -42,9 +42,8 @@ const readPersistedSystemState = (): Partial<SystemState> | null => {
 
 export const initializeSystemAppearance = () => {
   const persisted = readPersistedSystemState();
-  const color = typeof persisted?.primaryColor === 'string' ? persisted.primaryColor : '#000000';
-  // Force light mode before auth role is known. Dark mode is admin-beta only.
-  applyThemeClass('light');
+  const color = typeof persisted?.primaryColor === 'string' ? persisted.primaryColor : '#4f5fa6';
+  applyThemeClass(persisted?.theme === 'dark' ? 'dark' : 'light');
   applyPrimaryColorVar(color);
 };
 
@@ -52,7 +51,7 @@ export const useSystemStore = create<SystemState>()(
   persist(
     (set) => ({
       theme: 'light',
-      primaryColor: '#000000',
+      primaryColor: '#4f5fa6',
       pageTitle: '',
       pageSubtitle: '',
       setTheme: (theme) => {
@@ -69,8 +68,7 @@ export const useSystemStore = create<SystemState>()(
       name: STORAGE_KEY,
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        // Keep light mode as default until role-based policy is applied after auth.
-        applyThemeClass('light');
+        applyThemeClass(state.theme === 'dark' ? 'dark' : 'light');
         applyPrimaryColorVar(state.primaryColor);
       },
     }

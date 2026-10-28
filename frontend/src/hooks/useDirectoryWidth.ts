@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
-const DEFAULT_WIDTH = 208;
-const MIN_WIDTH = 200;
-const MAX_WIDTH = 320;
+const DEFAULT_WIDTH = 192;
+const MIN_WIDTH = 180;
+const MAX_WIDTH = 288;
 const COLLAPSE_WIDTH = MIN_WIDTH / 2;
 const STIFFNESS = 1200;
 const DAMPING = 80;
-const MASS = 1;
 
 export function previewDirectoryWidth(value: number, collapseThreshold = COLLAPSE_WIDTH) {
   if (value <= collapseThreshold) return 0;
@@ -37,21 +36,20 @@ export function useDirectoryWidth(collapseThreshold = COLLAPSE_WIDTH) {
     if (next === currentWidth.current) return;
     setAnimated((next === 0) !== (currentWidth.current === 0));
     if (next >= MIN_WIDTH) setLastWidth(next);
-    if (!spring) {
+    if (!spring || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       currentWidth.current = next;
       setWidth(next);
       return;
     }
-    let position = currentWidth.current;
-    let velocity = 0;
-    let last = performance.now();
+    const initial = currentWidth.current;
+    const start = performance.now();
+    const root = Math.sqrt(DAMPING * DAMPING - 4 * STIFFNESS);
+    const slow = (-DAMPING + root) / 2;
+    const fast = (-DAMPING - root) / 2;
     const step = (now: number) => {
-      const dt = Math.min(0.032, Math.max(0.001, (now - last) / 1000));
-      last = now;
-      const acceleration = (-STIFFNESS * (position - next) - DAMPING * velocity) / MASS;
-      velocity += acceleration * dt;
-      position += velocity * dt;
-      if (Math.abs(position - next) < 0.4 && Math.abs(velocity) < 6) {
+      const t = (now - start) / 1000;
+      const position = next + (initial - next) * (fast * Math.exp(slow * t) - slow * Math.exp(fast * t)) / (fast - slow);
+      if (Math.abs(position - next) < 0.4) {
         currentWidth.current = next;
         setWidth(next);
         frame.current = null;

@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import api from '@/lib/api';
 import { upsertChatMessage } from '@/lib/chatMessages';
 import { readChatStream } from '@/lib/chatStream';
-import { createRevealQueue } from '@/lib/chatReveal';
+import { createRevealQueue, createStreamSmoother } from '@/lib/chatReveal';
 import { restoreVisualSteps } from '@/lib/visualHistory';
 // processMathContent removed — LLM outputs LaTeX directly
 import { toast } from 'sonner';
@@ -128,6 +128,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const dragStartWidth = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const revealRef = useRef<ReturnType<typeof createRevealQueue> | null>(null);
+  const smoothRef = useRef<ReturnType<typeof createStreamSmoother> | null>(null);
   const sendCountRef = useRef(0);
   const pendingSendRef = useRef<{ key: string; id: string; text: string; userMessageId?: string } | null>(null);
   const conversationIdRef = useRef(conversationId);
@@ -146,6 +147,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     abortRef.current = null;
     revealRef.current?.dispose();
     revealRef.current = null;
+    smoothRef.current?.dispose();
+    smoothRef.current = null;
     setLoading(false);
     if (pendingSendRef.current) setInput(pendingSendRef.current.text);
   }, []);
@@ -326,6 +329,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     if (abortRef.current) abortRef.current.abort();
     revealRef.current?.dispose();
     revealRef.current = null;
+    smoothRef.current?.dispose();
+    smoothRef.current = null;
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -379,6 +384,35 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     });
     revealRef.current = reveal;
 
+    // 流式文字平滑器只服务本次请求，每次轮次边界重新创建。
+    let smoother: ReturnType<typeof createStreamSmoother> | null = null;
+    const ensureSmoother = () => {
+      if (!smoother) {
+        smoother = createStreamSmoother({
+          isActive: isCurrent,
+          onUpdate: (content) => {
+            if (!streamingId || !isCurrent()) return;
+            const id = streamingId;
+            setMessages(prev => upsertChatMessage(prev, {
+              _id: id, role: 'assistant', content,
+              visible: true, streaming: true, timestamp: new Date().toISOString(),
+              conversation_id: conversationIdRef.current,
+            }));
+          },
+        });
+        smoothRef.current = smoother;
+      }
+      return smoother;
+    };
+    const stopSmoother = (content?: string, discard = false) => {
+      const current = smoother;
+      if (!current) return;
+      smoother = null;
+      if (smoothRef.current === current) smoothRef.current = null;
+      if (!discard) current.flush(content);
+      current.dispose();
+    };
+
     try {
       for await (const payload of readChatStream({
         body: { ...body, request_id: pending.id },
@@ -392,9 +426,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             } else if (payload.type === 'message' && payload.content) {
               if (streamingId) {
                 const id = streamingId;
+                // 轮次边界先收尾文字，避免残留帧把内容回写并与后续工具卡片交错。
+                stopSmoother(payload.content);
                 setMessages(prev => upsertChatMessage(prev, {
                   _id: id, role: 'assistant', content: payload.content,
-                  visible: true, timestamp: new Date().toISOString(),
+                  visible: true, streaming: false, timestamp: new Date().toISOString(),
                   conversation_id: conversationIdRef.current,
                 }));
                 streamingId = null;
@@ -472,6 +508,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                 }
               }
             } else if (payload.type === 'text_reset') {
+              stopSmoother(undefined, true);
               if (streamingId) {
                 const id = streamingId; setMessages(prev => prev.filter(message => message._id !== id));
               }
@@ -480,12 +517,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               if (!payload.delta) continue;
               streamingId ??= nextId();
               streamingContent += payload.delta;
-              const message: Message & { _id: string } = {
-                _id: streamingId, role: 'assistant', content: streamingContent,
-                visible: true, streaming: true, timestamp: new Date().toISOString(),
-                conversation_id: conversationIdRef.current,
-              };
-              setMessages(prev => upsertChatMessage(prev, message));
+              ensureSmoother().push(streamingContent);
             } else if (payload.type === 'error') {
               toast.error(payload.message || 'AI 调用失败');
             } else if (payload.done) {
@@ -498,6 +530,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                 toast.error(finalContent || 'AI 调用失败');
               } else if (finalContent && streamingId) {
                 const id = streamingId;
+                // 先补全逐字泵，再写 metadata，避免残留帧覆盖最终内容。
+                stopSmoother(finalContent);
                 setMessages(prev => upsertChatMessage(prev, {
                   _id: id, id: payload.message_id, role: 'assistant',
                   content: finalContent, visible: true, streaming: false,
@@ -557,8 +591,10 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       }
       reveal.dispose();
       if (revealRef.current === reveal) revealRef.current = null;
+      // 异常断流时补全已收到的文字；取消或切会话时 flush 受 isActive 保护，不会写回。
+      stopSmoother(streamingContent);
       if (isCurrent()) {
-        setMessages(prev => prev.map(m => m.visible === false ? { ...m, visible: true } : m));
+        setMessages(prev => prev.map(m => m.visible === false || m.streaming ? { ...m, visible: true, streaming: false } : m));
         setLoading(false);
       }
     }
@@ -590,6 +626,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     return () => {
       if (abortRef.current) abortRef.current.abort();
       revealRef.current?.dispose();
+      smoothRef.current?.dispose();
     };
   }, []);
 
