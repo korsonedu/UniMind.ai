@@ -1,5 +1,11 @@
 import { create } from 'zustand';
 
+export interface DesktopLoginState {
+  status: 'idle' | 'opening' | 'waiting' | 'completing' | 'authenticated' | 'error';
+  error?: string;
+  expiresAt?: number;
+}
+
 export interface DesktopState {
   version: string;
   platform: string;
@@ -7,10 +13,13 @@ export interface DesktopState {
   downloads: { courseId: number; title: string; status: 'downloading' | 'paused' | 'ready' | 'failed'; receivedBytes: number; totalBytes: number; expiresAt?: number; error?: string }[];
   storage?: { usedBytes: number };
   learningSync?: { pending: number; rejected: number; error?: string };
+  auth?: DesktopLoginState;
   update: { status: 'unconfigured' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; error?: string };
 }
 interface DesktopBridge {
   getState(): Promise<DesktopState>;
+  startLogin?(): Promise<DesktopState>;
+  cancelLogin?(): Promise<DesktopState>;
   syncIdentity(): Promise<DesktopState>;
   logout(): Promise<DesktopState>;
   updatePreferences(value: Partial<DesktopState['preferences']>): Promise<DesktopState>;

@@ -155,7 +155,7 @@ const RootRedirect = () => {
   useEffect(() => {
     if (!isError) return;
     logout({ preserveDesktop: true });
-    if (location.pathname !== '/') return;
+    if (location.pathname !== '/' || window.unimindDesktop) return;
     api.get('/users/check-invite/')
       .then(res => {
         if (res.data?.has_invite) navigate('/register', { replace: true });
@@ -171,6 +171,7 @@ const RootRedirect = () => {
   }
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
+  if (window.unimindDesktop) return <Navigate to="/login" replace />;
 
   return <Suspense fallback={<div className="min-h-dvh bg-[#080b0f]" aria-hidden="true" />}><Landing /></Suspense>;
 };

@@ -61,7 +61,7 @@ def safe_account_next(value):
     if (decoded.startswith('/accounts/') and '\\' not in decoded
             and url_has_allowed_host_and_scheme(decoded, allowed_hosts=set())
             and not any(ord(char) < 32 for char in decoded)
-            and urlsplit(decoded).path in {'/accounts/o/authorize/', '/accounts/profile/', '/accounts/unimind/'}):
+            and urlsplit(decoded).path in {'/accounts/o/authorize/', '/accounts/profile/', '/accounts/unimind/', '/accounts/desktop/'}):
         return value
     return '/accounts/profile/'
 

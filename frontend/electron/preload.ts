@@ -21,6 +21,8 @@ ipcRenderer.on('desktop:resume', (_event, value: { reason: 'resume' | 'renderer-
 contextBridge.exposeInMainWorld('unimindDesktop', {
   getState: () => invoke('getState'),
   syncIdentity: () => invoke('syncIdentity'),
+  startLogin: () => invoke('startLogin'),
+  cancelLogin: () => invoke('cancelLogin'),
   logout: () => invoke('logout'),
   updatePreferences: (value: unknown) => invoke('updatePreferences', value),
   notify: (value: unknown) => invoke('notify', value),

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { OfflineLibrary, courseId } from './offline';
 import { DesktopUpdater } from './updater';
+import { DesktopAuth } from './auth';
 import { sameOrigin, validResource, validSource } from './security';
 
 const RELEASE_URL = 'https://unimind-ai.com';
@@ -23,6 +24,7 @@ let mainWindow: BrowserWindow | null = null;
 let sourceUrl = '';
 let offline: OfflineLibrary;
 let updater: DesktopUpdater;
+let auth: DesktopAuth;
 let offlineWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
@@ -31,7 +33,7 @@ const noticeTimes = new Map<string, number>();
 protocol.registerSchemesAsPrivileged([{ scheme: 'unimind-offline', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
 function state() {
-  return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, update: updater?.state || { status: 'unconfigured' } };
+  return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, update: updater?.state || { status: 'unconfigured' }, auth: auth?.state || { status: 'idle' } };
 }
 function changed() {
   if (mainWindow && sameOrigin(sourceUrl, mainWindow.webContents.getURL())) mainWindow.webContents.send('desktop:state', state());
@@ -54,10 +56,10 @@ function navigate(route: string) {
   else mainWindow?.webContents.send('desktop:navigate', route);
 }
 function deepLink(value: string) {
+  if (auth?.receive(value)) { showMain(); return; }
   try {
     const url = new URL(value);
     if (url.protocol !== 'unimind:' || url.username || url.password || url.port) return;
-    // Login callbacks deliberately cannot inject tokens or exchange accounts.
     if (!['settings', 'xiaoyu', 'courses', 'notes'].includes(url.hostname)) return;
     const route = `/${url.hostname}${url.pathname}${url.search}${url.hash}`;
     if (validRoute(route)) navigate(route);
@@ -99,7 +101,9 @@ function installIPC() {
   const handlers: Record<string, (...args: any[]) => any> = {
     getState: () => state(),
     syncIdentity: async () => { await offline.sync(); return state(); },
-    logout: async () => { await offline.logout(); return state(); },
+    startLogin: async () => { await auth.start(); return state(); },
+    cancelLogin: async () => { await auth.cancel(); return state(); },
+    logout: async () => { await auth.cancel(); await offline.logout(); return state(); },
     updatePreferences: async (value: unknown) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('无效桌面设置');
       for (const [key, enabled] of Object.entries(value)) {
@@ -129,7 +133,7 @@ function previewMode(): boolean {
 }
 
 function entryUrl(): string {
-  if (app.isPackaged && !previewMode()) return RELEASE_URL;
+  if (app.isPackaged && !previewMode()) return new URL('/login', RELEASE_URL).href;
   if (process.env.UNIMIND_DESKTOP_URL) return process.env.UNIMIND_DESKTOP_URL;
   if (previewMode()) return PREVIEW_URL;
   return app.isPackaged ? RELEASE_URL : DEV_URL;
@@ -279,6 +283,10 @@ if (!gotLock) {
     offline = new OfflineLibrary(sourceUrl, changed, () => { offlineWindow?.close(); });
     await offline.restore();
     updater = new DesktopUpdater(previewMode(), changed);
+    auth = new DesktopAuth(sourceUrl, changed, () => {
+      showMain();
+      void mainWindow?.loadURL(new URL('/account-callback?next=/xiaoyu', sourceUrl).href).catch(() => {});
+    });
     const privateSession = session.fromPartition('unimind-offline');
     privateSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     privateSession.setPermissionCheckHandler(() => false);
