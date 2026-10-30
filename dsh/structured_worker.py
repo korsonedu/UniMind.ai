@@ -12,6 +12,25 @@ from worker import reserve_slot
 ROOT = Path(__file__).resolve().parent
 
 
+class RetryableTask(Exception):
+    """Provider stream was malformed; the caller may retry once."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def turn_error(result):
+    for event in reversed(result.events):
+        if event.get('type') != 'turn/end':
+            continue
+        reason = (event.get('data') or {}).get('reason') or {}
+        error = reason.get('error') or {}
+        if reason.get('kind') == 'error' and isinstance(error.get('code'), str):
+            return error['code']
+    return None
+
+
 def execute(payload):
     context, model = payload['context'], payload['model']
     tool = context['tools'][0]['function']
@@ -34,6 +53,8 @@ def execute(payload):
                      'UNIMIND_DSH_RESEARCH': json.dumps({key: context.get(key) for key in ('research_tools', 'research_groups', 'bridge')}, ensure_ascii=False)}) as harness:
                 result = harness.run(payload['prompt'])
         if result.finish_reason != 'completed' or not gateway['requests'] or any(request['status'] != 'completed' for request in gateway['requests']):
+            if result.finish_reason == 'error' and turn_error(result) == 'MALFORMED_RESPONSE':
+                raise RetryableTask('MALFORMED_RESPONSE')
             raise RuntimeError('Incomplete structured task')
         calls, outputs = set(), []
         for event in result.events:
@@ -52,6 +73,8 @@ def execute(payload):
 if __name__ == '__main__':
     try:
         response = {'status': 200, 'result': execute(json.load(sys.stdin))}
+    except RetryableTask as exc:
+        response = {'status': 503, 'error': 'DSH 结构化任务未完成。', 'code': exc.code, 'retryable': True}
     except Exception:
         response = {'status': 503, 'error': 'DSH 结构化任务未完成。'}
     print(json.dumps(response, ensure_ascii=False, allow_nan=False))

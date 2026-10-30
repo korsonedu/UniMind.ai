@@ -90,6 +90,56 @@ def test_structured_result_validation_private_config_and_timeout(settings, tmp_p
     assert not list((tmp_path / 'tasks' / '.tasks').glob('*'))
 
 
+def test_malformed_provider_response_retries_once(settings, tmp_path):
+    from ai_assistant.services.dsh_tasks import run_structured
+    settings.DEBUG = True
+    settings.UNIMIND_DSH_PYTHON = sys.executable
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path / 'tasks')
+    settings.UNIMIND_DSH_FIXTURE_URL = 'http://127.0.0.1:8912/v1/messages'
+    valid = {'score': 8, 'feedback': '合成评分', 'analysis': '合成答案', 'memorix_rating': 3, 'error_analysis': None}
+    malformed = {'status': 503, 'error': 'DSH 结构化任务未完成。',
+                 'code': 'MALFORMED_RESPONSE', 'retryable': True}
+
+    class Process:
+        returncode = 0
+        pid = 123456789
+
+        def __init__(self, body):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def communicate(self, _data, timeout=None):
+            return (self.body, b'')
+
+    def worker(responses):
+        return patch('ai_assistant.services.dsh_tasks.subprocess.Popen',
+                     side_effect=[Process(json.dumps(body).encode()) for body in responses])
+
+    with worker([malformed, {'status': 200, 'result': valid}]) as popen:
+        assert run_structured('quizzes.grade_question', '合成作答') == valid
+    assert popen.call_count == 2
+
+    with worker([malformed, malformed]) as popen:
+        with pytest.raises(DshUnavailable):
+            run_structured('quizzes.grade_question', '合成作答')
+    assert popen.call_count == 2
+
+    with worker([{'status': 503, 'error': 'DSH 结构化任务未完成。'}]) as popen:
+        with pytest.raises(DshUnavailable):
+            run_structured('quizzes.grade_question', '合成作答')
+    assert popen.call_count == 1
+
+    with worker([malformed]) as popen:
+        with pytest.raises(DshUnavailable):
+            run_structured('assistant.title', '用户: 久期\n助手: 利率敏感度')
+    assert popen.call_count == 1
+
+
 @pytest.mark.django_db
 def test_practice_reads_the_owned_session_and_saved_result(auth_client, user, settings):
     from django.core.cache import cache

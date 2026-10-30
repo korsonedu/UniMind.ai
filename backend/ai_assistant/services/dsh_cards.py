@@ -1,5 +1,10 @@
 """User-visible cards derived from authorized business results, never model HTML."""
+import json
+import re
 import time
+
+from jsonschema import Draft202012Validator
+from rest_framework.exceptions import ValidationError
 
 
 def data_card(title, items, cta=None, note=''):
@@ -85,3 +90,92 @@ def build_tool_card(name, result):
             for a in result.get('unlocked', [])[:8]], ('查看成就', '/achievements'),
             '' if result.get('unlocked') else '尚未解锁成就。')
     return None
+
+# Presentation is a separate read-only tool, never a free-form business operation.
+INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic|study|qa)')
+
+
+def _object(properties, required):
+    return {'type': 'object', 'properties': properties, 'required': required, 'additionalProperties': False}
+
+
+def _text(limit, minimum=1):
+    return {'type': 'string', 'minLength': minimum, 'maxLength': limit}
+
+
+def _array(items, limit, minimum=1):
+    return {'type': 'array', 'items': items, 'minItems': minimum, 'maxItems': limit}
+
+
+_NUMBER = {'type': 'number', 'minimum': -1000000, 'maximum': 1000000}
+_POINT = _object({'x': _NUMBER, 'y': _NUMBER}, ['x', 'y'])
+_RANGE = {**_array(_NUMBER, 2), 'minItems': 2}
+VISUAL_SCHEMAS = {
+    'latex_derivation': _object({'title': _text(120), 'steps': _array(_object({
+        'latex': _text(2000), 'note': _text(500, 0)}, ['latex']), 12)}, ['title', 'steps']),
+    'step_solution': _object({'title': _text(120), 'steps': _array(_object({
+        'text': _text(1000), 'latex': _text(2000)}, ['text']), 12)}, ['title', 'steps']),
+    'function_graph': _object({
+        'title': _text(120), 'expressions': _array(_object({'label': _text(80),
+            'points': _array(_POINT, 100, 2)}, ['points']), 3),
+        'points': _array(_object({'x': _NUMBER, 'y': _NUMBER, 'label': _text(80)}, ['x', 'y']), 12, 0),
+        'xRange': _RANGE, 'yRange': _RANGE, 'xLabel': _text(40), 'yLabel': _text(40),
+    }, ['expressions']),
+    'action_cards': _object({'title': _text(120), 'multi_separator': _text(4),
+        'cards': _array(_object({'title': _text(120), 'description': _text(500, 0),
+            'icon': {'type': 'string', 'enum': ['video', 'quiz', 'review', 'course', 'chart', 'plan', 'exam']},
+            'priority': {'type': 'string', 'enum': ['high', 'normal', 'low']},
+            'action': _object({'type': {'type': 'string', 'enum': ['reply', 'navigate']},
+                'url': _text(1000, 0), 'label': _text(120),
+                'reply_mode': {'type': 'string', 'enum': ['single', 'multi', 'acknowledge', 'input', 'rating']}},
+                ['type', 'url', 'label'])}, ['title', 'description', 'icon', 'action']), 6)}, ['cards']),
+}
+PRESENTATION_TOOL = {'type': 'function', 'function': {
+    'name': 'present_learning_visual',
+    'description': '展示受控教学卡片：公式推导、分步解题、有限采样点函数图或回复选项与站内导航。仅展示，不执行表达式，不代学生提交、写笔记或改变成绩。函数图每条曲线只提供2到100个有限坐标点，最多3条，不接受formula；导航只允许课程、习题、报告、成就、诊断、自习与答疑既有站内路由。reply的url是回复文字，input模式可为空；input与rating每组只能有一张卡，rating的url必须为评分：{rating}。',
+    'parameters': _object({'type': {'type': 'string', 'enum': list(VISUAL_SCHEMAS)},
+        'payload': {'oneOf': list(VISUAL_SCHEMAS.values())}}, ['type', 'payload']),
+}}
+
+
+def build_learning_visual(arguments):
+    try:
+        encoded = json.dumps(arguments, ensure_ascii=False, allow_nan=False)
+        if len(encoded.encode()) > 16384:
+            raise ValueError()
+        if next(Draft202012Validator(PRESENTATION_TOOL['function']['parameters']).iter_errors(arguments), None):
+            raise ValueError()
+        kind, payload = arguments['type'], arguments['payload']
+        if next(Draft202012Validator(VISUAL_SCHEMAS[kind]).iter_errors(payload), None):
+            raise ValueError()
+        # No HTML or link commands may escape a formula into the Markdown renderer.
+        if re.search(r'</?[A-Za-z][^>]*>|<![^>]*>|\\(?:href|url|html\w*)\b|(?:https?|javascript|data):', encoded, re.I):
+            raise ValueError()
+        if kind == 'function_graph':
+            if any(payload[key][0] >= payload[key][1] for key in ('xRange', 'yRange') if key in payload):
+                raise ValueError()
+            if any(any(a['x'] >= b['x'] for a, b in zip(curve['points'], curve['points'][1:]))
+                   for curve in payload['expressions']):
+                raise ValueError()
+        if kind == 'action_cards':
+            modes = set()
+            for card in payload['cards']:
+                action = card['action']
+                if action['type'] == 'navigate':
+                    if 'reply_mode' in action or not INTERNAL_PATH.fullmatch(action['url']):
+                        raise ValueError()
+                else:
+                    mode = action.get('reply_mode', 'single')
+                    modes.add(mode)
+                    if mode in {'input', 'rating'} and len(payload['cards']) != 1:
+                        raise ValueError()
+                    if mode == 'rating' and action['url'] != '评分：{rating}':
+                        raise ValueError()
+                    if not action['url'].strip() and mode != 'input':
+                        raise ValueError()
+            if len(modes) > 1:
+                raise ValueError()
+        # Copy only the validated JSON, never an unchecked model object or HTML.
+        return json.loads(encoded)
+    except (ValueError, TypeError, KeyError):
+        raise ValidationError({'arguments': '展示内容不符合受控格式、大小、采样点或站内链接限制。'})

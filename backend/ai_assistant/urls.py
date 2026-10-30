@@ -7,6 +7,7 @@ from .views import (
     SemanticMemoryListView, SemanticMemoryDeleteView,
     ActionCardInteractionView,
 )
+from .views_recovery import ChatRequestStatusView
 from .views_dashboard import XiaoYuDashboardView, ExamWorkbenchDashboardView
 from .views_projects import ConversationDetailView, ProjectListCreateView, ProjectDetailView
 from .views_dsh import DshContextView, DshToolView, DshChatView, DshSessionView, DshStatusView, DshChatStreamView, DshSessionListView, DshConfirmView, DshSubmissionView
@@ -30,6 +31,7 @@ urlpatterns = [
     path('workbench/dashboard/', ExamWorkbenchDashboardView.as_view(), name='exam-workbench-dashboard'),
     path('chat/', AIChatView.as_view(), name='ai-chat'),
     path('chat/stream/', AIChatStreamView.as_view(), name='ai-chat-stream'),
+    path('chat-requests/<uuid:request_id>/', ChatRequestStatusView.as_view(), name='ai-chat-request-status'),
     path('history/', AIChatListView.as_view(), name='ai-chat-history'),
     path('conversations/', ConversationListView.as_view(), name='conversation-list'),
     path('conversations/<uuid:conversation_id>/', ConversationDetailView.as_view(), name='conversation-detail'),

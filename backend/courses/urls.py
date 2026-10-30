@@ -12,8 +12,12 @@ from .views_tags import TagListCreateView, TagDetailView, BatchAssignTagsView
 from .portal import LearningProgressView, LearningActivityView, WatchLaterListView, WatchLaterDetailView
 from .goal import LearningGoalView
 from .modules import ModuleListCreateView, ModuleDetailView, ModuleAssignView
+from .offline import OfflineManifestView, OfflineAccessView, OfflineProgressView
 
 urlpatterns = [
+    path('offline-access/', OfflineAccessView.as_view(), name='course-offline-access'),
+    path('<int:pk>/offline-manifest/', OfflineManifestView.as_view(), name='course-offline-manifest'),
+    path('<int:pk>/offline-progress/', OfflineProgressView.as_view(), name='course-offline-progress'),
     path('modules/', ModuleListCreateView.as_view(), name='course-module-list'),
     path('modules/assign/', ModuleAssignView.as_view(), name='course-module-assign'),
     path('modules/<int:pk>/', ModuleDetailView.as_view(), name='course-module-detail'),

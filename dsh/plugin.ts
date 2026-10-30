@@ -47,6 +47,7 @@ export async function apply(ctx: Context) {
         schema: { type: 'object', additionalProperties: true },
         render: (_args, value) => {
           const { visual, ...data } = value as Record<string, ToolValue>;
+          if (definition.name === 'present_learning_visual') return [{ type: 'text', text: JSON.stringify({ presented: data.presented, card_type: (visual as Record<string, ToolValue> | undefined)?.type }) }];
           if (definition.name === 'get_practice_questions' && visual && Array.isArray(data.questions)) {
             const questions = data.questions.filter((question): question is Record<string, ToolValue> =>
               !!question && typeof question === 'object' && !Array.isArray(question));

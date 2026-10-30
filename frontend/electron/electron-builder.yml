@@ -3,10 +3,11 @@ productName: UniMind
 copyright: Copyright © 2026 Korson
 directories:
   output: release
-electronDist: node_modules/electron/dist
 files:
   - dist/**/*
   - package.json
+  - tray.png
+  - desktop-update.json
 asar: true
 mac:
   category: public.app-category.education
@@ -27,3 +28,8 @@ linux:
   target:
     - AppImage
   icon: ../src-tauri/icons/128x128.png
+
+protocols:
+  - name: UniMind
+    schemes:
+      - unimind

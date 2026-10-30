@@ -16,7 +16,7 @@ export function AccountCallback() {
         // Discard previous-account caches before the authoritative identity request.
         await queryClient.cancelQueries();
         queryClient.clear();
-        useAuthStore.getState().logout();
+        useAuthStore.getState().logout({ preserveDesktop: true });
         const { data: user } = await axios.get(`${import.meta.env.VITE_API_URL || '/api'}/users/me/`, {
           withCredentials: true, timeout: 30000, signal: controller.signal,
         });

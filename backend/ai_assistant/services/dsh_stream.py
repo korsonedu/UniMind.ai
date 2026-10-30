@@ -1,7 +1,7 @@
 """ASGI transport for one existing bounded site task; no second ledger or agent loop."""
 import asyncio
 import json
-from queue import Queue, Empty, Full
+from queue import Queue, Empty
 from threading import Event, Thread
 
 from django.db import close_old_connections
@@ -9,25 +9,14 @@ from rest_framework.exceptions import APIException
 
 
 async def stream_events(action):
-    queue = Queue(maxsize=64)
+    queue = Queue()
     closed = Event()
 
     def publish(event):
-        if event['type'] in ('done', 'error'):
-            while not closed.is_set():
-                try:
-                    queue.put_nowait(event)
-                    return
-                except Full:
-                    try:
-                        queue.get_nowait()  # Final result replaces expendable provisional fragments.
-                    except Empty:
-                        pass
-        elif not closed.is_set():
-            try:
-                queue.put_nowait(event)
-            except Full:
-                pass  # Provisional fragments may be dropped; done contains the canonical answer.
+        # Text is expendable; control/status events must survive a slow consumer.
+        # Their count is bounded by the original task's model/tool budget.
+        if not closed.is_set() and (event['type'] != 'text_delta' or queue.qsize() < 63):
+            queue.put_nowait(event)
 
     def produce():
         close_old_connections()

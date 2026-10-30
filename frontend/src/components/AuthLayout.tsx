@@ -19,7 +19,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
   }, []);
 
   return (
-    <div className="grid min-h-[100dvh] lg:grid-cols-[1.05fr_1fr]">
+    <div className="um-auth-shell grid min-h-[100dvh] lg:grid-cols-[1.05fr_1fr]">
       {/* ── Left Brand Panel ── */}
       <div
         ref={panelRef}

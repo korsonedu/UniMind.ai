@@ -1,6 +1,7 @@
 """Adapt the server harness to XiaoYu's existing messages, history and SSE UI."""
 import json
 import logging
+from uuid import uuid4
 
 from django.conf import settings
 from django.db import transaction
@@ -48,8 +49,8 @@ def task_context(user, claims, message):
 def complete_turn(request, bot, conversation_id, message, emit):
     from ai_assistant.views import _reserve_chat_request
     user = request.user
-    with site_request_lock(user):
-        with quota_write_lock():
+    with site_request_lock(user, conversation_id):
+        with quota_write_lock(), transaction.atomic():
             reservation = _reserve_chat_request(user, request.data, bot)
         if not reservation.acquired:
             if reservation.status == 'pending':
@@ -126,16 +127,36 @@ def response(request, bot, conversation_id, message):
         raise ValidationError('本轮问题最多 4000 字。')
 
     async def events():
+        run_id, round_number = 'dsh_' + uuid4().hex, 1
+        pending = {}
         async for frame in stream_events(lambda emit: complete_turn(request, bot, conversation_id, message, emit)):
             if not frame.startswith(b'data: '):
                 yield frame
                 continue
             event = json.loads(frame[6:])
+            if event['type'] in {'done', 'error'}:
+                for step in pending.values():
+                    failed = {**step, 'status': 'failed', 'error': {
+                        'code': 'tool_interrupted', 'message': '学习工具未完成，本轮调用已结束。'}}
+                    yield ('data: ' + json.dumps(failed, ensure_ascii=False) + '\n\n').encode()
+                pending.clear()
             if event['type'] == 'done':
                 event = event['result']
             elif event['type'] == 'text_delta':
                 event = {'type': 'text_delta', 'delta': event['text']}
+            elif event['type'] == 'tool_status':
+                event = {'type': 'step', 'run_id': run_id, 'call_id': event['call_id'],
+                    'round': round_number, 'name': event['name'],
+                    'label': '切换学习工具' if event['name'] == 'find_learning_tools' else '展示学习内容' if event['name'] == 'present_learning_visual' else '查询学习资料',
+                    'status': event['status'], **({'error': event['error']} if event.get('error') else {})}
+                if event['status'] == 'running':
+                    pending[event['call_id']] = event
+                else:
+                    if event['call_id'] in pending:
+                        event['round'] = pending[event['call_id']]['round']
+                    pending.pop(event['call_id'], None)
             elif event['type'] == 'step':
+                round_number = event.get('step', round_number)
                 event = {'type': 'text_reset'}
             elif event['type'] == 'error':
                 event = {'done': True, 'is_error': True, 'full_content': event['error']}

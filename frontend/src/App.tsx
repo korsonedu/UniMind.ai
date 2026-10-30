@@ -14,7 +14,6 @@ const CommunityEntry = lazy(() => import('./layouts/CommunityLayout').then(m => 
 import { useAuthStore } from './store/useAuthStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
 import { FeatureGuard } from './components/FeatureGuard';
-import { XiaoyuRoute } from './pages/XiaoyuRoute';
 import { Loading } from '@/components/Loading';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
@@ -101,6 +100,10 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
 
 const HomeRedirect = () => <Navigate to={HOME_PATH} replace />;
 
+// The persistent XiaoYu instance lives in MainLayout so in-workspace route changes
+// do not unmount its SSE streams.
+const XiaoyuPlaceholder = () => null;
+
 const LegacyRedirect = ({ to }: { to: string }) => {
   const { search, hash } = useLocation();
   return <Navigate to={{ pathname: to, search, hash }} replace />;
@@ -151,7 +154,7 @@ const RootRedirect = () => {
   // On auth failure, log out and check invite status
   useEffect(() => {
     if (!isError) return;
-    logout();
+    logout({ preserveDesktop: true });
     if (location.pathname !== '/') return;
     api.get('/users/check-invite/')
       .then(res => {
@@ -205,7 +208,7 @@ const router = createBrowserRouter([
           { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamHistoryPage)}</FeatureGuard> },
           { path: "notes", element: lazyPage(NotesPage) },
           { path: "notes/:id", element: lazyPage(NotesPage) },
-          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant"><XiaoyuRoute /></FeatureGuard> },
+          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant"><XiaoyuPlaceholder /></FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
           { path: "settings", element: lazyPage(Settings) },
           { path: "billing", element: lazyPage(BillingPage) },

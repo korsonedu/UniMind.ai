@@ -1,6 +1,7 @@
 """Fixed server-owned DSH structured operations; no student tools or memory."""
 from copy import deepcopy
 import json
+import logging
 import os
 from pathlib import Path
 import signal
@@ -16,6 +17,8 @@ from ai_engine.tools import GRADING_RESULT_SCHEMA, OBJECTIVE_ANALYSIS_SCHEMA, QU
 from .dsh_runtime import DshUnavailable
 from .dsh_scope import generation_scope, current_execution
 
+
+logger = logging.getLogger(__name__)
 
 TITLE_SCHEMA = {
     'type': 'object',
@@ -54,6 +57,10 @@ TASKS = {
     'assistant.title': ('submit_title', 'fast', 64, TITLE_SCHEMA),
     'assistant.memory_extract': ('submit_memories', 'fast', 800, MEMORY_EXTRACTION_SCHEMA),
 }
+
+# Only subjective grading retries a malformed provider stream once; each attempt
+# is still one model request behind its own gateway.
+RETRY_ONCE_OPERATIONS = {'quizzes.grade_question'}
 
 
 def wire_schema(schema):
@@ -139,25 +146,33 @@ def run_structured(operation, prompt, *, internal=None):
     try:
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         tasks.mkdir(mode=0o700, exist_ok=True)
-        with TemporaryDirectory(prefix='structured-', dir=tasks) as home:
-            payload = {'prompt': prompt, 'context': context, 'model': model, 'home': home, 'state_dir': state_dir}
-            with subprocess.Popen([python, str(worker)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                  stderr=subprocess.DEVNULL, env=environment, start_new_session=True) as process:
-                try:
-                    output, _ = process.communicate(json.dumps(payload).encode(), timeout=max(.01, min(120, current_execution()['deadline'] - monotonic() + 2)))
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.communicate()
-                    raise DshUnavailable('DSH 任务超时，请稍后重试。') from None
-                except BaseException:
-                    if process.poll() is None:
+        for attempt in range(2):
+            with TemporaryDirectory(prefix='structured-', dir=tasks) as home:
+                payload = {'prompt': prompt, 'context': context, 'model': model, 'home': home, 'state_dir': state_dir}
+                with subprocess.Popen([python, str(worker)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                      stderr=subprocess.DEVNULL, env=environment, start_new_session=True) as process:
+                    try:
+                        output, _ = process.communicate(json.dumps(payload).encode(), timeout=max(.01, min(120, current_execution()['deadline'] - monotonic() + 2)))
+                    except subprocess.TimeoutExpired:
                         os.killpg(process.pid, signal.SIGKILL)
                         process.communicate()
-                    raise
+                        raise DshUnavailable('DSH 任务超时，请稍后重试。') from None
+                    except BaseException:
+                        if process.poll() is None:
+                            os.killpg(process.pid, signal.SIGKILL)
+                            process.communicate()
+                        raise
             if process.returncode or len(output) > 2 * 1024 * 1024:
                 raise ValueError()
             response = json.loads(output)
-            if not isinstance(response, dict) or response.get('status') != 200:
+            if not isinstance(response, dict):
+                raise ValueError()
+            if response.get('status') != 200:
+                if (response.get('retryable') is True and attempt == 0
+                        and operation in RETRY_ONCE_OPERATIONS
+                        and monotonic() + 10 < current_execution()['deadline']):
+                    logger.warning('DSH structured task retry: operation=%s code=%s', operation, response.get('code'))
+                    continue
                 raise ValueError()
             result = response['result']
             if array_result:
@@ -167,5 +182,6 @@ def run_structured(operation, prompt, *, internal=None):
             json.dumps(result, allow_nan=False)
             validate(result, schema)
             return result
+        raise ValueError()
     except (OSError, ValueError, KeyError, TypeError, SchemaError):
         raise DshUnavailable('DSH 未返回有效结构化结果，本轮未写入业务结果。') from None

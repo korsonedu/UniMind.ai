@@ -139,6 +139,7 @@ export interface AgentChatLayoutProps {
     onNewInProject: (id: number) => void;
     sessions: ConversationSession[];
     activeSessionId: number | null;
+    thinkingIds: string[];
     onLoadSession: (session: ConversationSession) => void;
     onDeleteSession?: (session: ConversationSession) => void;
     onUpdateSession: ReturnType<typeof useAgentConversation>['handleUpdateSession'];
@@ -184,13 +185,13 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const [contactOpen, setContactOpen] = useState(false);
 
   const {
-    bot, messages, input, loading, isComposing, initialized, skillOpen,
+    bot, messages, input, loading, generatingIds, isComposing, initialized, skillOpen,
     sessions, activeSessionId, sessionOpen, chatWidth, dragging, hasConversation, conversationId, taskList,
     scrollRef, projectId, setProjectId,
     setMessages, setInput, setBot, setInitialized, setSkillOpen, setSessionOpen,
     setIsComposition, setActiveSessionId, setSessions, setConversationId,
     handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleUpdateSession, handleReset,
-    handleSkillSelect, groupIntoSessions, doSend,
+    handleSkillSelect, groupIntoSessions, doSend, recovery, recoverRequests, retryPendingRequest,
   } = useAgentConversation({
     enableProjects: appearance === 'native',
     findBot,
@@ -216,13 +217,13 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
 
   useEffect(() => {
-    if (appearance !== 'native' || loading) return;
+    if (appearance !== 'native' || generatingIds.length > 0) return;
     const controller = new AbortController();
     void api.get<LearningAccess>('/users/learning/access/', { signal: controller.signal })
       .then(({ data }) => { setAIUsage(data.ai_usage); setQuotaError(false); })
       .catch(() => { if (!controller.signal.aborted) setQuotaError(true); });
     return () => controller.abort();
-  }, [appearance, loading]);
+  }, [appearance, generatingIds.length]);
 
   // Expose doSend to parent
   useEffect(() => {
@@ -399,7 +400,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       if (removed && projectId === id) wrappedReset(false, null);
       return removed;
     } }, onNewInProject: id => wrappedReset(false, id),
-    sessions, activeSessionId, onLoadSession: wrappedLoadSession,
+    sessions, activeSessionId, thinkingIds: generatingIds, onLoadSession: wrappedLoadSession,
     onDeleteSession: onDeleteSession ? handleDeleteSession : undefined,
     onUpdateSession: handleUpdateSession,
     onNewConversation: wrappedReset, botDisplayName,
@@ -418,6 +419,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     </p>
     <ContactAdminModal open={contactOpen} onOpenChange={setContactOpen} />
   </>;
+
+  const recoveryHint = window.unimindDesktop && (recovery === 'pending' || recovery === 'unknown') && <div className="um-agent-recovery" role="status">
+    <p>{recovery === 'pending' ? '上一条提问仍在执行，正在恢复已有结果。' : '上一条提问的执行结果尚未确认，可以先刷新历史；手动重试可能再次执行原提问。'}</p>
+    <div><button type="button" disabled={loading} onClick={() => void recoverRequests()}>刷新历史</button>{recovery === 'unknown' && <button type="button" disabled={loading} onClick={retryPendingRequest}>手动重试原提问</button>}</div>
+  </div>;
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
@@ -451,6 +457,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <button className="um-agent-button um-agent-button-primary um-agent-send" disabled={loading || !input.trim() || !bot} onClick={() => doSend(input)} aria-label="发送消息"><ArrowUp size={18} /></button>
               </footer>
             </div>
+            {recoveryHint}
             {quotaHint}
             </div>
           </section>
@@ -640,7 +647,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
           {/* Messages — 内联视觉卡片 */}
           <AgentReplyContext.Provider value={{ onReply: onActionReply }}>
-            <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+            <div ref={scrollRef} className="um-agent-scroll flex-1 overflow-y-auto min-h-0">
               <div className="max-w-3xl mx-auto p-4 space-y-4">
                 {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {
                   // render_visual → 内联 VisualCard
@@ -706,6 +713,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           {/* Input */}
           <div className={cn("shrink-0 px-4 pb-4 pt-2", appearance === 'native' && 'um-agent-chat-input')}>
             <div className="max-w-3xl mx-auto">
+              {recoveryHint}
               <div data-tour={inputTourClass} className="rounded-2xl border border-border bg-white shadow-[0_2px_12px_rgba(0,0,0,0.06),0_0_0_1px_rgba(0,0,0,0.02)] overflow-hidden focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
                 {noteMentions.panel}
                 <textarea ref={nativeInputRef} rows={1}
@@ -847,7 +855,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             </Button>
           </div>
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+          <div ref={scrollRef} className="um-agent-scroll flex-1 overflow-y-auto min-h-0">
             <div className="p-2.5 space-y-3">
               {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => (
                 msg.toolStep ? (

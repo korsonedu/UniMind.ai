@@ -9,9 +9,10 @@
 .um-inline-practice-segments span { flex: 1; height: 4px; border-radius: 4px; background: var(--um-color-disabled); }
 .um-inline-practice-segments span[data-complete="true"] { background: var(--um-color-accent); }
 .um-inline-practice-nav { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 24px; }
-.um-inline-practice-nav button { width: 36px; height: 34px; border-radius: 9px; background: var(--um-color-context); color: var(--um-color-text-muted); font-variant-numeric: tabular-nums; }
+.um-inline-practice-nav button { position: relative; width: 36px; height: 34px; border-radius: 9px; background: var(--um-color-context); color: var(--um-color-text-muted); font-variant-numeric: tabular-nums; }
 .um-inline-practice-nav button[data-answered="true"] { color: var(--um-color-accent); background: var(--um-color-selected); }
 .um-inline-practice-nav button[aria-current="step"] { background: var(--um-color-text); color: var(--um-color-surface); }
+.um-inline-practice-nav button[data-answered="true"]::after { content: ""; position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--um-color-accent); box-shadow: 0 0 0 1px var(--um-color-surface); }
 .um-inline-practice-question { min-width: 0; overflow-wrap: anywhere; }
 .um-inline-practice-question > .um-inline-practice-caption { margin-bottom: 10px; }
 .um-inline-practice-options { display: grid; gap: 8px; margin-top: 18px; }
@@ -26,10 +27,12 @@
 .um-inline-practice-result { display: grid; gap: 14px; margin-top: 24px; padding: 18px; border-radius: 12px; background: var(--um-color-context); }
 .um-inline-practice-score { font-size: 17px; font-weight: 600; }
 .um-inline-practice-footer { margin-top: 24px; flex-wrap: wrap; }
-.um-inline-practice-footer > div { display: flex; gap: 16px; }
-.um-inline-practice-footer button { font-size: 12px; }
+.um-inline-practice-footer > div { display: flex; gap: 8px; }
+.um-inline-practice-footer button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 34px; padding: 0 12px; border-radius: 9px; background: var(--um-color-context); color: var(--um-color-text-muted); font-size: 12px; transition: background-color 150ms ease, color 150ms ease; }
+.um-inline-practice-footer button:hover:not(:disabled) { background: var(--um-color-hover); color: var(--um-color-text); }
 .um-inline-practice-footer button:disabled { opacity: .4; cursor: default; }
-.um-inline-practice-footer .um-inline-practice-submit { padding: 9px 16px; border-radius: 9px; background: var(--um-color-accent); color: var(--um-color-on-accent); font-weight: 500; }
+.um-inline-practice-footer .um-inline-practice-submit { min-height: 36px; padding: 0 16px; background: var(--um-color-accent); color: var(--um-color-on-accent); font-weight: 500; }
+.um-inline-practice-footer .um-inline-practice-submit:hover:not(:disabled) { background: var(--um-color-accent-hover); color: var(--um-color-on-accent); }
 .um-inline-practice-error { margin-top: 14px; color: var(--um-color-danger); font-size: 12px; }
 .um-inline-practice button:focus-visible, .um-inline-practice a:focus-visible, .um-inline-practice summary:focus-visible, .um-inline-practice textarea:focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: 3px; }
 @media (max-width: 480px) {

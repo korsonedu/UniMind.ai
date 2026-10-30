@@ -44,6 +44,23 @@ def test_task_callback_scope(user, settings):
 
 
 @pytest.mark.django_db
+def test_site_request_lock_scopes(user, settings, tmp_path):
+    settings.UNIMIND_DSH_STATE_DIR = str(tmp_path / 'locks')
+    with site_request_lock(user, 'conversation-a'):
+        with pytest.raises(DshUnavailable) as same:
+            with site_request_lock(user, 'conversation-a'):
+                pass
+        assert same.value.status_code == 409
+        with site_request_lock(user, 'conversation-b'):
+            pass
+    with site_request_lock(user):
+        with pytest.raises(DshUnavailable) as same_user:
+            with site_request_lock(user):
+                pass
+        assert same_user.value.status_code == 409
+
+
+@pytest.mark.django_db
 def test_site_quota_and_idempotency(auth_client, user, settings, tmp_path):
     url = '/api/ai/dsh/chat/'
     body = {'message': '查询学习统计', 'request_id': str(uuid4()), 'model': 'client-cannot-select'}
@@ -218,8 +235,10 @@ def test_stream_terminal_does_not_wait_for_slow_consumer():
     def action(emit):
         emit({'type': 'step', 'step': 1})
         assert continue_task.wait(2)
+        emit({'type': 'tool_status', 'call_id': 'synthetic-call', 'name': 'search_courses', 'status': 'running'})
         for _ in range(100):
             emit({'type': 'text_delta', 'text': '合成片段'})
+        emit({'type': 'tool_status', 'call_id': 'synthetic-call', 'name': 'search_courses', 'status': 'succeeded'})
         return {'content': '完整结果'}
     async def consume():
         unused = stream_events(action)
@@ -231,7 +250,9 @@ def test_stream_terminal_does_not_wait_for_slow_consumer():
             continue_task.set()
             assert await asyncio.to_thread(cleaned.wait, 1), 'completed producer must release ORM even if consumer stalls'
             events = [json.loads(frame[6:]) async for frame in stream]
-            assert len(events) <= 64 and events[-1] == {'type': 'done', 'result': {'content': '完整结果'}}
+            assert sum(event['type'] == 'text_delta' for event in events) <= 63
+            assert [event['status'] for event in events if event['type'] == 'tool_status'] == ['running', 'succeeded']
+            assert events[-1] == {'type': 'done', 'result': {'content': '完整结果'}}
         finally:
             await stream.aclose()
         cleanup_calls.clear(); cleaned.clear(); continue_task.clear()

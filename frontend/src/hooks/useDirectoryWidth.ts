@@ -20,7 +20,9 @@ export function resolveDirectoryWidth(value: number, collapseThreshold = COLLAPS
 export function useDirectoryWidth(collapseThreshold = COLLAPSE_WIDTH) {
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [animated, setAnimated] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const currentWidth = useRef(DEFAULT_WIDTH);
+  const targetWidth = useRef(DEFAULT_WIDTH);
   const [lastWidth, setLastWidth] = useState(DEFAULT_WIDTH);
   const frame = useRef<number | null>(null);
 
@@ -32,9 +34,12 @@ export function useDirectoryWidth(collapseThreshold = COLLAPSE_WIDTH) {
   useEffect(() => stop, []);
 
   const commit = (next: number, spring: boolean) => {
+    if (next === targetWidth.current && spring) return;
     stop();
+    targetWidth.current = next;
+    setCollapsed(next === 0);
     if (next === currentWidth.current) return;
-    setAnimated((next === 0) !== (currentWidth.current === 0));
+    setAnimated(spring);
     if (next >= MIN_WIDTH) setLastWidth(next);
     if (!spring || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       currentWidth.current = next;
@@ -63,6 +68,9 @@ export function useDirectoryWidth(collapseThreshold = COLLAPSE_WIDTH) {
   };
 
   const changeWidth = (value: number) => commit(resolveDirectoryWidth(value, collapseThreshold), true);
-  const previewWidth = (value: number) => commit(previewDirectoryWidth(value, collapseThreshold), false);
-  return { width, contentWidth: width || lastWidth, animated, changeWidth, previewWidth, toggle: () => changeWidth(width ? 0 : lastWidth) };
+  const previewWidth = (value: number) => {
+    const next = previewDirectoryWidth(value, collapseThreshold);
+    commit(next, next === 0);
+  };
+  return { width, contentWidth: animated ? lastWidth : Math.max(MIN_WIDTH, width || lastWidth), collapsed, animated, changeWidth, previewWidth, toggle: () => changeWidth(collapsed ? lastWidth : 0) };
 }

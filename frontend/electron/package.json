@@ -1,13 +1,13 @@
 {
   "name": "unimind-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "UniMind Electron thin shell",
   "author": "Korson",
   "main": "dist/main.cjs",
   "type": "commonjs",
   "scripts": {
-    "compile": "esbuild main.ts --bundle --platform=node --format=cjs --target=node20 --external:electron --outfile=dist/main.cjs && esbuild security.test.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/security.test.cjs",
+    "compile": "esbuild main.ts --bundle --platform=node --format=cjs --target=node20 --external:electron --external:electron-updater --outfile=dist/main.cjs && esbuild security.test.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/security.test.cjs && esbuild preload.ts --bundle --platform=node --format=cjs --target=node20 --external:electron --outfile=dist/preload.cjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test dist/security.test.cjs",
     "build": "npm run compile && npm run typecheck && npm test",
@@ -17,6 +17,9 @@
     "pack": "npm run build && electron-builder --config electron-builder.yml --dir",
     "dist": "npm run build && electron-builder --config electron-builder.yml",
     "dist:win": "npm run build && electron-builder --config electron-builder.yml --win nsis",
+    "release:check": "node scripts/check-release.cjs",
+    "release:verify": "node scripts/verify-release.cjs",
+    "release:dist": "npm run release:check && npm run build && electron-builder --config electron-builder.yml --config.forceCodeSigning=true",
     "dist:preview": "npm run build && electron-builder --config electron-builder.preview.yml"
   },
   "devDependencies": {
@@ -24,5 +27,8 @@
     "electron-builder": "^26.18.0",
     "esbuild": "^0.28.2",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

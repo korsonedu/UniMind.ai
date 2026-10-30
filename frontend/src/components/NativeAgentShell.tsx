@@ -13,15 +13,15 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = '�
   const [open, setOpen] = useState(false);
   const directory = useDirectoryWidth();
   if (!native) return <div className="h-full flex animate-in fade-in duration-300">{sidebar}{children}</div>;
-  return <div className="um-native-agent um-agent-workspace" data-directory-hidden={!directory.width} data-directory-animated={directory.animated || undefined}>
+  return <div className="um-native-agent um-agent-workspace" data-directory-hidden={directory.collapsed} data-directory-animated={directory.animated || undefined}>
     <div className="um-agent-directory" style={{ width: directory.width, '--um-directory-content-width': `${directory.contentWidth}px` } as CSSProperties}>
-      <div aria-hidden={!directory.width || undefined} inert={!directory.width} className="um-agent-directory-content um-directory-content">{sidebar}</div>
+      <div aria-hidden={directory.collapsed || undefined} inert={directory.collapsed} className="um-agent-directory-content um-directory-content">{sidebar}</div>
       <DirectoryResizeHandle width={directory.width} onChange={directory.previewWidth} onCommit={directory.changeWidth} label="调整历史对话宽度" />
     </div>
     <section className="um-agent-main" aria-label="小宇工作区">
       <WorkspaceToolbar className="um-agent-toolbar">
         <div>
-          <button className="um-agent-icon-button um-agent-directory-toggle" onClick={directory.toggle} aria-label={directory.width ? '收起历史对话' : '展开历史对话'} title={directory.width ? '收起历史对话' : '展开历史对话'}><SidebarSimple size={18} /></button>
+          <button className="um-agent-icon-button um-agent-directory-toggle" onClick={directory.toggle} aria-label={!directory.collapsed ? '收起历史对话' : '展开历史对话'} title={!directory.collapsed ? '收起历史对话' : '展开历史对话'}><SidebarSimple size={18} /></button>
           <Dialog.Root open={open} onOpenChange={setOpen}>
             <Dialog.Trigger asChild><button className="um-agent-history-button" aria-label="打开历史对话"><SidebarSimple size={18} /></button></Dialog.Trigger>
             <Dialog.Portal><Dialog.Overlay className="um-agent-drawer-overlay" /><Dialog.Content className="um-native-agent um-agent-drawer">

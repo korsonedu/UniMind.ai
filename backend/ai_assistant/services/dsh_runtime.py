@@ -25,8 +25,8 @@ class DshUnavailable(APIException):
 
 
 @contextmanager
-def site_request_lock(user):
-    """Keep generation, quota commit and deletion ordered for this student."""
+def site_request_lock(user, scope=None):
+    """Keep generation, quota commit and deletion ordered for this student or conversation."""
     try:
         import fcntl
         state_dir = getattr(settings, 'UNIMIND_DSH_STATE_DIR', '')
@@ -35,11 +35,17 @@ def site_request_lock(user):
         Path(state_dir).mkdir(mode=0o700, parents=True, exist_ok=True)
         root = Path(state_dir) / '.requests'
         root.mkdir(mode=0o700, exist_ok=True)
-        with os.fdopen(os.open(root / str(user.pk), os.O_CREAT | os.O_RDWR, 0o600), 'a') as lock:
+        if scope is None:
+            key = str(user.pk)
+        else:
+            digest = hashlib.sha256(str(scope).strip().lower().encode()).hexdigest()
+            key = f'{user.pk}-{digest}'
+        with os.fdopen(os.open(root / key, os.O_CREAT | os.O_RDWR, 0o600), 'a') as lock:
             try:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
-                error = DshUnavailable('当前账号仍有会话操作在处理中，请稍后重试。')
+                error = DshUnavailable('当前会话仍有操作在处理中，请稍后重试。' if scope is not None
+                                       else '当前账号仍有会话操作在处理中，请稍后重试。')
                 error.status_code = 409
                 raise error from None
             yield

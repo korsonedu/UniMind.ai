@@ -29,16 +29,35 @@ def reserve_slot(stack, state_dir):
 
 
 def execute(payload, on_event=None):
+    pending = {}
+    def forward(event):
+        if event.get('type') == 'tool_status':
+            if event['status'] == 'running':
+                pending[event['call_id']] = event
+            else:
+                pending.pop(event['call_id'], None)
+        if on_event:
+            on_event(event)
+    try:
+        return _execute(payload, forward if on_event else None)
+    finally:
+        for event in pending.values():
+            on_event({**event, 'status': 'failed', 'error': {
+                'code': 'tool_interrupted', 'message': '学习工具未完成，本轮调用已结束。'}})
+
+
+def _execute(payload, on_event=None):
     os.environ.update({'UNIMIND_API_URL': payload['api_url'], 'UNIMIND_AUTH_TOKEN': payload['token'],
                        'UNIMIND_DSH_AUTH_SCHEME': 'DSH',
                        'UNIMIND_DSH_AUDIT_DIR': str(Path(payload['state_dir']).parent / 'usage')})
     host.SESSIONS = SessionStore(payload['state_dir'])
     context = host.backend_request('/api/ai/dsh/context/', {'message': payload.get('message', '')})
     context['runtime_source'] = payload['runtime_source']
-    owner = host.SESSIONS.directory(context, uuid4().hex).parent
+    session_id = payload.get('session_id')
+    owner = host.SESSIONS.directory(context, session_id or uuid4().hex).parent
     owner.mkdir(mode=0o700, parents=True, exist_ok=True)
     with ExitStack() as stack:
-        lock = stack.enter_context(os.fdopen(os.open(owner / '.runtime.lock', os.O_CREAT | os.O_RDWR, 0o600), 'a'))
+        lock = stack.enter_context(os.fdopen(os.open(owner / f'.runtime-{session_id or "account"}.lock', os.O_CREAT | os.O_RDWR, 0o600), 'a'))
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:

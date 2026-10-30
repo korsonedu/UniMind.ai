@@ -468,26 +468,34 @@ class VideoProgressUpdateView(APIView):
     permission_classes = [IsMember]
 
     def post(self, request, pk):
-        from django.db import transaction
-        from django.utils import timezone
-        from .models import LearningActivity
-        from .portal import ProgressInput, ProgressSerializer
+        from .portal import ProgressInput
         payload = ProgressInput(data=request.data)
         payload.is_valid(raise_exception=True)
         data = payload.validated_data
         course = _get_course_for_user(pk, request.user, request)
         if not course:
             return Response({'error': 'Course not found'}, status=404)
+        return self.save_progress(request, course, data)
+
+    def save_progress(self, request, course, data, learning_session=None):
+        from django.db import transaction
+        from django.utils import timezone
+        from users.models import LearningSession
+        from .models import LearningActivity
+        from .portal import ProgressSerializer
         with transaction.atomic():
             # Serialize per-user progress updates and completion awards.
             user = request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
-            progress, created = VideoProgress.objects.get_or_create(user=user, course=course)
+            prior = None
             if data.get('event_id'):
                 prior = LearningActivity.objects.filter(user=user, event_id=data['event_id']).first()
-                if prior:
-                    if prior.course_id != pk:
-                        return Response({'error': '活动编号已用于其他课程'}, status=400)
-                    return Response({'status': 'ok', 'is_finished': progress.is_finished, 'elo_added': 0, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
+                if prior and prior.course_id != course.pk:
+                    return Response({'error': '活动编号已用于其他课程'}, status=400)
+            if not prior and learning_session is not None and LearningSession.objects.filter(user=user, session_id=data['event_id']).exists():
+                return Response({'error': '活动编号已用于其他学习记录'}, status=400)
+            progress, created = VideoProgress.objects.get_or_create(user=user, course=course)
+            if prior:
+                return Response({'status': 'ok', 'duplicate': True, 'is_finished': progress.is_finished, 'elo_added': 0, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
             if created:
                 record_event('course_view', user=user, properties={'course_id': course.id})
             completed = data['is_finished'] and not progress.is_finished
@@ -500,17 +508,27 @@ class VideoProgressUpdateView(APIView):
                     progress.elo_claimed_at = timezone.now()
                     elo_added = course.elo_reward
                 record_event('course_complete', user=user, properties={'course_id': course.id})
-            if 'position' in data:
+            update_position = learning_session is None or created or learning_session['ended_at'] >= progress.updated_at
+            previous_updated_at = progress.updated_at
+            if 'position' in data and update_position:
                 progress.last_position = data['position']
-            if data.get('duration', 0) > 0:
+            if data.get('duration', 0) > 0 and update_position:
                 progress.duration = data['duration']
             progress.save()
-            if data['watched_seconds'] > 0 or completed:
+            if learning_session is not None:
+                progress.updated_at = learning_session['ended_at'] if update_position else previous_updated_at
+                VideoProgress.objects.filter(pk=progress.pk).update(updated_at=progress.updated_at)
+            if data['watched_seconds'] > 0 or completed or learning_session is not None:
                 event = dict(user=user, course=course, watched_seconds=data['watched_seconds'], completed=completed, elo_earned=elo_added)
                 if data.get('event_id'):
                     event['event_id'] = data['event_id']
-                LearningActivity.objects.create(**event)
-        return Response({'status': 'ok', 'is_finished': progress.is_finished, 'elo_added': elo_added, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
+                activity = LearningActivity.objects.create(**event)
+                if learning_session is not None:
+                    LearningActivity.objects.filter(pk=activity.pk).update(created_at=learning_session['ended_at'])
+                    if int(data['watched_seconds']):
+                        LearningSession.objects.create(user=user, session_id=data['event_id'], kind='video', course=course,
+                                                       active_seconds=int(data['watched_seconds']), **learning_session)
+        return Response({'status': 'ok', 'duplicate': False, 'is_finished': progress.is_finished, 'elo_added': elo_added, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
 
 class StartupMaterialListCreateView(generics.ListCreateAPIView):
     serializer_class = StartupMaterialSerializer

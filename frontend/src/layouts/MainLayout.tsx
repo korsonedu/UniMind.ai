@@ -19,8 +19,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 import { ExamActivityBar } from '@/components/ExamActivityBar';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
+import { WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
+import { XiaoYu } from '@/pages/XiaoYu';
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
+import { useDesktopStore } from '@/lib/desktop';
+import { useDesktopRuntime } from '@/hooks/useDesktopRuntime';
 
 type NavItem = { to: string; icon: string; label: string; mobileLabel: string; feature?: string };
 
@@ -53,6 +57,8 @@ export const MainLayout: React.FC = () => {
   useEffect(() => { setHistoryEnd(old => navigationType === 'PUSH' ? historyIndex : Math.max(old, historyIndex)); }, [location.key, navigationType, historyIndex]);
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
+  useDesktopRuntime(user?.id);
+  const pendingLearningRecords = useDesktopStore(state => state.state?.learningSync?.pending ?? 0);
   const logout = useAuthStore(state => state.logout);
   const updateUser = useAuthStore(state => state.updateUser);
   const { primaryColor, pageTitle } = useSystemStore();
@@ -60,9 +66,10 @@ export const MainLayout: React.FC = () => {
   const isMobile = useIsMobile();
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [xiaoyuMounted, setXiaoyuMounted] = useState(location.pathname === '/xiaoyu');
   const hasWorkspaceToolbar = ['/xiaoyu', '/courses', '/notes'].includes(location.pathname) || location.pathname.startsWith('/notes/') || /^\/course\/\d+/.test(location.pathname);
   const isCommunityWorkspace = ['/community', '/qa', '/study'].includes(location.pathname) || location.pathname.startsWith('/qa/');
-  const isIntegratedWorkspace = isCommunityWorkspace || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
+  const isIntegratedWorkspace = isCommunityWorkspace || location.pathname === '/settings' || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
     || (location.pathname === '/xiaoyu' && hasFeature('ai.assistant'))
     || ((location.pathname === '/courses' || /^\/course\/\d+/.test(location.pathname)) && hasFeature('course.video'));
   const isMobileStudyPage = isMobile && location.pathname === '/study';
@@ -70,7 +77,13 @@ export const MainLayout: React.FC = () => {
   const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/') && hasFeature('course.video');
   const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage || (location.pathname === '/study' && hasFeature('study.room')));
   const isTourPage = location.pathname === '/xiaoyu';
+  const xiaoyuVisible = location.pathname === '/xiaoyu';
+  const showXiaoyu = (xiaoyuMounted || xiaoyuVisible) && !featuresLoading && hasFeature('ai.assistant');
   useExamActivity();
+
+  useEffect(() => {
+    if (xiaoyuVisible) setXiaoyuMounted(true);
+  }, [xiaoyuVisible]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-override', primaryColor);
@@ -163,6 +176,13 @@ export const MainLayout: React.FC = () => {
         isMobileImmersivePage || isMobileStudyPage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+env(safe-area-inset-bottom))] md:pb-0' : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0')}>
         <ExamActivityBar />
         <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage || isMobileStudyPage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6', isMobile && !hideMobileBottomNav && !isIntegratedWorkspace && 'pb-20')}>
+          <WorkspaceToolbarHostContext.Provider value={{ host: toolbarHost, enabled: xiaoyuVisible }}>
+            <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
+              {showXiaoyu && <div className={xiaoyuVisible ? 'contents' : 'hidden'} aria-hidden={!xiaoyuVisible || undefined} inert={!xiaoyuVisible || undefined}>
+                <XiaoYu />
+              </div>}
+            </WorkspaceActiveContext.Provider>
+          </WorkspaceToolbarHostContext.Provider>
           <Outlet context={{ toolbarHost }} />
         </div>
       </main>
@@ -170,7 +190,7 @@ export const MainLayout: React.FC = () => {
       <nav className={cn('md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]', hideMobileBottomNav && 'hidden')}>
         <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{navItems.map(item => canEnter(item) ? <Link key={item.to} to={item.to} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}<NavIcon position={item.icon} /><span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={`${item.label}，暂未开通`} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[40px] text-muted-foreground opacity-40 cursor-not-allowed"><NavIcon position={item.icon} /><span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>
       </nav>
-      <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>确认退出登录？</AlertDialogTitle><AlertDialogDescription>退出后需要重新登录才能访问学习记录和课程。</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>返回</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>确认退出</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={showLogoutAlert} onOpenChange={setShowLogoutAlert}><AlertDialogContent className="rounded-lg border-border bg-card"><AlertDialogHeader><AlertDialogTitle>确认退出登录？</AlertDialogTitle><AlertDialogDescription>退出后需要重新登录才能访问学习记录和课程。{pendingLearningRecords > 0 && ` 当前还有 ${pendingLearningRecords} 条离线学习记录未同步，退出会清除这些记录，建议先返回桌面设置联网同步。`}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>返回</AlertDialogCancel><AlertDialogAction onClick={async () => { try { await api.post('/users/logout/'); } catch { /* Local logout remains available. */ } await queryClient.cancelQueries(); queryClient.clear(); logout(); navigate('/login', { replace: true }); }}>确认退出</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
       {showTour && isTourPage && <GuidedTour steps={tourSteps} onDismiss={handleTourDismiss} />}
     </div>
   </TooltipProvider>;

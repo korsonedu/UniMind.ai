@@ -557,7 +557,7 @@ class AIChatDeleteConversationView(APIView):
         if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
             from .services.dsh_xiaoyu import delete_state
             from .services.dsh_runtime import site_request_lock
-            with site_request_lock(request.user), transaction.atomic():
+            with site_request_lock(request.user, conversation_id), transaction.atomic():
                 delete_state(request.user, qs)
                 deleted, _ = qs.delete()
                 Conversation.objects.filter(user=request.user, conversation_id=conversation_id).delete()

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
+import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
@@ -10,6 +11,7 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useExamActivityStore, isActiveExamStatus, type ExamActivityStatus } from '@/store/useExamActivityStore';
 import { useLearningSession } from '@/hooks/useLearningSession';
+import { WorkspaceActiveContext } from '@/components/WorkspaceContext';
 import '@/styles/inline-practice.css';
 
 export interface PracticeQuestion {
@@ -57,7 +59,8 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
     try { return { ...empty, ...JSON.parse(localStorage.getItem(storageKey) || 'null') }; }
     catch { return empty; }
   });
-  const [active, setActive] = useState(false);
+  const [active, setActive] = useState(true);
+  const workspaceActive = useContext(WorkspaceActiveContext);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
@@ -91,7 +94,7 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
     });
   }, [submission.data, questions]);
 
-  useLearningSession({ enabled: active && !locked && questions.length > 0,
+  useLearningSession({ enabled: active && workspaceActive && !locked && questions.length > 0,
     kind: 'practice', questionIds: questions.map(item => item.id) });
 
   useEffect(() => {
@@ -104,6 +107,10 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
     window.addEventListener('unimind:practice-active', onActive);
     return () => window.removeEventListener('unimind:practice-active', onActive);
   }, [storageKey]);
+
+  useEffect(() => {
+    if (active) window.dispatchEvent(new CustomEvent('unimind:practice-active', { detail: storageKey }));
+  }, [active, storageKey]);
 
   const detail = useQuery<PracticeResult>({
     queryKey: queryKeys.exams.detail(draft.examId || 0),
@@ -149,8 +156,6 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
   return <section className="um-inline-practice" aria-label={payload.title || '随堂练习'}
     onFocusCapture={event => {
       if (!(event.target as HTMLElement).closest('[data-practice-toggle]')) activate();
-    }} onBlurCapture={event => {
-      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActive(false);
     }}>
     <header className="um-inline-practice-header">
       <div><span className="um-inline-practice-caption">随堂练习 · {questions.length} 题</span><h3>{payload.title || '随堂练习'}</h3></div>
@@ -201,8 +206,8 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
     {!draft.examId && submission.isPending && <p>正在读取提交状态…</p>}
     {!draft.examId && submission.isError && <p role="alert">暂时无法读取提交状态。<button type="button" onClick={() => void submission.refetch()}>重试读取</button></p>}
     <footer className="um-inline-practice-footer">
-      <div><button type="button" disabled={index === 0} onClick={() => setDraft(previous => ({ ...previous, index: index - 1 }))}>上一题</button>
-        <button type="button" disabled={index === questions.length - 1} onClick={() => setDraft(previous => ({ ...previous, index: index + 1 }))}>下一题</button></div>
+      <div><button type="button" className="um-inline-practice-nav-button" disabled={index === 0} onClick={() => setDraft(previous => ({ ...previous, index: index - 1 }))}><CaretLeft size={14} aria-hidden="true" />上一题</button>
+        <button type="button" className="um-inline-practice-nav-button" disabled={index === questions.length - 1} onClick={() => setDraft(previous => ({ ...previous, index: index + 1 }))}>下一题<CaretRight size={14} aria-hidden="true" /></button></div>
       {!draft.examId && <button type="button" className="um-inline-practice-submit" disabled={submitting || recovering || answeredCount !== questions.length}
         onClick={() => void submit()}>{submitting ? '提交中…' : draft.submitted ? '重试提交' : '提交批改'}</button>}
     </footer>

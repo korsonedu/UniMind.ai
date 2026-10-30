@@ -132,6 +132,12 @@ body {
 html {
   overflow-y: scroll;
 }
+/* Desktop auth pages opt out of native scroll bounce. */
+@media (min-width: 768px) {
+  html:has(.um-auth-shell) {
+    overscroll-behavior: none;
+  }
+}
 
 /* Ensure all Lucide icons and common headers adapt to dark mode */
 .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {

@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { useDesktopStore } from '@/lib/desktop';
+import { clearConversationRecovery } from '@/lib/conversationRecovery';
 import { persist } from 'zustand/middleware';
 import { useInstitutionStore } from './useInstitutionStore';
 import { useExamActivityStore } from './useExamActivityStore';
@@ -50,19 +52,25 @@ interface AuthState {
   user: User | null;
   token: string | null;
   setAuth: (user: User, token?: string | null) => void;
-  logout: () => void;
+  logout: (options?: { preserveDesktop?: boolean }) => void;
   updateUser: (user: Partial<User>) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       setAuth: (user, token) => {
         set({ user, token });
       },
-      logout: () => {
+      logout: (options) => {
+        useDesktopStore.setState({ state: null, error: null });
+        if (!options?.preserveDesktop) {
+          const userId = get().user?.id;
+          if (userId) clearConversationRecovery(userId);
+          void window.unimindDesktop?.logout().catch(() => {});
+        }
         set({ user: null, token: null });
         useInstitutionStore.getState().clear();
         useExamActivityStore.getState().clear();
@@ -80,5 +88,5 @@ export const useAuthStore = create<AuthState>()(
 
 // Clear in-memory state when 401 interceptor fires
 window.addEventListener('auth:logout', () => {
-  useAuthStore.getState().logout();
+  useAuthStore.getState().logout({ preserveDesktop: true });
 });

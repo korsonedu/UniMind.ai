@@ -3,6 +3,7 @@ from ai_engine.tool_router import classify_intent_keywords
 
 
 GROUPS = {
+    'presentation': ('教学展示与回复选项', '展示公式推导、解题步骤、函数采样图和回复选项，不改变学生数据。', ('present_learning_visual',)),
     'support': ('人工答疑', '准备需要学生核对确认的人工答疑草稿，不自动发布。', ('create_faq_ticket',)),
     'focus': ('自习专注', '查自习室当前专注状态与每日专注历史，区别于听课和做题记录。', (
         'get_study_status', 'get_focus_history', 'get_learning_sessions')),
@@ -36,6 +37,8 @@ def grouped_tools(allowed, message, recent_messages=None):
         initial = 'focus'
     if any(word in message for word in ('诊断', '初始评估')):
         initial = 'practice'
+    if any(word in message for word in ('公式推导', '函数图', '解题步骤', '选项卡')):
+        initial = 'presentation'
     if any(word in message for word in ('人工', '老师答疑', '工单')):
         initial = 'support'
     initial = initial if initial in groups else ''

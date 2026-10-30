@@ -5,10 +5,10 @@ extraMetadata:
 copyright: Copyright © 2026 Korson
 directories:
   output: release-preview
-electronDist: node_modules/electron/dist
 files:
   - dist/**/*
   - package.json
+  - tray.png
 asar: true
 mac:
   category: public.app-category.education

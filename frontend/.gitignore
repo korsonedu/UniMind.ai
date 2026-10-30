@@ -21,6 +21,8 @@ electron/node_modules
 electron/dist
 electron/release
 electron/release-preview
+electron/release-windows-preview
+electron/release-macos-preview
 
 # Editor directories and files
 .vscode/*

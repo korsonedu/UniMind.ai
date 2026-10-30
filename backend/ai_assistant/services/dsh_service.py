@@ -13,7 +13,7 @@ from ai_engine.config import get_model_for_task
 from ai_engine.tools import get_planner_tools
 from ai_assistant.models import AgentMemory
 from .tool_executor import PlannerToolExecutor, set_permitted_tools
-from .dsh_cards import build_tool_card
+from .dsh_cards import build_tool_card, build_learning_visual, PRESENTATION_TOOL
 from .dsh_routing import grouped_tools
 
 
@@ -57,7 +57,8 @@ def student_catalog(user):
 
 
 def permitted_tools(user):
-    return [t for t in student_catalog(user) if t['function']['name'] in M0_TOOLS]
+    allowed = [t for t in student_catalog(user) if t['function']['name'] in M0_TOOLS]
+    return [*allowed, PRESENTATION_TOOL] if allowed else []
 
 
 def build_context(user, message, recent_messages=None):
@@ -67,6 +68,8 @@ def build_context(user, message, recent_messages=None):
     candidates = route_tools(message, catalog, recent_messages=recent_messages,
                              bot_type='planner', intent_classifier=classify_intent_keywords)
     allowed = [t for t in catalog if t['function']['name'] in M0_TOOLS]
+    if allowed:
+        allowed.append(PRESENTATION_TOOL)
     selected, groups, initial = grouped_tools(allowed, message, recent_messages)
     return {
         'protocol': 'unimind.dsh.m0.v1',
@@ -106,6 +109,9 @@ def execute_tool(user, name, arguments, memory_version, source=None):
     error = validate_arguments(definition['function']['parameters'], arguments)
     if error:
         raise ValidationError({'arguments': error})
+    if name == 'present_learning_visual':
+        visual = build_learning_visual(arguments)
+        return {'presented': True, 'visual': visual}
     if name == 'run_diagnostic':
         from .dsh_actions import prepare_diagnostic
         return prepare_diagnostic(user, source)

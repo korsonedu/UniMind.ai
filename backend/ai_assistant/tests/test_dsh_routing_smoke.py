@@ -48,7 +48,7 @@ def test_dsh_routing_comparison(user):
         assert len(executable) <= 8
         assert required & M0_TOOLS <= executable
         assert all(len(group['tools']) <= 7 for group in context['tool_groups'].values())
-        assert {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']} == M0_TOOLS
+        assert {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']} == M0_TOOLS | {'present_learning_visual'}
         assert required - M0_TOOLS <= set(context['routing']['pending_names'])
         report.append({'case': label, 'query': message, 'required': sorted(required),
                        'legacy_candidates': len(legacy), 'legacy_schema_bytes': len(json.dumps(legacy, ensure_ascii=False).encode()),

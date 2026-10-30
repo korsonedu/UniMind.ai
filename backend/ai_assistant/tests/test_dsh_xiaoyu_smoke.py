@@ -4,7 +4,7 @@ from uuid import uuid4
 from unittest.mock import patch
 import pytest
 from ai_assistant.models import Bot, Conversation, AIChatMessage
-from users.models import WeeklyAIQuotaConfig, AIUsageReservation
+from users.models import WeeklyAIQuotaConfig, WeeklyAIUsage, AIUsageReservation
 
 
 @pytest.mark.django_db
@@ -49,6 +49,16 @@ def test_official_turn_failure_releases_and_never_uses_legacy(user, settings, tm
         legacy.assert_not_called()
     assert not AIChatMessage.objects.filter(conversation_id=cid).exists()
     assert AIUsageReservation.objects.get(user=user).status == 'released'
+    native = {'finish_reason': 'completed', 'content': '同一请求重试完成',
+              'session': {'id': 'b' * 32, 'messages': [{'role': 'assistant', 'cards': []}]}}
+    with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', return_value=native) as runtime:
+        request = SimpleNamespace(user=user, data=body)
+        result = complete_turn(request, bot, cid, body['message'], lambda event: None)
+        assert complete_turn(request, bot, cid, body['message'], lambda event: None) == result
+        runtime.assert_called_once()
+    assert AIUsageReservation.objects.get(user=user).status == 'succeeded'
+    assert WeeklyAIUsage.objects.get(user=user).ai_calls == 1
+    assert AIChatMessage.objects.filter(conversation_id=cid).count() == 2
 
 
 @pytest.mark.django_db
