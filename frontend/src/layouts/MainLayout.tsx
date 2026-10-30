@@ -54,7 +54,11 @@ export const MainLayout: React.FC = () => {
   const [historyEnd, setHistoryEnd] = useState(historyIndex);
   const [toolbarHost, setToolbarHost] = useState<HTMLDivElement | null>(null);
   const [railHidden, setRailHidden] = useState(false);
-  useEffect(() => { setHistoryEnd(old => navigationType === 'PUSH' ? historyIndex : Math.max(old, historyIndex)); }, [location.key, navigationType, historyIndex]);
+  const [historyKey, setHistoryKey] = useState(location.key);
+  if (historyKey !== location.key) {
+    setHistoryKey(location.key);
+    setHistoryEnd(navigationType === 'PUSH' ? historyIndex : Math.max(historyEnd, historyIndex));
+  }
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
   useDesktopRuntime(user?.id);
@@ -66,6 +70,7 @@ export const MainLayout: React.FC = () => {
   const isMobile = useIsMobile();
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [pendingTourDismiss, setPendingTourDismiss] = useState(false);
   const [xiaoyuMounted, setXiaoyuMounted] = useState(location.pathname === '/xiaoyu');
   const hasWorkspaceToolbar = ['/xiaoyu', '/courses', '/notes'].includes(location.pathname) || location.pathname.startsWith('/notes/') || /^\/course\/\d+/.test(location.pathname);
   const isCommunityWorkspace = ['/community', '/qa', '/study'].includes(location.pathname) || location.pathname.startsWith('/qa/');
@@ -77,13 +82,12 @@ export const MainLayout: React.FC = () => {
   const isMobileVideoPage = isMobile && location.pathname.startsWith('/course/') && hasFeature('course.video');
   const hideMobileBottomNav = isMobile && (isMobileImmersivePage || isMobileVideoPage || (location.pathname === '/study' && hasFeature('study.room')));
   const isTourPage = location.pathname === '/xiaoyu';
+  if (showTour && !isTourPage) { setShowTour(false); setPendingTourDismiss(true); }
   const xiaoyuVisible = location.pathname === '/xiaoyu';
   const showXiaoyu = (xiaoyuMounted || xiaoyuVisible) && !featuresLoading && hasFeature('ai.assistant');
   useExamActivity();
 
-  useEffect(() => {
-    if (xiaoyuVisible) setXiaoyuMounted(true);
-  }, [xiaoyuVisible]);
+  if (xiaoyuVisible && !xiaoyuMounted) setXiaoyuMounted(true);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-override', primaryColor);
@@ -124,8 +128,11 @@ export const MainLayout: React.FC = () => {
   }, [isTourPage, isMobile, user?.tour_dismissed_at]);
 
   useEffect(() => {
-    if (showTour && !isTourPage) void handleTourDismiss();
-  }, [showTour, isTourPage, handleTourDismiss]);
+    if (!pendingTourDismiss) return;
+    void api.patch('/users/me/tour-dismiss/').then(() => {
+      updateUser({ tour_dismissed_at: new Date().toISOString() });
+    }).catch(() => {}).finally(() => setPendingTourDismiss(false));
+  }, [pendingTourDismiss, updateUser]);
 
   const canEnter = (item: NavItem) => {
     if (item.to === '/community') return !featuresLoading && (hasFeature('faq.system') || hasFeature('study.room'));

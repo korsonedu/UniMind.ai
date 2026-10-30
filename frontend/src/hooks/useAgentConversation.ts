@@ -1,5 +1,5 @@
 import type { VisualData } from '@/pages/xiaoyu/visuals';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import api from '@/lib/api';
 import { notifyDesktop } from '@/lib/desktop';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -161,7 +161,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   const loading = generatingIds.includes(conversationId);
   const identity = `${userId ?? ''}:${bot?.id ?? ''}`;
-  identityRef.current = identity;
+  useLayoutEffect(() => { identityRef.current = identity; }, [identity]);
   const previousIdentityRef = useRef({ userId, botId: bot?.id });
 
   const setInput = useCallback((value: React.SetStateAction<string>) => {
@@ -191,18 +191,75 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     setGeneratingIds([...set]);
   }, []);
 
+  // ── Session grouping ──
+
+  const groupIntoSessions = useCallback((allMessages: Message[]): ConversationSession[] => {
+    if (allMessages.length === 0) return [];
+    const GAP_MS = 30 * 60 * 1000;
+    const groups = new Map<string, Message[]>();
+    let legacyKey = '';
+    let previousLegacy: Message | undefined;
+    for (const msg of allMessages) {
+      if (!msg.conversation_id) {
+        const timeGap = msg.timestamp && previousLegacy?.timestamp
+          ? Date.parse(msg.timestamp) - Date.parse(previousLegacy.timestamp) : 0;
+        if (!legacyKey || timeGap > GAP_MS) {
+          legacyKey = `legacy:${msg.id ?? msg._id ?? msg.timestamp ?? groups.size}`;
+        }
+        previousLegacy = msg;
+      } else {
+        legacyKey = '';
+        previousLegacy = undefined;
+      }
+      const key = msg.conversation_id || legacyKey;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(msg);
+    }
+    return Array.from(groups, ([key, msgs]) => {
+      if (!sessionIdsRef.current.has(key)) sessionIdsRef.current.set(key, sessionIdsRef.current.size);
+      const metadata = sessionMetadataRef.current.get(key);
+      const title = metadata?.title ?? msgs.find(m => m.conversation_title)?.conversation_title ?? '';
+      const firstUser = msgs.find(m => m.role === 'user');
+      const label = title || (firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : '对话');
+      const lastMsg = msgs[msgs.length - 1];
+      return { id: sessionIdsRef.current.get(key)!, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id, projectId: metadata?.project_id !== undefined ? metadata.project_id : lastMsg.conversation_project ?? null, isPinned: metadata?.is_pinned ?? msgs.some(message => message.conversation_pinned) };
+    }).sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
+  }, []);
+
+  const syncSession = useCallback((id: string, nextMessages: Message[], nextProjectId?: number | null) => {
+    if (!nextMessages.length) return;
+    const current = groupIntoSessions(nextMessages.map(message => ({ ...message, conversation_id: id })))[0];
+    if (!current) return;
+    current.messages = nextMessages;
+    setSessions(previous => {
+      const existing = previous.find(session => session.conversationId === id);
+      const currentProjectId = nextProjectId !== undefined ? nextProjectId : current.projectId ?? existing?.projectId ?? null;
+      const updated = existing ? { ...existing, ...current, projectId: currentProjectId } : { ...current, projectId: currentProjectId };
+      return [...previous.filter(session => session.conversationId !== id), updated]
+        .sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
+    });
+    if (id === conversationIdRef.current) setActiveSessionId(current.id);
+  }, [groupIntoSessions]);
+
   const updateConversationMessages = useCallback((id: string, updater: (previous: Message[]) => Message[]) => {
     if (id === conversationIdRef.current) {
       const next = updater(messagesRef.current);
       messagesRef.current = next;
       messageBuffersRef.current.set(id, next);
+      // Update sidebar snapshots at message boundaries, before history can refresh.
+      const key = `${id}:${projectIdRef.current ?? ''}:${next.length}:${next[next.length - 1]?._id ?? ''}`;
+      if (sessionSyncKeyRef.current !== key) {
+        sessionSyncKeyRef.current = key;
+        ++sessionsRevisionRef.current;
+        syncSession(id, next, projectIdRef.current);
+      }
       setMessages(next);
       return next;
     }
     const next = updater(messageBuffersRef.current.get(id) ?? []);
     messageBuffersRef.current.set(id, next);
     return next;
-  }, []);
+  }, [syncSession]);
 
   const abortStream = useCallback((id: string) => {
     const entry = streamsRef.current.get(id);
@@ -263,67 +320,6 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, [chatWidth]);
-
-  // ── Session grouping ──
-
-  const groupIntoSessions = useCallback((allMessages: Message[]): ConversationSession[] => {
-    if (allMessages.length === 0) return [];
-    const GAP_MS = 30 * 60 * 1000;
-    const groups = new Map<string, Message[]>();
-    let legacyKey = '';
-    let previousLegacy: Message | undefined;
-    for (const msg of allMessages) {
-      if (!msg.conversation_id) {
-        const timeGap = msg.timestamp && previousLegacy?.timestamp
-          ? Date.parse(msg.timestamp) - Date.parse(previousLegacy.timestamp) : 0;
-        if (!legacyKey || timeGap > GAP_MS) {
-          legacyKey = `legacy:${msg.id ?? msg._id ?? msg.timestamp ?? groups.size}`;
-        }
-        previousLegacy = msg;
-      } else {
-        legacyKey = '';
-        previousLegacy = undefined;
-      }
-      const key = msg.conversation_id || legacyKey;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(msg);
-    }
-    return Array.from(groups, ([key, msgs]) => {
-      if (!sessionIdsRef.current.has(key)) sessionIdsRef.current.set(key, sessionIdsRef.current.size);
-      const metadata = sessionMetadataRef.current.get(key);
-      const title = metadata?.title ?? msgs.find(m => m.conversation_title)?.conversation_title ?? '';
-      const firstUser = msgs.find(m => m.role === 'user');
-      const label = title || (firstUser ? firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '...' : '') : '对话');
-      const lastMsg = msgs[msgs.length - 1];
-      return { id: sessionIdsRef.current.get(key)!, label, title, messages: msgs, lastTime: lastMsg.timestamp || '', conversationId: lastMsg.conversation_id, projectId: metadata?.project_id !== undefined ? metadata.project_id : lastMsg.conversation_project ?? null, isPinned: metadata?.is_pinned ?? msgs.some(message => message.conversation_pinned) };
-    }).sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
-  }, []);
-
-  const syncSession = useCallback((id: string, nextMessages: Message[], nextProjectId?: number | null) => {
-    if (!nextMessages.length) return;
-    const current = groupIntoSessions(nextMessages.map(message => ({ ...message, conversation_id: id })))[0];
-    if (!current) return;
-    current.messages = nextMessages;
-    setSessions(previous => {
-      const existing = previous.find(session => session.conversationId === id);
-      const currentProjectId = nextProjectId !== undefined ? nextProjectId : current.projectId ?? existing?.projectId ?? null;
-      const updated = existing ? { ...existing, ...current, projectId: currentProjectId } : { ...current, projectId: currentProjectId };
-      return [...previous.filter(session => session.conversationId !== id), updated]
-        .sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
-    });
-    if (id === conversationIdRef.current) setActiveSessionId(current.id);
-  }, [groupIntoSessions]);
-
-  // Keep the sidebar snapshot current while sending, before any history refresh.
-  // Token updates keep the same length and message id, so they don't rewrite the session snapshot.
-  useEffect(() => {
-    const key = `${conversationId}:${projectId ?? ''}:${messages.length}:${messages[messages.length - 1]?._id ?? ''}`;
-    if (sessionSyncKeyRef.current === key) return;
-    sessionSyncKeyRef.current = key;
-    ++sessionsRevisionRef.current;
-    if (!messages.length) return;
-    syncSession(conversationId, messages, projectId);
-  }, [messages, conversationId, projectId, syncSession]);
 
   // ── Session management ──
 

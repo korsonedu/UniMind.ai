@@ -31,7 +31,7 @@ function ActionForm({ payload }: { payload: ActionPayload }) {
   const [error, setError] = useState('');
   const [content, setContent] = useState(payload.content || '');
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(Date.now);
   const inFlight = useRef(false);
   const seconds = Math.max(0, Math.ceil((payload.expires_at * 1000 - now) / 1000));
   const expired = seconds === 0;

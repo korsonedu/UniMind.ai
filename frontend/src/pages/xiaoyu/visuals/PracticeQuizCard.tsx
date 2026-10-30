@@ -84,15 +84,13 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
   const recovering = !draft.examId && (submission.isPending || submission.isError);
   const locked = draft.submitted || !!draft.examId || recovering;
 
-  useEffect(() => {
-    const saved = submission.data;
-    if (!saved) return;
-    setDraft(previous => previous.examId === saved.exam_id ? previous : { ...previous,
-      examId: saved.exam_id, submitted: true,
+  const saved = submission.data;
+  if (saved && draft.examId !== saved.exam_id) {
+    setDraft({ ...draft, examId: saved.exam_id, submitted: true,
       answers: Object.fromEntries(questions.map((item, position) => [item.id,
         saved.answers.find(answer => answer.position === position + 1)?.answer || ''])),
     });
-  }, [submission.data, questions]);
+  }
 
   useLearningSession({ enabled: active && workspaceActive && !locked && questions.length > 0,
     kind: 'practice', questionIds: questions.map(item => item.id) });

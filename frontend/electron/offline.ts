@@ -81,7 +81,7 @@ export class OfflineLibrary {
     } catch { /* First launch has no offline library. */ }
   }
   list(): Download[] {
-    return this.actor && !this.locked ? this.entries.filter(e => !e.expiresAt || e.expiresAt > Date.now()).map(({ version: _version, grant: _grant, ...entry }) => entry) : [];
+    return this.actor && !this.locked ? this.entries.filter(e => !e.expiresAt || e.expiresAt > Date.now()).map(entry => ({ courseId: entry.courseId, title: entry.title, status: entry.status, receivedBytes: entry.receivedBytes, totalBytes: entry.totalBytes, expiresAt: entry.expiresAt, error: entry.error })) : [];
   }
   async logout(waitForJobs = true, preserveSync = false) {
     if (!preserveSync) this.syncFlight = null;

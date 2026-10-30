@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 const invoke = (method: string, ...args: unknown[]) => ipcRenderer.invoke(`desktop:${method}`, ...args);
-const subscribe = (channel: string, callback: (value: any) => void) => {
+const subscribe = (channel: string, callback: (value: unknown) => void) => {
   const listener = (_event: Electron.IpcRendererEvent, value: unknown) => callback(value);
   ipcRenderer.on(channel, listener);
   return () => ipcRenderer.removeListener(channel, listener);

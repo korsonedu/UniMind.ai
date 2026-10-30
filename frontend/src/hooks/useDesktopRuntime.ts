@@ -1,11 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDesktopStore } from '@/lib/desktop';
 
 export function useDesktopRuntime(userId?: number) {
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
+  useLayoutEffect(() => { navigateRef.current = navigate; }, [navigate]);
   useEffect(() => {
     const desktop = window.unimindDesktop;
     if (!desktop) return;

@@ -45,11 +45,16 @@ export function CoursePortal({ courses, progress, loading, error, activity, acti
   const [tab, setTab] = useState('unfinished');
   const [dash, setDash] = useState<DashData | null>(null);
   const [dashError, setDashError] = useState(false);
+  const [previousHasReport, setPreviousHasReport] = useState(hasReport);
+  if (previousHasReport !== hasReport) {
+    setPreviousHasReport(hasReport);
+    if (!hasReport) { setDash(null); setDashError(false); }
+  }
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkInBurst, setCheckInBurst] = useState(0);
   const [dashboardVersion, setDashboardVersion] = useState(0);
   useEffect(() => {
-    if (!hasReport) { setDash(null); setDashError(false); return; }
+    if (!hasReport) return;
     const controller = new AbortController();
     api.get<DashData>('/ai/dashboard/', { signal: controller.signal })
       .then(response => { setDash(response.data); setDashError(false); })

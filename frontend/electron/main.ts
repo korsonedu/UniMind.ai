@@ -98,7 +98,7 @@ function notify(value: unknown) {
   notice.on('click', () => navigate(item.route as string)); notice.show();
 }
 function installIPC() {
-  const handlers: Record<string, (...args: any[]) => any> = {
+  const handlers: Record<string, (value: unknown) => unknown> = {
     getState: () => state(),
     syncIdentity: async () => { await offline.sync(); return state(); },
     startLogin: async () => { await auth.start(); return state(); },
@@ -114,17 +114,17 @@ function installIPC() {
       updateTray(); changed(); return state();
     },
     notify,
-    downloadCourse: async (id: number) => { await offline.download(courseId(id)); return state(); },
-    pauseDownload: async (id: number) => { await offline.pause(courseId(id)); return state(); },
-    removeDownload: async (id: number) => { await offline.remove(courseId(id)); return state(); },
+    downloadCourse: async (id: unknown) => { await offline.download(courseId(id)); return state(); },
+    pauseDownload: async (id: unknown) => { await offline.pause(courseId(id)); return state(); },
+    removeDownload: async (id: unknown) => { await offline.remove(courseId(id)); return state(); },
     openOfflineLibrary: () => openOffline(),
-    openOfflineCourse: (id: number) => openOffline(courseId(id)),
+    openOfflineCourse: (id: unknown) => openOffline(courseId(id)),
     checkForUpdates: async () => { await updater.check(); return state(); },
     installUpdate: () => updater.install(() => { quitting = true; }),
   };
   for (const [name, handler] of Object.entries(handlers)) ipcMain.handle(`desktop:${name}`, (event, ...args) => {
     if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame || !sameOrigin(sourceUrl, event.senderFrame.url)) throw new Error('不受信任的桌面请求');
-    return handler(...args);
+    return handler(args[0]);
   });
 }
 
@@ -304,7 +304,7 @@ if (!gotLock) {
       if (offlineWindow) offlineWindow.webContents.reload();
     });
     if (app.isPackaged && !previewMode()) app.setAsDefaultProtocolClient('unimind');
-    session.defaultSession.cookies.on('changed', (_event, cookie, _cause, _removed) => {
+    session.defaultSession.cookies.on('changed', (_event, cookie) => {
       const domain = cookie.domain?.replace(/^\./, '');
       if (cookie.name === 'auth_token' && domain && (new URL(sourceUrl).hostname === domain || new URL(sourceUrl).hostname.endsWith(`.${domain}`))) void offline.lock().catch(() => {});
     });

@@ -53,7 +53,7 @@ export const TestLadder: React.FC = () => {
   // Assessment UI State
   const [isTestOpen, setIsTestOpen] = useState(false);
   const [difficulty, setDifficulty] = useState("mixed");
-  const [qCount, setQCount] = useState("5");
+  const [customQCount, setQCount] = useState("5");
   const [isCustomCount, setIsCustomCount] = useState(false);
   const [qCountEdited, setQCountEdited] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -75,13 +75,9 @@ export const TestLadder: React.FC = () => {
   });
   const [loadingStates, setLoadingStates] = useState({ goals: true });
 
-  useEffect(() => {
-    if (qCountEdited) return;
-    const suggestedCount = Number(goals.recommended_questions);
-    if (Number.isFinite(suggestedCount) && suggestedCount > 0) {
-      setQCount(String(Math.max(1, Math.min(50, suggestedCount))));
-    }
-  }, [goals.recommended_questions, qCountEdited]);
+  const suggestedCount = Number(goals.recommended_questions);
+  const qCount = qCountEdited ? customQCount : Number.isFinite(suggestedCount) && suggestedCount > 0
+    ? String(Math.max(1, Math.min(50, suggestedCount))) : '5';
 
   const fetchGoals = () => {
 

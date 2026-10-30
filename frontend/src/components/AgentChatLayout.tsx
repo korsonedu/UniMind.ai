@@ -1,4 +1,4 @@
-import { useNoteMentions } from '@/pages/notes/NoteMentions';
+import { useNoteMentions } from '@/pages/notes/useNoteMentions';
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
@@ -212,7 +212,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     resetMessage,
   });
   const noteMentions = useNoteMentions({ enabled: enableNoteMentions, disabled: loading, botId: bot?.id, conversationId, input, setInput, textareaRef: nativeInputRef });
-  noteMentionsRef.current = noteMentions;
+  useLayoutEffect(() => { noteMentionsRef.current = noteMentions; }, [noteMentions]);
   const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions);
   const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
 

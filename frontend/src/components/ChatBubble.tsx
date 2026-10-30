@@ -56,6 +56,11 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
   native = false,
 }) => {
   const [feedback, setFeedback] = useState<boolean | null | undefined>(msg.feedback);
+  const [feedbackSource, setFeedbackSource] = useState({ id: msg.id, feedback: msg.feedback });
+  if (feedbackSource.id !== msg.id || feedbackSource.feedback !== msg.feedback) {
+    setFeedbackSource({ id: msg.id, feedback: msg.feedback });
+    setFeedback(msg.feedback);
+  }
   const [hover, setHover] = useState(false);
 
   const handleFeedback = useCallback(async (value: boolean) => {
@@ -70,11 +75,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
       setFeedback(prev); // 失败回滚
     }
   }, [msg.id, feedback]);
-
-  // 同步外部 feedback 变化（历史加载时）
-  React.useEffect(() => {
-    setFeedback(msg.feedback);
-  }, [msg.feedback]);
 
   const showFeedback = !isUser && !isThinking && msg.content && msg.id;
 

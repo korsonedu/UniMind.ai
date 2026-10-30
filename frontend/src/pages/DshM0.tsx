@@ -81,7 +81,7 @@ export default function DshM0({ production = false }: { production?: boolean }) 
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [turn, setTurn] = useState<Turn | null>(null);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [retry, setRetry] = useState<Pending | null>(null);
   const [liveText, setLiveText] = useState('');
   const [liveStep, setLiveStep] = useState(0);
@@ -118,11 +118,8 @@ export default function DshM0({ production = false }: { production?: boolean }) 
     setError(err instanceof Error ? err.message : '调用失败');
   };
 
-  const refresh = async () => {
-    const signal = begin();
-    setHealth(null); setSession(null); setContext(null); setTurn(null); setSavedSessions([]);
-    try {
-      const status = await request<Health>(site ? '/status' : '/health', undefined, signal);
+  const loadConnection = (signal: AbortSignal) =>
+    request<Health>(site ? '/status' : '/health', undefined, signal).then(async status => {
       if (signal.aborted) return;
       if (site) {
         const key = `unimind-dsh-site-session:${status.student!.id}`;
@@ -150,11 +147,17 @@ export default function DshM0({ production = false }: { production?: boolean }) 
           report(err, signal);
         }
       }
-    } catch (err) { report(err, signal); }
-    finally { if (!signal.aborted) setBusy(false); }
+    }).catch(err => report(err, signal))
+      .finally(() => { if (!signal.aborted) setBusy(false); });
+  const refresh = () => {
+    const signal = begin();
+    setHealth(null); setSession(null); setContext(null); setTurn(null); setSavedSessions([]);
+    return loadConnection(signal);
   };
   useEffect(() => {
-    void refresh();
+    const controller = new AbortController();
+    operation.current = controller;
+    void loadConnection(controller.signal);
     if (!site) return () => operation.current?.abort();
     const logout = () => { clearIdentity(); setError('登录状态已变化，请刷新连接后继续。'); };
     const focus = () => { void refresh(); };

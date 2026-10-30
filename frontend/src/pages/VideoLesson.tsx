@@ -46,8 +46,14 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const courseId = Number(id);
   const offlineDownload = desktopState?.downloads.find(item => item.courseId === courseId);
+  const [offlineNow, setOfflineNow] = useState(Date.now);
+  useEffect(() => {
+    if (!offlineDownload?.expiresAt) return;
+    const timer = window.setInterval(() => setOfflineNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [offlineDownload?.expiresAt]);
   const offlineReady = offlineDownload?.status === 'ready'
-    && (!offlineDownload.expiresAt || offlineDownload.expiresAt > Date.now());
+    && (!offlineDownload.expiresAt || offlineDownload.expiresAt > offlineNow);
   const [offlinePending, setOfflinePending] = useState(false);
 
   const handleOffline = async () => {

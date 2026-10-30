@@ -15,15 +15,16 @@ export class OfflineProgress {
   state() { return { pending: this.queue.length, rejected: this.rejected, ...(this.error ? { error: this.error } : {}) }; }
   position(id: number) { return this.positions[String(id)]?.position || 0; }
   clear() { this.generation++; this.positions = {}; this.queue = []; this.rejected = 0; this.error = undefined; this.flight = null; }
-  restore(value: any) {
+  restore(value: unknown) {
     this.clear();
     if (!value || typeof value !== 'object') return;
-    if (value.positions && typeof value.positions === 'object') for (const [id, point] of Object.entries(value.positions) as [string, Checkpoint][]) {
+    const restored = value as Partial<ReturnType<OfflineProgress['snapshot']>>;
+    if (restored.positions && typeof restored.positions === 'object') for (const [id, point] of Object.entries(restored.positions) as [string, Checkpoint][]) {
       if (/^[1-9]\d*$/.test(id) && point && Number.isFinite(point.position) && point.position >= 0 && Number.isFinite(point.duration) && Number.isFinite(Date.parse(point.ended_at))) this.positions[id] = point;
     }
-    this.queue = Array.isArray(value.queue) ? value.queue.filter((event: Queued) => event && Number.isSafeInteger(event.courseId) && event.courseId > 0 && typeof event.payload?.event_id === 'string' && typeof event.payload.grant === 'string' && typeof event.payload.version === 'string') : [];
-    this.rejected = Number.isSafeInteger(value.rejected) && value.rejected >= 0 ? value.rejected : 0;
-    this.error = typeof value.error === 'string' ? value.error : undefined;
+    this.queue = Array.isArray(restored.queue) ? restored.queue.filter((event: Queued) => event && Number.isSafeInteger(event.courseId) && event.courseId > 0 && typeof event.payload?.event_id === 'string' && typeof event.payload.grant === 'string' && typeof event.payload.version === 'string') : [];
+    this.rejected = typeof restored.rejected === 'number' && Number.isSafeInteger(restored.rejected) && restored.rejected >= 0 ? restored.rejected : 0;
+    this.error = typeof restored.error === 'string' ? restored.error : undefined;
   }
   record(id: number, value: unknown, version: string, grant?: string) {
     const body = value as Record<string, unknown>;

@@ -72,7 +72,7 @@ export class DesktopAuth {
     if (generation === this.generation) this.publish({ status: 'idle' });
   }
   receive(value: string): boolean {
-    if (!value.startsWith('unimind://auth/callback?') || value.length > 256 || value.includes('#') || /[\u0000-\u0020\\]/.test(value)) return false;
+    if (!value.startsWith('unimind://auth/callback?') || value.length > 256 || value.includes('#') || value.includes('\\') || [...value].some(character => character.charCodeAt(0) <= 32)) return false;
     let url: URL;
     try { url = new URL(value); } catch { return false; }
     if (url.protocol !== 'unimind:' || url.hostname !== 'auth' || url.port || url.username || url.password || url.pathname !== '/callback' || url.hash || url.search.slice(1).split('&').length !== 2) return false;

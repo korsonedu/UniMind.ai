@@ -25,8 +25,8 @@ export default function NotesPage() {
   const [view, setView] = useState<'all' | 'favorite' | 'recent' | 'trash'>('all');
   const [mobileView, setMobileView] = useState<'directory' | 'editor'>('directory');
   const [refresh, setRefresh] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [listLoading, setListLoading] = useState(false);
+  const [loading, setLoading] = useState(!!id);
+  const [listLoading, setListLoading] = useState(true);
   const [pageError, setPageError] = useState('');
   const [listError, setListError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -37,7 +37,8 @@ export default function NotesPage() {
     setItems(previous => previous.map(item => item.id === saved.id ? saved : item));
     setTags(previous => [...previous, ...saved.tags.filter(name => !previous.some(tag => tag.name === name)).map((name, index) => ({ id: -Date.now() - index, name }))]);
   }, []);
-  const { note, documentKey, dirty, status, error, load, change, flush } = useNoteSave(onSaved);
+  const { note: savedNote, documentKey, dirty, status, error, load, change, flush } = useNoteSave(onSaved);
+  const note = id ? savedNote : null;
   const blocker = useBlocker(dirty || busy);
   const blocking = useRef(false);
   useEffect(() => {
@@ -54,9 +55,13 @@ export default function NotesPage() {
     }).catch(() => { if (active) setListError('笔记目录加载失败，请刷新重试。'); });
     return () => { active = false; };
   }, [refresh]);
+  const listKey = JSON.stringify([query, folder, tag, view, refresh]);
+  const [previousListKey, setPreviousListKey] = useState(listKey);
+  if (previousListKey !== listKey) {
+    setPreviousListKey(listKey); setListLoading(true); setListError('');
+  }
   useEffect(() => {
     const controller = new AbortController();
-    setListLoading(true); setListError('');
     const timer = setTimeout(() => {
       const params: Record<string, string> = {};
       if (query) params.q = query;
@@ -68,11 +73,13 @@ export default function NotesPage() {
     }, query ? 220 : 0);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query, folder, tag, view, refresh]);
+  const [previousId, setPreviousId] = useState(id);
+  if (previousId !== id) {
+    setPreviousId(id); setDialog(null); setPageError(''); setLoading(!!id);
+  }
   useEffect(() => {
-    setDialog(null);
-    if (!id) { load(null); setLoading(false); setPageError(''); return; }
+    if (!id) return;
     const controller = new AbortController();
-    setLoading(true); setPageError('');
     void notesApi.get(Number(id), controller.signal).then(result => {
       if (!controller.signal.aborted) { load(result); setMobileView('editor'); }
     }).catch(() => { if (!controller.signal.aborted) { load(null); setPageError('笔记不存在、不可访问或加载失败。'); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -136,7 +143,7 @@ export default function NotesPage() {
       {(query || folder || tag || view !== 'all') && <button aria-label="清除筛选" title="清除筛选" className="notes-clear-filters" onClick={() => { setQuery(''); setFolder(''); setTag(''); setView('all'); }}><FunnelX size={16} /></button>}
       <div className="notes-list-heading"><span>{view === 'trash' ? '回收站' : selectedNotebook?.name || '笔记'}</span><small>{listLoading ? '加载中…' : `${items.length} 篇`}</small></div>
       {listError && <p className="notes-error" role="alert">{listError}<button onClick={reload}>重试</button></p>}
-      <div className="notes-list" aria-busy={listLoading}>{orderedItems.map(item => <button className={item.id === note?.id ? 'is-active' : ''} key={item.id} onClick={() => open(item.id)}><strong>{item.is_favorite && '☆ '}{item.title || '未命名笔记'}</strong><span>{item.content.replace(/[#*`>\[\]]/g, '').slice(0, 60) || '还没有正文'}</span><small>{new Date(item.updated_at).toLocaleDateString()} · {notebookPath(item.notebook, notebooks)}</small></button>)}{!listLoading && !items.length && !listError && <p className="notes-empty">{view === 'trash' ? '回收站是空的。' : '没有匹配的笔记。'}{view !== 'trash' && <button onClick={createNote}>写一篇新笔记</button>}</p>}</div>
+      <div className="notes-list" aria-busy={listLoading}>{orderedItems.map(item => <button className={item.id === note?.id ? 'is-active' : ''} key={item.id} onClick={() => open(item.id)}><strong>{item.is_favorite && '☆ '}{item.title || '未命名笔记'}</strong><span>{item.content.replace(/[#*`>[\]]/g, '').slice(0, 60) || '还没有正文'}</span><small>{new Date(item.updated_at).toLocaleDateString()} · {notebookPath(item.notebook, notebooks)}</small></button>)}{!listLoading && !items.length && !listError && <p className="notes-empty">{view === 'trash' ? '回收站是空的。' : '没有匹配的笔记。'}{view !== 'trash' && <button onClick={createNote}>写一篇新笔记</button>}</p>}</div>
     </aside>
     <main className="notes-main" aria-busy={loading}>
       <WorkspaceToolbar className="notes-note-header">
