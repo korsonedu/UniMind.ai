@@ -102,6 +102,18 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   // ── Fetch questions ──────────────────────────────────
   useEffect(() => {
     if (!sessionId) return;
+    if (!navigator.onLine && userId && offlineCacheSupported()) {
+      void getCachedPractice(userId, sessionId).then(cached => {
+        // The cache is already on disk; applying it after the async read is the offline path.
+        if (cached) {
+          setOffline(true);
+          if (cached.result) { setSubmitResult(cached.result as SubmitResponse); setPhase('results'); }
+          else if (Array.isArray(cached.questions) && cached.questions.length) { setQuestions(cached.questions as QuestionItem[]); setPhase('answering'); }
+          else setError('没有找到匹配的题目');
+        } else setError('离线，且没有本地缓存。');
+      });
+      return;
+    }
     api.get(`/ai/practice/session/${sessionId}/`)
       .then((res) => {
         const questions = res.data.questions || [];

@@ -69,6 +69,15 @@ export default function NotesPage() {
   const reload = useCallback(() => setRefresh(value => value + 1), []);
   useEffect(() => {
     let active = true;
+    if (!navigator.onLine && userId && offlineCacheSupported()) {
+      void loadOfflineCache(userId).then(cached => {
+        if (!active) return;
+        // The cache is already on disk; applying it after the async read is the offline path.
+        if (cached) { setNotebooks(cached.notebooks); setTags(cached.tags); setOfflineMode(true); setListError(''); }
+        else setListError('离线，且没有本地缓存。');
+      });
+      return () => { active = false; };
+    }
     void Promise.all([notesApi.notebooks(), notesApi.tags()]).then(([books, labels]) => {
       if (!active) return;
       setNotebooks(books); setTags(labels); setOfflineMode(false);
@@ -106,6 +115,15 @@ export default function NotesPage() {
   }
   useEffect(() => {
     const controller = new AbortController();
+    if (!navigator.onLine && userId && offlineCacheSupported()) {
+      void loadOfflineCache(userId).then(cached => {
+        if (controller.signal.aborted) return;
+        // The cache is already on disk; applying it after the async read is the offline path.
+        if (cached) { setItems(filterCachedNotes(cached.notes, { query, folder, tag, view })); setOfflineMode(true); setListError(''); }
+        else setListError('离线，且没有本地缓存。');
+      }).finally(() => { if (!controller.signal.aborted) setListLoading(false); });
+      return () => controller.abort();
+    }
     const timer = setTimeout(() => {
       const params: Record<string, string> = {};
       if (query) params.q = query;
@@ -134,6 +152,15 @@ export default function NotesPage() {
   useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
+    if (!navigator.onLine && userId && offlineCacheSupported()) {
+      void getCachedNote(userId, Number(id)).then(cached => {
+        if (controller.signal.aborted) return;
+        // The cache is already on disk; applying it after the async read is the offline path.
+        if (cached) { load(cached); setOfflineMode(true); setMobileView('editor'); }
+        else { load(null); setPageError('离线，且没有本地缓存。'); }
+      }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      return () => controller.abort();
+    }
     void notesApi.get(Number(id), controller.signal).then(result => {
       if (controller.signal.aborted) return;
       load(result); setMobileView('editor');
