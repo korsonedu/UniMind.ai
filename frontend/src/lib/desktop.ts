@@ -9,7 +9,8 @@ export interface DesktopLoginState {
 export interface DesktopState {
   version: string;
   platform: string;
-  preferences: { notifications: boolean; keepRunning: boolean };
+  preferences: { notifications: boolean; keepRunning: boolean; launchAtLogin?: boolean; quickEntry?: boolean };
+  focus?: { status: 'idle' | 'running' | 'paused'; remaining: number; duration: number };
   downloads: { courseId: number; title: string; status: 'downloading' | 'paused' | 'ready' | 'failed'; receivedBytes: number; totalBytes: number; expiresAt?: number; error?: string }[];
   storage?: { usedBytes: number };
   learningSync?: { pending: number; rejected: number; error?: string };

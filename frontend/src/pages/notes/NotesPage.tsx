@@ -1,5 +1,5 @@
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FilePlus, FolderPlus, Notebook as NotebookIcon, MagnifyingGlass, ArrowClockwise, ArrowCounterClockwise, ClockCounterClockwise, DownloadSimple, Export, Folders, FunnelX, NotePencil, PencilSimple, Stack, Star, Trash, SidebarSimple } from '@phosphor-icons/react';
@@ -158,6 +158,17 @@ export default function NotesPage() {
     const created = await notesApi.create(folder && folder !== 'unfiled' ? Number(folder) : null);
     setView('all'); reload(); navigate(`/notes/${created.id}`); setMobileView('editor');
   });
+  const createNoteRef = useRef(createNote);
+  useLayoutEffect(() => { createNoteRef.current = createNote; });
+  const newNoteRequested = useRef(false);
+  useEffect(() => {
+    if (newNoteRequested.current || id) return;
+    if (new URLSearchParams(window.location.search).get('new') !== '1') return;
+    newNoteRequested.current = true;
+    if (!navigator.onLine) { toast.error('离线时暂不能新建笔记，请联网后重试。'); return; }
+    const timer = window.setTimeout(() => createNoteRef.current(), 0);
+    return () => window.clearTimeout(timer);
+  }, [id]);
   const createNotebook = () => setDialog({ title: '新建笔记本', initialValue: '', confirmText: '创建', onConfirm: name => void run(async () => {
     const book = await notesApi.createNotebook(name, folder && folder !== 'unfiled' ? Number(folder) : null);
     setFolder(String(book.id)); setView('all'); reload();

@@ -1,6 +1,6 @@
 {
   "name": "unimind-desktop",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "UniMind Electron thin shell",
   "author": "Korson",

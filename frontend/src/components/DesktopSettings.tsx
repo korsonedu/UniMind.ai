@@ -20,13 +20,17 @@ export function DesktopSettings() {
   const updateLabels = { unconfigured: '发布源未配置', idle: '可以检查更新', checking: '正在检查更新…', available: '发现新版本', downloading: '正在下载更新…', downloaded: '更新已准备好', error: '更新检查失败' };
   const usedBytes = state.storage?.usedBytes ?? 0;
   const storageLabel = usedBytes >= 1024 ** 3 ? `${(usedBytes / 1024 ** 3).toFixed(1)} GB` : `${(usedBytes / 1024 ** 2).toFixed(1)} MB`;
+  const focusLabel = state.focus ? `${Math.floor(state.focus.remaining / 60)}:${String(state.focus.remaining % 60).padStart(2, '0')}` : '';
   return <>
     {(actionError || error) && <p className="um-desktop-error" role="alert">{actionError || error}</p>}
     <h3 className="um-settings-group-title">桌面体验</h3>
     <section className="um-settings-group">
       <div className="um-settings-row"><div><label htmlFor="desktop-notifications">系统通知</label><p>在后台收到新消息或小宇完成回复时提醒你。需允许系统通知。</p></div><Switch id="desktop-notifications" checked={state.preferences.notifications} disabled={!!busy} onCheckedChange={notifications => void run('notifications', () => desktop.updatePreferences({ notifications }))} /></div>
       <div className="um-settings-row"><div><label htmlFor="desktop-background">关闭窗口后继续运行</label><p>在菜单栏或托盘保留 UniMind，继续下载课程并接收提醒。退出应用可使用菜单中的“退出”。</p></div><Switch id="desktop-background" checked={state.preferences.keepRunning} disabled={!!busy} onCheckedChange={keepRunning => void run('background', () => desktop.updatePreferences({ keepRunning }))} /></div>
+      {state.preferences.launchAtLogin !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-launch-at-login">开机自启</label><p>登录系统后自动启动 UniMind，保持下载和提醒可用。</p></div><Switch id="desktop-launch-at-login" checked={state.preferences.launchAtLogin} disabled={!!busy} onCheckedChange={launchAtLogin => void run('launch-at-login', () => desktop.updatePreferences({ launchAtLogin }))} /></div>}
+      {state.preferences.quickEntry !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-quick-entry">全局快捷键</label><p>{state.platform === 'darwin' ? '⌘⇧U 打开 UniMind；⌘⇧N 新建笔记。' : 'Ctrl+Shift+U 打开 UniMind；Ctrl+Shift+N 新建笔记。'}关闭后不再注册。</p></div><Switch id="desktop-quick-entry" checked={state.preferences.quickEntry} disabled={!!busy} onCheckedChange={quickEntry => void run('quick-entry', () => desktop.updatePreferences({ quickEntry }))} /></div>}
       <div className="um-settings-row"><div><span>键盘快捷键</span><p>{state.platform === 'darwin' ? '⌘' : 'Ctrl'}+, 打开设置；{state.platform === 'darwin' ? '⌘' : 'Ctrl'}+1 小宇；+2 课程；+3 笔记。完整快捷键见应用菜单。</p></div></div>
+      {state.focus && <div className="um-settings-row"><div><span>菜单栏专注</span><p>{state.focus.status === 'running' ? `专注中 ${focusLabel}` : state.focus.status === 'paused' ? `已暂停 ${focusLabel}` : '未开始'}。可在菜单栏或应用菜单开始 25 分钟专注。</p></div></div>}
     </section>
     <h3 className="um-settings-group-title">离线课程</h3>
     <section className="um-settings-group">

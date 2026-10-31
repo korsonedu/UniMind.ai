@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, session, ipcMain, Notification, Tray, nativeImage, protocol, powerMonitor, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, Menu, dialog, session, ipcMain, Notification, Tray, nativeImage, protocol, powerMonitor, globalShortcut, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { OfflineLibrary, courseId } from './offline';
@@ -28,15 +28,101 @@ let auth: DesktopAuth;
 let offlineWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let quitting = false;
-let preferences = { notifications: false, keepRunning: false };
+let preferences = { notifications: false, keepRunning: false, launchAtLogin: false, quickEntry: true };
+const FOCUS_SECONDS = 25 * 60;
+let focusStatus: 'idle' | 'running' | 'paused' = 'idle';
+let focusRemaining = FOCUS_SECONDS;
+let focusEndsAt = 0;
+let focusInterval: ReturnType<typeof setInterval> | null = null;
 const noticeTimes = new Map<string, number>();
 protocol.registerSchemesAsPrivileged([{ scheme: 'unimind-offline', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
 function state() {
-  return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, offlineSession: offline?.offlineSession() || null, update: updater?.state || { status: 'unconfigured' }, auth: auth?.state || { status: 'idle' } };
+  return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, focus: { status: focusStatus, remaining: focusRemaining, duration: FOCUS_SECONDS }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, offlineSession: offline?.offlineSession() || null, update: updater?.state || { status: 'unconfigured' }, auth: auth?.state || { status: 'idle' } };
 }
 function changed() {
   if (mainWindow && sameOrigin(sourceUrl, mainWindow.webContents.getURL())) mainWindow.webContents.send('desktop:state', state());
+}
+
+function focusText(seconds: number) {
+  return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
+function updateTrayTitle() {
+  if (!tray) return;
+  const label = focusStatus === 'idle' ? '' : focusText(focusRemaining);
+  if (process.platform === 'darwin') tray.setTitle(label);
+  tray.setToolTip(label ? `UniMind · 专注 ${label}` : 'UniMind');
+}
+function stopFocusInterval() {
+  if (focusInterval) clearInterval(focusInterval);
+  focusInterval = null;
+}
+function ensureFocusInterval() {
+  if (focusInterval) return;
+  focusInterval = setInterval(focusTick, 1000);
+  focusInterval.unref?.();
+}
+function startFocus() {
+  if (focusStatus === 'running') return;
+  if (focusStatus === 'paused' && focusRemaining > 0) {
+    focusStatus = 'running';
+    focusEndsAt = Date.now() + focusRemaining * 1000;
+  } else {
+    focusRemaining = FOCUS_SECONDS;
+    focusEndsAt = Date.now() + FOCUS_SECONDS * 1000;
+    focusStatus = 'running';
+  }
+  ensureFocusInterval();
+  updateTray();
+  changed();
+}
+function pauseFocus() {
+  if (focusStatus !== 'running') return;
+  focusRemaining = Math.max(0, Math.ceil((focusEndsAt - Date.now()) / 1000));
+  focusStatus = 'paused';
+  stopFocusInterval();
+  updateTray();
+  changed();
+}
+function resetFocus() {
+  focusStatus = 'idle';
+  focusRemaining = FOCUS_SECONDS;
+  focusEndsAt = 0;
+  stopFocusInterval();
+  updateTray();
+  changed();
+}
+function toggleFocus() {
+  if (focusStatus === 'running') pauseFocus(); else startFocus();
+}
+function focusTick() {
+  if (focusStatus !== 'running') return;
+  focusRemaining = Math.max(0, Math.ceil((focusEndsAt - Date.now()) / 1000));
+  updateTrayTitle();
+  if (focusRemaining <= 0) finishFocus();
+}
+function finishFocus() {
+  stopFocusInterval();
+  focusStatus = 'idle';
+  focusRemaining = FOCUS_SECONDS;
+  focusEndsAt = 0;
+  updateTray();
+  changed();
+  if (Notification.isSupported()) {
+    const notice = new Notification({ title: '专注结束', body: '完成了 25 分钟专注，休息一下。' });
+    notice.on('click', showMain);
+    notice.show();
+  }
+}
+function applyLaunchAtLogin() {
+  if (!app.isPackaged || !['darwin', 'win32'].includes(process.platform)) return;
+  app.setLoginItemSettings({ openAtLogin: preferences.launchAtLogin });
+}
+function registerGlobalShortcuts() {
+  globalShortcut.unregisterAll();
+  if (!preferences.quickEntry) return;
+  if (!globalShortcut.register('CommandOrControl+Shift+U', showMain)) console.warn('无法注册全局快捷键 CommandOrControl+Shift+U');
+  if (!globalShortcut.register('CommandOrControl+Shift+N', () => { showMain(); navigate('/notes?new=1'); })) console.warn('无法注册全局快捷键 CommandOrControl+Shift+N');
 }
 function showMain() {
   if (!mainWindow) createMainWindow();
@@ -78,12 +164,25 @@ function openOffline(id?: number) {
   void offlineWindow.loadURL(target); offlineWindow.show();
 }
 function updateTray() {
-  if (!preferences.keepRunning) { tray?.destroy(); tray = null; return; }
-  if (tray) return;
-  tray = new Tray(nativeImage.createFromPath(path.join(app.getAppPath(), 'tray.png')));
-  tray.setToolTip('UniMind');
-  tray.setContextMenu(Menu.buildFromTemplate([{ label: '打开 UniMind', click: showMain }, { label: '离线课程库', click: () => openOffline() }, { type: 'separator' }, { label: '退出 UniMind', click: () => app.quit() }]));
-  tray.on('click', showMain);
+  const shouldShow = preferences.keepRunning || focusStatus !== 'idle';
+  if (!shouldShow) { tray?.destroy(); tray = null; return; }
+  if (!tray) {
+    tray = new Tray(nativeImage.createFromPath(path.join(app.getAppPath(), 'tray.png')));
+    tray.on('click', showMain);
+  }
+  const timerLabel = focusStatus === 'idle' ? '专注 25:00' : `专注 ${focusText(focusRemaining)}`;
+  const actionLabel = focusStatus === 'running' ? '暂停专注' : focusStatus === 'paused' ? '继续专注' : '开始 25 分钟专注';
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '打开 UniMind', click: showMain },
+    { label: '离线课程库', click: () => openOffline() },
+    { type: 'separator' },
+    { label: timerLabel, enabled: false },
+    { label: actionLabel, click: toggleFocus },
+    { label: '重置专注', click: resetFocus, enabled: focusStatus !== 'idle' },
+    { type: 'separator' },
+    { label: '退出 UniMind', click: () => app.quit() },
+  ]));
+  updateTrayTitle();
 }
 function notify(value: unknown) {
   if (!value || typeof value !== 'object') throw new Error('无效通知');
@@ -107,10 +206,12 @@ function installIPC() {
     updatePreferences: async (value: unknown) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('无效桌面设置');
       for (const [key, enabled] of Object.entries(value)) {
-        if (!['notifications', 'keepRunning'].includes(key) || typeof enabled !== 'boolean') throw new Error('无效桌面设置');
+        if (!['notifications', 'keepRunning', 'launchAtLogin', 'quickEntry'].includes(key) || typeof enabled !== 'boolean') throw new Error('无效桌面设置');
         preferences[key as keyof typeof preferences] = enabled;
       }
       await writeFile(path.join(app.getPath('userData'), 'desktop-preferences.json'), JSON.stringify(preferences));
+      applyLaunchAtLogin();
+      registerGlobalShortcuts();
       updateTray(); changed(); return state();
     },
     notify,
@@ -273,7 +374,12 @@ function installMenu(): void {
     { label: '小宇', accelerator: 'CommandOrControl+1', click: () => navigate('/xiaoyu') },
     { label: '课程', accelerator: 'CommandOrControl+2', click: () => navigate('/courses') },
     { label: '笔记', accelerator: 'CommandOrControl+3', click: () => navigate('/notes') },
+    { label: '新建笔记', click: () => { showMain(); navigate('/notes?new=1'); } },
     { label: '桌面设置', accelerator: 'CommandOrControl+,', click: () => navigate('/settings?section=desktop') },
+    { type: 'separator' }, { label: '专注', submenu: [
+      { label: '开始 / 暂停 25 分钟专注', click: toggleFocus },
+      { label: '重置专注', click: resetFocus },
+    ] },
     { type: 'separator' }, { label: '离线课程库', accelerator: 'CommandOrControl+Shift+O', click: () => openOffline() },
     { label: '重新连接', click: () => { showMain(); void mainWindow?.loadURL(sourceUrl); } },
     { label: '退出 UniMind', accelerator: 'CommandOrControl+Q', click: () => app.quit() },
@@ -297,6 +403,7 @@ if (!gotLock) {
   let desktopReady = false;
   let pendingDeepLink = process.argv.find(arg => arg.startsWith('unimind://')) || '';
   app.on('before-quit', () => { quitting = true; });
+  app.on('will-quit', () => { globalShortcut.unregisterAll(); stopFocusInterval(); });
   app.on('open-url', (event, url) => { event.preventDefault(); if (desktopReady) deepLink(url); else pendingDeepLink = url; });
   app.on('second-instance', (_event, argv) => {
     const link = argv.find(arg => arg.startsWith('unimind://'));
@@ -309,7 +416,15 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     sourceUrl = entryUrl();
     if (!validSource(sourceUrl, allowsDevelopment(sourceUrl))) throw new Error('桌面客户端只允许 HTTPS 站点或本机开发地址');
-    try { const saved = JSON.parse(await readFile(path.join(app.getPath('userData'), 'desktop-preferences.json'), 'utf8')); preferences = { notifications: saved.notifications === true, keepRunning: saved.keepRunning === true }; } catch { /* Defaults require explicit opt-in. */ }
+    try {
+      const saved = JSON.parse(await readFile(path.join(app.getPath('userData'), 'desktop-preferences.json'), 'utf8'));
+      preferences = {
+        notifications: saved.notifications === true,
+        keepRunning: saved.keepRunning === true,
+        launchAtLogin: saved.launchAtLogin === true,
+        quickEntry: saved.quickEntry !== false,
+      };
+    } catch { /* Defaults require explicit opt-in. */ }
     offline = new OfflineLibrary(sourceUrl, changed, () => { offlineWindow?.close(); });
     await offline.restore();
     updater = new DesktopUpdater(previewMode(), changed);
@@ -343,6 +458,8 @@ if (!gotLock) {
     app.setAboutPanelOptions({ applicationName: 'UniMind', applicationVersion: app.getVersion() });
     createMainWindow();
     desktopReady = true;
+    applyLaunchAtLogin();
+    registerGlobalShortcuts();
     if (app.isPackaged && !previewMode()) {
       setTimeout(() => { void updater.check(); }, 8000).unref();
     }
