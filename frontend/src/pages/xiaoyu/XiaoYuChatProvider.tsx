@@ -17,7 +17,8 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   const [activated, setActivated] = useState(false);
   const pageHooksRef = useRef<PageChatHooks>({});
   const viewedRef = useRef<string | null>(null);
-  const initializingRef = useRef(false);
+  const loadedUserIdRef = useRef<number | null>(null);
+  const initializingUserIdRef = useRef<number | null>(null);
   const unread = useChatUnreadStore(state => state.unread);
   const unreadIds = useMemo(() => new Set(Object.keys(unread)), [unread]);
   const markUnread = useChatUnreadStore(state => state.markSettled);
@@ -40,11 +41,12 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     onStepQuestions: questions => pageHooksRef.current.onStepQuestions?.(questions),
     resetMessage: '已开始新对话',
   });
-  const { initialized, conversationId, setBot, setInitialized, setSessions, groupIntoSessions } = chat;
+  const { conversationId, setBot, setInitialized, setSessions, groupIntoSessions } = chat;
+  const userId = useAuthStore(state => state.user?.id);
 
   useEffect(() => {
-    if (!activated || initialized || initializingRef.current) return;
-    initializingRef.current = true;
+    if (!activated || !userId || loadedUserIdRef.current === userId || initializingUserIdRef.current === userId) return;
+    initializingUserIdRef.current = userId;
     let cancelled = false;
     const init = async () => {
       try {
@@ -70,12 +72,19 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       } catch {
         if (!cancelled) toast.error('小宇加载失败');
       } finally {
-        if (!cancelled) setInitialized(true);
+        if (initializingUserIdRef.current === userId) initializingUserIdRef.current = null;
+        if (!cancelled) {
+          loadedUserIdRef.current = userId;
+          setInitialized(true);
+        }
       }
     };
     void init();
-    return () => { cancelled = true; };
-  }, [activated, initialized, setBot, setInitialized, setSessions, groupIntoSessions]);
+    return () => {
+      cancelled = true;
+      if (initializingUserIdRef.current === userId) initializingUserIdRef.current = null;
+    };
+  }, [activated, userId, setBot, setInitialized, setSessions, groupIntoSessions]);
 
   const viewed = location.pathname === '/xiaoyu' ? conversationId : null;
   useLayoutEffect(() => {
@@ -98,9 +107,7 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   return <XiaoYuChatContext.Provider value={value}>{children}</XiaoYuChatContext.Provider>;
 }
 
-/** 登录后挂载，路由切换不卸载。未登录时只渲染路由。 */
+/** 始终挂载，用户变化只在 Provider 内重置，不重挂路由子树。 */
 export function XiaoYuChatHost() {
-  const user = useAuthStore(state => state.user);
-  if (!user) return <Outlet />;
-  return <XiaoYuChatProvider key={user.id}><Outlet /></XiaoYuChatProvider>;
+  return <XiaoYuChatProvider><Outlet /></XiaoYuChatProvider>;
 }

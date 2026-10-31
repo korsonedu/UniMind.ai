@@ -4,6 +4,7 @@ import { clearConversationRecovery } from '@/lib/conversationRecovery';
 import { persist } from 'zustand/middleware';
 import { useInstitutionStore } from './useInstitutionStore';
 import { useExamActivityStore } from './useExamActivityStore';
+import { useChatUnreadStore } from './useChatUnreadStore';
 
 interface User {
   id: number;
@@ -62,7 +63,9 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       setAuth: (user, token) => {
+        const previousId = get().user?.id;
         set({ user, token });
+        if (previousId !== user.id) useChatUnreadStore.getState().reset();
       },
       logout: (options) => {
         useDesktopStore.setState({ state: null, error: null });
@@ -74,6 +77,7 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, token: null });
         useInstitutionStore.getState().clear();
         useExamActivityStore.getState().clear();
+        useChatUnreadStore.getState().reset();
       },
       updateUser: (updatedUser) => set((state) => ({
         user: state.user ? { ...state.user, ...updatedUser } : null
