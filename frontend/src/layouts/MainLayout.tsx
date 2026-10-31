@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { Link, useLocation, Outlet, useNavigate, useNavigationType } from 'react-router-dom';
+
 import { User as UserIcon, SignOut, CreditCard, ChartBar, Trophy, ArrowLeft, ArrowRight, SidebarSimple } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -20,7 +21,6 @@ import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 import { ExamActivityBar } from '@/components/ExamActivityBar';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
 import { WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
-import { XiaoYu } from '@/pages/XiaoYu';
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
 import { useDesktopStore } from '@/lib/desktop';
@@ -71,7 +71,6 @@ export const MainLayout: React.FC = () => {
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [pendingTourDismiss, setPendingTourDismiss] = useState(false);
-  const [xiaoyuMounted, setXiaoyuMounted] = useState(location.pathname === '/xiaoyu');
   const hasWorkspaceToolbar = ['/xiaoyu', '/courses', '/notes'].includes(location.pathname) || location.pathname.startsWith('/notes/') || /^\/course\/\d+/.test(location.pathname);
   const isCommunityWorkspace = ['/community', '/qa', '/study'].includes(location.pathname) || location.pathname.startsWith('/qa/');
   const isIntegratedWorkspace = isCommunityWorkspace || location.pathname === '/settings' || location.pathname === '/notes' || location.pathname.startsWith('/notes/')
@@ -84,10 +83,7 @@ export const MainLayout: React.FC = () => {
   const isTourPage = location.pathname === '/xiaoyu';
   if (showTour && !isTourPage) { setShowTour(false); setPendingTourDismiss(true); }
   const xiaoyuVisible = location.pathname === '/xiaoyu';
-  const showXiaoyu = (xiaoyuMounted || xiaoyuVisible) && !featuresLoading && hasFeature('ai.assistant');
   useExamActivity();
-
-  if (xiaoyuVisible && !xiaoyuMounted) setXiaoyuMounted(true);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-override', primaryColor);
@@ -185,12 +181,9 @@ export const MainLayout: React.FC = () => {
         <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage || isMobileStudyPage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6', isMobile && !hideMobileBottomNav && !isIntegratedWorkspace && 'pb-20')}>
           <WorkspaceToolbarHostContext.Provider value={{ host: toolbarHost, enabled: xiaoyuVisible }}>
             <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
-              {showXiaoyu && <div className={xiaoyuVisible ? 'contents' : 'hidden'} aria-hidden={!xiaoyuVisible || undefined} inert={!xiaoyuVisible || undefined}>
-                <XiaoYu />
-              </div>}
+              <Outlet context={{ toolbarHost }} />
             </WorkspaceActiveContext.Provider>
           </WorkspaceToolbarHostContext.Provider>
-          <Outlet context={{ toolbarHost }} />
         </div>
       </main>
       </div>

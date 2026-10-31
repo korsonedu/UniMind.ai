@@ -1,5 +1,5 @@
 import { useNoteMentions } from '@/pages/notes/useNoteMentions';
-import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -7,29 +7,27 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { PaperPlaneTilt, Spinner, ArrowCounterClockwise, Lightbulb, ClockCounterClockwise, Trash, Sparkle, Plus, ArrowUp, MagnifyingGlass, Folder, Check } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
 import { useTypewriter } from '@/hooks/useTypewriter';
 import ChatBubble from '@/components/ChatBubble';
 import { ToolStepMessage } from '@/components/AgentStepCard';
 import { DshToolCard, type DshCard } from '@/components/DshToolCard';
 import { InlineVisualCard } from '@/components/InlineVisualCard';
 import {
-  useAgentConversation,
   type Bot,
   type Message,
   type ConversationSession,
-  RECENT_SESSION_MS,
+  type ConversationPatch,
 } from '@/hooks/useAgentConversation';
 import type { AgentStep } from '@/types/toolRun';
 import type { Icon } from '@phosphor-icons/react';
 import type { VisualData } from '@/pages/xiaoyu/visuals';
 import { AgentReplyContext } from '@/pages/xiaoyu/visuals/agentReplyContext';
-import { restoreVisualSteps } from '@/lib/visualHistory';
 import { TaskList } from '@/components/TaskList';
 import { NativeAgentShell } from '@/components/NativeAgentShell';
 import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useChatUnreadStore } from '@/store/useChatUnreadStore';
+import { useXiaoYuChat } from '@/pages/xiaoyu/xiaoYuChatContext';
 import { ContactAdminModal } from '@/components/ContactAdminModal';
 import { learningReset, type AIUsage, type LearningAccess } from '@/types/learning';
 
@@ -56,12 +54,10 @@ export interface RightPanelProps {
 
 export interface AgentChatLayoutProps {
   appearance?: 'native';
-  // Bot & skills
-  findBot: (bots: Bot[]) => Bot | undefined;
+  // Skills
   skills: Skill[];
   typewriterWords: string[];
   chatPlaceholder: string;
-  resetMessage?: string;
 
   // Landing page
   landingTitle: string;
@@ -71,16 +67,11 @@ export interface AgentChatLayoutProps {
   // Chat header
   botDisplayName: string;
 
-  // Init
-  /** Process message content during init (e.g. processMathContent). Default: identity */
-  processContent?: (content: string) => string;
-
   // useAgentConversation callbacks
   getExtraPayload?: () => Record<string, unknown>;
   beforeSend?: () => Promise<void>;
   enableNoteMentions?: boolean;
   contextPanel?: (props: { bot: Bot | null; conversationId: string }) => React.ReactNode;
-  onStepDone?: (step: AgentStep, prev: Message[]) => Message[] | null;
   /** Called after SSE 'done'. Receives refreshSessions; defaults to calling it. */
   onDone?: (refreshSessions: () => void) => void;
 
@@ -141,7 +132,7 @@ export interface AgentChatLayoutProps {
     unreadIds: ReadonlySet<string>;
     onLoadSession: (session: ConversationSession) => void;
     onDeleteSession?: (session: ConversationSession) => void;
-    onUpdateSession: ReturnType<typeof useAgentConversation>['handleUpdateSession'];
+    onUpdateSession: (session: ConversationSession, patch: ConversationPatch) => Promise<boolean>;
     onNewConversation: () => void;
     botDisplayName: string;
   }) => React.ReactNode;
@@ -151,11 +142,10 @@ export interface AgentChatLayoutProps {
 
 export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const {
-    findBot, skills, typewriterWords, chatPlaceholder, resetMessage,
+    skills, typewriterWords, chatPlaceholder,
     landingTitle, landingDescription, skillTooltip = '技能',
     botDisplayName,
-    processContent,
-    getExtraPayload, beforeSend, enableNoteMentions = false, contextPanel, onStepDone, onDone, onSendReady,
+    getExtraPayload, beforeSend, enableNoteMentions = false, contextPanel, onDone, onSendReady,
     extractVisualFromStep,
     onQuestionsGenerated,
     onLoadSession, onReset, onDeleteSession,
@@ -176,16 +166,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const dashboardRef = useRef<HTMLDivElement>(null);
   const nativeInputRef = useRef<HTMLTextAreaElement>(null);
   const noteMentionsRef = useRef<ReturnType<typeof useNoteMentions> | null>(null);
-  const location = useLocation();
-  const xiaoyuVisible = location.pathname === '/xiaoyu';
-  const unread = useChatUnreadStore(state => state.unread);
-  const unreadIds = useMemo(() => new Set(Object.keys(unread)), [unread]);
-  const markUnread = useChatUnreadStore(state => state.markSettled);
-  const viewUnread = useChatUnreadStore(state => state.view);
-  const leaveUnread = useChatUnreadStore(state => state.leave);
-  const clearUnread = useChatUnreadStore(state => state.remove);
-  const resetUnread = useChatUnreadStore(state => state.reset);
-  const viewedRef = useRef<string | null>(null);
+  const { chat, activate, setPageHooks, unreadIds } = useXiaoYuChat();
+  const removeUnread = useChatUnreadStore(state => state.remove);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
   const [aiUsage, setAIUsage] = useState<AIUsage | null>(null);
@@ -196,40 +178,44 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     bot, messages, input, loading, generatingIds, isComposing, initialized, skillOpen,
     sessions, activeSessionId, sessionOpen, chatWidth, dragging, hasConversation, conversationId, taskList,
     scrollRef, projectId, setProjectId,
-    setMessages, setInput, setBot, setInitialized, setSkillOpen, setSessionOpen,
-    setIsComposition, setActiveSessionId, setSessions, setConversationId,
+    setInput, setSkillOpen, setSessionOpen, setIsComposition, setSessions,
     handleDragStart, handleLoadSession, handleRefreshSessions, handleDeleteSession, handleUpdateSession, handleReset,
     handleSkillSelect, groupIntoSessions, doSend, recovery, recoverRequests, retryPendingRequest,
-  } = useAgentConversation({
-    enableProjects: appearance === 'native',
-    findBot,
-    getExtraPayload: () => ({ ...getExtraPayload?.(), ...(enableNoteMentions ? noteMentionsRef.current?.payload() : {}) }),
-    beforeSend: async () => { await beforeSend?.(); await noteMentionsRef.current?.beforeSend(); },
-    onDone: () => onDone?.(handleRefreshSessions),
-    onRunSettled: (id, outcome) => {
-      if (id === viewedRef.current) return;
-      markUnread(id, outcome);
-    },
-    onStepDone,
-    onStepDoneEffect: extractVisualFromStep ? (step) => {
-      const v = extractVisualFromStep(step);
-      if (v) pendingVisualsRef.current.push(v);
-    } : undefined,
-    onAllVisuals: (visuals) => {
-      pendingVisualsRef.current = [];
-      setVisual(visuals as VisualData[]);
-    },
-    onStepQuestions: onQuestionsGenerated,
-    resetMessage,
-  });
-  useEffect(() => {
-    const viewed = xiaoyuVisible ? conversationId : null;
-    viewedRef.current = viewed;
-    if (viewed) viewUnread(viewed);
-    else leaveUnread(conversationId);
-  }, [xiaoyuVisible, conversationId, viewUnread, leaveUnread]);
+  } = chat;
 
-  useEffect(() => () => resetUnread(), [resetUnread]);
+  useEffect(() => { activate(); }, [activate]);
+
+  useLayoutEffect(() => {
+    setPageHooks({
+      beforeSend: async () => { await beforeSend?.(); await noteMentionsRef.current?.beforeSend(); },
+      getExtraPayload: () => ({ ...getExtraPayload?.(), ...(enableNoteMentions ? noteMentionsRef.current?.payload() : {}) }),
+      onDone: () => onDone?.(handleRefreshSessions),
+      onStepDoneEffect: extractVisualFromStep ? (step) => {
+        const v = extractVisualFromStep(step);
+        if (v) pendingVisualsRef.current.push(v);
+      } : undefined,
+      onAllVisuals: (visuals) => {
+        pendingVisualsRef.current = [];
+        setVisual(visuals as VisualData[]);
+      },
+      onStepQuestions: onQuestionsGenerated,
+    });
+    return () => setPageHooks(null);
+  }, [setPageHooks, beforeSend, getExtraPayload, enableNoteMentions, onDone, handleRefreshSessions, extractVisualFromStep, onQuestionsGenerated]);
+
+  const previousConversationRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (previousConversationRef.current === conversationId) return;
+    previousConversationRef.current = conversationId;
+    const last = [...messages].reverse().find(message => message.metadata?.all_visuals?.length || message.metadata?.visual);
+    const restored = last?.metadata?.all_visuals?.length ? last.metadata.all_visuals : last?.metadata?.visual;
+    setVisual(restored ? restored as VisualData | VisualData[] : null);
+    if (messages.length) {
+      requestAnimationFrame(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      });
+    }
+  }, [conversationId, messages, scrollRef]);
 
   const noteMentions = useNoteMentions({ enabled: enableNoteMentions, disabled: loading, botId: bot?.id, conversationId, input, setInput, textareaRef: nativeInputRef });
   useLayoutEffect(() => { noteMentionsRef.current = noteMentions; }, [noteMentions]);
@@ -294,55 +280,6 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     return () => setPageHeader('', '');
   }, [setPageHeader]);
 
-  // Init: load bot, history, and restore recent session
-  useEffect(() => {
-    let cancelled = false;
-    const init = async () => {
-      if (appearance === 'native') setConversationId(crypto.randomUUID());
-      try {
-        const bRes = await api.get('/ai/bots/');
-        if (cancelled) return;
-        const found = findBot(bRes.data);
-        if (found) {
-          setBot(found);
-          const hRes = await api.get('/ai/history/', { params: { bot_id: found.id } });
-          if (hRes.data.length > 0) {
-            const allMsgs: Message[] = restoreVisualSteps(
-              hRes.data
-                .filter((m: Message) => m.content !== '[Thinking...]')
-                .map((m: Message) => ({
-                  ...m,
-                  content: processContent ? processContent(m.content as string) : (m.content as string),
-                  visible: true,
-                } as Message)),
-            );
-            const grouped = groupIntoSessions(allMsgs);
-            setSessions(grouped);
-            const lastMsg = hRes.data[hRes.data.length - 1];
-            const isRecent = lastMsg && Date.now() - new Date(lastMsg.timestamp).getTime() < RECENT_SESSION_MS;
-            if (appearance !== 'native' && isRecent && lastMsg.conversation_id) {
-              setConversationId(lastMsg.conversation_id);
-            }
-            // 非 native 模式自动加载最新 session；native 留在 landing，等用户从侧栏选择。
-            if (appearance !== 'native' && grouped.length > 0) {
-              const latest = grouped[grouped.length - 1];
-              if (latest.conversationId) setConversationId(latest.conversationId);
-              setMessages(latest.messages);
-              setActiveSessionId(latest.id);
-              setProjectId(latest.projectId ?? null);
-            }
-          }
-        }
-      } catch {
-        if (!cancelled) toast.error(`Failed to load ${botDisplayName}`);
-      } finally {
-        if (!cancelled) setInitialized(true);
-      }
-    };
-    init();
-    return () => { cancelled = true; };
-  }, [appearance, botDisplayName, findBot, groupIntoSessions, processContent, setActiveSessionId, setBot, setConversationId, setInitialized, setMessages, setProjectId, setSessions]);
-
   useEffect(() => {
     const textarea = nativeInputRef.current;
     if (appearance !== 'native' || !textarea) return;
@@ -367,19 +304,18 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   // ── Session load/reset wrappers ──
 
   const wrappedLoadSession = useCallback((session: ConversationSession) => {
-    if (session.conversationId) clearUnread(session.conversationId);
     if (onLoadSession) {
       onLoadSession(session, handleLoadSession);
     } else {
       handleLoadSession(session);
     }
     setSessionOpen(false);
-  }, [clearUnread, handleLoadSession, onLoadSession, setSessionOpen]);
+  }, [handleLoadSession, onLoadSession, setSessionOpen]);
 
   const wrappedDeleteSession = useCallback((session: ConversationSession) => {
-    if (session.conversationId) clearUnread(session.conversationId);
+    if (session.conversationId) removeUnread(session.conversationId);
     handleDeleteSession(session);
-  }, [clearUnread, handleDeleteSession]);
+  }, [handleDeleteSession, removeUnread]);
 
   const wrappedReset = useCallback((notify = true, nextProjectId = projectId) => {
     if (onReset) {

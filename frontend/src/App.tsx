@@ -17,6 +17,7 @@ import { Loading } from '@/components/Loading';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { XiaoYuChatHost } from './pages/xiaoyu/XiaoYuChatProvider';
 
 
 // Lazy-loaded pages — named exports need .then() wrapper
@@ -45,6 +46,7 @@ const Checkout = lazy(() => import('./pages/Checkout').then(module => ({ default
 const DiagnosticTest = lazy(() => import('./pages/DiagnosticTest').then(module => ({ default: module.DiagnosticTest })));
 const NotesPage = lazy(() => import('./pages/notes/NotesPage'));
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
+const XiaoYu = lazy(() => import('./pages/XiaoYu').then(module => ({ default: module.XiaoYu })));
 
 // Default exports — plain lazy() works
 const MemorixPage = lazy(() => import('./pages/Memorix'));
@@ -97,10 +99,6 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
 };
 
 const HomeRedirect = () => <Navigate to={HOME_PATH} replace />;
-
-// The persistent XiaoYu instance lives in MainLayout so in-workspace route changes
-// do not unmount its SSE streams.
-const XiaoyuPlaceholder = () => null;
 
 const LegacyRedirect = ({ to }: { to: string }) => {
   const { search, hash } = useLocation();
@@ -174,6 +172,9 @@ const lazyPage = (Component: React.ComponentType) => (
 );
 
 const router = createBrowserRouter([
+  {
+    element: <XiaoYuChatHost />,
+    children: [
   ...(import.meta.env.DEV ? [{ path: '/dev/dsh', element: lazyPage(lazy(() => import('./pages/DshM0'))) }] : []),
   ...legacyRoutes.map(([path, to]) => ({ path, element: <LegacyRedirect to={to} /> })),
   {
@@ -200,7 +201,7 @@ const router = createBrowserRouter([
           { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamHistoryPage)}</FeatureGuard> },
           { path: "notes", element: lazyPage(NotesPage) },
           { path: "notes/:id", element: lazyPage(NotesPage) },
-          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant"><XiaoyuPlaceholder /></FeatureGuard> },
+          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{lazyPage(XiaoYu)}</FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
           { path: "settings", element: lazyPage(Settings) },
           { path: "billing", element: lazyPage(BillingPage) },
@@ -230,6 +231,8 @@ const router = createBrowserRouter([
   { path: "/checkout", element: <RequireAuth>{lazyPage(Checkout)}</RequireAuth> },
   { path: "/payments/result", element: <RequireAuth>{lazyPage(PaymentResult)}</RequireAuth> },
   { path: "*", element: lazyPage(NotFound) },
+    ],
+  },
 ]);
 
 function StudyRoomWsBridge() {
