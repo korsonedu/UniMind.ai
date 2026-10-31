@@ -43,3 +43,30 @@ jobs:
             frontend/electron/windows-sha256.txt
           if-no-files-found: error
           retention-days: 14
+
+  installer-smoke:
+    needs: windows-x64
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: UniMind-Windows-x64-${{ github.sha }}
+          path: downloaded-installer
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install inspection tool only (no app development dependencies)
+        run: npm install -g agent-browser@0.41.0 --no-audit --no-fund
+      - name: Verify clean installation and first launch
+        shell: pwsh
+        run: ./frontend/electron/scripts/smoke-windows-installer.ps1 -ArtifactDirectory downloaded-installer -EvidenceDirectory installer-evidence
+      - name: Preserve installation results and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniMind-Windows-installation-proof-${{ github.sha }}
+          path: installer-evidence/
+          if-no-files-found: warn
+          retention-days: 14
