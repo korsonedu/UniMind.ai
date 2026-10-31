@@ -9,11 +9,14 @@ const entry = `
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { useAgentConversation } from '/src/hooks/useAgentConversation.ts';
+import { useChatUnreadStore } from '/src/store/useChatUnreadStore.ts';
 import api from '/src/lib/api.ts';
 const findBot = bots => bots[0];
 api.get = async () => ({data: window.historyFixture || []});
 api.post = async () => ({data: {}});
 window.requests = [];
+window.runSettled = [];
+window.unreadStore = useChatUnreadStore;
 window.fetch = async (url, init) => {
   let controller;
   const body = new ReadableStream({start(c) { controller = c; }});
@@ -22,7 +25,11 @@ window.fetch = async (url, init) => {
   return new Response(body);
 };
 function Harness() {
-  window.chat = useAgentConversation({findBot, enableProjects: true});
+  window.chat = useAgentConversation({
+    findBot,
+    enableProjects: true,
+    onRunSettled: (id, outcome) => { window.runSettled.push({id, outcome}); },
+  });
   return null;
 }
 createRoot(document.getElementById('root')).render(React.createElement(Harness));
@@ -86,14 +93,22 @@ try {
     assert.equal(grouped.length, 2);
     assert.equal(grouped.find(s => s.conversationId === 'a').messages.length, 2);
   });
-  await check('切换会话取消旧请求，迟到回复不污染新会话', async () => {
+  await check('切换会话不取消旧请求，迟到回复写入原会话并上报停住', async () => {
     await fresh();
+    const aCid = await page.evaluate(() => window.chat.conversationId);
     await page.evaluate(() => { void window.chat.doSend('A'); });
     await page.waitForFunction(() => window.requests.length === 1);
     await page.evaluate(() => window.chat.handleLoadSession({id: 7, label: 'B', conversationId: 'b', messages: [{role: 'user', content: 'B', conversation_id: 'b'}], lastTime: ''}));
-    assert.equal(await page.evaluate(() => window.requests[0].init.signal.aborted), true);
-    await emit(0, {done: true, full_content: 'A迟到回复'});
+    assert.equal(await page.evaluate(() => window.requests[0].init.signal.aborted), false);
+    await emit(0, {done: true, full_content: 'A迟到回复', message_id: 43});
+    await page.evaluate(() => window.requests[0].controller.close());
+    await page.waitForFunction(cid => {
+      const session = window.chat.sessions.find(item => item.conversationId === cid);
+      return session && session.messages.length === 2;
+    }, aCid);
     assert.deepEqual(await page.evaluate(() => window.chat.messages.map(m => m.content)), ['B']);
+    assert.deepEqual(await page.evaluate(cid => window.chat.sessions.find(item => item.conversationId === cid).messages.map(m => m.content), aCid), ['A', 'A迟到回复']);
+    assert.deepEqual(await page.evaluate(cid => window.runSettled.filter(item => item.id === cid), aCid), [{id: aCid, outcome: 'completed'}]);
     assert.equal(await page.evaluate(() => window.chat.loading), false);
   });
   await check('新建对话立即解除等待，旧请求结束不干扰新请求', async () => {
@@ -155,6 +170,32 @@ try {
     await page.evaluate(() => window.resolveHistory({data: []}));
     await page.waitForTimeout(30);
     assert.equal(await page.evaluate(() => window.chat.sessions.length), 1);
+  });
+  await check('未读只在非当前会话停住时标记，查看、离开和删除会清除', async () => {
+    await fresh();
+    const states = await page.evaluate(() => {
+      const store = window.unreadStore;
+      const read = () => ({...store.getState().unread});
+      store.getState().reset();
+      store.getState().view('a');
+      store.getState().markSettled('a', 'completed');
+      const viewed = read();
+      store.getState().leave('a');
+      store.getState().markSettled('a', 'error');
+      const background = read();
+      store.getState().view('a');
+      const opened = read();
+      store.getState().markSettled('a', 'error');
+      const viewedAgain = read();
+      store.getState().remove('a');
+      const removed = read();
+      return { viewed, background, opened, viewedAgain, removed };
+    });
+    assert.deepEqual(states.viewed, {});
+    assert.deepEqual(states.background, {a: true});
+    assert.deepEqual(states.opened, {});
+    assert.deepEqual(states.viewedAgain, {});
+    assert.deepEqual(states.removed, {});
   });
 } finally {
   await browser.close();

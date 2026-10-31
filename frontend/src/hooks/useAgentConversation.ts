@@ -80,6 +80,8 @@ interface UseAgentConversationOptions {
   beforeSend?: () => Promise<void>;
   /** Called after SSE 'done' event (outside state updater) */
   onDone?: () => void;
+  /** Called once when a run settles, whether or not the conversation is visible. */
+  onRunSettled?: (conversationId: string, outcome: 'completed' | 'error') => void;
   /** Pure message transform on step done (runs inside setMessages updater, no side effects) */
   onStepDone?: (step: AgentStep, prev: Message[]) => Message[] | null;
   /** Side effect after step done (runs outside setMessages updater) */
@@ -101,6 +103,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // Stabilize callback refs to avoid dependency churn in doSend
   const onDoneRef = useRef(options.onDone);
+  const onRunSettledRef = useRef(options.onRunSettled);
   const onStepDoneRef = useRef(options.onStepDone);
   const onStepDoneEffectRef = useRef(options.onStepDoneEffect);
   const onStepQuestionsRef = useRef(options.onStepQuestions);
@@ -281,6 +284,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   useEffect(() => {
     onDoneRef.current = options.onDone;
+    onRunSettledRef.current = options.onRunSettled;
     onStepDoneRef.current = options.onStepDone;
     onStepDoneEffectRef.current = options.onStepDoneEffect;
     onStepQuestionsRef.current = options.onStepQuestions;
@@ -289,7 +293,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     beforeSendRef.current = options.beforeSend;
     projectIdRef.current = projectId;
     conversationIdRef.current = conversationId;
-  }, [options.onDone, options.onStepDone, options.onStepDoneEffect, options.onStepQuestions, options.onAllVisuals, options.getExtraPayload, options.beforeSend, projectId, conversationId]);
+  }, [options.onDone, options.onRunSettled, options.onStepDone, options.onStepDoneEffect, options.onStepQuestions, options.onAllVisuals, options.getExtraPayload, options.beforeSend, projectId, conversationId]);
 
   const hasConversation = activeSessionId !== null || messages.some(m => m.role === 'user');
 
@@ -634,6 +638,12 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     let streamingId: string | null = null;
     let streamingContent = '';
     let completed = false;
+    let settled = false;
+    const settle = (outcome: 'completed' | 'error') => {
+      if (settled) return;
+      settled = true;
+      onRunSettledRef.current?.(requestConversationId, outcome);
+    };
 
     const body = existingPending ? JSON.parse(existingPending.key) : {
       message: text, bot_id: bot.id, conversation_id: requestConversationId,
@@ -873,6 +883,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
               onAllVisualsRef.current?.(doneVisuals);
             }
             if (isVisible()) onDoneRef.current?.();
+            settle(payload.is_error ? 'error' : 'completed');
           } else if (payload.error) {
             toast.error(payload.error);
           }
@@ -884,6 +895,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       const msg = err instanceof Error ? err.message : '发送失败，请重试';
       toast.error(msg.includes('HTTP') || err instanceof TypeError ? '服务暂时不可用，请稍后再试' : msg);
       if (isVisible() && inputRevisionRef.current === sentInputRevision) setInput(text);
+      settle('error');
     } finally {
       const stillOwner = streamsRef.current.get(requestConversationId) === entry;
       if (stillOwner) streamsRef.current.delete(requestConversationId);
@@ -902,6 +914,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       }
       if (stillOwner) markGenerating(requestConversationId, false);
       if (!completed && isRequestActive()) {
+        settle('error');
         setRecoveryStatuses(previous => ({ ...previous, [requestConversationId]: 'unknown' }));
         void recoverRequests();
       }

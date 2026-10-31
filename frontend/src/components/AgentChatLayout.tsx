@@ -1,5 +1,5 @@
 import { useNoteMentions } from '@/pages/notes/useNoteMentions';
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { useSystemStore } from '@/store/useSystemStore';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -28,7 +28,8 @@ import { restoreVisualSteps } from '@/lib/visualHistory';
 import { TaskList } from '@/components/TaskList';
 import { NativeAgentShell } from '@/components/NativeAgentShell';
 import { useConversationProjects, type ConversationProjectControls } from '@/hooks/useConversationProjects';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { useChatUnreadStore } from '@/store/useChatUnreadStore';
 import { ContactAdminModal } from '@/components/ContactAdminModal';
 import { learningReset, type AIUsage, type LearningAccess } from '@/types/learning';
 
@@ -121,9 +122,6 @@ export interface AgentChatLayoutProps {
   /** Guided tour: CSS class for the input container */
   inputTourClass?: string;
 
-  /** External conversation ID — when provided, shared across pages */
-  initialConversationId?: string;
-
   /** 当 sessions 加载/变化时通知父组件（用于外部 session 切换器） */
   onSessionsReady?: (data: {
     sessions: ConversationSession[];
@@ -140,6 +138,7 @@ export interface AgentChatLayoutProps {
     sessions: ConversationSession[];
     activeSessionId: number | null;
     thinkingIds: string[];
+    unreadIds: ReadonlySet<string>;
     onLoadSession: (session: ConversationSession) => void;
     onDeleteSession?: (session: ConversationSession) => void;
     onUpdateSession: ReturnType<typeof useAgentConversation>['handleUpdateSession'];
@@ -166,7 +165,6 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     onHasConversation,
     landingBanner,
     inputTourClass,
-    initialConversationId,
     sidebar,
     onSessionsReady,
     appearance,
@@ -178,6 +176,16 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const dashboardRef = useRef<HTMLDivElement>(null);
   const nativeInputRef = useRef<HTMLTextAreaElement>(null);
   const noteMentionsRef = useRef<ReturnType<typeof useNoteMentions> | null>(null);
+  const location = useLocation();
+  const xiaoyuVisible = location.pathname === '/xiaoyu';
+  const unread = useChatUnreadStore(state => state.unread);
+  const unreadIds = useMemo(() => new Set(Object.keys(unread)), [unread]);
+  const markUnread = useChatUnreadStore(state => state.markSettled);
+  const viewUnread = useChatUnreadStore(state => state.view);
+  const leaveUnread = useChatUnreadStore(state => state.leave);
+  const clearUnread = useChatUnreadStore(state => state.remove);
+  const resetUnread = useChatUnreadStore(state => state.reset);
+  const viewedRef = useRef<string | null>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
   const [aiUsage, setAIUsage] = useState<AIUsage | null>(null);
@@ -198,8 +206,11 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     getExtraPayload: () => ({ ...getExtraPayload?.(), ...(enableNoteMentions ? noteMentionsRef.current?.payload() : {}) }),
     beforeSend: async () => { await beforeSend?.(); await noteMentionsRef.current?.beforeSend(); },
     onDone: () => onDone?.(handleRefreshSessions),
+    onRunSettled: (id, outcome) => {
+      if (id === viewedRef.current) return;
+      markUnread(id, outcome);
+    },
     onStepDone,
-    initialConversationId,
     onStepDoneEffect: extractVisualFromStep ? (step) => {
       const v = extractVisualFromStep(step);
       if (v) pendingVisualsRef.current.push(v);
@@ -211,6 +222,15 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
     onStepQuestions: onQuestionsGenerated,
     resetMessage,
   });
+  useEffect(() => {
+    const viewed = xiaoyuVisible ? conversationId : null;
+    viewedRef.current = viewed;
+    if (viewed) viewUnread(viewed);
+    else leaveUnread(conversationId);
+  }, [xiaoyuVisible, conversationId, viewUnread, leaveUnread]);
+
+  useEffect(() => () => resetUnread(), [resetUnread]);
+
   const noteMentions = useNoteMentions({ enabled: enableNoteMentions, disabled: loading, botId: bot?.id, conversationId, input, setInput, textareaRef: nativeInputRef });
   useLayoutEffect(() => { noteMentionsRef.current = noteMentions; }, [noteMentions]);
   const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions);
@@ -278,7 +298,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   useEffect(() => {
     let cancelled = false;
     const init = async () => {
-      if (appearance === 'native' && !initialConversationId) setConversationId(crypto.randomUUID());
+      if (appearance === 'native') setConversationId(crypto.randomUUID());
       try {
         const bRes = await api.get('/ai/bots/');
         if (cancelled) return;
@@ -303,10 +323,9 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
             if (appearance !== 'native' && isRecent && lastMsg.conversation_id) {
               setConversationId(lastMsg.conversation_id);
             }
-            // 有历史对话时，自动加载最新 session（不限制时间窗口）
-            const requested = initialConversationId && grouped.find(session => session.conversationId === initialConversationId);
-            if (requested || (appearance !== 'native' && grouped.length > 0)) {
-              const latest = requested || grouped[grouped.length - 1];
+            // 非 native 模式自动加载最新 session；native 留在 landing，等用户从侧栏选择。
+            if (appearance !== 'native' && grouped.length > 0) {
+              const latest = grouped[grouped.length - 1];
               if (latest.conversationId) setConversationId(latest.conversationId);
               setMessages(latest.messages);
               setActiveSessionId(latest.id);
@@ -348,13 +367,19 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   // ── Session load/reset wrappers ──
 
   const wrappedLoadSession = useCallback((session: ConversationSession) => {
+    if (session.conversationId) clearUnread(session.conversationId);
     if (onLoadSession) {
       onLoadSession(session, handleLoadSession);
     } else {
       handleLoadSession(session);
     }
     setSessionOpen(false);
-  }, [handleLoadSession, onLoadSession, setSessionOpen]);
+  }, [clearUnread, handleLoadSession, onLoadSession, setSessionOpen]);
+
+  const wrappedDeleteSession = useCallback((session: ConversationSession) => {
+    if (session.conversationId) clearUnread(session.conversationId);
+    handleDeleteSession(session);
+  }, [clearUnread, handleDeleteSession]);
 
   const wrappedReset = useCallback((notify = true, nextProjectId = projectId) => {
     if (onReset) {
@@ -371,10 +396,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       sessions,
       activeSessionId,
       loadSession: wrappedLoadSession,
-      deleteSession: handleDeleteSession,
+      deleteSession: wrappedDeleteSession,
       newConversation: wrappedReset,
     });
-  }, [sessions, activeSessionId, onSessionsReady, wrappedLoadSession, handleDeleteSession, wrappedReset]);
+  }, [sessions, activeSessionId, onSessionsReady, wrappedLoadSession, wrappedDeleteSession, wrappedReset]);
 
   const selectNewProject = (id: number | null) => {
     wrappedReset(false, id);
@@ -400,8 +425,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
       if (removed && projectId === id) wrappedReset(false, null);
       return removed;
     } }, onNewInProject: id => wrappedReset(false, id),
-    sessions, activeSessionId, thinkingIds: generatingIds, onLoadSession: wrappedLoadSession,
-    onDeleteSession: onDeleteSession ? handleDeleteSession : undefined,
+    sessions, activeSessionId, thinkingIds: generatingIds, unreadIds, onLoadSession: wrappedLoadSession,
+    onDeleteSession: onDeleteSession ? wrappedDeleteSession : undefined,
     onUpdateSession: handleUpdateSession,
     onNewConversation: wrappedReset, botDisplayName,
   });

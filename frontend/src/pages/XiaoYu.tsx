@@ -2,7 +2,6 @@ import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, Chat
 import AgentChatLayout from '@/components/AgentChatLayout';
 import NativeSessionSidebar from '@/components/NativeSessionSidebar';
 import type { Bot } from '@/hooks/useAgentConversation';
-import { useXiaoYuStore } from '@/store/useXiaoYuStore';
 
 const findAssistantBot = (bots: Bot[]) => bots.filter(bot => bot.name === '小宇' && bot.bot_type === 'planner' && bot.institution == null && bot.is_active !== false).sort((a, b) => a.id - b.id)[0];
 
@@ -21,10 +20,9 @@ const SKILLS = [
 ];
 
 export const XiaoYu = () => {
-  const sharedConversationId = useXiaoYuStore(state => state.conversationId);
   return <AgentChatLayout
     appearance="native" layout="inline" enableNoteMentions inputTourClass="xiaoyu-input"
-    sidebar={props => <NativeSessionSidebar sessions={props.sessions} activeSessionId={props.activeSessionId} thinkingIds={props.thinkingIds} onSelect={props.onLoadSession} onUpdate={props.onUpdateSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
+    sidebar={props => <NativeSessionSidebar sessions={props.sessions} activeSessionId={props.activeSessionId} thinkingIds={props.thinkingIds} unreadIds={props.unreadIds} onSelect={props.onLoadSession} onUpdate={props.onUpdateSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
     findBot={findAssistantBot}
     skills={SKILLS} typewriterWords={['让小宇分析薄弱知识点', '让小宇安排今天的复习', '让小宇推荐适合的课程', '让小宇看看复习进度']}
     chatPlaceholder="和小宇对话，@ 引用笔记…" resetMessage="已开始新对话"
@@ -32,7 +30,6 @@ export const XiaoYu = () => {
     onDeleteSession={() => {}}
     onLoadSession={(session, handler) => handler(session)}
     onStepDone={(step, previous) => previous.map(message => message.toolStep?.call_id === step.call_id ? { ...message, toolStep: step } : message)}
-    initialConversationId={sharedConversationId}
   />;
 };
 

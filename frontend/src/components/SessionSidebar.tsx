@@ -7,6 +7,7 @@ export interface SessionSidebarProps {
   sessions: ConversationSession[];
   activeSessionId: number | null;
   thinkingIds?: string[];
+  unreadIds?: ReadonlySet<string>;
   onSelect: (session: ConversationSession) => void;
   onDelete?: (session: ConversationSession) => void;
   onNew: () => void;

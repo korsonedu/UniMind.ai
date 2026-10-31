@@ -69,32 +69,3 @@ test('聊天在 done 前显示分片，多轮文本和最终消息不重复，�
   assert.equal(await page.getByText('请选择每日学习时间。', { exact: true }).count(), 1);
   assert.equal(await page.getByText(intermediate, { exact: true }).count(), 1);
 });
-
-test('全局小宇引擎同样实时累计分片，done 原位补齐消息信息', async t => {
-  const page = await openChat(t);
-  await page.evaluate(async () => {
-    const storeUrl = performance.getEntriesByType('resource')
-      .map(entry => entry.name).find(url => url.includes('/src/store/useXiaoYuStore.ts'));
-    const { useXiaoYuStore } = await import(storeUrl);
-    useXiaoYuStore.getState().setBotId(1);
-    window.chatStore = useXiaoYuStore;
-  });
-  await page.waitForFunction(() => typeof window.chatStore.getState().sendMessage === 'function',
-    null, { timeout: 2000 });
-  await page.evaluate(() => window.chatStore.getState().sendMessage('测试全局引擎'));
-  await page.waitForFunction(() => typeof window.emitChatEvent === 'function');
-  await emit(page, { type: 'text_delta', delta: '全局第一段。' });
-  await page.waitForFunction(() => window.chatStore.getState().messages.some(
-    message => message.content === '全局第一段。' && message.visible,
-  ), null, { timeout: 2000 });
-  await emit(page, { type: 'text_delta', delta: '全局第二段。' });
-  await emit(page, { done: true, full_content: '全局第一段。全局第二段。', message_id: 998 });
-  await page.evaluate(() => window.closeChatStream());
-  await page.waitForFunction(() => !window.chatStore.getState().loading);
-  const replies = await page.evaluate(() => window.chatStore.getState().messages.filter(
-    message => message.role === 'assistant' && !message.toolStep,
-  ));
-  assert.equal(replies.length, 1);
-  assert.equal(replies[0].content, '全局第一段。全局第二段。');
-  assert.equal(replies[0].id, 998);
-});

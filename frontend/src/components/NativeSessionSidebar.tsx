@@ -14,7 +14,7 @@ interface Props extends SessionSidebarProps {
   onUpdate: (session: ConversationSession, patch: ConversationPatch) => Promise<boolean>;
 }
 
-export default function NativeSessionSidebar({ sessions, activeSessionId, thinkingIds, onSelect, onDelete, onNew, projectControls: controls, onNewInProject, onUpdate }: Props) {
+export default function NativeSessionSidebar({ sessions, activeSessionId, thinkingIds, unreadIds, onSelect, onDelete, onNew, projectControls: controls, onNewInProject, onUpdate }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [editing, setEditing] = useState<{ id?: number; name: string; instructions: string } | null>(null);
@@ -34,9 +34,12 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
     try { return await onUpdate(session, patch); }
     finally { setUpdating(false); }
   };
-  const renderSession = (session: ConversationSession, search = false) => <li key={session.id} data-active={session.id === activeSessionId}>
+  const renderSession = (session: ConversationSession, search = false) => {
+    const thinking = session.conversationId ? thinkingIds?.includes(session.conversationId) : false;
+    const unread = session.conversationId ? unreadIds?.has(session.conversationId) : false;
+    return <li key={session.id} data-active={session.id === activeSessionId}>
     <button data-session-select aria-current={session.id === activeSessionId ? 'page' : undefined} onClick={() => select(session)} title={`${session.title || session.label} · ${session.messages.length} 条`}>
-      <span className="um-agent-session-title">{session.isPinned && <PushPin size={12} className="inline-block mr-1" aria-label="已置顶" />}<span className="um-agent-session-name">{session.title || session.label}</span>{session.conversationId && thinkingIds?.includes(session.conversationId) && <span className="um-agent-session-thinking" role="status" aria-label="正在思考" title="正在思考" />}</span>{search && <span className="um-agent-session-meta">{controls.projects.find(project => project.id === session.projectId)?.name || '未分类'} · {session.lastTime ? new Date(session.lastTime).toLocaleDateString('zh-CN') : ''}</span>}
+      <span className="um-agent-session-title">{session.isPinned && <PushPin size={12} className="inline-block mr-1" aria-label="已置顶" />}<span className="um-agent-session-name">{session.title || session.label}</span>{thinking ? <span className="um-agent-session-thinking" role="status" aria-label="正在思考" title="正在思考" /> : unread ? <span className="um-agent-unread-dot" role="status" aria-label="有新回复" title="有新回复" /> : null}</span>{search && <span className="um-agent-session-meta">{controls.projects.find(project => project.id === session.projectId)?.name || '未分类'} · {session.lastTime ? new Date(session.lastTime).toLocaleDateString('zh-CN') : ''}</span>}
     </button>
     <DropdownMenu><DropdownMenuTrigger asChild><button className="um-agent-session-menu um-agent-icon-button" aria-label={`对话菜单：${session.title || session.label}`}><DotsThree size={18} /></button></DropdownMenuTrigger>
       <DropdownMenuContent className="um-native-menu" align="start" onCloseAutoFocus={event => { if (renaming) event.preventDefault(); }}>
@@ -50,6 +53,7 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
       </DropdownMenuContent>
     </DropdownMenu>
   </li>;
+  };
   return <aside className="um-agent-sessions" aria-label="历史对话">
     <header><h2>对话</h2></header>
     <div className="um-agent-session-actions">
