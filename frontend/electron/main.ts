@@ -47,11 +47,27 @@ function changed() {
 function focusText(seconds: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 }
+function trayIcon() {
+  return nativeImage.createFromPath(path.join(app.getAppPath(), 'tray.png'));
+}
+function trayLabel(seconds: number) {
+  return seconds >= 60 ? `${Math.ceil(seconds / 60)}m` : `${seconds}s`;
+}
+let trayShowingTime = false;
 function updateTrayTitle() {
   if (!tray) return;
-  const label = focusStatus === 'idle' ? '' : focusText(focusRemaining);
-  if (process.platform === 'darwin') tray.setTitle(label);
-  tray.setToolTip(label ? `UniMind · 专注 ${label}` : 'UniMind');
+  const active = focusStatus !== 'idle';
+  if (process.platform === 'darwin') {
+    if (active !== trayShowingTime) {
+      tray.setImage(active ? nativeImage.createEmpty() : trayIcon());
+      trayShowingTime = active;
+    }
+    tray.setTitle(active ? trayLabel(focusRemaining) : '');
+  }
+  tray.setToolTip(active ? `UniMind · 专注 ${focusText(focusRemaining)}` : 'UniMind');
+}
+function maybeQuit() {
+  if (process.platform !== 'darwin' && !preferences.keepRunning && focusStatus === 'idle' && !mainWindow && !offlineWindow) app.quit();
 }
 function stopFocusInterval() {
   if (focusInterval) clearInterval(focusInterval);
@@ -91,6 +107,7 @@ function resetFocus() {
   stopFocusInterval();
   updateTray();
   changed();
+  maybeQuit();
 }
 function toggleFocus() {
   if (focusStatus === 'running') pauseFocus(); else startFocus();
@@ -98,7 +115,7 @@ function toggleFocus() {
 function focusTick() {
   if (focusStatus !== 'running') return;
   focusRemaining = Math.max(0, Math.ceil((focusEndsAt - Date.now()) / 1000));
-  updateTrayTitle();
+  updateTray();
   if (focusRemaining <= 0) finishFocus();
 }
 function finishFocus() {
@@ -113,6 +130,7 @@ function finishFocus() {
     notice.on('click', showMain);
     notice.show();
   }
+  maybeQuit();
 }
 function applyLaunchAtLogin() {
   if (!app.isPackaged || !['darwin', 'win32'].includes(process.platform)) return;
@@ -165,9 +183,10 @@ function openOffline(id?: number) {
 }
 function updateTray() {
   const shouldShow = preferences.keepRunning || focusStatus !== 'idle';
-  if (!shouldShow) { tray?.destroy(); tray = null; return; }
+  if (!shouldShow) { tray?.destroy(); tray = null; trayShowingTime = false; return; }
   if (!tray) {
-    tray = new Tray(nativeImage.createFromPath(path.join(app.getAppPath(), 'tray.png')));
+    tray = new Tray(trayIcon());
+    trayShowingTime = false;
     tray.on('click', showMain);
   }
   const timerLabel = focusStatus === 'idle' ? '专注 25:00' : `专注 ${focusText(focusRemaining)}`;
@@ -411,7 +430,7 @@ if (!gotLock) {
     showMain(); if (link) deepLink(link);
   });
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin' && !preferences.keepRunning) app.quit();
+    if (process.platform !== 'darwin') maybeQuit();
   });
   app.whenReady().then(async () => {
     sourceUrl = entryUrl();
