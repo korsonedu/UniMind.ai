@@ -51,6 +51,8 @@ mem0ai==2.0.4
 pgvector>=0.3.0
 # IRT parameter estimation
 scipy>=1.13.0
+# Aliyun OSS media storage
+oss2==2.19.1
 # Dev & monitoring
 sentry-sdk>=2.0
 pytest>=8.0
