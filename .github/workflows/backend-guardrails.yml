@@ -56,6 +56,8 @@ jobs:
 
       - name: QA smoke check
         working-directory: backend
+        env:
+          UNIMIND_CONTENT_INSTITUTION_ID: "global"
         run: |
           python manage.py migrate
           bash ../scripts/smoke_qa.sh
