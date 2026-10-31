@@ -162,7 +162,7 @@ export const MainLayout: React.FC = () => {
   </div> : null;
 
   return <TooltipProvider delayDuration={0}>
-    <div className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground">
+    <div className="um-app-shell flex flex-col h-dvh bg-background text-foreground overflow-hidden font-sans selection:bg-primary selection:text-primary-foreground" data-nav-history={historyIndex > 0 || historyIndex < historyEnd ? 'true' : undefined}>
       <header className="um-window-toolbar" aria-label="工作区功能区">
         <div className="um-window-navigation"><button aria-label="返回" title="返回" disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label="前进" title="前进" disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
         <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button" aria-label="切换导航栏" onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || '学习空间'} crumbs={[]} /></>}</div>

@@ -85,11 +85,14 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-window-toolbar .notes-note-header > div:last-child > button { min-width: 30px; min-height: 30px; align-items: center; justify-content: center; }
 
 /* Keep native edge bounce inside the active pane, clear of the window toolbar.
-   Desktop root must stay `auto`: Chromium suppresses elastic bounce of non-root
-   scrollers when the root is `none`. Root is overflow:hidden, so it cannot move. */
+   Desktop root must stay `auto` vertically: Chromium suppresses elastic bounce
+   of non-root scrollers when the root is `none`. Root is overflow:hidden, so it
+   cannot move. Horizontal overscroll stays off until the app has a history entry
+   to navigate, so trackpad swipes cannot drag the page sideways. */
 html:has(.um-app-shell), body:has(.um-app-shell) { overscroll-behavior: none; }
 @media (min-width: 768px) {
-  html:has(.um-app-shell), body:has(.um-app-shell) { overscroll-behavior: auto; }
+  html:has(.um-app-shell), body:has(.um-app-shell) { overscroll-behavior-y: auto; overscroll-behavior-x: none; }
+  html:has(.um-app-shell[data-nav-history='true']), body:has(.um-app-shell[data-nav-history='true']) { overscroll-behavior-x: auto; }
 }
 .um-app-shell :is(.overflow-y-auto, .overflow-auto, .um-agent-scroll, .um-agent-sessions nav, .um-agent-landing, .um-course-main-scroll, .um-course-list-scroll, .notes-directory, .notes-main, .notes-tree, .notes-list) { overscroll-behavior-y: contain; }
 @media (prefers-reduced-motion: reduce) {
