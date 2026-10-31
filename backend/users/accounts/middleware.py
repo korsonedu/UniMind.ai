@@ -73,5 +73,6 @@ class AccountBoundaryMiddleware(MiddlewareMixin):
     def process_response(self, request, response):
         if request.path.startswith(('/account-api/', '/accounts/', '/api/users/desktop-auth/')):
             response['Cache-Control'] = 'no-store'
-            response['Referrer-Policy'] = 'no-referrer'
+            # Same-origin forms need a non-null Origin for Django's CSRF check.
+            response['Referrer-Policy'] = 'same-origin' if request.path.startswith('/accounts/') else 'no-referrer'
         return response
