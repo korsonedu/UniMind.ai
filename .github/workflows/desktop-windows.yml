@@ -56,7 +56,7 @@ jobs:
           path: downloaded-installer
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
       - name: Install inspection tool only (no app development dependencies)
         run: npm install -g agent-browser@0.41.0 --no-audit --no-fund
       - name: Verify clean installation and first launch

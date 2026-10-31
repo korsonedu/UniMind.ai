@@ -15,12 +15,14 @@ function Invoke-Browser {
   return ($output -join "`n")
 }
 try {
-  $installers = @(Get-ChildItem -LiteralPath $ArtifactDirectory -Filter '*-setup.exe')
+  $installers = @(Get-ChildItem -LiteralPath $ArtifactDirectory -Filter '*-setup.exe' -Recurse)
   if ($installers.Count -ne 1) { throw 'Expected exactly one installer' }
   $installer = $installers[0]
   $report.installer = $installer.Name
   $report.sha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash
-  $manifest = Get-Content (Join-Path $ArtifactDirectory 'windows-sha256.txt') -Raw
+  $manifests = @(Get-ChildItem -LiteralPath $ArtifactDirectory -Filter 'windows-sha256.txt' -Recurse)
+  if ($manifests.Count -ne 1) { throw 'Expected exactly one checksum manifest' }
+  $manifest = Get-Content -LiteralPath $manifests[0].FullName -Raw
   if ($manifest -notmatch [regex]::Escape($report.sha256)) { throw 'Installer hash differs from build artifact' }
   if (Test-Path $installDirectory) { throw 'Install directory must not already exist' }
   $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S', '/currentuser', "/D=$installDirectory" -WindowStyle Hidden -PassThru
