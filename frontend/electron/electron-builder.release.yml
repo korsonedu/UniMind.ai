@@ -1,0 +1,8 @@
+extends: ./electron-builder.yml
+
+# release:prepare writes desktop-update.json with the same URL.
+# Artifacts and latest-mac.yml / latest.yml are generated locally and uploaded
+# to this HTTPS directory; electron-builder never uploads a generic feed.
+publish:
+  provider: generic
+  url: ${env.UNIMIND_UPDATE_URL}

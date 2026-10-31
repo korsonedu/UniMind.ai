@@ -313,6 +313,9 @@ if (!gotLock) {
     app.setAboutPanelOptions({ applicationName: 'UniMind', applicationVersion: app.getVersion() });
     createMainWindow();
     desktopReady = true;
+    if (app.isPackaged && !previewMode()) {
+      setTimeout(() => { void updater.check(); }, 8000).unref();
+    }
     if (pendingDeepLink) { deepLink(pendingDeepLink); pendingDeepLink = ''; }
     app.on('activate', () => {
       showMain();

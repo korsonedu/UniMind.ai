@@ -181,3 +181,6 @@ skills-lock.json
 .hermes/
 .m0-venv/
 .m0-state/
+
+# 桌面发行时生成，内容由 release:prepare 写入
+frontend/electron/desktop-update.json

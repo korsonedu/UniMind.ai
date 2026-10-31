@@ -17,9 +17,11 @@
     "pack": "npm run build && electron-builder --config electron-builder.yml --dir",
     "dist": "npm run build && electron-builder --config electron-builder.yml",
     "dist:win": "npm run build && electron-builder --config electron-builder.yml --win nsis",
+    "release:prepare": "node scripts/prepare-update.cjs",
     "release:check": "node scripts/check-release.cjs",
     "release:verify": "node scripts/verify-release.cjs",
-    "release:dist": "npm run release:check && npm run build && electron-builder --config electron-builder.yml --config.forceCodeSigning=true",
+    "release:dist": "npm run release:prepare && npm run release:check && npm run build && electron-builder --config electron-builder.release.yml --publish never --config.forceCodeSigning=true",
+    "release:dist:win": "npm run release:prepare && npm run release:check && npm run build && electron-builder --config electron-builder.release.yml --publish never --win nsis --config.forceCodeSigning=true",
     "dist:preview": "npm run build && electron-builder --config electron-builder.preview.yml"
   },
   "devDependencies": {
