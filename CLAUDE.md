@@ -98,7 +98,7 @@ UniMindCode/                  ← git 仓库根目录
 | `/api/legal/` | 内置或数据库法律文档 |
 | `/health/` | Django 健康检查；生产核验须确认未命中 SPA 回退 |
 
-旧 `/workbench`、`/management`、`/institution`、`/marketplace` 等学习端地址保留重定向。机构加入/邀请、套餐变更、API Key 和外部 API 等停用接口继续返回 410。`/join/:invite_slug` 的旧页面仍存在，但不能作为有效加入流程。
+旧 `/workbench`、`/management`、`/institution`、`/marketplace` 等学习端地址保留重定向。机构加入/邀请、套餐变更、API Key 和外部 API 等停用接口继续返回 410。`/join/:invite_slug` 旧页面已删除，加入接口继续返回 410。
 
 产品反馈与 NPS 提交/状态接口已从本地路由移除。`core.0007`、`core.0008` 和 `users.0075` 为本次清理生成的待执行迁移，尚未提交或部署。
 

@@ -140,10 +140,11 @@ api.defaults.adapter = async config => {
   switch (path) {
     case '/users/logout/': guest = true; sessionStorage.setItem('unimind-preview-signed-out', '1'); data = { status: 'ok' }; break;
     case '/users/me/': if (guest) throw new AxiosError('Guest preview', 'PREVIEW_GUEST', config, undefined, { data: {}, status: 401, statusText: 'Unauthorized', headers: {}, config }); data = user; break;
-    case '/users/check-invite/': data = { has_invite: false }; break;
     case '/users/learning/access/': data = { is_course_student: true, ai_usage: { used: 12, limit: 100, remaining: 88, base_remaining: 88, addon_remaining: 0, configured: true, unlimited: false, resets_at: `${date(7)}T00:00:00+08:00` }, addons: [] }; break;
     case '/ai/card-interactions/': if (config.method === 'post') cardInteractions.push({ id: Date.now(), ...payload }); data = { interactions: cardInteractions }; break;
     case '/users/me/learning-sessions/': data = { id: payload?.session_id || 'preview-session', ...payload }; break;
+    case '/notes/references/': data = { note_ids: [] }; break;
+    case '/notes/notebooks/': data = []; break;
     case '/ai/bots/': data = [{ id: 1, name: '小宇', bot_type: 'planner', avatar: null }, { id: 2, name: '出题助手', bot_type: 'exam_generator', avatar: null }]; break;
     case '/ai/history/': data = history; break;
     case '/ai/projects/': if (config.method === 'post') { const project = { id: Date.now(), name: payload.name, instructions: payload.instructions || '' }; projectFixtures.projects.push(project); saveProjects(); data = project; } else data = projectFixtures.projects; break;

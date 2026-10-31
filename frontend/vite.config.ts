@@ -12,6 +12,9 @@ function getVersion(): string {
   }
 }
 
+const API_TARGET = process.env.UNIMIND_API_TARGET || 'http://127.0.0.1:8000'
+const WS_TARGET = API_TARGET.replace(/^http/, 'ws')
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -53,15 +56,15 @@ export default defineConfig({
         rewrite: route => route.replace(/^\/dsh-m0/, ''),
       },
       '^/api/': {
-        target: 'http://127.0.0.1:8000',
+        target: API_TARGET,
         changeOrigin: true,
       },
       '/media': {
-        target: 'http://127.0.0.1:8000',
+        target: API_TARGET,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://127.0.0.1:8000',
+        target: WS_TARGET,
         ws: true,
         changeOrigin: true,
       },

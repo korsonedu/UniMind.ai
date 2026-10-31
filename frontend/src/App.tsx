@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
@@ -6,7 +6,6 @@ import { queryClient } from '@/lib/queryClient';
 import { queryKeys } from '@/lib/queryKeys';
 import { HOME_PATH, getLoginPath } from '@/lib/routing';
 import { useStudyRoomWs } from '@/hooks/useStudyRoomWs';
-import { useXiaoYuEngine } from '@/hooks/useXiaoYuEngine';
 import { FEATURES } from './store/useInstitutionStore';
 const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ default: m.MainLayout })));
 const CommunityLayout = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityLayout })));
@@ -49,7 +48,6 @@ const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
 // Default exports — plain lazy() works
 const MemorixPage = lazy(() => import('./pages/Memorix'));
-const JoinPage = lazy(() => import('./pages/JoinPage').then(module => ({ default: module.JoinPage })));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const Legal = lazy(() => import('./pages/Legal'));
@@ -136,7 +134,6 @@ const RootRedirect = () => {
   const setAuth = useAuthStore(s => s.setAuth);
   const logout = useAuthStore(s => s.logout);
   const hasHydrated = useAuthStore.persist.hasHydrated();
-  const navigate = useNavigate();
   const location = useLocation();
 
   const { data: userData, isLoading, isError } = useQuery({
@@ -151,17 +148,11 @@ const RootRedirect = () => {
     if (userData && !isError) setAuth(userData, null);
   }, [userData, isError, setAuth]);
 
-  // On auth failure, log out and check invite status
+  // On auth failure, clear the stale session so the landing page renders anonymously.
   useEffect(() => {
     if (!isError) return;
     logout({ preserveDesktop: true });
-    if (location.pathname !== '/' || window.unimindDesktop) return;
-    api.get('/users/check-invite/')
-      .then(res => {
-        if (res.data?.has_invite) navigate('/register', { replace: true });
-      })
-      .catch(() => {});
-  }, [isError, logout, navigate, location.pathname]);
+  }, [isError, logout]);
 
   if (!hasHydrated || isLoading) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
@@ -224,7 +215,6 @@ const router = createBrowserRouter([
       },
     ],
   },
-  { path: "/join/:invite_slug", element: lazyPage(JoinPage) },
   { path: "/intro/:slug", element: <Navigate to="/" replace /> },
   { path: "/intro", element: <Navigate to="/" replace /> },
   { path: "/pricing", element: lazyPage(PricingPage) },
@@ -253,19 +243,11 @@ function StudyRoomWsBridge() {
   return null;
 }
 
-function XiaoYuEngineBridge() {
-  const user = useAuthStore(s => s.user);
-  const enabled = !!user;
-  useXiaoYuEngine({ enabled });
-  return null;
-}
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <Toaster position="top-center" richColors />
-        <XiaoYuEngineBridge />
         <StudyRoomWsBridge />
         <RouterProvider router={router} />
       </ErrorBoundary>

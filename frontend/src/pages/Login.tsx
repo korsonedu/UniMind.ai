@@ -24,7 +24,6 @@ const WebLogin: React.FC = () => {
   const [error, setError] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
   const setAuth = useAuthStore(s => s.setAuth);
-  const updateUser = useAuthStore(s => s.updateUser);
   const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -67,13 +66,6 @@ const WebLogin: React.FC = () => {
       const user = response.data.user;
       const token = response.data.token;
       setAuth(user, token);
-      if (institutionSlug) {
-        try {
-          await api.post('/users/institution/join-by-slug/', { slug: institutionSlug, role: institutionRole });
-          const meRes = await api.get('/users/me/');
-          updateUser(meRes.data);
-        } catch (err) { console.error('Join institution after login failed:', err); }
-      }
       await fetchFeatures();
       navigate(returnTo, { replace: true });
     } catch (err: unknown) {
