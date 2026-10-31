@@ -7,7 +7,8 @@ from rest_framework.test import APIRequestFactory
 
 
 @pytest.mark.django_db
-def test_album_upload_keeps_request_context(admin_user):
+def test_album_upload_keeps_request_context(admin_user, settings):
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     from courses.models import Album
     from courses.views import OSSMultipartCompleteView
     album = Album.objects.create(name='upload album')
@@ -24,7 +25,8 @@ def test_album_upload_keeps_request_context(admin_user):
 
 
 @pytest.mark.django_db
-def test_course_entry_does_not_open_articles(auth_client, user):
+def test_course_entry_does_not_open_articles(auth_client, user, settings):
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     from articles.models import Article
     from users.models import CourseStudentStatus
     article = Article.objects.create(title='restricted article', content='private content')
@@ -36,7 +38,8 @@ def test_course_entry_does_not_open_articles(auth_client, user):
 
 
 @pytest.mark.django_db
-def test_shared_tag_does_not_expand_private_courses(auth_client):
+def test_shared_tag_does_not_expand_private_courses(auth_client, settings):
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     from courses.models import Course, CourseModule, CourseTag, CourseTagRelation
     module = CourseModule.objects.create(subject='finance', name='open', is_public=True)
     public = Course.objects.create(title='open lesson', module=module)

@@ -124,4 +124,3 @@ export function useNoteMentions({ enabled, disabled, botId, conversationId, inpu
   </div>;
   return { panel, beforeSend, onKeyDown, updateQuery, payload: () => ({ note_ids: store.getSnapshot().notes.map(note => note.id) }) };
 }
-

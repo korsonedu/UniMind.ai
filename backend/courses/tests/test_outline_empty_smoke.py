@@ -5,7 +5,8 @@ import pytest
 
 
 @pytest.mark.django_db
-def test_empty_completed_transcript_is_not_dispatched(auth_client, user):
+def test_empty_completed_transcript_is_not_dispatched(auth_client, user, settings):
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     from courses.models import Course, VideoTranscript, CourseOutline
     from users.models import CourseStudentStatus
     CourseStudentStatus.objects.create(user=user, is_course_student=True)

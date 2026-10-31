@@ -15,6 +15,7 @@ from users.models import Institution
 class CoursePortalTests(TestCase):
     def setUp(self):
         self.inst = Institution.objects.create(name='A', slug='portal-a')
+        self.enterContext(self.settings(UNIMIND_CONTENT_INSTITUTION_ID=str(self.inst.pk)))
         self.other_inst = Institution.objects.create(name='B', slug='portal-b')
         self.user = get_user_model().objects.create_user(username='learner', is_member=True, institution=self.inst)
         self.other = get_user_model().objects.create_user(username='other', is_member=True, institution=self.inst)

@@ -6,12 +6,12 @@ from django.test import TestCase
 
 
 class AlbumListIsolationTests(TestCase):
-    """/api/courses/albums/ 机构隔离：机构用户只看到本机构专辑，不再包含全局专辑。"""
+    """课程学员的专辑列表限定在科晟内容范围。"""
 
     def setUp(self):
         from django.contrib.auth import get_user_model
 
-        from courses.models import Album
+        from courses.models import Album, Course
         from users.models import Institution
 
         User = get_user_model()
@@ -21,12 +21,15 @@ class AlbumListIsolationTests(TestCase):
         self.inst_b = Institution.objects.create(
             name='机构B', slug='inst-b', contact_name='B', contact_email='b@example.com',
         )
+        self.enterContext(self.settings(UNIMIND_CONTENT_INSTITUTION_ID=str(self.inst_a.pk)))
         self.user_a = User.objects.create_user(
-            username='user_a', email='ua@example.com', password='pw', institution=self.inst_a,
+            username='user_a', email='ua@example.com', password='pw', institution=self.inst_b, is_member=True,
         )
         self.global_album = Album.objects.create(name='全局专辑')
         self.album_a = Album.objects.create(name='A机构专辑', institution=self.inst_a)
         self.album_b = Album.objects.create(name='B机构专辑', institution=self.inst_b)
+        for album in (self.global_album, self.album_a, self.album_b):
+            Course.objects.create(title=album.name, album_obj=album, institution=album.institution)
 
     def _client(self, user):
         from rest_framework.test import APIClient
@@ -35,7 +38,7 @@ class AlbumListIsolationTests(TestCase):
         client.force_authenticate(user=user)
         return client
 
-    def test_institution_user_sees_only_own_albums(self):
+    def test_historical_institution_does_not_change_canonical_album_scope(self):
         resp = self._client(self.user_a).get('/api/courses/albums/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual({a['name'] for a in resp.data}, {'A机构专辑'})
@@ -53,10 +56,13 @@ class OSSMultipartResignTests(TestCase):
         self.inst = Institution.objects.create(
             name='机构A', slug='resign-a', contact_name='A', contact_email='a@example.com',
         )
-        self.user = User.objects.create_user(
-            username='resign_user', email='r@example.com', password='pw',
-            institution=self.inst, institution_role='owner',
-        )
+        self.user = User.objects.create_superuser(username='resign_user', email='r@example.com', password='pw')
+        other = User.objects.create_superuser(username='resign_other')
+        self.enterContext(self.settings(UNIMIND_CONTENT_INSTITUTION_ID=str(self.inst.pk),
+            UNIMIND_DIRECTUS_ADMIN_MAP={
+                '00000000-0000-4000-8000-000000000001': self.user.pk,
+                '00000000-0000-4000-8000-000000000002': other.pk,
+            }))
         self.object_key = f'institutions/{self.inst.id}/video/x.mp4'
 
         from rest_framework.test import APIClient

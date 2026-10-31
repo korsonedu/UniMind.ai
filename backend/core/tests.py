@@ -153,7 +153,7 @@ class CircuitBreakerTests(TestCase):
 
 
 class InstitutionFilterTests(TestCase):
-    """apply_institution_filter：机构用户只看本机构，无机构用户只看全局，超管看全部。"""
+    """所有身份均遵守显式配置的科晟内容范围。"""
 
     def setUp(self):
         from django.contrib.auth import get_user_model
@@ -165,6 +165,7 @@ class InstitutionFilterTests(TestCase):
         self.inst = Institution.objects.create(
             name="机构A", slug="inst-a", contact_name="联系人A", contact_email="a@example.com",
         )
+        self.enterContext(self.settings(UNIMIND_CONTENT_INSTITUTION_ID=str(self.inst.pk)))
         self.global_album = Album.objects.create(name="全局专辑")
         self.own_album = Album.objects.create(name="本机构专辑", institution=self.inst)
         self.inst_user = User.objects.create_user(
@@ -176,27 +177,42 @@ class InstitutionFilterTests(TestCase):
         self.admin = User.objects.create_superuser(
             username="platform_admin", email="admin@example.com", password="pw",
         )
+        other = User.objects.create_superuser(username="other_platform_admin")
+        self.enterContext(self.settings(UNIMIND_DIRECTUS_ADMIN_MAP={
+            '00000000-0000-4000-8000-000000000001': self.admin.pk,
+            '00000000-0000-4000-8000-000000000002': other.pk,
+        }))
 
-    def test_institution_user_sees_only_own(self):
+    def test_institution_user_sees_only_canonical_content(self):
         from courses.models import Album
         from core.utils import apply_institution_filter
 
         qs = apply_institution_filter(Album.objects.all(), self.inst_user)
         self.assertEqual(list(qs), [self.own_album])
 
-    def test_user_without_institution_sees_only_global(self):
+    @override_settings(UNIMIND_CONTENT_INSTITUTION_ID='global')
+    def test_explicit_global_scope_excludes_institution_content(self):
         from courses.models import Album
         from core.utils import apply_institution_filter
 
         qs = apply_institution_filter(Album.objects.all(), self.plain_user)
         self.assertEqual(list(qs), [self.global_album])
 
-    def test_platform_admin_sees_all(self):
+    def test_platform_admin_cannot_bypass_canonical_scope(self):
         from courses.models import Album
         from core.utils import apply_institution_filter
 
         qs = apply_institution_filter(Album.objects.all(), self.admin)
-        self.assertEqual(set(qs), {self.global_album, self.own_album})
+        self.assertEqual(list(qs), [self.own_album])
+
+    @override_settings(UNIMIND_CONTENT_INSTITUTION_ID='')
+    def test_unconfigured_scope_denies_access(self):
+        from courses.models import Album
+        from core.utils import apply_institution_filter
+        from rest_framework.exceptions import PermissionDenied
+
+        with self.assertRaises(PermissionDenied):
+            apply_institution_filter(Album.objects.all(), self.admin)
 
 
 class FileValidationTests(TestCase):

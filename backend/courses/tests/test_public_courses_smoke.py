@@ -9,6 +9,7 @@ def test_registered_public_course_boundary(auth_client, user, settings, tmp_path
     from courses.models import Album, Course, CourseModule, StartupMaterial
     from users.models import CourseStudentStatus
     settings.MEDIA_ROOT = str(tmp_path)
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     settings.OSS_ACCESS_KEY_ID = ''
     album = Album.objects.create(name='mixed album')
     empty_album = Album.objects.create(name='empty album')

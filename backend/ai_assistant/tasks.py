@@ -78,18 +78,19 @@ def _analyze_user(user, cutoff, now):
     # 1. Analyze wrong answer patterns from recent exams
     recent_exams = QuizExam.objects.filter(
         user=user,
-        submitted_at__gte=cutoff,
-    ).order_by('-submitted_at')[:10]
+        created_at__gte=cutoff,
+        status__in=('completed', 'partial'),
+    ).prefetch_related('results').order_by('-created_at')[:10]
 
     if recent_exams:
         total_questions = 0
         total_wrong = 0
         for exam in recent_exams:
-            results = exam.results or {}
-            questions = results.get('questions', [])
-            for q in questions:
+            for result in exam.results.all():
+                if result.status != 'graded':
+                    continue
                 total_questions += 1
-                if not q.get('is_correct', True):
+                if not result.is_correct:
                     total_wrong += 1
 
         if total_questions > 0:

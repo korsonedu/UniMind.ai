@@ -37,7 +37,8 @@ def test_two_current_cohorts_have_independent_context(user):
 
 
 @pytest.mark.django_db
-def test_expiry_does_not_fall_back_or_reset_usage(auth_client, user):
+def test_expiry_does_not_fall_back_or_reset_usage(auth_client, user, settings):
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     from users.models import StudentCohort, CourseStudentStatus, WeeklyAIUsage
     from users.learning import is_course_student, week_bounds, set_weekly_quota_config
     today = timezone.localdate()

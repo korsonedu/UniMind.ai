@@ -1,6 +1,8 @@
 import json
 from types import SimpleNamespace
 
+import pytest
+
 from ai_assistant.services.tool_executor import BaseToolExecutor, set_permitted_tools
 
 
@@ -15,8 +17,18 @@ class _Executor(BaseToolExecutor):
         return {"tool": "forbidden"}
 
 
-def test_executor_can_expand_route_only_within_plan_permissions():
-    executor = _Executor(user=SimpleNamespace(institution=None))
+@pytest.fixture
+def executor(settings):
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    settings.UNIMIND_DIRECTUS_ADMIN_MAP = {
+        '00000000-0000-4000-8000-000000000001': 1,
+        '00000000-0000-4000-8000-000000000002': 2,
+    }
+    return _Executor(user=SimpleNamespace(pk=1, is_authenticated=True, is_active=True,
+        is_staff=True, is_superuser=True, institution_id=None, institution=None))
+
+
+def test_executor_can_expand_route_only_within_plan_permissions(executor):
     executor._allowed_tool_names = {"allowed"}
     executor._permitted_tool_names = {"allowed", "permitted_but_unrouted"}
 
@@ -29,8 +41,7 @@ def test_executor_can_expand_route_only_within_plan_permissions():
     assert blocked_result == {"error": "Tool not allowed: forbidden"}
 
 
-def test_permitted_tools_keep_route_before_schemas():
-    executor = _Executor(user=SimpleNamespace(institution=None))
+def test_permitted_tools_keep_route_before_schemas(executor):
     definitions = [
         {
             "type": "function",
