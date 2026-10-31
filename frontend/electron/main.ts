@@ -183,6 +183,31 @@ async function offerRecovery() {
   } finally { recovering = false; }
 }
 
+function fallbackUrl(): string {
+  const target = sourceUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UniMind · 网络不可用</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:32px;background:#f4f2ed;color:#202226;font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{width:min(440px,100%);padding:28px;border:1px solid #e2e5e9;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgb(20 25 30 / 6%)}
+h1{margin:0 0 8px;font-size:20px}p{margin:0 0 12px;color:#60656c}a{display:inline-block;margin-top:8px;color:#202226;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+small{display:block;margin-top:16px;color:#8a8f96}
+</style>
+</head>
+<body><main>
+<h1>网络暂时不可用</h1>
+<p>无法连接 UniMind。请检查网络后重试。</p>
+<p>离线课程库已打开，可继续观看已下载的课程。</p>
+<a href="${target}">重新连接</a>
+<small>UniMind ${app.getVersion()}</small>
+</main></body></html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
 function createMainWindow(): void {
   const source = entryUrl();
   const development = allowsDevelopment(source);
@@ -222,9 +247,11 @@ function createMainWindow(): void {
     if (recoveryNotice) { const reason = recoveryNotice; recoveryNotice = undefined; signalRecovery(reason); }
     if (pendingRoute) { const route = pendingRoute; pendingRoute = ''; navigate(route); }
   });
-  mainWindow.webContents.on('did-fail-load', (_event, code, _description, _url, isMainFrame) => {
-    if (code === -3 || !isMainFrame) return;
-    mainWindow?.show(); openOffline();
+  mainWindow.webContents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
+    if (code === -3 || !isMainFrame || url.startsWith('data:')) return;
+    mainWindow?.show();
+    if (app.isPackaged && !previewMode()) void mainWindow?.loadURL(fallbackUrl()).catch(() => {});
+    openOffline();
   });
   mainWindow.webContents.on('render-process-gone', () => { void offerRecovery(); });
   mainWindow.on('unresponsive', () => { void offerRecovery(); });
