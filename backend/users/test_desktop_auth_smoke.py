@@ -122,9 +122,12 @@ class DesktopAuthSmokeTests(TestCase):
         client = self.login(Client(enforce_csrf_checks=True))
         request_id = self.start(client).json()['request_id']
         url = '/accounts/desktop/?request=' + request_id
-        client.get(url)
+        self.assertEqual(client.get(url)['Referrer-Policy'], 'same-origin')
         self.assertEqual(client.post(url, {'request': request_id}).status_code, 403)
-        response = client.post(url, {'request': request_id, 'csrfmiddlewaretoken': client.cookies['csrftoken'].value})
+        data = {'request': request_id, 'csrfmiddlewaretoken': client.cookies['csrftoken'].value}
+        self.assertEqual(client.post(url, data, HTTP_ORIGIN='null').status_code, 403)
+        self.assertEqual(client.post(url, data, HTTP_ORIGIN='https://evil.example').status_code, 403)
+        response = client.post(url, data, HTTP_ORIGIN='http://testserver')
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Token.objects.filter(user=self.user).exists())
 
