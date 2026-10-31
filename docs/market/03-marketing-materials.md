@@ -1,6 +1,8 @@
 # UniMind — 营销素材库
 
-> 市场/销售团队可直接取用的对外文案、社交媒体内容、PPT 叙事线。
+> 历史参考（2026-10-25 标记）：本文保留历史 B 端营销材料，不作为当前销售承诺、授权规范或操作指南。文中套餐价格、教师/机构角色、旧页面地址、效果数字和计划须重新核实。当前范围见 [README](../../README.md)、[管理扩展](../../admin-extension/README.md) 和 [单平台边界](../tech/architecture/SINGLE_PLATFORM_TRANSITION.md)；本次本地清理尚未部署。
+
+> 历史文案与 PPT 叙事，当前使用前须重新核对功能、定价与证据。
 > 版本 2.0 · 2026-07-05 | 整合自 BRAND.md + ppt/index.html + design/spec.md
 
 ---

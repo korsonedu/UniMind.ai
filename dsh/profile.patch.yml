@@ -1,0 +1,29 @@
+# Pinned to the actual 0.2.1rc2 SDK profile. No general student execution tools.
+- { id: tool-bash, disabled: true }
+- { id: tool-pwsh, disabled: true }
+- { id: tool-jobs, disabled: true }
+- { id: tool-fs, disabled: true }
+- { id: tool-fs-search, disabled: true }
+- { id: tool-working-directory, disabled: true }
+- { id: tool-skill, disabled: true }
+- { id: tool-subagent, disabled: true }
+- { id: tool-subagent-fork, disabled: true }
+- { id: tool-subagent-control, disabled: true }
+- { id: tool-subagent-list-agents, disabled: true }
+- { id: tool-workflow, disabled: true }
+- { id: tool-todo, disabled: true }
+- { id: tool-goal, disabled: true }
+- { id: tool-web, disabled: true }
+- { id: tool-plugin-manager, disabled: true }
+- { id: workspace-dependencies, disabled: true }
+- { id: agent-instructions, disabled: true }
+- { id: plan-mode, disabled: true }
+- { id: skill-filesystem, disabled: true }
+- { id: skill-office, disabled: true }
+- { id: session-log-deepseek, disabled: true }
+- { id: plugin-package-inventory-deepseek, disabled: true }
+- { id: session-telemetry-otel, disabled: true }
+- { id: otel, disabled: true }
+- insert:
+    - id: unimind-learning-m0
+      name: ./plugin.ts

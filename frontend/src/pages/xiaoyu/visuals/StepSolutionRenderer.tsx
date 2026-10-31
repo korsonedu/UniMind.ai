@@ -8,26 +8,11 @@ interface StepSolutionPayload {
 
 export const StepSolutionRenderer: React.FC<{ payload: StepSolutionPayload }> = ({ payload }) => {
   if (!Array.isArray(payload.steps)) return null;
-  return (
-    <div className="p-5 space-y-5">
-      {payload.title && (
-        <h3 className="text-[15px] font-semibold tracking-tight text-foreground">{payload.title}</h3>
-      )}
-      <div className="space-y-4">
-        {payload.steps.map((step, i) => (
-          <div key={i} className="space-y-1.5">
-            <div className="flex items-baseline gap-2">
-              <span className="text-[11px] font-medium text-foreground/30 tabular-nums">{String(i + 1).padStart(2, '0')}</span>
-              <p className="text-[13px] text-foreground/80 leading-relaxed">{step.text}</p>
-            </div>
-            {step.latex && (
-              <div className="ml-6 py-1.5">
-                <MarkdownContent content={`$$${step.latex}$$`} />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <div className="um-visual-steps">
+    {payload.title && <h3>{payload.title}</h3>}
+    <ol className="um-visual-step-list">{payload.steps.map((step, index) => <li key={index}>
+      <span className="um-visual-step-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+      <div><p>{step.text}</p>{step.latex && <div className="um-visual-formula"><MarkdownContent content={`$$${step.latex}$$`} /></div>}</div>
+    </li>)}</ol>
+  </div>;
 };

@@ -11,7 +11,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from users.models import User, Institution
+from payments.models import Order, Subscription
+from users.models import User, Institution, AIAddonProduct
 
 
 def _create_institution(name='Test School', plan='free', creator=None):
@@ -30,6 +31,22 @@ def _create_owner(username='owner', email='owner@test.com', institution=None):
         user.institution_role = 'owner'
         user.save()
     return user
+
+
+def _historical_subscription(*, institution, plan='starter', billing_cycle='monthly', gateway='stub'):
+    # Existing subscriptions must remain manageable after new sales are retired.
+    start = timezone.now()
+    return Subscription.objects.create(
+        institution=institution, plan=plan, billing_cycle=billing_cycle, gateway=gateway,
+        current_period_start=start,
+        current_period_end=start + timedelta(days=365 if billing_cycle == 'annual' else 30),
+    )
+
+
+def _create_ai_product():
+    return AIAddonProduct.objects.create(
+        name='AI 加量', price_cents=9900, ai_calls=100, validity_days=30, is_active=True,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -103,36 +120,32 @@ class SubscriptionLifecycleTests(TestCase):
         self.institution.created_by = self.owner
         self.institution.save()
 
-    def test_create_subscription_pending(self):
+    def test_create_subscription_monthly_rejected(self):
         from payments.services.subscription import create_subscription
 
-        sub = create_subscription(
-            institution=self.institution,
-            plan='growth', billing_cycle='monthly', gateway='stub',
-        )
-        self.assertEqual(sub.status, 'pending')
-        self.assertEqual(sub.plan, 'growth')
-        self.assertEqual(sub.billing_cycle, 'monthly')
-        self.assertEqual(sub.gateway, 'stub')
-        self.assertIsNotNone(sub.current_period_start)
-        self.assertIsNotNone(sub.current_period_end)
-        delta = sub.current_period_end - sub.current_period_start
-        self.assertAlmostEqual(delta.days, 30, delta=1)
+        with self.assertRaisesMessage(ValueError, '机构套餐已停止销售。'):
+            create_subscription(
+                institution=self.institution, plan='growth',
+                billing_cycle='monthly', gateway='stub',
+            )
+        self.assertFalse(Subscription.objects.exists())
+        self.assertFalse(Order.objects.exists())
 
-    def test_create_subscription_annual(self):
+    def test_create_subscription_annual_rejected(self):
         from payments.services.subscription import create_subscription
 
-        sub = create_subscription(
-            institution=self.institution,
-            plan='enterprise', billing_cycle='annual', gateway='stub',
-        )
-        delta = sub.current_period_end - sub.current_period_start
-        self.assertAlmostEqual(delta.days, 365, delta=2)
+        with self.assertRaisesMessage(ValueError, '机构套餐已停止销售。'):
+            create_subscription(
+                institution=self.institution, plan='enterprise',
+                billing_cycle='annual', gateway='stub',
+            )
+        self.assertFalse(Subscription.objects.exists())
+        self.assertFalse(Order.objects.exists())
 
     def test_activate_subscription(self):
-        from payments.services.subscription import create_subscription, activate_subscription
+        from payments.services.subscription import activate_subscription
 
-        sub = create_subscription(
+        sub = _historical_subscription(
             institution=self.institution, plan='growth',
             billing_cycle='monthly', gateway='stub',
         )
@@ -149,14 +162,14 @@ class SubscriptionLifecycleTests(TestCase):
         self.assertTrue(self.owner.membership_source.startswith('subscription:'))
 
         self.institution.refresh_from_db()
-        self.assertEqual(self.institution.plan, 'growth')
+        self.assertEqual(self.institution.plan, 'free')
 
     def test_cancel_subscription(self):
         from payments.services.subscription import (
-            create_subscription, activate_subscription, cancel_subscription,
+            activate_subscription, cancel_subscription,
         )
 
-        sub = create_subscription(
+        sub = _historical_subscription(
             institution=self.institution, plan='growth',
             billing_cycle='monthly', gateway='stub',
         )
@@ -168,10 +181,10 @@ class SubscriptionLifecycleTests(TestCase):
 
     def test_renew_subscription(self):
         from payments.services.subscription import (
-            create_subscription, activate_subscription, renew_subscription,
+            activate_subscription, renew_subscription,
         )
 
-        sub = create_subscription(
+        sub = _historical_subscription(
             institution=self.institution, plan='starter',
             billing_cycle='monthly', gateway='stub',
         )
@@ -185,10 +198,10 @@ class SubscriptionLifecycleTests(TestCase):
 
     def test_expire_subscription(self):
         from payments.services.subscription import (
-            create_subscription, activate_subscription, expire_subscription,
+            activate_subscription, expire_subscription,
         )
 
-        sub = create_subscription(
+        sub = _historical_subscription(
             institution=self.institution, plan='growth',
             billing_cycle='monthly', gateway='stub',
         )
@@ -207,12 +220,12 @@ class SubscriptionLifecycleTests(TestCase):
 
     def test_get_active_subscription(self):
         from payments.services.subscription import (
-            create_subscription, activate_subscription, get_active_subscription,
+            activate_subscription, get_active_subscription,
         )
 
         self.assertIsNone(get_active_subscription(self.institution))
 
-        sub = create_subscription(
+        sub = _historical_subscription(
             institution=self.institution, plan='starter',
             billing_cycle='annual', gateway='stub',
         )
@@ -224,11 +237,11 @@ class SubscriptionLifecycleTests(TestCase):
 
     def test_get_active_subscription_ignores_canceled(self):
         from payments.services.subscription import (
-            create_subscription, activate_subscription,
+            activate_subscription,
             cancel_subscription, get_active_subscription,
         )
 
-        sub = create_subscription(
+        sub = _historical_subscription(
             institution=self.institution, plan='starter',
             billing_cycle='monthly', gateway='stub',
         )
@@ -254,35 +267,45 @@ class OrderFlowTests(TestCase):
         self.user.institution = self.institution
         self.user.institution_role = 'owner'
         self.user.save()
+        self.product = _create_ai_product()
 
-    def test_create_order_basic(self):
+    def test_create_institution_order_rejected(self):
         from payments.services.base import create_order
 
-        order = create_order(
-            user=self.user, plan='starter', billing_cycle='monthly',
-            gateway='stub', institution=self.institution,
+        with self.assertRaisesMessage(ValueError, '机构套餐已停止销售。'):
+            create_order(
+                user=self.user, plan='starter', billing_cycle='monthly',
+                gateway='stub', institution=self.institution,
+            )
+        self.assertFalse(Order.objects.exists())
+
+    def test_create_order_basic(self):
+        from payments.services.base import create_ai_addon_order
+
+        order = create_ai_addon_order(
+            user=self.user, product=self.product, gateway='stub',
         )
         self.assertEqual(order.status, 'pending')
-        self.assertEqual(order.plan, 'starter')
+        self.assertEqual(order.plan, 'ai_addon')
+        self.assertEqual(order.amount_cents, self.product.price_cents)
+        self.assertEqual(order.entitlement_snapshot, self.product.snapshot())
         self.assertGreater(order.amount_cents, 0)
         self.assertIsNotNone(order.expires_at)
 
     def test_create_order_expires_in_30_minutes(self):
-        from payments.services.base import create_order
+        from payments.services.base import create_ai_addon_order
 
-        order = create_order(
-            user=self.user, plan='starter', billing_cycle='monthly',
-            gateway='stub', institution=self.institution,
+        order = create_ai_addon_order(
+            user=self.user, product=self.product, gateway='stub',
         )
         delta = order.expires_at - order.created_at
         self.assertAlmostEqual(delta.total_seconds(), 1800, delta=60)
 
-    def test_confirm_order_activates_membership(self):
-        from payments.services.base import create_order, confirm_order
+    def test_confirm_order_grants_ai_addon(self):
+        from payments.services.base import create_ai_addon_order, confirm_order
 
-        order = create_order(
-            user=self.user, plan='growth', billing_cycle='annual',
-            gateway='stub', institution=self.institution,
+        order = create_ai_addon_order(
+            user=self.user, product=self.product, gateway='stub',
         )
         txn_id = f'txn_{uuid.uuid4().hex[:12]}'
         confirm_order(order.id, txn_id, {'source': 'test'}, order.amount_cents)
@@ -292,43 +315,54 @@ class OrderFlowTests(TestCase):
         self.assertIsNotNone(order.paid_at)
 
         self.user.refresh_from_db()
-        self.assertTrue(self.user.is_member)
-        self.assertEqual(self.user.membership_tier, 'growth')
+        self.assertFalse(self.user.is_member)
+        grant = order.ai_addon_grant
+        self.assertEqual(grant.user_id, self.user.id)
+        self.assertEqual(grant.ai_calls, self.product.ai_calls)
+        self.assertEqual(grant.snapshot, order.entitlement_snapshot)
+        self.assertAlmostEqual((grant.expires_at - grant.starts_at).days, self.product.validity_days, delta=1)
 
         self.institution.refresh_from_db()
-        self.assertEqual(self.institution.plan, 'growth')
+        self.assertEqual(self.institution.plan, 'free')
 
     def test_confirm_order_idempotent(self):
-        from payments.services.base import create_order, confirm_order
+        from payments.services.base import create_ai_addon_order, confirm_order
 
-        order = create_order(
-            user=self.user, plan='starter', billing_cycle='monthly',
-            gateway='stub', institution=self.institution,
+        order = create_ai_addon_order(
+            user=self.user, product=self.product, gateway='stub',
         )
         txn_id = f'txn_{uuid.uuid4().hex[:12]}'
         confirm_order(order.id, txn_id, {'source': 'test'}, order.amount_cents)
         order.refresh_from_db()
         self.assertEqual(order.status, 'paid')
 
-        # Second call should not raise
-        confirm_order(order.id, f'{txn_id}_dup', {'source': 'test'}, order.amount_cents)
+        confirm_order(order.id, txn_id, {'source': 'test'}, order.amount_cents)
+        self.assertEqual(order.transactions.count(), 1)
+        self.assertEqual(self.user.ai_addon_grants.count(), 1)
+
+        with self.assertRaisesMessage(ValueError, 'Payment transaction mismatch'):
+            confirm_order(order.id, f'{txn_id}_dup', {'source': 'test'}, order.amount_cents)
+        self.assertEqual(order.transactions.count(), 1)
+        self.assertEqual(self.user.ai_addon_grants.count(), 1)
 
     def test_confirm_order_amount_mismatch_raises(self):
-        from payments.services.base import create_order, confirm_order
+        from payments.services.base import create_ai_addon_order, confirm_order
 
-        order = create_order(
-            user=self.user, plan='starter', billing_cycle='monthly',
-            gateway='stub', institution=self.institution,
+        order = create_ai_addon_order(
+            user=self.user, product=self.product, gateway='stub',
         )
         with self.assertRaises(ValueError):
             confirm_order(order.id, f'txn_{uuid.uuid4().hex[:12]}', {'source': 'test'}, 1)
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'pending')
+        self.assertFalse(order.transactions.exists())
+        self.assertFalse(self.user.ai_addon_grants.exists())
 
     def test_confirm_order_updates_gateway_order_id(self):
-        from payments.services.base import create_order, confirm_order
+        from payments.services.base import create_ai_addon_order, confirm_order
 
-        order = create_order(
-            user=self.user, plan='starter', billing_cycle='monthly',
-            gateway='stub', institution=self.institution,
+        order = create_ai_addon_order(
+            user=self.user, product=self.product, gateway='stub',
         )
         txn_id = f'txn_{uuid.uuid4().hex[:12]}'
         confirm_order(order.id, txn_id, {'source': 'test'}, order.amount_cents)
@@ -352,12 +386,9 @@ class StubGatewayTests(TestCase):
         self.user.institution = self.institution
         self.user.save()
 
-    def _make_order(self, plan='starter', cycle='monthly'):
-        from payments.services.base import create_order
-        return create_order(
-            user=self.user, plan=plan, billing_cycle=cycle,
-            gateway='stub', institution=self.institution,
-        )
+    def _make_order(self):
+        from payments.services.base import create_ai_addon_order
+        return create_ai_addon_order(user=self.user, product=_create_ai_product(), gateway='stub')
 
     def test_create_checkout_session_returns_url(self):
         from payments.services.stub_gateway import create_checkout_session
@@ -370,7 +401,11 @@ class StubGatewayTests(TestCase):
     def test_create_subscription_checkout_returns_url(self):
         from payments.services.stub_gateway import create_subscription_checkout
 
-        order = self._make_order()
+        order = Order.objects.create(
+            user=self.user, institution=self.institution, plan='starter',
+            billing_cycle='monthly', amount_cents=49900, gateway='stub',
+            expires_at=timezone.now() + timedelta(minutes=30),
+        )
         result = create_subscription_checkout(order)
         self.assertIn('checkout_url', result)
         self.assertIn('subscription_id', result)
@@ -432,10 +467,9 @@ class StubGatewayTests(TestCase):
         self.assertIsNone(result)
 
     def test_cancel_subscription(self):
-        from payments.services.subscription import create_subscription
         from payments.services.stub_gateway import cancel_subscription
 
-        sub = create_subscription(
+        sub = _historical_subscription(
             institution=self.institution, plan='starter',
             billing_cycle='monthly', gateway='stub',
         )
@@ -454,11 +488,12 @@ class OrderAPITests(APITestCase):
             username='orderer', email='o@test.com', password='testpass'
         )
         self.client.force_authenticate(user=self.user)
+        self.product = _create_ai_product()
 
     @override_settings(DEBUG=True)
     def test_create_checkout_session(self):
         resp = self.client.post('/api/payments/create-session/', {
-            'plan': 'starter', 'billing_cycle': 'monthly', 'gateway': 'stub',
+            'product': self.product.id, 'gateway': 'stub',
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertIn('checkout_url', resp.data)
@@ -466,20 +501,36 @@ class OrderAPITests(APITestCase):
 
     def test_create_checkout_session_invalid_gateway(self):
         resp = self.client.post('/api/payments/create-session/', {
-            'plan': 'starter', 'billing_cycle': 'monthly', 'gateway': 'nonexistent',
+            'product': self.product.id, 'gateway': 'nonexistent',
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_get_order_status(self):
-        from payments.services.base import create_order
+    @override_settings(DEBUG=True)
+    def test_institution_checkout_payload_rejected(self):
+        resp = self.client.post('/api/payments/create-session/', {
+            'plan': 'starter', 'billing_cycle': 'monthly', 'gateway': 'stub',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Order.objects.exists())
 
-        order = create_order(
-            user=self.user, plan='starter',
-            billing_cycle='monthly', gateway='stub',
+    def test_subscription_sales_route_retired(self):
+        resp = self.client.post('/api/payments/subscriptions/', {
+            'plan': 'starter', 'billing_cycle': 'monthly', 'gateway': 'stub',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(Subscription.objects.exists())
+        self.assertFalse(Order.objects.exists())
+
+    def test_get_order_status(self):
+        from payments.services.base import create_ai_addon_order
+
+        order = create_ai_addon_order(
+            user=self.user, product=self.product, gateway='stub',
         )
         resp = self.client.get(f'/api/payments/orders/{order.id}/')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data['plan'], 'starter')
+        self.assertEqual(resp.data['plan'], 'ai_addon')
+        self.assertEqual(resp.data['product_name'], self.product.name)
         self.assertEqual(resp.data['status'], 'pending')
 
     def test_get_order_not_found(self):
@@ -487,12 +538,11 @@ class OrderAPITests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_order_history(self):
-        from payments.services.base import create_order
+        from payments.services.base import create_ai_addon_order
 
         for i in range(3):
-            create_order(
-                user=self.user, plan='starter',
-                billing_cycle='monthly', gateway='stub',
+            create_ai_addon_order(
+                user=self.user, product=self.product, gateway='stub',
             )
         resp = self.client.get('/api/payments/orders/')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -502,12 +552,13 @@ class OrderAPITests(APITestCase):
         resp = self.client.post('/api/payments/webhook/?gateway=stub', {}, format='json')
         self.assertIn(resp.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_500_INTERNAL_SERVER_ERROR))
 
-    def test_coupon_validate_invalid(self):
+    def test_coupon_validate_retired(self):
         resp = self.client.post('/api/payments/coupons/validate/', {
             'code': 'NOEXIST', 'plan': 'starter', 'billing_cycle': 'monthly',
         }, format='json')
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(resp.data['valid'])
+        self.assertEqual(resp.status_code, status.HTTP_410_GONE)
+        self.assertEqual(resp.data['error'], '旧版机构套餐优惠码已停止使用。')
+        self.assertFalse(Order.objects.exists())
 
     def test_coupon_list_empty(self):
         resp = self.client.get('/api/payments/coupons/')
@@ -532,12 +583,11 @@ class TaskTests(TestCase):
         self.user.save()
 
     def test_expire_stale_orders(self):
-        from payments.services.base import create_order
+        from payments.services.base import create_ai_addon_order
         from payments.tasks import expire_stale_orders
 
-        order = create_order(
-            user=self.user, plan='starter', billing_cycle='monthly',
-            gateway='stub', institution=self.institution,
+        order = create_ai_addon_order(
+            user=self.user, product=_create_ai_product(), gateway='stub',
         )
         expire_stale_orders()
         order.refresh_from_db()
@@ -550,10 +600,10 @@ class TaskTests(TestCase):
         self.assertEqual(order.status, 'expired')
 
     def test_check_subscription_expiry(self):
-        from payments.services.subscription import create_subscription, activate_subscription
+        from payments.services.subscription import activate_subscription
         from payments.tasks import check_subscription_expiry
 
-        sub = create_subscription(
+        sub = _historical_subscription(
             institution=self.institution, plan='growth',
             billing_cycle='monthly', gateway='stub',
         )

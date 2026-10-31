@@ -36,7 +36,12 @@ class ModuleDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [IsMember()] if self.request.method == 'GET' else [IsAdmin()]
 
     def get_queryset(self):
-        return apply_institution_filter(CourseModule.objects.annotate(course_count=Count('courses')), self.request.user, self.request)
+        modules = apply_institution_filter(CourseModule.objects.annotate(course_count=Count('courses')), self.request.user, self.request)
+        if self.request.method == 'GET':
+            from .access import has_full_course_access
+            if not has_full_course_access(self.request.user):
+                modules = modules.filter(is_public=True)
+        return modules
 
     def destroy(self, request, *args, **kwargs):
         try:

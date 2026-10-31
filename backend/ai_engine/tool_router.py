@@ -510,7 +510,12 @@ def classify_intent(user_message: str, recent_messages: List[Dict[str, str]] = N
     if result and result != "general":
         return result
 
-    # 关键词保底
+    return classify_intent_keywords(user_message, recent_messages, bot_type)
+
+
+def classify_intent_keywords(user_message: str, recent_messages: List[Dict[str, str]] = None,
+                             bot_type: str = "planner") -> str:
+    """Deterministic fallback, also usable by DSH without a legacy model call."""
     intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
     text = user_message.lower()
 
@@ -528,7 +533,7 @@ def classify_intent(user_message: str, recent_messages: List[Dict[str, str]] = N
                 if kw in context_text:
                     return intent
 
-    return result or "general"
+    return "general"
 
 
 # ── 主路由函数 ─────────────────────────────────────────────────
@@ -575,6 +580,7 @@ def route_tools(
     all_tools: List[dict],
     recent_messages: List[Dict[str, str]] = None,
     bot_type: str = "planner",
+    *, intent_classifier=None,
 ) -> List[dict]:
     """小工具集常驻只读能力；写入按意图选择，大工具集额外使用语义召回。"""
     _dbg = logging.getLogger("agent_debug")
@@ -584,7 +590,7 @@ def route_tools(
         return list(all_tools)
 
     candidates = [] if small_catalog else _retrieve_candidates(user_message, bot_type, top_k=8)
-    intent = classify_intent(user_message, recent_messages, bot_type=bot_type)
+    intent = (intent_classifier or classify_intent)(user_message, recent_messages, bot_type=bot_type)
     intent_map = BOT_INTENT_MAP.get(bot_type, PLANNER_INTENT_MAP)
     intent_tools = set(intent_map.get(intent, {}).get("tools", []))
 

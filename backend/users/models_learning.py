@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from django.core.validators import MinValueValidator
+from zoneinfo import ZoneInfo
 
 
 class LearningSession(models.Model):
@@ -65,9 +67,36 @@ class LearningUsage(models.Model):
         constraints = [models.UniqueConstraint(fields=['user', 'month'], name='unique_user_learning_month')]
 
 
+class StudentCohort(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name='批次名称')
+    target_year = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)], verbose_name='目标届别',
+        help_text='例如2027届；实际考试日期单独设置，不要求与届别同年。')
+    exam_date = models.DateField(null=True, blank=True, verbose_name='实际考试日期')
+    starts_on = models.DateField(verbose_name='服务开始日期（上海）')
+    ends_on = models.DateField(verbose_name='服务结束日期（含当日）')
+    is_active = models.BooleanField(default=False, verbose_name='启用批次')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-target_year', 'name']
+        constraints = [models.CheckConstraint(condition=models.Q(ends_on__gte=models.F('starts_on')),
+                       name='cohort_service_dates_ordered')]
+
+    @property
+    def state(self):
+        if not self.is_active:
+            return 'disabled'
+        today = timezone.localdate(timezone=ZoneInfo('Asia/Shanghai'))
+        return 'scheduled' if today < self.starts_on else 'expired' if today > self.ends_on else 'active'
+
+    def __str__(self):
+        return f'{self.target_year}届 · {self.name}'
+
+
 class CourseStudentStatus(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='course_student_status')
     is_course_student = models.BooleanField(default=False)
+    cohort = models.ForeignKey(StudentCohort, null=True, blank=True, on_delete=models.PROTECT, related_name='student_statuses')
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     updated_at = models.DateTimeField(auto_now=True)
 

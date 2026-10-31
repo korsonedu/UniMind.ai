@@ -10,7 +10,13 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "electron:build": "npm --prefix electron run build",
+    "electron:dev": "npm --prefix electron run dev",
+    "electron:preview": "npm --prefix electron run preview",
+    "electron:pack": "npm --prefix electron run pack",
+    "electron:dist": "npm --prefix electron run dist",
+    "electron:dist:win": "npm --prefix electron run dist:win"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -35,7 +41,7 @@
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/react-query": "^5.101.1",
-    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/api": "2.12.3",
     "@tiptap/extension-bubble-menu": "^3.32.0",
     "@tiptap/extension-floating-menu": "^3.32.0",
     "@tiptap/extension-placeholder": "^3.32.0",
@@ -68,7 +74,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
-    "@tauri-apps/cli": "^2.11.2",
+    "@tauri-apps/cli": "2.12.2",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

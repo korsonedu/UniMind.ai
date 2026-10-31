@@ -25,7 +25,7 @@ def test_no_identity_or_non_course_student_has_no_tools():
     with patch('users.learning.is_course_student', return_value=False):
         assert filter_tools('planner', Mock(), tools('search_courses')) == []
         assert filter_tools('planner', Mock(), tools('run_diagnostic'), user=user()) == []
-        assert get_user_capabilities(user()) == ['member.access', 'ai.assistant']
+        assert get_user_capabilities(user()) == ['member.access', 'ai.assistant', 'course.video']
 
 
 def test_historical_teacher_and_owner_have_no_admin_permission():

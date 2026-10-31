@@ -8,7 +8,7 @@
 .landing-refraction::before { content: ''; position: absolute; inset: 0; background: url('/images/landing-tech-background.webp') center 42% / cover no-repeat; filter: url('#landing-glass-warp') invert(1) grayscale(.9) brightness(.8); opacity: .7; }
 .landing-refraction::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg,#080b0fe6 0%,#080b0f99 24%,#080b0f1a 59%,#080b0f80 100%); }
 .landing-light-sweep { position: absolute; inset: -35% -50%; background: linear-gradient(112deg, transparent 43%, #ffffff00 46%, #d7e9f34d 49%, #c4e6ff26 50%, #ffffff00 54%, transparent 57%); mix-blend-mode: screen; animation: landing-light-flow 16s ease-in-out infinite; }
-.landing-floor-reflection { position: absolute; top: 76%; left: -3%; right: -3%; height: 36%; background: url('/images/landing-tech-background.webp') center bottom / cover no-repeat; transform: translateY(var(--floor-shift,0px)) scaleY(-1); transition: transform .35s ease-out; filter: invert(1) grayscale(1) brightness(.7); opacity: .12; mask-image: linear-gradient(transparent, #000 52%, transparent); }
+.landing-floor-reflection { position: absolute; top: 76%; left: -3%; right: -3%; height: 36%; background: url('/images/landing-tech-background.webp') center bottom / cover no-repeat; transform: translateY(var(--floor-shift,0px)) scaleY(-1); transition: transform .35s ease-out; filter: invert(1) grayscale(1) brightness(.7); opacity: .12; mask-image: linear-gradient(transparent, #0b0d10 52%, transparent); }
 .um-landing *, .um-landing *::before, .um-landing *::after { box-sizing: border-box; }
 .um-landing a { color: inherit; text-decoration: none; }
 .um-landing button, .um-landing input { font: inherit; }
@@ -65,9 +65,9 @@
 .landing-product-stage { position: relative; perspective: 1800px; padding: 32px 3% 48px; }
 .landing-product-main .landing-product-stage { width: min(100%,calc((100svh - 200px) * 1.6)); margin-inline: auto; }
 .landing-product-stage::before { content: ''; position: absolute; inset: 5% -8% 0; background: radial-gradient(ellipse at 50% 60%,#8fb8d620,transparent 65%); border-bottom: 1px solid #bddef016; pointer-events: none; }
-.landing-product-stage .landing-ui-frame { position: relative; transform: translateY(calc(var(--scene-depth,0) * -22px)) rotateX(calc(3deg + var(--scene-depth,0) * -3deg)) rotateY(-3deg); transition: transform .35s ease-out; box-shadow: 15px calc(38px + var(--scene-depth,0) * 15px) 90px -30px #000, 0 0 0 8px #bdd7ef05; }
+.landing-product-stage .landing-ui-frame { position: relative; transform: translateY(calc(var(--scene-depth,0) * -22px)) rotateX(calc(3deg + var(--scene-depth,0) * -3deg)) rotateY(-3deg); transition: transform .35s ease-out; box-shadow: 15px calc(38px + var(--scene-depth,0) * 15px) 90px -30px #0b0d10, 0 0 0 8px #bdd7ef05; }
 .landing-product-secondary .landing-ui-frame { transform: translateY(calc(var(--scene-depth,0) * -16px)) rotateX(calc(3deg + var(--scene-depth,0) * -3deg)) rotateY(6deg) rotateZ(-2deg); }
-.landing-agent-frame { border-color: #b8cfdf30; border-radius: 16px; box-shadow: 0 35px 110px -44px #000, 0 0 70px -48px #b3d8f32e, inset 0 1px #ffffff12; }
+.landing-agent-frame { border-color: #b8cfdf30; border-radius: 16px; box-shadow: 0 35px 110px -44px #0b0d10, 0 0 70px -48px #b3d8f32e, inset 0 1px #ffffff12; }
 .landing-agent-showcase { position: relative; aspect-ratio: 1280 / 880; }
 .landing-agent-images { position: absolute; inset: 0; perspective: 1400px; transform-style: preserve-3d; }
 .landing-agent-image { position: absolute; inset: 0; opacity: 0; transform: translate3d(10%,4%,-180px) rotateY(-14deg) rotateZ(3deg); pointer-events: none; transition: opacity .72s ease,transform .9s cubic-bezier(.22,1,.36,1); }

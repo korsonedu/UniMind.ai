@@ -98,9 +98,11 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   // ── Fetch questions ──────────────────────────────────
   useEffect(() => {
     if (!sessionId) return;
-    api.post('/ai/practice/start/', { count: 5 })
+    api.get(`/ai/practice/session/${sessionId}/`)
       .then((res) => {
-        if (res.data.questions?.length) {
+        if (res.data.result) {
+          setSubmitResult(res.data.result); setPhase('results');
+        } else if (res.data.questions?.length) {
           setQuestions(res.data.questions);
           setPhase('answering');
         } else {
@@ -180,7 +182,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
       const res = await api.post('/ai/practice/submit/', {
         session_id: sessionId,
         answers: answerList,
-      });
+      }, { timeout: Math.max(1, questions.length) * 130000 });
       setSubmitResult(res.data);
       setPhase('results');
       // Clean up localStorage
@@ -237,17 +239,17 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
             {correct_rate}%
           </div>
           <p className="text-stone-500 mb-2">
-            正确率（{correct_count}/{total_questions}）
+            得分率 · 达标题数（{correct_count}/{total_questions}）
           </p>
           <div className="flex items-center gap-2 text-stone-400 text-sm mb-6">
             <Clock className="w-4 h-4" />
-            <span>用时 {timeStr}</span>
+            <span>{questions.length ? `用时 ${timeStr}` : '已恢复已完成的练习'}</span>
           </div>
 
           {/* KP breakdown */}
           {kp_breakdown.length > 0 && (
             <div className="w-full bg-stone-50 rounded-xl p-4 mb-6">
-              <h3 className="text-sm font-semibold text-stone-700 mb-3">知识点掌握度</h3>
+              <h3 className="text-sm font-semibold text-stone-700 mb-3">知识点达标情况</h3>
               {kp_breakdown.map((kp) => (
                 <div key={kp.kp_id} className="flex items-center justify-between py-1.5 text-sm">
                   <span className="text-stone-600 truncate flex-1 mr-2">{kp.kp_name}</span>
@@ -270,6 +272,13 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
 
           {/* Summary */}
           <p className="text-sm text-stone-500 text-center mb-8">{summary_text}</p>
+
+          <div className="mb-6 w-full space-y-4">
+            {submitResult.results.map(result => <article key={result.question_id} className="rounded-xl border border-stone-200 p-4">
+              <h3 className="mb-2 text-sm font-medium text-stone-800">{result.kp_name} · {result.score}/{result.max_score} 分</h3>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-stone-600">{result.feedback}</p>
+            </article>)}
+          </div>
 
           {/* View analysis button */}
           <button

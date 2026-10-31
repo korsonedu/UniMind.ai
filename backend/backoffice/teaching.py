@@ -3,6 +3,7 @@ import logging
 from datetime import timedelta
 from uuid import uuid4
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Q
@@ -199,7 +200,7 @@ def create_task(request, data, kind, payload, title):
         request.backoffice_no_change = True
         return task_item(existing, True)
     task = ContentPipelineTask.objects.create(created_by=request.user, institution=content_institution(required=True),
-        task_type='ai_generate' if kind in ['quick', 'arc', 'bulk'] else 'other',
+        task_type='ai_generate' if kind in ['quick', 'arc', 'bulk', 'parse'] else 'other',
         title=title[:200], status='pending', payload={'kind': kind, **payload}, request_id=key)
     from .tasks import run_teaching_task
 
@@ -215,7 +216,21 @@ def create_task(request, data, kind, payload, title):
 
 
 def launch(request, data):
-    kind = serializers.ChoiceField(choices=['quick', 'arc', 'bulk']).run_validation(data.get('kind', 'quick'))
+    kind = serializers.ChoiceField(choices=['quick', 'arc', 'bulk', 'parse']).run_validation(data.get('kind', 'quick'))
+    if kind == 'parse':
+        if not getattr(settings, 'UNIMIND_DSH_TEACHING_ENABLED', False):
+            raise serializers.ValidationError('DSH 教研解析尚未开通，可继续人工录入题目。')
+        ids = validate_kps(data.get('kp_ids'))
+        if len(ids) != 1:
+            raise serializers.ValidationError('文本解析须选定一个考点，其他考点请分批录入。')
+        text = serializers.CharField(max_length=10000).run_validation(data.get('raw_text'))
+        try:
+            size = len(text.encode())
+        except UnicodeEncodeError:
+            raise serializers.ValidationError('资料包含无法编码的字符，请检查后重试。') from None
+        if size > 40000:
+            raise serializers.ValidationError('资料超过本次解析范围，请分批录入。')
+        return create_task(request, data, kind, {'kp_ids': ids, 'raw_text': text}, '文本解析，人工审核')
     payload = {'difficulty': serializers.ChoiceField(choices=DIFFICULTIES).run_validation(data.get('difficulty', 'normal')),
         'count': serializers.IntegerField(min_value=1, max_value=1000 if kind == 'bulk' else 100).run_validation(data.get('count', 5)),
         'types': serializers.ListField(child=serializers.ChoiceField(choices=['objective', 'subjective:noun', 'subjective:short', 'subjective:essay', 'subjective:calculate']), required=False).run_validation(data.get('types', []))}
@@ -319,12 +334,14 @@ def retry(request, data):
         raise serializers.ValidationError('只能重试失败或已取消的任务。')
     payload = source.payload or {}
     kind = payload.get('kind')
-    if kind not in ['quick', 'arc', 'bulk', 'chat', 'report']:
+    if kind not in ['quick', 'arc', 'bulk', 'parse', 'chat', 'report']:
         # Legacy ARC/bulk tasks contain enough parameters to rerun the original service.
         kind = 'bulk' if payload.get('subject') and payload.get('total_target') else 'arc' if payload.get('kp_ids') else None
     if not kind:
         raise serializers.ValidationError('该历史任务缺少可执行参数，不能自动重试。')
     clean = {key: value for key, value in payload.items() if key not in ['kind', 'stages', 'current_stage', 'status_text']}
+    if kind == 'parse':
+        return launch(request, {**clean, 'kind': 'parse', 'request_id': data.get('request_id')})
     if kind == 'bulk':
         clean.setdefault('count', clean.get('total_target', 500))
     elif kind in ['quick', 'arc']:

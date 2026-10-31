@@ -6,8 +6,13 @@ import './styles/native-agent.css'
 import './styles/course-workspace.css'
 import './styles/course-portal.css'
 import './styles/disclosure.css'
+import './styles/ui-refinements.css'
 import { initializeSystemAppearance } from './store/useSystemStore'
 import { registerSW } from 'virtual:pwa-register'
+
+if (navigator.userAgent.includes('Electron/')) {
+  document.documentElement.classList.add('um-desktop', navigator.userAgent.includes('Macintosh') ? 'um-desktop-mac' : 'um-desktop-other');
+}
 
 initializeSystemAppearance()
 registerSW({ immediate: true })

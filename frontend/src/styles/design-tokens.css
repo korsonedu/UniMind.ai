@@ -66,18 +66,30 @@
   --um-radius-composer: 16px;
   --um-radius-dialog: 12px;
   --um-width-rail: 192px;
-  --um-width-rail-collapsed: 64px;
-  --um-width-context: 208px;
-  --um-width-context-min: 200px;
-  --um-width-context-max: 320px;
+  --um-width-rail-collapsed: 56px;
+  --um-width-context: 192px;
+  --um-width-context-min: 180px;
+  --um-width-context-max: 288px;
   --um-width-reading: 760px;
   --um-width-chat: 800px;
   --um-height-header: 48px;
   --um-height-row: 36px;
   --um-height-touch-target: 44px;
+  --um-surface-1: #ffffff;
+  --um-surface-2: #fbfcfd;
+  --um-surface-3: #f6f7f9;
+  --um-surface-4: #f1f3f6;
+  --um-weight-regular: 400;
+  --um-weight-medium: 500;
+  --um-weight-semibold: 600;
+  --um-weight-bold: 700;
+  --um-focus-shadow: 0 2px 9px rgb(34 40 52 / 5%), 0 5px 20px rgb(34 40 52 / 3%);
+  --um-like-easing: linear(0.0000, 0.1008, 0.3337, 0.6071, 0.8552, 1.0405, 1.1510, 1.1932, 1.1839, 1.1434, 1.0908, 1.0402, 1.0004, 0.9749, 0.9634, 0.9629, 0.9696, 0.9795, 0.9897, 0.9981, 1.0038, 1.0068, 1.0074, 1.0064, 1.0045, 1.0025, 1.0008, 0.9995, 0.9988);
+  --um-spring-drag: 1200;
+  --um-spring-drag-damping: 80;
   --um-motion-fast: 150ms;
-  --um-shadow-overlay: 0 8px 24px rgb(20 25 30 / 10%);
-  --um-shadow-panel: 0 1px 3px rgb(20 25 30 / 4%), 0 3px 12px rgb(20 25 30 / 2%);
+  --um-shadow-overlay: 0 8px 24px rgb(12 16 24 / 10%);
+  --um-shadow-panel: 0 1px 3px rgb(12 16 24 / 4%), 0 3px 12px rgb(12 16 24 / 2%);
 }
 
 .dark {
@@ -85,9 +97,9 @@
   --um-color-accent-hover: #bcc7f5;
   --um-color-on-accent: #171d35;
   --um-color-accent-subtle: #282e46;
-  --um-color-rail: #141518;
+  --um-color-rail: #15171a;
   --um-color-context: #191b1f;
-  --um-color-canvas: #191b1f;
+  --um-color-canvas: #1b1d21;
   --um-color-toolbar: #202227;
   --um-color-surface: #202227;
   --um-color-text: #eceef2;
@@ -100,8 +112,17 @@
   --um-color-warning: #fcd34d;
   --um-color-danger: #fca5a5;
   --um-color-on-danger: #451a1a;
-  --um-shadow-overlay: 0 8px 24px rgb(0 0 0 / 28%);
-  --um-shadow-panel: 0 1px 6px rgb(0 0 0 / 16%);
+  --um-surface-1: #202227;
+  --um-surface-2: #1d1f23;
+  --um-surface-3: #191b1f;
+  --um-surface-4: #15171a;
+  --um-weight-regular: 400;
+  --um-weight-medium: 500;
+  --um-weight-semibold: 600;
+  --um-weight-bold: 700;
+  --um-focus-shadow: 0 2px 10px rgb(8 10 14 / 18%), 0 6px 22px rgb(8 10 14 / 10%);
+  --um-shadow-overlay: 0 8px 24px rgb(8 10 14 / 32%);
+  --um-shadow-panel: 0 1px 6px rgb(8 10 14 / 20%);
   --um-heat-0: #303640;
   --um-heat-1: #394465;
   --um-heat-2: #526499;

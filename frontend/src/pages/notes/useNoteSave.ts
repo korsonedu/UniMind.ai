@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { noteDraft, notesApi, type Note, type NoteDraft } from '@/lib/notes';
 
@@ -10,13 +10,15 @@ export function useNoteSave(onSaved: (note: Note) => void) {
   const [error, setError] = useState('');
   const current = useRef<Note | null>(null);
   const saved = useRef('');
+  const [savedSignature, setSavedSignature] = useState('');
   const conflict = useRef(false);
   const pending = useRef<Promise<void> | null>(null);
   const onSavedRef = useRef(onSaved);
-  onSavedRef.current = onSaved;
-  const dirty = saving || (!!note && JSON.stringify(noteDraft(note)) !== saved.current);
+  useLayoutEffect(() => { onSavedRef.current = onSaved; }, [onSaved]);
+  const dirty = saving || (!!note && JSON.stringify(noteDraft(note)) !== savedSignature);
   const load = useCallback((value: Note | null) => {
     current.current = value; saved.current = value ? JSON.stringify(noteDraft(value)) : '';
+    setSavedSignature(saved.current);
     setDocumentKey(value => value + 1);
     conflict.current = false; setError(''); setStatus(value ? '已保存' : ''); setNote(value);
   }, []);
@@ -37,7 +39,7 @@ export function useNoteSave(onSaved: (note: Note) => void) {
         try {
           const result = await notesApi.save(snapshot);
           if (current.current?.id !== snapshot.id) return;
-          saved.current = signature;
+          saved.current = signature; setSavedSignature(signature);
           const next = { ...current.current, version: result.version, updated_at: result.updated_at, backlinks: result.backlinks };
           current.current = next; setNote(next); setError('');
           onSavedRef.current(result);

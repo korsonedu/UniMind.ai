@@ -13,7 +13,7 @@ export default function NoteAISettings({ onboarding = false }: { onboarding?: bo
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const load = () => { setFailed(false); void notesApi.aiSettings().then(setSettings).catch(() => setFailed(true)); };
+  const load = () => { void notesApi.aiSettings().then(value => { setSettings(value); setFailed(false); }).catch(() => setFailed(true)); };
   useEffect(() => { if (hasAI || !onboarding) load(); }, [hasAI, onboarding]);
   const save = async (enabled: boolean) => {
     if (busy) return;
@@ -28,5 +28,5 @@ export default function NoteAISettings({ onboarding = false }: { onboarding?: bo
       <DialogFooter><Button variant="outline" disabled={busy} onClick={() => { setDismissed(true); void save(false); }}>直接书写</Button><Button disabled={busy} onClick={() => void save(true)}>启用</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
-  return <Card className="border-none shadow-sm rounded-3xl bg-card p-8"><div className="flex items-center justify-between gap-5"><label htmlFor="note-ai-awareness" className="font-medium text-sm">让小宇了解我的笔记</label>{failed ? <Button variant="outline" onClick={load}>重试</Button> : <Switch id="note-ai-awareness" checked={settings?.enabled ?? false} disabled={!settings || busy || !hasAI && !settings.enabled} onCheckedChange={value => void save(value)} />}</div></Card>;
+  return <Card className="border-none shadow-sm rounded-3xl bg-card p-8"><div className="flex items-center justify-between gap-5"><label htmlFor="note-ai-awareness" className="font-medium text-sm">让小宇了解我的笔记</label>{failed ? <Button variant="outline" onClick={() => { setFailed(false); load(); }}>重试</Button> : <Switch id="note-ai-awareness" checked={settings?.enabled ?? false} disabled={!settings || busy || !hasAI && !settings.enabled} onCheckedChange={value => void save(value)} />}</div></Card>;
 }

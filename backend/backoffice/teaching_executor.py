@@ -13,6 +13,13 @@ class TeachingExecutor(ExamGeneratorToolExecutor):
         self.confirmations = []
         self.generated_batches = []
 
+    def check_dsh_scope(self):
+        from users.permissions import is_platform_admin
+        self.user.refresh_from_db()
+        scope = teaching.content_institution(required=True)
+        if not is_platform_admin(self.user) or (scope.pk if scope else None) != (self.institution.pk if self.institution else None):
+            raise PermissionError('管理员权限或内容范围已变更。')
+
     def _handle_search_knowledge(self, args):
         result = teaching.search_knowledge(self.request, args)
         return {'found': result['total'], 'results': result['items']}

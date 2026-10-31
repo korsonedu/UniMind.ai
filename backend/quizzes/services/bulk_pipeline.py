@@ -222,6 +222,8 @@ def _execute_bulk_pipeline(
             result.per_kp[kp.code] = result.per_kp.get(kp.code, 0) + saved
 
     # ── Phase 4: 写入结果 ──
+    from ai_assistant.services.dsh_scope import check_teaching_task
+    check_teaching_task()
     stage_log.append({
         "stage": "bulk_done",
         "total_generated": result.total_generated,

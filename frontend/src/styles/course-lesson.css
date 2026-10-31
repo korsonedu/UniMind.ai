@@ -23,21 +23,21 @@
 .um-lesson-player[data-fullscreen='true'] { position: fixed; inset: 0; z-index: 50; width: 100%; height: 100%; border-radius: 0; }
 .um-lesson-no-video { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; height: 100%; color: #a7adb5; }
 .um-lesson-no-video p { margin: 0; }
-.um-lesson-controls { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; padding: 20px 12px 10px; background: linear-gradient(transparent, rgb(0 0 0 / 82%)); opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
+.um-lesson-controls { position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; padding: 20px 12px 10px; background: linear-gradient(transparent, rgb(8 10 14 / 82%)); opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
 .um-lesson-controls[data-visible='true'], .um-lesson-controls:focus-within { opacity: 1; pointer-events: auto; }
 .um-lesson-controls button { display: inline-flex; align-items: center; justify-content: center; width: 32px; min-width: 32px; min-height: 32px; height: 32px; }
 .um-lesson-controls button:hover { background: rgb(255 255 255 / 12%); }
 .um-lesson-progress { display: block; width: 100%; height: 18px; margin: 0 0 4px; padding: 0; accent-color: #fff; cursor: pointer; }
 .um-course-detail-player .um-lesson-heading { display: flex; flex-wrap: nowrap; align-items: flex-start; justify-content: space-between; flex: 0 0 auto; gap: 16px; }
 .um-lesson-heading > div { min-width: 0; }
-.um-lesson-heading h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.5; letter-spacing: 0; overflow-wrap: anywhere; }
+.um-lesson-heading h1 { margin: 0; font-size: 20px; font-weight: var(--um-weight-semibold); line-height: 1.5; letter-spacing: 0; overflow-wrap: anywhere; }
 .um-course-detail-player .um-lesson-module { margin: 0 0 6px; color: var(--um-color-text-muted); font-size: 12px; line-height: 1.5; }
 .um-lesson-favorite { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; min-height: 36px; padding: 6px 10px; border: 1px solid var(--um-color-border); border-radius: 6px; color: var(--um-color-text-muted); font-size: 13px; cursor: pointer; }
 .um-lesson-favorite[aria-pressed='true'] { color: var(--um-color-accent); background: var(--um-color-selected); }
 .um-lesson-favorite:hover { background: var(--um-color-hover); }
 .um-lesson-favorite:disabled { opacity: .45; cursor: not-allowed; }
 .um-lesson-sidebar { display: flex; flex-direction: column; gap: 24px; min-width: 0; min-height: 0; padding: 0 0 56px 24px; border-left: 1px solid var(--um-color-border); overflow-y: auto; }
-.um-lesson .um-lesson-sidebar h2 { margin: 0 0 14px; font-size: 14px; font-weight: 600; line-height: 1.5; letter-spacing: 0; }
+.um-lesson .um-lesson-sidebar h2 { margin: 0 0 14px; font-size: 14px; font-weight: var(--um-weight-semibold); line-height: 1.5; letter-spacing: 0; }
 .um-lesson-outline-section { display: flex; flex-direction: column; flex: 1 0 140px; min-height: 140px; }
 .um-lesson-sidebar > :not(.um-lesson-outline-section) { flex: 0 0 auto; }
 .um-lesson-outline { display: flex; flex-direction: column; flex: 1; min-height: 0; }
@@ -62,11 +62,10 @@
   .um-course-detail-player > .um-lesson { grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; padding: 16px 20px 20px; }
   .um-lesson-sidebar { padding-left: 20px; }
 }
-@media (min-width: 768px) and (max-width: 1279px) {
-  .um-course-workspace:has(.um-lesson) { grid-template-columns: minmax(0, 1fr); }
-  .um-course-workspace:has(.um-lesson) .um-course-context { display: none; }
-  .um-course-workspace:has(.um-lesson) .um-course-directory-toggle { display: none; }
-  .um-course-workspace:has(.um-lesson) .um-course-list-toggle { display: inline-flex; }
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .um-course-detail-player > .um-lesson { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 100%; gap: 32px; }
+  .um-lesson-view { overflow: visible; }
+  .um-lesson-sidebar { overflow: visible; padding: 0 0 56px; border-left: 0; }
 }
 @media (max-width: 1023px) {
   .um-course-main-scroll:has(.um-lesson) { display: block; overflow-y: auto; }

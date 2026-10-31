@@ -340,7 +340,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
             {isImageAttachment ? (
               <div className="um-qa-attachment-image rounded-xl overflow-hidden border border-border/50 max-w-sm group/img relative">
                 <img src={question.attachment} alt="问题附件" className="w-full h-auto max-h-[300px] object-contain" loading="lazy" />
-                <a href={question.attachment} target="_blank" rel="noreferrer" aria-label="查看原图" className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-lg opacity-100 md:opacity-0 group-hover/img:opacity-100 focus:opacity-100 transition-opacity">
+                <a href={question.attachment} target="_blank" rel="noreferrer" aria-label="查看原图" className="absolute top-2 right-2 p-1.5 bg-[#0b0d10]/50 text-white rounded-lg opacity-100 md:opacity-0 group-hover/img:opacity-100 focus:opacity-100 transition-opacity">
                   <Paperclip className="h-3.5 w-3.5" />
                 </a>
               </div>
@@ -463,11 +463,10 @@ export const QASystem: React.FC = () => {
     loadedPagesRef.current = 1;
   }
 
-  const fetchQuestions = useCallback(async (background = false, page = 1) => {
+  const fetchQuestions = useCallback((background = false, page = 1) => {
     const requestId = ++questionsRequestRef.current;
-    if (page > 1) setLoadingMore(true);
     const lastPage = background && page === 1 ? loadedPagesRef.current : page;
-    try {
+    const fetchPages = async () => {
       const items: QAQuestion[] = [];
       let currentPage = page;
       let hasNext = false;
@@ -478,18 +477,22 @@ export const QASystem: React.FC = () => {
         hasNext = !Array.isArray(data) && !!data.next;
         if (!hasNext || currentPage === lastPage) break;
       }
-      if (requestId !== questionsRequestRef.current) return;
+      return { items, currentPage, hasNext };
+    };
+    return fetchPages().then(result => {
+      if (!result || requestId !== questionsRequestRef.current) return;
+      const { items, currentPage, hasNext } = result;
       setQuestions(previous => page === 1 ? items : [...previous, ...items.filter(item => !previous.some(question => question.id === item.id))]);
       loadedPagesRef.current = currentPage;
       setNextPage(hasNext ? currentPage + 1 : null);
-    } catch {
+    }).catch(() => {
       if (requestId === questionsRequestRef.current) toast.error('加载失败');
-    } finally {
+    }).finally(() => {
       if (requestId === questionsRequestRef.current) {
         setLoadingMore(false);
         if (!background) setLoading(false);
       }
-    }
+    });
   }, [filter, search]);
   const refreshFetchQuestions = useCallback((background = false) => {
     if (!background) setLoading(true);
@@ -620,7 +623,7 @@ export const QASystem: React.FC = () => {
             ))
           )}
           {!loading && nextPage && (
-            <Button variant="ghost" disabled={loadingMore} onClick={() => fetchQuestions(true, nextPage)} className="w-full mt-4">
+            <Button variant="ghost" disabled={loadingMore} onClick={() => { setLoadingMore(true); void fetchQuestions(true, nextPage); }} className="w-full mt-4">
               {loadingMore ? '加载中…' : '加载更多'}
             </Button>
           )}
@@ -634,7 +637,6 @@ export const QuestionDetail: React.FC = () => {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const user = useAuthStore(s => s.user);
   const [question, setQuestion] = useState<QAQuestion | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);

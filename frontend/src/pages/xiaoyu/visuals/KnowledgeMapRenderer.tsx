@@ -23,30 +23,11 @@ const NODE_RADIUS = 28;
 const W = 560;
 const H = 320;
 
-/** Monochrome + single accent. Low mastery → darker fill. */
-const nodeFill = (mastery?: number): string => {
-  if (mastery === undefined) return '#f5f5f4'; // stone-100
-  if (mastery >= 0.8) return '#f0fdf4'; // green-50
-  if (mastery >= 0.6) return '#eff6ff'; // blue-50
-  if (mastery >= 0.4) return '#fefce8'; // yellow-50
-  return '#fef2f2'; // red-50
-};
-
-const nodeStroke = (mastery?: number): string => {
-  if (mastery === undefined) return '#d6d3d1'; // stone-300
-  if (mastery >= 0.8) return '#86efac';
-  if (mastery >= 0.6) return '#93c5fd';
-  if (mastery >= 0.4) return '#fde047';
-  return '#fca5a5';
-};
-
-const nodeTextColor = (mastery?: number): string => {
-  if (mastery === undefined) return '#78716c';
-  if (mastery >= 0.8) return '#166534';
-  if (mastery >= 0.6) return '#1e40af';
-  if (mastery >= 0.4) return '#a16207';
-  return '#991b1b';
-};
+const nodeFill = (mastery?: number): string => mastery === undefined ? 'var(--um-surface-3)'
+  : `color-mix(in srgb, var(--um-color-accent) ${mastery >= 0.8 ? 6 : mastery >= 0.6 ? 10 : mastery >= 0.4 ? 16 : 24}%, var(--um-surface-2))`;
+const nodeStroke = (mastery?: number): string => mastery === undefined ? 'var(--um-color-border)'
+  : 'color-mix(in srgb, var(--um-color-accent) 40%, var(--um-color-border))';
+const nodeTextColor = (mastery?: number): string => mastery === undefined ? 'var(--um-color-text-muted)' : 'var(--um-color-text)';
 
 interface PositionedNode extends KnowledgeNode {
   x: number;
@@ -140,12 +121,12 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
   const highlights = payload.highlights || [];
 
   return (
-    <div className="p-5 space-y-3">
+    <div className="um-visual-knowledge space-y-3">
       {payload.title && (
         <h3 className="text-[15px] font-semibold tracking-tight text-foreground">{payload.title}</h3>
       )}
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minHeight: 240 }}>
+      <div className="um-visual-graph-scroll" tabIndex={0} aria-label="知识关系图，可横向滚动"><svg role="group" aria-label={payload.title || '知识关系图'} viewBox={`0 0 ${W} ${H}`} className="um-visual-knowledge-graph">
         {/* Edges */}
         {edges.map((edge, i) => {
           const s = idToPos.get(edge.from);
@@ -156,7 +137,7 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
             <line
               key={i}
               x1={s.x} y1={s.y} x2={t.x} y2={t.y}
-              stroke={active ? '#a1a1aa' : '#e4e4e7'}
+              stroke={active ? 'var(--um-color-accent)' : 'var(--um-color-border)'}
               strokeWidth={1}
               strokeDasharray="4 2"
             />
@@ -170,14 +151,17 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
           return (
             <g
               key={node.id}
+              tabIndex={0} role="img" aria-label={`${node.label}，${node.mastery === undefined ? '暂无掌握度' : `掌握度 ${Math.round(node.mastery * 100)}%`}`}
+              onFocus={() => setHoveredId(node.id)} onBlur={() => setHoveredId(null)}
               onMouseEnter={() => setHoveredId(node.id)}
               onMouseLeave={() => setHoveredId(null)}
               style={{ cursor: 'default' }}
             >
+              <title>{node.label}</title>
               <circle
                 cx={node.x} cy={node.y} r={NODE_RADIUS}
                 fill={nodeFill(node.mastery)}
-                stroke={isHovered || isHighlight ? '#a1a1aa' : nodeStroke(node.mastery)}
+                stroke={isHovered || isHighlight ? 'var(--um-color-accent)' : nodeStroke(node.mastery)}
                 strokeWidth={isHovered || isHighlight ? 1.5 : 1}
               />
               <text
@@ -194,7 +178,7 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
                   x={node.x} y={node.y + 11}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  style={{ fontSize: 9, fontWeight: 400, fill: nodeTextColor(node.mastery), opacity: 0.6 }}
+                  style={{ fontSize: 10, fontWeight: 400, fill: nodeTextColor(node.mastery), opacity: 0.85 }}
                   className="pointer-events-none select-none"
                 >
                   {Math.round(node.mastery * 100)}%
@@ -203,26 +187,11 @@ const KnowledgeMapGraph: React.FC<{ payload: KnowledgeMapPayload }> = ({ payload
             </g>
           );
         })}
-      </svg>
+      </svg></div>
 
-      {/* Legend — minimal */}
-      <div className="flex flex-wrap items-center gap-4 text-[11px] text-foreground/35">
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-emerald-50 border border-emerald-200" /> ≥80%
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-blue-50 border border-blue-200" /> 60–79%
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-yellow-50 border border-yellow-200" /> 40–59%
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-red-50 border border-red-200" /> &lt;40%
-        </span>
-        <span className="ml-auto">{edges.length} 关联</span>
-      </div>
+      <div className="um-visual-map-legend"><span>颜色越深，越需复习；节点显示掌握度</span><span>{edges.length} 关联</span></div>
       {payload.note && (
-        <p className="text-[11px] leading-relaxed text-foreground/35">{payload.note}</p>
+        <p className="um-visual-note">{payload.note}</p>
       )}
     </div>
   );

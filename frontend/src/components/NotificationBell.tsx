@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Bell, ChatCircle, CheckCircle, Info, Brain } from '@phosphor-icons/react';
@@ -15,6 +15,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import api from '@/lib/api';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useDesktopStore, notifyDesktop } from '@/lib/desktop';
 
 import {
   AlertDialog,
@@ -32,13 +34,30 @@ export const NotificationBell = () => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [showClearAlert, setShowClearAlert] = useState(false);
+  const userId = useAuthStore(state => state.user?.id);
+  const desktopNotifications = useDesktopStore(state => Boolean(window.unimindDesktop && state.state?.preferences.notifications));
+  const previousUnread = useRef<number | null>(null);
 
-  const { data: unreadData } = useQuery({
-    queryKey: queryKeys.notifications.unreadCount,
+  const { data: unreadData, isFetching } = useQuery({
+    queryKey: [...queryKeys.notifications.unreadCount, userId],
     queryFn: () => api.get('/notifications/unread-count/').then(r => r.data),
+    enabled: !!userId,
     refetchInterval: 30000,
-    refetchIntervalInBackground: false,
+    refetchIntervalInBackground: desktopNotifications,
   });
+
+  useEffect(() => {
+    previousUnread.current = null;
+  }, [userId, desktopNotifications]);
+
+  useEffect(() => {
+    if (!desktopNotifications || !userId || isFetching || typeof unreadData?.unread_count !== 'number') return;
+    const count = unreadData.unread_count;
+    if (previousUnread.current !== null && count > previousUnread.current) {
+      void notifyDesktop({ title: '新的学习消息', body: '打开 UniMind 查看通知。', route: '/xiaoyu' });
+    }
+    previousUnread.current = count;
+  }, [desktopNotifications, userId, isFetching, unreadData]);
 
   // Sync React Query data to store (markAsRead still calls fetchUnreadCount internally)
   useEffect(() => {

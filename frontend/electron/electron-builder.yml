@@ -1,0 +1,35 @@
+appId: com.korsonedu.unimind.desktop
+productName: UniMind
+copyright: Copyright © 2026 Korson
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+  - tray.png
+  - desktop-update.json
+asar: true
+mac:
+  category: public.app-category.education
+  target:
+    - dmg
+    - zip
+  icon: ../src-tauri/icons/icon.icns
+win:
+  target:
+    - nsis
+  icon: ../src-tauri/icons/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: UniMind-${version}-${arch}-setup.${ext}
+linux:
+  target:
+    - AppImage
+  icon: ../src-tauri/icons/128x128.png
+
+protocols:
+  - name: UniMind
+    schemes:
+      - unimind

@@ -6,6 +6,23 @@ import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { NoteSources } from '@/pages/notes/NoteSources';
 
+function StreamingText({ content }: { content: string }) {
+  const root = React.useRef<HTMLDivElement>(null);
+  const previous = React.useRef('');
+  React.useLayoutEffect(() => {
+    const start = content.startsWith(previous.current) ? Array.from(previous.current).length : 0;
+    previous.current = content;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const children = Array.from(root.current?.children ?? []);
+    const animations = children.slice(Math.max(start, children.length - 4)).map((child, index) =>
+      child.animate([{ opacity: .8, filter: 'blur(1px)' }, { opacity: 1, filter: 'blur(0)' }], {
+        duration: 100, delay: index * 10, easing: 'ease-out', fill: 'backwards',
+      }));
+    return () => animations.forEach(animation => animation.cancel());
+  }, [content]);
+  return <div ref={root} className="um-streaming-text" aria-live="polite">{Array.from(content).map((char, index) => char === '\n' ? <br key={index} /> : <span key={index}>{char}</span>)}</div>;
+}
+
 export interface ChatBubbleMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -24,6 +41,7 @@ interface ChatBubbleProps {
   botAvatar?: string;
   /** Hide avatar and use tighter spacing */
   compact?: boolean;
+  streaming?: boolean;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
@@ -34,9 +52,15 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
   botGradient = 'from-violet-500 to-indigo-500',
   botAvatar,
   compact = false,
+  streaming = false,
   native = false,
 }) => {
   const [feedback, setFeedback] = useState<boolean | null | undefined>(msg.feedback);
+  const [feedbackSource, setFeedbackSource] = useState({ id: msg.id, feedback: msg.feedback });
+  if (feedbackSource.id !== msg.id || feedbackSource.feedback !== msg.feedback) {
+    setFeedbackSource({ id: msg.id, feedback: msg.feedback });
+    setFeedback(msg.feedback);
+  }
   const [hover, setHover] = useState(false);
 
   const handleFeedback = useCallback(async (value: boolean) => {
@@ -51,11 +75,6 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
       setFeedback(prev); // 失败回滚
     }
   }, [msg.id, feedback]);
-
-  // 同步外部 feedback 变化（历史加载时）
-  React.useEffect(() => {
-    setFeedback(msg.feedback);
-  }, [msg.feedback]);
 
   const showFeedback = !isUser && !isThinking && msg.content && msg.id;
 
@@ -106,7 +125,9 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
               // KaTeX display math spacing
               "prose-[.katex-display]:my-2 prose-[.katex-display]:overflow-x-auto",
             )}>
-              <MarkdownContent content={msg.content} />
+              {streaming ? (
+                <StreamingText content={msg.content} />
+              ) : <MarkdownContent content={msg.content} />}
             </div>
           )}
         </div>

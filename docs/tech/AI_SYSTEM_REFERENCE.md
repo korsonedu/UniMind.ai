@@ -1,7 +1,7 @@
 # AI 系统参考手册
 
 > 维护者索引：所有 AI 功能的分系统位置、Schema、Prompt 模板、模型路由的完整映射。
-> 新增/修改 AI 功能时，先查此文档定位要改的文件。
+> 2026-10-25 已按本地源码移除面试子系统索引。当前产品入口、权限和部署状态见 README 与单平台过渡清单；下方模型、Schema 行号和实验描述仍须按对应源码核对。
 
 ## 架构总览
 
@@ -9,7 +9,6 @@
 prompts/                          ← Prompt 模板（纯文本，业务可编辑）
     ↓ AIService.get_template()
 quizzes/services/                 ← 判分逻辑、命题管线编排
-interviews/services.py            ← 面试 AI
 courses/services/ai_course_service.py ← 课程 AI
     ↓ AIService.structured_output() / simple_chat()
 ai_engine/ai_service.py           ← AIService 门面（system_prompt+user_prompt → messages）
@@ -18,7 +17,7 @@ ai_engine/service.py              ← AIEngine（HTTP 请求、tool calling、�
     ↓ HTTP POST → api.deepseek.com/v1/chat/completions
 ai_engine/tools.py                ← JSON Schema 定义（约束模型输出格式）
 ai_engine/config.py               ← 模型路由表（哪个任务用什么模型、是否思考）
-ai_engine/tool_permissions.py     ← 工具权限沙箱（按 plan 过滤可用工具）
+ai_engine/tool_permissions.py     ← 工具权限沙箱（按用户能力与功能授权过滤）
 ai_assistant/services/tenant_memory.py ← mem0 语义记忆（pgvector 后端，租户隔离）
 ai_assistant/services/prompt_adapter.py ← Prompt 自适应（规则引擎检测用户模式）
 ai_assistant/tasks.py             ← 元认知 Celery 任务（每日分析学习数据生成高阶记忆）
@@ -158,54 +157,9 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 
 ---
 
-### 3. 面试
+### 3. 已退出的面试子系统
 
-#### 3a. 简历调优
-
-| 维度 | 值 |
-|------|---|
-| **入口** | `interviews/views.py` → `ResumeTuneView.post` |
-| **服务** | `interviews/services.py` → `InterviewAIService.tune_resume` |
-| **Schema** | `RESUME_TUNE_SCHEMA` (tools.py:224) |
-| **Prompt** | `prompts/interviews/resume_tuner.txt` (PromptManager: `AI_RESUME_TUNER`) |
-| **Operation** | `interviews.tune_resume` |
-| **Model** | deepseek-v4-flash |
-| **输出** | `{"score": 85, "diagnostics": "...", "optimized_content": {...}, "predicted_questions": [...]}` |
-
-#### 3b. 面试复盘雷达
-
-| 维度 | 值 |
-|------|---|
-| **入口** | `interviews/views.py` → `InterviewFinishView.post` |
-| **服务** | `interviews/services.py` → `InterviewAIService.generate_post_interview_radar` |
-| **Schema** | `INTERVIEW_RADAR_SCHEMA` (tools.py:245) |
-| **Prompt** | `prompts/interviews/interview_analyzer.txt` (PromptManager: `AI_INTERVIEW_ANALYZER`) |
-| **Operation** | `interviews.radar_analysis` |
-| **Model** | deepseek-v4-flash |
-| **输出** | `{"radar_scores": {theory, logic, stress, fluency, english}, "overall_feedback": "..."}` |
-
-#### 3c. 模拟面试追问（流式对话）
-
-| 维度 | 值 |
-|------|---|
-| **入口** | `interviews/views.py` → `InterviewReplyStreamView.post` (SSE) |
-| **服务** | `interviews/services.py` → `InterviewAIService.generate_interview_reply_stream` |
-| **AI 方法** | `AIEngine.call_ai_stream`（**非** structured_output，自由文本） |
-| **Operation** | `interviews.mock_reply` |
-| **Model** | deepseek-v4-flash |
-| **Prompt** | inline (`_build_prompt()` 根据 session_type/ style 动态构建) |
-
-#### 3d. 逐句点评
-
-| 维度 | 值 |
-|------|---|
-| **入口** | `interviews/views.py` → (面试 WebSocket 内触发) |
-| **服务** | `InterviewAIService.annotate_candidate_turn` |
-| **AI 方法** | `simple_chat_text`（纯文本） |
-| **Operation** | `interviews.turn_feedback` |
-| **Prompt** | `prompts/interviews/turn_feedback.txt` (PromptManager: `AI_INTERVIEW_TURN_FEEDBACK`) |
-
----
+模拟面试、简历调优及面试复盘不属于当前产品。旧设计见 [归档面试说明](features/archive/mock-interview-simulator.md)，不再指向已删除的运行模块和模板。
 
 ### 4. 课程
 
@@ -353,8 +307,6 @@ Classifier: 本地匹配知识点 code → kp_id（不调 AI）
 | `GRADING_RESULT_SCHEMA` | 236 | 主观题判分 | `{score, feedback, analysis, memorix_rating}` |
 | `OBJECTIVE_ANALYSIS_SCHEMA` | 250 | 客观题解析 | `{why_correct, why_wrong, pitfalls}` |
 | `BATCH_REVIEW_SCHEMA` | 260 | 单管线批量审核 | array of `{index, pass, issues, severity}` |
-| `RESUME_TUNE_SCHEMA` | 281 | 简历调优 | `{score, diagnostics, optimized_content, predicted_questions}` |
-| `INTERVIEW_RADAR_SCHEMA` | 302 | 面试复盘 | `{radar_scores: {5维}, overall_feedback}` |
 | `OUTLINE_ITEMS_SCHEMA` | 322 | 课程大纲 | array of `{title, timestamp_seconds, description}` |
 
 ### Agent 工具（研究/查询）
@@ -475,10 +427,6 @@ prompts/
 │   ├── reviewer_adversarial.txt        ← 对抗管线 Reviewer
 │   ├── reviewer_single.txt             ← 单管线 Reviewer
 │   └── classifier.txt                  ← 对抗管线 Classifier
-├── interviews/
-│   ├── resume_tuner.txt                ← 简历调优
-│   ├── interview_analyzer.txt          ← 面试复盘雷达
-│   └── turn_feedback.txt               ← 逐句点评
 ├── courses/
 │   └── transcript_outline_prompt.txt   ← 视频大纲生成
 └── ai_assistant/
@@ -512,7 +460,6 @@ prompts/
 | `pipeline.author_revise` | deepseek-v4-pro | **medium** | 基于反馈修订 |
 | `pipeline.classifier` | deepseek-v4-**flash** | 关 | 题目分类（轻量） |
 | `chat` | deepseek-v4-flash | 关 | 小宇/命题官对话 |
-| `interviews` | deepseek-v4-flash | 关 | 面试追问/简历/复盘 |
 | `generate_knowledge_tree` | deepseek-v4-pro | 关 | 知识树生成 |
 | `grading` / `grade` | deepseek-v4-pro | **high** | 主观题判分 |
 | `essay` | deepseek-v4-pro | **max** | 作文评分 |

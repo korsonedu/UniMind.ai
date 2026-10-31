@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .learning import active_grants, usage_info, ai_limit, is_course_student, active_addons, get_weekly_quota_config
+from .learning import active_grants, usage_info, ai_limit, is_course_student, active_addons, get_weekly_quota_config, cohort_info
 from .models import LearningProduct, LearningGrant, AIAddonProduct
 from .permissions import IsPlatformAdmin
 
@@ -91,6 +91,7 @@ class MyLearningAccessView(APIView):
         addons = active_addons(request.user)
         return Response({'ai_usage': usage_info(request.user),
                          'is_course_student': is_course_student(request.user),
+                         'cohort': cohort_info(request.user),
                          'addons': [{'id': grant.id, 'name': grant.snapshot.get('name', ''),
                                      'ai_calls': grant.ai_calls, 'used_calls': grant.used_calls,
                                      'expires_at': grant.expires_at} for grant in addons],

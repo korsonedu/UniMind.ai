@@ -1,19 +1,17 @@
 # CLAUDE.md — UniMind.ai
 
-Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepSeek V4。
+科晟教育 Agent 学习平台。当前入口与业务边界以 `README.md`、`admin-extension/README.md` 和 `docs/tech/architecture/SINGLE_PLATFORM_TRANSITION.md` 为准。本地清理不等于生产发布。
 
 ## Agent 架构
 
-两个自治 AI Agent 共享统一运行时：
+| 运行时类型 | 入口与职责 |
+| --- | --- |
+| `planner`（小宇） | 学习端 `/xiaoyu`；普通问答、学习辅助、可视化与本人会话 |
+| `exam_generator` | Directus 管理扩展的教学生产；生成、审核、学情与通知，不能作为学生端可选 Bot |
 
-| Agent | bot_type | 工具数 | 意图路由 | 职责 |
-|-------|----------|--------|---------|------|
-| 小宇 | `planner` | 23 | ✅ 7类意图 | 学生端唯一 AI 入口：学习规划 + 知识讲解 + 数据分析 + 可视化渲染 + 教练式对话 |
-| 工作台 | `exam_generator` | 12 | ✅ 8类意图 | 教师端唯一 AI 入口：出题 + 查学生数据 + 资产浏览 + 通知 + 邀请管理 |
+运行时由 BotRegistry、执行器、`chat_service.py`、`ai_engine/tool_run.py` 和模型工具调用组成。两类 Agent 启用意图预筛选；权限和参数校验由服务端执行。当前聊天服务传入的小宇工具轮次上限为 12，教学生产为 8；以实际调用点为准，不能把引擎默认 5 轮当成全部入口上限。
 
-运行时：`Bot → BotRegistry → ToolExecutor → chat_dispatch → call_ai_with_tools`（最多 5 轮自主工具调用）。
-意图路由器：`planner` 和 `exam_generator` 启用 `use_intent_router`，按关键词预筛选工具子集。Prompt 自适应：基于 mem0 语义记忆检测用户偏好，自动注入自适应指令。**自进化优化**：LLM 驱动的用户画像分析（缓存预计算 + Celery 异步）、Memorix↔Agent 联动、MUTAR 自进化全链路（Measure→Umpire→Think→Adapt→Refine：采集→评估→分析→变体→精炼，Trajectory 自动记录 + 用户反馈闭环）。
-新增 Agent 只需：① 写 prompt 文件到 `prompts/ai_assistant/bots/{name}/` ② 在 `bot_registry.py` 的 `BOT_REGISTRY` 加一行 ③ （可选）写 ToolExecutor 子类。
+MUTAR 的用户反馈指 Agent 回复赞踩。右下角产品反馈和 NPS 满意度问卷已在本地退出，两者与 Agent 赞踩分别管理。
 
 ## 硬边界
 
@@ -26,8 +24,8 @@ Agent 驱动的新一代智能教育基础设施。Django 6.0 + React 19 + DeepS
 - **Serializer 字段必须显式声明**：禁止 `fields = '__all__'`，所有字段显式列出，防止未来新增 model 字段被自动暴露。
 - **敏感字段加密**：支付密钥等用 `core.fields.EncryptedCharField` / `EncryptedTextField`（Fernet AES），加密密钥通过 `ENCRYPTION_KEY` 环境变量设置（默认从 SECRET_KEY 派生）。
 - **Cookie 认证为主**：REST API 用 `core.authentication.CookieTokenAuthentication`（先读 httpOnly cookie，fallback Authorization header），前端 `api.ts` 设 `withCredentials:true`。WebSocket 仅 Cookie 认证（connect 时校验，未认证直接 close 4001），前端不存 token 到 localStorage。
-- **题目机构隔离**：所有 Question 查询必须按机构过滤。机构成员只能看到本机构题目（`qs.filter(institution=inst)`），禁止将全局题目（`institution__isnull=True`）作为机构成员的 fallback 数据源。独立用户（无机构）仅见全局题目。
-- **四层权限模型**：Layer 1 超管(`is_superuser`+无机构) → Layer 2 机构所有者(`owner`) → Layer 3 教师(`teacher`) → Layer 4 学生(`student`)。禁止内联 `institution_role in (...)` 判断，统一用 `users.permissions` 中的 helper 函数（`is_platform_admin` / `is_institution_owner` / `is_institution_teacher`）或 DRF 权限类。方案获取用 `get_effective_plan_for_user(user)`。详见 `docs/tech/architecture/PERMISSION_ARCHITECTURE.md`。
+- **单平台内容范围**：内容查询通过 `core.utils.apply_institution_filter` 等既有服务使用显式 `UNIMIND_CONTENT_INSTITUTION_ID`。正整数对应既有内容机构，`global` 对应历史全局分区；未配置拒绝访问。禁止按请求者历史机构猜测归属、扩大到全站或移除过滤。
+- **当前权限模型**：学习能力依据 `users.learning.is_course_student` 和逐人功能开关；后台只允许两名 Directus 映射管理员，须同时启用、具有 staff/superuser 身份并无机构归属。历史 owner/teacher 不再授予管理权限。使用 `users.permissions` 的 helper 或 DRF 权限类；`get_effective_plan_for_user` 仅保留历史方案兼容，不能替代当前学习授权。详见 `docs/tech/architecture/SINGLE_PLATFORM_TRANSITION.md`。
 - **只做被要求的事**：严格按指令执行，不擅自追加额外改动。如果认为某件额外的事确实有用，先询问，不得自行决定。
 
 ## 项目结构速查
@@ -49,6 +47,8 @@ UniMindCode/                  ← git 仓库根目录
 │   ├── users/                  # 用户/会员/RBAC/ELO/机构管理
 │   │   └── services/           #   会员服务 (membership.py)
 │   ├── courses/                # 课程/专辑/AI大纲/ASR/OSS分片直传
+│   ├── notes/                  # 个人笔记与 Agent 参考
+│   ├── backoffice/             # 管理桥接与异步教学任务
 │   ├── articles/               # 深度文章
 │   ├── study_room/             # 在线自习室
 │   ├── faq_system/             # 答疑系统
@@ -61,66 +61,46 @@ UniMindCode/                  ← git 仓库根目录
 │           ├── xiaoyu/           #   小宇学习教练
 │           └── exam_generator/   #   工作台教研助手
 ├── frontend/
-│   ├── src/pages/              # 页面组件（学生/教师/机构/平台四侧）
+│   ├── src/pages/              # 学习端页面（旧管理页面已退出）
 │   ├── src/components/         # 通用组件 + shadcn/ui
 │   ├── src/lib/                # API 客户端、权限、hooks
 │   └── src/store/              # Zustand 状态管理
-├── Brand/                      # 品牌素材、营销方案、产品介绍（非代码）
+├── admin-extension/            # Vue / Directus 管理扩展
 ├── docs/                       # 技术文档（架构、Memorix 论文、事故记录）
 ├── scripts/                    # 运维脚本（bootstrap, check, smoke）
 └── Makefile                    # make backend-check / frontend-check / qa-smoke
 ```
 
-## Django Apps (11)
+## Django 业务应用
 
-`ai_engine` `ai_assistant` `quizzes` `users` `courses` `articles` `study_room` `faq_system` `notifications` `core`
+`ai_assistant` `quizzes` `users` `courses` `articles` `study_room` `faq_system` `notifications` `core` `payments` `notes` `backoffice`。`ai_engine` 是共享引擎模块，安装列表以 `school_system/settings.py` 为准。
 
 ## 关键路由
 
 | 路径 | 说明 |
-|------|------|
-| `/` | Landing（未登录）/ HomeRedirect（已登录：老师/机构主→/workbench, enterprise 机构成员→/institution, 学生→/xiaoyu） |
-| `/login` `/register` | 邮箱验证码登录注册 |
-| `/diagnostic` | 学生诊断测试（首次登录强制） |
-| `/workbench` | 工作台 — 教师 AI 助手：出题 + 查数据 + 管资产（老师/机构主） |
-| `/xiaoyu` | 小宇 — 学生 AI 教练对话页 |
-| `/intro/:slug` | 机构公开首页（无需登录，公开访问） |
-| `/management` | 管理后台（需管理员） |
-| `/platform-analytics` | 平台数据分析（仅超管） |
-| `/join/:invite_slug` | 邀请链接落地页（未登录→注册/登录，已登录裸号→审批/自动加入机构） |
-| `/achievements` | 学生成就勋章墙（10 预置成就，类别筛选，进度展示） |
-| `/pricing` | 定价页（公开访问） |
-| `/api/ai/chat/` | POST Agent 对话（非流式 polling） |
-| `/api/ai/chat/stream/` | POST Agent 对话（SSE 流式，小宇/工作台共用） |
-| `/api/ai/dashboard/` | GET 小宇 Dashboard 数据聚合 |
-| `/api/ai/workbench/dashboard/` | GET 工作台 Dashboard 聚合接口（仅机构管理员） |
-| `/api/ai/history/` | GET 对话历史 |
-| `/api/ai/reset/` | POST 重置对话 |
-| `/api/ai/memories/` | GET/POST Agent 记忆 CRUD（结构化） |
-| `/api/ai/memories/semantics/` | GET 语义记忆列表（mem0，需 USE_MEM0=true） |
-| `/api/ai/bots/` | GET Bot 列表（按机构过滤） |
-| `/api/users/` | 用户/会员/ELO API |
-| `/api/users/me/diagnostic/generate/` | POST 生成诊断题目 |
-| `/api/users/me/diagnostic/submit/` | POST 提交诊断答案 |
-| `/api/users/me/achievements/` | GET 已解锁成就列表 + GET/POST /api/users/achievements/ 全部成就（含进度） |
-| `/api/users/me/checkin/` | POST 每日签到；GET 签到历史+streak |
-| `/api/users/me/push-subscribe/` | POST/DELETE PWA 推送订阅 |
-| `/api/users/institution/me/invites/` | GET/POST 邀请链接管理（支持审批流+角色分配） |
-| `/api/users/institution/me/join-requests/` | GET 加入申请列表 + PATCH 审批（通过/拒绝） |
-| `/api/users/admin/analytics/dashboard/` | GET 平台数据分析 Dashboard（仅超管） |
-| `/api/users/admin/analytics/export/` | GET CSV 导出（trends/events/nps，仅超管） |
-| `/api/users/nps/submit/` | POST 提交 NPS 问卷 |
-| `/api/quizzes/` | 题库/考试 API |
-| `/api/quizzes/admin/adversarial-pipeline/` | POST 启动 ARC 对抗出题管线 |
-| `/api/courses/` | 课程/视频 API |
-| `/api/courses/oss/multipart/init/` | POST 初始化 OSS 分片上传（返回签名 URL 列表） |
-| `/api/courses/oss/multipart/complete/` | POST 确认 OSS 分片完成 + 创建课程 |
-| `/api/qa/` | 答疑系统 API |
-| `/api/study/` | 自习室 API |
-| `/api/notifications/` | 站内通知 API |
-| `/api/payments/` | 支付 API（订单/Stripe Billing webhook） |
-| `/health` | GET 健康检查 |
-| `/ws/ai/chat/<bot_id>/` | WS Agent 对话（工作台/小宇，多步可见） |
+| --- | --- |
+| `/` | 未登录首页；已登录进入 `/xiaoyu` |
+| `/login`、`/register`、`/account-callback` | 学习端账号入口 |
+| `/xiaoyu`、`/notes`、`/notes/:id` | 小宇与个人笔记 |
+| `/courses`、`/course/:id` | 课程中心与课程工作区 |
+| `/tests`、`/tests/session`、`/tests/review`、`/report-card` | 练习、错题与学习记录 |
+| `/community`、`/qa`、`/study` | 答疑与自习室 |
+| `/billing`、`/pricing`、`/checkout` | 我的服务、AI 加量目录与结算 |
+| `/diagnostic`、`/achievements` | 诊断与成就，实际访问仍受服务端权限限制 |
+| Directus `/admin/unimind-admin` | 教学与内容管理 |
+| `/api/backoffice/operations/<operation>/` | 签名管理桥接，固定操作名 |
+| `/api/ai/chat/`、`/api/ai/chat/stream/`、`/api/ai/history/` | 学习端对话与本人历史 |
+| `/api/ai/feedback/` | Agent 回复赞踩，继续保留 |
+| `/api/notes/` | 笔记、引用与绑定 API |
+| `/api/users/learning/access/`、`/api/users/learning/catalog/` | 学员服务与 AI 加量目录 |
+| `/api/users/admin/analytics/dashboard/`、`/api/users/admin/analytics/export/` | 管理分析与 CSV 导出，只保留 trends/events |
+| `/api/payments/` | AI 加量订单及历史支付兼容 |
+| `/api/legal/` | 内置或数据库法律文档 |
+| `/health/` | Django 健康检查；生产核验须确认未命中 SPA 回退 |
+
+旧 `/workbench`、`/management`、`/institution`、`/marketplace` 等学习端地址保留重定向。机构加入/邀请、套餐变更、API Key 和外部 API 等停用接口继续返回 410。`/join/:invite_slug` 的旧页面仍存在，但不能作为有效加入流程。
+
+产品反馈与 NPS 提交/状态接口已从本地路由移除。`core.0007`、`core.0008` 和 `users.0075` 为本次清理生成的待执行迁移，尚未提交或部署。
 
 ## 环境变量速查
 
@@ -151,8 +131,9 @@ AI_CB_FAILURE_THRESHOLD=5  AI_CB_RECOVERY_TIMEOUT=300  AI_CB_WINDOW_TIMEOUT=60
 
 # Agent 记忆（mem0 语义记忆，默认关闭）
 USE_MEM0=false                    # 启用 mem0 语义记忆（需 pgvector 扩展）
-AI_EMBEDDING_MODEL=deepseek-embedding  # Embedding 模型（config.py 内默认值）
-AI_EMBEDDING_BASE_URL=https://api.deepseek.com/v1  # Embedding API 地址（自动从 DEFAULT_BASE_URL 派生）
+AI_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B  # config.py 默认值
+AI_EMBEDDING_BASE_URL=http://127.0.0.1:8012/v1  # 需另行部署对应嵌入服务
+AI_EMBEDDING_DIMENSIONS=1024
 
 # 其他
 AI_BULK_GENERATE_MAX_PER_REQUEST=3  AI_BULK_GENERATE_CONCURRENCY=4
@@ -194,8 +175,8 @@ for f in backend/knowledge_trees/*.md; do subject=$(basename "$f" .md); python m
 python manage.py seed_exam_agent                # 创建/更新工作台 Bot
 python manage.py seed_xiaoyu                    # 创建/更新小宇学习规划 Bot
 
-# 机构管理
-python manage.py assign_default_institution     # 将无机构用户批量归入宇艺示范学员
+# 管理接入
+# 按 admin-extension/README.md 核对两人映射与内容归属，不批量重写历史机构。
 
 # Migration
 python manage.py makemigrations && python manage.py migrate
@@ -216,11 +197,11 @@ sudo journalctl -u unimind.service -f
 
 | 任务 | 分级 | 思考 | 原因 |
 |------|------|------|------|
-| 对话/面试 | fast | — | 快速响应 |
+| 小宇对话 | fast | — | 快速响应 |
 | 出题 Author / AuthorRevise | fast | — | structured_output |
 | 出题 Reviewer | pro | 开 | 深度逻辑检查，唯一显式开 thinking 的任务 |
 | 出题 Classifier | fast | — | 审计+分类，structured_output |
-| 批量出题 / 模拟考试出题 | pro | — | 高质量批量生成 |
+| 批量出题 | fast | — | 以 config.py 的 quizzes.bulk_generate 映射为准 |
 | 单管线审核 | pro | — | 深度审核 |
 | 主观题判分 | pro | — | 结构化 JSON 输出 |
 | 知识树生成 | pro | — | 高质量内容创作 |
@@ -236,26 +217,27 @@ sudo journalctl -u unimind.service -f
 |------|------|
 | `README.md` | 完整系统介绍、部署指南、环境变量全量参考 |
 | `CHANGELOG.md` | 版本更新日志 |
-| `docs/market/01-product-brand.md` | 产品定位、使用场景、定价方案（客户向） |
-| `docs/market/02-business-strategy.md` | 商业策略、竞争壁垒、路线图（内部/投资人向） |
-| `docs/market/03-marketing-materials.md` | 营销素材库：文案、PPT叙事、术语规范（市场/销售向） |
+| `admin-extension/README.md` | 当前后台接入、权限、内容与教学任务 |
+| `docs/market/02-business-strategy.md` | 历史 B 端商业策略，不能作为当前定价 |
+| `docs/market/03-marketing-materials.md` | 历史营销材料，重新对外使用前须核对 |
 | `docs/market/04-user-manual.md` | 用户操作手册（场景化组织） |
 | `docs/VERSIONING.md` | 版本管理规范（SemVer + Commit 规范 + 发布流程） |
-| `docs/enterprise-deployment.md` | 企业版本地部署指南 |
+| `docs/enterprise-deployment.md` | 历史企业版部署参考，不代表现行销售承诺 |
 
 ### 技术总参考
 
 | 文档 | 内容 |
 |------|------|
 | `docs/tech/AI_SYSTEM_REFERENCE.md` | AI 系统完整参考（Schema 目录、Prompt 模板、模型路由表） |
-| `docs/tech/architecture/PERMISSION_ARCHITECTURE.md` | 权限模型、路由守卫、数据隔离、开发规范 |
+| `docs/tech/architecture/SINGLE_PLATFORM_TRANSITION.md` | 当前单平台权限、内容边界与历史依赖 |
+| `docs/tech/architecture/PERMISSION_ARCHITECTURE.md` | 历史四层权限设计，不作为现行授权规范 |
 
 ### 核心功能文档
 
 | 文档 | 内容 |
 |------|------|
 | `docs/tech/features/AGENT_MEMORY.md` | Agent 记忆系统（提取/检索/注入机制 + 多租户 + Memorix 联动） |
-| `docs/tech/features/EXAM_WORKBENCH.md` | AI 出题工作台（对话式 Agent/快速出题/ARC 精修管线） |
+| `docs/tech/features/EXAM_WORKBENCH.md` | 旧前台工作台历史参考，当前入口见管理扩展 README |
 | `docs/tech/features/INTELLIGENT_TOOL_ROUTING.md` | 智能工具路由（SkillRouter 论文落地、impl_summary、意图预筛选） |
 | `docs/tech/features/MEMORIX_WHITEPAPER.md` | Memorix 算法论文 |
 | `docs/tech/features/MULTI_STEP_AGENT.md` | 多步可见 Agent（逐步气泡展示 + 自定义指标卡片） |
@@ -279,4 +261,4 @@ sudo journalctl -u unimind.service -f
 
 ### Domain docs
 
-Single-context — 一个全局 `CONTEXT.md` + `docs/adr/` 在 repo 根目录。
+当前仓库无 `CONTEXT.md`。先读 `README.md`、本文件和单平台过渡清单；日期化设计、历史权限与研究文档不自动代表已实现或已发布。

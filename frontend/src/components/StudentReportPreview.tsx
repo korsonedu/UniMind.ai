@@ -69,7 +69,7 @@ export function StudentReportPreview({ payload }: { payload: Record<string, unkn
   );
 
   return (
-    <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
+    <div className="um-visual-report space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold">{studentName} 的学习报告</h3>

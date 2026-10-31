@@ -249,6 +249,12 @@ class AIEngine:
         tools / tool_choice: OpenAI 兼容的 function calling 参数。
         不传则行为与之前完全一致。
         """
+        from ai_assistant.services.dsh_generation import enabled, generate, chat_result
+        if enabled(operation):
+            if tools:
+                from ai_assistant.services.dsh_runtime import DshUnavailable
+                raise DshUnavailable('工具调用须使用受控的 DSH 执行器。')
+            return chat_result(generate(messages, operation, max_tokens=max_tokens, temperature=temperature))
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from .config import get_model_tier_for_operation
         started_at = time.monotonic()
@@ -551,6 +557,9 @@ class AIEngine:
         "auto"（即不传 tool_choice）。当 thinking 开启时自动降级为 "auto"，
         并通过 prompt 引导模型调用工具，同时保留 content fallback。
         """
+        from ai_assistant.services.dsh_generation import enabled, generate
+        if enabled(operation):
+            return generate(messages, operation, schema=schema, tool_name=tool_name, max_tokens=max_tokens, temperature=temperature)
         # DeepSeek/OpenAI function calling 要求 parameters schema 顶层 type 必须为 object，
         # 对于 array schema，自动包裹一层 object 并在提取后解包。
         _is_array_schema = schema.get('type') == 'array'
@@ -646,6 +655,10 @@ class AIEngine:
 
         tool_executor: callable(tool_name, arguments_dict) -> str
         """
+        from ai_assistant.services.dsh_generation import enabled, generate, chat_result
+        if enabled(operation):
+            return chat_result(generate(messages, operation, tools=tools, executor=tool_executor,
+                                        max_tokens=max_tokens, max_requests=max_tool_rounds, temperature=temperature))
         from .tool_run import ToolRunCoordinator
 
         all_messages = list(messages)
@@ -737,6 +750,10 @@ class AIEngine:
         on_message: callable(text) — 有 tool_calls 的轮次，通过此回调发送中间消息
         返回: {"content": str, "run_id": str} 最后一轮文本和请求级 Tool Run ID
         """
+        from ai_assistant.services.dsh_generation import enabled
+        if enabled(operation):
+            from ai_assistant.services.dsh_runtime import DshUnavailable
+            raise DshUnavailable('旧流式 Agent 已停用，请使用小宇 DSH 会话入口或教研任务。')
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from .config import get_model_tier_for_operation
         from .tool_run import ToolRunCoordinator
@@ -954,13 +971,52 @@ class AIEngine:
 
             for outcome in outcomes:
                 name = outcome.call.name
+                tool_content = outcome.result
+                practice_card = False
+
+                if not outcome.failed and name == 'get_practice_questions':
+                    try:
+                        data = json.loads(tool_content)
+                    except (json.JSONDecodeError, TypeError):
+                        data = None
+                    if isinstance(data, dict) and isinstance(data.get('visual'), dict):
+                        practice_card = True
+                        # 卡片已带题干和选项；模型侧副本只留元信息，从源头避免复述。
+                        questions = data.pop('questions', None)
+                        visual_payload = data['visual'].get('payload')
+                        if isinstance(visual_payload, dict):
+                            visual_payload.pop('questions', None)
+                        if isinstance(questions, list):
+                            data['question_count'] = len(questions)
+                            data['questions'] = [
+                                {
+                                    "id": q.get("id"),
+                                    "kp_name": q.get("kp_name"),
+                                    "difficulty_level": q.get("difficulty_level"),
+                                    "is_review": q.get("is_review"),
+                                }
+                                for q in questions if isinstance(q, dict)
+                            ]
+                            if isinstance(visual_payload, dict):
+                                visual_payload['question_count'] = len(questions)
+                        tool_content = json.dumps(data, ensure_ascii=False, default=str)
+
                 all_messages.append({
                     "role": "tool",
-                    "content": outcome.result,
+                    "content": tool_content,
                     "tool_call_id": outcome.call.call_id,
                 })
 
-                if not outcome.failed and name in ('quick_generate', 'bulk_generate_questions'):
+                if practice_card:
+                    all_messages.append({
+                        "role": "system",
+                        "content": (
+                            "练习题卡片已在当前对话中展示，学生可直接在卡片内作答和提交。"
+                            "你的回复只需一句话简短引导，不要复述题干、选项或答案，"
+                            "也不要再调用 render_visual 为同一组题生成跳转卡片。"
+                        ),
+                    })
+                elif not outcome.failed and name in ('quick_generate', 'bulk_generate_questions'):
                     all_messages.append({
                         "role": "system",
                         "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
@@ -1074,6 +1130,11 @@ class AIEngine:
         tool_executor:  callable(tool_name, arguments_dict) -> str   研究工具执行器
         schema/tool_name/tool_description: 最终提交工具的 JSON Schema
         """
+        from ai_assistant.services.dsh_generation import enabled, generate
+        if enabled(operation):
+            return generate(messages, operation, schema=schema, tool_name=tool_name,
+                            tools=research_tools, executor=tool_executor, max_tokens=max_tokens,
+                            max_requests=max_tool_rounds, temperature=temperature)
         submit_tool = cls._tool_def(tool_name, tool_description, schema)
         all_tools = list(research_tools) + [submit_tool]
         all_messages = list(messages)
@@ -1142,6 +1203,10 @@ class AIEngine:
     @classmethod
     def call_ai_stream(cls, messages, temperature=0.7, max_tokens=8192, operation='general', max_retries=None):
         """流式 AI 调用，yield 每个 delta.content 片段。支持重试。"""
+        from ai_assistant.services.dsh_generation import enabled, generate
+        if enabled(operation):
+            yield generate(messages, operation, max_tokens=max_tokens, temperature=temperature)['text']
+            return
         from .circuit_breaker import AICircuitBreaker, CircuitBreakerError
         from .config import get_model_tier_for_operation
 

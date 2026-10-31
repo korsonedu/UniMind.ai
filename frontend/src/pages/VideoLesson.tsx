@@ -10,6 +10,7 @@ import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
 import { useLearningSession } from '@/hooks/useLearningSession';
+import { useDesktopStore } from '@/lib/desktop';
 import '@/styles/course-lesson.css';
 
 const formatTime = (s: number) => {
@@ -27,6 +28,7 @@ interface VideoLessonProps {
 export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
   const { id } = useParams();
   const updateUser = useAuthStore(s => s.updateUser);
+  const desktopState = useDesktopStore(s => s.state);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
@@ -43,6 +45,30 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [seeking] = useState(false);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const courseId = Number(id);
+  const offlineDownload = desktopState?.downloads.find(item => item.courseId === courseId);
+  const [offlineNow, setOfflineNow] = useState(Date.now);
+  useEffect(() => {
+    if (!offlineDownload?.expiresAt) return;
+    const timer = window.setInterval(() => setOfflineNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [offlineDownload?.expiresAt]);
+  const offlineReady = offlineDownload?.status === 'ready'
+    && (!offlineDownload.expiresAt || offlineDownload.expiresAt > offlineNow);
+  const [offlinePending, setOfflinePending] = useState(false);
+
+  const handleOffline = async () => {
+    const desktop = window.unimindDesktop;
+    if (!desktop) return;
+    setOfflinePending(true);
+    try {
+      if (offlineReady) await desktop.openOfflineCourse(courseId);
+      else useDesktopStore.setState({ state: await desktop.downloadCourse(courseId) });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '离线课程操作失败，请重试。');
+    } finally {
+      setOfflinePending(false);
+    }
+  };
 
   useLearningSession({ enabled: !loading && course?.id === courseId && !!course.video_file, kind: 'video', courseId, videoRef });
 
@@ -317,7 +343,23 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
         </div>
         <header className="um-lesson-heading">
           <div><p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || '待归类'}</p><h1>{course.title}</h1></div>
-          <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{isFavorite ? '已收藏' : '收藏'}</button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {window.unimindDesktop && course.video_file && (
+              <button className="um-lesson-favorite" disabled={offlinePending || offlineDownload?.status === 'downloading'} onClick={() => void handleOffline()} title={offlineDownload?.error}>
+                {offlineReady ? <Play size={18} /> : <Download size={18} />}
+                {offlineDownload?.status === 'downloading'
+                  ? `下载中${offlineDownload.totalBytes > 0 ? ` ${Math.min(100, Math.floor(offlineDownload.receivedBytes / offlineDownload.totalBytes * 100))}%` : '…'}`
+                  : offlineReady ? '离线播放' : offlineDownload?.status === 'paused' ? '继续下载' : offlineDownload?.status === 'failed' ? '重试下载' : offlineDownload ? '重新下载' : '下载课程'}
+              </button>
+            )}
+            {offlineDownload?.status === 'downloading' && window.unimindDesktop?.pauseDownload && <button className="um-lesson-favorite" disabled={offlinePending} onClick={async () => {
+              setOfflinePending(true);
+              try { useDesktopStore.setState({ state: await window.unimindDesktop!.pauseDownload!(courseId) }); }
+              catch (error) { toast.error(error instanceof Error ? error.message : '暂停失败，请重试。'); }
+              finally { setOfflinePending(false); }
+            }}><Pause size={18} />暂停下载</button>}
+            <button className="um-lesson-favorite" disabled={favoritePending || !onFavoriteChange} onClick={onFavoriteChange} aria-pressed={isFavorite}><Star size={18} weight={isFavorite ? 'fill' : 'regular'} />{isFavorite ? '已收藏' : '收藏'}</button>
+          </div>
         </header>
       </section>
       <aside className="um-lesson-sidebar" aria-label="学习侧栏">

@@ -2,8 +2,6 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-DEFAULT_TRIAL_DAYS = 7
-
 
 def activate_membership(user, plan, duration_days, source='payment'):
     """Single entry point for membership activation.

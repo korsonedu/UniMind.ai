@@ -15,7 +15,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from core.models import SecurityAuditLog
 from courses.models import Course, CourseModule, TranscriptSegment, VideoTranscript
 from quizzes.models import KnowledgePoint, Question, UserQuestionStatus
-from users.models import User, Institution, LearningProduct, LearningGrant, UserAccessProfile
+from users.models import User, Institution, LearningProduct, LearningGrant, UserAccessProfile, CourseStudentStatus
 
 
 class BackofficeTests(TestCase):
@@ -64,17 +64,17 @@ class BackofficeTests(TestCase):
         course.refresh_from_db()
         self.assertIsNone(course.module_id)
 
-    def test_grant_is_idempotent(self):
+    def test_retired_grant_creation_is_rejected(self):
         product = LearningProduct.objects.create(name='Existing service', duration_days=30)
         payload = {'user': self.student.pk, 'product': product.pk, 'source': 'course', 'request_id': str(uuid.uuid4())}
         first = self.call('grants.create', payload)[0]
         second = self.call('grants.create', payload, actor=1)[0]
-        self.assertEqual(first.status_code, 200)
-        self.assertEqual(second.status_code, 200)
-        self.assertEqual(first.data['id'], second.data['id'])
-        self.assertEqual(LearningGrant.objects.count(), 1)
+        self.assertEqual(first.status_code, 404)
+        self.assertEqual(second.status_code, 404)
+        self.assertEqual(LearningGrant.objects.count(), 0)
 
     def test_course_access_is_per_user_not_per_module_or_grant(self):
+        CourseStudentStatus.objects.create(user=self.student, is_course_student=True)
         profile = UserAccessProfile.objects.create(user=self.student, blocked_permissions=['unrelated.permission'])
         student_client = APIClient()
         student_client.credentials(HTTP_AUTHORIZATION='Token ' + Token.objects.create(user=self.student).key)

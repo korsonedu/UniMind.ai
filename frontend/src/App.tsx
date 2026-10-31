@@ -12,16 +12,12 @@ const MainLayout = lazy(() => import('./layouts/MainLayout').then(m => ({ defaul
 const CommunityLayout = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityLayout })));
 const CommunityEntry = lazy(() => import('./layouts/CommunityLayout').then(m => ({ default: m.CommunityEntry })));
 import { useAuthStore } from './store/useAuthStore';
-import { useSystemStore } from './store/useSystemStore';
 import { useInstitutionStore } from './store/useInstitutionStore';
 import { FeatureGuard } from './components/FeatureGuard';
 import { Loading } from '@/components/Loading';
 import api from '@/lib/api';
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-
-const NPSSurvey = lazy(() => import('./components/NPSSurvey').then(m => ({ default: m.NPSSurvey })));
-import { FeedbackButton } from './components/FeedbackButton';
 
 
 // Lazy-loaded pages — named exports need .then() wrapper
@@ -48,7 +44,6 @@ const BillingPage = lazy(() => import('./pages/Billing').then(module => ({ defau
 const PaymentResult = lazy(() => import('./pages/PaymentResult').then(module => ({ default: module.PaymentResult })));
 const Checkout = lazy(() => import('./pages/Checkout').then(module => ({ default: module.Checkout })));
 const DiagnosticTest = lazy(() => import('./pages/DiagnosticTest').then(module => ({ default: module.DiagnosticTest })));
-const XiaoYu = lazy(() => import('./pages/XiaoYu').then(module => ({ default: module.XiaoYu })));
 const NotesPage = lazy(() => import('./pages/notes/NotesPage'));
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
 
@@ -89,12 +84,7 @@ const PageLoader = () => (
 const RequireAuth = ({ children }: { children: ReactNode }) => {
   const user = useAuthStore(s => s.user);
   const location = useLocation();
-  const { theme, setTheme } = useSystemStore();
-
   useEffect(() => {
-    if (user && theme !== 'light') {
-      setTheme('light');
-    }
     // PWA push subscription — deferred to avoid blocking render
     if (user) {
       const timer = setTimeout(() => {
@@ -102,13 +92,17 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [user, theme, setTheme]);
+  }, [user]);
 
   if (!user) return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
   return children;
 };
 
 const HomeRedirect = () => <Navigate to={HOME_PATH} replace />;
+
+// The persistent XiaoYu instance lives in MainLayout so in-workspace route changes
+// do not unmount its SSE streams.
+const XiaoyuPlaceholder = () => null;
 
 const LegacyRedirect = ({ to }: { to: string }) => {
   const { search, hash } = useLocation();
@@ -138,6 +132,7 @@ const legacyRoutes = [
 
 const RootRedirect = () => {
 
+  const storeUser = useAuthStore(s => s.user);
   const setAuth = useAuthStore(s => s.setAuth);
   const logout = useAuthStore(s => s.logout);
   const hasHydrated = useAuthStore.persist.hasHydrated();
@@ -159,8 +154,8 @@ const RootRedirect = () => {
   // On auth failure, log out and check invite status
   useEffect(() => {
     if (!isError) return;
-    logout();
-    if (location.pathname !== '/') return;
+    logout({ preserveDesktop: true });
+    if (location.pathname !== '/' || window.unimindDesktop) return;
     api.get('/users/check-invite/')
       .then(res => {
         if (res.data?.has_invite) navigate('/register', { replace: true });
@@ -170,9 +165,13 @@ const RootRedirect = () => {
 
   if (!hasHydrated || isLoading) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
-  if (userData && !isError) return <Outlet />;
+  if (userData && !isError) {
+    if (storeUser?.id !== userData.id) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+    return <Outlet />;
+  }
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
+  if (window.unimindDesktop) return <Navigate to="/login" replace />;
 
   return <Suspense fallback={<div className="min-h-dvh bg-[#080b0f]" aria-hidden="true" />}><Landing /></Suspense>;
 };
@@ -184,6 +183,7 @@ const lazyPage = (Component: React.ComponentType) => (
 );
 
 const router = createBrowserRouter([
+  ...(import.meta.env.DEV ? [{ path: '/dev/dsh', element: lazyPage(lazy(() => import('./pages/DshM0'))) }] : []),
   ...legacyRoutes.map(([path, to]) => ({ path, element: <LegacyRedirect to={to} /> })),
   {
     path: "/",
@@ -209,7 +209,7 @@ const router = createBrowserRouter([
           { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamHistoryPage)}</FeatureGuard> },
           { path: "notes", element: lazyPage(NotesPage) },
           { path: "notes/:id", element: lazyPage(NotesPage) },
-          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{lazyPage(XiaoYu)}</FeatureGuard> },
+          { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant"><XiaoyuPlaceholder /></FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
           { path: "settings", element: lazyPage(Settings) },
           { path: "billing", element: lazyPage(BillingPage) },
@@ -265,13 +265,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <Toaster position="top-center" richColors />
-        <Suspense fallback={null}>
-          <NPSSurvey />
-        </Suspense>
         <XiaoYuEngineBridge />
         <StudyRoomWsBridge />
         <RouterProvider router={router} />
-        <FeedbackButton />
       </ErrorBoundary>
     </QueryClientProvider>
   );

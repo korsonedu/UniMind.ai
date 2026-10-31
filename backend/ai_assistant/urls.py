@@ -7,19 +7,31 @@ from .views import (
     SemanticMemoryListView, SemanticMemoryDeleteView,
     ActionCardInteractionView,
 )
+from .views_recovery import ChatRequestStatusView
 from .views_dashboard import XiaoYuDashboardView, ExamWorkbenchDashboardView
 from .views_projects import ConversationDetailView, ProjectListCreateView, ProjectDetailView
+from .views_dsh import DshContextView, DshToolView, DshChatView, DshSessionView, DshStatusView, DshChatStreamView, DshSessionListView, DshConfirmView, DshSubmissionView
 from .views_api import (
     grade_view, profile_view, due_view, stats_view,
-    practice_start_view, practice_pre_grade_view, practice_submit_view,
+    practice_start_view, practice_pre_grade_view, practice_submit_view, practice_session_view,
     feedback_view,
 )
 
 urlpatterns = [
+    path('dsh/actions/confirm/', DshConfirmView.as_view(), name='dsh-confirm'),
+    path('dsh/actions/<uuid:request_id>/', DshSubmissionView.as_view(), name='dsh-submission'),
+    path('dsh/context/', DshContextView.as_view(), name='dsh-context'),
+    path('dsh/tools/<str:name>/', DshToolView.as_view(), name='dsh-tool'),
+    path('dsh/status/', DshStatusView.as_view(), name='dsh-status'),
+    path('dsh/chat/stream/', DshChatStreamView.as_view(), name='dsh-chat-stream'),
+    path('dsh/chat/', DshChatView.as_view(), name='dsh-chat'),
+    path('dsh/sessions/', DshSessionListView.as_view(), name='dsh-sessions'),
+    path('dsh/session/<str:action>/', DshSessionView.as_view(), name='dsh-session'),
     path('dashboard/', XiaoYuDashboardView.as_view(), name='xiaoyu-dashboard'),
     path('workbench/dashboard/', ExamWorkbenchDashboardView.as_view(), name='exam-workbench-dashboard'),
     path('chat/', AIChatView.as_view(), name='ai-chat'),
     path('chat/stream/', AIChatStreamView.as_view(), name='ai-chat-stream'),
+    path('chat-requests/<uuid:request_id>/', ChatRequestStatusView.as_view(), name='ai-chat-request-status'),
     path('history/', AIChatListView.as_view(), name='ai-chat-history'),
     path('conversations/', ConversationListView.as_view(), name='conversation-list'),
     path('conversations/<uuid:conversation_id>/', ConversationDetailView.as_view(), name='conversation-detail'),
@@ -44,6 +56,7 @@ urlpatterns = [
     path('memory/stats/', stats_view, name='memory-stats'),
 
     # Practice session
+    path('practice/session/<str:session_id>/', practice_session_view, name='practice-session'),
     path('practice/start/', practice_start_view, name='practice-start'),
     path('practice/pre-grade/', practice_pre_grade_view, name='practice-pre-grade'),
     path('practice/submit/', practice_submit_view, name='practice-submit'),

@@ -7,11 +7,13 @@ export type Course = { id: number; title: string; description: string; module: n
 export type Product = { id: number; name: string; description: string; price_cents: number; duration_days: number;
   monthly_ai_calls: number; modules: number[]; is_active: boolean; sort_order: number };
 export type Grant = { id: number; product: number; snapshot: { name: string }; source: string; starts_at: string; expires_at: string; revoked: boolean };
-export type Person = { id: number; username: string; email: string; nickname: string; is_active: boolean; email_verified: boolean; is_course_student: boolean; is_admin: boolean };
+export type Cohort = { id: number; name: string; target_year: number; exam_date: string | null; starts_on: string; ends_on: string; is_active: boolean; state: string };
+export const cohortStates: Record<string, string> = { active: '服务中', scheduled: '尚未开始', expired: '已结束', disabled: '已停用' };
+export type Person = { id: number; username: string; email: string; nickname: string; is_active: boolean; email_verified: boolean; is_course_student: boolean; is_admin: boolean; course_student_enabled: boolean; cohort: Cohort | null };
 export type AIUsage = { used: number; limit: number | null; remaining: number | null; resets_at: string; configured: boolean; unlimited: boolean };
 export type AddonProduct = { id?: number; name: string; description: string; price_cents: number | null; ai_calls: number | null; validity_days: number | null; is_active: boolean; sort_order: number; configured?: boolean };
 export type Page<T> = { items: T[]; total: number; page: number; page_size: number };
-export type Meta = { operator: { id: number; name: string }; content_configured: boolean; uploads_enabled: boolean };
+export type Meta = { operator: { id: number; name: string }; content_configured: boolean; teaching_parse_enabled?: boolean; uploads_enabled: boolean };
 export type KnowledgeNode = { id: number; name: string; code: string | null; level: string; parent: number | null;
   subject: string | null; description: string; order: number; question_count: number };
 export type QuestionRow = { id: number; text: string; q_type: string; subjective_type: string | null;

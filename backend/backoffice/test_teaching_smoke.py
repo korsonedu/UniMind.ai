@@ -58,6 +58,50 @@ class TeachingSmoke(TestCase):
         teaching.review(self.request, data)
         self.assertEqual(Question.objects.filter(institution=self.scope).count(), 1)
 
+    @override_settings(UNIMIND_DSH_TEACHING_ENABLED=True)
+    def test_parse_candidates_require_scoped_kp_and_confirmation(self):
+        data = {'kind': 'parse', 'kp_ids': [self.kp.pk], 'raw_text': '合成资料：久期是什么？答案：利率敏感度。', 'request_id': str(uuid4())}
+        with override_settings(UNIMIND_DSH_TEACHING_ENABLED=False), self.assertRaises(ValidationError):
+            teaching.launch(self.request, data)
+        for bad in ({'kp_ids': [self.foreign_kp.pk]}, {'kp_ids': [self.kp.pk, self.foreign_kp.pk]}, {'raw_text': ' '}, {'raw_text': '题'*10001}):
+            with self.assertRaises(ValidationError):
+                teaching.launch(self.request, {**data, **bad})
+        with patch('backoffice.tasks.run_teaching_task.delay') as dispatch:
+            with self.captureOnCommitCallbacks(execute=True):
+                first = teaching.launch(self.request, data)
+                self.assertEqual(teaching.launch(self.request, data)['id'], first['id'])
+            dispatch.assert_called_once_with(first['id'])
+        parsed = {'text': '合成题目', 'q_type': 'subjective', 'subjective_type': 'short', 'options': {},
+            'correct_answer': '合成答案', 'grading_points': ['合成要点'], 'analysis': '', 'difficulty_level': 'normal'}
+        with patch('ai_engine.ai_service.AIService.parse_questions_from_text', return_value=[parsed]) as parse:
+            run_teaching_task(first['id']); run_teaching_task(first['id'])
+            parse.assert_called_once_with(data['raw_text'])
+        task = ContentPipelineTask.objects.get(pk=first['id'])
+        self.assertEqual(task.status, 'review')
+        self.assertEqual(task.result['questions'][0]['kp_id'], self.kp.pk)
+        self.assertFalse(Question.objects.exists())
+        review = {'id': task.pk, 'action': 'approve', 'question_indices': [0]}
+        with self.assertRaises(ValidationError):
+            teaching.review(self.request, review)
+        teaching.review(self.request, {**review, 'confirmed': True})
+        teaching.review(self.request, {**review, 'confirmed': True})
+        self.assertEqual(Question.objects.filter(institution=self.scope).count(), 1)
+        failed = self.task(status='pending', payload={'kind': 'parse', 'kp_ids': [self.kp.pk], 'raw_text': '合成故障'})
+        with patch('ai_engine.ai_service.AIService.parse_questions_from_text', side_effect=RuntimeError('fixture failure')):
+            run_teaching_task(failed.pk)
+        failed.refresh_from_db()
+        self.assertEqual(failed.status, 'failed')
+        self.assertIn('解析任务执行失败', failed.error_message)
+        self.assertEqual(Question.objects.count(), 1)
+        retry_source = self.task(status='failed', payload={'kind': 'parse', 'kp_ids': [self.kp.pk], 'raw_text': '重试资料'})
+        with patch('backoffice.tasks.run_teaching_task.delay') as dispatch:
+            with self.captureOnCommitCallbacks(execute=True):
+                retried = teaching.retry(self.request, {'id': retry_source.pk, 'request_id': str(uuid4())})
+            dispatch.assert_called_once_with(retried['id'])
+        retried_task = ContentPipelineTask.objects.get(pk=retried['id'])
+        self.assertEqual(retried_task.payload['raw_text'], '重试资料')
+        self.assertEqual(retried_task.payload['kp_ids'], [self.kp.pk])
+
     def test_scope_and_history_are_bound_to_the_real_operator(self):
         with self.assertRaises(ValidationError):
             teaching.validate_kps([self.foreign_kp.pk])

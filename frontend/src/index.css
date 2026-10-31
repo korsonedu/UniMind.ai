@@ -106,7 +106,7 @@
 
 /* Global Dark Mode Style Fixes */
 .dark body {
-  background-color: #08080a;
+  background-color: var(--um-surface-4);
 }
 
 /* Dark mode semantic overrides */
@@ -131,6 +131,12 @@ body {
 }
 html {
   overflow-y: scroll;
+}
+/* Desktop auth pages opt out of native scroll bounce. */
+@media (min-width: 768px) {
+  html:has(.um-auth-shell) {
+    overscroll-behavior: none;
+  }
 }
 
 /* Ensure all Lucide icons and common headers adapt to dark mode */

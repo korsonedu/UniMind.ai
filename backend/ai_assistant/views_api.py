@@ -237,6 +237,24 @@ def practice_start_view(request):
     })
 
 
+@api_view(['GET'])
+@permission_classes([IsMember])
+def practice_session_view(request, session_id):
+    session_id = serializers.UUIDField().run_validation(session_id).hex
+    prior = PracticeSubmission.objects.filter(user=request.user, session_id=session_id, response__has_key='results').first()
+    if prior:
+        return Response({'session_id': session_id, 'questions': [], 'result': prior.response})
+    session = _cache.get(f'practice:session:{session_id}')
+    if not session:
+        return Response({'error': '练习已过期或不存在'}, status=404)
+    if session['user_id'] != request.user.pk:
+        return Response({'error': '无权访问此练习'}, status=403)
+    ids = {question['id'] for question in session['questions']}
+    if Question.objects.filter(pk__in=ids, institution_id=get_content_institution_id()).count() != len(ids):
+        return Response({'error': '题目已不在当前内容范围'}, status=403)
+    return Response({'session_id': session_id, 'questions': session['questions']})
+
+
 @api_view(['POST'])
 @permission_classes([IsMember])
 def practice_pre_grade_view(request):
@@ -389,9 +407,9 @@ def practice_submit_view(request):
     kp_breakdown = [{'kp_id': pk, 'kp_name': value['kp_name'],
                      'correct_rate': round(value['correct'] / value['total'] * 100, 1)}
                     for pk, value in kp_scores.items()]
-    summary = [f'正确率 {correct_rate}%（{correct_count}/{len(results)}）']
+    summary = [f'得分率 {correct_rate}%（达标 {correct_count}/{len(results)} 题）']
     weak = [kp['kp_name'] for kp in kp_breakdown if kp['correct_rate'] < 60]
-    summary.append('薄弱知识点：' + '、'.join(weak[:3]) if weak else '全部知识点掌握良好')
+    summary.append('本次未达标知识点：' + '、'.join(weak[:3]) if weak else '本次题目均达到当前评分标准')
     response = {
         'total_score': round(total_score, 1), 'max_score': round(max_score, 1),
         'correct_rate': correct_rate, 'correct_count': correct_count,

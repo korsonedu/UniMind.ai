@@ -1,0 +1,17 @@
+{% extends 'users/accounts/base.html' %}
+{% block content %}
+{% if callback %}
+<h1>登录已确认</h1>
+<p class="form-description">请返回 UniMind 完成登录。若没有自动打开，请点击下方按钮。此登录链接将在 60 秒内失效。</p>
+<a class="primary-button" href="{{ callback }}">打开 UniMind</a>
+<script>window.location.href = "{{ callback|escapejs }}";</script>
+{% else %}
+<h1>登录 UniMind 桌面端</h1>
+<p class="form-description">确认使用以下科晟账号登录 UniMind。请确认这是你刚刚在桌面端发起的登录。</p>
+<p>{{ request.user.nickname|default:request.user.username }}</p>
+<p>{{ request.user.email|default:request.user.username }}</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="request" value="{{ request_id }}">
+<button class="primary-button" type="submit">确认登录 UniMind</button>
+</form>
+{% endif %}
+{% endblock %}

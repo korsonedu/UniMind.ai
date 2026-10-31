@@ -18,6 +18,7 @@ from . import courses, people, quizzes, uploads, commerce, teaching, transcripts
 def meta(request, data):
     return {'operator': {'id': request.user.pk, 'name': request.user.nickname or request.user.username},
             'content_configured': bool(settings.UNIMIND_CONTENT_INSTITUTION_ID),
+            'teaching_parse_enabled': getattr(settings, 'UNIMIND_DSH_TEACHING_ENABLED', False),
             'uploads_enabled': bool(settings.OSS_BUCKET_NAME and settings.OSS_ACCESS_KEY_ID and settings.OSS_ACCESS_KEY_SECRET and settings.OSS_ENDPOINT)}
 
 
@@ -34,6 +35,7 @@ READS = {'meta': meta, 'options': courses.options, 'courses.list': courses.list_
          'knowledge.list': quizzes.list_catalog, 'questions.list': quizzes.list_questions,
          'questions.detail': quizzes.question_detail,
          'courses.transcript.get': transcripts.get_transcript}
+READS['cohorts.list'] = people.list_cohorts
 WRITES = {'courses.save': courses.save_course, 'courses.delete': courses.delete_course,
           'courses.assign': courses.assign_courses, 'modules.save': courses.save_module,
           'modules.delete': courses.delete_module, 'grants.revoke': people.revoke_grant,
@@ -46,6 +48,7 @@ WRITES = {'courses.save': courses.save_course, 'courses.delete': courses.delete_
           'courses.transcript.save': transcripts.save_transcript,
           'courses.transcript.retranscribe': transcripts.retranscribe_course,
           'courses.outline.regenerate': transcripts.regenerate_outline}
+WRITES['cohorts.save'] = people.save_cohort
 
 READS.update(commerce.READS)
 READS.update(teaching.READS)
@@ -81,7 +84,9 @@ class OperationView(APIView):
                         detail=json.dumps({'channel': 'directus', 'operator': request.auth, 'operation': operation,
                                            'target': result.get('id'), 'updated': result.get('updated'),
                                            'enabled_features': result.get('enabled_features'),
-                                           'is_course_student': result.get('is_course_student')}, ensure_ascii=False))
+                                           'is_course_student': result.get('is_course_student'),
+                                           'course_student_enabled': result.get('course_student_enabled'),
+                                           'cohort_id': result.get('cohort_id')}, ensure_ascii=False))
         except Exception as exc:
             cleanup = getattr(request, 'backoffice_rollback', None)
             if cleanup:

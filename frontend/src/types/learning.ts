@@ -23,6 +23,8 @@ export interface AIUsage {
 
 export interface LearningAccess {
   is_course_student: boolean;
+  cohort: { id: number; name: string; target_year: number; exam_date: string | null;
+    starts_on: string; ends_on: string; state: string; service_active: boolean } | null;
   ai_usage: AIUsage;
   addons: { id: number; name: string; ai_calls: number; used_calls: number; expires_at: string }[];
 }

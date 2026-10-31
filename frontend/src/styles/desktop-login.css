@@ -1,0 +1,31 @@
+html:has(.um-desktop-login) { overflow: hidden; overscroll-behavior: none; }
+.um-desktop-login { --login-muted: #777773; min-height: 100dvh; display: flex; flex-direction: column; background: #fafaf9; color: #20201e; }
+.um-desktop-login-titlebar { height: 48px; flex: 0 0 48px; -webkit-app-region: drag; }
+.um-desktop-login-content { width: min(100%, 440px); flex: 1; align-self: center; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 44px 28px 72px; text-align: center; animation: um-login-appear .24s ease-out; }
+.um-desktop-login-mark { width: 72px; height: 72px; display: grid; place-items: center; margin-bottom: 32px; border: 1px solid #ecece9; border-radius: 20px; background: #fff; overflow: hidden; }
+.um-desktop-login-mark img { width: 68px; height: 68px; object-fit: contain; }
+.um-desktop-login h1 { margin: 0; font-size: clamp(28px, 3.5vw, 36px); line-height: 1.25; font-weight: 600; letter-spacing: -.045em; }
+.um-desktop-login-subtitle { margin: 15px 0 0; color: var(--login-muted); font-size: 15px; line-height: 1.7; }
+.um-desktop-login-actions { width: 100%; max-width: 320px; margin-top: 42px; position: relative; }
+.um-desktop-login-primary { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; padding: 13px 22px; border-radius: 11px; border: 1px solid transparent; background: #242422; color: #fff; font-size: 14px; font-weight: 500; transition: background .15s ease, transform .15s ease; -webkit-app-region: no-drag; }
+.um-desktop-login-primary:hover:not(:disabled) { background: #40403b; }
+.um-desktop-login-primary:active:not(:disabled) { transform: translateY(1px); }
+.um-desktop-login-primary:disabled { cursor: default; opacity: .55; }
+.um-desktop-login-primary:focus-visible, .um-desktop-login a:focus-visible, .um-desktop-login-cancel:focus-visible { outline: 2px solid #626a9c; outline-offset: 4px; }
+.um-desktop-login-status { min-height: 42px; margin: 15px 0 0; color: var(--login-muted); font-size: 12px; line-height: 1.75; text-wrap: pretty; }
+.um-desktop-login-status[role='alert'] { color: #a23f31; }
+.um-desktop-login-cancel { padding: 8px 12px; border: 0; border-radius: 7px; color: var(--login-muted); font-size: 12px; position: absolute; top: 113px; left: 50%; transform: translateX(-50%); white-space: nowrap; }
+.um-desktop-login-cancel:hover { color: #20201e; background: #ededeb; }
+.um-desktop-login-footer { flex: 0 0 auto; display: flex; align-items: center; flex-direction: column; gap: 12px; padding: 16px 24px 24px; text-align: center; color: var(--login-muted); font-size: 11px; line-height: 1.8; }
+.um-desktop-login-footer p { margin: 0; }
+.um-desktop-login-footer a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.um-desktop-login-footer span { font-size: 10px; opacity: .65; letter-spacing: .04em; }
+.dark .um-desktop-login { --login-muted: #92928d; background: #1c1c1a; color: #f2f2ed; }
+.dark .um-desktop-login h1 { color: #f2f2ed; }
+.dark .um-desktop-login-primary { background: #efefe9; color: #242422; }
+.dark .um-desktop-login-primary:hover:not(:disabled) { background: #fff; }
+.dark .um-desktop-login-cancel:hover { color: #f2f2ed; background: #30302b; }
+.dark .um-desktop-login-status[role='alert'] { color: #e89c8e; }
+@keyframes um-login-appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (max-height: 600px) { .um-desktop-login-content { padding-block: 24px 48px; } .um-desktop-login-mark { margin-bottom: 20px; } .um-desktop-login-actions { margin-top: 26px; } }
+@media (prefers-reduced-motion: reduce) { .um-desktop-login-content { animation: none; } .um-desktop-login-primary { transition: none; } }

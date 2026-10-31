@@ -1,20 +1,19 @@
 html:has(.um-app-shell) { overflow-y: hidden; }
 body:has(.um-app-shell) { scrollbar-gutter: auto; }
-.um-app-shell { font-family: var(--um-font-family); background: var(--um-color-rail); }
-.um-app-shell .um-app-main { margin: 2px; border: 1px solid var(--um-color-border); border-radius: 16px; background: var(--um-color-surface); box-shadow: var(--um-shadow-panel); isolation: isolate; }
+.um-app-shell { font-family: var(--um-font-family); font-weight: var(--um-weight-regular); font-variant-numeric: tabular-nums; background: var(--um-surface-4); }
+.um-app-shell .um-app-main { margin: 2px; border: 1px solid transparent; border-radius: 16px; background: var(--um-surface-1); box-shadow: none; isolation: isolate; }
 .um-app-shell .um-app-rail { background: var(--um-color-rail); border-right: 0; }
-.um-app-shell :is(.um-agent-sessions, .um-course-context) { background: color-mix(in srgb, var(--um-color-rail) 55%, var(--um-color-surface)); }
+.um-app-shell :is(.um-agent-sessions, .um-course-context) { background: var(--um-surface-3); border-color: transparent; }
 .um-directory-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; z-index: 15; cursor: col-resize; touch-action: none; }
 .um-directory-resize:hover { background: var(--um-color-border); }
 .um-directory-resize:focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: -2px; }
 .um-directory-content { overflow: hidden; transition: opacity 140ms ease; }
 .um-directory-content[aria-hidden='true'] { opacity: 0; visibility: hidden; transition: opacity 140ms ease, visibility 0s 220ms; }
-[data-directory-animated='true'] .um-agent-directory { transition: width 220ms cubic-bezier(.22,1,.36,1); }
-.um-course-workspace[data-directory-animated='true'] { transition: grid-template-columns 220ms cubic-bezier(.22,1,.36,1); }
 @media (prefers-reduced-motion: reduce) {
-  .um-directory-content, .um-directory-content[aria-hidden='true'], [data-directory-animated='true'] .um-agent-directory, .um-course-workspace[data-directory-animated='true'] { transition: none; }
+  .um-directory-content, .um-directory-content[aria-hidden='true'] { transition: none; }
 }
-.um-app-brand { height: 48px; align-items: center; margin-bottom: 12px; }
+.dark .um-app-brand img { mix-blend-mode: screen; }
+.um-app-brand { height: 44px; align-items: center; margin-bottom: 10px; }
 .um-app-rail a[aria-current='page'] { background: var(--um-color-selected); color: var(--um-color-accent); border: 0; box-shadow: none; }
 .um-app-shell :is(button,a):focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: 2px; box-shadow: none; }
 .um-app-global-header { align-self: flex-end; min-height: var(--um-height-header); background: transparent; }
@@ -28,8 +27,8 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-app-menu { background: var(--um-color-surface); color: var(--um-color-text); border-color: var(--um-color-border); border-radius: var(--um-radius-dialog); box-shadow: var(--um-shadow-overlay); }
 .um-app-menu [role='menuitem'] { min-height: 36px; font-size: 13px; }
 .um-app-menu [role='menuitem'] svg { flex-shrink: 0; }
-.um-app-elo { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 8px; border-radius: var(--um-radius-control); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--um-color-text); transition: background-color var(--um-motion-fast); }
-.um-app-elo-label { font-size: 12px; color: var(--um-color-text-muted); font-weight: 400; }
+.um-app-elo { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 8px; border-radius: var(--um-radius-control); font-size: 13px; font-weight: var(--um-weight-medium); font-variant-numeric: tabular-nums; color: var(--um-color-text); transition: background-color var(--um-motion-fast); }
+.um-app-elo-label { font-size: 12px; color: var(--um-color-text-muted); font-weight: var(--um-weight-regular); }
 .um-app-elo:hover, .um-app-elo[data-state='open'] { background: var(--um-color-hover); }
 .um-app-elo:focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: 2px; }
 .um-app-elo-panel { max-width: calc(100vw - 32px); border-radius: var(--um-radius-dialog); background: var(--um-color-surface); color: var(--um-color-text); box-shadow: var(--um-shadow-overlay); }
@@ -46,4 +45,53 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
   .um-app-elo-label { display: none; }
   .um-app-menu [role='menuitem'] { min-height: 44px; }
   .um-app-mobile-links > a { flex: 1; min-width: 0; }
+}
+
+.um-nav-icon { display: inline-block; width: 24px; height: 24px; flex-shrink: 0; background: currentColor; mask-image: url('/assets/navigation/unimind-nav-generated-v1.png'); mask-size: 300% 200%; mask-repeat: no-repeat; -webkit-mask-image: url('/assets/navigation/unimind-nav-generated-v1.png'); -webkit-mask-size: 300% 200%; -webkit-mask-repeat: no-repeat; }
+.um-desktop :is(.um-course-header, .um-agent-toolbar, .notes-note-header, .um-app-global-header, .um-agent-sessions > header, .um-course-tree-header, .notes-directory-header) { -webkit-app-region: drag; }
+.um-desktop :is(button, a, input, textarea, select, [role='separator']) { -webkit-app-region: no-drag; }
+@media (max-width: 767px) { .um-app-mobile-links .um-nav-icon { width: 24px; height: 24px; } }
+
+.um-workspace-trail { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+.um-workspace-trail nav { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 13px; white-space: nowrap; }
+.um-workspace-crumb { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--um-color-text-muted); }
+.um-workspace-crumb > :first-child { overflow: hidden; text-overflow: ellipsis; }
+.um-workspace-trail strong { font-weight: var(--um-weight-medium); color: var(--um-color-text); overflow: hidden; text-overflow: ellipsis; }
+.um-workspace-trail :is(button, a) { pointer-events: auto; }
+.um-workspace-trail button:disabled { opacity: .35; }
+.notes-note-header > .um-workspace-trail { justify-content: flex-start; }
+.notes-save-status { color: var(--um-color-text-muted); font-size: 11px; }
+@media (max-width: 599px) { .um-workspace-crumb { display: none; } .notes-save-status { display: none; } }
+
+.um-window-toolbar { display: flex; align-items: center; gap: 8px; height: 48px; min-height: 48px; padding: 4px 12px; flex-shrink: 0; background: var(--um-surface-4); color: var(--um-color-text); }
+.um-window-navigation { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.um-window-navigation button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 6px; }
+.um-window-navigation button:hover:not(:disabled) { background: var(--um-color-hover); }
+.um-window-navigation button:disabled { opacity: .3; }
+.um-window-workspace { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; }
+.um-window-toolbar :is(.um-agent-toolbar, .um-course-header, .notes-note-header) { position: static; inset: auto; display: flex; align-items: center; min-width: 0; min-height: 36px; width: 100%; padding: 0; border: 0; background: transparent; pointer-events: auto; gap: 8px; }
+.um-window-toolbar .um-course-header-title { flex: 1; }
+.um-window-toolbar .um-workspace-trail { font-size: 13px; }
+.um-window-toolbar .notes-note-header > div:last-child { flex-shrink: 0; }
+.um-app-shell .um-agent-chat-body { padding-top: 0; }
+.um-desktop .um-window-toolbar { -webkit-app-region: drag; }
+.um-desktop-mac .um-window-toolbar { padding-left: 80px; }
+.um-desktop-other .um-window-toolbar { padding-right: max(150px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))); }
+@media (min-width: 901px) { .notes-workspace[data-directory-hidden='true'] { grid-template-columns: 0 minmax(0, 1fr); } .notes-workspace[data-directory-hidden='true'] .notes-directory { visibility: hidden; padding: 0; } }
+@media (max-width: 599px) { .um-window-toolbar { gap: 4px; padding-inline: 6px; } .um-window-navigation button { width: 26px; } }
+
+.um-window-toolbar .um-agent-history-button { align-items: center; }
+.um-window-toolbar .um-agent-toolbar-new { display: inline-flex; width: 30px; height: 30px; }
+.um-window-toolbar .notes-note-header > div:last-child > button { min-width: 30px; min-height: 30px; align-items: center; justify-content: center; }
+
+/* Keep native edge bounce inside the active pane, clear of the window toolbar.
+   Desktop root must stay `auto`: Chromium suppresses elastic bounce of non-root
+   scrollers when the root is `none`. Root is overflow:hidden, so it cannot move. */
+html:has(.um-app-shell), body:has(.um-app-shell) { overscroll-behavior: none; }
+@media (min-width: 768px) {
+  html:has(.um-app-shell), body:has(.um-app-shell) { overscroll-behavior: auto; }
+}
+.um-app-shell :is(.overflow-y-auto, .overflow-auto, .um-agent-scroll, .um-agent-sessions nav, .um-agent-landing, .um-course-main-scroll, .um-course-list-scroll, .notes-directory, .notes-main, .notes-tree, .notes-list) { overscroll-behavior-y: contain; }
+@media (prefers-reduced-motion: reduce) {
+  .um-app-shell :is(.overflow-y-auto, .overflow-auto, .um-agent-scroll, .um-agent-sessions nav, .um-agent-landing, .um-course-main-scroll, .um-course-list-scroll, .notes-directory, .notes-main, .notes-tree, .notes-list) { overscroll-behavior-y: none; }
 }

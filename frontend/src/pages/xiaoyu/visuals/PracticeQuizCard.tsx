@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
+import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import api from '@/lib/api';
 import { formatApiErrorToast } from '@/lib/apiError';
@@ -9,9 +11,10 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useExamActivityStore, isActiveExamStatus, type ExamActivityStatus } from '@/store/useExamActivityStore';
 import { useLearningSession } from '@/hooks/useLearningSession';
+import { WorkspaceActiveContext } from '@/components/WorkspaceContext';
 import '@/styles/inline-practice.css';
 
-interface PracticeQuestion {
+export interface PracticeQuestion {
   id: number;
   text: string;
   q_type: string;
@@ -19,7 +22,7 @@ interface PracticeQuestion {
   kp_name?: string;
 }
 
-interface PracticePayload {
+export interface PracticePayload {
   practice_id: string;
   title: string;
   questions: PracticeQuestion[];
@@ -43,6 +46,11 @@ interface PracticeResult {
     is_correct: boolean; correct_answer: string; feedback: string; analysis: string }[];
 }
 
+interface SubmittedPractice {
+  exam_id: number;
+  answers: { position: number; answer: string }[];
+}
+
 export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
   const userId = useAuthStore(state => state.user?.id);
   const storageKey = `unimind:inline-practice:${userId}:${payload.practice_id}`;
@@ -51,7 +59,8 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
     try { return { ...empty, ...JSON.parse(localStorage.getItem(storageKey) || 'null') }; }
     catch { return empty; }
   });
-  const [active, setActive] = useState(false);
+  const [active, setActive] = useState(true);
+  const workspaceActive = useContext(WorkspaceActiveContext);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
@@ -59,9 +68,31 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
   const index = Math.max(0, Math.min(draft.index, questions.length - 1));
   const question = questions[index];
   const answeredCount = questions.filter(item => draft.answers[item.id]?.trim()).length;
-  const locked = draft.submitted || !!draft.examId;
+  const submission = useQuery<SubmittedPractice | null>({
+    queryKey: queryKeys.exams.submission(userId, payload.practice_id),
+    queryFn: async () => {
+      try { return (await api.get(`/quizzes/submissions/${payload.practice_id}/`)).data; }
+      catch (failure) {
+        if (isAxiosError(failure) && failure.response?.status === 404) return null;
+        throw failure;
+      }
+    },
+    enabled: !!userId && !draft.examId,
+    retry: 1,
+    staleTime: 0,
+  });
+  const recovering = !draft.examId && (submission.isPending || submission.isError);
+  const locked = draft.submitted || !!draft.examId || recovering;
 
-  useLearningSession({ enabled: active && !locked && questions.length > 0,
+  const saved = submission.data;
+  if (saved && draft.examId !== saved.exam_id) {
+    setDraft({ ...draft, examId: saved.exam_id, submitted: true,
+      answers: Object.fromEntries(questions.map((item, position) => [item.id,
+        saved.answers.find(answer => answer.position === position + 1)?.answer || ''])),
+    });
+  }
+
+  useLearningSession({ enabled: active && workspaceActive && !locked && questions.length > 0,
     kind: 'practice', questionIds: questions.map(item => item.id) });
 
   useEffect(() => {
@@ -74,6 +105,10 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
     window.addEventListener('unimind:practice-active', onActive);
     return () => window.removeEventListener('unimind:practice-active', onActive);
   }, [storageKey]);
+
+  useEffect(() => {
+    if (active) window.dispatchEvent(new CustomEvent('unimind:practice-active', { detail: storageKey }));
+  }, [active, storageKey]);
 
   const detail = useQuery<PracticeResult>({
     queryKey: queryKeys.exams.detail(draft.examId || 0),
@@ -91,7 +126,7 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
     if (!locked) window.dispatchEvent(new CustomEvent('unimind:practice-active', { detail: storageKey }));
   };
   const submit = async () => {
-    if (inFlight.current || draft.examId || answeredCount !== questions.length) return;
+    if (inFlight.current || draft.examId || recovering || answeredCount !== questions.length) return;
     inFlight.current = true;
     setSubmitting(true);
     setActive(false);
@@ -119,8 +154,6 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
   return <section className="um-inline-practice" aria-label={payload.title || '随堂练习'}
     onFocusCapture={event => {
       if (!(event.target as HTMLElement).closest('[data-practice-toggle]')) activate();
-    }} onBlurCapture={event => {
-      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActive(false);
     }}>
     <header className="um-inline-practice-header">
       <div><span className="um-inline-practice-caption">随堂练习 · {questions.length} 题</span><h3>{payload.title || '随堂练习'}</h3></div>
@@ -168,10 +201,12 @@ export function PracticeQuizCard({ payload }: { payload: PracticePayload }) {
         </>}
     </section>}
     {error && <p className="um-inline-practice-error" role="alert">{error}</p>}
+    {!draft.examId && submission.isPending && <p>正在读取提交状态…</p>}
+    {!draft.examId && submission.isError && <p role="alert">暂时无法读取提交状态。<button type="button" onClick={() => void submission.refetch()}>重试读取</button></p>}
     <footer className="um-inline-practice-footer">
-      <div><button type="button" disabled={index === 0} onClick={() => setDraft(previous => ({ ...previous, index: index - 1 }))}>上一题</button>
-        <button type="button" disabled={index === questions.length - 1} onClick={() => setDraft(previous => ({ ...previous, index: index + 1 }))}>下一题</button></div>
-      {!draft.examId && <button type="button" className="um-inline-practice-submit" disabled={submitting || answeredCount !== questions.length}
+      <div><button type="button" className="um-inline-practice-nav-button" disabled={index === 0} onClick={() => setDraft(previous => ({ ...previous, index: index - 1 }))}><CaretLeft size={14} aria-hidden="true" />上一题</button>
+        <button type="button" className="um-inline-practice-nav-button" disabled={index === questions.length - 1} onClick={() => setDraft(previous => ({ ...previous, index: index + 1 }))}>下一题<CaretRight size={14} aria-hidden="true" /></button></div>
+      {!draft.examId && <button type="button" className="um-inline-practice-submit" disabled={submitting || recovering || answeredCount !== questions.length}
         onClick={() => void submit()}>{submitting ? '提交中…' : draft.submitted ? '重试提交' : '提交批改'}</button>}
     </footer>
   </section>;

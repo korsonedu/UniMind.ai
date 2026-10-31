@@ -73,7 +73,7 @@ def get_user_capabilities(user) -> list[str]:
         return []
 
     from .learning import LEARNING_FEATURES, is_course_student
-    caps = [CAP_MEMBER_ACCESS, 'ai.assistant']
+    caps = [CAP_MEMBER_ACCESS, 'ai.assistant', 'course.video']
     if is_platform_admin(user) or is_course_student(user):
         caps = [CAP_LEARNING_ACCESS, CAP_MEMBER_ACCESS, *LEARNING_FEATURES]
     if is_platform_admin(user):

@@ -9,6 +9,7 @@ from .models import Course, LearningGoal, VideoProgress
 class LearningGoalTests(TestCase):
     def setUp(self):
         self.institution = Institution.objects.create(name='目标测试', slug='goal-test')
+        self.enterContext(self.settings(UNIMIND_CONTENT_INSTITUTION_ID=str(self.institution.pk)))
         self.user = User.objects.create_user(username='goal-student', institution=self.institution, is_member=True)
         self.other = User.objects.create_user(username='goal-other', institution=self.institution, is_member=True)
         self.course = Course.objects.create(title='金融学', institution=self.institution, video_file='finance.mp4')

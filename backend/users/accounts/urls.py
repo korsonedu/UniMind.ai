@@ -1,7 +1,7 @@
 from django.urls import path, include
 from oauth2_provider import views as provider
 
-from . import views
+from . import views, desktop
 from .oidc import AccountAuthorizationView, AccountTokenView
 
 provider_urls = [
@@ -19,6 +19,7 @@ urlpatterns = [
     path('account-api/logout/', views.site_logout, name='account-site-logout'),
     path('accounts/o/', include((provider_urls, 'oauth2_provider'), namespace='oauth2_provider')),
     path('accounts/login/', views.account_login, name='account-login'),
+    path('accounts/desktop/', desktop.confirm, name='account-desktop'),
     path('accounts/register/', views.account_register, name='account-register'),
     path('accounts/send-code/', views.account_send_code, name='account-send-code'),
     path('accounts/reset-password/', views.account_reset_password, name='account-reset-password'),

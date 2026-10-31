@@ -1,14 +1,29 @@
 from core.utils import apply_institution_filter, get_content_institution_id
+from rest_framework.permissions import BasePermission
 
 from .models import Course
 
 
-def visible_courses(request):
-    """当前用户可见的课程集合。
+def has_full_course_access(user):
+    from users.learning import is_course_student
+    from users.permissions import is_platform_admin
+    return bool(user and user.is_authenticated and user.is_active and
+                (is_platform_admin(user) or is_course_student(user)))
 
-    模块仅作分类打标，学习权益暂不参与可见性判断；权限模型确定后再在此处实现。
-    """
-    return apply_institution_filter(Course.objects.all(), request.user, request)
+
+class HasFullCourseAccess(BasePermission):
+    message = '该功能仅向课程学员开放。'
+
+    def has_permission(self, request, view):
+        return has_full_course_access(request.user)
+
+
+def visible_courses(request):
+    """课程学员可读本平台全课，注册学生仅可读明确开放的模块。"""
+    courses = apply_institution_filter(Course.objects.all(), request.user, request)
+    if not has_full_course_access(request.user):
+        courses = courses.filter(module__is_public=True, module__institution_id=get_content_institution_id())
+    return courses
 
 
 def course_list_queryset(queryset, request):
@@ -19,7 +34,7 @@ def course_list_queryset(queryset, request):
         tag__institution_id=get_content_institution_id(),
     ).select_related('tag').annotate(
         tag_course_count=Count('tag__course_relations', filter=Q(
-            tag__course_relations__course__institution_id=get_content_institution_id(),
+            tag__course_relations__course__in=visible_courses(request),
         )),
     )
     return queryset.select_related('module', 'album_obj').prefetch_related(

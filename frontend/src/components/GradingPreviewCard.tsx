@@ -95,7 +95,7 @@ export function GradingPreviewCard({ payload }: { payload: Record<string, unknow
   };
 
   return (
-    <div className="space-y-4 rounded-2xl border border-border bg-card p-5">
+    <div className="um-visual-grading space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold">{title}</h3>
         <span className="text-xs text-muted-foreground">{submissions.length} 份提交</span>

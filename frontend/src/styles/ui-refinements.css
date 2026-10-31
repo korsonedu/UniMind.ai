@@ -1,0 +1,76 @@
+/* Shared app surfaces and interaction feedback. */
+.um-app-shell,
+.um-course-workspace,
+.um-native-agent,
+.um-agent-workspace {
+  --um-color-surface: var(--um-surface-1);
+  --um-color-toolbar: var(--um-surface-2);
+  --um-color-context: var(--um-surface-3);
+  --um-color-rail: var(--um-surface-4);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--um-weight-regular);
+}
+
+.um-app-shell :is(button, a, label, summary) svg,
+.um-native-agent :is(button, a, label) svg {
+  position: relative;
+  top: .125em;
+  vertical-align: -.125em;
+}
+
+.dark .um-app-shell .font-normal { font-weight: var(--um-weight-regular); }
+.dark .um-app-shell .font-medium { font-weight: var(--um-weight-medium); }
+.dark .um-app-shell .font-semibold { font-weight: var(--um-weight-semibold); }
+.dark .um-app-shell .font-bold { font-weight: var(--um-weight-bold); }
+
+.um-app-shell p,
+.notes-prose,
+.um-course-prose p,
+.um-lesson-description p,
+.um-native-chat-bubble .prose p { text-wrap: pretty; }
+
+.um-focus-field:focus-visible,
+.um-app-shell :is(button, a, select, input, textarea, summary, [tabindex]):focus-visible,
+.um-course-workspace :is(button, a, select, input, textarea, [tabindex]):focus-visible,
+.um-course-drawer :is(button, a, select, input, textarea, [tabindex]):focus-visible,
+.um-native-agent :is(button, a, select, input, textarea, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--um-focus-shadow);
+}
+
+.um-course-search:focus-within,
+.um-agent-search:focus-within,
+.um-agent-composer:focus-within,
+.notes-search:focus-within {
+  outline: none;
+  box-shadow: var(--um-focus-shadow);
+}
+
+.um-directory-resize:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 8px color-mix(in srgb, var(--um-color-accent) 8%, transparent);
+}
+
+.um-streaming-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.um-streaming-text > span { display: inline-block; white-space: pre; }
+
+/* Unit-mass spring, stiffness380/damping18; small feedback amplitude. */
+@keyframes um-like-pop { from { transform: scale(.94); } to { transform: scale(1); } }
+.um-qa-like[aria-pressed='true'] svg,
+.um-agent-feedback button[aria-pressed='true'] svg {
+  animation: um-like-pop 700ms var(--um-like-easing);
+}
+
+.um-native-agent :is(.um-agent-search input, .um-agent-composer textarea, .um-agent-chat-input textarea):focus-visible,
+.notes-workspace .notes-search input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.um-agent-composer, .um-agent-search { border-color: transparent; }
+.um-agent-composer:has(textarea:focus-visible),
+.um-agent-search:has(input:focus-visible) { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .um-qa-like[aria-pressed='true'] svg,
+  .um-agent-feedback button[aria-pressed='true'] svg { animation: none; }
+}

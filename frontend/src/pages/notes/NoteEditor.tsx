@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -20,7 +20,7 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props)
   const [matches, setMatches] = useState<Note[]>([]);
   const [searchFailed, setSearchFailed] = useState(false);
   const changeRef = useRef(onChange);
-  changeRef.current = onChange;
+  useLayoutEffect(() => { changeRef.current = onChange; }, [onChange]);
   const editor = useEditor({
     extensions: [NoteMath, StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: { openOnClick: false } }), Markdown.configure({ html: false }), Placeholder.configure({ placeholder: '开始书写…' })],
     content: note.content,

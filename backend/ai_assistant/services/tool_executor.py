@@ -650,7 +650,7 @@ class PlannerToolExecutor(BaseToolExecutor):
         }
         visual = {
             'type': 'practice_result',
-            'payload': result,
+            'payload': dict(result),
         }
         return self._attach_visual(result, lambda: visual)
 

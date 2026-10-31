@@ -78,18 +78,19 @@ def _analyze_user(user, cutoff, now):
     # 1. Analyze wrong answer patterns from recent exams
     recent_exams = QuizExam.objects.filter(
         user=user,
-        submitted_at__gte=cutoff,
-    ).order_by('-submitted_at')[:10]
+        created_at__gte=cutoff,
+        status__in=('completed', 'partial'),
+    ).prefetch_related('results').order_by('-created_at')[:10]
 
     if recent_exams:
         total_questions = 0
         total_wrong = 0
         for exam in recent_exams:
-            results = exam.results or {}
-            questions = results.get('questions', [])
-            for q in questions:
+            for result in exam.results.all():
+                if result.status != 'graded':
+                    continue
                 total_questions += 1
-                if not q.get('is_correct', True):
+                if not result.is_correct:
                     total_wrong += 1
 
         if total_questions > 0:
@@ -516,47 +517,10 @@ def record_trajectory_async(
     acks_late=True,
 )
 def generate_conversation_title(conversation_id: str, user_id: int, bot_id: int):
-    """用 LLM 总结首轮对话，生成会话标题。"""
-    from .models import Conversation, AIChatMessage as Msg
-
+    """生成会话标题；DSH 开关与回退逻辑集中在 title_generator。"""
     try:
-        # 已有标题则跳过
-        if Conversation.objects.filter(conversation_id=conversation_id, title__gt='').exists():
-            return
-
-        # 取首轮 user + assistant 消息
-        msgs = list(
-            Msg.objects
-            .filter(conversation_id=conversation_id, user_id=user_id)
-            .order_by('timestamp')[:4]
-        )
-        user_msg = next((m for m in msgs if m.role == 'user'), None)
-        assistant_msg = next((m for m in msgs if m.role == 'assistant'), None)
-        if not user_msg or not assistant_msg:
-            return
-
-        prompt = (
-            f"用户: {user_msg.content[:300]}\n"
-            f"助手: {assistant_msg.content[:300]}\n\n"
-            "为以上对话生成一个简短标题（≤15个字），直接输出标题，不要引号、不要前缀。"
-        )
-
-        ai = AIService()
-        result = ai.simple_chat_text(
-            system_prompt="你是标题生成器。为对话生成简短标题（≤15字），直接输出标题。",
-            user_prompt=prompt,
-            operation='assistant.chat.title',
-        )
-        title = (result or '').strip()[:120]
-
-        if title:
-            conversation, _ = Conversation.objects.get_or_create(
-                conversation_id=conversation_id, user_id=user_id, defaults={'bot_id': bot_id},
-            )
-            Conversation.objects.filter(pk=conversation.pk, title='').update(title=title)
-            logger.info("Generated title '%s' for conversation %s", title, conversation_id)
-    except Exception:
-        logger.exception("Failed to generate title for conversation %s", conversation_id)
+        from .services.title_generator import sync_generate_title
+        sync_generate_title(conversation_id, user_id, bot_id)
     finally:
         connections.close_all()
 
@@ -1181,9 +1145,12 @@ def _handle_bot_suggestion(s: dict):
     )
 
 
+from django.conf import settings as _dsh_settings
+
+
 @shared_task(
-    soft_time_limit=60,
-    time_limit=90,
+    soft_time_limit=150 if getattr(_dsh_settings, "UNIMIND_DSH_GRADING_ENABLED", False) else 60,
+    time_limit=180 if getattr(_dsh_settings, "UNIMIND_DSH_GRADING_ENABLED", False) else 90,
     acks_late=True,
 )
 def pre_grade_single_question(session_id: str, question_id: int, user_answer: str, user_id: int):

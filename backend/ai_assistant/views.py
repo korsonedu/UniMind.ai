@@ -5,6 +5,7 @@ import logging
 import time
 from asgiref.sync import sync_to_async
 from django.utils.decorators import method_decorator
+from django.conf import settings
 from django.db import models, close_old_connections
 from users.permissions import IsAdmin, HasQuota, HasPlanFeature, IsInstitutionAdmin, IsMemberOrReadOnlyList
 from rest_framework import generics, permissions, serializers
@@ -218,7 +219,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
             )
             full_history = history_msgs + [{'role': 'user', 'content': user_message}]
             if _can_use_learning_context(user) and not conversation_uses_notes(user, conversation_id):
-                extract_memories_async(user, full_history)
+                extract_memories_async(user, full_history, str(conversation_id))
                 extract_memories_with_mem0(user, full_history)
         except Exception:
             logger.warning("Memory extraction failed (polling)", exc_info=True)
@@ -532,6 +533,14 @@ class AIChatResetView(APIView):
         qs = AIChatMessage.objects.filter(user=request.user)
         if bot_id:
             qs = qs.filter(bot_id=bot_id)
+        if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
+            from .services.dsh_xiaoyu import delete_state
+            from .services.dsh_runtime import site_request_lock
+            with site_request_lock(request.user), transaction.atomic():
+                delete_state(request.user, qs)
+                qs.delete()
+                Conversation.objects.filter(user=request.user, **({'bot_id': bot_id} if bot_id else {})).delete()
+            return Response({'status': 'cleared'})
         qs.delete()
         return Response({'status': 'cleared'})
 
@@ -544,6 +553,15 @@ class AIChatDeleteConversationView(APIView):
         conversation_id = request.data.get('conversation_id')
         if not conversation_id:
             return Response({'error': 'conversation_id is required'}, status=400)
+        qs = AIChatMessage.objects.filter(user=request.user, conversation_id=conversation_id)
+        if settings.UNIMIND_DSH_XIAOYU_ENABLED or qs.filter(metadata__engine='dsh').exists():
+            from .services.dsh_xiaoyu import delete_state
+            from .services.dsh_runtime import site_request_lock
+            with site_request_lock(request.user, conversation_id), transaction.atomic():
+                delete_state(request.user, qs)
+                deleted, _ = qs.delete()
+                Conversation.objects.filter(user=request.user, conversation_id=conversation_id).delete()
+            return Response({'status': 'deleted', 'count': deleted})
         with transaction.atomic():
             deleted, _ = AIChatMessage.objects.filter(
                 user=request.user, conversation_id=conversation_id
@@ -585,6 +603,12 @@ class AIChatStreamView(APIView):
 
         if not _user_can_access_bot(request.user, bot):
             return Response({'error': '无权使用此机器人'}, status=403)
+
+        from django.conf import settings
+        if (getattr(settings, 'UNIMIND_DSH_XIAOYU_ENABLED', False)
+                and bot.bot_type == 'planner' and bot.institution_id is None and bot.name == '小宇'):
+            from .services.dsh_xiaoyu import response
+            return response(request, bot, conversation_id, user_message)
 
         sync_bot_prompt(bot)
 
@@ -917,7 +941,7 @@ class AIChatStreamView(APIView):
                     full_history = history_msgs + [{'role': 'user', 'content': user_message}]
                     if (await sync_to_async(_can_use_learning_context)(request.user)
                             and not await sync_to_async(conversation_uses_notes)(request.user, conversation_id)):
-                        await sync_to_async(extract_memories_async)(request.user, full_history)
+                        await sync_to_async(extract_memories_async)(request.user, full_history, str(conversation_id))
                         await sync_to_async(extract_memories_with_mem0)(request.user, full_history)
                 except Exception:
                     logger.warning("Memory extraction failed (SSE)", exc_info=True)

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Institution, InstitutionInvite, JoinRequest, User, APICredential, SSOConfig
+from .models import Institution, JoinRequest, User
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -30,19 +30,6 @@ class InstitutionSerializer(serializers.ModelSerializer):
         return obj.children.count()
 
 
-class CreateInstitutionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Institution
-        fields = ['name', 'slug', 'contact_name', 'contact_email', 'contact_phone',
-                  'plan', 'plan_expires_at', 'max_students_override',
-                  'custom_domain', 'business_type', 'notes']
-
-
-class ChangePlanSerializer(serializers.Serializer):
-    plan = serializers.ChoiceField(choices=Institution.PLAN_CHOICES)
-    plan_expires_at = serializers.DateTimeField(required=False, allow_null=True)
-
-
 class InstitutionStudentSerializer(serializers.ModelSerializer):
     avatar_url = serializers.ReadOnlyField()
     class Meta:
@@ -66,21 +53,6 @@ class InstitutionFeatureSerializer(serializers.Serializer):
     usage = serializers.DictField(allow_null=True, required=False)
 
 
-class InstitutionInviteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InstitutionInvite
-        fields = ['id', 'slug', 'assigned_role', 'max_uses', 'used_count',
-                  'expires_at', 'requires_approval', 'is_active',
-                  'created_by', 'created_at']
-        read_only_fields = ['id', 'slug', 'used_count', 'created_by', 'created_at']
-
-
-class CreateInstitutionInviteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InstitutionInvite
-        fields = ['assigned_role', 'max_uses', 'expires_at', 'requires_approval']
-
-
 class JoinRequestSerializer(serializers.ModelSerializer):
     user_name = serializers.CharField(source='user.username', read_only=True)
     user_nickname = serializers.CharField(source='user.nickname', read_only=True)
@@ -92,22 +64,3 @@ class JoinRequestSerializer(serializers.ModelSerializer):
                   'invite_slug_used', 'status', 'message', 'reviewed_by',
                   'created_at', 'reviewed_at']
         read_only_fields = ['id', 'user', 'invite', 'reviewed_by', 'created_at', 'reviewed_at']
-
-
-class APICredentialSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = APICredential
-        fields = ['id', 'name', 'key_id', 'scopes', 'rate_limit', 'is_active',
-                  'last_used_at', 'created_at']
-        read_only_fields = ['id', 'key_id', 'last_used_at', 'created_at']
-
-
-class SSOConfigSerializer(serializers.ModelSerializer):
-    client_secret = serializers.CharField(write_only=True, required=False)
-
-    class Meta:
-        model = SSOConfig
-        fields = ['id', 'provider', 'enabled', 'client_id', 'client_secret',
-                  'redirect_uri', 'domain_whitelist', 'auto_join', 'default_role',
-                  'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']

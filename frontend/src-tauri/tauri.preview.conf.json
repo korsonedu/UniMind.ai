@@ -1,0 +1,25 @@
+{
+  "productName": "UniMind Preview",
+  "identifier": "com.korsonedu.unimind.preview",
+  "build": {
+    "devUrl": "http://127.0.0.1:5175/api/ai/dsh-preview/student-b/",
+    "beforeDevCommand": null
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "UniMind Preview · 合成数据",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["app"]
+  }
+}

@@ -17,6 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsAdmin, HasQuota
 
 from .models import Course, Album, StartupMaterial, VideoProgress
+from .access import HasFullCourseAccess
 
 from core.utils import apply_institution_filter, get_content_institution
 
@@ -391,7 +392,7 @@ class OSSMultipartCompleteView(APIView):
         except Exception:
             pass
 
-        return Response(CourseSerializer(course).data, status=201)
+        return Response(CourseSerializer(course, context={'request': request}).data, status=201)
 
 
 @_upload_rl
@@ -467,26 +468,34 @@ class VideoProgressUpdateView(APIView):
     permission_classes = [IsMember]
 
     def post(self, request, pk):
-        from django.db import transaction
-        from django.utils import timezone
-        from .models import LearningActivity
-        from .portal import ProgressInput, ProgressSerializer
+        from .portal import ProgressInput
         payload = ProgressInput(data=request.data)
         payload.is_valid(raise_exception=True)
         data = payload.validated_data
         course = _get_course_for_user(pk, request.user, request)
         if not course:
             return Response({'error': 'Course not found'}, status=404)
+        return self.save_progress(request, course, data)
+
+    def save_progress(self, request, course, data, learning_session=None):
+        from django.db import transaction
+        from django.utils import timezone
+        from users.models import LearningSession
+        from .models import LearningActivity
+        from .portal import ProgressSerializer
         with transaction.atomic():
             # Serialize per-user progress updates and completion awards.
             user = request.user.__class__.objects.select_for_update().get(pk=request.user.pk)
-            progress, created = VideoProgress.objects.get_or_create(user=user, course=course)
+            prior = None
             if data.get('event_id'):
                 prior = LearningActivity.objects.filter(user=user, event_id=data['event_id']).first()
-                if prior:
-                    if prior.course_id != pk:
-                        return Response({'error': '活动编号已用于其他课程'}, status=400)
-                    return Response({'status': 'ok', 'is_finished': progress.is_finished, 'elo_added': 0, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
+                if prior and prior.course_id != course.pk:
+                    return Response({'error': '活动编号已用于其他课程'}, status=400)
+            if not prior and learning_session is not None and LearningSession.objects.filter(user=user, session_id=data['event_id']).exists():
+                return Response({'error': '活动编号已用于其他学习记录'}, status=400)
+            progress, created = VideoProgress.objects.get_or_create(user=user, course=course)
+            if prior:
+                return Response({'status': 'ok', 'duplicate': True, 'is_finished': progress.is_finished, 'elo_added': 0, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
             if created:
                 record_event('course_view', user=user, properties={'course_id': course.id})
             completed = data['is_finished'] and not progress.is_finished
@@ -499,23 +508,33 @@ class VideoProgressUpdateView(APIView):
                     progress.elo_claimed_at = timezone.now()
                     elo_added = course.elo_reward
                 record_event('course_complete', user=user, properties={'course_id': course.id})
-            if 'position' in data:
+            update_position = learning_session is None or created or learning_session['ended_at'] >= progress.updated_at
+            previous_updated_at = progress.updated_at
+            if 'position' in data and update_position:
                 progress.last_position = data['position']
-            if data.get('duration', 0) > 0:
+            if data.get('duration', 0) > 0 and update_position:
                 progress.duration = data['duration']
             progress.save()
-            if data['watched_seconds'] > 0 or completed:
+            if learning_session is not None:
+                progress.updated_at = learning_session['ended_at'] if update_position else previous_updated_at
+                VideoProgress.objects.filter(pk=progress.pk).update(updated_at=progress.updated_at)
+            if data['watched_seconds'] > 0 or completed or learning_session is not None:
                 event = dict(user=user, course=course, watched_seconds=data['watched_seconds'], completed=completed, elo_earned=elo_added)
                 if data.get('event_id'):
                     event['event_id'] = data['event_id']
-                LearningActivity.objects.create(**event)
-        return Response({'status': 'ok', 'is_finished': progress.is_finished, 'elo_added': elo_added, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
+                activity = LearningActivity.objects.create(**event)
+                if learning_session is not None:
+                    LearningActivity.objects.filter(pk=activity.pk).update(created_at=learning_session['ended_at'])
+                    if int(data['watched_seconds']):
+                        LearningSession.objects.create(user=user, session_id=data['event_id'], kind='video', course=course,
+                                                       active_seconds=int(data['watched_seconds']), **learning_session)
+        return Response({'status': 'ok', 'duplicate': False, 'is_finished': progress.is_finished, 'elo_added': elo_added, 'new_score': user.elo_score, 'progress': ProgressSerializer(progress).data})
 
 class StartupMaterialListCreateView(generics.ListCreateAPIView):
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method == 'POST': return [IsAdmin()]
-        return [IsMember()]
+        return [IsMember(), HasFullCourseAccess()]
 
     def get_queryset(self):
         return apply_institution_filter(StartupMaterial.objects.all().order_by('-created_at'), self.request.user, self.request)
@@ -546,7 +565,7 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StartupMaterialSerializer
     def get_permissions(self):
         if self.request.method in ['PATCH', 'PUT', 'DELETE']: return [IsAdmin()]
-        return [IsMember()]
+        return [IsMember(), HasFullCourseAccess()]
 
     def get_queryset(self):
         return apply_institution_filter(StartupMaterial.objects.all(), self.request.user, self.request)
@@ -554,11 +573,11 @@ class StartupMaterialDetailView(generics.RetrieveUpdateDestroyAPIView):
 class AlbumListCreateView(generics.ListCreateAPIView):
     serializer_class = AlbumSerializer
     def get_queryset(self):
-        from django.db.models import Count
+        from django.db.models import Count, Q
         from django.db.models import Prefetch
         from .access import visible_courses
         visible = visible_courses(self.request)
-        qs = Album.objects.annotate(course_count=Count('courses')).prefetch_related(Prefetch('courses', queryset=visible)).order_by('-created_at')
+        qs = Album.objects.annotate(course_count=Count('courses', filter=Q(courses__in=visible))).prefetch_related(Prefetch('courses', queryset=visible)).order_by('-created_at')
         from users.permissions import is_platform_admin, is_institution_admin
         if is_platform_admin(self.request.user) or is_institution_admin(self.request.user):
             return apply_institution_filter(qs, self.request.user, self.request)
@@ -581,7 +600,13 @@ class AlbumDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [IsMember()]
 
     def get_queryset(self):
-        return apply_institution_filter(Album.objects.all(), self.request.user, self.request)
+        from django.db.models import Count, Q, Prefetch
+        from .access import visible_courses, has_full_course_access
+        visible = visible_courses(self.request)
+        albums = apply_institution_filter(Album.objects.all(), self.request.user, self.request)
+        if self.request.method == 'GET' and not has_full_course_access(self.request.user):
+            albums = albums.filter(pk__in=visible.values_list('album_obj_id', flat=True))
+        return albums.annotate(course_count=Count('courses', filter=Q(courses__in=visible))).prefetch_related(Prefetch('courses', queryset=visible))
 
 
 class AlbumCoursesView(APIView):
@@ -769,7 +794,8 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CourseOutlineView(APIView):
-    permission_classes = [IsMember]
+    def get_permissions(self):
+        return [IsMember()] if self.request.method == 'GET' else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
         course = _get_course_for_user(pk, request.user, request)
@@ -793,7 +819,7 @@ class CourseOutlineView(APIView):
             return Response({'error': '课程不存在'}, status=404)
 
         transcript = getattr(course, 'transcript', None)
-        if not transcript or transcript.asr_status != 'completed':
+        if not transcript or transcript.asr_status != 'completed' or not (transcript.full_text or '').strip():
             return Response({'error': '请先完成语音转录'}, status=400)
 
         from .models import CourseOutline
@@ -812,7 +838,8 @@ class CourseOutlineView(APIView):
 
 
 class CourseTranscriptView(APIView):
-    permission_classes = [IsMember]
+    def get_permissions(self):
+        return [IsMember()] if self.request.method == 'GET' else [IsMember(), HasFullCourseAccess()]
 
     def get(self, request, pk):
         course = _get_course_for_user(pk, request.user, request)

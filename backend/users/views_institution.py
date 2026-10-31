@@ -2,7 +2,7 @@ import csv
 import logging
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
@@ -18,14 +18,13 @@ logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
 from core.utils import get_content_institution
-from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, compute_expiry, DEFAULT_DURATION_DAYS, DURATION_PERMANENT, MAX_DURATION_DAYS, InstitutionInvite, JoinRequest
+from .models import Institution, PlanInviteCode, get_plan_features, PLAN_FEATURES, JoinRequest
 
 User = get_user_model()
 from .permissions import IsPlatformAdmin, IsInstitutionAdmin, IsInstitutionOwner, IsInstitutionActive, IsInstitutionMember, IsInstitutionTeacher, is_platform_admin, is_institution_admin
 from .serializers_institution import (
-    InstitutionSerializer, CreateInstitutionSerializer, ChangePlanSerializer,
-    InstitutionStudentSerializer, CreateStudentSerializer, InstitutionFeatureSerializer,
-    InstitutionInviteSerializer, CreateInstitutionInviteSerializer, JoinRequestSerializer,
+    InstitutionSerializer, InstitutionStudentSerializer, CreateStudentSerializer,
+    InstitutionFeatureSerializer, JoinRequestSerializer,
 )
 
 class RetiredInstitutionView(APIView):
@@ -38,54 +37,12 @@ class RetiredInstitutionView(APIView):
     get = post = put = patch = delete = _retired
 
 
-DIRECTION_LIMITS = {'starter': 1, 'growth': 3, 'enterprise': 999999}
-
-
 def _get_institution_ids_for_query(inst) -> list[int]:
     """返回查询范围：仅当前机构。"""
     return [inst.pk] if inst else []
 
 
-def _clone_knowledge_tree(subject_name, institution):
-    """Clone all global KnowledgePoints for a subject into an institution scope."""
-    from quizzes.models import KnowledgePoint
-
-    global_kps = list(
-        KnowledgePoint.objects.filter(
-            subject=subject_name,
-            institution__isnull=True,
-        ).order_by('level', 'order')
-    )
-    if not global_kps:
-        return 0
-
-    old_to_new = {}
-    for kp in global_kps:
-        new_kp = KnowledgePoint(
-            code=kp.code,
-            name=kp.name,
-            level=kp.level,
-            prefix_category=kp.prefix_category,
-            description=kp.description,
-            parent=None,
-            institution=institution,
-            order=kp.order,
-            subject=kp.subject,
-        )
-        new_kp.save()
-        old_to_new[kp.id] = new_kp
-
-    # Remap parent FK relationships
-    for kp in global_kps:
-        if kp.parent_id and kp.parent_id in old_to_new:
-            new_kp = old_to_new[kp.id]
-            new_kp.parent_id = old_to_new[kp.parent_id].id
-            new_kp.save(update_fields=['parent'])
-
-    return len(old_to_new)
-
-
-# ── Super Admin: Institution CRUD ──
+# ── Super Admin: Historical Institution Queries ──
 
 class InstitutionListView(APIView):
     http_method_names = ['get', 'head', 'options']
@@ -105,17 +62,6 @@ class InstitutionListView(APIView):
         serializer = InstitutionSerializer(qs, many=True)
         return Response(serializer.data)
 
-    def post(self, request):
-        serializer = CreateInstitutionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        institution = serializer.save(created_by=request.user)
-        # 创建机构的用户应升级为管理员
-        request.user.role = 'admin'
-        request.user.institution_role = 'owner'
-        request.user.institution = institution
-        request.user.save()
-        return Response(InstitutionSerializer(institution).data, status=status.HTTP_201_CREATED)
-
 
 class InstitutionDetailView(APIView):
     http_method_names = ['get', 'head', 'options']
@@ -123,66 +69,6 @@ class InstitutionDetailView(APIView):
 
     def get(self, request, pk):
         inst = get_object_or_404(Institution, pk=pk)
-        return Response(InstitutionSerializer(inst).data)
-
-    def put(self, request, pk):
-        inst = get_object_or_404(Institution, pk=pk)
-        serializer = InstitutionSerializer(inst, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-    def delete(self, request, pk):
-        inst = get_object_or_404(Institution, pk=pk)
-        inst.delete()
-        return Response({'status': 'deleted'}, status=status.HTTP_204_NO_CONTENT)
-
-
-class InstitutionActivateView(APIView):
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
-
-    def post(self, request, pk):
-        inst = get_object_or_404(Institution, pk=pk)
-        inst.is_active = True
-        inst.save(update_fields=['is_active', 'updated_at'])
-        return Response({'status': 'activated'})
-
-
-class InstitutionDeactivateView(APIView):
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
-
-    def post(self, request, pk):
-        inst = get_object_or_404(Institution, pk=pk)
-        inst.is_active = False
-        inst.save(update_fields=['is_active', 'updated_at'])
-        return Response({'status': 'deactivated'})
-
-
-class InstitutionChangePlanView(APIView):
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
-
-    def post(self, request, pk):
-        inst = get_object_or_404(Institution, pk=pk)
-        serializer = ChangePlanSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        old_plan = inst.plan
-        old_expires = inst.plan_expires_at
-
-        inst.plan = serializer.validated_data['plan']
-        if 'plan_expires_at' in serializer.validated_data:
-            inst.plan_expires_at = serializer.validated_data['plan_expires_at']
-        inst.save(update_fields=['plan', 'plan_expires_at', 'updated_at'])
-
-        # 审计日志
-        from users.models_commercial import InstitutionAuditLog
-        InstitutionAuditLog.objects.create(
-            institution=inst,
-            operator=request.user,
-            action='change_plan',
-            detail=f'{old_plan} → {inst.plan} (expires: {old_expires} → {inst.plan_expires_at})',
-        )
-
         return Response(InstitutionSerializer(inst).data)
 
 
@@ -530,153 +416,6 @@ class PlatformAdminInstitutionOverviewView(APIView):
         })
 
 
-# ── Preview as Institution (平台超管专用) ──
-
-class InstitutionPreviewView(APIView):
-    """平台管理员以任意机构身份预览功能集"""
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
-
-    def get(self, request, pk):
-        inst = get_object_or_404(Institution, pk=pk)
-        return Response({
-            'preview': True,
-            'is_platform_admin': False,  # preview mode → behave as institution member
-            'institution': {
-                'id': inst.id, 'name': inst.name, 'slug': inst.slug,
-                'plan': inst.plan, 'plan_label': inst.get_plan_display(),
-                'plan_expires_at': inst.plan_expires_at,
-                'is_active': inst.is_active,
-                'is_plan_active': inst.is_plan_active,
-                'max_students': inst.max_students,
-                'student_count': inst.student_count,
-            },
-            'features': get_plan_features(inst.plan),
-        })
-
-
-class CheckInviteView(APIView):
-    """前端检测：是否有有效的机构邀请 cookie"""
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        invite_slug = request.COOKIES.get('institution_invite', '')
-        exists = bool(invite_slug and InstitutionInvite.objects.filter(
-            slug=invite_slug, is_active=True, institution__is_active=True).exists())
-        return Response({'has_invite': exists})
-
-
-# ── Institution Self-Update (机构管理员编辑自己的机构信息) ──
-
-class InstitutionSelfUpdateView(APIView):
-    """机构管理员可编辑机构名称、联系人、Logo、简介等信息。学生无权访问。"""
-    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
-
-    def _build_logo_url(self, inst, request):
-        if inst.logo:
-            return request.build_absolute_uri(inst.logo.url)
-        return None
-
-    def get(self, request):
-        inst = request.user.institution
-        effective_plan = inst.get_effective_plan()
-        plan_label = dict(Institution.PLAN_CHOICES).get(effective_plan, effective_plan)
-        return Response({
-            'id': inst.id,
-            'name': inst.name,
-            'slug': inst.slug,
-            'contact_name': inst.contact_name,
-            'contact_email': inst.contact_email,
-            'contact_phone': inst.contact_phone,
-            'plan': effective_plan,
-            'plan_label': plan_label,
-            'plan_expires_at': inst.plan_expires_at,
-            'is_plan_active': inst.is_plan_active,
-            'max_students': inst.max_students,
-            'student_count': inst.student_count,
-            'staff_count': inst.students.filter(institution_role__in=('owner', 'teacher')).count(),
-            'notes': inst.notes or '',
-            'description': inst.description or '',
-            'custom_domain': inst.custom_domain or '',
-            'business_type': inst.business_type or '',
-            'logo_url': self._build_logo_url(inst, request),
-        })
-
-    def put(self, request):
-        inst = request.user.institution
-        allowed = ['name', 'contact_name', 'contact_email', 'contact_phone', 'notes', 'description', 'business_type']
-        updated = []
-        for field in allowed:
-            if field in request.data:
-                setattr(inst, field, request.data[field])
-                updated.append(field)
-        if 'logo' in request.FILES:
-            from core.file_validation import validate_upload_file
-            validate_upload_file(request.FILES['logo'], allowed_extensions={'.jpg', '.jpeg', '.png', '.webp'})
-            inst.logo = request.FILES['logo']
-            updated.append('logo')
-        if updated:
-            updated.append('updated_at')
-            inst.save(update_fields=updated)
-        return Response({
-            'status': 'ok',
-            'name': inst.name,
-            'contact_name': inst.contact_name,
-            'notes': inst.notes or '',
-            'logo_url': self._build_logo_url(inst, request),
-        })
-
-
-class UpdateDirectionsView(APIView):
-    """机构所有者更新业务方向 —— 删旧 KP，克隆新方向 KP。"""
-    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
-
-    def put(self, request):
-        inst = request.user.institution
-        plan = inst.plan
-
-        subject_names = (request.data.get('subject_names') or [])
-        if isinstance(subject_names, str):
-            subject_names = [s.strip() for s in subject_names.split(',') if s.strip()]
-        subject_names = [s for s in subject_names if s and s != 'custom']
-
-        max_dirs = DIRECTION_LIMITS.get(plan, 1)
-        if len(subject_names) > max_dirs:
-            return Response(
-                {'error': f'{plan.upper()} 方案最多选择 {max_dirs} 个学科方向'},
-                status=400,
-            )
-
-        # Delete existing institution KPs
-        from quizzes.models import KnowledgePoint
-        deleted, _ = KnowledgePoint.objects.filter(institution=inst).delete()
-
-        # Clone selected subjects
-        imported_count = 0
-        for s in subject_names:
-            imported_count += _clone_knowledge_tree(s, inst)
-
-        inst.business_type = ', '.join(subject_names) if subject_names else '自定义'
-        inst.save(update_fields=['business_type'])
-
-        return Response({
-            'status': 'ok',
-            'deleted': deleted,
-            'imported_nodes': imported_count,
-            'subjects': subject_names,
-            'business_type': inst.business_type,
-        })
-
-
-class RegenerateInviteSlugView(APIView):
-    """机构所有者重新生成邀请链接 slug"""
-    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
-
-    def post(self, request):
-        inst = request.user.institution
-        inst.regenerate_invite_slug()
-        return Response({'invite_slug': inst.invite_slug})
-
-
 # ── Institution Member Management (owner + teacher) ──
 
 class InstitutionMemberListView(APIView):
@@ -692,190 +431,6 @@ class InstitutionMemberListView(APIView):
         return Response(serializer.data)
 
 
-class InstitutionMemberRoleView(APIView):
-    """机构所有者修改成员角色（student ↔ teacher）"""
-    permission_classes = [IsAuthenticated, IsInstitutionOwner, IsInstitutionActive]
-
-    def patch(self, request, pk):
-        inst = request.user.institution
-        member = get_object_or_404(
-            User, pk=pk, institution=inst)
-        if member.institution_role not in ('teacher', 'student'):
-            return Response({'error': '不能修改此用户的角色'}, status=400)
-        new_role = (request.data.get('role') or '').strip()
-        if new_role not in ('teacher', 'student'):
-            return Response({'error': '无效的角色'}, status=400)
-        member.institution_role = new_role
-        member.save(update_fields=['institution_role'])
-        return Response(InstitutionStudentSerializer(member).data)
-
-
-# ── Public Institution Page ──
-
-class InstitutionJoinBySlugView(APIView):
-    """通过机构标识（slug 或 invite_slug）加入机构，role 由邀请链接或请求参数决定"""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        identifier = (request.data.get('slug') or '').strip()
-        if not identifier:
-            return Response({'error': '缺少机构标识'}, status=400)
-
-        from django.db.models import Q
-        try:
-            inst = Institution.objects.get(
-                Q(slug=identifier) | Q(invite_slug=identifier),
-                is_active=True,
-            )
-        except Institution.DoesNotExist:
-            return Response({'error': '机构不存在或已停用'}, status=404)
-        except Institution.MultipleObjectsReturned:
-            inst = Institution.objects.filter(slug=identifier, is_active=True).first()
-
-        if not inst.is_plan_active:
-            return Response({'error': '该机构服务已到期'}, status=403)
-
-        role = 'student'  # 通过邀请链接加入的用户只能是学生，教师角色需机构管理员指定
-
-        if inst.student_count >= inst.max_students:
-            return Response({'error': '该机构学员数已达上限'}, status=403)
-
-        user = request.user
-        if user.institution == inst:
-            return Response({'status': 'ok', 'institution': {'id': inst.id, 'name': inst.name}})
-        if user.institution is not None:
-            return Response({'error': '你已加入其他机构，请先退出'}, status=409)
-
-        user.institution = inst
-        user.institution_role = role
-        user.save(update_fields=['institution', 'institution_role'])
-
-        return Response({
-            'status': 'ok',
-            'institution': {'id': inst.id, 'name': inst.name},
-        })
-
-
-class InstitutionJoinByInviteSlugView(APIView):
-    """已登录用户通过邀请链接加入机构。支持审批流。"""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        invite_slug = (request.data.get('invite_slug') or '').strip()
-        if not invite_slug:
-            return Response({'error': '缺少邀请标识'}, status=400)
-
-        # 加入教学机构与个人学习权益分别管理。
-        invite = InstitutionInvite.objects.filter(slug=invite_slug, is_active=True).first()
-        if invite:
-            inst = invite.institution
-            if not inst.is_active:
-                return Response({'error': '该机构已停用'}, status=403)
-            assigned_role = invite.assigned_role
-            requires_approval = invite.requires_approval
-        else:
-            return Response({'error': '邀请链接无效或已停用。'}, status=404)
-
-        user = request.user
-        if user.institution == inst:
-            return Response({'status': 'ok', 'institution': {'id': inst.id, 'name': inst.name}})
-        if user.institution is not None:
-            return Response({'error': '你已加入其他机构，请先退出'}, status=409)
-
-        # 检查是否已有待审批的申请
-        existing_req = JoinRequest.objects.filter(user=user, institution=inst, status='pending').first()
-        if existing_req:
-            return Response({
-                'status': 'pending_approval',
-                'institution': {'id': inst.id, 'name': inst.name},
-            })
-
-        if requires_approval:
-            # 创建加入申请
-            join_req = JoinRequest.objects.create(
-                institution=inst, user=user, invite=invite,
-                status='pending',
-            )
-            # 通知机构管理员
-            from notifications.models import Notification
-            admins = inst.students.filter(institution_role__in=('owner', 'teacher'))
-            for admin in admins:
-                Notification.objects.create(
-                    recipient=admin, sender=user, ntype='join_request',
-                    title='新的加入申请',
-                    content=f'{user.nickname or user.username} 申请加入机构',
-                    link='/management?tab=join-requests',
-                )
-            return Response({
-                'status': 'pending_approval',
-                'institution': {'id': inst.id, 'name': inst.name},
-            })
-
-        # 无需审批：直接加入并更新计数
-        user.institution = inst
-        user.institution_role = assigned_role
-        user.save(update_fields=['institution', 'institution_role'])
-
-        if invite:
-            InstitutionInvite.objects.filter(pk=invite.pk).update(
-                used_count=F('used_count') + 1
-            )
-
-        return Response({
-            'status': 'ok',
-            'institution': {'id': inst.id, 'name': inst.name},
-        })
-
-
-# ── Institution Invites CRUD ──
-
-class InstitutionInviteListView(APIView):
-    """教师管理机构邀请链接：GET 列表 / POST 创建"""
-    permission_classes = [IsAuthenticated, IsInstitutionTeacher, IsInstitutionActive]
-
-    def get(self, request):
-        inst = request.user.institution
-        qs = InstitutionInvite.objects.filter(institution=inst).order_by('-created_at')
-        return Response(InstitutionInviteSerializer(qs, many=True).data)
-
-    def post(self, request):
-        inst = request.user.institution
-        serializer = CreateInstitutionInviteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        count = int(request.data.get('count', 1))
-        invites = []
-        for _ in range(max(1, min(count, 50))):  # 上限 50
-            invite = InstitutionInvite.objects.create(
-                institution=inst,
-                created_by=request.user,
-                **serializer.validated_data,
-            )
-            invites.append(invite)
-        if len(invites) == 1:
-            return Response(InstitutionInviteSerializer(invites[0]).data, status=201)
-        return Response(InstitutionInviteSerializer(invites, many=True).data, status=201)
-
-
-class InstitutionInviteDetailView(APIView):
-    """PATCH 更新 / DELETE 删除邀请链接"""
-    permission_classes = [IsAuthenticated, IsInstitutionTeacher, IsInstitutionActive]
-
-    def patch(self, request, pk):
-        inst = request.user.institution
-        invite = get_object_or_404(InstitutionInvite, pk=pk, institution=inst)
-        for field in ['is_active', 'max_uses', 'expires_at', 'requires_approval', 'assigned_role']:
-            if field in request.data:
-                setattr(invite, field, request.data[field])
-        invite.save()
-        return Response(InstitutionInviteSerializer(invite).data)
-
-    def delete(self, request, pk):
-        inst = request.user.institution
-        invite = get_object_or_404(InstitutionInvite, pk=pk, institution=inst)
-        invite.delete()
-        return Response(status=204)
-
-
 class InstitutionJoinRequestListView(APIView):
     http_method_names = ['get', 'head', 'options']
     """GET 加入申请列表（按状态筛选）"""
@@ -888,138 +443,6 @@ class InstitutionJoinRequestListView(APIView):
             institution=inst, status=status_filter,
         ).select_related('user', 'invite').order_by('-created_at')
         return Response(JoinRequestSerializer(qs, many=True).data)
-
-
-class InstitutionJoinRequestReviewView(APIView):
-    """PATCH 审批加入申请（通过/拒绝）"""
-    permission_classes = [IsAuthenticated, IsInstitutionTeacher, IsInstitutionActive]
-
-    def patch(self, request, pk):
-        inst = request.user.institution
-        join_req = get_object_or_404(JoinRequest, pk=pk, institution=inst, status='pending')
-        action = (request.data.get('status') or '').strip()
-        if action not in ('approved', 'rejected'):
-            return Response({'error': 'status 必须是 approved 或 rejected'}, status=400)
-
-        join_req.status = action
-        join_req.reviewed_by = request.user
-        join_req.reviewed_at = timezone.now()
-        join_req.save()
-
-        if action == 'approved':
-            user = join_req.user
-            user.institution = inst
-            user.institution_role = join_req.invite.assigned_role if join_req.invite else 'student'
-            user.save(update_fields=['institution', 'institution_role'])
-            if join_req.invite:
-                InstitutionInvite.objects.filter(pk=join_req.invite_id).update(
-                    used_count=F('used_count') + 1
-                )
-
-        return Response(JoinRequestSerializer(join_req).data)
-
-
-# ── Teacher: Create Own Institution ──
-
-class InstitutionCreateView(APIView):
-    """注册后用户通过方案邀请码自建机构，成功后自动成为机构管理员"""
-    permission_classes = [IsPlatformAdmin]
-
-    @transaction.atomic
-    def post(self, request):
-        user = request.user
-        if user.institution is not None:
-            return Response({'error': '你已有所属机构，不能重复创建'}, status=409)
-
-        invite_code = (request.data.get('invite_code') or '').strip().upper()
-        if not invite_code:
-            return Response({'error': '需要方案邀请码才能创建机构，请联系 UniMind 获取'}, status=400)
-
-        valid, result = PlanInviteCode.validate_and_use(invite_code)
-        if not valid:
-            return Response({'error': result}, status=400)
-        plan, duration_days = result
-
-        name = (request.data.get('name') or '').strip()
-        if not name:
-            return Response({'error': '机构名称不能为空'}, status=400)
-
-        slug_base = name.lower().replace(' ', '-')
-        slug = slug_base
-        counter = 1
-        while Institution.objects.filter(slug=slug).exists():
-            slug = f'{slug_base}-{counter}'
-            counter += 1
-
-        contact_name = (request.data.get('contact_name') or user.nickname or user.username).strip()
-        contact_email = (request.data.get('contact_email') or user.email or '').strip()
-        contact_phone = (request.data.get('contact_phone') or '').strip()
-        description = (request.data.get('description') or '').strip()
-        student_scale = (request.data.get('student_scale') or '').strip()
-
-        # Clone knowledge trees for selected subjects
-        subject_names = (request.data.get('subject_names') or [])
-        if isinstance(subject_names, str):
-            subject_names = [s.strip() for s in subject_names.split(',') if s.strip()]
-
-        # Filter out "custom" — it means user wants empty tree
-        subject_names = [s for s in subject_names if s and s != 'custom']
-
-        max_dirs = DIRECTION_LIMITS.get(plan, 1)
-        if len(subject_names) > max_dirs:
-            return Response(
-                {'error': f'{plan.upper()} 方案最多选择 {max_dirs} 个学科方向'},
-                status=400,
-            )
-
-        inst = Institution.objects.create(
-            name=name, slug=slug,
-            contact_name=contact_name,
-            contact_email=contact_email,
-            contact_phone=contact_phone,
-            description=description,
-            student_scale=student_scale,
-            plan=plan,
-            plan_expires_at=compute_expiry(duration_days),
-            created_by=user,
-            is_active=True,
-        )
-
-        imported_count = 0
-        for s in subject_names:
-            imported_count += _clone_knowledge_tree(s, inst)
-
-        # Also store business_type
-        inst.business_type = ', '.join(subject_names) if subject_names else '自定义'
-        inst.save(update_fields=['business_type'])
-
-        user.institution = inst
-        user.institution_role = 'owner'
-        user.role = 'admin'
-        user.is_member = True
-        user.membership_tier = user.institution.get_effective_plan() if user.institution else 'free'
-        user.save(update_fields=['institution', 'institution_role', 'role', 'is_member', 'membership_tier'])
-
-        # 创建「初始化题库」通知
-        if imported_count > 0:
-            from notifications.models import Notification
-            Notification.objects.create(
-                recipient=user,
-                ntype='bulk_init',
-                title='初始化题库',
-                content=f'你的机构「{inst.name}」已导入 {imported_count} 个知识点。可以现在用 AI 批量生成题目。',
-                link='/workbench',
-            )
-
-        return Response({
-            'status': 'ok',
-            'institution': {
-                'id': inst.id, 'name': inst.name, 'slug': inst.slug,
-                'plan': inst.plan, 'plan_label': inst.get_plan_display(),
-            },
-            'imported_nodes': imported_count,
-            'subjects_imported': subject_names,
-        }, status=status.HTTP_201_CREATED)
 
 
 # ── Plan Invite Code Management (平台超管) ──
@@ -1043,48 +466,6 @@ class PlanInviteCodeListView(APIView):
             'note': c.note, 'created_at': c.created_at,
             'created_by': c.created_by.nickname if c.created_by else '',
         } for c in qs])
-
-
-class PlanInviteCodeGenerateView(APIView):
-    """超管：按方案批量生成邀请码"""
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
-
-    def post(self, request):
-        code_type = (request.data.get('code_type') or 'formal').strip()
-        if code_type not in ('trial', 'formal'):
-            return Response({'error': '无效的码类型'}, status=400)
-
-        plan = (request.data.get('plan') or '').strip()
-        if code_type == 'trial':
-            plan = 'growth'
-        elif plan not in dict(Institution.PLAN_CHOICES):
-            return Response({'error': '无效的方案类型'}, status=400)
-
-        count = max(1, min(int(request.data.get('count', 1)), 100))
-        max_uses = max(1, min(int(request.data.get('max_uses', 1)), 1000))
-        duration_days = 7 if code_type == 'trial' else max(DURATION_PERMANENT, min(int(request.data.get('duration_days', DEFAULT_DURATION_DAYS)), MAX_DURATION_DAYS))
-        note = (request.data.get('note') or '').strip()
-
-        codes = PlanInviteCode.generate(plan=plan, created_by=request.user, count=count, max_uses=max_uses, duration_days=duration_days, note=note, code_type=code_type)
-        return Response({
-            'generated': len(codes),
-            'code_type': code_type,
-            'plan': plan,
-            'plan_label': dict(Institution.PLAN_CHOICES).get(plan, plan),
-            'duration_days': duration_days,
-            'codes': codes,
-        }, status=status.HTTP_201_CREATED)
-
-
-class PlanInviteCodeDeactivateView(APIView):
-    """超管：停用邀请码"""
-    permission_classes = [IsAuthenticated, IsPlatformAdmin]
-
-    def post(self, request, pk):
-        code = get_object_or_404(PlanInviteCode, pk=pk)
-        code.is_active = False
-        code.save(update_fields=['is_active'])
-        return Response({'status': 'deactivated'})
 
 
 class InstitutionAuditLogView(APIView):
@@ -1175,37 +556,6 @@ class InstitutionNotificationConfigView(APIView):
             'enabled': config.enabled,
             'channel': config.channel,
             'due_threshold': config.due_threshold,
-        })
-
-
-# ── Bulk Init ──
-
-class InstitutionBulkInitView(APIView):
-    """机构批量初始化出题资格查询。"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        inst = getattr(request.user, 'institution', None)
-        if not inst:
-            return Response({'eligible': False, 'reason': '无机构'})
-
-        # 只统计机构专属知识点（不含全局）
-        from quizzes.models import KnowledgePoint
-        kps = KnowledgePoint.objects.filter(
-            institution=inst,
-            level='kp',
-        )
-        kp_count = kps.count()
-        subjects = sorted(set(
-            s for s in kps.values_list('subject', flat=True) if s
-        ))
-
-        return Response({
-            'eligible': not inst.has_used_bulk_init,
-            'has_used': inst.has_used_bulk_init,
-            'kp_count': kp_count,
-            'max_questions': 500,
-            'available_subjects': subjects[:20],  # 最多 20 个学科
         })
 
 

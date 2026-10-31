@@ -214,6 +214,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
   const replyCards = cards.filter(c => c.action.type === 'reply');
   // 自动推断模式：url 为空且未显式指定 reply_mode → 视为 input（让用户自定义输入）
   const replyMode: ReplyMode = (() => {
+    if (!replyCards.length) return 'single';
     const explicit = replyCards[0]?.action.reply_mode;
     if (explicit) return explicit;
     if (!replyCards[0]?.action.url) return 'input';
@@ -223,7 +224,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
   if (!cards.length) return null;
 
   return (
-    <div className="p-5 space-y-3">
+    <div className="um-visual-actions space-y-3">
       {payload.title && (
         <h3 className="text-[15px] font-semibold tracking-tight text-foreground">{payload.title}</h3>
       )}
@@ -249,6 +250,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                     }
                   }}
                   disabled={ratingSent}
+                  aria-pressed={isSelected}
                   className={cn(
                     'w-9 h-9 rounded-lg text-sm font-bold transition-colors border',
                     isActive && 'border-border/60 hover:border-foreground/20 hover:bg-muted/30',
@@ -287,6 +289,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                     key={i}
                     onClick={() => handleClick(card)}
                     disabled={isLocked}
+                    aria-pressed={isChosen}
                     className={cn(
                       'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left',
                       'border transition-colors duration-150',
@@ -312,6 +315,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                   <button
                     key={i}
                     onClick={() => handleClick(card)}
+                    aria-pressed={isMultiChecked}
                     className={cn(
                       'w-full flex items-start gap-2 px-3 py-2 rounded-lg text-left',
                       'border transition-colors duration-150',
@@ -343,6 +347,7 @@ export const ActionCardsRenderer: React.FC<{ payload: ActionCardsPayload }> = ({
                   key={i}
                   onClick={() => handleClick(card)}
                   disabled={isLocked}
+                    aria-pressed={isChosen}
                   className={cn(
                     'w-full flex items-start gap-2 px-3 py-2 rounded-lg text-left',
                     'border transition-colors duration-150',

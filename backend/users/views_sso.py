@@ -3,13 +3,11 @@ from django.shortcuts import redirect, get_object_or_404
 from django.contrib.auth import login as auth_login
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from users.permissions import IsInstitutionOwner
 from .models import Institution, SSOConfig
-from .serializers_institution import SSOConfigSerializer
 from .services.sso import (
     get_authorize_url, exchange_code, normalize_user_info,
     find_or_create_sso_user, verify_state_token,
@@ -68,24 +66,3 @@ class SSOCallbackView(APIView):
         # 重定向到前端
         frontend_url = request.COOKIES.get('sso_redirect_to', '/')
         return redirect(frontend_url)
-
-
-class SSOConfigView(APIView):
-    """GET/PUT /api/users/institution/me/sso-config/ — 机构 SSO 配置管理。"""
-    permission_classes = [IsAuthenticated, IsInstitutionOwner]
-
-    def get(self, request):
-        inst = request.user.institution
-        config, _ = SSOConfig.objects.get_or_create(
-            institution=inst,
-            defaults={'provider': 'feishu', 'enabled': False},
-        )
-        return Response(SSOConfigSerializer(config).data)
-
-    def put(self, request):
-        inst = request.user.institution
-        config, _ = SSOConfig.objects.get_or_create(institution=inst)
-        ser = SSOConfigSerializer(config, data=request.data, partial=True)
-        ser.is_valid(raise_exception=True)
-        ser.save()
-        return Response(ser.data)

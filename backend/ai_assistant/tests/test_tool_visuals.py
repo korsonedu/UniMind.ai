@@ -3,17 +3,29 @@ import json
 import pytest
 from django.contrib.auth import get_user_model
 
-from ai_assistant.services.tool_executor import PlannerToolExecutor
+from ai_assistant.services.tool_executor import PlannerToolExecutor, set_permitted_tools
 
 
 @pytest.fixture
-def user(db):
-    return get_user_model().objects.create_user(username='visual-user')
+def user(db, settings):
+    from users.models import CourseStudentStatus
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    user = get_user_model().objects.create_user(username='visual-user')
+    CourseStudentStatus.objects.create(user=user, is_course_student=True)
+    return user
+
+
+def visual_executor(user):
+    executor = PlannerToolExecutor(user)
+    set_permitted_tools(executor, [{'function': {'name': name}} for name in (
+        'get_learning_stats', 'get_knowledge_mastery_map', 'get_due_reviews', 'render_visual',
+    )])
+    return executor
 
 
 @pytest.mark.django_db
 def test_learning_stats_returns_card_without_misleading_zero(user):
-    executor = PlannerToolExecutor(user)
+    executor = visual_executor(user)
 
     data = json.loads(executor('get_learning_stats', {}))
 
@@ -26,7 +38,7 @@ def test_learning_stats_returns_card_without_misleading_zero(user):
 
 @pytest.mark.django_db
 def test_mastery_without_diagnosis_returns_prompt_card(user):
-    executor = PlannerToolExecutor(user)
+    executor = visual_executor(user)
 
     data = json.loads(executor('get_knowledge_mastery_map', {}))
 
@@ -37,7 +49,7 @@ def test_mastery_without_diagnosis_returns_prompt_card(user):
 
 @pytest.mark.django_db
 def test_duplicate_visual_is_registered_once(user):
-    executor = PlannerToolExecutor(user)
+    executor = visual_executor(user)
 
     first = json.loads(executor('get_learning_stats', {}))
     second = json.loads(executor('get_learning_stats', {}))
@@ -50,7 +62,7 @@ def test_duplicate_visual_is_registered_once(user):
 @pytest.mark.django_db
 def test_unexpected_exception_is_masked(monkeypatch, caplog, user):
     caplog.set_level('ERROR')
-    executor = PlannerToolExecutor(user)
+    executor = visual_executor(user)
 
     def boom(args):
         raise RuntimeError('INTERNAL_SECRET')
@@ -68,7 +80,7 @@ def test_unexpected_exception_is_masked(monkeypatch, caplog, user):
 
 @pytest.mark.django_db
 def test_business_error_keeps_original_message(user):
-    executor = PlannerToolExecutor(user)
+    executor = visual_executor(user)
 
     data = json.loads(executor('render_visual', {'type': 'invalid'}))
 

@@ -1,0 +1,26 @@
+appId: com.korsonedu.unimind.preview
+productName: UniMind Preview
+extraMetadata:
+  productName: UniMind Preview
+copyright: Copyright © 2026 Korson
+directories:
+  output: release-preview
+files:
+  - dist/**/*
+  - package.json
+  - tray.png
+asar: true
+mac:
+  category: public.app-category.education
+  target:
+    - dir
+  icon: ../src-tauri/icons/icon.icns
+win:
+  target:
+    - nsis
+  icon: ../src-tauri/icons/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: UniMind-Preview-${version}-${arch}-setup.${ext}

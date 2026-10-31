@@ -85,10 +85,14 @@ def media_serve(request, path):
     protected = None
     feature = None
     if courses.exists():
-        protected, feature = courses, 'course.video'
+        from courses.access import visible_courses
+        protected, feature = courses.filter(pk__in=visible_courses(request)), 'course.video'
     elif questions.exists():
         protected, feature = questions, 'faq.system'
     elif materials.exists():
+        from courses.access import has_full_course_access
+        if request.user.is_authenticated and not has_full_course_access(request.user):
+            return HttpResponse(status=403)
         protected, feature = materials, 'course.video'
 
     # 聊天图片在发送消息前就需要预览，上传接口使用 UUID 文件名。

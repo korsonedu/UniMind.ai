@@ -10,6 +10,7 @@ from core.file_validation import validate_upload_file, IMAGE_EXTENSIONS, IMAGE_M
 from core.rate_limit import user_rate_limit
 from users.quota import check_and_add_storage_usage
 from core.utils import apply_institution_filter, get_content_institution
+from courses.access import HasFullCourseAccess
 
 _upload_rl = method_decorator(user_rate_limit("upload", 100, 3600), name="dispatch")
 
@@ -21,7 +22,7 @@ class ArticleListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == 'POST':
             return [IsAdmin(), HasQuota()]
-        return [IsAdminWriteMemberRead()]
+        return [IsAdminWriteMemberRead(), HasFullCourseAccess()]
 
     def get_queryset(self):
         qs = apply_institution_filter(Article.objects.all().order_by('-created_at'), self.request.user, self.request)
@@ -80,7 +81,7 @@ class ArticleListCreateView(generics.ListCreateAPIView):
 class ArticleDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Article.objects.all()
     serializer_class = ArticleSerializer
-    permission_classes = [IsAdminWriteMemberRead]
+    permission_classes = [IsAdminWriteMemberRead, HasFullCourseAccess]
 
     def get_queryset(self):
         return apply_institution_filter(super().get_queryset(), self.request.user, self.request)
@@ -89,7 +90,7 @@ class ArticleIncrementViewView(generics.GenericAPIView):
 
     def get_queryset(self):
         return apply_institution_filter(Article.objects.all(), self.request.user, self.request)
-    permission_classes = [IsMember]
+    permission_classes = [IsMember, HasFullCourseAccess]
 
     def post(self, request, *args, **kwargs):
         instance = self.get_object()

@@ -159,7 +159,6 @@ api.defaults.adapter = async config => {
     case '/notifications/clear/': notifications.splice(0); break;
     case '/users/achievements/': data = achievements; break;
     case '/users/me/achievements/': data = achievements.filter(item => item.is_unlocked); break;
-    case '/users/nps/status/': data = { should_show: false }; break;
     case '/users/institution/me/students/ranking/': data = [user]; break;
     case '/courses/tags/': data = [...new Set(courses.flatMap(course => course.tags))].map(name => ({ name, count: courses.filter(course => course.tags.includes(name)).length })); break;
     case '/courses/learning-progress/': data = courses.filter(c => c.progress).map(c => ({ course: c.id, ...c.progress, duration: c.duration })); break;

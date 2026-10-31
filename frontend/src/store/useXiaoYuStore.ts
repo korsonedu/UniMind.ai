@@ -14,6 +14,7 @@ export interface XiaoYuMessage {
   conversation_id?: string;
   conversation_title?: string;
   metadata?: Record<string, unknown> & { visual?: VisualData; all_visuals?: VisualData[] };
+  streaming?: boolean;
 }
 
 interface XiaoYuState {

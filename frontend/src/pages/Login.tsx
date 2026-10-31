@@ -10,10 +10,13 @@ import { Warning, Spinner } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { getReturnTo } from '@/lib/routing';
+import { DesktopLogin } from './DesktopLogin';
 
 type LoginTab = 'password' | 'code';
 
-export const Login: React.FC = () => {
+export const Login: React.FC = () => window.unimindDesktop ? <DesktopLogin /> : <WebLogin />;
+
+const WebLogin: React.FC = () => {
   const [tab, setTab] = useState<LoginTab>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

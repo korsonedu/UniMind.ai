@@ -37,7 +37,6 @@ class User(AbstractUser):
     membership_expires_at = models.DateTimeField(null=True, blank=True, verbose_name="会员到期时间")
     membership_tier = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="会员等级（已弃用，迁移至 personal_plan）")
     personal_plan = models.CharField(max_length=20, choices=MEMBERSHIP_TIER_CHOICES, default='free', verbose_name="个人方案（无机构用户）")
-    trial_ends_at = models.DateTimeField(null=True, blank=True, verbose_name="试用到期时间（已废弃，保留兼容）")
     MEMBERSHIP_SOURCE_CHOICES = (
         ('trial', '试用'), ('code', '激活码'), ('payment', '付费'), ('admin', '管理员'),
     )
@@ -511,10 +510,6 @@ class SSOConfig(models.Model):
 
 
 # ── Plan features utility ──
-DEFAULT_DURATION_DAYS = 30
-DURATION_PERMANENT = 0
-MAX_DURATION_DAYS = 365
-
 PLAN_FEATURES: dict[str, list[str]] = {
     'free': [
         'quiz.manual', 'quiz.exam', 'wrong.review', 'basic.stats',
@@ -684,6 +679,6 @@ from .models_commercial import (
     InstitutionAuditLog,
 )
 from .models_learning import (
-    LearningSession, LearningProduct, LearningGrant, LearningUsage, CourseStudentStatus, WeeklyAIQuotaConfig,
+    LearningSession, LearningProduct, LearningGrant, LearningUsage, StudentCohort, CourseStudentStatus, WeeklyAIQuotaConfig,
     AIAddonProduct, AIAddonGrant, WeeklyAIUsage, AIUsageReservation,
 )

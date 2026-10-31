@@ -119,7 +119,7 @@
 
 **action_cards** — 行动引导卡片
 发现薄弱点、复习到期、推荐下一步学习动作时调用。
-数据组合：按需调用 get_user_weak_points + search_asr + get_due_reviews + get_practice_questions + search_courses 等工具，将结果组装成可跳转的行动卡片。
+数据组合：按需调用 get_user_weak_points + search_asr + get_due_reviews + search_courses 等工具，将结果组装成可跳转的行动卡片。get_practice_questions 自带可作答的练习卡片，不要再用 action_cards 包装同一组题。
 优先级规则：掌握度低或错误率高 → high（全宽）；一般建议 → normal；辅助信息 → low。
 action.type 支持的类型：
 - video/quiz/review/course/chart/plan/exam → 跳转到对应页面（非 reply 类型）
@@ -230,7 +230,7 @@ action.type 支持的类型：
 - **数据分析**：学生主动询问学习数据、进度或对比趋势，且文字不足以清晰表达时 → `data_card`
 - **知识图谱**：学生要求查看知识点掌握关系或薄弱分布时 → `knowledge_map`
 - **行动引导**：学生需要明确下一步行动、且存在多个可选路径时 → `action_cards`
-- **出题练习**：学生要求做题、薄弱知识点强化 → 先调 `get_practice_questions` 获取题目，再用 `action_cards` 包装成可跳转的做题卡片
+- **出题练习**：学生要求做题、薄弱知识点强化 → 调用 `get_practice_questions`，练习卡片会自动内联展示；文字只做简短引导，不再调用 `render_visual` 包装同一组题，也不复述题干和选项
 
 #### 不需要渲染的场景
 - 纯文字问答（简单提问、闲聊、鼓励、安慰）

@@ -46,35 +46,12 @@ function deduplicateLatex(raw: string): string {
 export const LatexRenderer: React.FC<{ payload: LatexDerivationPayload }> = ({ payload }) => {
   const steps = payload?.steps;
   if (!Array.isArray(steps)) return null;
-  return (
-    <div className="p-5 space-y-5">
-      {payload.title && (
-        <h3 className="text-[15px] font-semibold tracking-tight text-foreground">{payload.title}</h3>
-      )}
-      <div className="space-y-0">
-        {steps.map((step, i) => (
-          <div key={i} className="relative pl-5 pb-5 last:pb-0">
-            {/* Vertical connector line */}
-            {i < steps.length - 1 && (
-              <div className="absolute left-[3px] top-[10px] bottom-0 w-px bg-foreground/10" />
-            )}
-            {/* Dot */}
-            <div className="absolute left-0 top-[6px] w-[7px] h-[7px] rounded-full bg-foreground/20" />
-            {/* Step number */}
-            <div className="text-[10px] font-medium text-foreground/30 tabular-nums mb-1.5">
-              {String(i + 1).padStart(2, '0')}
-            </div>
-            {/* Formula */}
-            <div className="py-1">
-              <MarkdownContent content={`$$${deduplicateLatex(step.latex)}$$`} />
-            </div>
-            {/* Note */}
-            {step.note && (
-              <p className="text-[13px] text-foreground/45 leading-relaxed mt-1">{step.note}</p>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <div className="um-visual-steps">
+    {payload.title && <h3>{payload.title}</h3>}
+    <ol className="um-visual-step-list">{steps.map((step, index) => <li key={index}>
+      <span className="um-visual-step-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+      <div><div className="um-visual-formula"><MarkdownContent content={`$$${deduplicateLatex(step.latex)}$$`} /></div>
+        {step.note && <p className="um-visual-note">{step.note}</p>}</div>
+    </li>)}</ol>
+  </div>;
 };

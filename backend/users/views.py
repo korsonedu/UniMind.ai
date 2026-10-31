@@ -35,13 +35,6 @@ security_logger = logging.getLogger('core.security')
 
 from users.permissions import IsMember, HasStudentFeature  # noqa: F401 — 向后兼容 re-export
 
-class ActivateMembershipView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        return Response({'detail': '激活码已停用，请联系管理员调整学员状态。'}, status=410)
-
-
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     permission_classes = (AllowAny,)
@@ -757,7 +750,7 @@ class AnalyticsDashboardView(APIView):
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def get(self, request):
-        from core.models import DailyPlatformStats, AnalyticsEvent, NPSSurvey
+        from core.models import DailyPlatformStats, AnalyticsEvent
         from django.db.models import Sum, Count
 
         days = _safe_int(request.query_params.get('days'), 30)
@@ -834,73 +827,25 @@ class AnalyticsDashboardView(APIView):
             'created_at': str(inst.created_at.date()),
         } for inst in top_insts]
 
-        # ── NPS 汇总 ──
-        nps_data = self._get_nps_summary()
-
         return Response({
             'summary': summary,
             'trends': trends,
             'feature_breakdown': feature_breakdown,
             'institution_top': institution_top[:10],
-            'nps': nps_data,
         })
-
-    def _get_nps_summary(self):
-        from core.models import NPSSurvey
-        from django.db.models import Count
-
-        total = NPSSurvey.objects.count()
-        if total == 0:
-            return {'score': 0, 'total': 0, 'distribution': {}, 'recent_feedback': []}
-
-        distribution = (
-            NPSSurvey.objects
-            .values('score')
-            .annotate(count=Count('id'))
-            .order_by('score')
-        )
-        dist = {d['score']: d['count'] for d in distribution}
-
-        promoters = sum(dist.get(s, 0) for s in [9, 10])
-        detractors = sum(dist.get(s, 0) for s in range(0, 7))
-        nps_score = round((promoters - detractors) / total * 100)
-
-        recent = list(
-            NPSSurvey.objects
-            .select_related('user')
-            .filter(feedback__gt='')
-            .order_by('-created_at')[:5]
-            .values('user__username', 'score', 'feedback', 'created_at')
-        )
-
-        return {
-            'score': nps_score,
-            'total': total,
-            'distribution': {
-                'promoters': promoters,
-                'passives': total - promoters - detractors,
-                'detractors': detractors,
-            },
-            'recent_feedback': [{
-                'username': r['user__username'],
-                'score': r['score'],
-                'feedback': r['feedback'],
-                'created_at': str(r['created_at']),
-            } for r in recent],
-        }
 
 
 class AnalyticsExportView(APIView):
     """导出平台分析数据为 CSV，仅超管可见。
 
-    GET /api/users/admin/analytics/export/?type=trends|events|nps&days=30
+    GET /api/users/admin/analytics/export/?type=trends|events&days=30
     """
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def get(self, request):
         import csv
         from django.http import HttpResponse
-        from core.models import DailyPlatformStats, AnalyticsEvent, NPSSurvey
+        from core.models import DailyPlatformStats, AnalyticsEvent
 
         export_type = request.query_params.get('type', 'trends')
         days = _safe_int(request.query_params.get('days'), 90)
@@ -909,9 +854,7 @@ class AnalyticsExportView(APIView):
             return self._export_trends(days)
         elif export_type == 'events':
             return self._export_events(days)
-        elif export_type == 'nps':
-            return self._export_nps()
-        return Response({'error': '无效的导出类型，支持: trends, events, nps'}, status=400)
+        return Response({'error': '无效的导出类型，支持: trends, events'}, status=400)
 
     def _export_trends(self, days):
         import csv
@@ -959,23 +902,6 @@ class AnalyticsExportView(APIView):
                 e.user_id, getattr(e.user, 'username', ''),
                 e.institution_id, getattr(e.institution, 'name', ''),
                 str(e.properties),
-            ])
-        return response
-
-    def _export_nps(self):
-        import csv
-        from django.http import HttpResponse
-        from core.models import NPSSurvey
-
-        surveys = NPSSurvey.objects.select_related('user').order_by('-created_at')
-        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
-        response['Content-Disposition'] = 'attachment; filename="nps_surveys.csv"'
-        writer = csv.writer(response)
-        writer.writerow(['时间', '用户', '评分', '分类', '反馈', '来源'])
-        for s in surveys:
-            writer.writerow([
-                s.created_at, s.user.username, s.score,
-                s.category, s.feedback, s.source,
             ])
         return response
 
@@ -1056,40 +982,6 @@ class PlatformRevenueView(APIView):
             'subs_by_plan': subs_by_plan,
             'inst_by_plan': {d['plan']: d['count'] for d in inst_plan_dist},
         })
-
-
-# ──────────────────────────────────────────────
-# NPS 问卷
-# ──────────────────────────────────────────────
-
-class NPSSubmitView(APIView):
-    """提交 NPS 问卷响应。"""
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        from core.models import NPSSurvey
-        score = request.data.get('score')
-        feedback = request.data.get('feedback', '')
-
-        if score is None or not (0 <= int(score) <= 10):
-            return Response({'error': '评分必须为 0-10'}, status=400)
-
-        NPSSurvey.objects.create(
-            user=request.user,
-            score=int(score),
-            feedback=feedback,
-            source=request.data.get('source', 'auto'),
-        )
-        return Response({'status': 'ok'})
-
-
-class NPSStatusView(APIView):
-    """检查当前用户是否需要填写 NPS。"""
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        from core.analytics import should_show_nps
-        return Response({'should_show': should_show_nps(request.user)})
 
 
 # ──────────────────────────────────────────────
@@ -1317,56 +1209,6 @@ class DataExportView(APIView):
         )
         response['Content-Disposition'] = f'attachment; filename="unimind_data_export_{user.id}.json"'
         return response
-
-
-# ──────────────────────────────────────────────
-# 用户反馈
-# ──────────────────────────────────────────────
-
-class FeedbackSubmitView(APIView):
-    """提交用户反馈 & 查看历史。
-
-    POST /api/users/feedback/
-    Body: { "category": "bug|feature|other", "content": "...", "contact": "optional" }
-
-    GET /api/users/feedback/  → 当前用户已提交的反馈列表
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        from core.models import Feedback
-        qs = Feedback.objects.filter(user=request.user).order_by('-created_at')[:50]
-        data = [{
-            'id': f.id,
-            'category': f.category,
-            'content': f.content[:200],
-            'contact': f.contact,
-            'page_url': f.page_url,
-            'created_at': f.created_at.isoformat(),
-        } for f in qs]
-        return Response(data)
-
-    @method_decorator(rate_limit(key_prefix="feedback", max_requests=10, window_seconds=3600))
-    def post(self, request):
-        from core.models import Feedback
-        category = request.data.get('category', 'other')
-        content = request.data.get('content', '').strip()
-        contact = request.data.get('contact', '').strip()
-
-        if not content:
-            return Response({'error': '请输入反馈内容'}, status=400)
-        if len(content) > 2000:
-            return Response({'error': '反馈内容不能超过 2000 字'}, status=400)
-
-        Feedback.objects.create(
-            user=request.user,
-            category=category,
-            content=content,
-            contact=contact,
-            page_url=request.data.get('page_url', ''),
-            user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
-        )
-        return Response({'status': 'ok', 'message': '感谢您的反馈！'})
 
 
 # ──────────────────────────────────────────────

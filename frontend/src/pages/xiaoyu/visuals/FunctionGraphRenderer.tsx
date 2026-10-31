@@ -84,13 +84,13 @@ function sampleFormula(formula: string, xMin: number, xMax: number, steps = 200)
 }
 
 // Muted, distinguishable palette
-const COLORS = ['#525252', '#9f1239', '#1e6b45', '#7c3aed'];
+const COLORS = ['var(--um-color-accent)', 'var(--um-color-success)', 'var(--um-color-warning)', 'var(--um-color-text-muted)'];
 
 const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: { x: number; y: number } }> }) => {
   if (!active || !payload?.length) return null;
   const { x, y } = payload[0].payload;
   return (
-    <div className="bg-background border border-border px-2 py-1 text-[11px] shadow-sm">
+    <div className="um-visual-chart-tooltip">
       <span className="text-foreground/40">x </span><span className="font-medium">{x}</span>
       <span className="text-foreground/40 ml-2">y </span><span className="font-medium">{y}</span>
     </div>
@@ -125,47 +125,47 @@ export const FunctionGraphRenderer: React.FC<{ payload: FunctionGraphPayload }> 
   }, [allData, quickData]);
 
   return (
-    <div className="p-5 space-y-3">
+    <div className="um-visual-function space-y-3">
       {payload.title && (
         <h3 className="text-[15px] font-semibold tracking-tight text-foreground">{payload.title}</h3>
       )}
 
       {mergedData.length > 0 ? (
-        <div className="w-full" style={{ height: 300 }}>
+        <div className="um-visual-graph-scroll" tabIndex={0} aria-label="函数图像，可横向滚动"><div className="um-visual-function-graph">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={mergedData} margin={{ top: 16, right: 20, bottom: 20, left: 20 }}>
-              <CartesianGrid strokeDasharray="2 4" stroke="#e4e4e7" />
+              <CartesianGrid strokeDasharray="2 4" stroke="var(--um-color-border)" />
               <XAxis
                 dataKey="x"
                 type="number"
                 domain={[xMin, xMax]}
-                tick={{ fontSize: 10, fill: '#a1a1aa' }}
-                axisLine={{ stroke: '#d4d4d8' }}
+                tick={{ fontSize: 10, fill: 'var(--um-color-text-muted)' }}
+                axisLine={{ stroke: 'var(--um-color-border)' }}
                 tickLine={false}
               >
-                {payload.xLabel && <Label value={payload.xLabel} position="bottom" offset={6} style={{ fontSize: 10, fill: '#a1a1aa' }} />}
+                {payload.xLabel && <Label value={payload.xLabel} position="bottom" offset={6} style={{ fontSize: 10, fill: 'var(--um-color-text-muted)' }} />}
               </XAxis>
               <YAxis
                 domain={payload.yRange ? [payload.yRange[0], payload.yRange[1]] : ['auto', 'auto']}
-                tick={{ fontSize: 10, fill: '#a1a1aa' }}
-                axisLine={{ stroke: '#d4d4d8' }}
+                tick={{ fontSize: 10, fill: 'var(--um-color-text-muted)' }}
+                axisLine={{ stroke: 'var(--um-color-border)' }}
                 tickLine={false}
               >
-                {payload.yLabel && <Label value={payload.yLabel} position="insideLeft" angle={-90} offset={6} style={{ fontSize: 10, fill: '#a1a1aa' }} />}
+                {payload.yLabel && <Label value={payload.yLabel} position="insideLeft" angle={-90} offset={6} style={{ fontSize: 10, fill: 'var(--um-color-text-muted)' }} />}
               </YAxis>
               <Tooltip content={<CustomTooltip />} />
-              <ReferenceLine y={0} stroke="#d4d4d8" strokeWidth={1} />
-              <ReferenceLine x={0} stroke="#d4d4d8" strokeWidth={1} />
+              <ReferenceLine y={0} stroke="var(--um-color-border)" strokeWidth={1} />
+              <ReferenceLine x={0} stroke="var(--um-color-border)" strokeWidth={1} />
 
               {quickData ? (
                 <Line
                   type="monotone" dataKey="y"
-                  stroke={COLORS[0]} strokeWidth={1.5} dot={false}
+                  stroke={COLORS[0]} strokeWidth={2} dot={false}
                 />
               ) : (
                 allData.map((_, i) => (
                   <Line
-                    key={i} type="monotone" dataKey={`expr_${i}`}
+                    key={i} type="monotone" dataKey={`expr_${i}`} connectNulls
                     stroke={payload.expressions?.[i]?.color || COLORS[i % COLORS.length]}
                     strokeWidth={1.5} dot={false}
                     name={payload.expressions?.[i]?.label || `f${i + 1}(x)`}
@@ -176,19 +176,19 @@ export const FunctionGraphRenderer: React.FC<{ payload: FunctionGraphPayload }> 
               {points.map((pt, i) => (
                 <ReferenceDot
                   key={i} x={pt.x} y={pt.y}
-                  r={4} fill="#ef4444" stroke="#fff" strokeWidth={1.5}
+                  r={4} fill="var(--um-color-accent)" stroke="var(--um-surface-2)" strokeWidth={1.5}
                 >
                   {pt.label && (
                     <Label
                       value={pt.label} position="top" offset={8}
-                      style={{ fontSize: 10, fontWeight: 500, fill: '#525252' }}
+                      style={{ fontSize: 10, fontWeight: 500, fill: 'var(--um-color-text)' }}
                     />
                   )}
                 </ReferenceDot>
               ))}
             </LineChart>
           </ResponsiveContainer>
-        </div>
+        </div></div>
       ) : (
         <div className="flex items-center justify-center h-48 text-[12px] text-foreground/25">
           暂无函数数据

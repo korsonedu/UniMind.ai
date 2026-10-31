@@ -112,6 +112,7 @@ class AgentMemory(models.Model):
     )
     SOURCE_CHOICES = (
         ('auto', 'AI提取'),
+        ('dsh', '服务端提取'),
         ('manual', '用户设置'),
     )
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='agent_memories')
@@ -119,6 +120,8 @@ class AgentMemory(models.Model):
     key = models.CharField(max_length=200, verbose_name="记忆键", help_text="如: 偏好数学推导风格")
     value = models.TextField(verbose_name="记忆值", help_text="如: 喜欢用具体例子先引入，再给出严格证明")
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='auto')
+    evidence = models.TextField(blank=True, default='', help_text="触发该记忆的用户原话")
+    source_conversation_id = models.CharField(max_length=64, blank=True, default='', db_index=True)
     confidence = models.FloatField(default=0.5, help_text="置信度 0-1")
     last_used_at = models.DateTimeField(null=True, blank=True)
     use_count = models.IntegerField(default=0)
@@ -141,6 +144,35 @@ class AgentMemory(models.Model):
 
     def __str__(self):
         return f"[{self.memory_type}] {self.key}: {self.value[:30]}"
+
+
+class MemoryExtractionLog(models.Model):
+    """同一轮用户发言只提取一次，防止重试或旧来源重建已删除的记忆。"""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='memory_extraction_logs')
+    conversation_id = models.CharField(max_length=64, db_index=True)
+    message_hash = models.CharField(max_length=64)
+    candidate_count = models.IntegerField(default=0)
+    saved_count = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'conversation_id', 'message_hash'],
+                name='uniq_memory_extraction_turn',
+            ),
+        ]
+        indexes = [models.Index(fields=['user', 'created_at'])]
+
+
+class DshSubmission(models.Model):
+    """学生明确确认的诊断或答疑结果，独立于模型调用额度。"""
+    request_id = models.UUIDField(primary_key=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    kind = models.CharField(max_length=16, choices=[('diagnostic', '诊断'), ('faq', '答疑')])
+    fingerprint = models.CharField(max_length=64)
+    response = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class ActionCardInteraction(models.Model):

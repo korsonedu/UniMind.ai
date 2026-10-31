@@ -1,243 +1,104 @@
-# UniMind.ai — Agent 驱动的新一代智能教育基础设施
+# UniMind.ai：科晟教育 Agent 学习平台
 
-UniMind 为教育培训机构提供 AI 驱动的教学基础设施，部署两个自治 Agent——学生学习教练「小宇」和教师教研助手「工作台」——覆盖出题、发布、练习、批改，以及教学资产管理与记忆调度的完整闭环。底层为 ARCA 四层架构（基础框架 → 记忆系统 → 教育闭环 → 测评引擎），逐层为 AI 提供教育领域必需的感知与约束。Memorix 图扩散记忆调度、IRT 机构级认知诊断、MUTAR 自进化闭环为核心算法。内置 13 学科 4,486 知识点全景知识图谱，机构间数据物理隔离。产品介绍详见 `docs/market/01-product-brand.md`。
+UniMind 为科晟课程提供学习、练习、复习、笔记与 AI 问答。小宇是学习端的 Agent 入口；教学生产和内容管理集中在 Directus 的 UniMind 管理扩展。课程在线下收费，课程学员身份由管理员调整，平台保留 AI 加量购买。
+
+本文的功能边界按 2026-10-25 本地源码核对。部署模板不代表当前生产拓扑，本地构建与迁移文件也不代表已经发布。
+
+## 当前入口
+
+| 入口 | 地址 | 说明 |
+| --- | --- | --- |
+| 产品介绍 | `/` | 未登录时展示首页，已登录后进入小宇 |
+| 小宇 | `/xiaoyu` | 普通问答、课程学习辅助与本人会话 |
+| 我的笔记 | `/notes`、`/notes/:id` | 笔记、笔记本、标签与 Agent 参考 |
+| 课程中心 | `/courses`、`/course/:id` | 学科、模块、视频、课件与学习记录 |
+| 习题训练 | `/tests` | 练习、考试、错题复盘与 Memorix 调度 |
+| 学习记录 | `/report-card` | 本人学习数据与成绩报告 |
+| 学习社区 | `/community`、`/qa`、`/study` | 课程答疑与自习室 |
+| 我的服务 | `/billing` | 学员状态、周额度、AI 加量与订单 |
+| AI 加量 | `/pricing`、`/checkout` | 公开目录与登录后的结算 |
+| 账号 | `/login`、`/register`、`/settings` | 登录注册与本人账号设置 |
+| 教学管理 | Directus `/admin/unimind-admin` | 两名映射管理员的内容、学员、教学任务与系统管理 |
+| Django 管理 | `/admin/` | 受现有管理权限约束的模型配置入口 |
+
+学习功能仍受学员状态和逐人功能开关控制。独立知识地图、旧工作台与前台管理页面已退出，旧地址保留跳转。`/join/:invite_slug` 仍有兼容页面，但加入机构接口已返回 410，不能作为有效入学流程。
+
+## 学员、权限与 AI 次数
+
+- 非课程学员可以体验小宇普通问答、读取本人会话和管理本人账号服务；购买 AI 加量不开放课程或其他学习工具。
+- 课程学员取得课程交付所需能力，继续受逐人功能开关和内容访问规则约束。
+- 后台仅允许两名 Directus 映射操作者，须同时满足有效账号、staff、superuser 和无机构归属。创建 superuser 或保留历史教师角色均不足以取得管理能力。
+- 内容查询使用显式 `UNIMIND_CONTENT_INSTITUTION_ID`；历史 `institution` 字段仍承担内容归属与兼容作用，不能清空字段或移除过滤来代替迁移。
+- `users.0073` 初始化非课程学员 20 次／周、课程学员 200 次／周，以及 9.9 元／100 次、90 天有效的 AI 加量包；保留已有人工配置，实际额度和商品以后台配置、页面展示为准。
+- 基础额度按上海时间周一 00:00 恢复，未用次数不累计；有效期内的加量不随周恢复清零。一次完整成功答复计一次，失败或取消释放占位，同次请求重试不重复扣次。管理员不限量。
+
+当前不销售机构套餐、课程服务包或激活码，也不自动发放旧套餐试用。历史订单、订阅与权益到期处理保留兼容；旧试用、个人套餐和机构套餐续费提醒已从本地调度中移除。
+
+## 当前能力与实现位置
+
+| 能力 | 实现位置 |
+| --- | --- |
+| Agent 执行与意图路由 | `backend/ai_assistant/services/chat_service.py`、`backend/ai_engine/tool_run.py`、`backend/ai_engine/tool_router.py` |
+| 会话与项目 | `frontend/src/components/AgentChatLayout.tsx`、`backend/ai_assistant/views_projects.py` |
+| 笔记与 Agent 参考 | `frontend/src/pages/notes/`、`backend/notes/`；Agent 回答留在聊天中，笔记由用户编辑 |
+| 练习、批改与复习 | `backend/quizzes/`、`backend/quizzes/memorix/` |
+| 课程与学习记录 | `frontend/src/pages/course-center/`、`backend/courses/`、`backend/users/views_activity.py` |
+| 教学管理与 ARC 内容生产 | `admin-extension/src/`、`backend/backoffice/`，生成结果经管理员确认后入库 |
+| 平台分析 | `backend/core/analytics.py`、`backend/core/tasks.py`，保留事件、每日统计与 CSV 导出 |
+
+模拟面试、旧 AI 助教和专属学生导师均不作为现行产品功能。右下角产品反馈及 NPS 满意度问卷已在本地移除；Agent 回复赞踩、练习批改反馈继续保留。
 
 ## 项目结构
 
-```
+```text
 UniMindCode/
-├── backend/                     # Django 后端 (Python 3.12+)
-│   ├── school_system/           # 项目配置 (settings, urls, celery, asgi, middleware)
-│   ├── ai_engine/               # AI 引擎 (路由、熔断、可观测性、模型配置、Agent/工具调用)
-│   ├── ai_assistant/            # Agent 运行时（Bot 注册表、ToolExecutor、记忆系统、mem0 语义记忆）
-│   ├── quizzes/                 # 核心刷题系统
-│   │   ├── services/            #   出题管线、评分、解析、PDF 生成
-│   │   └── memorix/             #   Memorix 自进化记忆调度算法
-│   ├── users/                   # 用户/会员/RBAC 权限/ELO 积分/机构管理
-│   ├── courses/                 # 课程/专辑/导学资料/AI智能大纲/ASR/分片上传
-│   ├── articles/                # 深度文章
-│   ├── interviews/              # AI 模拟面试 (WebSocket)
-│   ├── study_room/              # 在线自习室 (番茄钟/GIPHY/周计划)
-│   ├── faq_system/              # 答疑系统
-│   ├── notifications/           # 站内通知
-│   ├── payments/                # 支付网关（Stripe/支付宝/微信/Airwallex，统一 gateway_router 分发）
-│   ├── core/                    # 基础设施 (加密字段、Cookie认证、邮件、限流、文件校验)
-│   ├── prompts/                 # 统一 Prompt 模板目录
-│   │   ├── quizzes/             #   题库生成 Prompt
-│   │   ├── ai_assistant/        #   助教对话 Prompt
-│   │   ├── courses/             #   课程大纲 Prompt
-│   │   ├── pipeline/            #   出题管线各 Agent Prompt
-│   │   ├── grading/             #   评分 Prompt
-│   │   └── interviews/          #   面试 Prompt
-│   ├── .env.example             # 环境变量模板
-│   ├── requirements.txt         # Python 依赖
-│   └── manage.py
-├── frontend/                    # React 前端 (TypeScript + Tailwind)
-│   ├── src/
-│   │   ├── pages/               # 37 个页面组件
-│   │   ├── components/          # 通用组件 + shadcn/ui
-│   │   ├── lib/                 # 工具库 (API 客户端、权限、hooks)
-│   │   └── store/               # Zustand 状态管理
-│   ├── vite.config.ts
-│   └── package.json
-├── docs/                        # 项目文档
-├── scripts/                     # 运维脚本
-├── .github/workflows/           # CI/CD
-└── README.md
+├── backend/
+│   ├── school_system/          # Django、ASGI、Celery 与路由配置
+│   ├── ai_engine/              # 模型、工具、意图路由与执行控制
+│   ├── ai_assistant/           # Agent 运行时、会话与记忆
+│   ├── users/                 # 账号、学员状态、周额度与历史权益
+│   ├── notes/                 # 个人笔记与 Agent 参考
+│   ├── courses/               # 课程、模块、资料与媒体
+│   ├── quizzes/               # 题库、考试、批改与 Memorix
+│   ├── backoffice/            # 管理桥接与教学任务
+│   ├── payments/              # AI 加量订单与历史支付兼容
+│   ├── articles/              # 文章资源
+│   ├── faq_system/            # 课程答疑
+│   ├── study_room/            # 自习室
+│   ├── notifications/         # 通知与学习提醒
+│   ├── core/                  # 认证、限流、审计、分析与内置法律文档
+│   └── prompts/               # 提示词模板
+├── frontend/src/              # React 学习端与本地预览
+├── admin-extension/           # Directus 管理扩展
+├── docs/                      # 当前说明、历史方案与研究记录
+└── scripts/                   # 运维与研究脚本
 ```
 
-## 页面入口
+## 技术栈与架构
 
-UniMind 前台统一为学习端，所有账号登录后进入小宇，不再区分教师界面与学生界面。内容配置由独立的 Django `/admin/` 承接，后台登录需要 staff 身份及相应权限。课程访问仍依据个人学习权益，内部机构归属用于隔离内容管理。
+后端使用 Django、DRF、Celery、Redis、Channels 与 Daphne；学习端使用 React、TypeScript、Tailwind、Radix、Zustand、TanStack Query、TipTap、KaTeX 与 Recharts。管理扩展使用 Vue 和 Directus。模型路由由 `backend/ai_engine/config.py` 定义，部署环境可以覆盖默认模型与地址。
 
-| 页面 | URL | 说明 |
-|------|-----|------|
-| **产品介绍页** | `/`（未登录） | 学习平台介绍与个人学习服务入口 |
-| **诊断测试** | `/diagnostic` | 学生首次登录强制诊断，评估知识掌握水平 |
-| **小宇学习教练** | `/xiaoyu` | 学生端 AI 对话入口：学习规划 + 知识讲解 + 可视化渲染 |
-| **成就勋章** | `/achievements` | 学生成就勋章墙（10 预置成就，进度展示） |
-| **定价页** | `/pricing` | 公开访问的定价页 |
-| **登录** | `/login` | 邮箱验证码登录 |
-| **注册** | `/register` | 邮箱验证注册，基础学习开放 |
-| **邀请链接** | `/join/:invite_slug` | 邀请链接落地页（未登录→注册/登录，已登录裸号→自动绑定机构） |
-| **统一管理后台** | `/admin/`（后端服务） | 课程、模块、题库、账号、学习权益、AI 配置与通知 |
+Bot 注册表连接执行器、工具集和提示词；意图路由缩小工具候选范围，权限与参数检查在服务端执行。小宇与后台教学生产共享运行时，通过各自入口和授权范围访问资源。Memorix-Field 将个人复习状态与知识关系结合；历史论文、仿真和设计中的指标不作为真实用户效果或发布证明。
 
-旧工作台和前台管理地址跳回学习页面。独立知识地图页面已撤下，底层知识点、关系数据与复习调度保留。
+## 本次本地清理与迁移状态
 
----
+截至本次文档更新，反馈、旧套餐提醒、不可达前端页面、停用接口旧实现、废弃配置和满意度问卷已在本地清理。以下迁移已生成，尚未在本次清理中执行：
 
-## 系统功能
+- `core.0007_remove_feedback`：删除产品反馈模型。
+- `users.0075_remove_user_trial_ends_at`：删除旧试用到期字段。
+- `core.0008_remove_npssurvey`：删除满意度问卷模型。
 
-### 1. AI 学习教练
+删表、删字段会移除对应历史数据，发布前须纳入备份和迁移安排。本次清理尚未提交或部署；不能据此宣称生产已经退出这些功能。
 
-前台仅保留小宇学习教练。后台保留内容生产能力与共享运行时，教师工作台不再作为用户产品入口。
+## 文档入口
 
-**小宇**：学生端 AI 入口，30+ 工具，承担学习教练职能——诊断能力起点、追踪记忆衰减、错因归类匹配变式题、制定学习计划。跨会话记忆持续积累学习风格和长期目标。
+- [用户手册](docs/market/04-user-manual.md)：当前学习端使用方式。
+- [管理扩展接入与操作](admin-extension/README.md)：两人映射、内容边界、教学任务与文件上传。
+- [单平台权限与历史依赖](docs/tech/architecture/SINGLE_PLATFORM_TRANSITION.md)：现行权限规则及结构保留原因。
+- [开发指引](CLAUDE.md)：代码位置、变更约束与常用命令。
+- [平台分析](docs/tech/features/PLATFORM_ANALYTICS.md)：当前事件、统计与导出。
 
-**后台配置**：教师在后台维护课程、知识点和题目，管理员配置个人学习服务并发放课程配套权益。前台不提供内容发布或管理菜单。
-
-**运行时**：BotRegistry 统一注册调度，意图路由器按关键词预筛选工具候选集（30+ → 5~8），缩小候选范围是提升首次选择准确率的核心手段。
-
-### 2. ARCA 四层架构
-
-**基础框架**：对话生命周期管理、Bot 注册调度、工具权限控制、意图预筛选路由、模型分级调度及通信传输。框架解耦，新增 Agent 只需注册配置。
-
-**记忆系统**：承担统一调度职能。Weibull 遗忘曲线 + 在线 SGD 参数更新，每位学生每道题独立维护记忆状态模型。**Memorix 图扩散**：知识图谱结构信息融入调度，激活沿拉普拉斯算子传播至相邻节点，感知跨知识点迁移效应。300 名学生 150 天 215 知识点 CFA 仿真中相较 FSRS 留存率提升 5.8%，消融实验确认全部优势来自扩散机制。**再巩固窗口（REC）**：在记忆不稳定期精确切入复习，替代固定间隔。
-
-**教育闭环**：教、练、测、评四环节首尾相连。知识树挂载资源、Memorix 驱动练习调度、IRT 自适应诊断与考试、错因分类联动变式题匹配引擎。评测结果回流更新记忆模型，机构教学数据持续沉淀为专有资产。
-
-**测评引擎**：IRT 三参数 Logistic 模型，MML-EM 参数估计。机构级参数隔离——同一道题在不同机构拥有独立参数，重点中学与普通中学各在其同龄人中评估相对位置。Fallback CTT 保证新题冷启动。
-
-### 3. 4-Agent ARC 对抗出题管线
-
-单次 LLM 出题通过率约 60%，ARC 管线 85%+。差距不在模型能力，在**架构**。
-
-- **四角色对抗博弈**：Author → Reviewer（深度思考模式，三维质量评分）→ AuthorRevise → Classifier（最终审计），最多 3 轮迭代，不达标不放行
-- **出题工作台 Agent**：教师说一句话，Agent 自主编排全流程。口语化指令直接执行，不反问确认
-- **全题型覆盖**：单选题、名词解释、简答题、论述题、计算题
-- **超长文本解析**：支持 5-10 万字语料的并行分片解析，Word/文本拖入即出题
-- **难度外生控制**：人工选择 entry → extreme 五档，AI 不得自行修改
-
-### 4. 全景知识拓扑地图
-
-体系化知识管理是区别于碎片化刷题工具的根本特征。
-
-- **4 级树状结构**：学科(Sub) → 篇章(Ch) → 小节(Sec) → 考点(KP)，13 学科 4,486 知识点
-- **类 Obsidian 思维图谱**：基于 D3.js 的可视化探索，节点间自由跳转
-- **多维资源挂载**：视频课程、深度文章、题库全量挂载至知识节点
-- **掌握度热力图**：按知识点展示掌握程度，一眼定位薄弱环节
-- **机构自定义**：支持 Markdown 导入自定义知识树，完全替换全局默认
-
-### 6. 沉浸式自习室
-
-天涯若比邻的共学空间。
-
-- **实时在线同步**：WebSocket 广播全站学友的专注状态
-- **番茄钟**：可配置的专注计时 + 任务管理
-- **GIPHY 集成**：学习间隙的轻松互动
-- **周度学习计划**：AI 自动生成每周复习计划，Celery 定时推送
-
-### 7. 音视频课程中心
-
-从上传到内化的完整学习闭环。
-
-- **分片上传**：支持 100MB+ 视频文件，断点续传，进度追踪
-- **AI 智能大纲**：ASR 语音转文字 → AI 生成结构化大纲 → 点击时间戳视频跳转
-- **多 ASR 提供者**：OpenAI Whisper / Vosk 离线 / GLM ASR，可插拔架构，按需接入
-- **视频出题**：基于视频内容 AI 自动生成配套习题
-- **课程管理**：专辑组织、导学资料、学习进度追踪
-
-### 8. 会员与激励体系
-
-- **四档方案**：Free / Starter / Growth / Enterprise，覆盖独立教师到大型机构
-- **14 天全功能试用**：新用户注册自动开启
-- **激活码系统**：灵活的批量会员开通方式
-- **ELO 积分特权**：付费会员 ELO 永不衰减
-- **周度认知报告**：转化率、ELO 百分位、每日准确率/专注度/课时趋势
-
-### 9. 智能工具路由 — 基于 SkillRouter 论文的工具选择优化
-
-基于阿里巴巴 SkillRouter 论文（arXiv:2603.22455）的核心发现：工具的实现体（implementation body）是路由决策的决定性信号，name + description 仅贡献 8.3% 的路由信号。
-
-- **工具元数据增强**：为每个工具补充实现级摘要（impl_summary），描述内部逻辑而非仅描述用途。论文实验表明，补充实现体后路由准确率提升 36 个百分点
-- **意图预筛选路由**：轻量级意图分类将 18 个工具缩减为 5-8 个候选，降低 LLM 选择复杂度。论文指出"context length constraints make it impractical to present every skill to the agent"
-- **渐进式上线**：Phase 1 仅增强元数据，Phase 2 引入意图路由层，Phase 3 全 Bot 推广
-
-详细技术文档：`docs/tech/features/INTELLIGENT_TOOL_ROUTING.md`
-
-### 10. 机构管理平台 (B2B)
-
-面向培训机构的全套教学管理系统。
-
-- **多教师协作**：教师角色分配，权限隔离
-- **学生管理**：学生列表、学习进度追踪、数据导出
-- **班级对比**：跨班级学习效果对比分析
-- **品牌定制**：Enterprise 方案支持白标，机构自有品牌展示
-- **独立定价**：机构可自定义对学生的收费标准
-- **收款集成**：支付宝/微信支付，机构自有商户号配置
-
----
-
-## 技术栈
-
-| 层 | 技术 |
-|----|------|
-| 后端框架 | Django 6.0 + Django REST Framework 3.16 |
-| 异步任务 | Celery 5.4 + Redis |
-| WebSocket | Django Channels 4.3 + Daphne 4.2 |
-| AI 引擎 | DeepSeek V4，Agent 运行时 + 按任务路由 + Function Calling 结构化输出 + 供应商热插拔 + 双层熔断器 |
-| 前端框架 | React 19 + TypeScript |
-| UI 组件 | shadcn/ui (Radix) + Tailwind CSS 4 |
-| 状态管理 | Zustand 5 |
-| 数学渲染 | KaTeX + remark-math + rehype-katex |
-| 富文本 | TipTap + react-markdown |
-| 图表 | Recharts 3 |
-| 国际化 | i18next (中英双语) |
-| 对象存储 | 阿里云 OSS（分片直传 / 签名 URL） |
-| 数据库 | SQLite (开发) / PostgreSQL (生产) |
-| 连接池 | PgBouncer（生产环境 transaction pooling） |
-
-## 版本方案
-
-| | Free | Starter | Growth | Enterprise |
-|------|:---:|:---:|:---:|:---:|
-| **定位** | 免费体验 | AI 智能学习 | 机构教学平台 | 企业旗舰 |
-| **价格** | ¥0 | ¥499/月 (¥4,992/年) | ¥1,299/月 (¥12,996/年) | ¥3,999/月 (¥39,996/年) |
-| **学员上限** | 30 | 50 | 200 | 不限 |
-| **教师数** | 1 | 1 | 5 | 不限 |
-| **AI 调用** | 100 次/月 | 500 次/月 | 3,000 次/月 | 不限 |
-| **学科数** | 1 | 3 | 10 | 不限 |
-| **视频存储** | 5 GB | 50 GB | 500 GB | 不限 |
-| **题库容量** | 200 | 2,000 | 10,000 | 不限 |
-| | | | | |
-| 习题训练 · 考试 | ✓ | ✓ | ✓ | ✓ |
-| 错题复盘 | ✓ | ✓ | ✓ | ✓ |
-| 基础统计 | ✓ | ✓ | ✓ | ✓ |
-| 作业管理 | ✓ | ✓ | ✓ | ✓ |
-| 成绩册 | ✓ | ✓ | ✓ | ✓ |
-| 诊断测试 | ✓ | ✓ | ✓ | ✓ |
-| 课程视频 | ✓ | ✓ | ✓ | ✓ |
-| 答疑系统 | ✓ | ✓ | ✓ | ✓ |
-| 自习室 | ✓ | ✓ | ✓ | ✓ |
-| PDF 模拟卷 | ✓ | ✓ | ✓ | ✓ |
-| 小宇 AI 助手 | ✓ | ✓ | ✓ | ✓ |
-| AI 出题 | ✓ | ✓ | ✓ | ✓ |
-| Memorix 记忆调度 | — | — | ✓ | ✓ |
-| 完整学情报告 | — | ✓ | ✓ | ✓ |
-| 教学计划 · 教案 | — | ✓ | ✓ | ✓ |
-| 知识图谱 | — | — | ✓ | ✓ |
-| 视频 AI 大纲 | — | — | ✓ | ✓ |
-| 多教师协作 | — | — | ✓ | ✓ |
-| 班级对比 · 数据导出 | — | — | ✓ | ✓ |
-| 学生端收费 | — | — | ✓ | ✓ |
-| AI Bot 自定义 | — | — | — | ✓ |
-| 品牌白标 | — | — | — | ✓ |
-| API 接入 | — | — | — | ✓ |
-| 私有化部署 | — | — | — | ✓ |
-
-新用户注册自动开启 14 天全功能试用。
-
----
-
-## 技术亮点
-
-| 特性 | 技术实现 |
-|------|---------|
-| Agent 运行时 | Bot → BotRegistry → ToolExecutor → chat_dispatch，5 轮自主工具调用循环，新增 Agent 只需定义工具和提示词 |
-| 对抗出题 | 4-Agent ARC 博弈，Reviewer 深度思考 + 三维质量评分，最多 3 轮迭代 |
-| 记忆调度 | Memorix Weibull + 在线 SGD + 贝叶斯校准，比 FSRS RMSE 降低 13.7% |
-| 三层个性化 | 诊断测试（冷启动）→ Memorix（行为建模）→ Agent Memory（对话提取） |
-| AI 模型路由 | 按任务分配 pro/fast，thinking + tool_choice 不冲突，供应商热插拔 |
-| 结构化输出 | `tool_choice="required"` + JSON Schema 强制输出，零脆弱正则解析 |
-| 双层熔断器 | 操作层 + 模型分层独立熔断，pro 模型阈值 3 次（vs fast 5 次），更快隔离故障 |
-| Prompt 管理 | 统一文件系统 + 数据库版本历史，支持一键回滚 |
-| 大文件上传 | 分片上传 + 断点续传，支持 100MB+ 视频文件 |
-| 实时通信 | Django Channels + Redis，WebSocket 毫秒级推送 |
-| 异步任务 | Celery 分布式任务队列，自动重试 + Celery Beat 定时调度 |
-| 智能大纲 | ASR 可插拔架构 (Vosk/Whisper/GLM)，离线至云端多方案覆盖 |
-| 权限体系 | RBAC + 细粒度功能权限 + 机构数据隔离 |
-
----
+旧商业计划、营销文案、四层权限设计和旧前台工作台说明保留为历史参考，不作为当前售卖范围、权限规范或操作入口。
 
 ## 快速开始 (本地开发)
 
@@ -755,7 +616,7 @@ USE_MEM0=true                      # mem0 语义记忆（需 pgvector 扩展）
 
 | 任务 | 分级 | 思考 |
 |------|------|------|
-| 对话 / 面试 | fast | — |
+| 小宇对话 | fast | — |
 | 出题 Author / AuthorRevise | fast | — |
 | 出题 Reviewer | pro | 开 |
 | 出题 Classifier | fast | — |
@@ -839,25 +700,21 @@ prompts/
 │   └── bots/         #   各 Bot 独立 Prompt（小宇/工作台）
 ├── pipeline/         # 出题管线各 Agent Prompt
 ├── grading/          # 评分 Prompt
-├── courses/          # 课程大纲 Prompt
-└── interviews/       # 面试 Prompt
+└── courses/          # 课程大纲 Prompt
 ```
 
 修改方式：
-1. **管理后台** → Prompt模板 → 选择命名空间 → 编辑 → 保存（自动生成版本历史）
-2. **直接编辑文件** → 重启后端生效
-
-版本历史通过 `PromptTemplateVersion` 数据库表追踪，支持一键回滚。
+基础提示词以 `backend/prompts/` 源码文件为准，按代码发布流程更新。后台 AI 配置只调整当前提供的助手名称、启停与偏好，不恢复已删除的前台提示词编辑页面。历史 Prompt 模型不代表当前界面提供版本回滚入口。
 
 ### 知识点管理
 
 所有功能（题库、课程、文章、知识地图、AI出题）的知识点数据均来自 **`backend/knowledge_trees/`** 目录下的 Markdown 文件。修改后运行导入命令即可更新全系统。
 
 ```bash
-# 导入指定学科知识树到全局（所有机构可见）
+# 导入指定学科知识树到历史全局分区（访问仍受单平台内容配置约束）
 python manage.py import_knowledge_tree backend/knowledge_trees/金融431.md --global --subject=金融431 --force
 
-# 导入到特定机构（机构管理员可见）
+# 导入到指定内容归属（先核对单平台内容配置）
 python manage.py import_knowledge_tree backend/knowledge_trees/金融431.md --institution=<slug> --force
 
 # 批量导入所有预设学科

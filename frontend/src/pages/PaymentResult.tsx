@@ -84,7 +84,7 @@ export function PaymentResult() {
                 <h3 className="text-[15px] font-extrabold text-white/80 tracking-tight">支付成功</h3>
                 <p className="text-[12px] text-white/20 font-semibold">学习权益已开通</p>
               </div>
-              <Button variant="apple" className="h-10 px-6 rounded-xl text-[13px] font-extrabold gap-2 bg-white text-black hover:bg-white/90 shadow-lg shadow-white/5"
+              <Button variant="apple" className="h-10 px-6 rounded-xl text-[13px] font-extrabold gap-2 bg-background text-foreground hover:bg-white/90 shadow-lg shadow-white/5"
                 onClick={() => navigate('/billing', { replace: true })}>
                 查看学习服务与账单 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
@@ -103,11 +103,11 @@ export function PaymentResult() {
                 </p>
               </div>
               <div className="space-y-2">
-                <Button variant="apple" className="w-full h-10 rounded-xl text-[13px] font-extrabold bg-white text-black hover:bg-white/90"
+                <Button variant="apple" className="w-full h-10 rounded-xl text-[13px] font-extrabold bg-background text-foreground hover:bg-white/90"
                   onClick={() => navigate('/billing', { replace: true })}>
                   返回学习服务与账单
                 </Button>
-                <Button variant="outline" className="w-full h-10 rounded-xl text-[13px] font-extrabold border-white/[0.06] text-white/30 hover:text-white/60 hover:bg-white/[0.03] gap-2"
+                <Button variant="outline" className="w-full h-10 rounded-xl text-[13px] font-extrabold border-background/[0.06] text-white/30 hover:text-white/60 hover:bg-white/[0.03] gap-2"
                   onClick={() => navigate('/', { replace: true })}>
                   <House className="h-3.5 w-3.5" /> 返回首页
                 </Button>

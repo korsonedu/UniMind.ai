@@ -6,6 +6,7 @@ import type { ConversationSession } from '@/hooks/useAgentConversation';
 export interface SessionSidebarProps {
   sessions: ConversationSession[];
   activeSessionId: number | null;
+  thinkingIds?: string[];
   onSelect: (session: ConversationSession) => void;
   onDelete?: (session: ConversationSession) => void;
   onNew: () => void;
