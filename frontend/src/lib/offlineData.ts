@@ -69,7 +69,13 @@ export async function loadOfflineCache(userId?: number): Promise<OfflineCache | 
   }
   cache = null; cacheUserId = null;
   loadFlight = desktop.readOfflineData!().then(value => {
-    if (!isValid(value) || value.userId !== userId) return null;
+    if (!isValid(value) || value.userId !== userId) {
+      const empty: OfflineCache = {
+        version: 1, userId, notes: [], notebooks: [], tags: [], practice: {}, outbox: [], updatedAt: now(),
+      };
+      cache = empty; cacheUserId = userId;
+      return empty;
+    }
     cache = value; cacheUserId = userId;
     return value;
   }).catch(() => null).finally(() => { loadFlight = null; });
