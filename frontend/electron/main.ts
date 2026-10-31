@@ -33,7 +33,7 @@ const noticeTimes = new Map<string, number>();
 protocol.registerSchemesAsPrivileged([{ scheme: 'unimind-offline', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
 function state() {
-  return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, update: updater?.state || { status: 'unconfigured' }, auth: auth?.state || { status: 'idle' } };
+  return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, offlineSession: offline?.offlineSession() || null, update: updater?.state || { status: 'unconfigured' }, auth: auth?.state || { status: 'idle' } };
 }
 function changed() {
   if (mainWindow && sameOrigin(sourceUrl, mainWindow.webContents.getURL())) mainWindow.webContents.send('desktop:state', state());
@@ -119,6 +119,9 @@ function installIPC() {
     removeDownload: async (id: unknown) => { await offline.remove(courseId(id)); return state(); },
     openOfflineLibrary: () => openOffline(),
     openOfflineCourse: (id: unknown) => openOffline(courseId(id)),
+    readOfflineData: () => offline.readOfflineData(),
+    writeOfflineData: async (value: unknown) => { await offline.writeOfflineData(value); return state(); },
+    clearOfflineData: async () => { await offline.clearOfflineData(); return state(); },
     checkForUpdates: async () => { await updater.check(); return state(); },
     installUpdate: () => updater.install(() => { quitting = true; }),
   };

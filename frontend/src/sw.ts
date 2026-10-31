@@ -1,8 +1,8 @@
 /// <reference lib="WebWorker" />
 
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { precacheAndRoute, cleanupOutdatedCaches, createHandlerBoundToURL } from 'workbox-precaching';
 import { clientsClaim } from 'workbox-core';
-import { registerRoute } from 'workbox-routing';
+import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { NetworkFirst, NetworkOnly } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 
@@ -15,9 +15,20 @@ clientsClaim();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
+// Offline navigation for the app shell; APIs stay network-only below.
+registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), {
+  denylist: [/^\/api\//, /^\/admin\//, /^\/media\//, /^\/static\//, /^\/assets\//, /^\/health\//],
+}));
+
 // API runtime caching
 registerRoute(
   ({ url }) => url.pathname === '/api/users/me/',
+  new NetworkOnly(),
+);
+// Notes and practice data come from the encrypted desktop cache when offline;
+// never serve another account's cached response.
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/api/notes/') || url.pathname.startsWith('/api/ai/practice/'),
   new NetworkOnly(),
 );
 registerRoute(
@@ -27,6 +38,10 @@ registerRoute(
     plugins: [new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 300 })],
   }),
 );
+
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.delete('api-cache'));
+});
 
 // ── Push notifications ──
 

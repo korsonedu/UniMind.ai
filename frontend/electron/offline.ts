@@ -1,4 +1,4 @@
-import { app, session, net } from 'electron';
+import { app, session, net, safeStorage } from 'electron';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, type ReadStream } from 'node:fs';
 import { mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -21,6 +21,8 @@ export class OfflineLibrary {
   private actor: number | null = null;
   private credential = '';
   private locked = false;
+  private leaseExpiresAt = 0;
+  private dataWrites: Promise<void> = Promise.resolve();
   private entries: Cached[] = [];
   private jobs = new Map<number, DownloadJob>();
   private pending = new Set<Promise<void>>();
@@ -49,7 +51,7 @@ export class OfflineLibrary {
       }
       if (actor === this.actor) this.usedBytes = usedBytes;
       const file = path.join(this.root, 'active.json');
-      await writeFile(`${file}.tmp`, JSON.stringify({ origin: new URL(this.source).origin, actor: this.actor, credential: this.credential, locked: this.locked, entries: this.entries, learning: this.learning.snapshot() }), { mode: 0o600 });
+      await writeFile(`${file}.tmp`, JSON.stringify({ origin: new URL(this.source).origin, actor: this.actor, credential: this.credential, locked: this.locked, leaseExpiresAt: this.leaseExpiresAt, entries: this.entries, learning: this.learning.snapshot() }), { mode: 0o600 });
       await rename(`${file}.tmp`, file);
     });
     this.writes = write;
@@ -57,12 +59,50 @@ export class OfflineLibrary {
   }
   storage() { return { usedBytes: this.usedBytes }; }
   learningSync() { return this.learning.state(); }
+  offlineSession() {
+    return this.actor && !this.locked && this.leaseExpiresAt > Date.now()
+      ? { userId: this.actor, expiresAt: this.leaseExpiresAt }
+      : null;
+  }
+  private offlineDataFile() {
+    return this.actor ? path.join(this.root, String(this.actor), 'notes.bin') : null;
+  }
+  async readOfflineData(): Promise<unknown | null> {
+    const file = this.offlineDataFile();
+    if (!file || !this.offlineSession() || !safeStorage.isEncryptionAvailable()) return null;
+    try {
+      const text = safeStorage.decryptString(await readFile(file));
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  }
+  async writeOfflineData(value: unknown): Promise<void> {
+    const file = this.offlineDataFile();
+    if (!file || !this.offlineSession()) throw new Error('离线数据不可用，请先联网同步账号');
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('系统加密不可用，无法保存离线笔记');
+    const text = JSON.stringify(value);
+    if (Buffer.byteLength(text) > 8 * 1024 * 1024) throw new Error('离线数据超过 8 MB');
+    const encrypted = safeStorage.encryptString(text);
+    const write = this.dataWrites.catch(() => {}).then(async () => {
+      await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+      await writeFile(`${file}.tmp`, encrypted, { mode: 0o600 });
+      await rename(`${file}.tmp`, file);
+    });
+    this.dataWrites = write;
+    return write;
+  }
+  async clearOfflineData(): Promise<void> {
+    const file = this.offlineDataFile();
+    if (file) await rm(file, { force: true });
+  }
   async restore() {
     try {
       const stored = JSON.parse(await readFile(path.join(this.root, 'active.json'), 'utf8'));
       const credential = await this.fingerprint();
       if (stored.origin !== new URL(this.source).origin || !Number.isSafeInteger(stored.actor) || stored.actor <= 0) return;
       this.actor = stored.actor; this.credential = stored.credential; this.locked = stored.locked === true || !credential || credential !== this.credential;
+      this.leaseExpiresAt = Number.isFinite(stored.leaseExpiresAt) ? stored.leaseExpiresAt : 0;
       this.entries = (Array.isArray(stored.entries) ? stored.entries : []).filter((e: Cached) => e && Number.isSafeInteger(e.courseId) && e.courseId > 0 && ['ready', 'downloading', 'paused', 'failed'].includes(e.status) && typeof e.version === 'string' && Number.isSafeInteger(e.totalBytes) && e.totalBytes > 0 && Number.isFinite(e.expiresAt) && e.expiresAt! > Date.now());
       this.learning.restore(stored.learning);
       for (const entry of this.entries) {
@@ -90,7 +130,7 @@ export class OfflineLibrary {
     this.epoch++; for (const job of this.jobs.values()) job.controller.abort(); this.jobs.clear();
     for (const streams of this.streams.values()) for (const stream of streams) stream.destroy();
     this.streams.clear();
-    this.actor = null; this.credential = ''; this.locked = false; this.entries = []; this.usedBytes = 0; this.playerTokens.clear(); this.learning.clear(); this.identityChanged();
+    this.actor = null; this.credential = ''; this.locked = false; this.leaseExpiresAt = 0; this.entries = []; this.usedBytes = 0; this.playerTokens.clear(); this.learning.clear(); this.identityChanged();
     const cleanup = this.cleanup.then(async () => {
       await Promise.allSettled(pending);
       if (oldDirectory) await rm(oldDirectory, { recursive: true, force: true });
@@ -131,6 +171,8 @@ export class OfflineLibrary {
       this.actor = user.id;
     }
     this.credential = fingerprint; this.locked = false;
+    this.leaseExpiresAt = Date.now() + 86400000;
+    await this.persist();
     try { await this.review(); } catch (error) {
       // A course permission failure must not prevent authenticated events receiving a terminal result.
       if (epoch === this.epoch) await this.flushLearning();

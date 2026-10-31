@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('unimindDesktop', {
   removeDownload: (courseId: number) => invoke('removeDownload', courseId),
   openOfflineLibrary: () => invoke('openOfflineLibrary'),
   openOfflineCourse: (courseId: number) => invoke('openOfflineCourse', courseId),
+  readOfflineData: () => invoke('readOfflineData'),
+  writeOfflineData: (value: unknown) => invoke('writeOfflineData', value),
+  clearOfflineData: () => invoke('clearOfflineData'),
   checkForUpdates: () => invoke('checkForUpdates'),
   installUpdate: () => invoke('installUpdate'),
   onNavigate: (callback: (route: string) => void) => {

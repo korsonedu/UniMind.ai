@@ -19,7 +19,13 @@ export function useDesktopRuntime(userId?: number) {
         const state = userId ? await desktop.syncIdentity() : await desktop.getState();
         if (active) useDesktopStore.setState({ state, error: null });
       } catch (error) {
-        if (active) useDesktopStore.setState({ error: String(error instanceof Error ? error.message : error) });
+        if (!active) return;
+        try {
+          const state = await desktop.getState();
+          if (active) useDesktopStore.setState({ state, error: null });
+        } catch {
+          if (active) useDesktopStore.setState({ error: String(error instanceof Error ? error.message : error) });
+        }
       }
     };
     useDesktopStore.setState({ state: null, error: null });

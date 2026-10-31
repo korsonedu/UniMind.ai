@@ -4,6 +4,8 @@ import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { FilePlus, FolderPlus, Notebook as NotebookIcon, MagnifyingGlass, ArrowClockwise, ArrowCounterClockwise, ClockCounterClockwise, DownloadSimple, Export, Folders, FunnelX, NotePencil, PencilSimple, Stack, Star, Trash, SidebarSimple } from '@phosphor-icons/react';
 import { notesApi, notebookPath, type Note, type Notebook } from '@/lib/notes';
+import { cacheNote, cacheNotebooks, cacheNotes, cacheTags, flushOfflineOutbox, getCachedNote, loadOfflineCache, offlineCacheSupported } from '@/lib/offlineData';
+import { useAuthStore } from '@/store/useAuthStore';
 import NoteEditor from './NoteEditor';
 import NoteAISettings from './NoteAISettings';
 import { Collapse } from '@/components/ui/collapse';
@@ -12,9 +14,26 @@ import NoteDialog, { type NoteDialogOptions } from './NoteDialog';
 import { useNoteSave } from './useNoteSave';
 import '@/styles/notes.css';
 
+function filterCachedNotes(notes: Note[], filters: { query: string; folder: string; tag: string; view: string }) {
+  return notes.filter(note => {
+    if (filters.view === 'trash' ? !note.deleted_at : note.deleted_at) return false;
+    if (filters.view === 'favorite' && !note.is_favorite) return false;
+    if (filters.folder && filters.folder !== 'unfiled' && String(note.notebook) !== filters.folder) return false;
+    if (filters.folder === 'unfiled' && note.notebook !== null) return false;
+    if (filters.tag && !note.tags.includes(filters.tag)) return false;
+    if (filters.query) {
+      const haystack = `${note.title}\n${note.content}`.toLowerCase();
+      if (!haystack.includes(filters.query.toLowerCase())) return false;
+    }
+    return true;
+  });
+}
+
 export default function NotesPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const userId = useAuthStore(state => state.user?.id);
+  const [offlineMode, setOfflineMode] = useState(false);
   const [dialog, setDialog] = useState<NoteDialogOptions | null>(null);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [items, setItems] = useState<Note[]>([]);
@@ -51,10 +70,35 @@ export default function NotesPage() {
   useEffect(() => {
     let active = true;
     void Promise.all([notesApi.notebooks(), notesApi.tags()]).then(([books, labels]) => {
-      if (active) { setNotebooks(books); setTags(labels); }
-    }).catch(() => { if (active) setListError('笔记目录加载失败，请刷新重试。'); });
+      if (!active) return;
+      setNotebooks(books); setTags(labels); setOfflineMode(false);
+      if (userId) { void cacheNotebooks(userId, books); void cacheTags(userId, labels); }
+    }).catch(async () => {
+      if (!active) return;
+      const cached = userId ? await loadOfflineCache(userId) : null;
+      if (!active) return;
+      if (cached) { setNotebooks(cached.notebooks); setTags(cached.tags); setOfflineMode(true); setListError(''); }
+      else setListError('笔记目录加载失败，请刷新重试。');
+    });
     return () => { active = false; };
-  }, [refresh]);
+  }, [refresh, userId]);
+  useEffect(() => {
+    if (!userId || !offlineCacheSupported()) return;
+    const sync = async () => {
+      if (!navigator.onLine) return;
+      try {
+        await window.unimindDesktop?.syncIdentity();
+        const result = await flushOfflineOutbox(userId);
+        if (result.synced || result.conflicts) {
+          if (result.conflicts) toast.info(`${result.conflicts} 条离线修改已保存为副本。`);
+          reload();
+        }
+      } catch { /* keep queued for the next online event */ }
+    };
+    void sync();
+    window.addEventListener('online', sync);
+    return () => window.removeEventListener('online', sync);
+  }, [userId, reload]);
   const listKey = JSON.stringify([query, folder, tag, view, refresh]);
   const [previousListKey, setPreviousListKey] = useState(listKey);
   if (previousListKey !== listKey) {
@@ -69,10 +113,20 @@ export default function NotesPage() {
       if (tag) params.tag = tag;
       if (view === 'favorite') params.favorite = '1';
       if (view === 'trash') params.trash = '1';
-      void notesApi.list(params, controller.signal).then(result => { if (!controller.signal.aborted) setItems(result); }).catch(() => { if (!controller.signal.aborted) setListError('搜索失败，请重试。'); }).finally(() => { if (!controller.signal.aborted) setListLoading(false); });
+      void notesApi.list(params, controller.signal).then(result => {
+        if (controller.signal.aborted) return;
+        setItems(result); setOfflineMode(false); setListError('');
+        if (userId) void cacheNotes(userId, result, !query && !folder && !tag && view === 'all');
+      }).catch(async () => {
+        if (controller.signal.aborted) return;
+        const cached = userId ? await loadOfflineCache(userId) : null;
+        if (controller.signal.aborted) return;
+        if (cached) { setItems(filterCachedNotes(cached.notes, { query, folder, tag, view })); setOfflineMode(true); setListError(''); }
+        else setListError('搜索失败，请重试。');
+      }).finally(() => { if (!controller.signal.aborted) setListLoading(false); });
     }, query ? 220 : 0);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [query, folder, tag, view, refresh]);
+  }, [query, folder, tag, view, refresh, userId]);
   const [previousId, setPreviousId] = useState(id);
   if (previousId !== id) {
     setPreviousId(id); setDialog(null); setPageError(''); setLoading(!!id);
@@ -81,12 +135,21 @@ export default function NotesPage() {
     if (!id) return;
     const controller = new AbortController();
     void notesApi.get(Number(id), controller.signal).then(result => {
-      if (!controller.signal.aborted) { load(result); setMobileView('editor'); }
-    }).catch(() => { if (!controller.signal.aborted) { load(null); setPageError('笔记不存在、不可访问或加载失败。'); } }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      if (controller.signal.aborted) return;
+      load(result); setMobileView('editor');
+      if (userId) void cacheNote(userId, result);
+    }).catch(async () => {
+      if (controller.signal.aborted) return;
+      const cached = userId ? await getCachedNote(userId, Number(id)) : null;
+      if (controller.signal.aborted) return;
+      if (cached) { load(cached); setOfflineMode(true); setMobileView('editor'); }
+      else { load(null); setPageError('笔记不存在、不可访问或加载失败。'); }
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [id, load]);
+  }, [id, load, userId]);
   const run = async (work: () => Promise<void>) => {
     if (busy || blocker.state !== 'unblocked') return;
+    if (offlineMode) { toast.error('离线时暂不支持新建、删除或移动笔记，请联网后重试。'); return; }
     setBusy(true);
     try { await flush(); await work(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : '操作失败，请重试。'); } finally { if (mounted.current) setBusy(false); }
   };
@@ -142,6 +205,7 @@ export default function NotesPage() {
       <div className="notes-filters"><select aria-label="按标签筛选" value={tag} onChange={e => setTag(e.target.value)}><option value="">所有标签</option>{tags.map(label => <option key={label.id} value={label.name}>{label.name}</option>)}</select></div>
       {(query || folder || tag || view !== 'all') && <button aria-label="清除筛选" title="清除筛选" className="notes-clear-filters" onClick={() => { setQuery(''); setFolder(''); setTag(''); setView('all'); }}><FunnelX size={16} /></button>}
       <div className="notes-list-heading"><span>{view === 'trash' ? '回收站' : selectedNotebook?.name || '笔记'}</span><small>{listLoading ? '加载中…' : `${items.length} 篇`}</small></div>
+      {offlineMode && <p className="mx-4 mt-2 rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground" role="status">离线模式：显示本地缓存，笔记修改会在联网后同步。</p>}
       {listError && <p className="notes-error" role="alert">{listError}<button onClick={reload}>重试</button></p>}
       <div className="notes-list" aria-busy={listLoading}>{orderedItems.map(item => <button className={item.id === note?.id ? 'is-active' : ''} key={item.id} onClick={() => open(item.id)}><strong>{item.is_favorite && '☆ '}{item.title || '未命名笔记'}</strong><span>{item.content.replace(/[#*`>[\]]/g, '').slice(0, 60) || '还没有正文'}</span><small>{new Date(item.updated_at).toLocaleDateString()} · {notebookPath(item.notebook, notebooks)}</small></button>)}{!listLoading && !items.length && !listError && <p className="notes-empty">{view === 'trash' ? '回收站是空的。' : '没有匹配的笔记。'}{view !== 'trash' && <button onClick={createNote}>写一篇新笔记</button>}</p>}</div>
     </aside>

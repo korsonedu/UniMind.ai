@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import axios from 'axios';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
@@ -133,8 +134,9 @@ const RootRedirect = () => {
   const logout = useAuthStore(s => s.logout);
   const hasHydrated = useAuthStore.persist.hasHydrated();
   const location = useLocation();
+  const [offlineAllowed, setOfflineAllowed] = useState(false);
 
-  const { data: userData, isLoading, isError } = useQuery({
+  const { data: userData, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.user.me,
     queryFn: ({ signal }) => api.get('/users/me/', { signal }).then(r => r.data),
     enabled: hasHydrated,
@@ -146,11 +148,24 @@ const RootRedirect = () => {
     if (userData && !isError) setAuth(userData, null);
   }, [userData, isError, setAuth]);
 
-  // On auth failure, clear the stale session so the landing page renders anonymously.
+  // A network failure may keep the desktop offline session; only a 401 logs out.
   useEffect(() => {
     if (!isError) return;
-    logout({ preserveDesktop: true });
-  }, [isError, logout]);
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    const desktop = window.unimindDesktop;
+    if (status === 401 || !desktop || !storeUser) {
+      logout({ preserveDesktop: true });
+      return;
+    }
+    let active = true;
+    void desktop.getState().then(state => {
+      if (!active) return;
+      const session = state.offlineSession;
+      if (session && session.userId === storeUser.id && session.expiresAt > Date.now()) setOfflineAllowed(true);
+      else logout({ preserveDesktop: true });
+    }).catch(() => { if (active) logout({ preserveDesktop: true }); });
+    return () => { active = false; };
+  }, [isError, error, logout, storeUser]);
 
   if (!hasHydrated || isLoading) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
@@ -158,6 +173,8 @@ const RootRedirect = () => {
     if (storeUser?.id !== userData.id) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
     return <Outlet />;
   }
+
+  if (offlineAllowed && storeUser) return <Outlet />;
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
   if (window.unimindDesktop) return <Navigate to="/login" replace />;

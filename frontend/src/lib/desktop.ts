@@ -13,6 +13,7 @@ export interface DesktopState {
   downloads: { courseId: number; title: string; status: 'downloading' | 'paused' | 'ready' | 'failed'; receivedBytes: number; totalBytes: number; expiresAt?: number; error?: string }[];
   storage?: { usedBytes: number };
   learningSync?: { pending: number; rejected: number; error?: string };
+  offlineSession?: { userId: number; expiresAt: number } | null;
   auth?: DesktopLoginState;
   update: { status: 'unconfigured' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error'; version?: string; error?: string };
 }
@@ -29,6 +30,9 @@ interface DesktopBridge {
   removeDownload(courseId: number): Promise<DesktopState>;
   openOfflineLibrary(): Promise<void>;
   openOfflineCourse(courseId: number): Promise<void>;
+  readOfflineData?(): Promise<unknown | null>;
+  writeOfflineData?(value: unknown): Promise<DesktopState>;
+  clearOfflineData?(): Promise<DesktopState>;
   checkForUpdates(): Promise<DesktopState>;
   installUpdate(): Promise<void>;
   onNavigate(callback: (route: string) => void): () => void;

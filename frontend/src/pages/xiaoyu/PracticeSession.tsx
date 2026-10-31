@@ -5,6 +5,8 @@ import { ArrowLeft, ArrowRight, Check, Spinner, CaretLeft, Target, Clock } from 
 import api from '@/lib/api';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { useLearningSession } from '@/hooks/useLearningSession';
+import { cachePractice, getCachedPractice, offlineCacheSupported } from '@/lib/offlineData';
+import { useAuthStore } from '@/store/useAuthStore';
 
 interface QuestionItem {
   id: number;
@@ -64,6 +66,8 @@ const PracticeSession: React.FC = () => {
 
 const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId }) => {
   const navigate = useNavigate();
+  const userId = useAuthStore(state => state.user?.id);
+  const [offline, setOffline] = useState(false);
 
   const [phase, setPhase] = useState<Phase>('loading');
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
@@ -79,7 +83,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   const [startTime] = useState(Date.now);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [elapsed, setElapsed] = useState(0);
-  useLearningSession({ enabled: phase === 'answering' && questions.length > 0,
+  useLearningSession({ enabled: phase === 'answering' && !offline && questions.length > 0,
     kind: 'practice', questionIds: questions.map(question => question.id) });
   useEffect(() => {
     if (phase === 'results') return;
@@ -100,19 +104,30 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
     if (!sessionId) return;
     api.get(`/ai/practice/session/${sessionId}/`)
       .then((res) => {
-        if (res.data.result) {
-          setSubmitResult(res.data.result); setPhase('results');
-        } else if (res.data.questions?.length) {
-          setQuestions(res.data.questions);
+        const questions = res.data.questions || [];
+        const result = res.data.result || null;
+        if (userId && offlineCacheSupported()) void cachePractice(userId, sessionId, questions, result);
+        if (result) {
+          setSubmitResult(result); setPhase('results');
+        } else if (questions.length) {
+          setQuestions(questions);
           setPhase('answering');
         } else {
           setError('没有找到匹配的题目');
         }
       })
-      .catch((err) => {
+      .catch(async (err) => {
+        const cached = userId && offlineCacheSupported() ? await getCachedPractice(userId, sessionId) : null;
+        if (cached) {
+          setOffline(true);
+          if (cached.result) { setSubmitResult(cached.result as SubmitResponse); setPhase('results'); }
+          else if (Array.isArray(cached.questions) && cached.questions.length) { setQuestions(cached.questions as QuestionItem[]); setPhase('answering'); }
+          else setError('没有找到匹配的题目');
+          return;
+        }
         setError(formatApiErrorToast(err, '加载题目失败'));
       });
-  }, [sessionId]);
+  }, [sessionId, userId]);
 
   // ── Keyboard navigation ──────────────────────────────
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -134,6 +149,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   // ── Pre-grade on question change ─────────────────────
   const prevIdxRef = React.useRef(currentIdx);
   useEffect(() => {
+    if (offline) return;
     const prevIdx = prevIdxRef.current;
     prevIdxRef.current = currentIdx;
 
@@ -149,7 +165,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
         }).catch(() => {}); // 静默失败，submit 时 fallback
       }
     }
-  }, [currentIdx, questions, answers, sessionId]);
+  }, [currentIdx, questions, answers, sessionId, offline]);
 
   // ── Persist answers to localStorage ──────────────────
   const persistAnswers = (updated: Record<number, string>) => {
@@ -159,12 +175,14 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
 
   // ── Answer handlers ──────────────────────────────────
   const selectOption = (qid: number, option: string) => {
+    if (offline) return;
     const updated = { ...answers, [qid]: option };
     setAnswers(updated);
     persistAnswers(updated);
   };
 
   const setTextAnswer = (qid: number, text: string) => {
+    if (offline) return;
     const updated = { ...answers, [qid]: text };
     setAnswers(updated);
     persistAnswers(updated);
@@ -172,6 +190,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
 
   // ── Submit ───────────────────────────────────────────
   const handleSubmit = async () => {
+    if (offline) return;
     setPhase('submitting');
     const answerList: AnswerEntry[] = questions.map((q) => ({
       question_id: q.id,
@@ -336,6 +355,8 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
         />
       </div>
 
+      {offline && <div className="mx-4 mt-3 rounded-xl bg-amber-50 px-4 py-2 text-xs leading-5 text-amber-700" role="status">离线只读：可查看已缓存的题目和结果，暂不能作答或提交。</div>}
+
       {/* Question area */}
       <div
         className="flex-1 overflow-y-auto px-4 py-6"
@@ -364,8 +385,9 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
                 return (
                   <button
                     key={i}
+                    disabled={offline}
                     onClick={() => selectOption(current.id, opt)}
-                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all disabled:cursor-not-allowed disabled:opacity-70 ${
                       isSelected
                         ? 'border-stone-800 bg-stone-50 text-stone-900 font-medium'
                         : 'border-stone-200 text-stone-600 hover:border-stone-300'
@@ -382,10 +404,11 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           ) : (
             <textarea
               value={answers[current.id] || ''}
+              disabled={offline}
               onChange={(e) => setTextAnswer(current.id, e.target.value)}
-              placeholder="输入你的答案..."
+              placeholder={offline ? '离线只读' : '输入你的答案...'}
               rows={5}
-              className="w-full border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder-stone-300 focus:outline-none focus:border-stone-400 resize-none"
+              className="w-full border border-stone-200 rounded-xl px-4 py-3 text-stone-800 placeholder-stone-300 focus:outline-none focus:border-stone-400 resize-none disabled:bg-stone-50 disabled:cursor-not-allowed"
             />
           )}
         </div>
@@ -422,7 +445,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
           {isLast ? (
             <button
               onClick={handleSubmit}
-              disabled={!allAnswered}
+              disabled={offline || !allAnswered}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-stone-900 text-white rounded-lg disabled:bg-stone-300 disabled:cursor-not-allowed hover:bg-stone-800 transition-colors"
             >
               <Check className="w-4 h-4" />
