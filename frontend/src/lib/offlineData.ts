@@ -43,7 +43,7 @@ let loadFlight: Promise<OfflineCache | null> | null = null;
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let writeChain: Promise<void> = Promise.resolve();
 let cacheEpoch = 0;
-let syncFlight: Promise<{ synced: number; conflicts: number; notes: Note[] }> | null = null;
+let syncFlight: Promise<{ synced: number; conflicts: number; notes: Note[]; cacheError?: boolean }> | null = null;
 let syncController: AbortController | null = null;
 
 const now = () => new Date().toISOString();
@@ -195,7 +195,7 @@ export function flushOfflineOutbox(userId: number) {
   return flight;
 }
 
-async function syncOutbox(userId: number, signal: AbortSignal): Promise<{ synced: number; conflicts: number; notes: Note[] }> {
+async function syncOutbox(userId: number, signal: AbortSignal): Promise<{ synced: number; conflicts: number; notes: Note[]; cacheError?: boolean }> {
   const value = await loadOfflineCache(userId);
   const notes: Note[] = [];
   if (!value || !navigator.onLine || !value.outbox.length) return { synced: 0, conflicts: 0, notes };
@@ -241,9 +241,10 @@ async function syncOutbox(userId: number, signal: AbortSignal): Promise<{ synced
   }
   if (signal.aborted || cache !== value) return { synced: 0, conflicts: 0, notes: [] };
   value.updatedAt = now();
-  await scheduleWrite(true);
+  let cacheError = false;
+  try { await scheduleWrite(true); } catch { cacheError = true; }
   if (synced || conflicts) {
     window.dispatchEvent(new CustomEvent('unimind:offline-sync', { detail: { synced, conflicts } }));
   }
-  return { synced, conflicts, notes };
+  return { synced, conflicts, notes, cacheError };
 }

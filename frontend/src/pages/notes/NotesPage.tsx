@@ -101,6 +101,7 @@ export default function NotesPage() {
         if (!active) return;
         const result = await flushOfflineOutbox(userId);
         if (!active) return;
+        if (result.cacheError) toast.error('本地缓存更新失败，请保持页面打开后重试。');
         if (result.synced || result.conflicts) {
           result.notes.forEach(syncSaved);
           if (result.conflicts) toast.info(`${result.conflicts} 条离线修改已保存为副本。`);
@@ -165,8 +166,14 @@ export default function NotesPage() {
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
       return () => controller.abort();
     }
-    void notesApi.get(Number(id), controller.signal).then(result => {
+    void notesApi.get(Number(id), controller.signal).then(async result => {
       if (controller.signal.aborted) return;
+      const cached = userId ? await loadOfflineCache(userId) : null;
+      if (controller.signal.aborted) return;
+      const pending = cached?.outbox.find(entry => entry.noteId === result.id);
+      const local = cached?.notes.find(note => note.id === result.id);
+      if (pending) result = { ...result, ...pending.draft, version: pending.baseVersion };
+      else if (local && local.version > result.version) result = local;
       load(result); setMobileView('editor');
       if (userId) void cacheNote(userId, result);
     }).catch(async () => {
