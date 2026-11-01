@@ -2,11 +2,12 @@ import type { Course } from '@/types/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams } from 'react-router-dom';
-import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
+import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX, SidebarSimple } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
+import { LessonLayout } from '@/components/course/LessonLayout';
 import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
 import { useLearningSession } from '@/hooks/useLearningSession';
@@ -42,6 +43,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [playbackRate, setPlaybackRate] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
   const [seeking] = useState(false);
   const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const courseId = Number(id);
@@ -211,6 +213,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
         setLoading(true);
         setCourse(null);
         setHasAwarded(false);
+        setVideoAspectRatio(16 / 9);
         const res = await api.get(`/courses/${courseId}/`, { signal: controller.signal });
         setCourse(res.data);
       } catch (e) { if (!controller.signal.aborted) console.error('fetchCourse failed', e); }
@@ -242,8 +245,14 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     if (!seeking) setCurrentTime(video.currentTime);
   };
 
+  const handleVideoResize = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const { videoWidth, videoHeight } = e.currentTarget;
+    if (videoWidth > 0 && videoHeight > 0) setVideoAspectRatio(videoWidth / videoHeight);
+  };
+
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget;
+    handleVideoResize(e);
     const dur = video.duration || 0;
     setDuration(dur);
     if (Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
@@ -274,7 +283,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   if (!course) return <div className="um-lesson um-lesson-state">课程未找到</div>;
 
   return (
-    <div className="um-lesson">
+    <LessonLayout aspectRatio={videoAspectRatio}>
+      {({ sidebarCollapsed, expandSidebar }) => <>
       <section className="um-lesson-view" aria-label="视频与课程信息">
         <div className="um-lesson-stage">
         <div
@@ -293,6 +303,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
               onEnded={handleVideoEnd}
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={handleLoadedMetadata}
+              onResize={handleVideoResize}
               onPlay={() => { setIsPlaying(true); scheduleHideControls(); }}
               onPause={() => {
                 setIsPlaying(false);
@@ -344,6 +355,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
         <header className="um-lesson-heading">
           <div><p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || '待归类'}</p><h1>{course.title}</h1></div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {sidebarCollapsed && <button className="um-lesson-favorite" onClick={expandSidebar} aria-label="展开课程大纲" aria-expanded={false}><SidebarSimple size={18} />展开大纲</button>}
             {window.unimindDesktop && course.video_file && (
               <button className="um-lesson-favorite" disabled={offlinePending || offlineDownload?.status === 'downloading'} onClick={() => void handleOffline()} title={offlineDownload?.error}>
                 {offlineReady ? <Play size={18} /> : <Download size={18} />}
@@ -378,6 +390,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
           <div className="um-lesson-description" tabIndex={0}><p>{course.description || '暂无课程简介'}</p></div>
         </section>
       </aside>
-    </div>
+      </>}
+    </LessonLayout>
   );
 };
