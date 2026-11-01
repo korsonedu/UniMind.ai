@@ -102,7 +102,7 @@ PLANNER_TOOLS_META = [
     ToolMeta(
         name="get_practice_questions",
         description="从题库中抽取相关题目供学生练习",
-        body="从题库中按知识点或学科抽取题目。参数: kp_name(str)=知识点名称, subject(str)=学科(可选), difficulty(str)=难度(可选), limit(int)=题数(默认5)。优先返回做错过的题目。适用于：给学生出题练习、'我想做XX题'、薄弱知识点强化训练。不适用于：查看错题记录（用get_user_wrong_questions）、查看复习任务（用get_due_reviews）。",
+        body="从题库中按知识点、学科、难度、题型抽取题目。参数: kp_name(str)=知识点名称, subject(str)=学科(可选), difficulty(str)=难度(可选), q_type(str)=objective/subjective(可选), subjective_type(str)=noun/short/essay/calculate(可选), limit(int)=题数(默认5)。优先返回做错过的题目。适用于：给学生出题练习、'我想做XX题'、薄弱知识点强化训练。题库为空或题型不符时，应现场出题并聊天内评分。不适用于：查看错题记录（用get_user_wrong_questions）、查看复习任务（用get_due_reviews）。",
     ),
     ToolMeta(
         name="get_knowledge_difficulty_analysis",
@@ -347,7 +347,7 @@ PLANNER_INTENT_MAP = {
         ],
     },
     "quiz": {
-        "keywords": ["出题", "出几道", "做题", "练习", "测试", "考试", "刷题", "模拟", "真题"],
+        "keywords": ["出题", "出几道", "出一道", "出个题", "来一道", "来几道", "做一道", "做几道", "练练", "练一练", "做题", "练习", "测试", "考试", "刷题", "模拟", "真题"],
         "tools": [
             "get_user_wrong_questions", "get_due_reviews",
             "lookup_question", "search_knowledge_tree",

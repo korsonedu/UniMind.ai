@@ -25,9 +25,18 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: [
+          'index.html',
+          'manifest.webmanifest',
+          'assets/*.{js,css}',
+          'assets/dm-sans-*.woff2',
+          'pwa-192x192.png',
+          'pwa-512x512.png',
+          'apple-touch-icon.png',
+          'unimind_logo_small.png',
+          'Unimind_logo.png',
+        ],
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
         name: 'UniMind',
         short_name: 'UniMind',
@@ -76,6 +85,7 @@ export default defineConfig({
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-katex': ['katex'],
+          'vendor-clsx': ['clsx'],
           'vendor-recharts': ['recharts'],
           'vendor-radix': [
             '@radix-ui/react-dialog',

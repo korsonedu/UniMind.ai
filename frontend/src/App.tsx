@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { registerSW } from 'virtual:pwa-register';
 import axios from 'axios';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +21,7 @@ import { Toaster } from 'sonner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { XiaoYuChatHost } from './pages/xiaoyu/XiaoYuChatProvider';
 
+let serviceWorkerRegistered = false;
 
 // Lazy-loaded pages — named exports need .then() wrapper
 const Landing = lazy(() => import('./pages/Landing').then(module => ({ default: module.Landing })));
@@ -88,6 +90,10 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // PWA push subscription — deferred to avoid blocking render
     if (user) {
+      if (!serviceWorkerRegistered) {
+        serviceWorkerRegistered = true;
+        registerSW({ immediate: true });
+      }
       const timer = setTimeout(() => {
         import('@/lib/pushSubscription').then(m => m.subscribeToPush()).catch(() => {});
       }, 3000);
@@ -167,7 +173,10 @@ const RootRedirect = () => {
     return () => { active = false; };
   }, [isError, error, logout, storeUser]);
 
-  if (!hasHydrated || isLoading) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
+  // Anonymous visitors see the landing immediately; /users/me/ keeps validating in the background.
+  const anonymousLanding = hasHydrated && !storeUser && location.pathname === '/' && !window.unimindDesktop;
+
+  if (!hasHydrated || (isLoading && !anonymousLanding)) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;
 
   if (userData && !isError) {
     if (storeUser?.id !== userData.id) return <Loading message="Authenticating Secure Session…" fullScreen size="lg" />;

@@ -588,6 +588,10 @@ class PlannerToolExecutor(BaseToolExecutor):
     def _handle_get_practice_questions(self, args: Dict) -> Dict:
         """根据知识点或薄弱点从题库中抽取题目供学生练习。"""
         from ai_assistant.services.memory_system import MemorySystem
+        q_type = (args.get('q_type') or '').strip()
+        subjective_type = (args.get('subjective_type') or '').strip()
+        if subjective_type:
+            q_type = 'subjective'
         result = MemorySystem.query_practice_questions(
             user=self.user,
             kp_name=(args.get('kp_name') or '').strip(),
@@ -596,8 +600,26 @@ class PlannerToolExecutor(BaseToolExecutor):
             limit=min(int(args.get('limit', 5)), 10),
             exclude_mastered=args.get('exclude_mastered', True),
             institution=self.institution,
+            q_type=q_type,
+            subjective_type=subjective_type,
         )
         if not result.get('questions'):
+            result.pop('practice_url', None)
+            result['message'] = '直接按学生要求出题。'
+            result['no_bank_match'] = True
+            result['fallback'] = {
+                'action': 'generate_question',
+                'instruction': (
+                    '不要重复调用本工具。直接按学生要求给出一道题，可以用一句话说明考查范围，'
+                    '但不要说明题库是否收录或题目来源：'
+                    '学科、题型、难度按学生要求（未指定数量时只出1道），先只给题干；'
+                    '题干里写明总分和各问分值（如 20 分，6+7+7）。'
+                    '需要示意图时用 Markdown text 围栏代码块或 LaTeX array；等学生作答后再给分和讲解。'
+                    '评分时先核对参考答案和评分点，先列每问得分/满分/依据，再给总分，一次性给最终分。'
+                    '这道题的评分只在对话内有效，不写入练习记录、错题本、掌握度、ELO 或 Memorix；'
+                    '不伪造题目ID，不调用 grade_student_answer，不声称来自题库、考纲或平台。'
+                ),
+            }
             return result
         from uuid import uuid4
         return self._attach_visual(result, lambda: {
