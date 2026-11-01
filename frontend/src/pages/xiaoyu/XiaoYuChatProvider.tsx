@@ -45,6 +45,11 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   const userId = useAuthStore(state => state.user?.id);
 
   useEffect(() => {
+    if (!userId) {
+      loadedUserIdRef.current = null;
+      setInitialized(false);
+      return;
+    }
     if (!activated || !userId || loadedUserIdRef.current === userId || initializingUserIdRef.current === userId) return;
     initializingUserIdRef.current = userId;
     let cancelled = false;

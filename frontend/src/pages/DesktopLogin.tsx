@@ -37,9 +37,18 @@ export function DesktopLogin() {
       if (controller.signal.aborted) return;
       useAuthStore.getState().setAuth(data, null);
       navigate(returnTo, { replace: true });
-    }).catch(() => { /* An expired session stays on the desktop sign-in screen. */ });
+    }).catch(async error => {
+      if (controller.signal.aborted || !desktop || (axios.isAxiosError(error) && error.response?.status === 401)) return;
+      try {
+        const { offlineSession } = await desktop.getState();
+        const user = useAuthStore.getState().user;
+        if (!controller.signal.aborted && user && offlineSession?.userId === user.id && offlineSession.expiresAt > Date.now()) {
+          navigate(returnTo, { replace: true });
+        }
+      } catch { /* No valid offline session: keep the sign-in screen. */ }
+    });
     return () => controller.abort();
-  }, [navigate, returnTo]);
+  }, [desktop, navigate, returnTo]);
 
   const start = async () => {
     if (!desktop?.startLogin || busy) return;

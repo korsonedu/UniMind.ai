@@ -56,7 +56,7 @@ export default function NotesPage() {
     setItems(previous => previous.map(item => item.id === saved.id ? saved : item));
     setTags(previous => [...previous, ...saved.tags.filter(name => !previous.some(tag => tag.name === name)).map((name, index) => ({ id: -Date.now() - index, name }))]);
   }, []);
-  const { note: savedNote, documentKey, dirty, status, error, load, change, flush } = useNoteSave(onSaved);
+  const { note: savedNote, documentKey, dirty, status, error, load, change, flush, syncSaved } = useNoteSave(onSaved);
   const note = id ? savedNote : null;
   const blocker = useBlocker(dirty || busy);
   const blocking = useRef(false);
@@ -93,12 +93,16 @@ export default function NotesPage() {
   }, [refresh, userId]);
   useEffect(() => {
     if (!userId || !offlineCacheSupported()) return;
+    let active = true;
     const sync = async () => {
       if (!navigator.onLine) return;
       try {
         await window.unimindDesktop?.syncIdentity();
+        if (!active) return;
         const result = await flushOfflineOutbox(userId);
+        if (!active) return;
         if (result.synced || result.conflicts) {
+          result.notes.forEach(syncSaved);
           if (result.conflicts) toast.info(`${result.conflicts} 条离线修改已保存为副本。`);
           reload();
         }
@@ -106,8 +110,8 @@ export default function NotesPage() {
     };
     void sync();
     window.addEventListener('online', sync);
-    return () => window.removeEventListener('online', sync);
-  }, [userId, reload]);
+    return () => { active = false; window.removeEventListener('online', sync); };
+  }, [userId, reload, syncSaved]);
   const listKey = JSON.stringify([query, folder, tag, view, refresh]);
   const [previousListKey, setPreviousListKey] = useState(listKey);
   if (previousListKey !== listKey) {
