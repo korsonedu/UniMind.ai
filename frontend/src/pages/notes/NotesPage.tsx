@@ -8,6 +8,7 @@ import { cacheNote, cacheNotebooks, cacheNotes, cacheTags, flushOfflineOutbox, g
 import { useAuthStore } from '@/store/useAuthStore';
 import NoteEditor from './NoteEditor';
 import NoteAISettings from './NoteAISettings';
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent } from '@/components/ui/context-menu';
 import { Collapse } from '@/components/ui/collapse';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
 import NoteDialog, { type NoteDialogOptions } from './NoteDialog';
@@ -216,10 +217,22 @@ export default function NotesPage() {
     if (selectedNotebook) await notesApi.updateNotebook(selectedNotebook.id, patch);
     reload();
   };
-  const removeNote = () => {
-    if (!note) return;
-    const permanent = !!note.deleted_at;
-    setDialog({ title: permanent ? '永久删除笔记？' : '移入回收站？', description: permanent ? '删除后无法恢复。' : undefined, confirmText: permanent ? '永久删除' : '移入回收站', destructive: true, onConfirm: () => void run(async () => { await notesApi.remove(note.id, permanent); load(null); reload(); navigate('/notes'); setMobileView('directory'); }) });
+  const updateNote = (target: Note, patch: Partial<Note>) => void run(async () => {
+    const current = await notesApi.get(target.id);
+    const updated = await notesApi.save({ ...current, ...patch });
+    onSaved(updated);
+    if (note?.id === updated.id) load(updated);
+    if (userId) void cacheNote(userId, updated);
+    reload();
+  });
+  const removeNote = (target = note) => {
+    if (!target) return;
+    const permanent = !!target.deleted_at;
+    setDialog({ title: permanent ? '永久删除笔记？' : '移入回收站？', description: permanent ? '删除后无法恢复。' : undefined, confirmText: permanent ? '永久删除' : '移入回收站', destructive: true, onConfirm: () => void run(async () => {
+      await notesApi.remove(target.id, permanent);
+      if (target.id === note?.id) { load(null); navigate('/notes'); setMobileView('directory'); }
+      reload();
+    }) });
   };
   const downloadLocal = () => {
     if (!note) return;
@@ -256,13 +269,30 @@ export default function NotesPage() {
       <div className="notes-list-heading"><span>{view === 'trash' ? '回收站' : selectedNotebook?.name || '笔记'}</span><small>{listLoading ? '加载中…' : `${items.length} 篇`}</small></div>
       {offlineMode && <p className="mx-4 mt-2 rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground" role="status">离线模式：显示本地缓存，笔记修改会在联网后同步。</p>}
       {listError && <p className="notes-error" role="alert">{listError}<button onClick={reload}>重试</button></p>}
-      <div className="notes-list" aria-busy={listLoading}>{orderedItems.map(item => <button className={item.id === note?.id ? 'is-active' : ''} key={item.id} onClick={() => open(item.id)}><strong>{item.is_favorite && '☆ '}{item.title || '未命名笔记'}</strong><span>{item.content.replace(/[#*`>[\]]/g, '').slice(0, 60) || '还没有正文'}</span><small>{new Date(item.updated_at).toLocaleDateString()} · {notebookPath(item.notebook, notebooks)}</small></button>)}{!listLoading && !items.length && !listError && <p className="notes-empty">{view === 'trash' ? '回收站是空的。' : '没有匹配的笔记。'}{view !== 'trash' && <button onClick={createNote}>写一篇新笔记</button>}</p>}</div>
+      <div className="notes-list" aria-busy={listLoading}>{orderedItems.map(item => <ContextMenu key={item.id}>
+        <ContextMenuTrigger asChild><button className={item.id === note?.id ? 'is-active' : ''} onClick={() => open(item.id)}><strong>{item.is_favorite && '☆ '}{item.title || '未命名笔记'}</strong><span>{item.content.replace(/[#*`>[\]]/g, '').slice(0, 60) || '还没有正文'}</span><small>{new Date(item.updated_at).toLocaleDateString()} · {notebookPath(item.notebook, notebooks)}</small></button></ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem disabled={busy} onSelect={() => open(item.id)}><NotePencil size={16} />打开笔记</ContextMenuItem>
+          {!item.deleted_at && <>
+            <ContextMenuItem disabled={busy || offlineMode} onSelect={() => setDialog({ title: '笔记名称', initialValue: item.title, onConfirm: title => updateNote(item, { title }) })}><PencilSimple size={16} />重命名</ContextMenuItem>
+            <ContextMenuItem disabled={busy || offlineMode} onSelect={() => updateNote(item, { is_favorite: !item.is_favorite })}><Star size={16} />{item.is_favorite ? '取消收藏' : '收藏'}</ContextMenuItem>
+            <ContextMenuSub><ContextMenuSubTrigger disabled={busy || offlineMode}><Folders size={16} />移动到笔记本</ContextMenuSubTrigger><ContextMenuSubContent>
+              <ContextMenuItem disabled={item.notebook === null} onSelect={() => updateNote(item, { notebook: null })}>未分类</ContextMenuItem>
+              {notebooks.map(book => <ContextMenuItem key={book.id} disabled={item.notebook === book.id} onSelect={() => updateNote(item, { notebook: book.id })}>{notebookPath(book.id, notebooks)}</ContextMenuItem>)}
+            </ContextMenuSubContent></ContextMenuSub>
+          </>}
+          <ContextMenuItem disabled={busy || offlineMode} onSelect={() => void run(() => notesApi.export('items', item.id))}><Export size={16} />导出笔记</ContextMenuItem>
+          {item.deleted_at && <ContextMenuItem disabled={busy || offlineMode} onSelect={() => void run(async () => { const restored = await notesApi.restore(item.id); if (note?.id === item.id) load(restored); setView('all'); reload(); })}><ArrowCounterClockwise size={16} />恢复笔记</ContextMenuItem>}
+          <ContextMenuSeparator />
+          <ContextMenuItem disabled={busy || offlineMode} className="text-destructive focus:text-destructive" onSelect={() => removeNote(item)}><Trash size={16} />{item.deleted_at ? '永久删除' : '移入回收站'}</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>)}{!listLoading && !items.length && !listError && <p className="notes-empty">{view === 'trash' ? '回收站是空的。' : '没有匹配的笔记。'}{view !== 'trash' && <button onClick={createNote}>写一篇新笔记</button>}</p>}</div>
     </aside>
     <main className="notes-main" aria-busy={loading}>
       <WorkspaceToolbar className="notes-note-header">
         <button className="um-agent-icon-button" aria-label="切换笔记目录" onClick={() => { const hidden = window.matchMedia('(max-width:900px)').matches ? mobileView === 'directory' : !directoryHidden; setDirectoryHidden(hidden); setMobileView(hidden ? 'editor' : 'directory'); }}><SidebarSimple size={18} /></button>
         <WorkspaceTrail title={note?.title || (note ? '未命名笔记' : '全部笔记')} crumbs={[{ label: '笔记', to: '/notes' }, ...(note ? [{ label: notebookPath(note.notebook, notebooks) }] : [])]} />
-        <div><span aria-live="polite" className="notes-save-status">{note ? `${status}${dirty && status === '已保存' ? ' · 未保存' : ''}` : ''}</span>{note && !pageError && <><button aria-label="导出笔记" title="导出笔记" disabled={busy} onClick={() => void run(() => notesApi.export('items', note.id))}><Export size={19} /></button>{note.deleted_at && <button aria-label="恢复笔记" title="恢复笔记" disabled={busy} onClick={() => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); })}><ArrowCounterClockwise size={19} /></button>}<button aria-label={note.deleted_at ? '永久删除' : '移入回收站'} title={note.deleted_at ? '永久删除' : '移入回收站'} disabled={busy} className="notes-danger" onClick={removeNote}><Trash size={19} /></button></>}</div>
+        <div><span aria-live="polite" className="notes-save-status">{note ? `${status}${dirty && status === '已保存' ? ' · 未保存' : ''}` : ''}</span>{note && !pageError && <><button aria-label="导出笔记" title="导出笔记" disabled={busy} onClick={() => void run(() => notesApi.export('items', note.id))}><Export size={19} /></button>{note.deleted_at && <button aria-label="恢复笔记" title="恢复笔记" disabled={busy} onClick={() => void run(async () => { load(await notesApi.restore(note.id)); setView('all'); reload(); })}><ArrowCounterClockwise size={19} /></button>}<button aria-label={note.deleted_at ? '永久删除' : '移入回收站'} title={note.deleted_at ? '永久删除' : '移入回收站'} disabled={busy} className="notes-danger" onClick={() => removeNote()}><Trash size={19} /></button></>}</div>
       </WorkspaceToolbar>
       {loading && <div className="notes-loading">正在打开笔记…</div>}
       {pageError && <div className="notes-empty" role="alert">{pageError}<button onClick={() => navigate('/notes')}>返回目录</button></div>}

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, session, ipcMain, Notification, Tray, nativeImage, protocol, powerMonitor, globalShortcut, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, Menu, clipboard, dialog, session, ipcMain, Notification, Tray, nativeImage, protocol, powerMonitor, globalShortcut, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { OfflineLibrary, courseId } from './offline';
@@ -186,6 +186,7 @@ function openOffline(id?: number) {
   const target = `unimind-offline://library/${id ? `course/${courseId(id)}` : ''}`;
   if (!offlineWindow) {
     offlineWindow = new BrowserWindow({ width: 1100, height: 760, title: 'UniMind · 离线课程', webPreferences: { ...SECURE_WEB_PREFERENCES, partition: 'unimind-offline' } });
+    installContextMenu(offlineWindow);
     offlineWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     const guard = (event: Electron.Event, url: string) => { if (!url.startsWith('unimind-offline://library/')) event.preventDefault(); };
     offlineWindow.webContents.on('will-navigate', guard);
@@ -305,6 +306,7 @@ function openResourceWindow(target: string, development: boolean): void {
     parent: mainWindow ?? undefined,
     webPreferences: SECURE_WEB_PREFERENCES,
   });
+  installContextMenu(window);
   window.webContents.on('will-navigate', (event, url) => {
     if (!validResource(sourceUrl, url, development)) event.preventDefault();
   });
@@ -382,6 +384,7 @@ function createMainWindow(): void {
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 18 } } : { titleBarOverlay: true }),
     webPreferences: { ...SECURE_WEB_PREFERENCES, preload: path.join(__dirname, 'preload.cjs') },
   });
+  installContextMenu(mainWindow);
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!sameOrigin(source, url)) event.preventDefault();
@@ -412,6 +415,34 @@ function createMainWindow(): void {
   mainWindow.on('closed', () => { mainWindow = null; });
   void mainWindow.loadURL(source).catch(() => {});
   if (!app.isPackaged) mainWindow.webContents.openDevTools({ mode: 'detach' });
+}
+
+function installContextMenu(window: BrowserWindow): void {
+  window.webContents.on('context-menu', (_event, params) => {
+    const { editFlags: flags, isEditable, selectionText, linkURL } = params;
+    const items: MenuItemConstructorOptions[] = [];
+    if (isEditable) {
+      items.push(
+        { label: '撤销', role: 'undo', enabled: flags.canUndo },
+        { label: '重做', role: 'redo', enabled: flags.canRedo },
+        { type: 'separator' },
+        { label: '剪切', role: 'cut', enabled: flags.canCut },
+        { label: '复制', role: 'copy', enabled: flags.canCopy },
+        { label: '粘贴', role: 'paste', enabled: flags.canPaste },
+        { label: '全选', role: 'selectAll', enabled: flags.canSelectAll },
+      );
+    } else if (selectionText.trim()) {
+      items.push({ label: '复制', role: 'copy', enabled: flags.canCopy });
+    }
+    if (linkURL && validResource(sourceUrl, linkURL, allowsDevelopment(sourceUrl))) {
+      if (items.length) items.push({ type: 'separator' });
+      items.push(
+        { label: '打开链接', click: () => openResourceWindow(linkURL, allowsDevelopment(sourceUrl)) },
+        { label: '复制链接地址', click: () => clipboard.writeText(linkURL) },
+      );
+    }
+    if (items.length) Menu.buildFromTemplate(items).popup({ window });
+  });
 }
 
 function installMenu(): void {

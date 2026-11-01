@@ -4,6 +4,7 @@ import { Collapse } from './ui/collapse';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from './ui/dropdown-menu';
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubTrigger, ContextMenuSubContent } from './ui/context-menu';
 import type { SessionSidebarProps } from './SessionSidebar';
 import type { ConversationPatch, ConversationSession } from '@/hooks/useAgentConversation';
 import type { ConversationProjectControls } from '@/hooks/useConversationProjects';
@@ -34,25 +35,35 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
     try { return await onUpdate(session, patch); }
     finally { setUpdating(false); }
   };
+  const sessionActions = (session: ConversationSession, context = false) => {
+    const Item = context ? ContextMenuItem : DropdownMenuItem;
+    const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
+    const Sub = context ? ContextMenuSub : DropdownMenuSub;
+    const SubTrigger = context ? ContextMenuSubTrigger : DropdownMenuSubTrigger;
+    const SubContent = context ? ContextMenuSubContent : DropdownMenuSubContent;
+    return <>
+        <Item disabled={updating || !session.conversationId} onSelect={() => { setSearchOpen(false); setRenaming({ session, name: session.title || session.label }); }}><PencilSimple size={15} />重命名</Item>
+        <Item disabled={updating || !session.conversationId} onSelect={() => void update(session, { is_pinned: !session.isPinned })}><PushPin size={15} />{session.isPinned ? '取消置顶' : '置顶'}</Item>
+        <Sub><SubTrigger disabled={updating || controls.error || !session.conversationId}><Folder size={15} className="mr-2" />移动到项目</SubTrigger><SubContent className="um-native-menu">
+          <Item disabled={!session.projectId} onSelect={() => void update(session, { project_id: null })}>未分类</Item>
+          {controls.projects.map(project => <Item key={project.id} disabled={session.projectId === project.id} onSelect={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); void update(session, { project_id: project.id }); }}>{project.name}</Item>)}
+        </SubContent></Sub>
+        {onDelete && <><Separator /><Item className="um-agent-menu-danger" onSelect={() => setDeleting({ session, name: session.title || session.label })}><Trash size={15} />删除对话</Item></>}
+    </>;
+  };
   const renderSession = (session: ConversationSession, search = false) => {
     const thinking = session.conversationId ? thinkingIds?.includes(session.conversationId) : false;
     const unread = session.conversationId ? unreadIds?.has(session.conversationId) : false;
-    return <li key={session.id} data-active={session.id === activeSessionId}>
+    return <ContextMenu key={session.id}><ContextMenuTrigger asChild><li data-active={session.id === activeSessionId}>
     <button data-session-select aria-current={session.id === activeSessionId ? 'page' : undefined} onClick={() => select(session)} title={`${session.title || session.label} · ${session.messages.length} 条`}>
       <span className="um-agent-session-title">{session.isPinned && <PushPin size={12} className="inline-block mr-1" aria-label="已置顶" />}<span className="um-agent-session-name">{session.title || session.label}</span>{thinking ? <span className="um-agent-session-thinking" role="status" aria-label="正在思考" title="正在思考" /> : unread ? <span className="um-agent-unread-dot" role="status" aria-label="有新回复" title="有新回复" /> : null}</span>{search && <span className="um-agent-session-meta">{controls.projects.find(project => project.id === session.projectId)?.name || '未分类'} · {session.lastTime ? new Date(session.lastTime).toLocaleDateString('zh-CN') : ''}</span>}
     </button>
     <DropdownMenu><DropdownMenuTrigger asChild><button className="um-agent-session-menu um-agent-icon-button" aria-label={`对话菜单：${session.title || session.label}`}><DotsThree size={18} /></button></DropdownMenuTrigger>
       <DropdownMenuContent className="um-native-menu" align="start" onCloseAutoFocus={event => { if (renaming) event.preventDefault(); }}>
-        <DropdownMenuItem disabled={updating || !session.conversationId} onSelect={() => { setSearchOpen(false); setRenaming({ session, name: session.title || session.label }); }}><PencilSimple size={15} />重命名</DropdownMenuItem>
-        <DropdownMenuItem disabled={updating || !session.conversationId} onSelect={() => void update(session, { is_pinned: !session.isPinned })}><PushPin size={15} />{session.isPinned ? '取消置顶' : '置顶'}</DropdownMenuItem>
-        <DropdownMenuSub><DropdownMenuSubTrigger disabled={updating || controls.error || !session.conversationId}><Folder size={15} className="mr-2" />移动到项目</DropdownMenuSubTrigger><DropdownMenuSubContent className="um-native-menu">
-          <DropdownMenuItem disabled={!session.projectId} onSelect={() => void update(session, { project_id: null })}>未分类</DropdownMenuItem>
-          {controls.projects.map(project => <DropdownMenuItem key={project.id} disabled={session.projectId === project.id} onSelect={() => { setClosedProjects(previous => previous.filter(id => id !== project.id)); void update(session, { project_id: project.id }); }}>{project.name}</DropdownMenuItem>)}
-        </DropdownMenuSubContent></DropdownMenuSub>
-        {onDelete && <><DropdownMenuSeparator /><DropdownMenuItem className="um-agent-menu-danger" onSelect={() => setDeleting({ session, name: session.title || session.label })}><Trash size={15} />删除对话</DropdownMenuItem></>}
+        {sessionActions(session)}
       </DropdownMenuContent>
     </DropdownMenu>
-  </li>;
+  </li></ContextMenuTrigger><ContextMenuContent className="um-native-menu" onCloseAutoFocus={event => { if (renaming) event.preventDefault(); }}>{sessionActions(session, true)}</ContextMenuContent></ContextMenu>;
   };
   return <aside className="um-agent-sessions" aria-label="历史对话">
     <header><h2>对话</h2></header>
