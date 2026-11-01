@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { noteDraft, notesApi, type Note, type NoteDraft } from '@/lib/notes';
-import { flushOfflineOutbox, offlineCacheSupported, queueNoteSave, removeQueuedNote } from '@/lib/offlineData';
+import { offlineCacheSupported, queueNoteSave, removeQueuedNote } from '@/lib/offlineData';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export function useNoteSave(onSaved: (note: Note) => void) {
@@ -30,32 +30,14 @@ export function useNoteSave(onSaved: (note: Note) => void) {
     current.current = next; setNote(next); setStatus('未保存');
     if (!conflict.current) setError('');
   }, []);
-  const syncSaved = useCallback((result: Note) => {
-    if (!current.current || current.current.id !== result.id || current.current.version > result.version) return;
-    const next = { ...current.current, version: result.version, updated_at: result.updated_at, backlinks: result.backlinks };
-    current.current = next; setNote(next);
-    if (JSON.stringify(noteDraft(next)) === saved.current && saved.current === JSON.stringify(noteDraft(result))) {
-      setStatus('已保存');
-    }
-  }, []);
   const flush = useCallback(async () => {
     if (pending.current) return pending.current;
     const work = async () => {
       if (conflict.current) throw new Error('版本冲突，请先保留本地内容，再重新加载。');
       const userId = useAuthStore.getState().user?.id;
-      if (userId && navigator.onLine && offlineCacheSupported()) {
-        const result = await flushOfflineOutbox(userId);
-        if (useAuthStore.getState().user?.id !== userId) return;
-        result.notes.forEach(syncSaved);
-      }
       const queueLocally = async (snapshot: Note, signature: string) => {
         if (!userId || !offlineCacheSupported()) return false;
-        try {
-          if (!await queueNoteSave(userId, snapshot.id, snapshot.version, noteDraft(snapshot))) throw new Error('离线存储不可用');
-        } catch {
-          const message = '本地保存失败，内容仍保留在编辑器中，请勿关闭页面。请联网后重试或下载本地内容。';
-          setError(message); setStatus('保存失败'); throw new Error(message);
-        }
+        await queueNoteSave(userId, snapshot.id, snapshot.version, noteDraft(snapshot));
         saved.current = signature; setSavedSignature(signature);
         setStatus('已保存到本地，等待同步'); setError('');
         onSavedRef.current({ ...snapshot, updated_at: new Date().toISOString() });
@@ -87,7 +69,7 @@ export function useNoteSave(onSaved: (note: Note) => void) {
     setSaving(true);
     pending.current = work();
     try { await pending.current; } finally { pending.current = null; setSaving(false); }
-  }, [syncSaved]);
+  }, []);
   useEffect(() => {
     if (!dirty || error) return;
     const timer = window.setTimeout(() => { void flush().catch(() => {}); }, 700);
@@ -100,5 +82,5 @@ export function useNoteSave(onSaved: (note: Note) => void) {
     window.addEventListener('beforeunload', protect);
     return () => window.removeEventListener('beforeunload', protect);
   }, []);
-  return { note, documentKey, dirty, status, error, load, change, flush, syncSaved };
+  return { note, documentKey, dirty, status, error, load, change, flush };
 }

@@ -134,7 +134,7 @@ const RootRedirect = () => {
   const logout = useAuthStore(s => s.logout);
   const hasHydrated = useAuthStore.persist.hasHydrated();
   const location = useLocation();
-  const [offlineAccess, setOfflineAccess] = useState<{ userId: number; error: unknown } | null>(null);
+  const [offlineAllowed, setOfflineAllowed] = useState(false);
 
   const { data: userData, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.user.me,
@@ -161,7 +161,7 @@ const RootRedirect = () => {
     void desktop.getState().then(state => {
       if (!active) return;
       const session = state.offlineSession;
-      if (session && session.userId === storeUser.id && session.expiresAt > Date.now()) setOfflineAccess({ userId: storeUser.id, error });
+      if (session && session.userId === storeUser.id && session.expiresAt > Date.now()) setOfflineAllowed(true);
       else logout({ preserveDesktop: true });
     }).catch(() => { if (active) logout({ preserveDesktop: true }); });
     return () => { active = false; };
@@ -174,10 +174,7 @@ const RootRedirect = () => {
     return <Outlet />;
   }
 
-  if (isError && window.unimindDesktop && storeUser && !(axios.isAxiosError(error) && error.response?.status === 401)) {
-    if (offlineAccess?.userId === storeUser.id && offlineAccess.error === error) return <Outlet />;
-    return <Loading message="正在确认离线访问权限…" fullScreen size="lg" />;
-  }
+  if (offlineAllowed && storeUser) return <Outlet />;
 
   if (location.pathname !== '/') return <Navigate to={getLoginPath(location.pathname + location.search + location.hash)} replace />;
   if (window.unimindDesktop) return <Navigate to="/login" replace />;
