@@ -70,7 +70,40 @@
 .um-agent-composer:has(textarea:focus-visible),
 .um-agent-search:has(input:focus-visible) { outline: none; }
 
+.dark :is(.um-agent-composer, .um-agent-chat-input > div > div:has(> textarea), .um-qa-composer-field, .um-qa-reply-composer, .um-agent-search, .um-course-search, .notes-search, .um-qa-search, .um-settings-search) {
+  background-color: var(--um-color-field);
+  transition: background-color var(--um-motion-fast);
+}
+.dark :is(.um-agent-composer, .um-agent-chat-input > div > div:has(> textarea), .um-qa-composer-field, .um-qa-reply-composer, .um-agent-search, .um-course-search, .notes-search, .um-qa-search, .um-settings-search):focus-within {
+  background-color: var(--um-color-field-active);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .um-qa-like[aria-pressed='true'] svg,
   .um-agent-feedback button[aria-pressed='true'] svg { animation: none; }
+}
+
+html[data-reading-size='large'] { --um-font-chat: 16px; --um-font-reading: 18px; --um-font-notes: 17px; }
+html[data-reading-size='larger'] { --um-font-chat: 18px; --um-font-reading: 20px; --um-font-notes: 19px; }
+html[data-reading-size]:not([data-reading-size='standard']) .um-native-agent { --um-font-chat: inherit; }
+html[data-reading-size]:not([data-reading-size='standard']) .notes-workspace .notes-prose,
+html[data-reading-size]:not([data-reading-size='standard']) .notes-workspace .notes-prose p { font-size: var(--um-font-notes); }
+html[data-reading-size]:not([data-reading-size='standard']) .um-native-chat-bubble .prose :is(h1,h2,h3,h4) { font-size: calc(var(--um-font-chat) + 1px); }
+@media (max-width: 767px) {
+  html[data-reading-size]:not([data-reading-size='standard']) .um-native-agent :is(.um-agent-composer, .um-agent-chat-input) textarea { font-size: max(16px, var(--um-font-chat)); }
+}
+@media (min-width: 768px) {
+  html[data-density='compact'] .um-agent-sessions li { min-height: 28px; }
+  html[data-density='compact'] .um-agent-sessions li > button:first-child { padding-block: 3px; }
+  html[data-density='compact'] .um-course-tree-label { padding-block: 4px; }
+  html[data-density='compact'] .um-course-list-item { padding: 8px; }
+  html[data-density='compact'] .notes-list > button { padding-block: 10px; }
+}
+html[data-reduce-motion='true'] .um-app-shell *,
+html[data-reduce-motion='true'] .um-app-shell *::before,
+html[data-reduce-motion='true'] .um-app-shell *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0s !important;
+  scroll-behavior: auto !important;
 }

@@ -1,3 +1,4 @@
+import { useSystemStore, type ExperiencePreferences } from '@/store/useSystemStore';
 import type { Course } from '@/types/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
@@ -37,10 +38,9 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [hasAwarded, setHasAwarded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [subtitlesVisible, setSubtitlesVisible] = useState(false);
+  const { videoSpeed: playbackRate, videoSubtitles: subtitlesVisible, setExperience } = useSystemStore();
   const [showControls, setShowControls] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [videoAspectRatio, setVideoAspectRatio] = useState(16 / 9);
@@ -183,7 +183,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     const idx = SPEEDS.indexOf(playbackRate);
     const next = SPEEDS[(idx + 1) % SPEEDS.length];
     v.playbackRate = next;
-    setPlaybackRate(next);
+    setExperience({ videoSpeed: next as ExperiencePreferences['videoSpeed'] });
   };
 
   // 同步 video 初始状态
@@ -191,8 +191,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     const v = videoRef.current;
     if (!v) return;
     setIsMuted(v.muted);
-    setPlaybackRate(v.playbackRate);
-  }, [course?.video_file]);
+    v.playbackRate = playbackRate;
+  }, [course?.video_file, loading, playbackRate]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -253,6 +253,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     const video = e.currentTarget;
     handleVideoResize(e);
+    video.playbackRate = playbackRate;
     const dur = video.duration || 0;
     setDuration(dur);
     if (Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
@@ -337,7 +338,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
                   <button onClick={cycleSpeed} className="rounded-md px-1.5 py-1 text-xs font-bold text-white/70 hover:text-white transition-colors min-w-[32px] text-center" aria-label="播放速度" title="播放速度">
                     {playbackRate}x
                   </button>
-                  <button onClick={() => setSubtitlesVisible(v => !v)} className={`rounded-md p-1.5 transition-colors ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} aria-label={subtitlesVisible ? '关闭字幕' : '开启字幕'} title={subtitlesVisible ? '关闭字幕' : '开启字幕'}>
+                  <button onClick={() => setExperience({ videoSubtitles: !subtitlesVisible })} className={`rounded-md p-1.5 transition-colors ${subtitlesVisible ? 'bg-white/20 text-white' : 'text-white/70 hover:text-white'}`} aria-label={subtitlesVisible ? '关闭字幕' : '开启字幕'} title={subtitlesVisible ? '关闭字幕' : '开启字幕'}>
                     <ClosedCaptioning className="h-[18px] w-[18px]" />
                   </button>
                   <button onClick={toggleFullscreen} className="rounded-md p-1.5 text-white/70 hover:text-white transition-colors" aria-label={isFullscreen ? '退出全屏' : '全屏'} title={isFullscreen ? '退出全屏' : '全屏'}>

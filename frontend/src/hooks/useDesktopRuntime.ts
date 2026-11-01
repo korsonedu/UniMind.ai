@@ -12,7 +12,7 @@ export function useDesktopRuntime(userId?: number) {
     let active = true;
     const unsubscribeState = desktop.onStateChanged(state => { if (active) useDesktopStore.setState({ state, error: null }); });
     const unsubscribeNavigation = desktop.onNavigate(route => {
-      if (/^\/(?:settings|xiaoyu|courses|notes)(?:[/?#]|$)/.test(route)) navigateRef.current(route);
+      if (/^\/(?:settings|xiaoyu|courses|notes|qa|tests)(?:[/?#]|$)/.test(route)) navigateRef.current(route);
     });
     const sync = async () => {
       try {

@@ -108,6 +108,8 @@
   --um-color-hover: #2a2e35;
   --um-color-selected: #282e46;
   --um-color-disabled: #303640;
+  --um-color-field: #2c2f35;
+  --um-color-field-active: #343840;
   --um-color-success: #86efac;
   --um-color-warning: #fcd34d;
   --um-color-danger: #fca5a5;

@@ -141,6 +141,9 @@ export interface AgentChatLayoutProps {
 // ── Component ──
 
 export default function AgentChatLayout(props: AgentChatLayoutProps) {
+  const sendShortcut = useSystemStore(state => state.sendShortcut);
+  const shouldSend = (event: React.KeyboardEvent<HTMLTextAreaElement>) => event.key === 'Enter' && !event.shiftKey
+    && (sendShortcut === 'enter' || event.ctrlKey || event.metaKey);
   const {
     skills, typewriterWords, chatPlaceholder,
     landingTitle, landingDescription, skillTooltip = '技能',
@@ -406,7 +409,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
               {noteMentions.panel}
               <textarea ref={nativeInputRef} value={input} onChange={event => { setInput(event.target.value); noteMentions.updateQuery(event.target.value, event.target.selectionStart); }}
                 onCompositionStart={() => setIsComposition(true)} onCompositionEnd={() => setIsComposition(false)}
-                onKeyDown={event => { if (noteMentions.onKeyDown(event, isComposing)) return; if (event.key === 'Enter' && !event.shiftKey && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
+                onKeyDown={event => { if (noteMentions.onKeyDown(event, isComposing)) return; if (shouldSend(event) && !isComposing && !event.nativeEvent.isComposing && !loading && input.trim() && bot) { event.preventDefault(); doSend(input); } }}
                 placeholder={chatPlaceholder} aria-label={`和${botDisplayName}对话`} disabled={loading || !bot} />
               <footer>
                 <Popover open={skillOpen} onOpenChange={setSkillOpen}>
@@ -682,7 +685,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   onChange={e => { setInput(e.target.value); noteMentions.updateQuery(e.target.value, e.target.selectionStart); }}
                   onCompositionStart={() => setIsComposition(true)}
                   onCompositionEnd={() => setIsComposition(false)}
-                  onKeyDown={e => { if (noteMentions.onKeyDown(e, isComposing)) return; if (e.key === 'Enter' && !e.shiftKey && !isComposing && !e.nativeEvent.isComposing && !loading && input.trim() && bot) { e.preventDefault(); doSend(input); } }}
+                  onKeyDown={e => { if (noteMentions.onKeyDown(e, isComposing)) return; if (shouldSend(e) && !isComposing && !e.nativeEvent.isComposing && !loading && input.trim() && bot) { e.preventDefault(); doSend(input); } }}
                   placeholder={chatPlaceholder}
                   aria-label={`和${botDisplayName}对话`}
                   autoComplete="off"
@@ -838,7 +841,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 onChange={e => setInput(e.target.value)}
                 onCompositionStart={() => setIsComposition(true)}
                 onCompositionEnd={() => setIsComposition(false)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !isComposing) { e.preventDefault(); doSend(input); } }}
+                onKeyDown={e => { if (shouldSend(e) && !isComposing && !e.nativeEvent.isComposing) { e.preventDefault(); doSend(input); } }}
                 placeholder={chatPlaceholder}
                 autoComplete="off"
                 className="w-full bg-transparent border-none resize-none text-sm px-4 py-3 placeholder:text-muted-foreground/45 focus:outline-none min-h-[80px]"

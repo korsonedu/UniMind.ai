@@ -1,3 +1,4 @@
+import { useSystemStore } from '@/store/useSystemStore';
 import { formatApiErrorToast } from '@/lib/apiError';
 import type { QuizQuestion } from '@/types/api';
 import '@/styles/practice.css';
@@ -30,6 +31,7 @@ const hasAnswer = (val: unknown) => {
 export const TestSessionPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { practiceCount, practicePreference } = useSystemStore();
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -44,15 +46,15 @@ export const TestSessionPage: React.FC = () => {
     kind: 'practice', questionIds: questions.map(question => question.id) });
 
   const questionLimit = useMemo(() => {
-    const raw = Number.parseInt(searchParams.get('count') || '5', 10);
+    const raw = Number.parseInt(searchParams.get('count') || (practiceCount === 'recommended' ? '5' : practiceCount), 10);
     if (!Number.isFinite(raw)) return 5;
     return Math.max(1, Math.min(raw, 50));
-  }, [searchParams]);
+  }, [searchParams, practiceCount]);
 
   const preference = useMemo(() => {
-    const p = searchParams.get('preference') || 'balanced';
+    const p = searchParams.get('preference') || practicePreference;
     return ['balanced', 'new_first', 'review_first'].includes(p) ? p : 'balanced';
-  }, [searchParams]);
+  }, [searchParams, practicePreference]);
 
   const requestParams = useMemo(() => {
     const params = new URLSearchParams({ limit: String(questionLimit), preference });

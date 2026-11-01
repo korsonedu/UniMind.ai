@@ -12,7 +12,6 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 @media (prefers-reduced-motion: reduce) {
   .um-directory-content, .um-directory-content[aria-hidden='true'] { transition: none; }
 }
-.dark .um-app-brand img { mix-blend-mode: screen; }
 .um-app-brand { height: 44px; align-items: center; margin-bottom: 10px; }
 .um-app-rail a[aria-current='page'] { background: var(--um-color-selected); color: var(--um-color-accent); border: 0; box-shadow: none; }
 .um-app-shell :is(button,a):focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: 2px; box-shadow: none; }

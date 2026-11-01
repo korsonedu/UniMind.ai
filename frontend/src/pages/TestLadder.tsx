@@ -1,3 +1,4 @@
+import { useSystemStore } from '@/store/useSystemStore';
 import type { QuizQuestion, KnowledgePoint } from '@/types/api';
 import '@/styles/practice.css';
 import React, { useState, useEffect } from 'react';
@@ -35,9 +36,7 @@ export const TestLadder: React.FC = () => {
   const isMobile = useIsMobile();
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
   const [selectedSubIds, setSelectedSubIds] = useState<number[]>([]);
-  const [preference, setPreference] = useState<string>(() => {
-    try { return localStorage.getItem('quiz_preference') || 'balanced'; } catch { return 'balanced'; }
-  });
+  const { practiceCount, practicePreference: preference, setExperience } = useSystemStore();
 
   // Data State
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -76,7 +75,7 @@ export const TestLadder: React.FC = () => {
   const [loadingStates, setLoadingStates] = useState({ goals: true });
 
   const suggestedCount = Number(goals.recommended_questions);
-  const qCount = qCountEdited ? customQCount : Number.isFinite(suggestedCount) && suggestedCount > 0
+  const qCount = qCountEdited ? customQCount : practiceCount !== 'recommended' ? practiceCount : Number.isFinite(suggestedCount) && suggestedCount > 0
     ? String(Math.max(1, Math.min(50, suggestedCount))) : '5';
 
   const fetchGoals = () => {
@@ -214,7 +213,7 @@ export const TestLadder: React.FC = () => {
 
             <div className="um-practice-subject"><span className="um-practice-label">学科范围</span><Popover><PopoverTrigger asChild><Button variant="outline" aria-label="选择学科">{selectedSubIds.length ? `已选 ${selectedSubIds.length} 个学科` : '全部学科'}<CaretDown size={14} /></Button></PopoverTrigger><PopoverContent className="um-practice-popover" align="start"><h2>学科范围</h2>{subjectList.map((subject: { id: number; name: string }) => <Label key={subject.id}><Checkbox checked={selectedSubIds.includes(subject.id)} onCheckedChange={checked => setSelectedSubIds(prev => checked ? [...prev, subject.id] : prev.filter(id => id !== subject.id))} />{subject.name}</Label>)}{!subjectList.length && <p>暂无可选学科</p>}{selectedSubIds.length > 0 && <Button variant="ghost" onClick={() => setSelectedSubIds([])}>清除筛选</Button>}</PopoverContent></Popover></div>
           </div>
-          <div className="um-practice-start"><div><span className="um-practice-label">练习偏好</span><div className="um-practice-preference" role="group" aria-label="练习偏好">{[{ value: 'balanced', label: '均衡' }, { value: 'new_first', label: '偏新题' }, { value: 'review_first', label: '偏复习' }].map(item => <button type="button" key={item.value} aria-pressed={preference === item.value} onClick={() => { setPreference(item.value); try { localStorage.setItem('quiz_preference', item.value); } catch { /* Browser may deny local storage. */ } }}>{item.label}</button>)}</div></div><Button onClick={startTest} disabled={starting || loadingStates.goals} className="um-practice-primary">{starting ? '正在读取题目…' : '开始练习'}<ArrowRight size={15} /></Button></div>
+          <div className="um-practice-start"><div><span className="um-practice-label">练习偏好</span><div className="um-practice-preference" role="group" aria-label="练习偏好">{[{ value: 'balanced', label: '均衡' }, { value: 'new_first', label: '偏新题' }, { value: 'review_first', label: '偏复习' }].map(item => <button type="button" key={item.value} aria-pressed={preference === item.value} onClick={() => setExperience({ practicePreference: item.value as typeof preference })}>{item.label}</button>)}</div></div><Button onClick={startTest} disabled={starting || loadingStates.goals} className="um-practice-primary">{starting ? '正在读取题目…' : '开始练习'}<ArrowRight size={15} /></Button></div>
         </section>
         {/* Modularized Assessment Flow */}
         <AssessmentDialog 

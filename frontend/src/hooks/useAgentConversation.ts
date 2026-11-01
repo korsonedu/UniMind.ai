@@ -822,7 +822,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             toast.error(payload.message || 'AI 调用失败');
           } else if (payload.done) {
             if (!payload.is_error) {
-              if (!completed) notifyDesktop({ title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: '/xiaoyu' });
+              if (!completed) notifyDesktop({ kind: 'chat', title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: '/xiaoyu' });
               completed = true;
               if (pendingSendsRef.current.get(requestConversationId)?.id === pending.id) {
                 pendingSendsRef.current.delete(requestConversationId);

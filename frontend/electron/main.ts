@@ -29,17 +29,17 @@ let offlineWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let trayMenu: Menu | null = null;
 let quitting = false;
-let preferences = { notifications: false, keepRunning: false, launchAtLogin: false, quickEntry: true };
-const FOCUS_SECONDS = 25 * 60;
+let preferences = { notifications: false, keepRunning: false, launchAtLogin: false, quickEntry: true, focusMinutes: 25, startupPage: '/xiaoyu', notifyChat: true, notifyQA: true, notifyLearning: true };
+let focusDuration = preferences.focusMinutes * 60;
 let focusStatus: 'idle' | 'running' | 'paused' = 'idle';
-let focusRemaining = FOCUS_SECONDS;
+let focusRemaining = focusDuration;
 let focusEndsAt = 0;
 let focusInterval: ReturnType<typeof setInterval> | null = null;
 const noticeTimes = new Map<string, number>();
 protocol.registerSchemesAsPrivileged([{ scheme: 'unimind-offline', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 
 function state() {
-  return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, focus: { status: focusStatus, remaining: focusRemaining, duration: FOCUS_SECONDS }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, offlineSession: offline?.offlineSession() || null, update: updater?.state || { status: 'unconfigured' }, auth: auth?.state || { status: 'idle' } };
+  return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, focus: { status: focusStatus, remaining: focusRemaining, duration: focusDuration }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, offlineSession: offline?.offlineSession() || null, update: updater?.state || { status: 'unconfigured' }, auth: auth?.state || { status: 'idle' } };
 }
 function changed() {
   if (mainWindow && sameOrigin(sourceUrl, mainWindow.webContents.getURL())) mainWindow.webContents.send('desktop:state', state());
@@ -93,8 +93,9 @@ function startFocus() {
     focusStatus = 'running';
     focusEndsAt = Date.now() + focusRemaining * 1000;
   } else {
-    focusRemaining = FOCUS_SECONDS;
-    focusEndsAt = Date.now() + FOCUS_SECONDS * 1000;
+    focusDuration = preferences.focusMinutes * 60;
+    focusRemaining = focusDuration;
+    focusEndsAt = Date.now() + focusDuration * 1000;
     focusStatus = 'running';
   }
   ensureFocusInterval();
@@ -111,7 +112,8 @@ function pauseFocus() {
 }
 function resetFocus() {
   focusStatus = 'idle';
-  focusRemaining = FOCUS_SECONDS;
+  focusDuration = preferences.focusMinutes * 60;
+  focusRemaining = focusDuration;
   focusEndsAt = 0;
   stopFocusInterval();
   updateTray();
@@ -128,14 +130,16 @@ function focusTick() {
   if (focusRemaining <= 0) finishFocus();
 }
 function finishFocus() {
+  const completedMinutes = focusDuration / 60;
   stopFocusInterval();
+  focusDuration = preferences.focusMinutes * 60;
   focusStatus = 'idle';
-  focusRemaining = FOCUS_SECONDS;
+  focusRemaining = focusDuration;
   focusEndsAt = 0;
   updateTray();
   changed();
   if (Notification.isSupported()) {
-    const notice = new Notification({ title: '专注结束', body: '完成了 25 分钟专注，休息一下。' });
+    const notice = new Notification({ title: '专注结束', body: `完成了 ${completedMinutes} 分钟专注，休息一下。` });
     notice.on('click', showMain);
     notice.show();
   }
@@ -157,9 +161,9 @@ function showMain() {
   mainWindow?.show(); mainWindow?.focus();
 }
 function validRoute(value: unknown): value is string {
-  return typeof value === 'string' && value.length <= 500 && /^\/(?:settings|xiaoyu|courses|notes)(?:[/?#]|$)/.test(value)
+  return typeof value === 'string' && value.length <= 500 && /^\/(?:settings|xiaoyu|courses|notes|qa|tests)(?:[/?#]|$)/.test(value)
     && sameOrigin(sourceUrl, new URL(value, sourceUrl).href)
-    && /^\/(?:settings|xiaoyu|courses|notes)(?:\/|$)/.test(new URL(value, sourceUrl).pathname) && !/[\\\r\n]/.test(value);
+    && /^\/(?:settings|xiaoyu|courses|notes|qa|tests)(?:\/|$)/.test(new URL(value, sourceUrl).pathname) && !/[\\\r\n]/.test(value);
 }
 let pendingRoute = '';
 function navigate(route: string) {
@@ -210,7 +214,7 @@ function updateTray() {
     tray.setContextMenu(trayMenu);
   }
   trayMenu!.getMenuItemById('focus-time')!.label = `${focusStatus === 'running' ? '专注中' : focusStatus === 'paused' ? '已暂停' : '专注'} · ${focusText(focusRemaining)}`;
-  trayMenu!.getMenuItemById('focus-action')!.label = focusStatus === 'running' ? '暂停专注' : focusStatus === 'paused' ? '继续专注' : '开始 25 分钟专注';
+  trayMenu!.getMenuItemById('focus-action')!.label = focusStatus === 'running' ? '暂停专注' : focusStatus === 'paused' ? '继续专注' : `开始 ${preferences.focusMinutes} 分钟专注`;
   trayMenu!.getMenuItemById('focus-reset')!.enabled = focusStatus !== 'idle';
   updateTrayTitle();
 }
@@ -218,13 +222,22 @@ function notify(value: unknown) {
   if (!value || typeof value !== 'object') throw new Error('无效通知');
   const item = value as Record<string, unknown>;
   if (typeof item.title !== 'string' || typeof item.body !== 'string' || !validRoute(item.route)) throw new Error('无效通知');
-  if (!preferences.notifications || mainWindow?.isFocused() || !Notification.isSupported()) return;
+  const kind = item.kind ?? 'learning';
+  if (!['chat', 'qa', 'learning'].includes(kind as string)) throw new Error('无效通知类别');
+  const enabled = kind === 'chat' ? preferences.notifyChat : kind === 'qa' ? preferences.notifyQA : preferences.notifyLearning;
+  if (!preferences.notifications || !enabled || mainWindow?.isFocused() || !Notification.isSupported()) return;
   const key = `${item.title}:${item.route}`;
   if (Date.now() - (noticeTimes.get(key) || 0) < 60000) return;
   noticeTimes.set(key, Date.now());
   if (noticeTimes.size > 100) noticeTimes.delete(noticeTimes.keys().next().value!);
   const notice = new Notification({ title: item.title.slice(0, 80), body: item.body.slice(0, 160), silent: true });
   notice.on('click', () => navigate(item.route as string)); notice.show();
+}
+function validPreference(key: string, value: unknown) {
+  if (['notifications', 'keepRunning', 'launchAtLogin', 'quickEntry', 'notifyChat', 'notifyQA', 'notifyLearning'].includes(key)) return typeof value === 'boolean';
+  if (key === 'focusMinutes') return typeof value === 'number' && [15, 25, 45, 60].includes(value);
+  if (key === 'startupPage') return ['/xiaoyu', '/courses', '/notes'].includes(value as string);
+  return false;
 }
 function installIPC() {
   const handlers: Record<string, (value: unknown) => unknown> = {
@@ -235,11 +248,11 @@ function installIPC() {
     logout: async () => { await auth.cancel(); await offline.logout(); return state(); },
     updatePreferences: async (value: unknown) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('无效桌面设置');
-      for (const [key, enabled] of Object.entries(value)) {
-        if (!['notifications', 'keepRunning', 'launchAtLogin', 'quickEntry'].includes(key) || typeof enabled !== 'boolean') throw new Error('无效桌面设置');
-        preferences[key as keyof typeof preferences] = enabled;
-      }
-      await writeFile(path.join(app.getPath('userData'), 'desktop-preferences.json'), JSON.stringify(preferences));
+      if (!Object.entries(value).every(([key, setting]) => validPreference(key, setting))) throw new Error('无效桌面设置');
+      const next = { ...preferences, ...value };
+      await writeFile(path.join(app.getPath('userData'), 'desktop-preferences.json'), JSON.stringify(next));
+      preferences = next;
+      if (focusStatus === 'idle') focusRemaining = focusDuration = preferences.focusMinutes * 60;
       applyLaunchAtLogin();
       registerGlobalShortcuts();
       updateTray(); changed(); return state();
@@ -267,7 +280,11 @@ function previewMode(): boolean {
 }
 
 function entryUrl(): string {
-  if (app.isPackaged && !previewMode()) return new URL('/login', RELEASE_URL).href;
+  if (app.isPackaged && !previewMode()) {
+    const target = new URL('/login', RELEASE_URL);
+    target.searchParams.set('next', preferences.startupPage);
+    return target.href;
+  }
   if (process.env.UNIMIND_DESKTOP_URL) return process.env.UNIMIND_DESKTOP_URL;
   if (previewMode()) return PREVIEW_URL;
   return app.isPackaged ? RELEASE_URL : DEV_URL;
@@ -407,7 +424,7 @@ function installMenu(): void {
     { label: '新建笔记', click: () => { showMain(); navigate('/notes?new=1'); } },
     { label: '桌面设置', accelerator: 'CommandOrControl+,', click: () => navigate('/settings?section=desktop') },
     { type: 'separator' }, { label: '专注', submenu: [
-      { label: '开始 / 暂停 25 分钟专注', click: toggleFocus },
+      { label: '开始 / 暂停专注', click: toggleFocus },
       { label: '重置专注', click: resetFocus },
     ] },
     { type: 'separator' }, { label: '离线课程库', accelerator: 'CommandOrControl+Shift+O', click: () => openOffline() },
@@ -448,19 +465,18 @@ if (!gotLock) {
     if (!validSource(sourceUrl, allowsDevelopment(sourceUrl))) throw new Error('桌面客户端只允许 HTTPS 站点或本机开发地址');
     try {
       const saved = JSON.parse(await readFile(path.join(app.getPath('userData'), 'desktop-preferences.json'), 'utf8'));
-      preferences = {
-        notifications: saved.notifications === true,
-        keepRunning: saved.keepRunning === true,
-        launchAtLogin: saved.launchAtLogin === true,
-        quickEntry: saved.quickEntry !== false,
-      };
+      if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+        preferences = { ...preferences, ...Object.fromEntries(Object.entries(saved).filter(([key, value]) => validPreference(key, value))) };
+      }
     } catch { /* Defaults require explicit opt-in. */ }
+    focusRemaining = focusDuration = preferences.focusMinutes * 60;
+    sourceUrl = entryUrl();
     offline = new OfflineLibrary(sourceUrl, changed, () => { offlineWindow?.close(); });
     await offline.restore();
     updater = new DesktopUpdater(previewMode(), changed);
     auth = new DesktopAuth(sourceUrl, changed, () => {
       showMain();
-      void mainWindow?.loadURL(new URL('/account-callback?next=/xiaoyu', sourceUrl).href).catch(() => {});
+      void mainWindow?.loadURL(new URL(`/account-callback?next=${encodeURIComponent(preferences.startupPage)}`, sourceUrl).href).catch(() => {});
     });
     const privateSession = session.fromPartition('unimind-offline');
     privateSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
