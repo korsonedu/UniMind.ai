@@ -216,6 +216,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
       }, { timeout: Math.max(1, questions.length) * 130000 });
       setSubmitResult(res.data);
       setPhase('results');
+      if (userId && sessionId && offlineCacheSupported()) void cachePractice(userId, sessionId, questions, res.data);
       // Clean up localStorage
       localStorage.removeItem(`practice:${sessionId}:answers`);
     } catch (err: unknown) {
