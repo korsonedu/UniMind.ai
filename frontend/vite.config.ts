@@ -29,7 +29,7 @@ export default defineConfig({
           'index.html',
           'manifest.webmanifest',
           'assets/*.{js,css}',
-          'assets/dm-sans-*.woff2',
+          'assets/*.woff2',
           'pwa-192x192.png',
           'pwa-512x512.png',
           'apple-touch-icon.png',
