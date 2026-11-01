@@ -170,7 +170,17 @@ export const MainLayout: React.FC = () => {
       </header>
       <div className="um-window-body flex flex-1 min-h-0 overflow-hidden">
       <aside data-tour="sidebar" aria-label="应用导航" className={cn('um-app-rail relative flex-col p-1.5 z-0 shrink-0 hidden md:flex w-[58px]', railHidden && 'md:hidden')}>
-        <div className="um-app-brand flex justify-center"><Link to="/xiaoyu" className="shrink-0" aria-label="返回小宇"><div className="h-9 w-9 rounded-lg overflow-hidden"><img src="/unimind_logo_small.png" alt="UniMind.ai" className="w-full h-full object-contain brand-logo-invert" /></div></Link></div>
+        <div className="um-app-brand flex justify-center"><Link to="/xiaoyu" className="flex h-9 w-9 shrink-0 items-center justify-center" aria-label="返回小宇">
+          <svg viewBox="0 0 100 100" className="h-8 w-8" aria-hidden="true" focusable="false">
+            <defs><linearGradient id="um-sidebar-brand-gradient" gradientUnits="userSpaceOnUse" x1="15" y1="90" x2="90" y2="10"><stop stopColor="#2f6cea" /><stop offset=".5" stopColor="#535fe7" /><stop offset="1" stopColor="#9252d8" /></linearGradient></defs>
+            <g fill="url(#um-sidebar-brand-gradient)">
+              <path d="M18 36C18 13 48 13 48 36C48 13 78 13 78 36V61C78 79 67 89 48 89S18 79 18 61Z" fill="none" stroke="url(#um-sidebar-brand-gradient)" strokeWidth="12" strokeLinejoin="round" />
+              <rect x="33" y="48" width="8" height="13" rx="4" />
+              <rect x="56" y="48" width="8" height="13" rx="4" />
+              <circle cx="90" cy="14" r="5" />
+            </g>
+          </svg>
+        </Link></div>
         <nav aria-label="功能导航" className="flex-1 min-h-0 overflow-y-auto space-y-1.5">
           {navItems.map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={item.to} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}><NavIcon position={item.icon} /><span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true"><NavIcon position={item.icon} /><span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && ' · 暂未开通'}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>

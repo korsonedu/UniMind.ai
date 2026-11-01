@@ -4,10 +4,11 @@ import { formatApiErrorToast } from '@/lib/apiError';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useSystemStore } from '@/store/useSystemStore';
-import { ArrowCounterClockwise, FloppyDisk, CreditCard, ArrowRight, MagnifyingGlass, UserCircle, Palette, Notebook, ShieldCheck, Database, DownloadSimple, Desktop } from '@phosphor-icons/react';
+import { useSystemStore, DEFAULT_EXPERIENCE, type ExperiencePreferences, type ThemeMode } from '@/store/useSystemStore';
+import { ArrowCounterClockwise, FloppyDisk, CreditCard, ArrowRight, MagnifyingGlass, UserCircle, Palette, Notebook, ShieldCheck, Database, DownloadSimple, Desktop, ChatCircle, GraduationCap } from '@phosphor-icons/react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import api from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
@@ -18,7 +19,9 @@ import '@/styles/settings.css';
 const SECTIONS = [
   { id: 'desktop', label: '桌面应用', icon: Desktop, keywords: '通知 后台 托盘 离线 下载 快捷键 更新 版本' },
   { id: 'profile', label: '个人资料', icon: UserCircle, keywords: '昵称 简介 头像 风格 账号' },
-  { id: 'appearance', label: '外观', icon: Palette, keywords: '主题 浅色 深色 界面' },
+  { id: 'appearance', label: '外观与阅读', icon: Palette, keywords: '主题 浅色 深色 系统 界面 字号 密度 动效' },
+  { id: 'chat', label: '对话与操作', icon: ChatCircle, keywords: '发送 Enter 快捷键 工具 过程 折叠 展开' },
+  { id: 'learning', label: '学习与播放', icon: GraduationCap, keywords: '练习 题量 新题 复习 课程 倍速 字幕' },
   { id: 'notes', label: '笔记与小宇', icon: Notebook, keywords: 'AI 阅读 笔记 了解' },
   { id: 'security', label: '账户安全', icon: ShieldCheck, keywords: '邮箱 密码 修改' },
   { id: 'data', label: '数据管理', icon: Database, keywords: '导出 下载 注销 删除 隐私 协议' },
@@ -29,9 +32,7 @@ const AVATAR_STYLES: Record<string, string> = {
 };
 
 export const Settings: React.FC = () => {
-  const theme = useSystemStore(state => state.theme);
-  const setTheme = useSystemStore(state => state.setTheme);
-  const setPageHeader = useSystemStore(state => state.setPageHeader);
+  const { theme, setTheme, setPageHeader, readingSize, density, reduceMotion, sendShortcut, toolDetails, practiceCount, practicePreference, videoSpeed, videoSubtitles, setExperience } = useSystemStore();
   const user = useAuthStore(state => state.user);
   const updateUser = useAuthStore(state => state.updateUser);
   const [params, setParams] = useSearchParams();
@@ -137,8 +138,38 @@ export const Settings: React.FC = () => {
           <footer className="um-settings-footer"><Button type="submit" disabled={!!busy}><FloppyDisk size={16} />{busy === 'profile' ? '保存中…' : '保存个人资料'}</Button></footer>
         </form>}
         {current?.id === 'appearance' && <>
+          <p className="um-settings-preference-note">仅此设备，更改后立即生效并自动保存。</p>
           <h3 className="um-settings-group-title">界面</h3>
-          <section className="um-settings-group"><div className="um-settings-row"><div><label htmlFor="settings-appearance">界面外观</label><p>为当前客户端选择浅色或深色界面。</p></div><select id="settings-appearance" value={theme} onChange={event => setTheme(event.target.value as 'light' | 'dark')}><option value="light">浅色</option><option value="dark">深色</option></select></div></section>
+          <section className="um-settings-group">
+            <div className="um-settings-row"><div><label htmlFor="settings-appearance">界面外观</label><p>选择浅色、深色，或随系统外观自动切换。</p></div><select id="settings-appearance" value={theme} onChange={event => setTheme(event.target.value as ThemeMode)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
+            <div className="um-settings-row"><div><label htmlFor="settings-reading-size">阅读字号</label><p>调整对话、笔记和课程正文的文字大小。</p></div><select id="settings-reading-size" value={readingSize} onChange={event => setExperience({ readingSize: event.target.value as ExperiencePreferences['readingSize'] })}><option value="standard">标准</option><option value="large">较大</option><option value="larger">更大</option></select></div>
+            <div className="um-settings-row"><div><label htmlFor="settings-density">列表密度</label><p>调整桌面端会话、课程和笔记列表的行距，手机保留触控间距。</p></div><select id="settings-density" value={density} onChange={event => setExperience({ density: event.target.value as ExperiencePreferences['density'] })}><option value="standard">标准</option><option value="compact">紧凑</option></select></div>
+            <div className="um-settings-row"><div><label htmlFor="settings-reduce-motion">减少界面动效</label><p>减少工作区过渡和回复文字淡入。系统已开启减少动态效果时始终遵循。</p></div><Switch id="settings-reduce-motion" checked={reduceMotion} onCheckedChange={value => setExperience({ reduceMotion: value })} /></div>
+          </section>
+          <footer className="um-settings-footer"><Button type="button" variant="outline" onClick={() => { setTheme('system'); setExperience({ readingSize: DEFAULT_EXPERIENCE.readingSize, density: DEFAULT_EXPERIENCE.density, reduceMotion: DEFAULT_EXPERIENCE.reduceMotion }); toast.success('已恢复外观默认设置'); }}><ArrowCounterClockwise size={16} />恢复外观默认</Button></footer>
+        </>}
+        {current?.id === 'chat' && <>
+          <p className="um-settings-preference-note">仅此设备，更改后立即生效并自动保存。</p>
+          <h3 className="um-settings-group-title">输入与过程</h3>
+          <section className="um-settings-group">
+            <div className="um-settings-row"><div><label htmlFor="settings-send-shortcut">发送消息</label><p>组合键模式下 Enter 换行；两种模式都保留 Shift+Enter 换行。</p></div><select id="settings-send-shortcut" value={sendShortcut} onChange={event => setExperience({ sendShortcut: event.target.value as ExperiencePreferences['sendShortcut'] })}><option value="enter">Enter 发送</option><option value="modifier-enter">⌘ / Ctrl+Enter 发送</option></select></div>
+            <div className="um-settings-row"><div><label htmlFor="settings-tool-details">工具过程</label><p>自动模式在成功后 3 秒折叠。失败提示与需要你作答、确认的卡片始终保留。</p></div><select id="settings-tool-details" value={toolDetails} onChange={event => setExperience({ toolDetails: event.target.value as ExperiencePreferences['toolDetails'] })}><option value="auto">完成后自动折叠</option><option value="expanded">默认保持展开</option></select></div>
+          </section>
+          <footer className="um-settings-footer"><Button type="button" variant="outline" onClick={() => { setExperience({ sendShortcut: DEFAULT_EXPERIENCE.sendShortcut, toolDetails: DEFAULT_EXPERIENCE.toolDetails }); toast.success('已恢复对话默认设置'); }}><ArrowCounterClockwise size={16} />恢复对话默认</Button></footer>
+        </>}
+        {current?.id === 'learning' && <>
+          <p className="um-settings-preference-note">仅此设备，自动保存。练习中的临时题量和打开链接指定的参数优先。</p>
+          <h3 className="um-settings-group-title">练习</h3>
+          <section className="um-settings-group">
+            <div className="um-settings-row"><div><label htmlFor="settings-practice-count">默认题量</label><p>“推荐”沿用练习首页的建议题量，开始前仍可调整。</p></div><select id="settings-practice-count" value={practiceCount} onChange={event => setExperience({ practiceCount: event.target.value as ExperiencePreferences['practiceCount'] })}><option value="recommended">按学习情况推荐</option><option value="5">5 题</option><option value="10">10 题</option><option value="20">20 题</option></select></div>
+            <div className="um-settings-row"><div><label htmlFor="settings-practice-preference">选题偏好</label><p>与练习首页的偏好同步，不改变考试或错题回顾的题目。</p></div><select id="settings-practice-preference" value={practicePreference} onChange={event => setExperience({ practicePreference: event.target.value as ExperiencePreferences['practicePreference'] })}><option value="balanced">均衡</option><option value="new_first">偏新题</option><option value="review_first">偏复习</option></select></div>
+          </section>
+          <h3 className="um-settings-group-title">在线课程播放</h3>
+          <section className="um-settings-group">
+            <div className="um-settings-row"><div><label htmlFor="settings-video-speed">默认倍速</label><p>播放器中调整倍速也会记住，下次打开课程继续使用。</p></div><select id="settings-video-speed" value={videoSpeed} onChange={event => setExperience({ videoSpeed: Number(event.target.value) as ExperiencePreferences['videoSpeed'] })}><option value="1">1x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2x</option></select></div>
+            <div className="um-settings-row"><div><label htmlFor="settings-video-subtitles">默认显示字幕</label><p>有字幕时显示。播放器中的字幕开关也会保存为偏好。</p></div><Switch id="settings-video-subtitles" checked={videoSubtitles} onCheckedChange={value => setExperience({ videoSubtitles: value })} /></div>
+          </section>
+          <footer className="um-settings-footer"><Button type="button" variant="outline" onClick={() => { setExperience({ practiceCount: DEFAULT_EXPERIENCE.practiceCount, practicePreference: DEFAULT_EXPERIENCE.practicePreference, videoSpeed: DEFAULT_EXPERIENCE.videoSpeed, videoSubtitles: DEFAULT_EXPERIENCE.videoSubtitles }); toast.success('已恢复学习默认设置'); }}><ArrowCounterClockwise size={16} />恢复学习默认</Button></footer>
         </>}
         {current?.id === 'notes' && <>
           <h3 className="um-settings-group-title">笔记参考</h3>

@@ -5,21 +5,23 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 import { NoteSources } from '@/pages/notes/NoteSources';
+import { useSystemStore } from '@/store/useSystemStore';
 
 function StreamingText({ content }: { content: string }) {
+  const reduceMotion = useSystemStore(state => state.reduceMotion);
   const root = React.useRef<HTMLDivElement>(null);
   const previous = React.useRef('');
   React.useLayoutEffect(() => {
     const start = content.startsWith(previous.current) ? Array.from(previous.current).length : 0;
     previous.current = content;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const children = Array.from(root.current?.children ?? []);
     const animations = children.slice(Math.max(start, children.length - 4)).map((child, index) =>
       child.animate([{ opacity: .8, filter: 'blur(1px)' }, { opacity: 1, filter: 'blur(0)' }], {
         duration: 100, delay: index * 10, easing: 'ease-out', fill: 'backwards',
       }));
     return () => animations.forEach(animation => animation.cancel());
-  }, [content]);
+  }, [content, reduceMotion]);
   return <div ref={root} className="um-streaming-text" aria-live="polite">{Array.from(content).map((char, index) => char === '\n' ? <br key={index} /> : <span key={index}>{char}</span>)}</div>;
 }
 

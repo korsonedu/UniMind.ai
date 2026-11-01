@@ -9,7 +9,7 @@ export interface DesktopLoginState {
 export interface DesktopState {
   version: string;
   platform: string;
-  preferences: { notifications: boolean; keepRunning: boolean; launchAtLogin?: boolean; quickEntry?: boolean };
+  preferences: { notifications: boolean; keepRunning: boolean; launchAtLogin?: boolean; quickEntry?: boolean; focusMinutes?: number; startupPage?: '/xiaoyu' | '/courses' | '/notes'; notifyChat?: boolean; notifyQA?: boolean; notifyLearning?: boolean };
   focus?: { status: 'idle' | 'running' | 'paused'; remaining: number; duration: number };
   downloads: { courseId: number; title: string; status: 'downloading' | 'paused' | 'ready' | 'failed'; receivedBytes: number; totalBytes: number; expiresAt?: number; error?: string }[];
   storage?: { usedBytes: number };
@@ -25,7 +25,7 @@ interface DesktopBridge {
   syncIdentity(): Promise<DesktopState>;
   logout(): Promise<DesktopState>;
   updatePreferences(value: Partial<DesktopState['preferences']>): Promise<DesktopState>;
-  notify(value: { title: string; body: string; route: string }): Promise<void>;
+  notify(value: { title: string; body: string; route: string; kind?: 'chat' | 'qa' | 'learning' }): Promise<void>;
   downloadCourse(courseId: number): Promise<DesktopState>;
   pauseDownload?(courseId: number): Promise<DesktopState>;
   removeDownload(courseId: number): Promise<DesktopState>;
@@ -42,6 +42,6 @@ interface DesktopBridge {
 }
 declare global { interface Window { unimindDesktop?: DesktopBridge } }
 export const useDesktopStore = create<{ state: DesktopState | null; error: string | null }>(() => ({ state: null, error: null }));
-export function notifyDesktop(value: { title: string; body: string; route: string }) {
+export function notifyDesktop(value: { title: string; body: string; route: string; kind?: 'chat' | 'qa' | 'learning' }) {
   void window.unimindDesktop?.notify(value).catch(() => { /* System notifications are best effort. */ });
 }

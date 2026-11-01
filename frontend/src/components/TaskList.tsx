@@ -3,6 +3,7 @@ import { Check, Circle, Spinner, X, CaretRight } from '@phosphor-icons/react';
 import { Collapse } from './ui/collapse';
 import { cn } from '@/lib/utils';
 import { shouldExpandToolRun, type TaskListData } from '@/types/toolRun';
+import { useSystemStore } from '@/store/useSystemStore';
 
 interface TaskListProps {
   data: TaskListData;
@@ -15,7 +16,13 @@ function formatDuration(ms: number): string {
 }
 
 export function TaskList({ data, onComplete }: TaskListProps) {
+  const toolDetails = useSystemStore(state => state.toolDetails);
   const [collapsed, setCollapsed] = useState(false);
+  const [previousToolDetails, setPreviousToolDetails] = useState(toolDetails);
+  if (previousToolDetails !== toolDetails) {
+    setPreviousToolDetails(toolDetails);
+    if (toolDetails === 'expanded') setCollapsed(false);
+  }
   const previousRunId = useRef(data.run_id);
   const contentId = useId();
   const [completion, setCompletion] = useState(() => {
@@ -40,12 +47,12 @@ export function TaskList({ data, onComplete }: TaskListProps) {
   useEffect(() => {
     if (allSucceeded) {
       const timer = setTimeout(() => {
-        setCollapsed(true);
+        if (toolDetails === 'auto') setCollapsed(true);
         onComplete?.();
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [allSucceeded, onComplete]);
+  }, [allSucceeded, onComplete, toolDetails]);
 
   // Track newly completed items for animation
   const doneIds = new Set(data.items.filter(item => item.status === 'succeeded').map(item => item.id));

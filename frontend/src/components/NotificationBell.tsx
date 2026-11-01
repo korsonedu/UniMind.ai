@@ -53,10 +53,21 @@ export const NotificationBell = () => {
   useEffect(() => {
     if (!desktopNotifications || !userId || isFetching || typeof unreadData?.unread_count !== 'number') return;
     const count = unreadData.unread_count;
-    if (previousUnread.current !== null && count > previousUnread.current) {
-      void notifyDesktop({ title: '新的学习消息', body: '打开 UniMind 查看通知。', route: '/xiaoyu' });
-    }
+    const added = previousUnread.current === null ? 0 : count - previousUnread.current;
     previousUnread.current = count;
+    if (added <= 0) return;
+    let active = true;
+    void api.get('/notifications/').then(({ data }) => {
+      if (!active || !Array.isArray(data)) return;
+      const supportsCategories = useDesktopStore.getState().state?.preferences.notifyQA !== undefined;
+      const latest = (data as typeof notifications).filter(item => !item.is_read).slice(0, added);
+      for (const item of latest) {
+        const kind = item.ntype === 'qa_reply' ? 'qa' : 'learning';
+        const route = supportsCategories && item.link && /^\/(?:xiaoyu|courses|notes|qa|tests)(?:[/?#]|$)/.test(item.link) ? item.link : '/xiaoyu';
+        notifyDesktop({ kind, title: item.title, body: '打开 UniMind 查看通知。', route });
+      }
+    }).catch(() => { /* The notification center remains available if polling fails. */ });
+    return () => { active = false; };
   }, [desktopNotifications, userId, isFetching, unreadData]);
 
   // Sync React Query data to store (markAsRead still calls fetchUnreadCount internally)
