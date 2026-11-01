@@ -1,26 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 
-const STORAGE_KEY = 'unimind-landing-entrance-v1';
-
 export function LandingEntrance() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [phase, setPhase] = useState<'gather' | 'form' | 'reveal' | 'done'>(() => {
-    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
-    let seen = false;
-    try { seen = sessionStorage.getItem(STORAGE_KEY) === '1'; } catch { /* Storage may be unavailable. */ }
-    return seen || window.matchMedia('(prefers-reduced-motion: reduce)').matches || connection?.saveData || ['slow-2g', '2g', '3g'].includes(connection?.effectiveType ?? '') ? 'done' : 'gather';
-  });
+  const [phase, setPhase] = useState<'gather' | 'form' | 'reveal' | 'done'>(() =>
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'done' : 'gather');
   const active = phase !== 'done';
 
   useEffect(() => {
-    if (!active) return;
-    try { sessionStorage.setItem(STORAGE_KEY, '1'); } catch { /* Continue without persisting the visit. */ }
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!active || !canvas) return;
     const context = canvas.getContext('2d');
     if (!context) { setPhase('done'); return; }
-    const timeScale = 800 / 3450;
-    const at = (ms: number) => ms * timeScale;
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const samples = window.innerWidth <= 700 ? 34 : 65;
     const glyphs = ['0', '1', '{', '}', '<', '>', '/', ';', ':', '=', '()', '[]', '=>', '&&'];
@@ -74,12 +64,12 @@ export function LandingEntrance() {
     const draw = (time: number) => {
       if (!document.hidden) elapsed += previousTime ? Math.min(time - previousTime, 48) : 0;
       previousTime = time;
-      const gather = ease(elapsed / at(1250));
-      const letterform = letters.length ? ease((elapsed - at(1050)) / at(650)) : 0;
-      const burst = Math.max(0, Math.min(1, (elapsed - at(2100)) / at(1100)));
+      const gather = ease(elapsed / 1250);
+      const letterform = letters.length ? ease((elapsed - 1050) / 650) : 0;
+      const burst = Math.max(0, Math.min(1, (elapsed - 2100) / 1100));
       const spread = ease(burst);
-      const opacity = ease(elapsed / at(180)) * (1 - ease((elapsed - at(2850)) / at(600)));
-      const cover = 1 - ease((elapsed - at(2050)) / at(650));
+      const opacity = ease(elapsed / 180) * (1 - ease((elapsed - 2850) / 600));
+      const cover = 1 - ease((elapsed - 2050) / 650);
       const scale = Math.min(width * .47, height * .58);
       const centerX = width * .5, centerY = height * .48;
       const seconds = elapsed / 1000;
@@ -138,7 +128,7 @@ export function LandingEntrance() {
         context.fillStyle = particle.warm ? `rgba(174, 220, 255, ${alpha})` : `rgba(223, 234, 244, ${alpha})`;
         context.fillText(glyphs[(index + (letterform < .9 ? Math.floor(elapsed / 110) : 0)) % glyphs.length], point.x, point.y);
       });
-      const letterOpacity = ease((elapsed - at(1450)) / at(300)) * (1 - ease((elapsed - at(2350)) / at(550)));
+      const letterOpacity = ease((elapsed - 1450) / 300) * (1 - ease((elapsed - 2350) / 550));
       if (letterOpacity > 0) {
         context.fillStyle = `rgba(218, 234, 247, ${letterOpacity * .82})`;
         context.font = '5px ui-monospace, SFMono-Regular, Consolas, monospace';
@@ -151,9 +141,9 @@ export function LandingEntrance() {
         });
       }
       previous = points;
-      if (!formed && elapsed >= at(1550)) { formed = true; setPhase('form'); }
-      if (!revealed && elapsed >= at(2050)) { revealed = true; setPhase('reveal'); }
-      if (elapsed < at(3450)) frame = requestAnimationFrame(draw);
+      if (!formed && elapsed >= 1550) { formed = true; setPhase('form'); }
+      if (!revealed && elapsed >= 2050) { revealed = true; setPhase('reveal'); }
+      if (elapsed < 3450) frame = requestAnimationFrame(draw);
       else setPhase('done');
     };
     const reduceMotion = () => { if (preference.matches) setPhase('done'); };
