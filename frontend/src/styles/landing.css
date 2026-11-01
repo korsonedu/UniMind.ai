@@ -113,16 +113,6 @@
 @keyframes landing-edge-spectrum { 0%,100% { opacity: 0; transform: translateX(0); } 20% { opacity: .9; transform: translateX(-.8px); } 55% { opacity: .65; transform: translateX(.8px); } }
 .landing-entrance { position: fixed; inset: 0; z-index: 100; display: block; width: 100%; height: 100%; pointer-events: none; }
 .um-landing:has(.landing-entrance) { z-index: 60; }
-@keyframes landing-header-reveal { from { opacity: 0; filter: blur(6px); transform: translateY(-12px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
-@keyframes landing-hero-reveal { from { opacity: 0; filter: blur(12px); transform: translateY(32px); } to { opacity: 1; filter: blur(0); transform: translateY(0); } }
-@media (prefers-reduced-motion: no-preference) {
-  .um-landing:has(.landing-entrance:is([data-phase='gather'],[data-phase='form'])) > :is(header, main, footer) { visibility: hidden; }
-  .um-landing:has(.landing-entrance[data-phase='reveal']) > .landing-header { animation: landing-header-reveal .5s cubic-bezier(.16,1,.3,1) both; }
-  .um-landing:has(.landing-entrance[data-phase='reveal']) .landing-hero-invitation { animation: landing-hero-reveal .55s .08s cubic-bezier(.16,1,.3,1) both; }
-  .um-landing:has(.landing-entrance[data-phase='reveal']) .landing-hero-statement > span { animation: landing-hero-reveal .65s .18s cubic-bezier(.16,1,.3,1) both; }
-  .um-landing:has(.landing-entrance[data-phase='reveal']) .landing-hero-statement > span:last-child { animation-delay: .31s; }
-  .um-landing:has(.landing-entrance[data-phase='reveal']) .landing-hero-copy > .landing-button { animation: landing-hero-reveal .55s .44s cubic-bezier(.16,1,.3,1) both; }
-}
 @media (max-width: 1000px) {
   .landing-wrap { width: calc(100% - 64px); }
 }
