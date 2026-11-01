@@ -27,6 +27,7 @@ let updater: DesktopUpdater;
 let auth: DesktopAuth;
 let offlineWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let trayMenu: Menu | null = null;
 let quitting = false;
 let preferences = { notifications: false, keepRunning: false, launchAtLogin: false, quickEntry: true };
 const FOCUS_SECONDS = 25 * 60;
@@ -47,11 +48,35 @@ function changed() {
 function focusText(seconds: number) {
   return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 }
+const trayImages = new Map<string, Electron.NativeImage>();
+function trayIcon(paused = false) {
+  const file = process.platform === 'darwin' ? (paused ? 'trayPausedTemplate.png' : 'trayTemplate.png') : 'tray.png';
+  if (!trayImages.has(file)) {
+    const image = nativeImage.createFromPath(path.join(app.getAppPath(), file));
+    if (process.platform === 'darwin') image.setTemplateImage(true);
+    trayImages.set(file, image);
+  }
+  return trayImages.get(file)!;
+}
+function trayLabel(seconds: number) {
+  return seconds >= 60 ? `${Math.ceil(seconds / 60)}m` : `${seconds}s`;
+}
+let trayPaused = false;
 function updateTrayTitle() {
   if (!tray) return;
-  const label = focusStatus === 'idle' ? '' : focusText(focusRemaining);
-  if (process.platform === 'darwin') tray.setTitle(label);
-  tray.setToolTip(label ? `UniMind · 专注 ${label}` : 'UniMind');
+  const active = focusStatus !== 'idle';
+  const paused = focusStatus === 'paused';
+  if (process.platform === 'darwin') {
+    if (paused !== trayPaused) {
+      tray.setImage(trayIcon(paused));
+      trayPaused = paused;
+    }
+    tray.setTitle(active ? trayLabel(focusRemaining) : '', { fontType: 'monospacedDigit' });
+  }
+  tray.setToolTip(active ? `UniMind · ${paused ? '已暂停' : '专注中'} ${focusText(focusRemaining)}` : 'UniMind');
+}
+function maybeQuit() {
+  if (process.platform !== 'darwin' && !preferences.keepRunning && focusStatus === 'idle' && !mainWindow && !offlineWindow) app.quit();
 }
 function stopFocusInterval() {
   if (focusInterval) clearInterval(focusInterval);
@@ -91,6 +116,7 @@ function resetFocus() {
   stopFocusInterval();
   updateTray();
   changed();
+  maybeQuit();
 }
 function toggleFocus() {
   if (focusStatus === 'running') pauseFocus(); else startFocus();
@@ -98,7 +124,7 @@ function toggleFocus() {
 function focusTick() {
   if (focusStatus !== 'running') return;
   focusRemaining = Math.max(0, Math.ceil((focusEndsAt - Date.now()) / 1000));
-  updateTrayTitle();
+  updateTray();
   if (focusRemaining <= 0) finishFocus();
 }
 function finishFocus() {
@@ -113,6 +139,7 @@ function finishFocus() {
     notice.on('click', showMain);
     notice.show();
   }
+  maybeQuit();
 }
 function applyLaunchAtLogin() {
   if (!app.isPackaged || !['darwin', 'win32'].includes(process.platform)) return;
@@ -165,23 +192,26 @@ function openOffline(id?: number) {
 }
 function updateTray() {
   const shouldShow = preferences.keepRunning || focusStatus !== 'idle';
-  if (!shouldShow) { tray?.destroy(); tray = null; return; }
+  if (!shouldShow) { tray?.destroy(); tray = null; trayMenu = null; trayPaused = false; return; }
   if (!tray) {
-    tray = new Tray(nativeImage.createFromPath(path.join(app.getAppPath(), 'tray.png')));
+    tray = new Tray(trayIcon());
+    trayPaused = false;
     tray.on('click', showMain);
+    trayMenu = Menu.buildFromTemplate([
+      { label: '打开 UniMind', icon: trayIcon().resize({ width: 16, height: 16 }), click: showMain },
+      { label: '离线课程库', click: () => openOffline() },
+      { type: 'separator' },
+      { id: 'focus-time', label: '', enabled: false },
+      { id: 'focus-action', label: '', click: toggleFocus },
+      { id: 'focus-reset', label: '重置计时', click: resetFocus },
+      { type: 'separator' },
+      { label: '退出 UniMind', click: () => app.quit() },
+    ]);
+    tray.setContextMenu(trayMenu);
   }
-  const timerLabel = focusStatus === 'idle' ? '专注 25:00' : `专注 ${focusText(focusRemaining)}`;
-  const actionLabel = focusStatus === 'running' ? '暂停专注' : focusStatus === 'paused' ? '继续专注' : '开始 25 分钟专注';
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '打开 UniMind', click: showMain },
-    { label: '离线课程库', click: () => openOffline() },
-    { type: 'separator' },
-    { label: timerLabel, enabled: false },
-    { label: actionLabel, click: toggleFocus },
-    { label: '重置专注', click: resetFocus, enabled: focusStatus !== 'idle' },
-    { type: 'separator' },
-    { label: '退出 UniMind', click: () => app.quit() },
-  ]));
+  trayMenu!.getMenuItemById('focus-time')!.label = `${focusStatus === 'running' ? '专注中' : focusStatus === 'paused' ? '已暂停' : '专注'} · ${focusText(focusRemaining)}`;
+  trayMenu!.getMenuItemById('focus-action')!.label = focusStatus === 'running' ? '暂停专注' : focusStatus === 'paused' ? '继续专注' : '开始 25 分钟专注';
+  trayMenu!.getMenuItemById('focus-reset')!.enabled = focusStatus !== 'idle';
   updateTrayTitle();
 }
 function notify(value: unknown) {
@@ -411,7 +441,7 @@ if (!gotLock) {
     showMain(); if (link) deepLink(link);
   });
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin' && !preferences.keepRunning) app.quit();
+    if (process.platform !== 'darwin') maybeQuit();
   });
   app.whenReady().then(async () => {
     sourceUrl = entryUrl();

@@ -8,7 +8,7 @@ directories:
 files:
   - dist/**/*
   - package.json
-  - tray.png
+  - tray*.png
 asar: true
 mac:
   category: public.app-category.education

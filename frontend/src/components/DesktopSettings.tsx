@@ -30,7 +30,7 @@ export function DesktopSettings() {
       {state.preferences.launchAtLogin !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-launch-at-login">开机自启</label><p>登录系统后自动启动 UniMind，保持下载和提醒可用。</p></div><Switch id="desktop-launch-at-login" checked={state.preferences.launchAtLogin} disabled={!!busy} onCheckedChange={launchAtLogin => void run('launch-at-login', () => desktop.updatePreferences({ launchAtLogin }))} /></div>}
       {state.preferences.quickEntry !== undefined && <div className="um-settings-row"><div><label htmlFor="desktop-quick-entry">全局快捷键</label><p>{state.platform === 'darwin' ? '⌘⇧U 打开 UniMind；⌘⇧N 新建笔记。' : 'Ctrl+Shift+U 打开 UniMind；Ctrl+Shift+N 新建笔记。'}关闭后不再注册。</p></div><Switch id="desktop-quick-entry" checked={state.preferences.quickEntry} disabled={!!busy} onCheckedChange={quickEntry => void run('quick-entry', () => desktop.updatePreferences({ quickEntry }))} /></div>}
       <div className="um-settings-row"><div><span>键盘快捷键</span><p>{state.platform === 'darwin' ? '⌘' : 'Ctrl'}+, 打开设置；{state.platform === 'darwin' ? '⌘' : 'Ctrl'}+1 小宇；+2 课程；+3 笔记。完整快捷键见应用菜单。</p></div></div>
-      {state.focus && <div className="um-settings-row"><div><span>菜单栏专注</span><p>{state.focus.status === 'running' ? `专注中 ${focusLabel}` : state.focus.status === 'paused' ? `已暂停 ${focusLabel}` : '未开始'}。可在菜单栏或应用菜单开始 25 分钟专注。</p></div></div>}
+      {state.focus && <div className="um-settings-row"><div><span>菜单栏专注</span><p>{state.focus.status === 'running' ? `专注中 ${focusLabel}` : state.focus.status === 'paused' ? `已暂停 ${focusLabel}` : '未开始'}。可在应用菜单的“专注”中开始，计时期间菜单栏显示剩余分钟。</p></div></div>}
     </section>
     <h3 className="um-settings-group-title">离线课程</h3>
     <section className="um-settings-group">

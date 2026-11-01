@@ -1,6 +1,6 @@
 {
   "name": "unimind-desktop",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "private": true,
   "description": "UniMind Electron thin shell",
   "author": "Korson",
@@ -22,7 +22,9 @@
     "release:verify": "node scripts/verify-release.cjs",
     "release:dist": "npm run release:prepare && npm run release:check && npm run build && electron-builder --config electron-builder.release.yml --publish never --config.forceCodeSigning=true",
     "release:dist:win": "npm run release:prepare && npm run release:check && npm run build && electron-builder --config electron-builder.release.yml --publish never --win nsis --config.forceCodeSigning=true",
-    "dist:preview": "npm run build && electron-builder --config electron-builder.preview.yml"
+    "dist:preview": "npm run build && electron-builder --config electron-builder.preview.yml",
+    "candidate:mac": "npm run build && electron-builder --config electron-builder.candidate.yml --mac dmg zip --arm64 --publish never",
+    "candidate:win": "npm run build && electron-builder --config electron-builder.candidate.yml --win nsis --x64 --publish never"
   },
   "devDependencies": {
     "electron": "^45.0.0",

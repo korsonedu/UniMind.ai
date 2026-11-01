@@ -1,0 +1,14 @@
+extends: ./electron-builder.yml
+
+directories:
+  output: release/desktop-${version}
+
+publish: null
+artifactName: UniMind-${version}-${arch}-unsigned.${ext}
+mac:
+  identity: '-'
+  notarize: false
+win:
+  signExecutable: false
+nsis:
+  artifactName: UniMind-${version}-${arch}-unsigned-setup.${ext}

@@ -6,7 +6,7 @@ directories:
 files:
   - dist/**/*
   - package.json
-  - tray.png
+  - tray*.png
   - desktop-update.json
 asar: true
 mac:
