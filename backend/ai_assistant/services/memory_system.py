@@ -454,7 +454,8 @@ class MemorySystem:
     def query_practice_questions(user, kp_name: str = '', subject: str = '',
                                  difficulty: str = '', limit: int = 5,
                                  exclude_mastered: bool = True,
-                                 institution=None) -> Dict:
+                                 institution=None, q_type: str = '',
+                                 subjective_type: str = '') -> Dict:
         """从题库中抽取练习题。优先返回做错过的题目。"""
         from quizzes.models import Question, UserQuestionStatus
 
@@ -469,6 +470,10 @@ class MemorySystem:
             qs = qs.filter(knowledge_point__subject=subject)
         if difficulty:
             qs = qs.filter(difficulty_level=difficulty)
+        if q_type:
+            qs = qs.filter(q_type=q_type)
+        if subjective_type:
+            qs = qs.filter(subjective_type=subjective_type)
 
         if exclude_mastered:
             mastered_ids = set(

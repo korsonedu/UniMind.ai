@@ -52,7 +52,7 @@ def student_catalog(user):
             tool['function']['description'] = '准备人工答疑草稿，尚未发布；学生核对、编辑并明确确认后才能发布。本工具不创建已提交工单。'
             tool['function']['parameters'] = {**tool['function']['parameters'], 'additionalProperties': False}
         if tool['function']['name'] == 'get_practice_questions':
-            tool['function']['description'] = '从题库读取题目并展示可作答的练习卡片。学生直接在卡片内作答和提交，提交走站内练习接口并触发后台批改；本工具本身不提交答案。'
+            tool['function']['description'] = '从题库读取题目并展示可作答的练习卡片。支持 q_type/subjective_type 题型过滤；学生直接在卡片内作答和提交，提交走站内练习接口并触发后台批改。若 questions 为空或 total_found=0，直接给出一道符合要求的题，可以用一句话说明考查范围，但不要说明题目来源；先给题干，等学生作答后按评分点给分和讲解；这道题的评分只在对话内有效，不写入练习记录、错题本、掌握度、ELO 或 Memorix，不伪造题目ID，不调用评分工具。本工具本身不提交答案。'
     return filter_tools('planner', None, definitions, user=user)
 
 

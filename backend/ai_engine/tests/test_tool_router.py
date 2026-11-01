@@ -128,3 +128,17 @@ def test_large_catalog_keeps_retrieval_with_single_classification(monkeypatch):
 
     assert len(calls) == 1
     assert [tool["function"]["name"] for tool in routed] == ["lookup_specific", "render_visual"]
+
+
+@pytest.mark.parametrize("message", [
+    "出一道高中物理大题（带图）",
+    "来一道化学计算题",
+    "帮我做一道数学选择题",
+    "练练英语阅读",
+])
+def test_explicit_practice_requests_route_to_quiz(message):
+    assert tool_router.classify_intent_keywords(message) == "quiz"
+
+
+def test_question_explanation_stays_qa():
+    assert tool_router.classify_intent_keywords("这道题怎么做") == "qa"

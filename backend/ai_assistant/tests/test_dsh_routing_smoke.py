@@ -23,6 +23,7 @@ def test_dsh_routing_comparison(user):
         ('待复习', '今天该复习什么？', [], {'get_due_reviews'}, set()),
         ('实际学习记录', '昨天听课时长是多少？', [], {'get_learning_sessions'}, set()),
         ('抽题', '给我出几道久期练习题。', [], {'get_practice_questions'}, set()),
+        ('物理大题', '出一道高中物理大题（带图）', [], {'get_practice_questions'}, set()),
         ('课程推荐', '帮我找久期相关课程。', [], {'search_courses'}, set()),
         ('短回复延续', '继续', [{'role': 'assistant', 'content': '需要确认批改这份答案吗？'}], {'grade_student_answer'}, set()),
         ('纯问候', '你好', [], set(), {'grade_student_answer', 'run_diagnostic', 'create_faq_ticket', 'save_session_note'}),
@@ -58,6 +59,8 @@ def test_dsh_routing_comparison(user):
                        'pending_required': sorted(required - M0_TOOLS),
                        'legacy_route_ms': round(legacy_ms, 3), 'new_context_ms': round(bridge_ms, 3),
                        'necessary_candidates_present': True, 'forbidden_absent': True})
+    physics = next(row for row in report if row['case'] == '物理大题')
+    assert physics['initial_group'] == 'practice'
     registered = type(user).objects.create_user(username='routing-registered')
     context = build_context(registered, '给我完整课程、所有学生成绩并发送通知。')
     assert context['tools'] == [] and context['routing']['candidate_names'] == []

@@ -16,7 +16,7 @@
 工具：get_learning_stats, get_knowledge_mastery_map, get_exam_history, get_recent_practice_result, get_knowledge_difficulty_analysis, render_visual
 
 ### quiz（出题练习）
-触发：出题、做题、练习、测试、考试、刷题、模拟、真题
+触发：出题、出几道、出一道、出个题、来一道、来几道、做一道、做几道、练练、练一练、做题、练习、测试、考试、刷题、模拟、真题
 工具：get_user_wrong_questions, get_due_reviews, lookup_question, search_knowledge_tree, get_practice_questions, get_user_weak_points, render_visual
 
 ### resource（学习资源）
