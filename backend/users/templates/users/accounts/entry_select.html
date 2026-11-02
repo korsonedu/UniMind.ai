@@ -1,0 +1,12 @@
+{% extends 'users/accounts/base.html' %}
+{% block content %}
+<h1>请选择进入 UniMind 的账号</h1>
+<form method="post">{% csrf_token %}
+<input type="hidden" name="website" value="{{ website }}"><input type="hidden" name="code" value="{{ code }}"><input type="hidden" name="entry_state" value="{{ entry_state }}">
+<input type="hidden" name="account_id" value="{{ website_user.pk }}"><input type="hidden" name="platform_id" value="{{ platform.pk }}">
+<p class="account-note">官网正在使用</p>
+<button class="account-card" type="submit" name="selection" value="website"><span class="account-card-details"><strong>{{ website_user.nickname|default:website_user.username }}</strong><span>{{ website_user.email }}</span></span><span aria-hidden="true">↗</span></button>
+<p class="account-note">UniMind 当前已登录</p>
+<button class="account-card" type="submit" name="selection" value="platform"><span class="account-card-details"><strong>{{ platform.nickname|default:platform.username }}</strong><span>{{ platform.email }}</span></span><span aria-hidden="true">↗</span></button>
+</form>
+{% endblock %}

@@ -225,7 +225,7 @@ class AccountTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(int(self.client.session['_auth_user_id']), account.pk)
         self.assertEqual(self.client.cookies['auth_token'].value, token.key)
-        response = self.client.post('/accounts/select/', {'selection': 'platform', 'next': '/accounts/unimind/'})
+        response = self.client.post('/accounts/select/', {'selection': 'platform', 'account_id': account.pk, 'platform_id': platform.pk, 'next': '/accounts/unimind/'})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(int(self.client.session['_auth_user_id']), platform.pk)
         self.assertNotIn('auth_token', response.cookies)

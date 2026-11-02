@@ -10,6 +10,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.db import transaction
+from django.utils import timezone
 from users.login_sessions import LoginSession
 from users.permissions import is_member_or_admin
 from django.middleware.csrf import get_token
@@ -35,6 +36,17 @@ def account_form_response(request, *, form, title, subtitle, submit_label, purpo
     }, status=status)
 
 
+def complete_account_login(request, next_path):
+    destination = urlsplit(next_path)
+    query = parse_qs(destination.query)
+    if destination.path == '/accounts/desktop/':
+        from .desktop import confirm
+        return confirm(request, request_id=query.get('request', [''])[0])
+    if destination.path == '/accounts/unimind/':
+        return finish_unimind_login(request, request.user, query.get('next', [None])[0])
+    return redirect(next_path)
+
+
 @require_http_methods(['GET', 'POST'])
 @csrf_protect
 @rate_limit('account_login', 10, 300, methods={'POST'})
@@ -43,13 +55,13 @@ def account_login(request):
     if request.method == 'POST' and request.POST.get('selection') == 'continue' and account_is_current(request, audience='account'):
         if request.POST.get('account_id') != str(request.user.pk):
             return HttpResponseBadRequest('账号已变化，请刷新页面后重新选择。')
-        return redirect(next_path)
+        return complete_account_login(request, next_path)
     form = LoginForm(request.POST if request.method == 'POST' else None)
     if request.method == 'POST' and form.is_valid():
         try:
             user = authenticate_account(request, **form.cleaned_data)
             begin_account_session(request, user, audience='account')
-            return redirect(next_path)
+            return complete_account_login(request, next_path)
         except ValidationError as exc:
             form.add_error(None, exc)
     return account_form_response(request, form=form, title='登录 UniMind',
@@ -67,7 +79,7 @@ def account_register(request):
         try:
             user = register_account(**form.cleaned_data)
             begin_account_session(request, user, audience='account')
-            return redirect(next_path)
+            return complete_account_login(request, next_path)
         except ValidationError as exc:
             form.add_error(None, exc)
     return account_form_response(request, form=form, title='注册科晟账号',
@@ -194,23 +206,34 @@ def set_platform_cookie(response, token):
 @require_http_methods(['GET', 'POST'])
 @csrf_protect
 def unimind_entry(request):
+    from .handoff import receive
+    response = receive(request)
+    if response is not None:
+        return response
     if not account_is_current(request, audience='account'):
         return redirect('/accounts/login/?' + urlencode({'next': '/accounts/unimind/'}))
     if request.method == 'POST' and request.POST.get('account_id') != str(request.user.pk):
         return HttpResponseBadRequest('账号已变化，请刷新页面后重新选择。')
+    if request.method == 'GET' and account_conflict(request):
+        return redirect('/accounts/select/?' + urlencode({'next': request.get_full_path()}))
+    return finish_unimind_login(request, request.user, request.POST.get('next') or request.GET.get('next'))
+
+
+def finish_unimind_login(request, identity, next_path=None):
     with transaction.atomic():
-        user = User.objects.select_for_update().get(pk=request.user.pk)
-        if not user.is_active or user.account_session_version != request.session.get('account_session_version'):
+        user = User.objects.select_for_update().get(pk=identity.pk)
+        if (not user.is_active or user.account_session_version != identity.account_session_version
+                or (user.locked_until and user.locked_until > timezone.now())):
             return redirect('/accounts/login/')
         if not is_member_or_admin(user):
             return render(request, 'users/accounts/profile.html', {'website': account_website_origin(request), 'learning_available': False})
-        token = LoginSession.issue(user)
         target = settings.ACCOUNT_UNIMIND_ORIGIN + '/account-callback'
-        next_path = request.POST.get('next') or request.GET.get('next')
         if next_path:
             target += '?' + urlencode({'next': safe_site_return_path(next_path)})
         response = redirect(target)
-        set_platform_cookie(response, token)
+        platform = platform_cookie_user(request)
+        if not platform or platform.pk != user.pk:
+            set_platform_cookie(response, LoginSession.issue(user))
         return response
 
 
@@ -227,12 +250,18 @@ def account_select(request):
         choice = request.POST.get('selection')
         if choice not in {'account', 'platform'}:
             return HttpResponseBadRequest('请选择账号。')
+        if (request.POST.get('account_id') != str(request.user.pk)
+                or request.POST.get('platform_id') != str(platform.pk)):
+            return HttpResponseBadRequest('账号已变化，请刷新页面后重新选择。')
         with transaction.atomic():
             chosen = platform if choice == 'platform' else request.user
             user = User.objects.select_for_update().get(pk=chosen.pk)
             if not user.is_active or user.account_session_version != chosen.account_session_version:
                 return redirect('/accounts/login/')
             begin_account_session(request, user, audience='account')
+            destination = urlsplit(next_path)
+            if destination.path == '/accounts/unimind/':
+                return finish_unimind_login(request, user, parse_qs(destination.query).get('next', [None])[0])
             response = redirect(next_path)
             return response
     return render(request, 'users/accounts/select.html', {'platform': platform, 'next_path': next_path, 'website': account_website_origin(request)})
@@ -252,10 +281,12 @@ def account_logout_all(request):
 
 
 @require_GET
+@rate_limit('website_unimind_entry', 20, 300)
 def site_center(request, action):
     if action not in {'profile', 'unimind'}:
         return HttpResponseBadRequest('账号入口不正确。')
     origin = f'{request.scheme}://{request.get_host()}'
     if action == 'unimind':
-        return redirect(settings.ACCOUNT_CENTER_ORIGIN + '/accounts/login/?' + urlencode({'next': '/accounts/unimind/', 'website': origin}))
+        from .handoff import site_entry
+        return site_entry(request)
     return redirect(settings.ACCOUNT_CENTER_ORIGIN + f'/accounts/{action}/?' + urlencode({'website': origin}))

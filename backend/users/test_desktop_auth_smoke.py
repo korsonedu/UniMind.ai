@@ -124,6 +124,25 @@ class DesktopAuthSmokeTests(TestCase):
         self.assertFalse(cache.get('desktop_confirmed:' + request_id))
         self.assertFalse(Token.objects.filter(user=self.user).exists())
 
+    def test_password_or_remembered_card_completes_app_login_without_second_confirmation(self):
+        self.user.set_password('Pass12345')
+        self.user.save(update_fields=['password'])
+        for mode in ('password', 'remembered'):
+            browser = Client()
+            request_id = self.start(browser).json()['request_id']
+            data = {'next': '/accounts/desktop/?request=' + request_id}
+            if mode == 'remembered':
+                self.login(browser)
+                data.update({'selection': 'continue', 'account_id': self.user.pk})
+            else:
+                data.update({'identifier': self.user.username, 'password': 'Pass12345'})
+            response = browser.post('/accounts/login/', data)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, '登录已确认')
+            self.assertNotContains(response, 'class="account-card"')
+            code = parse_qs(urlsplit(response.context['callback']).query)['code'][0]
+            self.assertEqual(self.exchange(code, client=Client()).status_code, 200)
+
     def test_confirmation_requires_csrf(self):
         client = self.login(Client(enforce_csrf_checks=True))
         request_id = self.start(client).json()['request_id']

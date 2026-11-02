@@ -84,8 +84,9 @@ def start(request, data):
 @require_http_methods(['GET', 'POST'])
 @csrf_protect
 @rate_limit('desktop_confirm', 20, 300, methods={'POST'})
-def confirm(request):
-    request_id = request.POST.get('request') if request.method == 'POST' else request.GET.get('request')
+def confirm(request, request_id=None):
+    if request_id is None:
+        request_id = request.POST.get('request') if request.method == 'POST' else request.GET.get('request')
     if not isinstance(request_id, str) or not VALUE.fullmatch(request_id):
         return error()
     try:
