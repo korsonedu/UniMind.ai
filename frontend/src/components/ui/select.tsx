@@ -3,6 +3,7 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, CaretDown, CaretUp } from "@phosphor-icons/react"
 
 import { cn } from "@/lib/utils"
+import { buttonVariants } from "@/components/ui/button-variants"
 
 const Select = SelectPrimitive.Root
 
@@ -17,14 +18,15 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between whitespace-nowrap rounded-lg border border-input bg-transparent px-3 py-2 text-sm ring-offset-background data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      buttonVariants({ variant: "outline" }),
+      "um-select-trigger w-full min-w-0 justify-between text-left data-[placeholder]:text-muted-foreground [&>span]:truncate",
       className
     )}
     {...props}
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <CaretDown className="h-4 w-4 opacity-50" aria-hidden="true" />
+      <CaretDown className="h-4 w-4 shrink-0" aria-hidden="true" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ))
@@ -69,10 +71,11 @@ const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
 >(({ className, children, position = "popper", ...props }, ref) => (
+    <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md um-motion-surface duration-[180ms] ease-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 origin-[--radix-select-content-transform-origin]",
+        "relative z-50 max-h-[var(--radix-select-content-available-height)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md um-motion-surface duration-[180ms] ease-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 origin-[--radix-select-content-transform-origin]",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className
@@ -92,6 +95,7 @@ const SelectContent = React.forwardRef<
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>
+    </SelectPrimitive.Portal>
 ))
 SelectContent.displayName = SelectPrimitive.Content.displayName
 
@@ -141,7 +145,28 @@ const SelectSeparator = React.forwardRef<
 ))
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName
 
+// Prefix values so empty selections (all subjects, root notebook) remain valid Radix items.
+const selectValue = (value: string | number) => `option:${value}`
+
+type SelectFieldProps = Omit<React.ComponentPropsWithoutRef<typeof SelectTrigger>, "value" | "onChange"> & {
+  value: string | number
+  onValueChange: (value: string) => void
+}
+
+function SelectField({ value, onValueChange, disabled, children, ...props }: SelectFieldProps) {
+  return <Select value={selectValue(value)} onValueChange={next => onValueChange(next.slice(7))} disabled={disabled}>
+    <SelectTrigger {...props}><SelectValue /></SelectTrigger>
+    <SelectContent>{children}</SelectContent>
+  </Select>
+}
+
+function SelectOption({ value, ...props }: Omit<React.ComponentPropsWithoutRef<typeof SelectItem>, "value"> & { value: string | number }) {
+  return <SelectItem {...props} value={selectValue(value)} />
+}
+
 export {
+  SelectField,
+  SelectOption,
   Select,
   SelectGroup,
   SelectValue,

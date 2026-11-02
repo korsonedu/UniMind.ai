@@ -8,14 +8,14 @@
 .um-practice-heading p { margin: 6px 0 0; color: var(--um-color-text-muted); }
 .um-practice-heading-actions { display: flex; align-items: center; flex-shrink: 0; gap: 4px; }
 .um-practice-home button, .um-practice-dialog button { font: inherit; min-height: 32px; border-radius: 7px; box-shadow: none; gap: 6px; }
-.um-practice-home :is(button,select,input,summary):focus-visible, .um-practice-dialog :is(button,textarea):focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: 2px; }
+.um-practice-home :is(button,.um-select-trigger,input,summary):focus-visible, .um-practice-dialog :is(button,textarea):focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: 2px; }
 .um-practice-setup { margin-top: 20px; padding: 22px; border: 1px solid var(--um-color-border); border-radius: 14px; background: var(--um-color-surface); }
 .um-practice-setup .um-practice-heading { align-items: flex-start; margin-bottom: 20px; }
 .um-practice-setup h2 { font-size: 18px; letter-spacing: -.3px; }
 .um-practice-setup .um-practice-heading p { font-size: 12px; }
 .um-practice-controls { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.4fr); align-items: start; gap: 18px; }
 .um-practice-controls > label, .um-practice-controls > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: var(--um-color-text-muted); }
-.um-practice-controls :is(select,input), .um-practice-controls .um-practice-subject > button { width: 100%; height: 40px; padding: 8px 12px; border: 1px solid var(--um-color-border); border-radius: 8px; background: var(--um-color-context); color: var(--um-color-text); font: inherit; min-width: 0; }
+.um-practice-controls :is(.um-select-trigger,input), .um-practice-controls .um-practice-subject > button { width: 100%; height: 40px; padding: 8px 12px; border: 1px solid var(--um-color-border); border-radius: 8px; background: var(--um-color-context); color: var(--um-color-text); font: inherit; min-width: 0; }
 .um-practice-controls .um-practice-subject > button { justify-content: space-between; }
 .um-practice-controls > label { min-width: 112px; }
 .um-practice-controls > .um-practice-count:has(input) { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
@@ -154,7 +154,7 @@
   .um-practice-controls > div { grid-column: 1 / -1; }
   .um-practice-controls > .um-practice-count:has(input) { grid-column: 1 / -1; width: auto; }
   .um-practice-controls:has(.um-practice-count input) > label { grid-column: 1 / -1; }
-  .um-practice-controls :is(select,input) { width: 100%; height: 44px; font-size: 16px; }
+  .um-practice-controls :is(.um-select-trigger,input), .um-practice-controls .um-practice-subject > button { width: 100%; height: 44px; font-size: 16px; }
   .um-practice-preference button { flex: 1; }
   .um-practice-home button, .um-practice-popover label { min-height: 44px; }
   .um-practice-start { flex-direction: column; align-items: stretch; gap: 16px; }

@@ -1,3 +1,4 @@
+import { SelectField, SelectOption } from '@/components/ui/select';
 import { WorkspaceToolbar } from '@/components/WorkspaceToolbar';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useBlocker, useNavigate, useParams } from 'react-router-dom';
@@ -260,11 +261,11 @@ export default function NotesPage() {
       <div className="notes-tree"><button className={`notes-tree-root ${folder === '' ? 'is-active' : ''}`} onClick={() => setFolder('')}>所有笔记本</button><button className={`notes-tree-root ${folder === 'unfiled' ? 'is-active' : ''}`} onClick={() => setFolder('unfiled')}>未分类</button>{tree(null)}</div>
       {selectedNotebook && <details className="notes-book-actions"><summary>{selectedNotebook.name}</summary><div className="notes-book-toolbar">
         <button aria-label="重命名笔记本" title="重命名" disabled={busy} onClick={() => setDialog({ title: '笔记本名称', initialValue: selectedNotebook.name, onConfirm: name => void run(() => changeNotebook({ name })) })}><PencilSimple size={18} /></button>
-        <select aria-label="移动笔记本到" value={selectedNotebook.parent ?? ''} disabled={busy} onChange={e => void run(() => changeNotebook({ parent: e.target.value ? Number(e.target.value) : null }))}><option value="">根目录</option>{notebooks.filter(book => !descendants(selectedNotebook.id, book)).map(book => <option key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</option>)}</select>
+        <SelectField aria-label="移动笔记本到" value={selectedNotebook.parent ?? ''} disabled={busy} onValueChange={value => void run(() => changeNotebook({ parent: value ? Number(value) : null }))}><SelectOption value="">根目录</SelectOption>{notebooks.filter(book => !descendants(selectedNotebook.id, book)).map(book => <SelectOption key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</SelectOption>)}</SelectField>
         <button aria-label="导出笔记本" title="导出 ZIP" disabled={busy} onClick={() => void run(() => notesApi.export('notebooks', selectedNotebook.id))}><Export size={18} /></button>
         <button aria-label="删除笔记本" title="删除笔记本" className="notes-danger" disabled={busy} onClick={() => setDialog({ title: '删除笔记本？', description: '笔记和子目录移到上一级。', confirmText: '删除', destructive: true, onConfirm: () => void run(async () => { await notesApi.removeNotebook(selectedNotebook.id); setFolder(selectedNotebook.parent ? String(selectedNotebook.parent) : ''); if (note?.notebook === selectedNotebook.id) load(await notesApi.get(note.id)); reload(); }) })}><Trash size={18} /></button>
       </div></details>}
-      <div className="notes-filters"><select aria-label="按标签筛选" value={tag} onChange={e => setTag(e.target.value)}><option value="">所有标签</option>{tags.map(label => <option key={label.id} value={label.name}>{label.name}</option>)}</select></div>
+      <div className="notes-filters"><SelectField aria-label="按标签筛选" value={tag} onValueChange={value => setTag(value)}><SelectOption value="">所有标签</SelectOption>{tags.map(label => <SelectOption key={label.id} value={label.name}>{label.name}</SelectOption>)}</SelectField></div>
       {(query || folder || tag || view !== 'all') && <button aria-label="清除筛选" title="清除筛选" className="notes-clear-filters" onClick={() => { setQuery(''); setFolder(''); setTag(''); setView('all'); }}><FunnelX size={16} /></button>}
       <div className="notes-list-heading"><span>{view === 'trash' ? '回收站' : selectedNotebook?.name || '笔记'}</span><small>{listLoading ? '加载中…' : `${items.length} 篇`}</small></div>
       {offlineMode && <p className="mx-4 mt-2 rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground" role="status">离线模式：显示本地缓存，笔记修改会在联网后同步。</p>}

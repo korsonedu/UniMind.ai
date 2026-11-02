@@ -1,3 +1,4 @@
+import { SelectField, SelectOption } from '@/components/ui/select';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
@@ -50,9 +51,9 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props)
   const toolbar = (label: string, icon: React.ReactNode, action: () => void, active = false) => <button type="button" className="notes-icon-button" aria-label={label} title={label} aria-pressed={active} onMouseDown={e => e.preventDefault()} onClick={action}>{icon}</button>;
   return <>
     <div className="notes-editor-meta">
-      <select aria-label="所属笔记本" value={note.notebook ?? ''} disabled={!!note.deleted_at} onChange={e => onChange({ notebook: e.target.value ? Number(e.target.value) : null })}>
-        <option value="">未分类</option>{notebooks.map(book => <option key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</option>)}
-      </select>
+      <SelectField aria-label="所属笔记本" value={note.notebook ?? ''} disabled={!!note.deleted_at} onValueChange={value => onChange({ notebook: value ? Number(value) : null })}>
+        <SelectOption value="">未分类</SelectOption>{notebooks.map(book => <SelectOption key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</SelectOption>)}
+      </SelectField>
       <button type="button" className="notes-icon-button" aria-label={note.is_favorite ? '取消收藏' : '收藏'} title={note.is_favorite ? '取消收藏' : '收藏'} aria-pressed={note.is_favorite} disabled={!!note.deleted_at} onClick={() => onChange({ is_favorite: !note.is_favorite })}><Star size={18} weight={note.is_favorite ? 'fill' : 'regular'} /></button>
     </div>
     <input className="notes-title" aria-label="笔记标题" placeholder="未命名笔记" value={note.title} readOnly={!!note.deleted_at} onChange={e => onChange({ title: e.target.value })} />
