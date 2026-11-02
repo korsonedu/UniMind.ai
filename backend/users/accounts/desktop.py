@@ -15,7 +15,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_POST, require_http_methods
-from rest_framework.authtoken.models import Token
+from users.login_sessions import LoginSession
 
 from core.rate_limit import rate_limit
 from users.models import User
@@ -84,8 +84,9 @@ def start(request, data):
 @require_http_methods(['GET', 'POST'])
 @csrf_protect
 @rate_limit('desktop_confirm', 20, 300, methods={'POST'})
-def confirm(request):
-    request_id = request.POST.get('request') if request.method == 'POST' else request.GET.get('request')
+def confirm(request, request_id=None):
+    if request_id is None:
+        request_id = request.POST.get('request') if request.method == 'POST' else request.GET.get('request')
     if not isinstance(request_id, str) or not VALUE.fullmatch(request_id):
         return error()
     try:
@@ -96,9 +97,12 @@ def confirm(request):
         return error()
     if not account_is_current(request, audience='account'):
         return redirect('/accounts/login/?' + urlencode({'next': '/accounts/desktop/?' + urlencode({'request': request_id})}))
-    context = {'request_id': request_id, 'website': account_website_origin(request)}
+    context = {'request_id': request_id, 'website': account_website_origin(request), 'title': '登录 UniMind',
+               'next_query': urlencode({'next': '/accounts/desktop/?' + urlencode({'request': request_id})})}
     if request.method == 'GET':
         return render(request, 'users/accounts/desktop.html', context)
+    if request.POST.get('account_id') and request.POST['account_id'] != str(request.user.pk):
+        return error('账号已变化，请刷新页面后重新选择。')
     with transaction.atomic():
         user = User.objects.select_for_update().filter(pk=request.user.pk).first()
         if (ticket['expires_at'] <= time.time() or not is_member_or_admin(user)
@@ -147,7 +151,7 @@ def exchange(request, data):
                 return error()
         except Exception:
             return error('登录服务暂不可用，请稍后重试。', 503)
-        token, _ = Token.objects.get_or_create(user=user)
+        token = LoginSession.issue(user)
         response = JsonResponse({'ok': True})
         set_platform_cookie(response, token)
         return response

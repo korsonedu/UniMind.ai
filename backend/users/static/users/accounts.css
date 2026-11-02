@@ -35,6 +35,12 @@ button:disabled { opacity: .5; cursor: wait; }
 .account-links { display: flex; justify-content: space-between; gap: 16px; margin-top: 24px; color: var(--quiet); font-size: 13px; } .account-links a:hover { color: var(--accent); }
 .account-details { margin: 0 0 24px; } .account-details div { display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: 13px; } .account-details dt { color: var(--quiet); } .account-details dd { margin: 0; overflow-wrap: anywhere; }
 .account-note { margin-block: 20px; color: var(--quiet); font-size: 13px; }
+.account-card { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.account-card:hover { background: var(--paper); border-color: var(--ink); }
+.account-avatar { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border-radius: 50%; background: #eee9e1; font-size: 18px; }
+.account-card-details { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.account-card-details strong { font-weight: 500; }
+.account-card-details > span { color: var(--quiet); font-size: 12px; overflow-wrap: anywhere; }
 .text-button { margin-top: 24px; padding: 0; border: 0; background: transparent; color: var(--quiet); font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; } .account-notice { color: var(--accent); font-size: 13px; }
 @media(max-width:900px) { body { background: #fffefa; } .account-header { position: relative; height: 80px; padding-inline: 24px; } .account-layout { display: block; min-height: calc(100svh - 80px); } .account-visual { display: none; } .account-form-pane { padding: 40px 24px 64px; } }
 @media(prefers-reduced-motion:reduce) { .field-control, .primary-button { transition: none; } }

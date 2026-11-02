@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from rest_framework.authtoken.models import Token
 
 from users.models import User
+from users.login_sessions import LoginSession
 
 
 @override_settings(
@@ -178,14 +179,14 @@ class AccountTests(TestCase):
         client.cookies['korson_account_session'] = session.session_key
         return client
 
-    def test_legacy_cookie_creates_center_session_without_rotating_token(self):
+    def test_platform_cookie_creates_center_session_without_rotating_token(self):
         user = User.objects.create_user(username='existing', password='Pass12345')
-        token = Token.objects.create(user=user)
+        token = LoginSession.issue(user)
         self.client.cookies['auth_token'] = token.key
         response = self.client.get('/accounts/profile/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(int(self.client.session['_auth_user_id']), user.pk)
-        self.assertEqual(Token.objects.get(user=user).key, token.key)
+        self.assertIsNotNone(LoginSession.resolve(token.key))
 
     def test_original_username_takes_priority_over_another_accounts_email(self):
         original = User.objects.create_user(username='shared@example.test', password='Pass12345')
@@ -200,7 +201,8 @@ class AccountTests(TestCase):
         self.client.post('/accounts/login/', {'identifier': user.username, 'password': 'Pass12345'})
         response = self.client.get('/accounts/unimind/')
         self.assertEqual(response['Location'], 'http://localhost:5173/account-callback')
-        self.assertEqual(response.cookies['auth_token'].value, token.key)
+        self.assertNotEqual(response.cookies['auth_token'].value, token.key)
+        self.assertIsNotNone(LoginSession.resolve(response.cookies['auth_token'].value))
         user.refresh_from_db()
         self.assertIsNone(user.institution_id)
 
@@ -210,22 +212,24 @@ class AccountTests(TestCase):
         response = self.client.get('/accounts/unimind/')
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response['Location'], 'http://localhost:5173/account-callback')
-        self.assertTrue(Token.objects.filter(user=user).exists())
+        self.assertTrue(LoginSession.objects.filter(user=user).exists())
         self.assertIn('auth_token', response.cookies)
 
-    def test_conflicting_accounts_require_explicit_selection(self):
+    def test_account_selection_does_not_replace_platform_session(self):
         account = User.objects.create_user(username='account', password='Pass12345', is_member=True)
         platform = User.objects.create_user(username='platform', password='Pass12345', is_member=True)
-        token = Token.objects.create(user=platform)
+        token = LoginSession.issue(platform)
         self.client.post('/accounts/login/', {'identifier': account.username, 'password': 'Pass12345'})
         self.client.cookies['auth_token'] = token.key
-        response = self.client.get('/accounts/unimind/')
-        self.assertTrue(response['Location'].startswith('/accounts/select/?'))
+        response = self.client.get('/accounts/select/?next=/accounts/unimind/')
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(int(self.client.session['_auth_user_id']), account.pk)
         self.assertEqual(self.client.cookies['auth_token'].value, token.key)
-        response = self.client.post('/accounts/select/', {'selection': 'platform', 'next': '/accounts/unimind/'})
+        response = self.client.post('/accounts/select/', {'selection': 'platform', 'account_id': account.pk, 'platform_id': platform.pk, 'next': '/accounts/unimind/'})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(int(self.client.session['_auth_user_id']), platform.pk)
+        self.assertNotIn('auth_token', response.cookies)
+        self.assertIsNotNone(LoginSession.resolve(token.key))
 
     def test_website_logout_leaves_other_service_session_active(self):
         user = User.objects.create_user(username='existing', password='Pass12345')
@@ -351,7 +355,10 @@ class AccountOAuthTests(TestCase):
         from urllib.parse import urlsplit
         started = self.client.get('/account-api/login/', {'return_to': return_to})
         self.assertEqual(started.status_code, 302)
-        authorized = self.center.get(started['Location'])
+        login = self.center.get(started['Location'])
+        self.assertEqual(login.status_code, 200)
+        continued = self.center.post(started['Location'], {'selection': 'continue', 'account_id': self.user.pk, 'next': login.context['next_path']})
+        authorized = self.center.get(continued['Location'])
         self.assertEqual(authorized.status_code, 302)
         callback = urlsplit(authorized['Location'])
         return callback.path + '?' + callback.query

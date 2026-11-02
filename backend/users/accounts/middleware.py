@@ -65,8 +65,8 @@ class AccountBoundaryMiddleware(MiddlewareMixin):
                 logout(request)
         if center and not request.user.is_authenticated and request.path in {
                 '/accounts/o/authorize/', '/accounts/profile/', '/accounts/unimind/', '/accounts/login/', '/accounts/desktop/'}:
-            from .services import legacy_cookie_user, begin_account_session
-            user = legacy_cookie_user(request)
+            from .services import platform_cookie_user, begin_account_session
+            user = platform_cookie_user(request)
             if user:
                 begin_account_session(request, user, audience='account')
 

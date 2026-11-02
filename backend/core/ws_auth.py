@@ -1,5 +1,5 @@
 """
-Channels WebSocket 认证中间件 — 从 auth_token cookie 解析 DRF Token，注入 scope["user"]。
+Channels WebSocket 认证中间件 — 从 auth_token cookie 解析独立登录会话，注入 scope["user"]。
 替代 channels.auth.AuthMiddlewareStack（后者读 Django session，但登录流程未写入 session）。
 """
 import logging
@@ -13,24 +13,18 @@ logger = logging.getLogger(__name__)
 
 @database_sync_to_async
 def get_user_from_token(token_key: str):
-    """根据 auth_token 查找 DRF Token 对应的用户。失败返回 None。"""
-    from rest_framework.authtoken.models import Token
+    """根据 auth_token 查找有效登录会话对应的用户。失败返回 None。"""
+    from users.login_sessions import LoginSession
 
     if not token_key:
         return None
 
-    try:
-        token = Token.objects.select_related("user").get(key=token_key)
-    except Token.DoesNotExist:
-        return None
-
-    if token.user.is_active:
-        return token.user
-    return None
+    token = LoginSession.resolve(token_key)
+    return token.user if token else None
 
 
 class TokenAuthMiddleware(BaseMiddleware):
-    """WebSocket 认证：从 auth_token cookie 读取 DRF Token，注入 scope["user"]。
+    """WebSocket 认证：从 auth_token cookie 读取登录会话，注入 scope["user"]。
 
     需外层包 channels.sessions.CookieMiddleware 以提供 scope["cookies"]。
     """

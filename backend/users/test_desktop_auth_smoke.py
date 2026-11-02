@@ -9,6 +9,7 @@ from django.test import Client, TestCase, override_settings
 from rest_framework.authtoken.models import Token
 
 from users.models import User
+from users.login_sessions import LoginSession
 
 
 @override_settings(
@@ -54,22 +55,27 @@ class DesktopAuthSmokeTests(TestCase):
         }, content_type='application/json', **headers)
 
     def test_success_cookie_token_preservation_duplicate_confirmation_and_replay(self):
-        token = Token.objects.create(user=self.user)
+        token = LoginSession.issue(self.user)
+        self.client.cookies['auth_token'] = token.key
         request_id, code = self.authorize()
         native = Client(enforce_csrf_checks=True)
         response = self.exchange(code, client=native)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'ok': True})
-        self.assertEqual(response.cookies['auth_token'].value, token.key)
+        self.assertNotEqual(response.cookies['auth_token'].value, token.key)
+        self.assertIsNotNone(LoginSession.resolve(response.cookies['auth_token'].value))
         self.assertTrue(response.cookies['auth_token']['httponly'])
         self.assertEqual(response['Cache-Control'], 'no-store')
-        self.assertEqual(Token.objects.get(user=self.user).key, token.key)
+        self.assertIsNotNone(LoginSession.resolve(token.key))
         repeated = self.client.post('/accounts/desktop/', {'request': request_id})
         self.assertEqual(repeated.status_code, 400)
         self.assertNotIn('auth_token', repeated.cookies)
         replay = self.exchange(code, client=native)
         self.assertEqual(replay.status_code, 400)
         self.assertNotIn('auth_token', replay.cookies)
+        self.assertEqual(native.get('/api/users/me/').status_code, 200)
+        self.assertEqual(native.post('/api/users/logout/').status_code, 200)
+        self.assertEqual(self.client.get('/api/users/me/').status_code, 200)
 
     def test_wrong_verifier_does_not_consume_code(self):
         _, code = self.authorize()
@@ -118,6 +124,25 @@ class DesktopAuthSmokeTests(TestCase):
         self.assertFalse(cache.get('desktop_confirmed:' + request_id))
         self.assertFalse(Token.objects.filter(user=self.user).exists())
 
+    def test_password_or_remembered_card_completes_app_login_without_second_confirmation(self):
+        self.user.set_password('Pass12345')
+        self.user.save(update_fields=['password'])
+        for mode in ('password', 'remembered'):
+            browser = Client()
+            request_id = self.start(browser).json()['request_id']
+            data = {'next': '/accounts/desktop/?request=' + request_id}
+            if mode == 'remembered':
+                self.login(browser)
+                data.update({'selection': 'continue', 'account_id': self.user.pk})
+            else:
+                data.update({'identifier': self.user.username, 'password': 'Pass12345'})
+            response = browser.post('/accounts/login/', data)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, '登录已确认')
+            self.assertNotContains(response, 'class="account-card"')
+            code = parse_qs(urlsplit(response.context['callback']).query)['code'][0]
+            self.assertEqual(self.exchange(code, client=Client()).status_code, 200)
+
     def test_confirmation_requires_csrf(self):
         client = self.login(Client(enforce_csrf_checks=True))
         request_id = self.start(client).json()['request_id']
@@ -132,7 +157,7 @@ class DesktopAuthSmokeTests(TestCase):
         self.assertFalse(Token.objects.filter(user=self.user).exists())
 
     def test_platform_cookie_restores_confirmation_without_authorizing(self):
-        token = Token.objects.create(user=self.user)
+        token = LoginSession.issue(self.user)
         self.client.cookies['auth_token'] = token.key
         request_id = self.start().json()['request_id']
         response = self.client.get('/accounts/desktop/', {'request': request_id})
@@ -140,7 +165,7 @@ class DesktopAuthSmokeTests(TestCase):
         self.assertEqual(int(self.client.session['_auth_user_id']), self.user.pk)
         self.assertFalse(cache.get('desktop_confirmed:' + request_id))
         self.assertNotIn('callback', response.context)
-        self.assertEqual(Token.objects.get(user=self.user).key, token.key)
+        self.assertIsNotNone(LoginSession.resolve(token.key))
         self.assertNotIn('auth_token', response.cookies)
 
     def test_disabled_origin_host_json_and_size_boundaries(self):

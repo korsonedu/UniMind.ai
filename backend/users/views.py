@@ -15,6 +15,7 @@ from .serializers import (
     DailyPlanSerializer,
 )
 from .models import User, DailyPlan
+from .login_sessions import LoginSession
 from .permissions import IsPlatformAdmin, IsAdmin, HasStudentFeature, is_platform_admin
 from django.utils import timezone
 from django.conf import settings
@@ -292,8 +293,7 @@ class LoginView(APIView):
                 user.save(update_fields=['failed_login_count', 'locked_until'])
             with transaction.atomic():
                 User.objects.select_for_update().get(pk=user.pk)
-                Token.objects.filter(user=user).delete()
-                token = Token.objects.create(user=user)
+                token = LoginSession.issue(user)
             user.last_login = timezone.now()
             user.save(update_fields=['last_login'])
             SecurityAuditLog.objects.create(
@@ -427,8 +427,7 @@ class LoginByCodeView(APIView):
 
         with transaction.atomic():
             User.objects.select_for_update().get(pk=user.pk)
-            Token.objects.filter(user=user).delete()
-            token = Token.objects.create(user=user)
+            token = LoginSession.issue(user)
 
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
@@ -469,8 +468,8 @@ class LogoutView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        if request.user.is_authenticated:
-            Token.objects.filter(user=request.user).delete()
+        if request.auth:
+            request.auth.delete()
         response = Response({'status': 'ok'})
         response.delete_cookie('auth_token', samesite='Lax')
         return response
@@ -544,7 +543,6 @@ class UpdatePasswordView(generics.UpdateAPIView):
         return self.request.user
 
     def patch(self, request, *args, **kwargs):
-        from rest_framework.authtoken.models import Token
         user = self.get_object()
         old_p = request.data.get('old_password', '')
         new_p = request.data.get('new_password', '')
@@ -556,8 +554,7 @@ class UpdatePasswordView(generics.UpdateAPIView):
             user.set_password(new_p)
             user.save(update_fields=['password'])
             # 删除所有旧 token，使泄露的 token 失效，创建新 token 保持登录
-            Token.objects.filter(user=user).delete()
-            new_token = Token.objects.create(user=user)
+            new_token = LoginSession.issue(user)
             resp = Response({'status': 'ok'})
             is_secure = getattr(settings, 'IS_PROD', False)
             resp.set_cookie(

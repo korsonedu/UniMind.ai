@@ -1,6 +1,6 @@
 from rest_framework import exceptions
 from rest_framework.authentication import TokenAuthentication, BaseAuthentication
-from rest_framework.authtoken.models import Token
+from users.login_sessions import LoginSession
 
 
 class CookieTokenAuthentication(TokenAuthentication):
@@ -8,14 +8,16 @@ class CookieTokenAuthentication(TokenAuthentication):
 
     def authenticate(self, request):
         token = request.COOKIES.get('auth_token')
-        if token:
-            try:
-                token_obj = Token.objects.select_related('user').get(key=token)
-                if token_obj.user.is_active:
-                    return (token_obj.user, token_obj)
-            except Token.DoesNotExist:
-                pass
+        token_obj = LoginSession.resolve(token)
+        if token_obj:
+            return (token_obj.user, token_obj)
         return super().authenticate(request)
+
+    def authenticate_credentials(self, key):
+        token = LoginSession.resolve(key)
+        if token:
+            return (token.user, token)
+        return super().authenticate_credentials(key)
 
 
 class APIKeyAuthentication(BaseAuthentication):
