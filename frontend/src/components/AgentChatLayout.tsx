@@ -124,6 +124,7 @@ export interface AgentChatLayoutProps {
 
   /** 左侧栏 render prop，传入 session 相关数据，返回 ReactNode */
   sidebar?: (props: {
+    menuRequestRef: React.RefObject<string | null>;
     projectControls: ConversationProjectControls;
     onNewInProject: (id: number) => void;
     sessions: ConversationSession[];
@@ -173,6 +174,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const removeUnread = useChatUnreadStore(state => state.remove);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
+  const menuRequestRef = useRef<string | null>(null);
   const [aiUsage, setAIUsage] = useState<AIUsage | null>(null);
   const [quotaError, setQuotaError] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
@@ -359,6 +361,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   // ── Landing state ──
 
   const sessionDirectory = sidebar?.({
+    menuRequestRef,
     projectControls: { ...projectControls, remove: async id => {
       const removed = await projectControls.remove(id);
       if (removed && projectId === id) wrappedReset(false, null);
