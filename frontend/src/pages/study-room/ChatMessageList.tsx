@@ -77,7 +77,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             const isTask = isTaskStateMessage(msg.content);
             if (isTask && !showOthersBroadcast && !isMe) return null;
             if (isTask) return (
-              <div key={msg.id} className="flex flex-col items-center py-0.5 animate-in fade-in zoom-in-95 duration-300">
+              <div key={msg.id} className="flex flex-col items-center py-0.5 um-motion-surface animate-in fade-in duration-[180ms] ease-out">
                 <div className={cn("um-study-event px-3 py-1.5 flex items-center gap-2 relative group/task",
                   msg.content.includes('❌') && "is-danger"
                 )}>
@@ -103,7 +103,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
             );
             const isMediaOnly = msg.content.trim().startsWith('![') && msg.content.trim().endsWith(')');
             return (
-              <div key={msg.id} className={cn("um-study-message flex gap-3 group animate-in fade-in slide-in-from-bottom-2 duration-300", isMe ? "flex-row-reverse text-right" : "flex-row text-left")}>
+              <div key={msg.id} className={cn("um-study-message flex gap-3 group um-motion-surface animate-in fade-in duration-[180ms] ease-out", isMe ? "flex-row-reverse text-right" : "flex-row text-left")}>
                 <Avatar className="h-8 w-8 border border-border shrink-0">
                   <AvatarImage src={msg.user_detail.avatar_url} />
                   <AvatarFallback className="text-[11px] font-bold bg-muted">{(msg.user_detail.nickname || msg.user_detail.username)[0]}</AvatarFallback>

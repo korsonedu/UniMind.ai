@@ -71,7 +71,7 @@ export default function SessionSidebar({
         'shrink-0 flex flex-col min-h-full bg-card/70 backdrop-blur-2xl',
         dragging && 'select-none overflow-hidden',
       )}
-      style={{ width, transition: dragging ? 'none' : 'width 200ms ease' }}
+      style={{ width, transition: dragging ? 'none' : 'width 180ms ease-out' }}
     >
       {/* 可拖动右边缘 — 分隔线 + 热区合一 */}
       <div

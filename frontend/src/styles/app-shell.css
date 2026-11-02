@@ -7,8 +7,8 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-directory-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; z-index: 15; cursor: col-resize; touch-action: none; }
 .um-directory-resize:hover { background: var(--um-color-border); }
 .um-directory-resize:focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: -2px; }
-.um-directory-content { overflow: hidden; transition: opacity 140ms ease; }
-.um-directory-content[aria-hidden='true'] { opacity: 0; visibility: hidden; transition: opacity 140ms ease, visibility 0s 220ms; }
+.um-directory-content { overflow: hidden; transition: opacity 180ms ease-out; }
+.um-directory-content[aria-hidden='true'] { opacity: 0; visibility: hidden; transition: opacity 180ms ease-out, visibility 0s 180ms; }
 @media (prefers-reduced-motion: reduce) {
   .um-directory-content, .um-directory-content[aria-hidden='true'] { transition: none; }
 }

@@ -17,7 +17,7 @@ export const PageWrapper = ({ children, title, subtitle, action }: PageWrapperPr
   }, [title, subtitle, setPageHeader]);
 
   return (
-    <div className="um-page-wrapper w-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="um-page-wrapper w-full space-y-4 um-motion-surface animate-in fade-in duration-[180ms] ease-out">
       {action && (
         <div className="um-page-actions flex justify-end pb-2">
           {action}

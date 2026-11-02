@@ -90,8 +90,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
             className="space-y-1.5 mb-8"
             style={{
               opacity: visible ? 1 : 0,
-              transform: visible ? 'translateY(0)' : 'translateY(12px)',
-              transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+              transition: 'opacity 180ms ease-out',
             }}
           >
             <h1 className="text-[26px] font-bold tracking-tight text-[#1D1D1F] dark:text-white">
@@ -108,8 +107,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
           <div
             style={{
               opacity: visible ? 1 : 0,
-              transform: visible ? 'translateY(0)' : 'translateY(16px)',
-              transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s',
+              transition: 'opacity 180ms ease-out',
             }}
           >
             {children}
@@ -121,7 +119,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
               className="mt-8 text-center"
               style={{
                 opacity: visible ? 1 : 0,
-                transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.25s',
+                transition: 'opacity 180ms ease-out',
               }}
             >
               {footer}

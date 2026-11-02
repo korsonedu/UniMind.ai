@@ -1,7 +1,7 @@
 html:has(.um-desktop-login) { overflow: hidden; overscroll-behavior: none; }
 .um-desktop-login { --login-muted: #777773; min-height: 100dvh; display: flex; flex-direction: column; background: #fafaf9; color: #20201e; }
 .um-desktop-login-titlebar { height: 48px; flex: 0 0 48px; -webkit-app-region: drag; }
-.um-desktop-login-content { width: min(100%, 440px); flex: 1; align-self: center; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 44px 28px 72px; text-align: center; animation: um-login-appear .24s ease-out; }
+.um-desktop-login-content { width: min(100%, 440px); flex: 1; align-self: center; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 44px 28px 72px; text-align: center; animation: um-login-appear 180ms ease-out; }
 .um-desktop-login-mark { width: 72px; height: 72px; display: grid; place-items: center; margin-bottom: 32px; border: 1px solid #ecece9; border-radius: 20px; background: #fff; overflow: hidden; }
 .um-desktop-login-mark img { width: 68px; height: 68px; object-fit: contain; }
 .um-desktop-login h1 { margin: 0; font-size: clamp(28px, 3.5vw, 36px); line-height: 1.25; font-weight: 600; letter-spacing: -.045em; }
@@ -26,6 +26,6 @@ html:has(.um-desktop-login) { overflow: hidden; overscroll-behavior: none; }
 .dark .um-desktop-login-primary:hover:not(:disabled) { background: #fff; }
 .dark .um-desktop-login-cancel:hover { color: #f2f2ed; background: #30302b; }
 .dark .um-desktop-login-status[role='alert'] { color: #e89c8e; }
-@keyframes um-login-appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes um-login-appear { from { opacity: 0; } to { opacity: 1; } }
 @media (max-height: 600px) { .um-desktop-login-content { padding-block: 24px 48px; } .um-desktop-login-mark { margin-bottom: 20px; } .um-desktop-login-actions { margin-top: 26px; } }
 @media (prefers-reduced-motion: reduce) { .um-desktop-login-content { animation: none; } .um-desktop-login-primary { transition: none; } }

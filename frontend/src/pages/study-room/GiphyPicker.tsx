@@ -73,7 +73,7 @@ export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onGifSent }) => {
               >
                 <img src={g.images.fixed_height_small.url} alt={g.title} className="w-full h-full object-cover" loading="lazy" />
               </button>
-              <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 scale-0 group-hover/gif:scale-100 transition-all z-[var(--z-overlay)] pointer-events-none origin-bottom">
+              <div className="absolute left-1/2 bottom-full mb-2 -translate-x-1/2 opacity-0 group-hover/gif:opacity-100 transition-opacity z-[var(--z-overlay)] pointer-events-none origin-bottom">
                 <div className="w-32 aspect-square rounded-xl overflow-hidden shadow-lg border-2 border-primary bg-card">
                   <img src={g.images.fixed_height_small.url} alt={g.title} className="w-full h-full object-cover" loading="lazy" />
                 </div>

@@ -121,7 +121,7 @@ const WebLogin: React.FC = () => {
           type="button"
           onClick={() => { setTab('password'); setError(''); }}
           className={`
-            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
+            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-[180ms]
             ${tab === 'password'
               ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
               : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'
@@ -134,7 +134,7 @@ const WebLogin: React.FC = () => {
           type="button"
           onClick={() => { setTab('code'); setError(''); }}
           className={`
-            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
+            flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-[180ms]
             ${tab === 'code'
               ? 'bg-white dark:bg-white/[0.12] text-[#1D1D1F] dark:text-white shadow-sm'
               : 'text-[#8E8E93] dark:text-white/30 hover:text-[#6E6E73] dark:hover:text-white/50'

@@ -58,7 +58,7 @@
 @keyframes um-like-pop { from { transform: scale(.94); } to { transform: scale(1); } }
 .um-qa-like[aria-pressed='true'] svg,
 .um-agent-feedback button[aria-pressed='true'] svg {
-  animation: um-like-pop 700ms var(--um-like-easing);
+  animation: um-like-pop 180ms ease-out;
 }
 
 .um-native-agent :is(.um-agent-search input, .um-agent-composer textarea, .um-agent-chat-input textarea):focus-visible,
@@ -98,12 +98,4 @@ html[data-reading-size]:not([data-reading-size='standard']) .um-native-chat-bubb
   html[data-density='compact'] .um-course-tree-label { padding-block: 4px; }
   html[data-density='compact'] .um-course-list-item { padding: 8px; }
   html[data-density='compact'] .notes-list > button { padding-block: 10px; }
-}
-html[data-reduce-motion='true'] .um-app-shell *,
-html[data-reduce-motion='true'] .um-app-shell *::before,
-html[data-reduce-motion='true'] .um-app-shell *::after {
-  animation-duration: .01ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0s !important;
-  scroll-behavior: auto !important;
 }

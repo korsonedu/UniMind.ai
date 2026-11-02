@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSystemStore } from '@/store/useSystemStore';
 
 const DEFAULT_WIDTH = 192;
 const MIN_WIDTH = 180;
 const MAX_WIDTH = 288;
 const COLLAPSE_WIDTH = MIN_WIDTH / 2;
-const STIFFNESS = 1200;
-const DAMPING = 80;
 
 export function previewDirectoryWidth(value: number, collapseThreshold = COLLAPSE_WIDTH) {
   if (value <= collapseThreshold) return 0;
@@ -41,20 +40,17 @@ export function useDirectoryWidth(collapseThreshold = COLLAPSE_WIDTH) {
     if (next === currentWidth.current) return;
     setAnimated(spring);
     if (next >= MIN_WIDTH) setLastWidth(next);
-    if (!spring || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (!spring || useSystemStore.getState().reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       currentWidth.current = next;
       setWidth(next);
       return;
     }
     const initial = currentWidth.current;
     const start = performance.now();
-    const root = Math.sqrt(DAMPING * DAMPING - 4 * STIFFNESS);
-    const slow = (-DAMPING + root) / 2;
-    const fast = (-DAMPING - root) / 2;
     const step = (now: number) => {
-      const t = (now - start) / 1000;
-      const position = next + (initial - next) * (fast * Math.exp(slow * t) - slow * Math.exp(fast * t)) / (fast - slow);
-      if (Math.abs(position - next) < 0.4) {
+      const progress = Math.min((now - start) / 180, 1);
+      const position = next + (initial - next) * (1 - progress) ** 3;
+      if (progress === 1 || useSystemStore.getState().reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         currentWidth.current = next;
         setWidth(next);
         frame.current = null;

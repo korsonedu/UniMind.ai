@@ -26,7 +26,7 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
   const navigate = useNavigate();
 
   const icon = step.status === 'succeeded' ? (
-    <Check className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-emerald-500 animate-in zoom-in duration-300")} />
+    <Check className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-emerald-500 um-motion-surface animate-in fade-in duration-[180ms] ease-out")} />
   ) : step.status === 'failed' ? (
     <X className={cn(compact ? "h-3 w-3" : "h-3.5 w-3.5", "text-destructive")} />
   ) : step.status === 'running' ? (
@@ -37,7 +37,7 @@ export const AgentStepCard: React.FC<{ step: AgentStep; compact?: boolean }> = R
 
   return (
     <div className={cn(
-      "rounded-lg border transition-all duration-300",
+      "rounded-lg border transition-all duration-[180ms]",
       compact ? "text-[11px]" : "text-[13px]",
       step.status === 'running'
         ? "border-primary/25 bg-primary/[0.04] shadow-[0_0_0_1px] shadow-primary/10 [animation:gentle-breathe_3s_ease-in-out_infinite]"
@@ -94,7 +94,7 @@ export const ToolStepMessage: React.FC<{
   botGradient?: string;
 }> = ({ step, index = 0 }) => (
   <div
-    className="flex gap-0 w-full animate-in fade-in slide-in-from-bottom-1 duration-300"
+    className="flex gap-0 w-full um-motion-surface animate-in fade-in duration-[180ms] ease-out"
     style={{ animationDelay: `${Math.min(index * 40, 200)}ms` }}
   >
     <div className="flex flex-col max-w-[85%] items-start">

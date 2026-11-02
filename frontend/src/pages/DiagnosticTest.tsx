@@ -220,7 +220,7 @@ export function DiagnosticTest() {
 
         {/* Progress */}
         <div className="w-full bg-muted rounded-full h-1.5 mb-8">
-          <div className="bg-primary h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+          <div className="bg-primary h-1.5 rounded-full transition-all duration-[180ms]" style={{ width: `${progress}%` }} />
         </div>
 
         {/* Question */}
@@ -233,7 +233,7 @@ export function DiagnosticTest() {
                 {q.options.map((opt, i) => (
                   <button
                     key={i}
-                    className={`w-full text-left p-4 rounded-xl border transition-all duration-200 ${
+                    className={`w-full text-left p-4 rounded-xl border transition-all duration-[180ms] ${
                       answers[currentIndex] === opt
                         ? 'border-primary bg-primary/5 shadow-sm'
                         : 'border-border/50 hover:bg-muted/50 hover:border-border'

@@ -433,7 +433,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (!hasConversation) {
     return (
       <TooltipProvider delayDuration={300}>
-        <div className="h-full overflow-y-scroll animate-in fade-in duration-500" style={{ scrollSnapType: 'y mandatory' }}>
+        <div className="h-full overflow-y-scroll um-motion-surface animate-in fade-in duration-[180ms] ease-out" style={{ scrollSnapType: 'y mandatory' }}>
           {/* 内层：恰好一屏高度，flex 居中输入框 */}
           <div className="h-full flex flex-col items-center justify-center px-4" style={{ scrollSnapAlign: 'start' }}>
             <div className="w-full max-w-2xl">
@@ -445,7 +445,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 <p className="text-xs text-foreground/60">{landingDescription}</p>
               </div>
 
-              <div data-tour={inputTourClass} className="bg-card rounded-2xl border border-border/50 shadow-lg overflow-hidden transition-all duration-200 focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+              <div data-tour={inputTourClass} className="bg-card rounded-2xl border border-border/50 shadow-lg overflow-hidden transition-all duration-[180ms] focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
                 <textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
@@ -495,7 +495,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     onClick={() => doSend(input)}
                     disabled={loading || !input.trim()}
                     size="icon"
-                    className="rounded-lg h-8 w-8 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90"
+                    className="rounded-lg h-8 w-8 bg-foreground text-background shadow-none um-motion-control active:scale-[0.98] transition-[color,background-color,border-color,opacity,transform,scale] duration-150 shrink-0 hover:opacity-90"
                   >
                     {loading ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <PaperPlaneTilt className="h-3.5 w-3.5" />}
                   </Button>
@@ -729,7 +729,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                   )}
                   <div className="flex-1" />
                   <Button aria-label="发送消息" onClick={() => doSend(input)} disabled={loading || !input.trim() || !bot} size="icon"
-                    className="um-agent-send rounded-full h-9 w-9 bg-primary text-primary-foreground shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
+                    className="um-agent-send rounded-full h-9 w-9 bg-primary text-primary-foreground shadow-none um-motion-control active:scale-[0.98] transition-[color,background-color,border-color,opacity,transform,scale] duration-150 shrink-0 hover:opacity-90">
                     {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                   </Button>
                 </div>
@@ -746,7 +746,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   // split mode
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="h-full flex animate-in fade-in duration-300">
+      <div className="h-full flex um-motion-surface animate-in fade-in duration-[180ms] ease-out">
         {renderRightPanel && (
           <div className="flex-1 min-w-0 h-full" style={{ minWidth: '55%' }}>
             {renderRightPanel({
@@ -884,7 +884,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                 )}
                 <div className="flex-1" />
                 <Button onClick={() => doSend(input)} disabled={loading || !input.trim()} size="icon"
-                  className="rounded-xl h-9 w-9 bg-foreground text-background shadow-none active:scale-95 transition-all shrink-0 hover:opacity-90">
+                  className="rounded-xl h-9 w-9 bg-foreground text-background shadow-none um-motion-control active:scale-[0.98] transition-[color,background-color,border-color,opacity,transform,scale] duration-150 shrink-0 hover:opacity-90">
                   {loading ? <Spinner className="h-4 w-4 animate-spin" /> : <PaperPlaneTilt className="h-4 w-4" />}
                 </Button>
               </div>

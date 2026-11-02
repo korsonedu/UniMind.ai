@@ -358,3 +358,31 @@ html {
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+.um-motion-surface { animation-duration: 180ms; animation-timing-function: ease-out; }
+@keyframes um-dialog-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes um-dialog-out { from { opacity: 1; } to { opacity: 0; } }
+.um-motion-dialog[data-state="open"] { animation: um-dialog-in 180ms ease-out; }
+.um-motion-dialog[data-state="closed"] { animation: um-dialog-out 180ms ease-out; }
+
+/* Include portalled menus, dialogs, notifications, and authentication pages. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  :is(.um-motion-control, .um-agent-button, .um-agent-activity-grid button, .um-dsh-action-submit):active { transform: none !important; scale: 1 !important; }
+}
+html[data-reduce-motion='true'] *,
+html[data-reduce-motion='true'] *::before,
+html[data-reduce-motion='true'] *::after {
+  animation-duration: .01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+html[data-reduce-motion='true'] :is(.um-motion-control, .um-agent-button, .um-agent-activity-grid button, .um-dsh-action-submit):active { transform: none !important; scale: 1 !important; }
