@@ -151,9 +151,9 @@ def test_delete_cache_failure_can_be_retried(auth_client, user, settings, tmp_pa
 
 @pytest.mark.django_db
 def test_site_status_cookie_and_source(user, settings):
-    from rest_framework.authtoken.models import Token
+    from users.login_sessions import LoginSession
     client = APIClient()
-    client.cookies['auth_token'] = Token.objects.get_or_create(user=user)[0].key
+    client.cookies['auth_token'] = LoginSession.issue(user).key
     url = '/api/ai/dsh/status/'
     assert client.get(url).status_code == 404
     settings.UNIMIND_DSH_ENABLED = settings.UNIMIND_DSH_SITE_ENABLED = True
