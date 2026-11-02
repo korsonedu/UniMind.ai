@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
+import { useSystemStore } from '@/store/useSystemStore';
 
 export function CheckInFireworks({ burst }: { burst: number }) {
+  const reduceMotion = useSystemStore(state => state.reduceMotion);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (!burst || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!burst || reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
     if (!canvas || !context) return;
@@ -40,6 +42,6 @@ export function CheckInFireworks({ burst }: { burst: number }) {
     };
     frame = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(frame); context.clearRect(0, 0, width, height); };
-  }, [burst]);
+  }, [burst, reduceMotion]);
   return <canvas ref={canvasRef} className="um-checkin-fireworks" aria-hidden="true" />;
 }

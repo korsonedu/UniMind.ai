@@ -313,15 +313,15 @@ export const StudyRoom: React.FC = () => {
   // ── Render ──
   return (
     <div className={cn(
-      "um-study-room overflow-hidden animate-in fade-in duration-300 text-left text-foreground",
+      "um-study-room overflow-hidden um-motion-surface animate-in fade-in duration-[180ms] ease-out text-left text-foreground",
       isMobile ? "h-full min-h-0 flex flex-col gap-0" : "flex"
     )}>
       {/* ── Main chat area ── */}
       <div
         className={cn(
           isMobile
-            ? "um-study-chat flex-1 min-h-0 flex flex-col bg-background overflow-hidden relative transition-all duration-300"
-            : "um-study-chat flex-1 flex flex-col bg-card overflow-hidden relative transition-all duration-300",
+            ? "um-study-chat flex-1 min-h-0 flex flex-col bg-background overflow-hidden relative transition-all duration-[180ms]"
+            : "um-study-chat flex-1 flex flex-col bg-card overflow-hidden relative transition-all duration-[180ms]",
           isDragging && "ring-4 ring-primary/20 bg-primary/5 border-primary border-dashed z-50",
         )}
         onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
@@ -446,7 +446,7 @@ export const StudyRoom: React.FC = () => {
 
       {/* ── Mobile fullscreen timer ── */}
       <div className={cn(
-        "fixed inset-0 z-[var(--z-overlay)] md:hidden bg-[#0b0d10]/95 text-white flex flex-col items-center justify-center gap-6 transition-all duration-300",
+        "fixed inset-0 z-[var(--z-overlay)] md:hidden bg-[#0b0d10]/95 text-white flex flex-col items-center justify-center gap-6 transition-all duration-[180ms]",
         showMobileTimerFullscreen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
       )}>
         <button onClick={() => setShowMobileTimerFullscreen(false)} className="absolute top-6 right-6 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">

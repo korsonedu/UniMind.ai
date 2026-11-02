@@ -98,7 +98,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
       )}
       <div className={cn("flex flex-col max-w-[85%]", isUser ? "items-end" : "items-start")}>
         <div data-native-message={native ? (isUser ? 'user' : 'assistant') : undefined} className={cn(
-          "w-fit animate-in fade-in slide-in-from-bottom-1 duration-300",
+          "w-fit um-motion-surface animate-in fade-in duration-[180ms] ease-out",
           compact
             ? "px-2.5 py-1 text-[12px] leading-relaxed"
             : "px-3 py-1.5 text-[13px] leading-relaxed",

@@ -57,7 +57,7 @@ export function PaymentResult() {
 
         <div className={cn(
           'w-full max-w-[320px] text-center space-y-6',
-          'motion-safe:transition-all motion-safe:duration-700 motion-safe:ease-out',
+          'motion-safe:transition-all motion-safe:duration-[180ms] motion-safe:ease-out',
           mounted ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0',
         )}>
 

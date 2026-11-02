@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useSystemStore } from '@/store/useSystemStore';
 
 /**
  * 滚动边界物理位移 — 当弹窗内滚动区域到达边界时，继续滚动会让
@@ -31,6 +32,12 @@ export function useScrollBoundaryShift(
     };
 
     const spring = () => {
+      if (useSystemStore.getState().reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        currentShift.current = 0;
+        targetShift = 0;
+        applyTransform(0);
+        return;
+      }
       const diff = targetShift - currentShift.current;
       if (Math.abs(diff) < 0.03) {
         currentShift.current = targetShift;

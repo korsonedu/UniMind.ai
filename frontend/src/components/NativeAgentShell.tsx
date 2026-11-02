@@ -12,7 +12,7 @@ interface Props { native?: boolean; sidebar?: ReactNode; onNew: () => void; chil
 export function NativeAgentShell({ native, sidebar, onNew, children, title = '新对话', label = '小宇' }: Props) {
   const [open, setOpen] = useState(false);
   const directory = useDirectoryWidth();
-  if (!native) return <div className="h-full flex animate-in fade-in duration-300">{sidebar}{children}</div>;
+  if (!native) return <div className="h-full flex um-motion-surface animate-in fade-in duration-[180ms] ease-out">{sidebar}{children}</div>;
   return <div className="um-native-agent um-agent-workspace" data-directory-hidden={directory.collapsed} data-directory-animated={directory.animated || undefined}>
     <div className="um-agent-directory" style={{ width: directory.width, '--um-directory-content-width': `${directory.contentWidth}px` } as CSSProperties}>
       <div aria-hidden={directory.collapsed || undefined} inert={directory.collapsed} className="um-agent-directory-content um-directory-content">{sidebar}</div>

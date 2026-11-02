@@ -187,7 +187,7 @@ export const MobileFocusTimer: React.FC<{
 
       {/* Fullscreen focus modal */}
       <div className={cn(
-        "fixed inset-0 z-[var(--z-overlay)] md:hidden bg-[#0b0d10]/95 text-white flex flex-col items-center justify-center gap-6 transition-all duration-300",
+        "fixed inset-0 z-[var(--z-overlay)] md:hidden bg-[#0b0d10]/95 text-white flex flex-col items-center justify-center gap-6 transition-all duration-[180ms]",
         showFullscreen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
       )}>
         <button onClick={() => setShowFullscreen(false)} className="absolute top-6 right-6 h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">

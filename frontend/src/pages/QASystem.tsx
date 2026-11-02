@@ -108,7 +108,7 @@ const AnswerItem = ({ answer, onReplyClick, onRefresh }: { answer: QAAnswer, onR
         </div>
 
         {isEditing ? (
-          <div className="space-y-2 animate-in fade-in slide-in-from-bottom-1 duration-200">
+          <div className="space-y-2 um-motion-surface animate-in fade-in duration-[180ms] ease-out">
             <textarea
               value={editContent}
               onChange={e => setEditContent(e.target.value)}
@@ -312,7 +312,7 @@ const ThreadCard = ({ question, onRefresh, isAdmin, detail = false, onDelete }: 
       {/* Question Content */}
       <div className="um-qa-thread-content">
         {isEditing ? (
-             <div className="space-y-2 animate-in fade-in slide-in-from-bottom-1 duration-200">
+             <div className="space-y-2 um-motion-surface animate-in fade-in duration-[180ms] ease-out">
              <textarea
                value={editContent}
                onChange={e => setEditContent(e.target.value)}

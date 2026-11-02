@@ -23,7 +23,7 @@
 .um-agent-toolbar-actions .um-agent-toolbar-new { display: none; }
 .um-agent-button { display: inline-flex; gap: 6px; align-items: center; justify-content: center; border: 1px solid var(--um-color-border); background: var(--um-color-surface); border-radius: 8px; min-height: 34px; padding: 6px 12px; cursor: pointer; transition: background-color var(--um-motion-fast), border-color var(--um-motion-fast), color var(--um-motion-fast), transform var(--um-motion-fast); }
 .um-agent-button:hover:not(:disabled) { background: var(--um-color-hover); }
-.um-agent-button:active:not(:disabled) { transform: scale(.97); }
+.um-agent-button:active:not(:disabled) { transform: scale(.98); }
 .um-agent-button-primary { color: var(--um-color-on-accent); background: var(--um-color-accent); border-color: var(--um-color-accent); }
 .um-agent-button-primary:hover:not(:disabled) { background: var(--um-color-accent-hover); }
 .um-agent-history-button { display: none; }
@@ -100,7 +100,7 @@
 .um-agent-activity-grid button { height: 24px; border-radius: 4px; background: var(--um-heat-0); cursor: pointer; transition: box-shadow var(--um-motion-fast), transform var(--um-motion-fast); }
 .um-agent-activity-grid button:hover { box-shadow: inset 0 0 0 1px var(--um-color-text-muted); }
 .um-agent-activity-grid button[aria-pressed='true'] { outline: 2px solid var(--um-color-accent); outline-offset: 2px; }
-.um-agent-activity-grid button:active { transform: scale(.94); }
+.um-agent-activity-grid button:active { transform: scale(.98); }
 .um-agent-activity-grid [data-level='1'] { background: var(--um-heat-1); }
 .um-agent-activity-grid [data-level='2'] { background: var(--um-heat-2); }
 .um-agent-activity-grid [data-level='3'] { background: var(--um-heat-3); }
@@ -147,7 +147,7 @@
 .um-agent-project-picker-empty { padding: 12px 8px; color: var(--um-color-text-muted); }
 .um-agent-button-danger { color: var(--um-color-on-accent); background: var(--um-color-danger); border-color: var(--um-color-danger); }
 .um-agent-button-danger:hover:not(:disabled) { background: var(--um-color-danger); filter: brightness(.92); }
-.um-agent-composer { width: 100%; max-width: 680px; background: var(--um-color-context); border: 1px solid var(--um-color-border); border-radius: var(--um-radius-composer); transition: border-color var(--um-motion-fast), box-shadow var(--um-motion-fast); animation: um-agent-enter 220ms ease-out; }
+.um-agent-composer { width: 100%; max-width: 680px; background: var(--um-color-context); border: 1px solid var(--um-color-border); border-radius: var(--um-radius-composer); transition: border-color var(--um-motion-fast), box-shadow var(--um-motion-fast); animation: um-agent-enter 180ms ease-out; }
 .um-agent-composer:focus-within { border-color: var(--um-color-accent); }
 .um-agent-composer:has(textarea:focus-visible) { outline: 2px solid var(--um-color-focus); outline-offset: 2px; }
 .um-agent-composer textarea { display: block; width: 100%; resize: none; min-height: 70px; max-height: 176px; padding: 16px 18px; font-size: var(--um-font-chat); line-height: var(--um-line-chat); background: transparent; border: 0; border-radius: var(--um-radius-composer) var(--um-radius-composer) 0 0; outline: 0; }
@@ -160,7 +160,7 @@
 .um-agent-composer .um-agent-task-trigger:hover { color: var(--um-color-text); background: var(--um-color-hover); }
 .um-agent-composer .um-agent-send { padding: 0; width: 36px; height: 36px; border-radius: 50%; }
 .um-agent-composer .um-agent-send:disabled { opacity: 1; color: var(--um-color-text-muted); background: var(--um-color-disabled); border-color: transparent; }
-@keyframes um-agent-enter { from { opacity: .65; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes um-agent-enter { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .um-agent-composer { animation: none; }
   .um-native-agent button:active { transform: none; }

@@ -393,7 +393,7 @@ export const TestSessionPage: React.FC = () => {
           </div>
           <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-primary rounded-full transition-all duration-300"
+              className="h-full bg-primary rounded-full transition-all duration-[180ms]"
               style={{ width: `${totalNeedAnswer ? (answeredCount / totalNeedAnswer) * 100 : 100}%` }}
             />
           </div>

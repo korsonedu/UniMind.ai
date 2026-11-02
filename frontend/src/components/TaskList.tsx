@@ -66,7 +66,7 @@ export function TaskList({ data, onComplete }: TaskListProps) {
   const activeItems = data.items.filter(item => item.status === 'queued' || item.status === 'running');
 
   return (
-    <div className="my-3 rounded-xl border border-border/60 bg-card/50 overflow-hidden transition-all duration-300">
+    <div className="my-3 rounded-xl border border-border/60 bg-card/50 overflow-hidden transition-all duration-[180ms]">
       {/* Header */}
       <button
         aria-expanded={!collapsed}
@@ -112,7 +112,7 @@ export function TaskList({ data, onComplete }: TaskListProps) {
               <div
                 key={item.id}
                 className={cn(
-                  'flex items-center gap-3 px-4 py-2 text-sm border-b border-border/20 last:border-0 transition-all duration-500',
+                  'flex items-center gap-3 px-4 py-2 text-sm border-b border-border/20 last:border-0 transition-all duration-[180ms]',
                   isNew && 'bg-emerald-50/50 dark:bg-emerald-950/20',
                 )}
               >

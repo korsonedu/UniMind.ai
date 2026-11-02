@@ -363,7 +363,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
       {/* Progress bar */}
       <div className="h-1 bg-stone-100 shrink-0">
         <div
-          className="h-full bg-stone-800 transition-all duration-300"
+          className="h-full bg-stone-800 transition-all duration-[180ms]"
           style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}
         />
       </div>
