@@ -67,7 +67,7 @@ class User(AbstractUser):
             self.is_staff = True
             self.is_member = True
         fields = kwargs.get('update_fields')
-        if (getattr(settings, 'ACCOUNT_ENABLED', False) and not self._state.adding
+        if (not self._state.adding
                 and (fields is None or {'password', 'is_active'}.intersection(fields))):
             from django.db import transaction
             from .accounts.services import revoke_account_sessions
@@ -682,3 +682,4 @@ from .models_learning import (
     LearningSession, LearningProduct, LearningGrant, LearningUsage, StudentCohort, CourseStudentStatus, WeeklyAIQuotaConfig,
     AIAddonProduct, AIAddonGrant, WeeklyAIUsage, AIUsageReservation,
 )
+from .login_sessions import LoginSession

@@ -1,6 +1,6 @@
 {% extends 'users/accounts/base.html' %}
 {% block content %}
-<h1>{% if purpose == 'register' %}注册{% elif purpose == 'reset_password' %}找回密码{% else %}登录{% endif %}</h1>
+<h1>{% if purpose == 'register' %}注册 UniMind{% elif purpose == 'reset_password' %}找回密码{% else %}登录 UniMind{% endif %}</h1>
 {% if request.GET.reset %}<p class="account-notice">密码已重置，请使用新密码登录。</p>{% endif %}
 <form method="post" class="account-form">
   {% csrf_token %}<input type="hidden" name="next" value="{{ next_path }}">
@@ -13,6 +13,12 @@
   </div>{% endfor %}
   <p class="code-feedback" role="status" aria-live="polite"></p><button type="submit" class="primary-button">{{ submit_label }}</button>
 </form>
+{% if remembered_user and not purpose %}
+<p class="account-note">使用已有账号继续</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next_path }}">
+{% include 'users/accounts/account_card.html' with select_account=True %}
+</form>
+{% endif %}
 <div class="account-links">
   {% if purpose == 'register' %}<a href="/accounts/login/?{{ next_query }}">已有账号？登录</a>
   {% elif purpose == 'reset_password' %}<a href="/accounts/login/?{{ next_query }}">返回登录</a>

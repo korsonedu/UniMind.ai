@@ -16,26 +16,27 @@ from core.rate_limit import _incr_cache
 from users.models import User
 
 
-def legacy_cookie_user(request):
-    from rest_framework.authtoken.models import Token
+def platform_cookie_user(request):
+    from users.login_sessions import LoginSession
     token = request.COOKIES.get('auth_token')
-    record = Token.objects.select_related('user').filter(key=token).first() if token else None
+    record = LoginSession.resolve(token)
     user = record.user if record else None
     return user if user and user.is_active and not (user.locked_until and user.locked_until > timezone.now()) else None
 
 
 def account_conflict(request):
-    platform = legacy_cookie_user(request)
+    platform = platform_cookie_user(request)
     return platform if account_is_current(request, audience='account') and platform and platform.pk != request.user.pk else None
 
 
 def revoke_account_sessions(user_id):
     from rest_framework.authtoken.models import Token
+    from users.login_sessions import LoginSession
     from oauth2_provider.models import Grant, AccessToken, RefreshToken, IDToken
     with transaction.atomic():
         User.objects.select_for_update().get(pk=user_id)
         User.objects.filter(pk=user_id).update(account_session_version=F('account_session_version') + 1)
-        for model in (Token, Grant, RefreshToken, AccessToken, IDToken):
+        for model in (Token, LoginSession, Grant, RefreshToken, AccessToken, IDToken):
             model.objects.filter(user_id=user_id).delete()
 
 

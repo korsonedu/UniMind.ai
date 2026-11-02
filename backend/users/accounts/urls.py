@@ -19,6 +19,7 @@ urlpatterns = [
     path('account-api/logout/', views.site_logout, name='account-site-logout'),
     path('accounts/o/', include((provider_urls, 'oauth2_provider'), namespace='oauth2_provider')),
     path('accounts/login/', views.account_login, name='account-login'),
+    path('accounts/session/', views.account_session, name='account-session'),
     path('accounts/desktop/', desktop.confirm, name='account-desktop'),
     path('accounts/register/', views.account_register, name='account-register'),
     path('accounts/send-code/', views.account_send_code, name='account-send-code'),

@@ -17,7 +17,7 @@ precacheAndRoute(self.__WB_MANIFEST);
 
 // Offline navigation for the app shell; APIs stay network-only below.
 registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-  denylist: [/^\/api\//, /^\/admin\//, /^\/media\//, /^\/static\//, /^\/assets\//, /^\/health\//],
+  denylist: [/^\/api\//, /^\/accounts\//, /^\/account-api\//, /^\/admin\//, /^\/media\//, /^\/static\//, /^\/assets\//, /^\/health\//],
 }));
 
 // API runtime caching

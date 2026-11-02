@@ -1,6 +1,6 @@
 """Registered students see only explicitly public course modules."""
 import pytest
-from rest_framework.authtoken.models import Token
+from users.login_sessions import LoginSession
 from rest_framework.test import APIClient
 
 
@@ -38,7 +38,7 @@ def test_registered_public_course_boundary(auth_client, user, settings, tmp_path
     assert auth_client.get(f'/api/courses/startup-materials/{material.pk}/').status_code == 403
     for action in ('outline', 'transcript'):
         assert auth_client.post(f'/api/courses/{open_course.pk}/{action}/').status_code == 403
-    auth_client.cookies['auth_token'] = Token.objects.create(user=user).key
+    auth_client.cookies['auth_token'] = LoginSession.issue(user=user).key
     for name in ('public.mp4', 'public.pdf'):
         response = auth_client.get('/media/' + name)
         assert response.status_code == 200

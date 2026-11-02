@@ -1,0 +1,6 @@
+<input type="hidden" name="account_id" value="{{ request.user.pk }}">
+<button class="account-card" type="submit"{% if select_account %} name="selection" value="continue"{% endif %}>
+  <span class="account-avatar" aria-hidden="true">{{ request.user.nickname|default:request.user.username|slice:':1' }}</span>
+  <span class="account-card-details"><strong>{{ request.user.nickname|default:request.user.username }}</strong><span>{{ request.user.email|default:request.user.username }}</span></span>
+  <span aria-hidden="true">↗</span>
+</button>

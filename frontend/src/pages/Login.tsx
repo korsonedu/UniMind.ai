@@ -23,6 +23,7 @@ const WebLogin: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
+  const [remembered, setRemembered] = useState<{ user: { id: number; nickname: string; email: string }; csrf_token: string } | null>(null);
   const setAuth = useAuthStore(s => s.setAuth);
   const { fetchFeatures } = useInstitutionStore();
   const navigate = useNavigate();
@@ -33,6 +34,15 @@ const WebLogin: React.FC = () => {
     const { user } = useAuthStore.getState();
     if (user) navigate(returnTo, { replace: true });
   }, [navigate, returnTo]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/accounts/session/', { credentials: 'same-origin', cache: 'no-store', signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (!controller.signal.aborted && data?.user) setRemembered(data); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   const getInstitutionSlug = (): string => {
     const fromParam = searchParams.get('institution');
@@ -218,6 +228,17 @@ const WebLogin: React.FC = () => {
           </p>
         </div>
       )}
+      {remembered && <form action="/accounts/unimind/" method="post" className="mt-6">
+        <input type="hidden" name="csrfmiddlewaretoken" value={remembered.csrf_token} />
+        <input type="hidden" name="next" value={returnTo} />
+        <input type="hidden" name="account_id" value={remembered.user.id} />
+        <p className="text-xs text-muted-foreground mb-3">使用已有账号继续</p>
+        <button type="submit" className="flex w-full items-center gap-3 rounded-xl border border-border p-4 text-left hover:bg-muted/50">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-lg" aria-hidden="true">{remembered.user.nickname.slice(0, 1)}</span>
+          <span className="min-w-0 flex-1"><span className="block text-sm font-medium">{remembered.user.nickname}</span><span className="block truncate text-xs text-muted-foreground">{remembered.user.email}</span></span>
+          <span aria-hidden="true">↗</span>
+        </button>
+      </form>}
     </AuthLayout>
   );
 };

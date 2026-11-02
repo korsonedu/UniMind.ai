@@ -4,8 +4,6 @@ from authlib.integrations.django_client import OAuth
 from authlib.integrations.base_client import OAuthError
 from oauth2_provider.views import AuthorizationView, TokenView
 from django.db import transaction
-from django.shortcuts import redirect
-from urllib.parse import urlencode
 from oauthlib.oauth2 import InvalidGrantError
 from users.models import User
 
@@ -51,10 +49,8 @@ class AccountAuthorizationView(AuthorizationView):
     login_url = '/accounts/login/'
 
     def dispatch(self, request, *args, **kwargs):
-        from .services import account_conflict, account_website_origin
+        from .services import account_website_origin
         account_website_origin(request)
-        if account_conflict(request):
-            return redirect('/accounts/select/?' + urlencode({'next': request.get_full_path()}))
         return super().dispatch(request, *args, **kwargs)
 
 
