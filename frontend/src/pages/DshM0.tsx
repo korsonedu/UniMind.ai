@@ -1,3 +1,4 @@
+import { SelectField, SelectOption } from '@/components/ui/select';
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { DshToolCard, type DshCard } from '@/components/DshToolCard';
@@ -270,12 +271,12 @@ export default function DshM0({ production = false }: { production?: boolean }) 
         <section className="space-y-4 border border-border bg-card p-6">
           {!production && <h2 className="font-semibold">小宇只读链路</h2>}
           {production && <div className="flex flex-wrap items-center gap-3 text-sm">
-            <select aria-label="历史会话" className="min-w-48 border border-border/70 bg-card p-2"
+            <SelectField aria-label="历史会话" className="min-w-48 border border-border/70 bg-card p-2"
               value={session?.id || ''} disabled={busy || !!retry || !health?.backend_configured || !savedSessions.length}
-              onChange={event => void loadSession(event.target.value)}>
-              <option value="">{savedSessions.length ? '历史会话' : '暂无历史会话'}</option>
-              {savedSessions.map(row => <option key={row.id} value={row.id}>{row.title} · {row.message_count} 条</option>)}
-            </select>
+              onValueChange={value => void loadSession(value)}>
+              <SelectOption value="">{savedSessions.length ? '历史会话' : '暂无历史会话'}</SelectOption>
+              {savedSessions.map(row => <SelectOption key={row.id} value={row.id}>{row.title} · {row.message_count} 条</SelectOption>)}
+            </SelectField>
             <button disabled={busy || !!retry || !health?.backend_configured} onClick={() => void manageSession('new')} className="border border-border px-3 py-2 disabled:opacity-40">新会话</button>
           </div>}
           <label className="block text-sm text-foreground/60" htmlFor="dsh-message">本轮问题</label>
@@ -328,12 +329,12 @@ export default function DshM0({ production = false }: { production?: boolean }) 
           </section>
           {site && <section>
             <label htmlFor="dsh-saved-session" className="font-semibold">服务端会话</label>
-            <select id="dsh-saved-session" className="mt-3 w-full border border-border/70 bg-card p-2 text-sm"
+            <SelectField id="dsh-saved-session" className="mt-3 w-full border border-border/70 bg-card p-2 text-sm"
               value={session?.id || ''} disabled={busy || !!retry || !health?.backend_configured || !savedSessions.length}
-              onChange={event => void loadSession(event.target.value)}>
-              <option value="">选择已有会话（最近 50 项）</option>
-              {savedSessions.map(row => <option key={row.id} value={row.id}>{row.title} · {row.message_count} 条</option>)}
-            </select>
+              onValueChange={value => void loadSession(value)}>
+              <SelectOption value="">选择已有会话（最近 50 项）</SelectOption>
+              {savedSessions.map(row => <SelectOption key={row.id} value={row.id}>{row.title} · {row.message_count} 条</SelectOption>)}
+            </SelectField>
             <p className="mt-2 text-xs leading-6 text-muted-foreground">{savedSessions.length ? '同一账号可从服务器恢复；读取不会调用模型或扣问答次数。' : '当前账号暂无可发现的服务端会话。'}</p>
           </section>}
           <section><h2 className="font-semibold">学生长期记忆</h2>

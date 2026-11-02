@@ -1,3 +1,4 @@
+import { SelectField, SelectOption } from '@/components/ui/select';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { CaretRight as ChevronRight, MagnifyingGlass as Search, SlidersHorizontal } from '@phosphor-icons/react';
@@ -65,11 +66,11 @@ export function CourseTree({ courses, treeCourses, selectedId, loading, error, q
         <PopoverContent className="um-course-filter-panel" align="start" collisionPadding={12} aria-label="课程筛选">
           <div className="um-course-filter-heading"><h3>筛选课程</h3><button type="button" className="um-course-text-button" disabled={!filtersActive} onClick={onResetFilters}>重置</button></div>
           <div className="um-course-facets">
-            <label htmlFor={subjectId}>学科</label><select id={subjectId} value={subjectFilter} onChange={event => onFilter(event.target.value, 'subject')}><option value="">全部学科</option>{allSubjects.map(value => <option key={value} value={value}>{value}</option>)}</select>
-            <label htmlFor={moduleId}>模块</label><select id={moduleId} value={moduleFilter} onChange={event => onFilter(event.target.value || subjectFilter, event.target.value ? 'module' : 'subject')}><option value="">全部模块</option>{moduleOptions.map(([key, course]) => <option key={key} value={key}>{!subjectFilter ? `${subjectName(course)} / ` : ''}{course.module_name || '待归类模块'}</option>)}</select>
-            <label htmlFor={scopeId}>观看范围</label><select id={scopeId} value={scope} onChange={event => onFacet('scope', event.target.value)}><option value="all">全部课程</option><option value="learning">继续学习</option><option value="later">稍后观看</option></select>
-            <label htmlFor={tagId}>标签筛选</label><select id={tagId} value={tag} onChange={event => onFacet('tag', event.target.value)}><option value="">全部标签</option>{tags.map(value => <option key={value} value={value}>{value}</option>)}</select>
-            <label htmlFor={statusId}>学习状态筛选</label><select id={statusId} value={status} onChange={event => onFacet('status', event.target.value)}><option value="all">全部状态</option><option value="learning">未看完</option><option value="finished">已看完</option><option value="new">未开始</option></select>
+            <label htmlFor={subjectId}>学科</label><SelectField id={subjectId} value={subjectFilter} onValueChange={value => onFilter(value, 'subject')}><SelectOption value="">全部学科</SelectOption>{allSubjects.map(value => <SelectOption key={value} value={value}>{value}</SelectOption>)}</SelectField>
+            <label htmlFor={moduleId}>模块</label><SelectField id={moduleId} value={moduleFilter} onValueChange={value => onFilter(value || subjectFilter, value ? 'module' : 'subject')}><SelectOption value="">全部模块</SelectOption>{moduleOptions.map(([key, course]) => <SelectOption key={key} value={key}>{!subjectFilter ? `${subjectName(course)} / ` : ''}{course.module_name || '待归类模块'}</SelectOption>)}</SelectField>
+            <label htmlFor={scopeId}>观看范围</label><SelectField id={scopeId} value={scope} onValueChange={value => onFacet('scope', value)}><SelectOption value="all">全部课程</SelectOption><SelectOption value="learning">继续学习</SelectOption><SelectOption value="later">稍后观看</SelectOption></SelectField>
+            <label htmlFor={tagId}>标签筛选</label><SelectField id={tagId} value={tag} onValueChange={value => onFacet('tag', value)}><SelectOption value="">全部标签</SelectOption>{tags.map(value => <SelectOption key={value} value={value}>{value}</SelectOption>)}</SelectField>
+            <label htmlFor={statusId}>学习状态筛选</label><SelectField id={statusId} value={status} onValueChange={value => onFacet('status', value)}><SelectOption value="all">全部状态</SelectOption><SelectOption value="learning">未看完</SelectOption><SelectOption value="finished">已看完</SelectOption><SelectOption value="new">未开始</SelectOption></SelectField>
             {extraFilters}
           </div>
         </PopoverContent>
