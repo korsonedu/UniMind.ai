@@ -21,6 +21,7 @@ const SECURE_WEB_PREFERENCES: Electron.WebPreferences = {
 };
 
 let mainWindow: BrowserWindow | null = null;
+const mainWindows = new Map<BrowserWindow, { pendingRoute?: string; recoveryNotice?: 'resume' | 'renderer-recovered' }>();
 let sourceUrl = '';
 let offline: OfflineLibrary;
 let updater: DesktopUpdater;
@@ -42,7 +43,10 @@ function state() {
   return { version: app.getVersion(), platform: process.platform, preferences: { ...preferences }, focus: { status: focusStatus, remaining: focusRemaining, duration: focusDuration }, downloads: offline?.list() || [], storage: offline?.storage() || { usedBytes: 0 }, learningSync: offline?.learningSync() || { pending: 0, rejected: 0 }, offlineSession: offline?.offlineSession() || null, update: updater?.state || { status: 'unconfigured' }, auth: auth?.state || { status: 'idle' } };
 }
 function changed() {
-  if (mainWindow && sameOrigin(sourceUrl, mainWindow.webContents.getURL())) mainWindow.webContents.send('desktop:state', state());
+  const next = state();
+  for (const window of mainWindows.keys()) {
+    if (sameOrigin(sourceUrl, window.webContents.getURL())) window.webContents.send('desktop:state', next);
+  }
 }
 
 function focusText(seconds: number) {
@@ -76,7 +80,7 @@ function updateTrayTitle() {
   tray.setToolTip(active ? `UniMind · ${paused ? '已暂停' : '专注中'} ${focusText(focusRemaining)}` : 'UniMind');
 }
 function maybeQuit() {
-  if (process.platform !== 'darwin' && !preferences.keepRunning && focusStatus === 'idle' && !mainWindow && !offlineWindow) app.quit();
+  if (process.platform !== 'darwin' && !preferences.keepRunning && focusStatus === 'idle' && !mainWindows.size && !offlineWindow) app.quit();
 }
 function stopFocusInterval() {
   if (focusInterval) clearInterval(focusInterval);
@@ -156,6 +160,8 @@ function registerGlobalShortcuts() {
   if (!globalShortcut.register('CommandOrControl+Shift+N', () => { showMain(); navigate('/notes?new=1'); })) console.warn('无法注册全局快捷键 CommandOrControl+Shift+N');
 }
 function showMain() {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && mainWindows.has(focused)) mainWindow = focused;
   if (!mainWindow) createMainWindow();
   if (mainWindow?.isMinimized()) mainWindow.restore();
   mainWindow?.show(); mainWindow?.focus();
@@ -165,12 +171,12 @@ function validRoute(value: unknown): value is string {
     && sameOrigin(sourceUrl, new URL(value, sourceUrl).href)
     && /^\/(?:settings|xiaoyu|courses|notes|qa|tests)(?:\/|$)/.test(new URL(value, sourceUrl).pathname) && !/[\\\r\n]/.test(value);
 }
-let pendingRoute = '';
 function navigate(route: string) {
   if (!validRoute(route)) return;
   showMain();
-  if (mainWindow?.webContents.isLoadingMainFrame()) pendingRoute = route;
-  else mainWindow?.webContents.send('desktop:navigate', route);
+  if (!mainWindow) return;
+  if (mainWindow.webContents.isLoadingMainFrame()) mainWindows.get(mainWindow)!.pendingRoute = route;
+  else mainWindow.webContents.send('desktop:navigate', route);
 }
 function deepLink(value: string) {
   if (auth?.receive(value)) { showMain(); return; }
@@ -195,7 +201,15 @@ function openOffline(id?: number) {
   }
   void offlineWindow.loadURL(target); offlineWindow.show();
 }
+function updateMenu() {
+  const menu = Menu.getApplicationMenu();
+  const toggle = menu?.getMenuItemById('focus-toggle');
+  if (toggle) toggle.label = focusStatus === 'running' ? '暂停专注' : focusStatus === 'paused' ? '继续专注' : '开始专注';
+  const reset = menu?.getMenuItemById('focus-reset');
+  if (reset) reset.enabled = focusStatus !== 'idle';
+}
 function updateTray() {
+  updateMenu();
   const shouldShow = preferences.keepRunning || focusStatus !== 'idle';
   if (!shouldShow) { tray?.destroy(); tray = null; trayMenu = null; trayPaused = false; return; }
   if (!tray) {
@@ -271,7 +285,8 @@ function installIPC() {
     installUpdate: () => updater.install(() => { quitting = true; }),
   };
   for (const [name, handler] of Object.entries(handlers)) ipcMain.handle(`desktop:${name}`, (event, ...args) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame || !sameOrigin(sourceUrl, event.senderFrame.url)) throw new Error('不受信任的桌面请求');
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || !mainWindows.has(window) || event.senderFrame !== window.webContents.mainFrame || !sameOrigin(sourceUrl, event.senderFrame.url)) throw new Error('不受信任的桌面请求');
     return handler(args[0]);
   });
 }
@@ -318,20 +333,19 @@ function openResourceWindow(target: string, development: boolean): void {
 }
 
 let recovering = false;
-let recoveryNotice: 'resume' | 'renderer-recovered' | undefined;
-function signalRecovery(reason: 'resume' | 'renderer-recovered') {
-  if (mainWindow && sameOrigin(sourceUrl, mainWindow.webContents.getURL()) && !mainWindow.webContents.isLoadingMainFrame()) mainWindow.webContents.send('desktop:resume', { reason });
-  else recoveryNotice = reason;
+function signalRecovery(reason: 'resume' | 'renderer-recovered', window: BrowserWindow) {
+  if (sameOrigin(sourceUrl, window.webContents.getURL()) && !window.webContents.isLoadingMainFrame()) window.webContents.send('desktop:resume', { reason });
+  else mainWindows.get(window)!.recoveryNotice = reason;
 }
-async function offerRecovery() {
-  if (recovering || quitting || !mainWindow) return;
+async function offerRecovery(window: BrowserWindow) {
+  if (recovering || quitting || window.isDestroyed()) return;
   recovering = true;
   try {
-    const result = await dialog.showMessageBox(mainWindow, { type: 'warning', title: 'UniMind 需要重新连接', message: '页面暂时没有响应。可以重新连接，或先打开离线课程库。', detail: '重新连接后会恢复草稿并查询原任务；执行结果不明时，可先刷新历史，再决定是否手动重试。', buttons: ['重新连接', '离线课程库', '稍后处理'], defaultId: 0, cancelId: 2 });
-    if (result.response === 0 && mainWindow) {
-      const current = mainWindow.webContents.getURL();
-      recoveryNotice = 'renderer-recovered';
-      void mainWindow.loadURL(sameOrigin(sourceUrl, current) ? current : sourceUrl).catch(() => {});
+    const result = await dialog.showMessageBox(window, { type: 'warning', title: 'UniMind 需要重新连接', message: '页面暂时没有响应。可以重新连接，或先打开离线课程库。', detail: '重新连接后会恢复草稿并查询原任务；执行结果不明时，可先刷新历史，再决定是否手动重试。', buttons: ['重新连接', '离线课程库', '稍后处理'], defaultId: 0, cancelId: 2 });
+    if (result.response === 0 && !window.isDestroyed()) {
+      const current = window.webContents.getURL();
+      mainWindows.get(window)!.recoveryNotice = 'renderer-recovered';
+      void window.loadURL(sameOrigin(sourceUrl, current) ? current : sourceUrl).catch(() => {});
     } else if (result.response === 1) openOffline();
   } finally { recovering = false; }
 }
@@ -370,7 +384,7 @@ function createMainWindow(): void {
     return;
   }
   sourceUrl = source;
-  mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
@@ -384,37 +398,44 @@ function createMainWindow(): void {
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 18 } } : { titleBarOverlay: true }),
     webPreferences: { ...SECURE_WEB_PREFERENCES, preload: path.join(__dirname, 'preload.cjs') },
   });
-  installContextMenu(mainWindow);
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
-  mainWindow.webContents.on('will-navigate', (event, url) => {
+  mainWindows.set(window, {});
+  mainWindow = window;
+  const windowState = mainWindows.get(window)!;
+  installContextMenu(window);
+  window.on('focus', () => { mainWindow = window; });
+  window.once('ready-to-show', () => window.show());
+  window.webContents.on('will-navigate', (event, url) => {
     if (!sameOrigin(source, url)) event.preventDefault();
   });
-  mainWindow.webContents.on('will-redirect', event => {
+  window.webContents.on('will-redirect', event => {
     if (event.isMainFrame && !sameOrigin(source, event.url)) event.preventDefault();
   });
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  window.webContents.setWindowOpenHandler(({ url }) => {
     if (validResource(source, url, development)) openResourceWindow(url, development);
     return { action: 'deny' };
   });
-  mainWindow.webContents.on('did-finish-load', () => {
+  window.webContents.on('did-finish-load', () => {
     changed();
-    if (recoveryNotice) { const reason = recoveryNotice; recoveryNotice = undefined; signalRecovery(reason); }
-    if (pendingRoute) { const route = pendingRoute; pendingRoute = ''; navigate(route); }
+    if (windowState.recoveryNotice) { const reason = windowState.recoveryNotice; windowState.recoveryNotice = undefined; signalRecovery(reason, window); }
+    if (windowState.pendingRoute) { const route = windowState.pendingRoute; windowState.pendingRoute = undefined; window.webContents.send('desktop:navigate', route); }
   });
-  mainWindow.webContents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
+  window.webContents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
     if (code === -3 || !isMainFrame || url.startsWith('data:')) return;
-    mainWindow?.show();
-    if (app.isPackaged && !previewMode()) void mainWindow?.loadURL(fallbackUrl()).catch(() => {});
+    window.show();
+    if (app.isPackaged && !previewMode()) void window.loadURL(fallbackUrl()).catch(() => {});
     openOffline();
   });
-  mainWindow.webContents.on('render-process-gone', () => { void offerRecovery(); });
-  mainWindow.on('unresponsive', () => { void offerRecovery(); });
-  mainWindow.on('close', event => {
-    if (preferences.keepRunning && !quitting) { event.preventDefault(); mainWindow?.hide(); }
+  window.webContents.on('render-process-gone', () => { void offerRecovery(window); });
+  window.on('unresponsive', () => { void offerRecovery(window); });
+  window.on('close', event => {
+    if (preferences.keepRunning && !quitting) { event.preventDefault(); window.hide(); }
   });
-  mainWindow.on('closed', () => { mainWindow = null; });
-  void mainWindow.loadURL(source).catch(() => {});
-  if (!app.isPackaged) mainWindow.webContents.openDevTools({ mode: 'detach' });
+  window.on('closed', () => {
+    mainWindows.delete(window);
+    if (mainWindow === window) mainWindow = [...mainWindows.keys()].pop() ?? null;
+  });
+  void window.loadURL(source).catch(() => {});
+  if (!app.isPackaged) window.webContents.openDevTools({ mode: 'detach' });
 }
 
 function installContextMenu(window: BrowserWindow): void {
@@ -447,23 +468,59 @@ function installContextMenu(window: BrowserWindow): void {
 
 function installMenu(): void {
   const template: MenuItemConstructorOptions[] = [];
-  if (process.platform === 'darwin') template.push({ role: 'appMenu' });
-  template.push({ label: '学习', submenu: [
-    { label: '小宇', accelerator: 'CommandOrControl+1', click: () => navigate('/xiaoyu') },
+  const appName = previewMode() ? 'UniMind Preview' : 'UniMind';
+  const settings: MenuItemConstructorOptions = { label: '设置…', accelerator: 'CommandOrControl+,', click: () => navigate('/settings?section=desktop') };
+  const update: MenuItemConstructorOptions = { label: '检查更新…', click: () => { navigate('/settings?section=desktop'); void updater.check(); } };
+  const quit: MenuItemConstructorOptions = { role: 'quit', label: `退出 ${appName}` };
+  const offlineLibrary: MenuItemConstructorOptions = { label: '离线课程库', accelerator: 'CommandOrControl+Shift+O', click: () => openOffline() };
+  const reconnect: MenuItemConstructorOptions = { label: '重新连接', click: () => { showMain(); void mainWindow?.loadURL(sourceUrl); } };
+  const file: MenuItemConstructorOptions[] = [
+    { label: '新建窗口', accelerator: 'CommandOrControl+N', click: () => createMainWindow() },
+    { label: '新聊天', accelerator: 'CommandOrControl+T', click: () => navigate('/xiaoyu?new=chat') },
+    { label: '新项目…', click: () => navigate('/xiaoyu?new=project') },
+    { type: 'separator' },
+    offlineLibrary,
+    reconnect,
+    { type: 'separator' },
+    { role: 'close', label: '关闭窗口' },
+  ];
+  const study: MenuItemConstructorOptions[] = [
     { label: '课程', accelerator: 'CommandOrControl+2', click: () => navigate('/courses') },
-    { label: '笔记', accelerator: 'CommandOrControl+3', click: () => navigate('/notes') },
-    { label: '新建笔记', click: () => { showMain(); navigate('/notes?new=1'); } },
-    { label: '桌面设置', accelerator: 'CommandOrControl+,', click: () => navigate('/settings?section=desktop') },
-    { type: 'separator' }, { label: '专注', submenu: [
-      { label: '开始 / 暂停专注', click: toggleFocus },
-      { label: '重置专注', click: resetFocus },
-    ] },
-    { type: 'separator' }, { label: '离线课程库', accelerator: 'CommandOrControl+Shift+O', click: () => openOffline() },
-    { label: '重新连接', click: () => { showMain(); void mainWindow?.loadURL(sourceUrl); } },
-    { label: '退出 UniMind', accelerator: 'CommandOrControl+Q', click: () => app.quit() },
-  ] }, { role: 'editMenu' }, { role: 'windowMenu' });
-  if (!app.isPackaged) template.push({ role: 'viewMenu' });
+    { type: 'separator' },
+    { id: 'focus-toggle', label: '开始专注', click: toggleFocus },
+    { id: 'focus-reset', label: '重置专注', click: resetFocus },
+  ];
+  if (process.platform === 'darwin') {
+    template.push({ label: appName, submenu: [
+      { role: 'about', label: `关于 ${appName}` },
+      { type: 'separator' },
+      settings,
+      update,
+      { type: 'separator' },
+      { role: 'services', label: '服务' },
+      { type: 'separator' },
+      { role: 'hide', label: `隐藏 ${appName}` },
+      { role: 'hideOthers', label: '隐藏其他' },
+      { role: 'unhide', label: '全部显示' },
+      { type: 'separator' },
+      quit,
+    ] });
+  } else {
+    file.push({ type: 'separator' }, settings, update, quit);
+  }
+  template.push({ label: '文件', submenu: file }, { label: '学习', submenu: study }, { role: 'editMenu', label: '编辑' });
+  if (process.platform === 'darwin') template.push({ label: '显示', submenu: [
+    ...(!app.isPackaged ? [{ role: 'forceReload' as const, label: '强制重新载入' }, { role: 'toggleDevTools' as const, label: '切换开发者工具' }, { type: 'separator' as const }] : []),
+    { role: 'resetZoom', label: '实际大小' },
+    { role: 'zoomIn', label: '放大' },
+    { role: 'zoomOut', label: '缩小' },
+    { type: 'separator' },
+    { role: 'togglefullscreen', label: '切换全屏' },
+  ] });
+  template.push({ role: 'windowMenu', label: '窗口' });
+  if (process.platform !== 'darwin' && !app.isPackaged) template.push({ role: 'viewMenu' });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  updateMenu();
 }
 
 function installSecurity(): void {
@@ -522,7 +579,7 @@ if (!gotLock) {
     installIPC(); updateTray();
     powerMonitor.on('suspend', () => offline.suspend());
     powerMonitor.on('resume', () => {
-      signalRecovery('resume');
+      for (const window of mainWindows.keys()) signalRecovery('resume', window);
       if (offlineWindow) offlineWindow.webContents.reload();
     });
     if (app.isPackaged && !previewMode()) app.setAsDefaultProtocolClient('unimind');

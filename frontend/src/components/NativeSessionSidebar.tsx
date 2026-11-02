@@ -1,4 +1,5 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { MagnifyingGlass, Plus, Trash, CaretRight, Folder, DotsThree, PencilSimple, PushPin, X } from '@phosphor-icons/react';
 import { Collapse } from './ui/collapse';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -10,12 +11,13 @@ import type { ConversationPatch, ConversationSession } from '@/hooks/useAgentCon
 import type { ConversationProjectControls } from '@/hooks/useConversationProjects';
 
 interface Props extends SessionSidebarProps {
+  claimMenuRequest: (key: string) => boolean;
   projectControls: ConversationProjectControls;
   onNewInProject: (id: number) => void;
   onUpdate: (session: ConversationSession, patch: ConversationPatch) => Promise<boolean>;
 }
 
-export default function NativeSessionSidebar({ sessions, activeSessionId, thinkingIds, unreadIds, onSelect, onDelete, onNew, projectControls: controls, onNewInProject, onUpdate }: Props) {
+export default function NativeSessionSidebar({ sessions, activeSessionId, thinkingIds, unreadIds, onSelect, onDelete, onNew, projectControls: controls, onNewInProject, onUpdate, claimMenuRequest }: Props) {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [editing, setEditing] = useState<{ id?: number; name: string; instructions: string } | null>(null);
@@ -24,6 +26,19 @@ export default function NativeSessionSidebar({ sessions, activeSessionId, thinki
   const [closedProjects, setClosedProjects] = useState<number[]>([]);
   const [renaming, setRenaming] = useState<{ session: ConversationSession; name: string } | null>(null);
   const [updating, setUpdating] = useState(false);
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const newAction = searchParams.get('new');
+  useEffect(() => {
+    if (!['chat', 'project'].includes(newAction || '')) return;
+    const timer = window.setTimeout(() => {
+      if (!claimMenuRequest(location.key)) return;
+      if (newAction === 'chat') onNew();
+      else setEditing({ name: '', instructions: '' });
+      setSearchParams(previous => { const next = new URLSearchParams(previous); next.delete('new'); return next; }, { replace: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [newAction, location.key, onNew, setSearchParams, claimMenuRequest]);
   const projectsId = useId();
   const ordered = [...sessions].reverse().sort((a, b) => Number(!!b.isPinned) - Number(!!a.isPinned));
   const filtered = ordered.filter(session => [session.title, session.label, ...session.messages.map(message => message.content)].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
