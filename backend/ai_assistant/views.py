@@ -618,7 +618,7 @@ class AIChatStreamView(APIView):
         if not _user_can_access_bot(request.user, bot):
             return Response({'error': '无权使用此机器人'}, status=403)
 
-        from .services.course_context import prepare_course_context, course_context_text
+        from .services.course_context import prepare_course_context, course_context_text, course_visual_messages
         course_context = prepare_course_context(request, bot, conversation_id)
 
         from django.conf import settings
@@ -674,6 +674,9 @@ class AIChatStreamView(APIView):
                 project_history = project_history + [{'role': 'user', 'content': note_context}]
             if course_context:
                 project_history.append({'role': 'user', 'content': course_context_text(request, course_context)})
+                visual = course_visual_messages(course_context)
+                if visual:
+                    project_history.append({'role': 'user', 'content': visual})
 
             student_context = ""
             if bot.bot_type == 'planner' and _can_use_learning_context(request.user):

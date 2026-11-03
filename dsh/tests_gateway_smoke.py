@@ -10,7 +10,7 @@ from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from gateway import task_gateway
+from gateway import attach_course_visual, task_gateway
 from smoke import model_fixture
 
 
@@ -44,6 +44,54 @@ def slow_fixture():
 
 
 class GatewaySmoke(unittest.TestCase):
+    def test_course_pixels_are_user_image_blocks_for_exact_current_question(self):
+        visual = [{'type': 'text', 'text': '当前课程画面 00:12'},
+                  {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,Y291cnNl'}}]
+        context = {'course_visual_content': visual, 'course_visual_message': '解释这一步'}
+        body = {'messages': [{'role': 'user', 'content': '解释这一步'},
+                             {'role': 'assistant', 'content': '旧回答'},
+                             {'role': 'user', 'content': [{'type': 'text', 'text': '解释这一步'},
+                                                         {'type': 'text', 'text': 'Current runtime context.'}]}]}
+        result = attach_course_visual(body, context)
+        self.assertEqual(result['messages'][0], body['messages'][0])
+        self.assertEqual(result['messages'][1], body['messages'][1])
+        self.assertEqual(result['messages'][2]['content'][-1], {'type': 'image', 'source': {
+            'type': 'base64', 'media_type': 'image/jpeg', 'data': 'Y291cnNl'}})
+        self.assertEqual(len(body['messages'][2]['content']), 2)
+        self.assertEqual(attach_course_visual(body, {}), body)
+        with self.assertRaisesRegex(ValueError, 'question is missing'):
+            attach_course_visual(body, {**context, 'course_visual_message': '其他问题'})
+
+    def test_signed_course_image_budget_does_not_expand_sdk_text_budget(self):
+        upstream, calls = model_fixture()
+        context = {'model_policy': {'operation': 'assistant.chat.planner', 'tier': 'fast',
+                   'model': 'deepseek-v4-flash', 'max_requests': 2, 'max_tokens': 128, 'max_request_bytes': 4096},
+                   'tools': [], 'course_visual_message': 'course visual question',
+                   'course_visual_content': [{'type': 'image_url', 'image_url': {
+                       'url': 'data:image/jpeg;base64,' + 'Y291cnNl' * 10000}}]}
+        try:
+            with task_gateway(context, f'http://127.0.0.1:{upstream.server_port}/v1/messages',
+                              'SYNTHETIC_SECRET', 'local-protocol-smoke') as gateway:
+                body = {'model': 'deepseek-v4-flash', 'stream': True, 'max_tokens': 128,
+                        'messages': [{'role': 'user', 'content': 'course visual question'}]}
+                def send(value):
+                    return urlopen(Request(gateway['url'] + '/messages', json.dumps(value).encode(),
+                                   {'x-api-key': gateway['credential']}), timeout=5)
+                with send(body) as response:
+                    self.assertEqual(response.status, 200)
+                    response.read()
+                self.assertEqual(calls[0]['messages'][0]['content'][1]['type'], 'image')
+                self.assertNotIn('Y291cnNl', json.dumps(gateway['requests']))
+                body['messages'] = [{'role': 'user', 'content': 'x' * 5000}]
+                with self.assertRaises(HTTPError) as error:
+                    send(body)
+                with error.exception:
+                    self.assertEqual(error.exception.code, 413)
+                self.assertEqual(len(calls), 1)
+        finally:
+            upstream.shutdown()
+            upstream.server_close()
+
     def test_live_text_callback_is_filtered(self):
         from streaming import text_delta
         self.assertIsNone(text_delta({'type': 'content_block_delta', 'delta': {'type': 'thinking_delta', 'thinking': 'PRIVATE_REASONING'}}))

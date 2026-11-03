@@ -192,3 +192,14 @@ body:has(.um-lesson[data-resizing='true']) * { cursor: col-resize !important; }
 }
 
 .um-course-chat-composer .um-course-chat-update-fragment { width: auto; height: auto; padding: 4px 6px; flex-shrink: 0; color: var(--um-color-accent); background: transparent; font-size: 11px; }
+
+.um-course-visual { flex-shrink: 0; min-width: 0; border: 1px solid var(--um-color-border); border-radius: 8px; font-size: 11px; }
+.um-course-visual summary { display: flex; align-items: center; gap: 8px; padding: 6px; cursor: pointer; color: var(--um-color-text-muted); }
+.um-course-visual summary > img { width: 52px; height: 30px; object-fit: contain; background: #101215; border-radius: 3px; }
+.um-course-visual-content { max-height: 250px; overflow: auto; padding: 6px; }
+.um-course-visual-content > img { display: block; width: 100%; height: auto; }
+.um-course-visual-content p { margin: 6px 0; color: var(--um-color-text-muted); }
+.um-course-visual-error { flex-shrink: 0; font-size: 12px; color: var(--um-color-text); }
+.um-course-visual-error p { margin: 4px 0; }
+.um-course-visual-error button { color: var(--um-color-accent); text-decoration: underline; cursor: pointer; }
+.um-course-chat-message .um-course-visual { margin: 4px 0 8px; }
