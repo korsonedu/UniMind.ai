@@ -1,5 +1,6 @@
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -15,6 +16,7 @@ interface Props {
   onOpen: (id: number) => void;
 }
 export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props) {
+  const navigate = useNavigate();
   const [dialog, setDialog] = useState<NoteDialogOptions | null>(null);
   const [linkQuery, setLinkQuery] = useState<{ from: number; to: number; query: string } | null>(null);
   const [tagInput, setTagInput] = useState(note.tags.join(', '));
@@ -76,6 +78,8 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props)
       const anchor = (event.target as HTMLElement).closest('a');
       const match = anchor?.getAttribute('href')?.match(/^\/notes\/(\d+)$/);
       if (match) { event.preventDefault(); if (event.metaKey || event.ctrlKey) onOpen(Number(match[1])); }
+      const courseLink = anchor?.getAttribute('href')?.match(/^\/course\/[1-9]\d*\?t=\d+(?:\.\d+)?$/);
+      if (courseLink && (event.metaKey || event.ctrlKey)) { event.preventDefault(); navigate(courseLink[0]); }
     }}>
       <EditorContent editor={editor} />
       {linkQuery && <div className="notes-link-picker" role="dialog" aria-label="链接笔记">

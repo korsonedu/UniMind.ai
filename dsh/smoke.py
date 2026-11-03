@@ -197,6 +197,7 @@ def model_fixture(status=200):
                     and any(b.get('type') == 'tool_result' for b in m['content']))), '')
             prompt = json.dumps(prompt, ensure_ascii=False)
             demo = 'M0只读演示：学习统计。' in prompt
+            course_question = '课程资料：' in json.dumps(body.get('system', ''), ensure_ascii=False)
             discovered = ''
             if has_result:
                 for result in latest:
@@ -252,6 +253,8 @@ def model_fixture(status=200):
             elif 'M0专注迁移' in prompt:
                 if not has_result:
                     tools = [('get_study_status', {}), ('get_focus_history', {'days': 7})]
+            elif course_question:
+                tools = None
             elif not has_result:
                 tools = [('get_recent_practice_result', {})] if 'M0批改快照' in prompt else [('get_learning_stats', {})]
                 if tools[0][0] not in {t['name'] for t in body.get('tools', [])}:
@@ -262,7 +265,7 @@ def model_fixture(status=200):
                 tools = self.server.tool_response(body)
             if tools is None:
                 blocks = [({'type': 'text', 'text': ''}, {'type': 'text_delta',
-                    'text': '本地协议模拟已完成工具往返；下方卡片来自隔离 Django 数据库的合成数据，不代表真实模型的判断。'})]
+                    'text': '本地课程问答验证：已收到本次提问的视频时间戳及附近的校对讲稿。可以点击下方讲稿引用回看。这是模拟回复，用于检查问答连接，讲解质量需要真实模型验证。' if course_question else '本地协议模拟已完成工具往返；下方卡片来自隔离 Django 数据库的合成数据，不代表真实模型的判断。'})]
                 finish = 'end_turn'
             else:
                 blocks = [({'type': 'tool_use', 'id': f'm0-call-{len(requests)}-{index}', 'name': name, 'input': {}},

@@ -8,6 +8,7 @@ urlpatterns = [
     path('notebooks/<int:pk>/', views.NotebookDetailView.as_view()),
     path('notebooks/<int:pk>/export/', views.NotebookExportView.as_view()),
     path('items/', views.NoteListView.as_view()),
+    path('course-replies/<int:message_id>/', views.CourseReplyNoteView.as_view()),
     path('items/<int:pk>/', views.NoteDetailView.as_view()),
     path('items/<int:pk>/restore/', views.RestoreNoteView.as_view()),
     path('items/<int:pk>/export/', views.NoteExportView.as_view()),

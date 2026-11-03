@@ -70,11 +70,14 @@ def _reserve_chat_request(user, data, bot):
     import hashlib
     import json
     from users.learning import reserve_ai_call
-    fingerprint = hashlib.sha256(json.dumps({
+    request_content = {
         'message': data.get('message', '').strip(), 'bot_id': bot.pk,
         'conversation_id': str(data.get('conversation_id') or ''),
         'note_ids': data.get('note_ids'), 'note_selection': data.get('note_selection', ''),
-    }, sort_keys=True).encode()).hexdigest()
+    }
+    if 'course_context' in data:
+        request_content['course_context'] = data['course_context']
+    fingerprint = hashlib.sha256(json.dumps(request_content, sort_keys=True).encode()).hexdigest()
     return reserve_ai_call(user, data.get('request_id'), fingerprint=fingerprint)
 
 
@@ -513,6 +516,17 @@ class AIChatListView(generics.ListAPIView):
         if conversation_id:
             qs = qs.filter(conversation_id=conversation_id)
 
+        course_id = self.request.query_params.get('course_id')
+        if course_id:
+            from courses.access import visible_courses
+            course_id = serializers.IntegerField(min_value=1).run_validation(course_id)
+            if not visible_courses(self.request).filter(pk=course_id).exists():
+                from rest_framework.exceptions import NotFound
+                raise NotFound('课程不存在或不可访问。')
+            qs = qs.filter(metadata__course_context__course_id=course_id)
+        elif not conversation_id:
+            qs = qs.exclude(metadata__has_key='course_context')
+
         # 注解 conversation_title
         title_subquery = Conversation.objects.filter(
             conversation_id=OuterRef('conversation_id'),
@@ -604,11 +618,14 @@ class AIChatStreamView(APIView):
         if not _user_can_access_bot(request.user, bot):
             return Response({'error': '无权使用此机器人'}, status=403)
 
+        from .services.course_context import prepare_course_context, course_context_text
+        course_context = prepare_course_context(request, bot, conversation_id)
+
         from django.conf import settings
         if (getattr(settings, 'UNIMIND_DSH_XIAOYU_ENABLED', False)
                 and bot.bot_type == 'planner' and bot.institution_id is None and bot.name == '小宇'):
             from .services.dsh_xiaoyu import response
-            return response(request, bot, conversation_id, user_message)
+            return response(request, bot, conversation_id, user_message, course_context=course_context)
 
         sync_bot_prompt(bot)
 
@@ -628,6 +645,9 @@ class AIChatStreamView(APIView):
                 bot=bot, conversation_id=conversation_id,
                 metadata=note_message_metadata(note_context, note_sources, request.data.get('note_selection', '')),
             )
+            if course_context:
+                user_msg.metadata['course_context'] = course_context
+                user_msg.save(update_fields=['metadata'])
         
             # Create pending assistant message (for refresh recovery)
             pending_msg = AIChatMessage.objects.create(
@@ -652,6 +672,8 @@ class AIChatStreamView(APIView):
             project_history = add_project_context(request.user, conversation_id, history_msgs)
             if note_context:
                 project_history = project_history + [{'role': 'user', 'content': note_context}]
+            if course_context:
+                project_history.append({'role': 'user', 'content': course_context_text(request, course_context)})
 
             student_context = ""
             if bot.bot_type == 'planner' and _can_use_learning_context(request.user):
@@ -850,6 +872,8 @@ class AIChatStreamView(APIView):
                 metrics['content_chars'] = len(ai_content)
 
                 metadata = {'note_sources': note_sources} if note_sources else {}
+                if course_context:
+                    metadata['course_context'] = course_context
                 visual_count = len(getattr(tool_executor, 'pending_visuals', []) or [])
                 metrics['visual_count'] = visual_count
                 if hasattr(tool_executor, '_last_generated') and tool_executor._last_generated:

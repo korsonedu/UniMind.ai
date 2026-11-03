@@ -1,6 +1,7 @@
 import { NoteAttachments } from '@/pages/notes/NoteMentions';
 import React, { useState, useCallback } from 'react';
 import { Sparkle, ThumbsUp, ThumbsDown } from '@phosphor-icons/react';
+import type { Components } from 'react-markdown';
 import { MarkdownContent } from '@/components/MarkdownContent';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
@@ -44,6 +45,7 @@ interface ChatBubbleProps {
   /** Hide avatar and use tighter spacing */
   compact?: boolean;
   streaming?: boolean;
+  markdownComponents?: Components;
 }
 
 const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
@@ -56,6 +58,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
   compact = false,
   streaming = false,
   native = false,
+  markdownComponents,
 }) => {
   const [feedback, setFeedback] = useState<boolean | null | undefined>(msg.feedback);
   const [feedbackSource, setFeedbackSource] = useState({ id: msg.id, feedback: msg.feedback });
@@ -129,7 +132,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = React.memo(({
             )}>
               {streaming ? (
                 <StreamingText content={msg.content} />
-              ) : <MarkdownContent content={msg.content} />}
+              ) : <MarkdownContent content={msg.content} components={markdownComponents} />}
             </div>
           )}
         </div>

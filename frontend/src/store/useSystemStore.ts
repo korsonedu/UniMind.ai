@@ -13,12 +13,14 @@ export interface ExperiencePreferences {
   practicePreference: 'balanced' | 'new_first' | 'review_first';
   videoSpeed: 1 | 1.25 | 1.5 | 2;
   videoSubtitles: boolean;
+  courseAssistantMode: 'floating' | 'sidebar';
 }
 
 export const DEFAULT_EXPERIENCE: ExperiencePreferences = {
   readingSize: 'standard', density: 'standard', reduceMotion: false,
   sendShortcut: 'enter', toolDetails: 'auto',
   practiceCount: 'recommended', practicePreference: 'balanced', videoSpeed: 1, videoSubtitles: false,
+  courseAssistantMode: 'floating',
 };
 
 interface SystemState extends ExperiencePreferences {
