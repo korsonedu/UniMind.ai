@@ -11,6 +11,8 @@
 5. **核对产物。** 检查包内 `package.json`、主进程／preload 与提交源码的对应关系、平台版本信息和图标资源。记录 `BUILD-INFO.json`（源码 SHA、版本、平台、构建时间、签名状态、入口、资源 SHA256）及 `SHA256SUMS`。Mac 做一次安装包启动／托盘冒烟；Windows 若未实机安装，明确标记未验收，不把交叉打包算作运行验收。
 6. **合并并分发。** 推送发布分支，按仓库规则通过 PR 合并。源码提交进入 main 后，把 `desktop-vX.Y.Z` 标签指向实际构建的源码 SHA，在 GitHub Release 上传安装包、构建信息和校验和，重新核对远端资产的大小及 SHA256。受控分发包标为 prerelease。完成后记录发布链接、下载校验与剩余限制。
 
+官网 landing 页通过 `/api/desktop-release/` 读取版本号最高的已发布 `desktop-vX.Y.Z` Release（包含 prerelease，排除 draft），缓存 5 分钟。安装包可作为 GitHub 资产上传，或在 Release 正文中列出官网 `https://unimind-ai.com/static/desktop/<version>/` 下载链接。当前识别 `UniMind-<version>-arm64[-unsigned].dmg` 与 `UniMind-<version>-x64[-unsigned]-setup.exe`。先上传并核实包及同目录 `INSTALL.txt`，最后发布 Release；页面不会退回旧版本安装包。
+
 发布后修改源码必须重新构建；若产物已对外分发，使用下一个版本号。保留上一版安装包；手动安装的回退使用上一版包，自动更新回退按下文规则生成更高版本号。
 
 ## 当前采用的受控分发

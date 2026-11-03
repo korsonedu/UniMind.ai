@@ -22,7 +22,7 @@ registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html'), {
 
 // API runtime caching
 registerRoute(
-  ({ url }) => url.pathname === '/api/users/me/',
+  ({ url }) => url.pathname === '/api/users/me/' || url.pathname === '/api/desktop-release/',
   new NetworkOnly(),
 );
 // Notes and practice data come from the encrypted desktop cache when offline;
