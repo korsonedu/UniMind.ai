@@ -124,7 +124,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
         attached?.addEventListener('emptied', clear);
       }
       if (!video) return;
-      const last = buffer.current.frames.at(-1);
+      const last = buffer.current.frames[buffer.current.frames.length - 1];
       // Release expired samples even if decoding/capture subsequently fails or playback is paused.
       if (last && video.currentTime - last.video_seconds >= 8) clear();
       if (video.paused || video.seeking) return;

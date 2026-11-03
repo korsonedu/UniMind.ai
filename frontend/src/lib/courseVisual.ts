@@ -7,9 +7,9 @@ export class CourseFrameBuffer {
   frames: VisualFrame[] = [];
   clear() { this.frames = []; }
   add(frame: VisualFrame) {
-    const last = this.frames.at(-1);
+    const last = this.frames[this.frames.length - 1];
     if (last && frame.video_seconds < last.video_seconds) this.clear();
-    if (this.frames.at(-1) && frame.video_seconds - this.frames.at(-1)!.video_seconds < 1) return;
+    else if (last && frame.video_seconds - last.video_seconds < 1) return;
     this.frames = [...this.frames.filter(item => frame.video_seconds - item.video_seconds <= 8), frame].slice(-8);
   }
   previous(seconds: number): VisualFrame | undefined {
