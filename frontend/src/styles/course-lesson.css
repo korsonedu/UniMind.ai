@@ -190,3 +190,5 @@ body:has(.um-lesson[data-resizing='true']) * { cursor: col-resize !important; }
 @media (prefers-reduced-motion: reduce) {
   .um-lesson-controls { transition: none; }
 }
+
+.um-course-chat-composer .um-course-chat-update-fragment { width: auto; height: auto; padding: 4px 6px; flex-shrink: 0; color: var(--um-color-accent); background: transparent; font-size: 11px; }

@@ -30,6 +30,8 @@ def course_reply(user, settings):
 @pytest.mark.django_db
 def test_save_course_reply_keeps_formula_question_and_replay_links(auth_client, user, course_reply):
     course, question, answer = course_reply
+    answer.content += f'\n讲解依据：[讲稿 09:15](/course/{course.pk}?t=555#segment-42)'
+    answer.save(update_fields=['content'])
     url = f'/api/notes/course-replies/{answer.pk}/'
     result = auth_client.post(url, {}, format='json')
     assert result.status_code == 201

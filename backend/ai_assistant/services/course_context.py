@@ -1,4 +1,4 @@
-"""A course question keeps the transcript and video position captured at send time."""
+"""A course question keeps the transcript and video position selected for the question."""
 import json
 import math
 from pathlib import Path
@@ -44,12 +44,14 @@ def prepare_course_context(request, bot, conversation_id):
     if transcript is None:
         raise ValidationError('本课程暂无可用讲稿，请完成转写后提问。')
     position = data.validated_data['video_seconds']
-    segments = list(transcript.segments.filter(start_time__lt=position + 60,
-        end_time__gt=max(0, position - 60)).order_by('index').values('id', 'start_time', 'end_time', 'text'))
+    selected_start, selected_end = max(0, position - 30), position + 30
+    segments = list(transcript.segments.filter(start_time__lt=selected_end,
+        end_time__gt=selected_start).order_by('index').values('id', 'start_time', 'end_time', 'text'))
     if not segments:
         raise ValidationError('当前时间附近没有讲稿，请选择有字幕的位置提问。')
     return {'course_id': course.pk, 'course_title': course.title,
             'video_seconds': position, 'revision': transcript.revision,
+            'selected_start_seconds': selected_start, 'selected_end_seconds': selected_end,
             'start_seconds': segments[0]['start_time'], 'end_seconds': segments[-1]['end_time'],
             'segments': segments}
 

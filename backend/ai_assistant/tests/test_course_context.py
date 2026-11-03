@@ -1,4 +1,5 @@
 """Timestamped questions use owned course transcripts and keep their original anchor."""
+import json
 from types import SimpleNamespace
 from uuid import uuid4
 from unittest.mock import patch
@@ -45,10 +46,12 @@ def test_timestamp_reads_complete_nearby_transcript_and_freezes_revision(user, l
     request = question(user, course)
     context = prepare_course_context(request, bot, request.data['conversation_id'])
     assert context['video_seconds'] == 120 and context['revision'] == 3
-    assert [segment['start_time'] for segment in context['segments']] == [60, 90, 140]
-    assert context['segments'][1]['text'].endswith('FULL_SEGMENT_END')
-    TranscriptSegment.objects.filter(transcript=transcript, index=1).update(text='修订内容')
-    assert context['segments'][0]['text'] == '折现是把未来现金流换算到今天。'
+    assert [segment['start_time'] for segment in context['segments']] == [90, 140]
+    assert context['segments'][0]['text'].endswith('FULL_SEGMENT_END')
+    TranscriptSegment.objects.filter(transcript=transcript, index=2).update(text='修订内容')
+    assert context['segments'][0]['text'].endswith('FULL_SEGMENT_END')
+    assert (context['selected_start_seconds'], context['selected_end_seconds']) == (90, 150)
+    assert (context['start_seconds'], context['end_seconds']) == (90, 180)
 
 
 @pytest.mark.django_db
@@ -99,7 +102,7 @@ def test_dsh_gets_signed_course_snapshot_and_preserves_sources_on_replay(user, l
     settings.UNIMIND_DSH_STATE_DIR = str(tmp_path)
     settings.UNIMIND_DSH_TITLE_ENABLED = settings.UNIMIND_DSH_MEMORY_ENABLED = False
     WeeklyAIQuotaConfig.objects.update_or_create(pk=1, defaults={'experience_calls': 20, 'course_calls': 200})
-    course, _, bot = lesson
+    course, transcript, bot = lesson
     request = question(user, course)
     cid = request.data['conversation_id']
     context = prepare_course_context(request, bot, cid)
@@ -107,11 +110,20 @@ def test_dsh_gets_signed_course_snapshot_and_preserves_sources_on_replay(user, l
         injected = task_context(user, kwargs['chat_context'], request.data['message'])
         assert 'FULL_SEGMENT_END' in injected and 'OUTSIDE_AFTER' not in injected
         assert '120.0' in injected and '时间价值' in injected
+        course_text = json.loads(injected.split('\n', 2)[2])['course']
+        assert 'selected_start_seconds": 90.0' in course_text
+        assert 'selected_end_seconds": 150.0' in course_text
+        assert 'revision": 3' in course_text
         return {'finish_reason': 'completed', 'content': '根据本课讲稿说明折现。',
                 'session': {'id': 'a' * 32, 'messages': [{'role': 'assistant', 'cards': []}]}}
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', side_effect=runtime) as run:
         result = complete_turn(request, bot, cid, request.data['message'], lambda event: None, course_context=context)
-        replay = complete_turn(request, bot, cid, request.data['message'], lambda event: None, course_context=context)
+        transcript.revision = 4
+        transcript.save(update_fields=['revision'])
+        transcript.segments.update(text='NEW_REVISION')
+        refreshed = prepare_course_context(request, bot, cid)
+        assert refreshed['revision'] == 4
+        replay = complete_turn(request, bot, cid, request.data['message'], lambda event: None, course_context=refreshed)
         assert replay == result and run.call_count == 1
     assert result['metadata']['course_context']['video_seconds'] == 120
     assert result['metadata']['course_context']['revision'] == 3
@@ -149,6 +161,9 @@ def test_legacy_stream_uses_same_transcript_and_persists_time(auth_client, user,
     def answer(**kwargs):
         reference = '\n'.join(message['content'] for message in kwargs['messages'])
         assert 'FULL_SEGMENT_END' in reference and 'OUTSIDE_AFTER' not in reference
+        assert 'selected_start_seconds": 90.0' in reference
+        assert 'selected_end_seconds": 150.0' in reference
+        assert 'revision": 3' in reference
         return {'content': '折现将未来现金流换算到今天。', 'finish_reason': 'completed'}
     async def collect(response):
         return b''.join([frame async for frame in response.streaming_content]).decode()
@@ -163,4 +178,48 @@ def test_legacy_stream_uses_same_transcript_and_persists_time(auth_client, user,
     assert done['metadata']['course_context']['video_seconds'] == 120
     messages = list(AIChatMessage.objects.filter(conversation_id=body['conversation_id']).order_by('id'))
     assert len(messages) == 2
-    assert all(message.metadata['course_context']['course_id'] == course.pk for message in messages)
+    assert all(message.metadata['course_context'] == done['metadata']['course_context'] for message in messages)
+    assert done['metadata']['course_context']['revision'] == 3
+
+
+@pytest.mark.django_db
+def test_selected_window_keeps_whole_segments_and_clamps_start(user, lesson):
+    course, _, bot = lesson
+    request = question(user, course, position=20)
+    context = prepare_course_context(request, bot, request.data['conversation_id'])
+    assert (context['selected_start_seconds'], context['selected_end_seconds']) == (0, 50)
+    assert [segment['start_time'] for segment in context['segments']] == [0]
+    assert context['end_seconds'] == 60
+    request = question(user, course, position=100)
+    context = prepare_course_context(request, bot, request.data['conversation_id'])
+    assert [segment['start_time'] for segment in context['segments']] == [60, 90]
+    assert context['segments'][1]['text'].endswith('FULL_SEGMENT_END')
+    assert (context['start_seconds'], context['end_seconds']) == (60, 140)
+
+
+@pytest.mark.django_db
+def test_selected_minute_excludes_old_window_and_ignores_client_range(user, lesson):
+    course, transcript, bot = lesson
+    transcript.segments.all().delete()
+    spans = [(440, 470), (460, 480), (490, 510), (520, 540), (530, 560)]
+    for index, (start, end) in enumerate(spans):
+        TranscriptSegment.objects.create(transcript=transcript, index=index,
+            start_time=start, end_time=end, text=f'COMPLETE_{start}_{end}')
+    request = question(user, course, position=500)
+    request.data['course_context'].update(selected_start_seconds=0, selected_end_seconds=9999)
+    context = prepare_course_context(request, bot, request.data['conversation_id'])
+    assert (context['selected_start_seconds'], context['selected_end_seconds']) == (470, 530)
+    assert [segment['text'] for segment in context['segments']] == [
+        'COMPLETE_460_480', 'COMPLETE_490_510', 'COMPLETE_520_540']
+    assert (context['start_seconds'], context['end_seconds']) == (460, 540)
+    assert [segment['id'] for segment in context['segments']] == list(
+        transcript.segments.filter(index__in=[1, 2, 3]).order_by('index').values_list('id', flat=True))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(('position', 'window'), [(0, (0, 30)), (200, (170, 230))])
+def test_selected_window_does_not_use_transcript_end_as_video_duration(user, lesson, position, window):
+    course, _, bot = lesson
+    request = question(user, course, position=position)
+    context = prepare_course_context(request, bot, request.data['conversation_id'])
+    assert (context['selected_start_seconds'], context['selected_end_seconds']) == window
