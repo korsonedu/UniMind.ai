@@ -215,7 +215,7 @@ function updateTray() {
   if (!tray) {
     tray = new Tray(trayIcon());
     trayPaused = false;
-    tray.on('click', showMain);
+    if (process.platform !== 'darwin') tray.on('click', showMain);
     trayMenu = Menu.buildFromTemplate([
       { label: '打开 UniMind', icon: trayIcon().resize({ width: 16, height: 16 }), click: showMain },
       { label: '离线课程库', click: () => openOffline() },

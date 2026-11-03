@@ -1,5 +1,12 @@
 # Changelog
 
+## Desktop 0.1.9 — macOS 菜单栏点击修复（2026-11-04）
+
+### Fixed
+- 点击 macOS 菜单栏 UniMind 图标只展开菜单，不再强制唤起主窗口；仍可通过菜单中的“打开 UniMind”进入应用。
+
+桌面包继续采用手动安装的受控分发方式。
+
 ## Web 与 Desktop 0.1.8 — macOS 菜单与多窗口（2026-11-03）
 
 ### Changed
