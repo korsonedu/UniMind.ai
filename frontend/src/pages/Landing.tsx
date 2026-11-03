@@ -4,6 +4,7 @@ import { ArrowUpRight } from '@phosphor-icons/react';
 import { AgentShowcase } from '@/components/landing/AgentShowcase';
 import { LandingEntrance } from '@/components/landing/LandingEntrance';
 import { LandingCoda } from '@/components/landing/LandingCoda';
+import { LandingDownload } from '@/components/landing/LandingDownload';
 import { LearningInstrument } from '@/components/landing/LearningInstrument';
 import { useAuthStore } from '@/store/useAuthStore';
 import { COPYRIGHT_YEAR } from '@/constants/version';
@@ -96,7 +97,7 @@ export function Landing() {
       <svg className="landing-nav-fiber" aria-hidden="true"><path pathLength="1" /><path pathLength="1" /></svg>
       <Link to="/" aria-label="UniMind 首页" className="landing-brand"><img src="/Unimind_logo_wide.png" alt="UniMind.ai" width="150" height="34" /></Link>
       <nav aria-label="首页导航">
-        <div className="landing-nav-links"><a href="#tools">探索小宇</a><a href="#workspace">学习空间</a><Link to="/pricing">AI 加量</Link></div>
+        <div className="landing-nav-links"><a href="#tools">探索小宇</a><a href="#workspace">学习空间</a><a href="#download">下载客户端</a><Link to="/pricing">AI 加量</Link></div>
         <div className="landing-nav-actions">{!user && <Link to="/login">登录</Link>}<Link to={entry} className="landing-nav-entry">{user ? '进入学习空间' : '开始体验'}<ArrowUpRight size={16} /></Link></div>
       </nav>
     </header>
@@ -106,7 +107,7 @@ export function Landing() {
         <div className="landing-hero-copy">
           <h1 aria-label="和小宇一起，将人工智能转化为人类智慧"><span className="landing-hero-invitation">和小宇一起</span><span className="landing-hero-statement"><span data-text="将人工智能">将人工智能</span><span data-text="转化为人类智慧">转化为人类智慧</span></span></h1>
           <p className="landing-hero-description"><span>查资料、画图讲解、练习与复习，</span><span>和小宇一起把问题弄清楚。</span></p>
-          <Link to={entry} className="landing-button">开始对话<ArrowUpRight size={18} /></Link>
+          <LandingDownload entry={entry} />
         </div>
       </section>
 
