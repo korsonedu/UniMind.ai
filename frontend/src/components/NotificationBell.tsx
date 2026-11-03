@@ -110,14 +110,12 @@ export const NotificationBell = () => {
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpen} modal={false}>
       <DropdownMenuTrigger asChild>
-        <div className="relative cursor-pointer group">
-          <Button variant="ghost" size="icon" className="um-app-notification-button h-9 w-9 text-muted-foreground hover:bg-muted hover:text-foreground relative" aria-label={unreadCount ? `通知，${unreadCount} 条未读` : '通知'}>
-            <Bell className="h-4 w-4" />
-            {unreadCount > 0 && (
-              <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 border-2 border-background" />
-            )}
-          </Button>
-        </div>
+        <Button variant="ghost" size="icon" className="um-app-notification-button h-9 w-9 text-muted-foreground hover:bg-muted hover:text-foreground relative" aria-label={unreadCount ? `通知，${unreadCount} 条未读` : '通知'}>
+          <Bell className="h-4 w-4" />
+          {unreadCount > 0 && (
+            <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 border-2 border-background" />
+          )}
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="um-app-notifications w-80 p-2 z-[var(--z-dropdown)]">
         <DropdownMenuLabel className="flex items-center justify-between px-3 py-2">

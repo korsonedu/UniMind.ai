@@ -26,7 +26,7 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-app-menu { background: var(--um-color-surface); color: var(--um-color-text); border-color: var(--um-color-border); border-radius: var(--um-radius-dialog); box-shadow: var(--um-shadow-overlay); }
 .um-app-menu [role='menuitem'] { min-height: 36px; font-size: 13px; }
 .um-app-menu [role='menuitem'] svg { flex-shrink: 0; }
-.um-app-elo { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 8px; border-radius: var(--um-radius-control); font-size: 13px; font-weight: var(--um-weight-medium); font-variant-numeric: tabular-nums; color: var(--um-color-text); transition: background-color var(--um-motion-fast); }
+.um-app-elo { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 0 8px; border-radius: var(--um-radius-control); font-size: 13px; line-height: 20px; white-space: nowrap; font-weight: var(--um-weight-medium); font-variant-numeric: tabular-nums; color: var(--um-color-text); transition: background-color var(--um-motion-fast); }
 .um-app-elo-label { font-size: 12px; color: var(--um-color-text-muted); font-weight: var(--um-weight-regular); }
 .um-app-elo:hover, .um-app-elo[data-state='open'] { background: var(--um-color-hover); }
 .um-app-elo:focus-visible { outline: 2px solid var(--um-color-focus); outline-offset: 2px; }
@@ -62,7 +62,7 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .notes-save-status { color: var(--um-color-text-muted); font-size: 11px; }
 @media (max-width: 599px) { .um-workspace-crumb { display: none; } .notes-save-status { display: none; } }
 
-.um-window-toolbar { display: flex; align-items: center; gap: 8px; height: 48px; min-height: 48px; padding: 4px 12px; flex-shrink: 0; background: var(--um-surface-4); color: var(--um-color-text); }
+.um-window-toolbar { --um-toolbar-control-size: 36px; display: flex; align-items: center; gap: 4px; height: 48px; min-height: 48px; padding: 4px 12px; flex-shrink: 0; background: var(--um-surface-4); color: var(--um-color-text); }
 .um-window-navigation { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .um-window-navigation button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 6px; }
 .um-window-navigation button:hover:not(:disabled) { background: var(--um-color-hover); }
@@ -77,11 +77,12 @@ body:has(.um-app-shell) { scrollbar-gutter: auto; }
 .um-desktop-mac .um-window-toolbar { padding-left: 80px; }
 .um-desktop-other .um-window-toolbar { padding-right: max(150px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))); }
 @media (min-width: 901px) { .notes-workspace[data-directory-hidden='true'] { grid-template-columns: 0 minmax(0, 1fr); } .notes-workspace[data-directory-hidden='true'] .notes-directory { visibility: hidden; padding: 0; } }
-@media (max-width: 599px) { .um-window-toolbar { gap: 4px; padding-inline: 6px; } .um-window-navigation button { width: 26px; } }
+@media (max-width: 600px) { .um-window-toolbar { --um-toolbar-control-size: 44px; height: 52px; min-height: 52px; padding-inline: 6px; gap: 2px; } .um-window-navigation button { width: 26px; } }
 
 .um-window-toolbar .um-agent-history-button { align-items: center; }
-.um-window-toolbar .um-agent-toolbar-new { display: inline-flex; width: 30px; height: 30px; }
-.um-window-toolbar .notes-note-header > div:last-child > button { min-width: 30px; min-height: 30px; align-items: center; justify-content: center; }
+.um-window-toolbar .um-agent-toolbar-new { display: inline-flex; }
+.um-window-toolbar :is(.um-agent-icon-button, .um-agent-history-button, .notes-note-header > div:last-child > button) { width: var(--um-toolbar-control-size); height: var(--um-toolbar-control-size); padding: 0; flex-shrink: 0; align-items: center; justify-content: center; }
+.um-window-toolbar :is(.um-agent-icon-button, .um-agent-history-button, .um-app-notification-button, .notes-note-header > div:last-child > button) svg { width: 18px; height: 18px; }
 
 /* Keep native edge bounce inside the active pane, clear of the window toolbar.
    Desktop root must stay `auto` vertically: Chromium suppresses elastic bounce

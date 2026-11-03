@@ -11,13 +11,6 @@
   font-weight: var(--um-weight-regular);
 }
 
-.um-app-shell :is(button, a, label, summary) svg,
-.um-native-agent :is(button, a, label) svg {
-  position: relative;
-  top: .125em;
-  vertical-align: -.125em;
-}
-
 .dark .um-app-shell .font-normal { font-weight: var(--um-weight-regular); }
 .dark .um-app-shell .font-medium { font-weight: var(--um-weight-medium); }
 .dark .um-app-shell .font-semibold { font-weight: var(--um-weight-semibold); }
