@@ -69,7 +69,7 @@ export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; c
   useLayoutEffect(() => {
     if (previousCollapsed.current === collapsed) return;
     previousCollapsed.current = collapsed;
-    const target = collapsed ? root.current?.querySelector<HTMLButtonElement>('[aria-label="展开课程大纲"]') : handle.current;
+    const target = collapsed ? root.current?.querySelector<HTMLButtonElement>('[aria-label="展开学习侧栏"]') : handle.current;
     target?.focus({ preventScroll: true });
   }, [collapsed]);
 
@@ -129,7 +129,7 @@ export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; c
 
   return <div ref={root} className="um-lesson" data-split={metrics.desktop || undefined} data-layout-wide={layoutWide || undefined} data-sidebar-collapsed={sidebarCollapsed || undefined} data-sidebar-narrow={sidebarNarrow || undefined} data-compressing={compressing || undefined} data-resizing={resizing || undefined} style={{ '--um-video-aspect-ratio': aspectRatio, '--um-lesson-video-width': `${displayedWidth}px` } as CSSProperties}>
     {children({ sidebarCollapsed, expandSidebar: () => setCollapsedPreference(false) })}
-    {metrics.desktop && !sidebarCollapsed && <div ref={handle} className="um-lesson-resize" role="separator" aria-label="调整视频与课程大纲宽度" title="拖动调整宽度，拖至右侧窄带后松开收起大纲；按 Enter 收起" aria-orientation="vertical" aria-valuemin={Math.round(bounds.min)} aria-valuemax={Math.round(resizing ? dragBounds.max : bounds.max)} aria-valuenow={Math.round(displayedWidth)} aria-valuetext={`视频宽度 ${Math.round(displayedWidth)} 像素；按 Enter 收起课程大纲`} tabIndex={0}
+    {metrics.desktop && !sidebarCollapsed && <div ref={handle} className="um-lesson-resize" role="separator" aria-label="调整视频与学习侧栏宽度" title="拖动调整宽度，拖至右侧窄带后松开收起侧栏；按 Enter 收起" aria-orientation="vertical" aria-valuemin={Math.round(bounds.min)} aria-valuemax={Math.round(resizing ? dragBounds.max : bounds.max)} aria-valuenow={Math.round(displayedWidth)} aria-valuetext={`视频宽度 ${Math.round(displayedWidth)} 像素；按 Enter 收起学习侧栏`} tabIndex={0}
       onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); cancelDrag(); return; }
         if (event.key === 'Enter') { event.preventDefault(); cancelDrag(); setCollapsedPreference(true); return; }
@@ -159,6 +159,6 @@ export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; c
       }}
       onPointerCancel={event => { if (drag.current?.pointerId === event.pointerId) cancelDrag(); }}
       onLostPointerCapture={event => { if (drag.current?.pointerId === event.pointerId) cancelDrag(); }}
-    >{resizing && sidebarNarrow && <span className="um-lesson-resize-tip" role="status">松开收起课程大纲</span>}</div>}
+    >{resizing && sidebarNarrow && <span className="um-lesson-resize-tip" role="status">松开收起学习侧栏</span>}</div>}
   </div>;
 }

@@ -2,13 +2,14 @@ import { useSystemStore, type ExperiencePreferences } from '@/store/useSystemSto
 import type { Course } from '@/types/api';
 import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX, SidebarSimple } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
 import { SubtitlesOverlay } from '@/components/course/SubtitlesOverlay';
 import { LessonLayout } from '@/components/course/LessonLayout';
+import { CourseChatPanel } from '@/components/course/CourseChatPanel';
 import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
 import { useLearningSession } from '@/hooks/useLearningSession';
@@ -29,7 +30,11 @@ interface VideoLessonProps {
 
 export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const linkedPosition = searchParams.get('t');
+  const linkedSeconds = linkedPosition?.trim() ? Number(linkedPosition) : null;
   const updateUser = useAuthStore(s => s.updateUser);
+  const userId = useAuthStore(s => s.user?.id);
   const desktopState = useDesktopStore(s => s.state);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
@@ -38,7 +43,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [hasAwarded, setHasAwarded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const { videoSpeed: playbackRate, videoSubtitles: subtitlesVisible, setExperience } = useSystemStore();
+  const { videoSpeed: playbackRate, videoSubtitles: subtitlesVisible, courseAssistantMode, setExperience } = useSystemStore();
+  const [sidebarView, setSidebarView] = useState<'chat' | 'materials'>('chat');
   const [showControls, setShowControls] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -257,6 +263,11 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     const dur = video.duration || 0;
     setDuration(dur);
     if (Number.isFinite(dur) && dur > 0) api.post(`/courses/${courseId}/progress/`, { duration: dur }).catch(() => {});
+    if (linkedSeconds !== null && Number.isFinite(linkedSeconds) && linkedSeconds >= 0 && linkedSeconds < dur) {
+      video.currentTime = linkedSeconds;
+      setCurrentTime(linkedSeconds);
+      return;
+    }
     // 续播：从上次位置继续（已完成、接近开头或结尾则不跳）
     const p = course?.progress;
     if (p && !p.is_finished && p.last_position > 10 && dur > 0 && p.last_position < dur - 10) {
@@ -356,7 +367,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
         <header className="um-lesson-heading">
           <div><p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || '待归类'}</p><h1>{course.title}</h1></div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {sidebarCollapsed && <button className="um-lesson-favorite" onClick={expandSidebar} aria-label="展开课程大纲" aria-expanded={false}><SidebarSimple size={18} />展开大纲</button>}
+            {sidebarCollapsed && <button className="um-lesson-favorite" onClick={expandSidebar} aria-label="展开学习侧栏" aria-expanded={false}><SidebarSimple size={18} />展开侧栏</button>}
             {window.unimindDesktop && course.video_file && (
               <button className="um-lesson-favorite" disabled={offlinePending || offlineDownload?.status === 'downloading'} onClick={() => void handleOffline()} title={offlineDownload?.error}>
                 {offlineReady ? <Play size={18} /> : <Download size={18} />}
@@ -375,7 +386,20 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
           </div>
         </header>
       </section>
-      <aside className="um-lesson-sidebar" aria-label="学习侧栏">
+      <aside className="um-lesson-sidebar" data-assistant-mode={courseAssistantMode} aria-label="学习侧栏">
+        {courseAssistantMode === 'sidebar' && <div className="um-lesson-sidebar-tabs" role="group" aria-label="右侧内容">
+          <button type="button" aria-pressed={sidebarView === 'chat'} onClick={() => setSidebarView('chat')}>小宇</button>
+          <button type="button" aria-pressed={sidebarView === 'materials'} onClick={() => setSidebarView('materials')}>课程内容</button>
+        </div>}
+        <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
+          mode={courseAssistantMode} visible={courseAssistantMode === 'floating' || sidebarView === 'chat'}
+          onModeChange={mode => {
+            setExperience({ courseAssistantMode: mode });
+            if (mode === 'sidebar') { setSidebarView('chat'); expandSidebar(); }
+          }} onSeek={seconds => {
+            if (videoRef.current) { videoRef.current.currentTime = seconds; setCurrentTime(seconds); }
+          }} />
+        <div className="um-course-info" hidden={courseAssistantMode === 'sidebar' && sidebarView !== 'materials'}>
         <section className="um-lesson-outline-section" aria-labelledby="lesson-outline-heading">
           <h2 id="lesson-outline-heading">课程大纲</h2>
           {course.ai_outline_enabled !== false ? <OutlinePanel courseId={courseId} videoRef={videoRef} /> : <p className="um-lesson-empty">本课程暂无大纲</p>}
@@ -390,6 +414,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
           <h2 id="lesson-intro-heading">课程简介</h2>
           <div className="um-lesson-description" tabIndex={0}><p>{course.description || '暂无课程简介'}</p></div>
         </section>
+        </div>
       </aside>
       </>}
     </LessonLayout>

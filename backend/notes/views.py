@@ -96,6 +96,47 @@ class NoteListView(PrivateNotesView, generics.ListCreateAPIView):
         after_note_save(note)
 
 
+class CourseReplyNoteView(PrivateNotesView, APIView):
+    @transaction.atomic
+    def post(self, request, message_id):
+        from courses.access import visible_courses
+
+        message = get_object_or_404(AIChatMessage.objects.select_for_update(),
+            pk=message_id, user=request.user, role='assistant')
+        context = message.metadata.get('course_context')
+        if not context or not message.content.strip() or message.content == '[Thinking...]':
+            raise serializers.ValidationError('请等待课程回答完成后再保存。')
+        course = get_object_or_404(visible_courses(request), pk=context['course_id'])
+        if note_id := message.metadata.get('saved_note_id'):
+            note = get_object_or_404(Note, pk=note_id, user=request.user, deleted_at__isnull=True)
+            return Response(NoteSerializer(note, context={'request': request}).data)
+        question = AIChatMessage.objects.filter(user=request.user, bot=message.bot,
+            conversation_id=message.conversation_id, role='user', id__lt=message.pk,
+            metadata__course_context__course_id=course.pk).order_by('-id').first()
+        if question is None:
+            raise serializers.ValidationError('没有找到这条回答对应的课程提问。')
+
+        def clock(seconds):
+            seconds = int(seconds)
+            return f'{seconds // 60:02d}:{seconds % 60:02d}'
+
+        position = context['video_seconds']
+        start, end = context['start_seconds'], context['end_seconds']
+        content = (f'课程：{context["course_title"]}\n\n'
+            f'提问位置：[{clock(position)}](/course/{course.pk}?t={position:g})\n\n'
+            f'讲稿参考：[{clock(start)}–{clock(end)}](/course/{course.pk}?t={start:g})\n\n'
+            f'## 问题\n\n{question.content}\n\n## 小宇讲解\n\n{message.content}')
+        serializer = NoteSerializer(data={'title': f'{context["course_title"]} · {clock(position)}',
+            'content': content}, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        note = serializer.save()
+        index_links(note)
+        after_note_save(note)
+        message.metadata['saved_note_id'] = note.pk
+        message.save(update_fields=['metadata'])
+        return Response(NoteSerializer(note, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+
 class NoteDetailView(PrivateNotesView, generics.RetrieveAPIView):
     serializer_class = NoteSerializer
 

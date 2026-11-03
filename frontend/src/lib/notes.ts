@@ -20,6 +20,7 @@ export const notesApi = {
   list: (params: Record<string, string> = {}, signal?: AbortSignal) => api.get<Note[]>('/notes/items/', { params, signal }).then(r => r.data),
   get: (id: number, signal?: AbortSignal) => api.get<Note>(`/notes/items/${id}/`, { signal }).then(r => r.data),
   create: (notebook: number | null) => api.post<Note>('/notes/items/', { title: '未命名笔记', notebook }, writeConfig).then(r => r.data),
+  saveCourseReply: (messageId: number) => api.post<Note>(`/notes/course-replies/${messageId}/`, {}, writeConfig).then(r => r.data),
   save: (note: Note) => api.patch<Note>(`/notes/items/${note.id}/`, { ...noteDraft(note), version: note.version }, writeConfig).then(r => r.data),
   remove: (id: number, permanent = false) => api.delete(`/notes/items/${id}/`, { ...writeConfig, params: permanent ? { permanent: '1' } : {} }),
   restore: (id: number) => api.post<Note>(`/notes/items/${id}/restore/`, {}, writeConfig).then(r => r.data),

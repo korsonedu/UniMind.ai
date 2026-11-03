@@ -171,9 +171,11 @@ def main():
                     seed_database()
                 check_database(state)
                 from rest_framework.authtoken.models import Token
+                from users.login_sessions import LoginSession
                 from school_system.asgi import application
                 from daphne.server import Server
-                tokens = {name: Token.objects.get(user__username=username).key for name, username in STUDENTS.items()}
+                tokens = {name: LoginSession.issue(user=Token.objects.select_related('user').get(
+                    user__username=username).user).key for name, username in STUDENTS.items()}
 
                 async def preview_application(scope, receive, send):
                     prefix = '/api/ai/dsh-preview/'

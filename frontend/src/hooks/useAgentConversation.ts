@@ -72,6 +72,7 @@ export interface Bot {
 // ── Hook options ──
 
 interface UseAgentConversationOptions {
+  courseId?: number;
   enableProjects?: boolean;
   /** Find the target bot from the bots list */
   findBot: (bots: Bot[]) => Bot | undefined;
@@ -347,7 +348,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     if (!bot) return;
     const revision = ++sessionsRevisionRef.current;
     try {
-      const hRes = await api.get('/ai/history/', { params: { bot_id: bot.id } });
+      const hRes = await api.get('/ai/history/', { params: { bot_id: bot.id, course_id: options.courseId } });
       if (revision !== sessionsRevisionRef.current) return;
       const allMsgs: Message[] = hRes.data
         .filter((m: Message) => m.content !== '[Thinking...]')
@@ -373,7 +374,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         return [...merged.values()].sort((a, b) => (Date.parse(a.lastTime) || 0) - (Date.parse(b.lastTime) || 0));
       });
     } catch (e) { console.error('[useAgentConversation] history fetch failed:', e); }
-  }, [bot, groupIntoSessions]);
+  }, [bot, groupIntoSessions, options.courseId]);
 
   const handleDeleteSession = useCallback(async (session: ConversationSession) => {
     if (!session.conversationId) return;
@@ -465,7 +466,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   useEffect(() => {
     if (!initialized || !bot || !userId || !window.unimindDesktop) return;
-    const scope = recoveryScope(userId, bot.id);
+    const scope = recoveryScope(userId, bot.id) + (options.courseId ? `:course:${options.courseId}` : '');
     if (scopeRef.current === scope) return;
     const saved = readRecovery(scope);
     scopeRef.current = scope;
@@ -492,7 +493,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     } else {
       saveRecovery(scope, conversationIdRef.current, { draft: inputValueRef.current }, true);
     }
-  }, [initialized, identity, bot, userId, options.initialConversationId, sessions, setConversationId, setProjectId]);
+  }, [initialized, identity, bot, userId, options.courseId, options.initialConversationId, sessions, setConversationId, setProjectId]);
 
   const recoverRequests = useCallback(async () => {
     if (!bot || !userId || !navigator.onLine) return;
@@ -658,7 +659,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     saveRecovery(requestScope, requestConversationId, { pending }, isVisible());
     if (!silent) {
       if (isVisible()) followScrollRef.current = true;
-      const userMsg: Message = { _id: userMessageId, role: 'user', content: text, timestamp: new Date().toISOString(), conversation_id: requestConversationId };
+      const userMsg: Message = { _id: userMessageId, role: 'user', content: text, timestamp: new Date().toISOString(), conversation_id: requestConversationId,
+        ...(body.course_context ? { metadata: { course_context: body.course_context } } : {}) };
       updateConversationMessages(requestConversationId, previous => previous.some(row => row._id === userMessageId || (pending.serverMessageId && row.id === pending.serverMessageId)) ? previous : [...previous, userMsg]);
       syncSession(requestConversationId, messageBuffersRef.current.get(requestConversationId) ?? [], projectIdRef.current);
     }
