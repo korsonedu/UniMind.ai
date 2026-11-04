@@ -311,6 +311,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
             <>
             <video
               ref={videoRef}
+              crossOrigin="anonymous"
               playsInline
               onEnded={handleVideoEnd}
               onTimeUpdate={handleTimeUpdate}

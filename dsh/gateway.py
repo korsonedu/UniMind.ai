@@ -16,6 +16,46 @@ from streaming import text_delta
 
 
 TASK_TIMEOUT_SECONDS = 90
+COURSE_VISUAL_REQUEST_BYTES = 4 * 1024 * 1024
+
+
+def attach_course_visual(body, context):
+    """Attach only the server-authorized course pixels to this turn's question.
+
+    The SDK continues to send bounded text/tool requests. Inline images are added
+    at the final provider boundary, never interpolated into the system prompt.
+    """
+    visual = context.get('course_visual_content')
+    if not visual:
+        return body
+    blocks = []
+    for part in visual:
+        if part['type'] == 'text':
+            blocks.append(part)
+        elif part['type'] == 'image_url':
+            header, data = part['image_url']['url'].split(',', 1)
+            if header != 'data:image/jpeg;base64':
+                raise ValueError('Invalid server course image')
+            blocks.append({'type': 'image', 'source': {'type': 'base64',
+                           'media_type': 'image/jpeg', 'data': data}})
+        else:
+            raise ValueError('Invalid server course content')
+    messages = list(body['messages'])
+    for index in range(len(messages) - 1, -1, -1):
+        row = messages[index]
+        if row['role'] != 'user':
+            continue
+        content = row['content']
+        # DSH appends a separate runtime-context text block to the user input.
+        # Match the actual first question block, not that appended snapshot.
+        text = content if isinstance(content, str) else (
+            content[0].get('text') if content and content[0].get('type') == 'text' else None)
+        if text != context['course_visual_message']:
+            continue
+        content = [{'type': 'text', 'text': content}] if isinstance(content, str) else list(content)
+        messages[index] = {**row, 'content': [*content, *blocks]}
+        return {**body, 'messages': messages}
+    raise ValueError('Course image question is missing')
 
 
 @contextmanager
@@ -128,6 +168,12 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                     'model', 'max_tokens', 'messages', 'system', 'tools', 'tool_choice',
                     'stream', 'temperature', 'top_p', 'stop_sequences',
                 }}
+                try:
+                    body = attach_course_visual(body, context)
+                    if len(json.dumps(body).encode()) > COURSE_VISUAL_REQUEST_BYTES:
+                        return self.reject(413, 'course_visual_budget_exceeded')
+                except (ValueError, KeyError, TypeError):
+                    return self.reject(403, 'course_visual_context_denied')
                 body['thinking'] = {'type': 'disabled'}
                 if policy['operation'] == 'server.generate':
                     body['temperature'] = policy.get('temperature', .7)

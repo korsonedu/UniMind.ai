@@ -44,8 +44,12 @@ class DshContextView(APIView):
         data.is_valid(raise_exception=True)
         context = build_context(request.user, **data.validated_data)
         if isinstance(request.auth, dict) and request.auth.get('chat_context'):
-            from .services.dsh_xiaoyu import task_context
+            from .services.dsh_xiaoyu import task_context, task_course_visual
             context['system_prompt'] += task_context(request.user, request.auth['chat_context'], data.validated_data['message'])
+            visual = task_course_visual(request.user, request.auth['chat_context'], data.validated_data['message'])
+            if visual:
+                context['course_visual_content'] = visual
+                context['course_visual_message'] = data.validated_data['message']
         return Response(context)
 
 
