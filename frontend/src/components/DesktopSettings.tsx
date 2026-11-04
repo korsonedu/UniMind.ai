@@ -55,6 +55,6 @@ export function DesktopSettings() {
       </div>)}
     </section>
     <h3 className="um-settings-group-title">版本与更新</h3>
-    <section className="um-settings-group"><div className="um-settings-row"><div><span>UniMind {state.version}</span><p>{updateLabels[state.update.status]}{state.update.version ? ` · ${state.update.version}` : ''}</p>{state.update.error && <p>{state.update.error}</p>}</div>{state.update.status === 'downloaded' ? <Button disabled={!!busy} onClick={() => void run('install', desktop.installUpdate)}>重启并更新</Button> : <Button variant="outline" disabled={!!busy || ['unconfigured', 'checking', 'available', 'downloading'].includes(state.update.status)} onClick={() => void run('update', desktop.checkForUpdates)}>检查更新</Button>}</div></section>
+    <section className="um-settings-group"><div className="um-settings-row"><div><span>客户端版本 {state.version}</span><p>{updateLabels[state.update.status]}{state.update.version ? ` · ${state.update.version}` : ''}</p>{state.update.error && <p>{state.update.error}</p>}</div>{state.update.status === 'downloaded' ? <Button disabled={!!busy} onClick={() => void run('install', desktop.installUpdate)}>重启并更新</Button> : <Button variant="outline" disabled={!!busy || ['unconfigured', 'checking', 'available', 'downloading'].includes(state.update.status)} onClick={() => void run('update', desktop.checkForUpdates)}>检查更新</Button>}</div></section>
   </>;
 }

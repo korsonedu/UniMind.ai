@@ -1,5 +1,8 @@
 # UniMind.ai 版本管理规范
 
+从待发布的 1.4.0「小宇随课问答」开始，产品和桌面客户端共用一个版本序列。`frontend/package.json` 的 `version` 是唯一手动维护的版本来源。已有 `v1.x` 和 `desktop-v0.1.x` 标签、安装包及发布记录保留，不重写历史。
+
+
 ## 一、版本号规则（SemVer 变体）
 
 ```
@@ -8,9 +11,11 @@ vMAJOR.MINOR.PATCH[-suffix]
 
 | 字段 | 何时 bump | 举例 |
 |------|----------|------|
-| MAJOR | 产品大版本：架构重构、数据库 schema 大改（不兼容旧数据）、商业模式变更 | v3.0.0 |
+| MAJOR | 产品大版本：产品定位或核心使用方式发生整体变化 | v3.0.0 |
 | MINOR | 功能里程碑：新 Agent、新完整模块（支付、课程、面试等）、大型 UI 改版 | v2.10.0 |
-| PATCH | 日常迭代：bugfix、小功能、优化、安全补丁、prompt 调优 | v2.9.3 |
+| PATCH | 日常迭代：bugfix、局部体验优化、安全补丁、prompt 调优 | v2.9.3 |
+
+提交数量与间隔只作为发版提醒，不自动决定版本类型。面向外部调用者的 API 兼容性仍需单独说明。
 
 ### suffix 后缀
 
@@ -57,7 +62,7 @@ v2.10.0-dev  →  v2.10.0-rc.1  →  v2.10.0-rc.2  →  v2.10.0
 
 | type | 含义 | 触发 MINOR/PATCH |
 |------|------|-----------------|
-| feat | 新功能 | MINOR |
+| feat | 新功能 | 结合用户能力变化确定，不自动升级 |
 | fix | bug 修复 | PATCH |
 | fix(security) | 安全修复 | PATCH |
 | refactor | 重构（无功能变更） | — |
@@ -119,13 +124,13 @@ git commit -m "feat(quizzes): 新增错题本导出 PDF 功能"
    ↓
 2. 更新 CHANGELOG.md（合并本轮所有 commit 为人类可读的变更记录）
    ↓
-3. bump 版本号（去掉 -dev 后缀，或升 MINOR/PATCH）
+3. 更新 frontend/package.json，执行 npm --prefix frontend/electron run version:sync
    ↓
-4. git tag v2.10.0
+4. 完成构建与冒烟，提交源码后创建 vX.Y.Z 标签（有桌面包时另建 desktop-vX.Y.Z）
    ↓
 5. git push + git push --tags
    ↓
-6. 服务器 git pull + npm build + systemctl restart
+6. 按发布范围部署并验收；桌面包按 DESKTOP_RELEASE.md 构建、验收与分发
    ↓
 7. 再次迭代时，在 CHANGELOG 顶部开新的 -dev 版本头
 ```
@@ -167,11 +172,24 @@ main                          ← 唯一长期分支，永远可部署
 
 ---
 
-## 七、版本号快速参考
+## 七、统一版本的维护与交付
 
+### 更新版本
+
+在仓库根目录执行（以下版本仅作示例）：
+
+```bash
+npm --prefix frontend version 1.4.1 --no-git-tag-version
+npm --prefix frontend/electron run version:sync
 ```
-当前版本:  v1.3.1
-下次 MINOR: v1.3.0（新模块/大功能上线时）
-下次 PATCH: v1.2.1（日常迭代）
-下次 MAJOR: v2.0.0（架构大改/商业模式变更）
-```
+
+第二条命令将产品版本同步到桌面 `package.json` 和两处锁文件；桌面编译前也会自动执行。不要独立修改桌面版本。更新 `CHANGELOG.md`，写清本次变化与待发布／已发布状态，再按发布范围构建和冒烟。
+
+### 发布与显示
+
+- 产品发布使用 `vX.Y.Z` 标签；包含桌面安装包的发行使用 `desktop-vX.Y.Z`，保留此前下载接口使用的前缀。它们共用版本序列，但分别记录实际交付。仅有源码标签不代表已部署或安装包已分发。
+- 产品功能发布时，需要制作的新客户端跟随产品版本；无需强制用户重新安装只加载线上新功能的客户端。
+- 仅修复桌面壳时，使用序列中的下一个修订版本制作安装包；网页不必为对齐数字重新部署，也不必创建对应产品标签。
+- 旧客户端加载新网页后，产品版本可以是 1.4.0，客户端仍是实际安装的 0.1.9。设置页分别显示，安装包版本不随网页更新改变。
+- 设置中的“技术详情”显示产品构建提交与未提交修改标记。桌面源码 SHA、构建时间及平台等继续记入安装包的 `BUILD-INFO.json`。
+- 已分发版本不得复用；新发布不得低于已发布的产品或客户端版本。桌面构建与分发遵循 [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md)。

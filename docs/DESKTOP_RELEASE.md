@@ -2,10 +2,10 @@
 
 ## 每次发布的固定流程
 
-以下流程适用于每次桌面发版。桌面版本独立于网站版本，标签使用 `desktop-vX.Y.Z`。本次为 `0.1.5`。
+以下流程适用于每次桌面发版。从待发布的 1.4.0 开始，桌面与产品共用版本序列，规则见 [VERSIONING.md](VERSIONING.md)。桌面标签继续使用 `desktop-vX.Y.Z`，用于下载接口识别安装包。
 
 1. **锁定范围。** 从已知提交建立独立发布分支，只带入本次桌面壳改动，不携带其他工作区的未提交修改。记录本次与上次版本的区别。网站／后端有配套变更时单独发布并验收；只有主进程、图标和打包配置变化时不需要重启业务服务。
-2. **统一版本。** 同时更新 `frontend/electron/package.json`、`package-lock.json` 顶层及根 package 的版本，以及根目录 `CHANGELOG.md` 的 Desktop 更新说明。已经分发的版本不得复用。
+2. **统一版本。** 只修改 `frontend/package.json` 的产品版本，执行 `npm --prefix frontend/electron run version:sync` 同步桌面包及锁文件，再更新根目录 `CHANGELOG.md`。桌面编译前也会自动同步。已经分发的版本不得复用；旧安装包的实际版本保持不变。
 3. **最小验证。** 执行 `npm run build`，包含主进程／preload 编译、类型检查和现有 3 项安全冒烟；针对本次改动补一次必要检查。不要为了发版重复跑整站测试。保留仓库已有 CI 门槛。
 4. **提交并制作。** 先提交本次源码，以这个确切 SHA 构建。在新的版本目录输出 macOS ARM64 DMG／ZIP 和 Windows x64 NSIS，保留原版本产物。默认入口必须是 `https://unimind-ai.com/login`，应用标识为 `com.korsonedu.unimind.desktop`；包内不得带预览账号、开发地址或本机服务依赖。
 5. **核对产物。** 检查包内 `package.json`、主进程／preload 与提交源码的对应关系、平台版本信息和图标资源。记录 `BUILD-INFO.json`（源码 SHA、版本、平台、构建时间、签名状态、入口、资源 SHA256）及 `SHA256SUMS`。Mac 做一次安装包启动／托盘冒烟；Windows 若未实机安装，明确标记未验收，不把交叉打包算作运行验收。
@@ -51,7 +51,7 @@ npm run candidate:win  # Windows x64：未签名 NSIS
 
 ## 发行步骤
 
-1. 修改 `frontend/electron/package.json` 的 `version`，同步更新 CHANGELOG。
+1. 按 [VERSIONING.md](VERSIONING.md) 更新统一版本并同步包元数据、锁文件及 CHANGELOG。
 2. 配置签名和公证环境变量，不提交任何密钥。
 3. 生成更新配置：
 

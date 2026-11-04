@@ -1,5 +1,7 @@
 import { SelectField, SelectOption } from '@/components/ui/select';
 import { DesktopSettings } from '@/components/DesktopSettings';
+import { APP_VERSION, APP_BUILD } from '@/constants/version';
+import { useDesktopStore } from '@/lib/desktop';
 import NoteAISettings from './notes/NoteAISettings';
 import { formatApiErrorToast } from '@/lib/apiError';
 import { useEffect, useRef, useState } from 'react';
@@ -26,6 +28,7 @@ const SECTIONS = [
   { id: 'notes', label: '笔记与小宇', icon: Notebook, keywords: 'AI 阅读 笔记 了解' },
   { id: 'security', label: '账户安全', icon: ShieldCheck, keywords: '邮箱 密码 修改' },
   { id: 'data', label: '数据管理', icon: Database, keywords: '导出 下载 注销 删除 隐私 协议' },
+  { id: 'about', label: '关于 UniMind', icon: ChatCircle, keywords: '产品 客户端 版本 构建 关于' },
 ] as const;
 const AVATAR_STYLES: Record<string, string> = {
   avataaars: '简约角色', bottts: '机器人', 'pixel-art': '像素艺术', adventurer: '冒险家',
@@ -35,6 +38,7 @@ const AVATAR_STYLES: Record<string, string> = {
 export const Settings: React.FC = () => {
   const { theme, setTheme, setPageHeader, readingSize, density, reduceMotion, sendShortcut, toolDetails, practiceCount, practicePreference, videoSpeed, videoSubtitles, setExperience } = useSystemStore();
   const user = useAuthStore(state => state.user);
+  const desktopState = useDesktopStore(state => state.state);
   const updateUser = useAuthStore(state => state.updateUser);
   const [params, setParams] = useSearchParams();
   const section = params.get('section') || 'profile';
@@ -179,6 +183,14 @@ export const Settings: React.FC = () => {
         {current?.id === 'security' && <>
           <form onSubmit={event => void handleUpdateEmail(event)}><h3 className="um-settings-group-title">邮箱</h3><section className="um-settings-group"><div className="um-settings-row"><div><label htmlFor="settings-email">修改邮箱</label><p>输入你要使用的新邮箱地址。</p></div><Input id="settings-email" type="email" value={email} required onChange={event => setEmail(event.target.value)} placeholder="新邮箱地址" autoComplete="email" spellCheck={false} /></div></section><footer className="um-settings-footer"><Button type="submit" variant="outline" disabled={!!busy || !email.trim()}>{busy === 'email' ? '更新中…' : '更新邮箱'}</Button></footer></form>
           <form onSubmit={event => void handleUpdatePassword(event)}><h3 className="um-settings-group-title">密码</h3><section className="um-settings-group"><div className="um-settings-row"><label htmlFor="settings-old-password">当前密码</label><Input id="settings-old-password" type="password" value={passwords.old} onChange={event => setPasswords({ ...passwords, old: event.target.value })} required autoComplete="current-password" /></div><div className="um-settings-row"><div><label htmlFor="settings-new-password">新密码</label><p>至少 6 个字符。</p></div><Input id="settings-new-password" type="password" value={passwords.new} onChange={event => setPasswords({ ...passwords, new: event.target.value })} required minLength={6} autoComplete="new-password" /></div></section><footer className="um-settings-footer"><Button type="submit" variant="outline" disabled={!!busy || !passwords.old || passwords.new.length < 6}>{busy === 'password' ? '更新中…' : '更新密码'}</Button></footer></form>
+        </>}
+        {current?.id === 'about' && <>
+          <h3 className="um-settings-group-title">版本信息</h3>
+          <section className="um-settings-group" aria-label="版本信息">
+            <div className="um-settings-row"><span>产品版本</span><span className="um-settings-value">{APP_VERSION}</span></div>
+            {!!window.unimindDesktop && <div className="um-settings-row"><div><span>客户端版本</span><p>当前安装的应用版本，安装新版客户端后更新。</p></div><span className="um-settings-value">{desktopState?.version || '正在读取…'}</span></div>}
+            <div className="um-settings-row"><details><summary>技术详情</summary><p>产品构建：{APP_BUILD}</p></details></div>
+          </section>
         </>}
         {current?.id === 'data' && <>
           <h3 className="um-settings-group-title">导出与保留</h3><section className="um-settings-group"><div className="um-settings-row"><div><span>导出个人数据</span><p>下载学习记录、答题历史等个人数据，格式为 JSON。</p></div><Button type="button" variant="outline" disabled={!!busy} onClick={() => void exportData()}><DownloadSimple size={16} />{busy === 'export' ? '导出中…' : '下载我的数据'}</Button></div></section>
