@@ -15,11 +15,11 @@ def test_registered_public_course_boundary(auth_client, user, settings, tmp_path
     empty_album = Album.objects.create(name='empty album')
     public = CourseModule.objects.create(subject='finance', name='public', is_public=True)
     private = CourseModule.objects.create(subject='finance', name='private')
-    open_course = Course.objects.create(title='public lesson', module=public, album_obj=album,
+    open_course = Course.objects.create(is_published=True, title='public lesson', module=public, album_obj=album,
                                        video_file='public.mp4', courseware='public.pdf')
-    paid = Course.objects.create(title='paid lesson', module=private, album_obj=album,
+    paid = Course.objects.create(is_published=True, title='paid lesson', module=private, album_obj=album,
                                 video_file='paid.mp4')
-    unassigned = Course.objects.create(title='unassigned lesson')
+    unassigned = Course.objects.create(is_published=True, title='unassigned lesson')
     material = StartupMaterial.objects.create(name='paid startup', file='startup.pdf')
     for name in ('public.mp4', 'public.pdf', 'paid.mp4', 'startup.pdf'):
         (tmp_path / name).write_bytes(b'synthetic file')

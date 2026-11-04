@@ -25,7 +25,7 @@ class CourseMediaAuthenticationTests(TestCase):
         path = Path(self.directory.name) / f'institutions/{self.institution.pk}/lesson.webm'
         path.parent.mkdir(parents=True)
         path.write_bytes(b'0123456789')
-        self.course = Course.objects.create(title='Protected media', institution=self.institution,
+        self.course = Course.objects.create(is_published=True, title='Protected media', institution=self.institution,
             video_file=f'institutions/{self.institution.pk}/lesson.webm')
         self.url = f'/media/institutions/{self.institution.pk}/lesson.webm'
 

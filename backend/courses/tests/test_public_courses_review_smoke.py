@@ -42,8 +42,8 @@ def test_shared_tag_does_not_expand_private_courses(auth_client, settings):
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     from courses.models import Course, CourseModule, CourseTag, CourseTagRelation
     module = CourseModule.objects.create(subject='finance', name='open', is_public=True)
-    public = Course.objects.create(title='open lesson', module=module)
-    private = Course.objects.create(title='private lesson')
+    public = Course.objects.create(is_published=True, title='open lesson', module=module)
+    private = Course.objects.create(is_published=True, title='private lesson')
     tag = CourseTag.objects.create(name='shared', slug='shared')
     for course in (public, private):
         CourseTagRelation.objects.create(course=course, tag=tag)

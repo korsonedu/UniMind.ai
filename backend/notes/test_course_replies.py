@@ -12,7 +12,7 @@ from notes.models import Note
 @pytest.fixture
 def course_reply(user, settings):
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
-    course = Course.objects.create(title='债券估值',
+    course = Course.objects.create(is_published=True, title='债券估值',
         module=CourseModule.objects.create(name='公开课程', is_public=True))
     bot = Bot.objects.create(name='小宇', bot_type='planner')
     context = {'course_id': course.pk, 'course_title': course.title,

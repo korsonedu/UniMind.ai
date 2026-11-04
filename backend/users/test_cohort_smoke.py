@@ -43,7 +43,7 @@ def test_expiry_does_not_fall_back_or_reset_usage(auth_client, user, settings):
     from users.learning import is_course_student, week_bounds, set_weekly_quota_config
     today = timezone.localdate()
     from courses.models import Course
-    course = Course.objects.create(title='private cohort course')
+    course = Course.objects.create(is_published=True, title='private cohort course')
     cohort = StudentCohort.objects.create(name='expired synthetic', target_year=2027,
         starts_on=today-timedelta(days=2), ends_on=today-timedelta(days=1), is_active=True)
     CourseStudentStatus.objects.create(user=user, is_course_student=True, cohort=cohort)

@@ -100,7 +100,7 @@ class BackofficeTests(TestCase):
     def test_bulk_assignment_rejects_cross_institution(self):
         module = CourseModule.objects.create(name='Existing module')
         other = Institution.objects.create(name='Other', slug='other')
-        course = Course.objects.create(title='Existing course', institution=other)
+        course = Course.objects.create(is_published=True, title='Existing course', institution=other)
         response, _ = self.call('courses.assign', {'module': module.pk, 'courses': [course.pk], 'request_id': str(uuid.uuid4())})
         self.assertEqual(response.status_code, 400)
         course.refresh_from_db()
@@ -125,7 +125,7 @@ class BackofficeTests(TestCase):
             STORAGES={'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'}},
         ):
             module = CourseModule.objects.create(subject='金融学', name='基础模块', is_public=False)
-            course = Course.objects.create(title='Video', module=module, video_file=SimpleUploadedFile('lesson.mp4', b'local-fixture-video'))
+            course = Course.objects.create(is_published=True, title='Video', module=module, video_file=SimpleUploadedFile('lesson.mp4', b'local-fixture-video'))
             self.assertEqual(student_client.get(f'/api/courses/{course.pk}/').status_code, 200)
             media = '/media/' + course.video_file.name
             response = student_client.get(media, HTTP_RANGE='bytes=0-7')
@@ -209,7 +209,7 @@ class BackofficeTests(TestCase):
         self.assertEqual(self.call('knowledge.delete', {'id': point.pk, 'request_id': str(uuid.uuid4())})[0].status_code, 200)
 
     def transcript_fixture(self, institution=None, asr_status='completed'):
-        course = Course.objects.create(title='Transcript course', institution=institution, video_file='transcript-fixture.mp4')
+        course = Course.objects.create(is_published=True, title='Transcript course', institution=institution, video_file='transcript-fixture.mp4')
         transcript = VideoTranscript.objects.create(
             course=course, full_text='原第一句\n原第二句', asr_status=asr_status,
             asr_provider='qwen_filetrans')
@@ -230,7 +230,7 @@ class BackofficeTests(TestCase):
         self.assertEqual([item['index'] for item in response.data['segments']], [0, 1])
         self.assertEqual(response.data['revision'], 0)
         self.assertEqual(response.data['manual_edited_by_name'], '')
-        missing = Course.objects.create(title='No transcript')
+        missing = Course.objects.create(is_published=True, title='No transcript')
         response = self.call('courses.transcript.get', {'id': missing.pk})[0]
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data['status'], 'not_available')

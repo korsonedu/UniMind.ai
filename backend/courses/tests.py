@@ -29,7 +29,7 @@ class AlbumListIsolationTests(TestCase):
         self.album_a = Album.objects.create(name='A机构专辑', institution=self.inst_a)
         self.album_b = Album.objects.create(name='B机构专辑', institution=self.inst_b)
         for album in (self.global_album, self.album_a, self.album_b):
-            Course.objects.create(title=album.name, album_obj=album, institution=album.institution)
+            Course.objects.create(is_published=True, title=album.name, album_obj=album, institution=album.institution)
 
     def _client(self, user):
         from rest_framework.test import APIClient
@@ -156,13 +156,13 @@ class CourseSortOrderTests(TestCase):
 
         self.assertEqual(_next_course_sort_order(self.inst), 1)  # 空列表
 
-        Course.objects.create(title='A', institution=self.inst, author=self.user, sort_order=1)
-        Course.objects.create(title='B', institution=self.inst, author=self.user, sort_order=2)
+        Course.objects.create(is_published=True, title='A', institution=self.inst, author=self.user, sort_order=1)
+        Course.objects.create(is_published=True, title='B', institution=self.inst, author=self.user, sort_order=2)
         self.assertEqual(_next_course_sort_order(self.inst), 3)
 
     def test_scoped_by_institution(self):
         from courses.models import Course
         from courses.views import _next_course_sort_order
 
-        Course.objects.create(title='X', institution=self.other, author=self.user, sort_order=99)
+        Course.objects.create(is_published=True, title='X', institution=self.other, author=self.user, sort_order=99)
         self.assertEqual(_next_course_sort_order(self.inst), 1)  # 不受其他机构影响
