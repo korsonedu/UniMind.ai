@@ -47,6 +47,48 @@ class BackofficeTests(TestCase):
         response = self.client.post(path, body, content_type='application/json', **signed)
         return response, signed
 
+    def test_course_publication_smoke(self):
+        CourseStudentStatus.objects.create(user=self.student, is_course_student=True)
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION='Token ' + Token.objects.create(user=self.student).key)
+        module = CourseModule.objects.create(subject='金融学', name='发布冒烟模块')
+        created = self.call('courses.save', {'title': '发布冒烟课程', 'module': module.pk, 'is_published': True,
+            'request_id': str(uuid.uuid4())})[0]
+        self.assertEqual(created.status_code, 200)
+        course = Course.objects.get(pk=created.data['id'])
+        self.assertFalse(course.is_published)
+        publish = lambda value: self.call('courses.publish', {'id': course.pk,
+            'is_published': value, 'request_id': str(uuid.uuid4())})[0]
+        self.assertEqual(publish(True).status_code, 400)
+        course.video_file = 'institutions/public/publication-smoke.mp4'
+        course.save(update_fields=['video_file'])
+        self.assertEqual(client.get(f'/api/courses/{course.pk}/').status_code, 404)
+        self.assertEqual(client.get('/media/' + course.video_file.name).status_code, 403)
+        transcript = VideoTranscript.objects.create(course=course, asr_status='completed', full_text='')
+        TranscriptSegment.objects.create(transcript=transcript, start_time=0, end_time=60, text='   ', index=0)
+        self.assertEqual(publish(True).status_code, 400)
+        self.assertEqual(self.call('courses.list')[0].data['items'][0]['id'], course.pk)
+        transcript.full_text = '折现率与现值。'
+        transcript.save(update_fields=['full_text'])
+        transcript.segments.update(text=transcript.full_text)
+        from ai_assistant.services.tool_executor import PlannerToolExecutor
+        executor = PlannerToolExecutor(self.student)
+        self.assertEqual(executor._handle_search_courses({'query': '发布冒烟'})['courses'], [])
+        self.assertEqual(executor._handle_search_asr({'query': '折现'})['segments'], [])
+        self.assertEqual(publish(True).status_code, 200)
+        self.assertEqual(executor._handle_search_asr({'query': '折现'})['segments'][0]['course_id'], course.pk)
+        self.assertEqual(client.get(f'/api/courses/{course.pk}/').status_code, 200)
+        with mock.patch('courses.services.task_dispatcher.dispatch_transcription') as dispatch:
+            with self.captureOnCommitCallbacks(execute=True):
+                result = self.call('courses.transcript.retranscribe', {'id': course.pk,
+                    'request_id': str(uuid.uuid4())})[0]
+            self.assertEqual(result.status_code, 200)
+            dispatch.assert_called_once_with(course.pk, force=True)
+        course.refresh_from_db()
+        self.assertFalse(course.is_published)
+        self.assertEqual(publish(True).status_code, 400)
+        self.assertEqual(client.get(f'/api/courses/{course.pk}/').status_code, 404)
+
     def test_authentication_and_replay(self):
         self.assertEqual(self.client.post('/api/backoffice/operations/meta/', {}, format='json').status_code, 401)
         self.assertEqual(self.call('meta', headers={'HTTP_X_UNIMIND_SIGNATURE': 'forged'})[0].status_code, 401)
@@ -167,7 +209,7 @@ class BackofficeTests(TestCase):
         self.assertEqual(self.call('knowledge.delete', {'id': point.pk, 'request_id': str(uuid.uuid4())})[0].status_code, 200)
 
     def transcript_fixture(self, institution=None, asr_status='completed'):
-        course = Course.objects.create(title='Transcript course', institution=institution)
+        course = Course.objects.create(title='Transcript course', institution=institution, video_file='transcript-fixture.mp4')
         transcript = VideoTranscript.objects.create(
             course=course, full_text='原第一句\n原第二句', asr_status=asr_status,
             asr_provider='qwen_filetrans')
@@ -285,7 +327,7 @@ class BackofficeTests(TestCase):
                     'id': course.pk, 'request_id': str(uuid.uuid4())})[0]
             transcribe.assert_called_once_with(course.pk, force=True)
             self.assertEqual(response.status_code, 200, response.data)
-            self.assertEqual(response.data, {'id': course.pk, 'status': 'processing'})
+            self.assertEqual(response.data, {'id': course.pk, 'status': 'pending'})
             with self.captureOnCommitCallbacks(execute=True):
                 response = self.call('courses.outline.regenerate', {
                     'id': course.pk, 'request_id': str(uuid.uuid4())})[0]

@@ -3,6 +3,7 @@ export type Gateway = <T = any>(operation: string, payload?: Payload) => Promise
 export type Module = { id: number; name: string; subject: string; description: string; is_public: boolean; sort_order: number; course_count: number };
 export type Course = { id: number; title: string; description: string; module: number | null; module_name: string; subject_name: string;
   sort_order: number; album_obj: number | null; knowledge_point: number | null; elo_reward: number; ai_outline_enabled: boolean;
+  is_published: boolean; transcript_status: string; transcript_edited: boolean; publish_error: string;
   video_name: string; cover_name: string; courseware_name: string; reference_name: string };
 export type Product = { id: number; name: string; description: string; price_cents: number; duration_days: number;
   monthly_ai_calls: number; modules: number[]; is_active: boolean; sort_order: number };

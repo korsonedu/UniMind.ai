@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
-import { ArrowUp, ArrowCounterClockwise, ArrowsOut, ArrowsIn, Clock, NotePencil, Sparkle, X } from '@phosphor-icons/react';
-import { Link } from 'react-router-dom';
+import { memo, useEffect, useRef, useState, type RefObject } from 'react';
+import { ArrowUp, ArrowCounterClockwise, ArrowsOut, ArrowsIn, Clock, NotePencil, Sparkle, ClockCounterClockwise, X } from '@phosphor-icons/react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useSystemStore } from '@/store/useSystemStore';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import api from '@/lib/api';
 import { notesApi } from '@/lib/notes';
 import { normalizeApiError } from '@/lib/apiError';
@@ -33,22 +35,26 @@ interface CourseChatPanelProps {
   mode: ExperiencePreferences['courseAssistantMode'];
   visible: boolean;
   onModeChange: (mode: ExperiencePreferences['courseAssistantMode']) => void;
+  onExpandSidebar: () => void;
 }
 
-export function CourseChatPanel(props: CourseChatPanelProps) {
+export const CourseChatPanel = memo(function CourseChatPanel(props: CourseChatPanelProps) {
   const userId = useAuthStore(state => state.user?.id);
-  return <CourseChatSession key={`${props.courseId}:${userId}`} {...props} />;
-}
+  const [params] = useSearchParams();
+  return <CourseChatSession key={`${props.courseId}:${userId}:${params.get('conversation') || ''}`} {...props} />;
+});
 
-function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeChange }: CourseChatPanelProps) {
+function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeChange, onExpandSidebar }: CourseChatPanelProps) {
   const userId = useAuthStore(state => state.user?.id);
   const sentPosition = useRef(0);
   const [attemptPosition, setAttemptPosition] = useState<number | null>(null);
-  const [draftPosition, setDraftPosition] = useState<number | null>(null);
+  const sendShortcut = useSystemStore(state => state.sendShortcut);
+  const [searchParams] = useSearchParams();
+  const linkedConversation = searchParams.get('conversation') || undefined;
   const [loadError, setLoadError] = useState('');
   const [loadVersion, setLoadVersion] = useState(0);
-  const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(!!linkedConversation);
+  const [expanded, setExpanded] = useState(!!linkedConversation);
   const [savingNote, setSavingNote] = useState<number | null>(null);
   const [savedNotes, setSavedNotes] = useState<Record<number, number>>({});
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -56,9 +62,11 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
   const floating = mode === 'floating';
   const { setBot, setInitialized, groupIntoSessions, setSessions, handleLoadSession,
     bot, conversationId, input, setInput, messages, loading, initialized, scrollRef, doSend,
-    recovery, recoverRequests, handleReset } = useAgentConversation({
+    recovery, recoverRequests, handleReset, sessions, handleRefreshSessions,
+    coursePosition: draftPosition, setCoursePosition: setDraftPosition } = useAgentConversation({
     findBot: findAssistantBot,
     courseId,
+    initialConversationId: linkedConversation,
     getExtraPayload: () => ({ course_context: { course_id: courseId, video_seconds: sentPosition.current } }),
   });
 
@@ -80,7 +88,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
           .filter(message => message.content !== '[Thinking...]')
           .map(message => ({ ...message, visible: true }))));
         setSessions(sessions);
-        if (sessions.length) handleLoadSession(sessions[sessions.length - 1]);
+        if (sessions.length) handleLoadSession(sessions.find(row => row.conversationId === linkedConversation) ?? sessions[sessions.length - 1], true);
         setInitialized(true);
       } catch (error) {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : '课程问答加载失败。');
@@ -88,7 +96,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
     };
     void load();
     return () => { cancelled = true; };
-  }, [courseId, userId, loadVersion, setBot, setInitialized, groupIntoSessions, setSessions, handleLoadSession]);
+  }, [courseId, userId, linkedConversation, loadVersion, setBot, setInitialized, groupIntoSessions, setSessions, handleLoadSession]);
 
   // Existing failed sends retry their original payload, including its selected position.
   const pending = userId && bot ? readRecovery(`${recoveryScope(userId, bot.id)}:course:${courseId}`)
@@ -107,6 +115,10 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
     if (!text.trim() || loading || !initialized) return;
     const video = videoRef.current;
     if (!video) { toast.error('请等待视频加载完成后再提问。'); return; }
+    if (fromDraft && !recovering && draftPosition === null) {
+      toast.info('请先选择提问片段。');
+      return;
+    }
     if (!recovering) {
       sentPosition.current = fromDraft && draftPosition !== null ? draftPosition : video.currentTime;
       setDraftPosition(sentPosition.current);
@@ -148,10 +160,16 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
     <section hidden={floating && !open} className="um-course-chat" role={floating ? 'dialog' : 'region'} aria-modal={floating ? false : undefined} aria-label="小宇课程助手" onKeyDown={event => { if (floating && event.key === 'Escape') close(); }}>
     <header className="um-course-chat-header">
       <span className="um-course-assistant-orb" data-thinking={loading || undefined}><Sparkle size={18} weight="fill" /></span>
-      <div className="um-course-chat-heading"><h2>小宇</h2><p>{loading ? '正在看这段讲稿…' : '一起弄懂这节课'}</p></div>
+      <div className="um-course-chat-heading"><h2>小宇</h2><p>{loading ? '正在处理你的问题…' : '结合本段讲稿回答'}</p></div>
+      <DropdownMenu onOpenChange={value => { if (value) void handleRefreshSessions(); }}>
+        <DropdownMenuTrigger asChild><button type="button" className="um-course-assistant-icon" aria-label="本课对话" title="本课对话" disabled={!initialized}><ClockCounterClockwise size={18} /></button></DropdownMenuTrigger>
+        <DropdownMenuContent className="um-course-chat-history" align="end">
+          {sessions.length ? [...sessions].reverse().map(session => <DropdownMenuItem key={session.id} aria-current={session.conversationId === conversationId ? 'true' : undefined} onSelect={() => handleLoadSession(session)}>{session.label}</DropdownMenuItem>) : <DropdownMenuItem disabled>暂无本课历史对话</DropdownMenuItem>}
+        </DropdownMenuContent>
+      </DropdownMenu>
       <div className="um-course-chat-modes" role="group" aria-label="小宇显示方式">
         <button type="button" aria-pressed={floating} onClick={() => { setOpen(true); onModeChange('floating'); }}>浮动</button>
-        <button type="button" aria-pressed={!floating} onClick={() => onModeChange('sidebar')}>右侧</button>
+        <button type="button" aria-pressed={!floating} onClick={() => { onModeChange('sidebar'); onExpandSidebar(); }}><span className="um-course-mode-desktop">右侧</span><span className="um-course-mode-mobile">页内</span></button>
       </div>
       {floating && <>
         <button type="button" className="um-course-assistant-icon" onClick={() => setExpanded(value => !value)} aria-label={expanded ? '收起文字与公式' : '展开文字与公式'} aria-expanded={expanded}>{expanded ? <ArrowsIn size={16} /> : <ArrowsOut size={16} />}</button>
@@ -189,15 +207,20 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
         </AgentReplyContext.Provider>
         {(recovery === 'unknown' || recovery === 'pending') && <p className="um-course-chat-status">这条提问的结果正在确认，沿用原提问片段，确认前不能更新。<button type="button" onClick={() => void recoverRequests()}>刷新结果</button></p>}
         <form className="um-course-chat-composer" onSubmit={event => { event.preventDefault(); send(input, true); }}>
-          <textarea ref={composerRef} value={input} onChange={event => editDraft(event.target.value)} disabled={loading} aria-label="向小宇提问" placeholder="问问当前这段…" rows={2}
-            onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); send(input, true); } }} />
-          <div><span><Clock size={13} />{input.trim() && selectedPosition !== null
-            ? `提问片段：${formatDuration(Math.max(0, selectedPosition - 30))}–${formatDuration(selectedPosition + 30)}`
-            : input.trim() ? '请编辑问题或改问当前片段以选择范围' : '输入问题时固定提问片段'}</span>
-            <button className="um-course-chat-update-fragment" type="button" disabled={loading || recovering || !input.trim()} onClick={() => { const video = videoRef.current; if (video) setDraftPosition(video.currentTime); }}>改问当前片段</button>
-            <button type="submit" disabled={loading || !input.trim()} aria-label="发送课程问题"><ArrowUp size={17} /></button></div>
+          <div className="um-course-chat-fragment"><span><Clock size={14} />{input.trim() && selectedPosition !== null
+            ? `已固定 ${formatDuration(Math.max(0, selectedPosition - 30))}–${formatDuration(selectedPosition + 30)}`
+            : input.trim() ? '请重新选择提问片段' : '输入时固定提问片段'}</span>
+            <div>{input.trim() && selectedPosition !== null && <button type="button" disabled={loading} onClick={() => onSeek(Math.max(0, selectedPosition - 30))}>回看</button>}
+              <button type="button" disabled={loading || recovering || !input.trim()} onClick={() => { const video = videoRef.current; if (video) setDraftPosition(video.currentTime); }}>改问当前片段</button></div>
+          </div>
+          <div className="um-course-chat-field">
+            <textarea ref={composerRef} value={input} onChange={event => editDraft(event.target.value)} disabled={loading} aria-label="向小宇提问" placeholder="问问这段课程…" rows={2}
+              onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && (sendShortcut === 'enter' || event.ctrlKey || event.metaKey)) { event.preventDefault(); send(input, true); } }} />
+            <div className="um-course-chat-send-row"><span>{sendShortcut === 'enter' ? 'Enter 发送 · Shift+Enter 换行' : '⌘ / Ctrl+Enter 发送'}</span>
+              <button type="submit" disabled={loading || !input.trim() || (!recovering && draftPosition === null)} aria-label="发送课程问题"><ArrowUp size={18} /></button></div>
+          </div>
         </form>
-        {messages.length > 0 && <footer className="um-course-chat-footer">{floating && <button type="button" className="um-course-chat-details" onClick={() => setExpanded(value => !value)}>{expanded ? '收起详情' : '展开文字、公式和历史'}</button>}<button className="um-course-chat-new" type="button" disabled={loading} onClick={() => { setDraftPosition(null); setAttemptPosition(null); setInput(''); handleReset(false); }}><ArrowCounterClockwise size={13} />新对话</button></footer>}
+        {messages.length > 0 && <footer className="um-course-chat-footer">{floating && <button type="button" className="um-course-chat-details" onClick={() => setExpanded(value => !value)}>{expanded ? '收起本次对话' : '展开本次对话'}</button>}<button className="um-course-chat-new" type="button" disabled={loading} onClick={() => { setDraftPosition(null); setAttemptPosition(null); setInput(''); handleReset(false); }}><ArrowCounterClockwise size={13} />新对话</button></footer>}
       </>}
   </section>
   </div>;

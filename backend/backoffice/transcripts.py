@@ -87,7 +87,7 @@ def save_transcript(request, data):
     transcript = VideoTranscript.objects.select_for_update().filter(course=course).first()
     if not transcript:
         raise serializers.ValidationError('该课程暂无字幕，无法保存。')
-    if transcript.asr_status == 'processing':
+    if transcript.asr_status in {'pending', 'processing'}:
         raise serializers.ValidationError('字幕正在重新识别，请稍后再保存。')
     if transcript.revision != revision:
         raise serializers.ValidationError('字幕已被其他人更新，请刷新后重试')
@@ -116,14 +116,28 @@ def save_transcript(request, data):
 
 
 def retranscribe_course(request, data):
-    course = _course(data)
+    course = get_object_or_404(managed(Course.objects.select_for_update()), pk=identity(data))
+    if not course.video_file:
+        raise serializers.ValidationError('请先上传视频。')
+    transcript, _ = VideoTranscript.objects.select_for_update().get_or_create(course=course)
+    if transcript.asr_status == 'processing':
+        raise serializers.ValidationError('字幕正在识别中，请稍后再试。')
+    course.is_published = False
+    course.save(update_fields=['is_published', 'updated_at'])
+    transcript.asr_status = 'pending'
+    transcript.save(update_fields=['asr_status', 'updated_at'])
 
     def dispatch():
         from courses.services.task_dispatcher import dispatch_transcription
-        dispatch_transcription(course.pk, force=True)
+        try:
+            dispatch_transcription(course.pk, force=True)
+        except Exception:
+            VideoTranscript.objects.filter(course=course, asr_status='pending').update(
+                asr_status='failed', error_message='转写任务提交失败，请重试。', updated_at=timezone.now())
+            raise
 
     transaction.on_commit(dispatch, robust=True)
-    return {'id': course.pk, 'status': 'processing'}
+    return {'id': course.pk, 'status': 'pending'}
 
 
 def regenerate_outline(request, data):

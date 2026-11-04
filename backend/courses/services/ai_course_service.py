@@ -33,20 +33,23 @@ class AICourseService:
     # ── 转录 ──────────────────────────────────────────────────────────
 
     def transcribe_video(self, course: Course, force: bool = False) -> VideoTranscript:
-        transcript, _ = VideoTranscript.objects.get_or_create(course=course)
-        if transcript.is_manually_edited and not force:
-            return transcript
+        with transaction.atomic():
+            course = Course.objects.select_for_update().get(pk=course.pk)
+            transcript, _ = VideoTranscript.objects.get_or_create(course=course)
+            if transcript.is_manually_edited and not force:
+                return transcript
 
-        claimed_at = timezone.now()
-        claim_filter = ~Q(asr_status='processing') | Q(updated_at__lt=claimed_at - timedelta(seconds=5400))
-        if not force:
-            claim_filter &= Q(manual_edited_at__isnull=True)
-        claimed = VideoTranscript.objects.filter(pk=transcript.pk).filter(claim_filter).update(
-            asr_status='processing', updated_at=claimed_at,
-        )
-        if not claimed:
-            transcript.refresh_from_db()
-            return transcript
+            claimed_at = timezone.now()
+            claim_filter = ~Q(asr_status='processing') | Q(updated_at__lt=claimed_at - timedelta(seconds=5400))
+            if not force:
+                claim_filter &= Q(manual_edited_at__isnull=True)
+            claimed = VideoTranscript.objects.filter(pk=transcript.pk).filter(claim_filter).update(
+                asr_status='processing', updated_at=claimed_at,
+            )
+            if not claimed:
+                transcript.refresh_from_db()
+                return transcript
+            Course.objects.filter(pk=course.pk).update(is_published=False)
         ownership = {'pk': transcript.pk, 'asr_status': 'processing', 'updated_at': claimed_at}
         if not force:
             ownership['manual_edited_at__isnull'] = True

@@ -30,7 +30,7 @@ def build_tool_card(name, result):
             '' if result.get('courses') else '没有找到匹配课程。')
     if name == 'search_asr':
         return data_card('课程讲稿来源', [item(f"{s['course_title']} · {s['start_time']}～{s['end_time']}",
-            s['text'], f"/course/{int(s['course_id'])}") for s in result.get('segments', [])[:10]],
+            s['text'], f"/course/{int(s['course_id'])}?t={float(s['start_seconds']):g}") for s in result.get('segments', [])[:10]],
             note='' if result.get('segments') else '没有找到匹配片段。')
     if name in {'lookup_question', 'get_user_wrong_questions', 'search_similar_questions'}:
         rows = [result] if name == 'lookup_question' else result.get('questions', [])

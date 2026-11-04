@@ -29,7 +29,7 @@ async function load() {
 onMounted(() => run(load));
 
 const processing = computed(() => transcript.value?.status === 'processing');
-const locked = computed(() => busy.value || processing.value);
+const locked = computed(() => busy.value || processing.value || transcript.value?.status === 'pending');
 const pageCount = computed(() => Math.max(1, Math.ceil((transcript.value?.segments.length || 0) / PAGE_SIZE)));
 const pageSegments = computed(() => transcript.value ? transcript.value.segments.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE) : []);
 const changes = computed(() => transcript.value ? transcript.value.segments.filter(segment => edits.has(segment.id)) : []);
@@ -95,13 +95,13 @@ async function save() {
   }
 }
 async function retranscribe() {
-  if (!window.confirm('重新识别会覆盖当前字幕，包括所有人工修改。确认继续？')) return;
+  if (!window.confirm('重新识别会先下架课程，并覆盖当前字幕及所有人工修改；完成后需要重新发布。确认继续？')) return;
   notice.value = '';
   await run(async () => {
     const result = await props.api<{ status?: string }>('courses.transcript.retranscribe', { id: props.course.id, request_id: crypto.randomUUID() });
     if (transcript.value) transcript.value.status = result?.status || 'processing';
     edits.clear();
-    notice.value = '已提交重新识别，处理完成后请刷新查看。';
+    notice.value = '课程已退回草稿，正在等待重新识别；处理完成后请刷新、校对并重新发布。';
   });
 }
 async function regenerateOutline() {
@@ -127,7 +127,7 @@ async function regenerateOutline() {
           <span>人工修订 <strong>{{ manualText }}</strong></span>
           <span v-if="changedCount" class="transcript-changed">待保存 {{ changedCount }} 句</span>
         </div>
-        <p v-if="processing" class="notice" role="status">字幕正在识别中，请等待处理完成；当前禁止编辑和保存。</p>
+        <p v-if="processing || transcript.status === 'pending'" class="notice" role="status">字幕正在排队或识别中，请等待处理完成；当前禁止编辑和保存。</p>
         <p v-else-if="transcript.status === 'failed'" class="error" role="alert">{{ transcript.error_message || '字幕识别失败，可重新识别。' }}</p>
         <p v-if="notice" class="notice" role="status">{{ notice }}</p>
         <template v-if="transcript.segments.length">

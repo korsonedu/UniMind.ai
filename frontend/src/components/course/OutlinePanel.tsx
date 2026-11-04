@@ -1,7 +1,6 @@
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { Spinner } from '@phosphor-icons/react';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
-import { useInstitutionStore } from '@/store/useInstitutionStore';
 import { formatDuration } from '@/lib/utils';
 
 interface OutlinePanelProps {
@@ -10,22 +9,12 @@ interface OutlinePanelProps {
 }
 
 export const OutlinePanel: React.FC<OutlinePanelProps> = ({ courseId, videoRef }) => {
-  const { outlineStatus, outlineItems, fetchOutline, triggerOutlineGeneration, clearCourseTimers } = useCourseAIStore();
-  const autoTriggeredRef = useRef(false);
-  const canGenerate = useInstitutionStore(state => state.features.includes('video.outline'));
+  const { outlineStatus, outlineItems, fetchOutline, clearCourseTimers } = useCourseAIStore();
 
   useEffect(() => {
     fetchOutline(courseId);
     return () => { clearCourseTimers(courseId); };
   }, [courseId, fetchOutline, clearCourseTimers]);
-
-  // 旧课程自动触发生成
-  useEffect(() => {
-    if (canGenerate && outlineStatus === 'unavailable' && !autoTriggeredRef.current) {
-      autoTriggeredRef.current = true;
-      triggerOutlineGeneration(courseId);
-    }
-  }, [canGenerate, outlineStatus, courseId, triggerOutlineGeneration]);
 
   const handleSeek = useCallback(
     (seconds: number) => {

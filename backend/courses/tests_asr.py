@@ -231,8 +231,10 @@ class TranscriptManualEditProtectionTests(TestCase):
     def setUp(self):
         from courses.models import Course, VideoTranscript
 
+        storage = patch.object(Course._meta.get_field("video_file"), "storage", _RemoteStorage())
+        storage.start()
+        self.addCleanup(storage.stop)
         self.course = Course.objects.create(title="测试课程", video_file="videos/lesson.mp4")
-        self.course.video_file.storage = _RemoteStorage()
         self.transcript = VideoTranscript.objects.create(course=self.course)
 
     def test_manual_edit_is_not_overwritten_by_default(self):
@@ -297,10 +299,10 @@ class TranscriptManualEditProtectionTests(TestCase):
         from courses.models import Course
 
         course = Course.objects.create(title="本地课程", video_file="videos/local.mp4")
-        course.video_file.storage = _LocalStorage()
         provider = _FakeURLProvider()
 
-        with patch.object(ASRProviderRegistry, "get_default_provider", return_value=provider):
+        with patch.object(Course._meta.get_field("video_file"), "storage", _LocalStorage()), \
+                patch.object(ASRProviderRegistry, "get_default_provider", return_value=provider):
             with self.assertLogs("courses.services.ai_course_service", level="ERROR"):
                 with self.assertRaises(ValueError) as ctx:
                     AICourseService().transcribe_video(course)

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useCourseAIStore } from '@/store/useCourseAIStore';
-import { useInstitutionStore } from '@/store/useInstitutionStore';
 
 interface SubtitlesOverlayProps {
   courseId: number;
@@ -13,24 +12,15 @@ export const SubtitlesOverlay: React.FC<SubtitlesOverlayProps> = ({
   videoRef,
   visible = false,
 }) => {
-  const { transcriptStatus, transcriptSegments, fetchTranscript, triggerTranscription, clearCourseTimers } =
+  const { transcriptSegments, fetchTranscript, clearCourseTimers } =
     useCourseAIStore();
   const activeIdxRef = useRef(-1);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const autoTriggeredRef = useRef(false);
-  const canGenerate = useInstitutionStore(state => state.features.includes('video.outline'));
 
   useEffect(() => {
     fetchTranscript(courseId);
     return () => { clearCourseTimers(courseId); };
   }, [courseId, fetchTranscript, clearCourseTimers]);
-
-  useEffect(() => {
-    if (canGenerate && transcriptStatus === 'unavailable' && !autoTriggeredRef.current) {
-      autoTriggeredRef.current = true;
-      triggerTranscription(courseId);
-    }
-  }, [canGenerate, transcriptStatus, courseId, triggerTranscription]);
 
   useEffect(() => {
     if (!visible || transcriptSegments.length === 0) return;
