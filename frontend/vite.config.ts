@@ -2,11 +2,16 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { execSync } from 'child_process'
+import { readFileSync } from 'node:fs'
 import path from 'path'
 
-function getVersion(): string {
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+
+function getBuild(): string {
   try {
-    return execSync('git describe --tags --always --dirty=-dirty', { encoding: 'utf8' }).trim()
+    const commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+    const dirty = execSync('git diff HEAD --name-only', { encoding: 'utf8' }).trim()
+    return `${commit}${dirty ? '-dirty' : ''}`
   } catch {
     return 'unknown'
   }
@@ -112,6 +117,7 @@ export default defineConfig({
     },
   },
   define: {
-    __APP_VERSION__: JSON.stringify(getVersion()),
+    __APP_VERSION__: JSON.stringify(version),
+    __APP_BUILD__: JSON.stringify(getBuild()),
   },
 })

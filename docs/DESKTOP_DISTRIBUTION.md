@@ -1,6 +1,6 @@
 # UniMind 桌面版小范围分发
 
-每次桌面发布以 [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md) 的固定流程为准。本次目标版本为 0.1.6，受控分发，使用正式产品名 UniMind、应用标识 `com.korsonedu.unimind.desktop` 和线上入口 `https://unimind-ai.com/login`。不使用合成账号，不依赖本地 5175 服务。下文 0.1.1／0.1.2 记录保留为历史背景，不代表当前线上状态。
+每次桌面发布以 [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md) 的固定流程为准，版本按 [VERSIONING.md](VERSIONING.md) 与产品统一。继续受控分发，使用正式产品名 UniMind、应用标识 `com.korsonedu.unimind.desktop` 和线上入口 `https://unimind-ai.com/login`。不使用合成账号，不依赖本地 5175 服务。下文 0.1.1／0.1.2 记录保留为历史背景，不代表当前线上状态。
 
 0.1.2增加桌面独立登录页，App直接进入`/login`，网页登录首页保留。App点击后打开系统浏览器，浏览器确认科晟账号后通过一次性码回流，主进程完成Cookie交换，再进入小宇。必须同步发布匹配前端和账号后端；老0.1.1的桥接不支持浏览器登录，显示更新提示，需要同时分发新客户端。新增API与客户端不得错配后宣称完整登录已上线。
 
