@@ -42,6 +42,7 @@ class CourseModule(models.Model):
 
 class Course(models.Model):
     title = models.CharField(max_length=200)
+    is_published = models.BooleanField(default=False, db_index=True, verbose_name='已发布')
     module = models.ForeignKey(CourseModule, on_delete=models.PROTECT, null=True, blank=True, related_name='courses', verbose_name='所属模块')
     album_obj = models.ForeignKey(Album, on_delete=models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name="所属专辑")
     description = models.TextField(blank=True, null=True)

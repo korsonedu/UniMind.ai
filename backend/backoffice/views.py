@@ -36,7 +36,7 @@ READS = {'meta': meta, 'options': courses.options, 'courses.list': courses.list_
          'questions.detail': quizzes.question_detail,
          'courses.transcript.get': transcripts.get_transcript}
 READS['cohorts.list'] = people.list_cohorts
-WRITES = {'courses.save': courses.save_course, 'courses.delete': courses.delete_course,
+WRITES = {'courses.publish': courses.publish_course, 'courses.save': courses.save_course, 'courses.delete': courses.delete_course,
           'courses.assign': courses.assign_courses, 'modules.save': courses.save_module,
           'modules.delete': courses.delete_module, 'grants.revoke': people.revoke_grant,
           'students.access.save': people.save_access,

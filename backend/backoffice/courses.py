@@ -1,9 +1,9 @@
-from django.db.models import Count
+from django.db.models import Count, F
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 
-from courses.models import Course, CourseModule, Album, LearningActivity
+from courses.models import Course, CourseModule, Album, LearningActivity, VideoTranscript
 from courses.serializers import CourseModuleSerializer
 from quizzes.models import KnowledgePoint
 from .common import content_institution, managed, identity, paginate, delete_files_after_commit
@@ -29,7 +29,26 @@ class ModuleInput(CourseModuleSerializer):
         return attrs
 
 
+def publication_error(course, transcript):
+    if not course.video_file:
+        return '请先上传视频。'
+    if not transcript or transcript.asr_status != 'completed':
+        return '请等待讲稿转写完成，按需人工复核后再发布。'
+    if not transcript.full_text.strip() or not transcript.segments.filter(
+        start_time__gte=0, end_time__gt=F('start_time'),
+    ).exclude(text__regex=r'^\s*$').exists():
+        return '讲稿缺少有效文本或分段，请校对后再发布。'
+    return ''
+
+
 class CourseInput(serializers.ModelSerializer):
+    transcript_status = serializers.CharField(source='transcript.asr_status', read_only=True, default='not_available')
+    transcript_edited = serializers.BooleanField(source='transcript.is_manually_edited', read_only=True, default=False)
+    publish_error = serializers.SerializerMethodField()
+
+    def get_publish_error(self, course):
+        return publication_error(course, getattr(course, 'transcript', None))
+
     subject_name = serializers.CharField(source='module.subject', read_only=True, default='')
     module_name = serializers.CharField(source='module.name', read_only=True, default='')
     video_name = serializers.CharField(source='video_file.name', read_only=True, default='')
@@ -41,8 +60,9 @@ class CourseInput(serializers.ModelSerializer):
         model = Course
         fields = ('id', 'title', 'module', 'module_name', 'subject_name', 'description', 'album_obj', 'knowledge_point',
                   'sort_order', 'elo_reward', 'ai_outline_enabled', 'updated_at',
+                  'is_published', 'transcript_status', 'transcript_edited', 'publish_error',
                   'video_name', 'cover_name', 'courseware_name', 'reference_name')
-        read_only_fields = ('updated_at',)
+        read_only_fields = ('updated_at', 'is_published')
 
     def validate(self, attrs):
         module = attrs.get('module', self.instance.module if self.instance else None)
@@ -63,7 +83,7 @@ class CourseInput(serializers.ModelSerializer):
 
 
 def list_courses(request, data):
-    queryset = managed(Course.objects.select_related('module')).order_by('sort_order', 'id')
+    queryset = managed(Course.objects.select_related('module', 'transcript')).order_by('sort_order', 'id')
     if data.get('search'):
         queryset = queryset.filter(title__icontains=str(data['search'])[:200])
     if data.get('subject'):
@@ -86,6 +106,18 @@ def save_course(request, data):
         from courses.views import _next_course_sort_order
         course = serializer.save(institution=module.institution, author=request.user,
                                  sort_order=serializer.validated_data.get('sort_order', _next_course_sort_order(module.institution)))
+    return CourseInput(course).data
+
+
+def publish_course(request, data):
+    course = get_object_or_404(managed(Course.objects.select_for_update()), pk=identity(data))
+    published = serializers.BooleanField().run_validation(data.get('is_published'))
+    if published:
+        transcript = VideoTranscript.objects.select_for_update().filter(course=course).first()
+        if error := publication_error(course, transcript):
+            raise serializers.ValidationError(error)
+    course.is_published = published
+    course.save(update_fields=['is_published', 'updated_at'])
     return CourseInput(course).data
 
 

@@ -1,9 +1,9 @@
 import { useSystemStore, type ExperiencePreferences } from '@/store/useSystemStore';
 import type { Course } from '@/types/api';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX, SidebarSimple } from '@phosphor-icons/react';
+import { Play, Pause, Star, FileText, Download, ArrowsOut, ArrowsIn, ClosedCaptioning, SpeakerHigh, SpeakerX } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { OutlinePanel } from '@/components/course/OutlinePanel';
@@ -26,12 +26,14 @@ interface VideoLessonProps {
   isFavorite?: boolean;
   favoritePending?: boolean;
   onFavoriteChange?: () => void;
+  sidebarToggleHost?: HTMLElement | null;
 }
 
-export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange }) => {
+export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, favoritePending = false, onFavoriteChange, sidebarToggleHost }) => {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const linkedPosition = searchParams.get('t');
+  const linkedConversation = searchParams.get('conversation');
   const linkedSeconds = linkedPosition?.trim() ? Number(linkedPosition) : null;
   const updateUser = useAuthStore(s => s.updateUser);
   const userId = useAuthStore(s => s.user?.id);
@@ -44,7 +46,9 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const { videoSpeed: playbackRate, videoSubtitles: subtitlesVisible, courseAssistantMode, setExperience } = useSystemStore();
-  const [sidebarView, setSidebarView] = useState<'chat' | 'materials'>('chat');
+  const [sidebarSelection, setSidebarSelection] = useState<{ view: 'chat' | 'materials'; conversation: string | null }>({ view: 'chat', conversation: linkedConversation });
+  const sidebarView = sidebarSelection.conversation === linkedConversation ? sidebarSelection.view : 'chat';
+  const setSidebarView = useCallback((view: 'chat' | 'materials') => setSidebarSelection({ view, conversation: linkedConversation }), [linkedConversation]);
   const [showControls, setShowControls] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -63,6 +67,11 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   const offlineReady = offlineDownload?.status === 'ready'
     && (!offlineDownload.expiresAt || offlineDownload.expiresAt > offlineNow);
   const [offlinePending, setOfflinePending] = useState(false);
+
+  const changeAssistantMode = useCallback((mode: ExperiencePreferences['courseAssistantMode']) => {
+    setExperience({ courseAssistantMode: mode });
+    if (mode === 'sidebar') setSidebarView('chat');
+  }, [setExperience, setSidebarView]);
 
   const handleOffline = async () => {
     const desktop = window.unimindDesktop;
@@ -277,6 +286,12 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     }
   };
 
+  const seekTo = useCallback((seconds: number) => {
+    if (!videoRef.current) return;
+    videoRef.current.currentTime = seconds;
+    setCurrentTime(seconds);
+  }, []);
+
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current;
     if (!v || !duration) return;
@@ -295,8 +310,8 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
   if (!course) return <div className="um-lesson um-lesson-state">课程未找到</div>;
 
   return (
-    <LessonLayout aspectRatio={videoAspectRatio}>
-      {({ sidebarCollapsed, expandSidebar }) => <>
+    <LessonLayout aspectRatio={videoAspectRatio} toolbarHost={sidebarToggleHost} revealKey={searchParams.get('conversation')}>
+      {({ expandSidebar }) => <>
       <section className="um-lesson-view" aria-label="视频与课程信息">
         <div className="um-lesson-stage">
         <div
@@ -368,7 +383,6 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
         <header className="um-lesson-heading">
           <div><p className="um-lesson-module">{[course.subject_name, course.module_name].filter(Boolean).join(' / ') || '待归类'}</p><h1>{course.title}</h1></div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {sidebarCollapsed && <button className="um-lesson-favorite" onClick={expandSidebar} aria-label="展开学习侧栏" aria-expanded={false}><SidebarSimple size={18} />展开侧栏</button>}
             {window.unimindDesktop && course.video_file && (
               <button className="um-lesson-favorite" disabled={offlinePending || offlineDownload?.status === 'downloading'} onClick={() => void handleOffline()} title={offlineDownload?.error}>
                 {offlineReady ? <Play size={18} /> : <Download size={18} />}
@@ -394,12 +408,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
         </div>}
         <CourseChatPanel key={`${userId}:${courseId}`} courseId={courseId} videoRef={videoRef}
           mode={courseAssistantMode} visible={courseAssistantMode === 'floating' || sidebarView === 'chat'}
-          onModeChange={mode => {
-            setExperience({ courseAssistantMode: mode });
-            if (mode === 'sidebar') { setSidebarView('chat'); expandSidebar(); }
-          }} onSeek={seconds => {
-            if (videoRef.current) { videoRef.current.currentTime = seconds; setCurrentTime(seconds); }
-          }} />
+          onModeChange={changeAssistantMode} onExpandSidebar={expandSidebar} onSeek={seekTo} />
         <div className="um-course-info" hidden={courseAssistantMode === 'sidebar' && sidebarView !== 'materials'}>
         <section className="um-lesson-outline-section" aria-labelledby="lesson-outline-heading">
           <h2 id="lesson-outline-heading">课程大纲</h2>

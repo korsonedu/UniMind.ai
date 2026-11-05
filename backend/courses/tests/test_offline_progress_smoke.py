@@ -17,7 +17,7 @@ def offline_event(auth_client, user, settings, tmp_path):
     settings.MEDIA_ROOT = str(tmp_path)
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     (tmp_path / 'offline.mp4').write_bytes(b'video')
-    course = Course.objects.create(title='offline progress', video_file='offline.mp4', elo_reward=20)
+    course = Course.objects.create(is_published=True, title='offline progress', video_file='offline.mp4', elo_reward=20)
     manifest = auth_client.get(f'/api/courses/{course.pk}/offline-manifest/').json()
     now = timezone.now()
     body = {'event_id': str(uuid.uuid4()), 'grant': manifest['grant'], 'version': manifest['version'],
@@ -69,7 +69,7 @@ def test_offline_actor_revocation_and_event_conflicts(auth_client, user, offline
     assert response.status_code == 403 and response.data['code'] == 'account_mismatch'
     assert APIClient().post(url, body, format='json').status_code == 401
     assert auth_client.post(url, body, format='json').status_code == 200
-    second = Course.objects.create(title='other course', video_file='offline.mp4')
+    second = Course.objects.create(is_published=True, title='other course', video_file='offline.mp4')
     grant = auth_client.get(f'/api/courses/{second.pk}/offline-manifest/').json()
     body.update(grant=grant['grant'], version=grant['version'])
     response = auth_client.post(f'/api/courses/{second.pk}/offline-progress/', body, format='json')

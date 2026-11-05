@@ -693,8 +693,9 @@ class PlannerToolExecutor(BaseToolExecutor):
             models.Q(knowledge_point__name__icontains=query)
         ).select_related('knowledge_point', 'album_obj')
 
-        # Institution isolation
-        qs = qs.filter(institution=self.institution)
+        from types import SimpleNamespace
+        from courses.access import visible_courses
+        qs = qs.filter(pk__in=visible_courses(SimpleNamespace(user=self.user, query_params={})))
 
         if subject:
             qs = qs.filter(knowledge_point__subject=subject)
@@ -732,8 +733,10 @@ class PlannerToolExecutor(BaseToolExecutor):
             text__icontains=query
         ).select_related('transcript__course')
 
-        # Institution isolation
-        qs = qs.filter(transcript__course__institution=self.institution)
+        from types import SimpleNamespace
+        from courses.access import visible_courses
+        qs = qs.filter(transcript__course__in=visible_courses(SimpleNamespace(user=self.user, query_params={})),
+                       transcript__asr_status='completed')
 
         # Filter by course if specified
         if course_id:
@@ -755,7 +758,7 @@ class PlannerToolExecutor(BaseToolExecutor):
                     "end_time": format_time(s.end_time),
                     "start_seconds": s.start_time,
                     "text": s.text[:200],
-                    "url": f"/course/{s.transcript.course_id}",
+                    "url": f"/course/{s.transcript.course_id}?t={s.start_time:g}",
                 }
                 for s in segments
             ],

@@ -16,7 +16,7 @@ from courses.models import Course, CourseModule, TranscriptSegment, VideoTranscr
 def lesson(user, settings):
     settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
     module = CourseModule.objects.create(name='公开课程', is_public=True)
-    course = Course.objects.create(title='时间价值', module=module)
+    course = Course.objects.create(is_published=True, title='时间价值', module=module)
     transcript = VideoTranscript.objects.create(course=course, asr_status='completed',
         is_manually_edited=True, revision=3)
     for index, (start, end, text) in enumerate([
@@ -57,7 +57,7 @@ def test_timestamp_reads_complete_nearby_transcript_and_freezes_revision(user, l
 @pytest.mark.django_db
 def test_course_context_checks_access_missing_transcript_and_invalid_time(user, lesson):
     course, transcript, bot = lesson
-    private = Course.objects.create(title='无权读取')
+    private = Course.objects.create(is_published=True, title='无权读取')
     request = question(user, private)
     with pytest.raises(NotFound):
         prepare_course_context(request, bot, request.data['conversation_id'])
@@ -86,7 +86,7 @@ def test_course_history_and_conversations_stay_separate(auth_client, user, lesso
     AIChatMessage.objects.create(user=user, bot=bot, role='user', content='GENERAL_QUESTION')
     assert [row['content'] for row in auth_client.get('/api/ai/history/', {'course_id': course.pk}).data] == ['COURSE_QUESTION', 'COURSE_ANSWER']
     assert [row['content'] for row in auth_client.get('/api/ai/history/').data] == ['GENERAL_QUESTION']
-    other = Course.objects.create(title='其他课', module=course.module)
+    other = Course.objects.create(is_published=True, title='其他课', module=course.module)
     request = question(user, other, conversation_id=cid)
     with pytest.raises(ValidationError, match='独立对话'):
         prepare_course_context(request, bot, cid)
@@ -137,7 +137,7 @@ def test_dsh_gets_signed_course_snapshot_and_preserves_sources_on_replay(user, l
 def test_stream_entry_validates_course_before_reserving_or_running(auth_client, user, lesson, settings):
     from users.models import AIUsageReservation
     settings.UNIMIND_DSH_XIAOYU_ENABLED = True
-    private = Course.objects.create(title='PRIVATE_TRANSCRIPT')
+    private = Course.objects.create(is_published=True, title='PRIVATE_TRANSCRIPT')
     _, _, bot = lesson
     body = question(user, private).data
     body['bot_id'] = bot.pk

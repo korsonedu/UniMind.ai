@@ -19,8 +19,8 @@ class CoursePortalTests(TestCase):
         self.other_inst = Institution.objects.create(name='B', slug='portal-b')
         self.user = get_user_model().objects.create_user(username='learner', is_member=True, institution=self.inst)
         self.other = get_user_model().objects.create_user(username='other', is_member=True, institution=self.inst)
-        self.course = Course.objects.create(title='课程', institution=self.inst, video_file='sample.mp4', elo_reward=20)
-        self.hidden = Course.objects.create(title='其他机构课程', institution=self.other_inst, video_file='other.mp4')
+        self.course = Course.objects.create(is_published=True, title='课程', institution=self.inst, video_file='sample.mp4', elo_reward=20)
+        self.hidden = Course.objects.create(is_published=True, title='其他机构课程', institution=self.other_inst, video_file='other.mp4')
 
     def call(self, view, method='get', data=None, pk=None, user=None):
         request = getattr(APIRequestFactory(), method)('/', data or {}, format='json')

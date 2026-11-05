@@ -12,9 +12,9 @@ class LearningGoalTests(TestCase):
         self.enterContext(self.settings(UNIMIND_CONTENT_INSTITUTION_ID=str(self.institution.pk)))
         self.user = User.objects.create_user(username='goal-student', institution=self.institution, is_member=True)
         self.other = User.objects.create_user(username='goal-other', institution=self.institution, is_member=True)
-        self.course = Course.objects.create(title='金融学', institution=self.institution, video_file='finance.mp4')
-        self.second = Course.objects.create(title='经济学', institution=self.institution, video_file='economics.mp4')
-        self.hidden = Course.objects.create(title='不可见课程', institution=Institution.objects.create(name='其他', slug='goal-hidden'), video_file='hidden.mp4')
+        self.course = Course.objects.create(is_published=True, title='金融学', institution=self.institution, video_file='finance.mp4')
+        self.second = Course.objects.create(is_published=True, title='经济学', institution=self.institution, video_file='economics.mp4')
+        self.hidden = Course.objects.create(is_published=True, title='不可见课程', institution=Institution.objects.create(name='其他', slug='goal-hidden'), video_file='hidden.mp4')
 
     def call(self, method='get', data=None, user=None):
         request = getattr(APIRequestFactory(), method)('/', data or {}, format='json')

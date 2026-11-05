@@ -104,7 +104,7 @@ def complete(request, data):
     store = bucket()
     request.backoffice_rollback = lambda: cleanup_upload(store, value['key'], value['upload'])
     if value['field'] == 'video_file' and (
-        VideoTranscript.objects.filter(course=course, asr_status='processing').exists()
+        VideoTranscript.objects.filter(course=course, asr_status__in=['pending', 'processing']).exists()
         or CourseOutline.objects.filter(course=course, status='generating').exists()
     ):
         raise serializers.ValidationError('当前视频仍在处理中，请处理完成后再替换。')
@@ -135,7 +135,8 @@ def complete(request, data):
     remove_storage_usage(course.institution, old_size)
     check_and_add_storage_usage(course.institution, actual_size)
     # File side effects follow the committed metadata and audit transaction.
-    Course.objects.filter(pk=course.pk).update(**{value['field']: value['key'], 'updated_at': timezone.now()})
+    Course.objects.filter(pk=course.pk).update(**{value['field']: value['key'], 'updated_at': timezone.now(),
+        **({'is_published': False} if value['field'] == 'video_file' else {})})
     delete_files_after_commit([old_file])
     if value['field'] == 'video_file':
         VideoTranscript.objects.filter(course=course).delete()

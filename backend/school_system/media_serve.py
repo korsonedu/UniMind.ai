@@ -113,6 +113,9 @@ def media_serve(request, path):
     else:
         public_image_dirs = {'album_covers', 'course_covers', 'article_covers', 'school_logos', 'institution_logos', 'bot_avatars'}
         is_image = os.path.splitext(path)[1].lower() in {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif'}
+        covers = Course.objects.filter(cover_image=path)
+        if covers.exists() and not covers.filter(is_published=True).exists():
+            return HttpResponse(status=404)
         if not (is_image and (path.split('/')[0] in public_image_dirs or Course.objects.filter(cover_image=path).exists())):
             # 未关联业务记录的文件不能凭路径获得新的签名。
             return HttpResponse(status=404)

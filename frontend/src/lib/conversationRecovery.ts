@@ -9,6 +9,7 @@ export interface PendingChatRequest {
 export interface SavedConversation {
   draft?: string;
   draftRevision?: string;
+  coursePosition?: number | null;
   pending?: PendingChatRequest;
 }
 export interface SavedConversations {

@@ -20,7 +20,7 @@ class HasFullCourseAccess(BasePermission):
 
 def visible_courses(request):
     """课程学员可读本平台全课，注册学生仅可读明确开放的模块。"""
-    courses = apply_institution_filter(Course.objects.all(), request.user, request)
+    courses = apply_institution_filter(Course.objects.filter(is_published=True), request.user, request)
     if not has_full_course_access(request.user):
         courses = courses.filter(module__is_public=True, module__institution_id=get_content_institution_id())
     return courses

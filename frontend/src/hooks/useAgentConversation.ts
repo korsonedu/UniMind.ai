@@ -116,6 +116,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
   const userId = useAuthStore(state => state.user?.id);
   const [input, updateInput] = useState('');
+  const [coursePosition, updateCoursePosition] = useState<number | null>(null);
   const inputValueRef = useRef('');
   const inputRevisionRef = useRef(0);
   const scopeRef = useRef<string | null>(null);
@@ -176,11 +177,18 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     saveRecovery(scopeRef.current, conversationIdRef.current, { draft: next, draftRevision: crypto.randomUUID() });
   }, []);
 
+  const setCoursePosition = useCallback((position: number | null) => {
+    updateCoursePosition(position);
+    saveRecovery(scopeRef.current, conversationIdRef.current, { coursePosition: position });
+  }, []);
+
   const setConversationId = useCallback((id: string) => {
     conversationIdRef.current = id;
     updateConversationId(id);
     if (scopeRef.current) {
-      const draft = readRecovery(scopeRef.current).conversations[id]?.draft ?? '';
+      const saved = readRecovery(scopeRef.current).conversations[id];
+      const draft = saved?.draft ?? '';
+      updateCoursePosition(saved?.coursePosition ?? null);
       inputValueRef.current = draft;
       ++inputRevisionRef.current;
       updateInput(draft);
@@ -328,8 +336,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // ── Session management ──
 
-  const handleLoadSession = useCallback((session: ConversationSession) => {
-    messageBuffersRef.current.set(conversationIdRef.current, messagesRef.current);
+  const handleLoadSession = useCallback((session: ConversationSession, initial = false) => {
+    if (!initial) messageBuffersRef.current.set(conversationIdRef.current, messagesRef.current);
     const id = session.conversationId || session.messages.find(message => message.conversation_id)?.conversation_id || crypto.randomUUID();
     setConversationId(id);
     const next = (messageBuffersRef.current.get(id) ?? session.messages)
@@ -337,7 +345,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     messagesRef.current = next;
     messageBuffersRef.current.set(id, next);
     setMessages(next);
-    if (!scopeRef.current) setInput('');
+    if (!scopeRef.current && !initial) setInput('');
     setTaskList(taskListsRef.current.get(id) ?? null);
     setActiveSessionId(session.id);
     setProjectId(session.projectId ?? null);
@@ -462,10 +470,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     inputValueRef.current = '';
     inputRevisionRef.current = 0;
     updateInput('');
+    updateCoursePosition(null);
   }, [identity]);
 
   useEffect(() => {
-    if (!initialized || !bot || !userId || !window.unimindDesktop) return;
+    if (!initialized || !bot || !userId || (!window.unimindDesktop && !options.courseId)) return;
     const scope = recoveryScope(userId, bot.id) + (options.courseId ? `:course:${options.courseId}` : '');
     if (scopeRef.current === scope) return;
     const saved = readRecovery(scope);
@@ -824,7 +833,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
             toast.error(payload.message || 'AI 调用失败');
           } else if (payload.done) {
             if (!payload.is_error) {
-              if (!completed) notifyDesktop({ kind: 'chat', title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: '/xiaoyu' });
+              if (!completed) notifyDesktop({ kind: 'chat', title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: options.courseId ? `/course/${options.courseId}?conversation=${requestConversationId}` : '/xiaoyu' });
               completed = true;
               if (pendingSendsRef.current.get(requestConversationId)?.id === pending.id) {
                 pendingSendsRef.current.delete(requestConversationId);
@@ -921,7 +930,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         void recoverRequests();
       }
     }
-  }, [bot, userId, markGenerating, options.enableProjects, syncSession, updateConversationMessages, recoverRequests, setInput]);
+  }, [bot, userId, markGenerating, options.enableProjects, options.courseId, syncSession, updateConversationMessages, recoverRequests, setInput]);
 
   // ── Handlers ──
 
@@ -966,6 +975,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     bot,
     messages,
     input,
+    coursePosition, setCoursePosition,
     loading,
     generatingIds,
     isComposing,

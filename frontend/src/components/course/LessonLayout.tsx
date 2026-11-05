@@ -1,12 +1,15 @@
 import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { SidebarSimple } from '@phosphor-icons/react';
 import { clampLessonWidth, isLessonSidebarNarrow, lessonDragBounds, lessonSplitBounds } from './lessonSplitBounds';
 
 const STORAGE_KEY = 'unimind-lesson-sidebar-width';
 const COLLAPSED_KEY = 'unimind-lesson-sidebar-collapsed';
 const WIDE_KEY = 'unimind-lesson-wide-layout';
 
-export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; children: (controls: { sidebarCollapsed: boolean; expandSidebar: () => void }) => ReactNode }) {
+export function LessonLayout({ aspectRatio, toolbarHost, revealKey, children }: { aspectRatio: number; toolbarHost?: HTMLElement | null; revealKey?: string | null; children: (controls: { sidebarCollapsed: boolean; expandSidebar: () => void }) => ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
   const handle = useRef<HTMLDivElement>(null);
   const drag = useRef<{ pointerId: number; x: number; width: number; latest: number; minimum: number; wide: boolean } | null>(null);
   const [resizing, setResizing] = useState(false);
@@ -14,9 +17,12 @@ export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; c
   const [manualWide, setManualWide] = useState(() => {
     try { return localStorage.getItem(WIDE_KEY) === '1'; } catch { return false; }
   });
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem(COLLAPSED_KEY) === '1'; } catch { return false; }
+  const [collapsePreference, setCollapsePreference] = useState(() => {
+    let value = false;
+    try { value = localStorage.getItem(COLLAPSED_KEY) === '1'; } catch { /* Storage may be disabled. */ }
+    return { value: value && !revealKey, revealKey };
   });
+  const collapsed = collapsePreference.revealKey === revealKey && collapsePreference.value;
   const previousCollapsed = useRef(collapsed);
   const [metrics, setMetrics] = useState({ available: 0, fullAvailable: 0, height: 0, sidebar: 320, gap: 28, desktop: false });
   const [sidebarWidth, setSidebarWidth] = useState<number | null>(() => {
@@ -39,7 +45,7 @@ export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; c
     if (!element) return;
     const measure = () => {
       const style = getComputedStyle(element);
-      const desktop = window.matchMedia('(min-width: 1280px)').matches;
+      const desktop = window.matchMedia('(min-width: 1024px)').matches;
       if (!desktop && drag.current) cancelDrag();
       const sidebar = parseFloat(style.getPropertyValue('--um-lesson-side-width')) || 320;
       const gap = parseFloat(style.getPropertyValue('--um-lesson-gap')) || 28;
@@ -69,7 +75,7 @@ export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; c
   useLayoutEffect(() => {
     if (previousCollapsed.current === collapsed) return;
     previousCollapsed.current = collapsed;
-    const target = collapsed ? root.current?.querySelector<HTMLButtonElement>('[aria-label="展开学习侧栏"]') : handle.current;
+    const target = toggle.current ?? handle.current;
     target?.focus({ preventScroll: true });
   }, [collapsed]);
 
@@ -85,15 +91,16 @@ export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; c
   const compressing = metrics.desktop && !sidebarCollapsed && previewAvailable - metrics.gap - expandedWidth < metrics.sidebar;
   const displayedWidth = sidebarCollapsed ? metrics.fullAvailable : expandedWidth;
   const layoutWide = metrics.desktop && (collapsed || manualWide || dragPreview?.wide);
-  const saveWide = (value: boolean) => {
+  const saveWide = useCallback((value: boolean) => {
     setManualWide(value);
     try { localStorage.setItem(WIDE_KEY, value ? '1' : '0'); } catch { /* Storage may be disabled. */ }
-  };
-  const setCollapsedPreference = (value: boolean) => {
+  }, []);
+  const setCollapsedPreference = useCallback((value: boolean) => {
     if (!value) saveWide(false);
-    setCollapsed(value);
+    setCollapsePreference({ value, revealKey });
     try { localStorage.setItem(COLLAPSED_KEY, value ? '1' : '0'); } catch { /* Storage may be disabled. */ }
-  };
+  }, [saveWide, revealKey]);
+  const expandSidebar = useCallback(() => setCollapsedPreference(false), [setCollapsedPreference]);
   const setWidth = (value: number, persist = false, wide = manualWide) => {
     const budget = wide ? metrics.fullAvailable : metrics.available;
     const limits = lessonSplitBounds(budget, metrics.height, aspectRatio, metrics.sidebar, metrics.gap, wide);
@@ -128,7 +135,8 @@ export function LessonLayout({ aspectRatio, children }: { aspectRatio: number; c
   };
 
   return <div ref={root} className="um-lesson" data-split={metrics.desktop || undefined} data-layout-wide={layoutWide || undefined} data-sidebar-collapsed={sidebarCollapsed || undefined} data-sidebar-narrow={sidebarNarrow || undefined} data-compressing={compressing || undefined} data-resizing={resizing || undefined} style={{ '--um-video-aspect-ratio': aspectRatio, '--um-lesson-video-width': `${displayedWidth}px` } as CSSProperties}>
-    {children({ sidebarCollapsed, expandSidebar: () => setCollapsedPreference(false) })}
+    {toolbarHost && metrics.desktop && createPortal(<button ref={toggle} type="button" className="um-course-directory-toggle" aria-label={sidebarCollapsed ? '展开学习侧栏' : '收起学习侧栏'} title={sidebarCollapsed ? '展开学习侧栏' : '收起学习侧栏'} aria-expanded={!sidebarCollapsed} onClick={() => setCollapsedPreference(!sidebarCollapsed)}><SidebarSimple size={18} /></button>, toolbarHost)}
+    {children({ sidebarCollapsed, expandSidebar })}
     {metrics.desktop && !sidebarCollapsed && <div ref={handle} className="um-lesson-resize" role="separator" aria-label="调整视频与学习侧栏宽度" title="拖动调整宽度，拖至右侧窄带后松开收起侧栏；按 Enter 收起" aria-orientation="vertical" aria-valuemin={Math.round(bounds.min)} aria-valuemax={Math.round(resizing ? dragBounds.max : bounds.max)} aria-valuenow={Math.round(displayedWidth)} aria-valuetext={`视频宽度 ${Math.round(displayedWidth)} 像素；按 Enter 收起学习侧栏`} tabIndex={0}
       onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); cancelDrag(); return; }
