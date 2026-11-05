@@ -20,7 +20,7 @@ from users.learning import confirm_ai_call, release_ai_call
 from users.models import AIUsageReservation
 from .dsh_runtime import DshUnavailable, run_site_action, site_request_lock, quota_write_lock
 from .dsh_stream import stream_events
-from .course_context import course_context_text
+from .course_context import course_context_text, course_visual_messages
 
 
 logger = logging.getLogger(__name__)
@@ -31,14 +31,30 @@ def can_use_learning_context(user):
     return _can_use_learning_context(user)
 
 
-def task_context(user, claims, message):
-    """Only server-signed chat identities may bring history or notes into DSH."""
-    from ai_assistant.views import _get_chat_history
+def task_message(user, claims, message):
+    """Resolve the exact question authorized by the server-signed identity."""
     current = AIChatMessage.objects.select_related('bot').filter(
         pk=claims.get('message_id'), user=user, role='user',
         conversation_id=claims.get('conversation_id'), bot_id=claims.get('bot_id')).first()
     if not current or current.content != message:
         raise PermissionDenied('会话上下文已失效。')
+    return current
+
+
+def task_course_visual(user, claims, message):
+    current = task_message(user, claims, message)
+    course = current.metadata.get('course_context')
+    if not course or not course.get('visual'):
+        return []
+    # Recheck course access before returning any saved pixels to the runtime.
+    course_context_text(SimpleNamespace(user=user, query_params={}), course)
+    return course_visual_messages(course)
+
+
+def task_context(user, claims, message):
+    """Only server-signed chat identities may bring history or notes into DSH."""
+    from ai_assistant.views import _get_chat_history
+    current = task_message(user, claims, message)
     history = _get_chat_history(user, current.bot, current.conversation_id, exclude_ids=(current.pk,))
     history = [{**row, 'content': row['content'][:800]} for row in history[-8:]]
     history = add_project_context(user, current.conversation_id, history)

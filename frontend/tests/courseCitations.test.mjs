@@ -24,6 +24,17 @@ try {
   assert.equal(renderLink('https://example.com').props.href, 'https://example.com');
   assert.equal(renderLink('https://example.com/#segment-42').type, 'a');
   assert.equal(courseCitationComponents(undefined, 7, () => {}).a({ href: '/course/7?t=90.5#segment-42', children: '旧消息' }).type, 'span');
+  const visualComponents = courseCitationComponents({ course_id: 7, segments: [],
+    visual: { current: { video_seconds: 120 }, previous: { video_seconds: 112 } } }, 7, seconds => { position = seconds; });
+  for (const seconds of [112, 120]) {
+    const link = visualComponents.a({ href: `/course/7?t=${seconds}`, children: '画面' });
+    assert.equal(link.type, 'button');
+    link.props.onClick();
+    assert.equal(position, seconds);
+  }
+  for (const href of ['/course/8?t=120', '/course/7?t=113', '/course/7?t=120#other']) {
+    assert.equal(visualComponents.a({ href, children: '错误画面' }).type, 'span');
+  }
   const html = renderToStaticMarkup(React.createElement(MarkdownContent, {
     content: '正文 123 [讲稿](/course/7?t=90.5#segment-42) [普通链接](https://example.com)\n\n$$x^2$$', components,
   }));

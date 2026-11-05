@@ -20,12 +20,16 @@ import { formatDuration } from '@/lib/utils';
 import { toast } from 'sonner';
 import { courseCitationComponents } from './courseCitations';
 import { readRecovery, recoveryScope } from '@/lib/conversationRecovery';
+import { captureCourseFrame, CourseFrameBuffer, type CourseVisual } from '@/lib/courseVisual';
+
+interface DraftSnapshot { position: number; visual?: CourseVisual; error?: string; textOnly?: boolean }
 
 interface CourseAnchor {
   course_id: number;
   video_seconds: number;
   start_seconds?: number;
   end_seconds?: number;
+  visual?: CourseVisual;
 }
 
 interface CourseChatPanelProps {
@@ -46,8 +50,11 @@ export const CourseChatPanel = memo(function CourseChatPanel(props: CourseChatPa
 
 function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeChange, onExpandSidebar }: CourseChatPanelProps) {
   const userId = useAuthStore(state => state.user?.id);
-  const sentPosition = useRef(0);
-  const [attemptPosition, setAttemptPosition] = useState<number | null>(null);
+  const sentSnapshot = useRef<DraftSnapshot>({ position: 0 });
+  const draftRef = useRef<DraftSnapshot | null>(null);
+  const draftTextRef = useRef('');
+  const buffer = useRef(new CourseFrameBuffer());
+  const [draft, setDraft] = useState<DraftSnapshot | null>(null);
   const sendShortcut = useSystemStore(state => state.sendShortcut);
   const [searchParams] = useSearchParams();
   const linkedConversation = searchParams.get('conversation') || undefined;
@@ -63,12 +70,20 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
   const { setBot, setInitialized, groupIntoSessions, setSessions, handleLoadSession,
     bot, conversationId, input, setInput, messages, loading, initialized, scrollRef, doSend,
     recovery, recoverRequests, handleReset, sessions, handleRefreshSessions,
-    coursePosition: draftPosition, setCoursePosition: setDraftPosition } = useAgentConversation({
+    coursePosition, setCoursePosition } = useAgentConversation({
     findBot: findAssistantBot,
     courseId,
     initialConversationId: linkedConversation,
-    getExtraPayload: () => ({ course_context: { course_id: courseId, video_seconds: sentPosition.current } }),
+    getExtraPayload: () => ({ course_context: {
+      course_id: courseId, video_seconds: sentSnapshot.current.position,
+      ...(sentSnapshot.current.visual ? { visual: sentSnapshot.current.visual } : {}),
+    } }),
   });
+  const updateDraft = (snapshot: DraftSnapshot | null) => {
+    draftRef.current = snapshot;
+    setDraft(snapshot);
+    setCoursePosition(snapshot?.position ?? null);
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -98,31 +113,78 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
     return () => { cancelled = true; };
   }, [courseId, userId, linkedConversation, loadVersion, setBot, setInitialized, groupIntoSessions, setSessions, handleLoadSession]);
 
-  // Existing failed sends retry their original payload, including its selected position.
+  // Recovery owns the immutable original payload, including after a page reload.
   const pending = userId && bot ? readRecovery(`${recoveryScope(userId, bot.id)}:course:${courseId}`)
     .conversations[conversationId]?.pending : undefined;
-  const recovering = recovery === 'unknown' || recovery === 'pending';
-  const pendingPosition = pending ? (JSON.parse(pending.key).course_context as CourseAnchor).video_seconds : attemptPosition;
-  const selectedPosition = recovering ? pendingPosition : draftPosition;
+  const recovering = !!pending || recovery === 'unknown' || recovery === 'pending';
+  const pendingAnchor = pending ? JSON.parse(pending.key).course_context as CourseAnchor : undefined;
+  const selected: DraftSnapshot | null = pendingAnchor ? {
+    position: pendingAnchor.video_seconds, visual: pendingAnchor.visual,
+  } : draft;
+  const selectedPosition = selected?.position ?? null;
+  useEffect(() => { draftTextRef.current = input; }, [input]);
+
+  // Restored drafts keep their fragment; without a captured frame they send as transcript-only.
+  useEffect(() => {
+    if (!initialized || recovering || draftRef.current || coursePosition === null || !input.trim()) return;
+    updateDraft({ position: coursePosition, textOnly: true });
+  }, [initialized, recovering, coursePosition, input]);
+
+  useEffect(() => {
+    let attached: HTMLVideoElement | null = null;
+    const clear = () => buffer.current.clear();
+    const sample = () => {
+      const video = videoRef.current;
+      if (video !== attached) {
+        attached?.removeEventListener('seeking', clear);
+        attached?.removeEventListener('emptied', clear);
+        clear(); attached = video;
+        attached?.addEventListener('seeking', clear);
+        attached?.addEventListener('emptied', clear);
+      }
+      if (!video) return;
+      const last = buffer.current.frames[buffer.current.frames.length - 1];
+      // Release expired samples even if decoding/capture subsequently fails or playback is paused.
+      if (last && video.currentTime - last.video_seconds >= 8) clear();
+      if (video.paused || video.seeking) return;
+      if (last && video.currentTime - last.video_seconds < 1) return;
+      try {
+        buffer.current.add(captureCourseFrame(video));
+      }
+      catch { /* Draft capture surfaces the concrete error; sampling sends nothing. */ }
+    };
+    sample();
+    const timer = window.setInterval(sample, 1000);
+    return () => { window.clearInterval(timer); attached?.removeEventListener('seeking', clear); attached?.removeEventListener('emptied', clear); clear(); };
+  }, [videoRef]);
+
+  const freeze = (): DraftSnapshot => {
+    try {
+      const frame = captureCourseFrame(videoRef.current);
+      const previous = buffer.current.previous(frame.video_seconds);
+      return { position: frame.video_seconds, visual: { current: frame, ...(previous ? { previous } : {}) } };
+    } catch (error) {
+      return { position: videoRef.current?.currentTime ?? 0, error: error instanceof Error ? error.message : '无法读取视频画面。' };
+    }
+  };
   const editDraft = (text: string) => {
-    const video = videoRef.current;
-    if (!video) { toast.error('请等待视频加载完成后再提问。'); return; }
-    if (!text.trim()) setDraftPosition(null);
-    else if (!input.trim() || draftPosition === null) setDraftPosition(video.currentTime);
+    if (!recovering) {
+      if (!text.trim()) updateDraft(null);
+      else if (!draftTextRef.current.trim() || !draftRef.current) updateDraft(freeze());
+    }
+    draftTextRef.current = text;
     setInput(text);
   };
   const send = (text: string, fromDraft = false) => {
     if (!text.trim() || loading || !initialized) return;
-    const video = videoRef.current;
-    if (!video) { toast.error('请等待视频加载完成后再提问。'); return; }
-    if (fromDraft && !recovering && draftPosition === null) {
-      toast.info('请先选择提问片段。');
-      return;
-    }
     if (!recovering) {
-      sentPosition.current = fromDraft && draftPosition !== null ? draftPosition : video.currentTime;
-      setDraftPosition(sentPosition.current);
-      setAttemptPosition(sentPosition.current);
+      const snapshot = fromDraft && draftRef.current ? draftRef.current : freeze();
+      updateDraft(snapshot);
+      if (!snapshot.visual && !snapshot.textOnly) {
+        if (!fromDraft) { draftTextRef.current = text; setInput(text); }
+        return;
+      }
+      sentSnapshot.current = { position: snapshot.position, visual: snapshot.visual };
     }
     void doSend(text.trim());
   };
@@ -160,7 +222,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
     <section hidden={floating && !open} className="um-course-chat" role={floating ? 'dialog' : 'region'} aria-modal={floating ? false : undefined} aria-label="小宇课程助手" onKeyDown={event => { if (floating && event.key === 'Escape') close(); }}>
     <header className="um-course-chat-header">
       <span className="um-course-assistant-orb" data-thinking={loading || undefined}><Sparkle size={18} weight="fill" /></span>
-      <div className="um-course-chat-heading"><h2>小宇</h2><p>{loading ? '正在处理你的问题…' : '结合本段讲稿回答'}</p></div>
+      <div className="um-course-chat-heading"><h2>小宇</h2><p>{loading ? '正在查看课程内容…' : '结合本段讲稿回答'}</p></div>
       <DropdownMenu onOpenChange={value => { if (value) void handleRefreshSessions(); }}>
         <DropdownMenuTrigger asChild><button type="button" className="um-course-assistant-icon" aria-label="本课对话" title="本课对话" disabled={!initialized}><ClockCounterClockwise size={18} /></button></DropdownMenuTrigger>
         <DropdownMenuContent className="um-course-chat-history" align="end">
@@ -181,7 +243,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
       : <>
         <AgentReplyContext.Provider value={{ onReply: send }}>
           <div className="um-course-chat-messages" ref={scrollRef} aria-live="polite">
-            {!messages.length && <div className="um-course-chat-empty"><p>哪里没听懂，直接问我</p><span>我会结合这段课程的讲稿来回答。</span>
+            {!messages.length && <div className="um-course-chat-empty"><p>哪里没听懂，直接问我</p><span>我会结合截图和这段课程的讲稿来回答。</span>
               <div className="um-course-chat-suggestions"><button type="button" onClick={() => send('请解释一下这里的核心概念。')}>解释这一步</button><button type="button" onClick={() => send('结合这里的讲解，举一个简单的例子。')}>举个例子</button></div>
             </div>}
             {visibleMessages.map((message, index) => {
@@ -191,6 +253,7 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
                 : undefined;
               return <div className="um-course-chat-message" key={message._id ?? message.id ?? index}>
                 {anchor && message.role === 'user' && <button type="button" className="um-course-chat-time" onClick={() => onSeek(anchor.video_seconds)} aria-label={`回到提问位置 ${formatDuration(anchor.video_seconds)}`}><Clock size={13} />{formatDuration(anchor.video_seconds)}</button>}
+                {anchor?.visual && message.role === 'user' && <CourseVisualPreview visual={anchor.visual} compact />}
                 {message.toolStep ? <ToolStepMessage step={message.toolStep} /> : <>
                   {(message.metadata?.dsh_cards as VisualData[] | undefined)?.map((visual, cardIndex) => <InlineVisualCard key={cardIndex} visual={visual} />)}
                   <ChatBubble native compact msg={message} isUser={message.role === 'user'} index={index} streaming={message.streaming} markdownComponents={courseCitationComponents(message.metadata?.course_context, courseId, onSeek)} />
@@ -202,26 +265,43 @@ function CourseChatSession({ courseId, videoRef, onSeek, mode, visible, onModeCh
                 </div>}
               </div>;
             })}
-            {loading && !messages.some(message => message.streaming) && <p className="um-course-chat-status" role="status">小宇正在阅读讲稿…</p>}
+            {loading && !messages.some(message => message.streaming) && <p className="um-course-chat-status" role="status">小宇正在查看课程内容…</p>}
           </div>
         </AgentReplyContext.Provider>
-        {(recovery === 'unknown' || recovery === 'pending') && <p className="um-course-chat-status">这条提问的结果正在确认，沿用原提问片段，确认前不能更新。<button type="button" onClick={() => void recoverRequests()}>刷新结果</button></p>}
+        {recovering && <p className="um-course-chat-status">这条提问的结果正在确认，沿用原提问片段，确认前不能更新。<button type="button" onClick={() => void recoverRequests()}>刷新结果</button></p>}
+        {selected?.visual && <CourseVisualPreview visual={selected.visual} />}
+        {draft?.error && !recovering && <div className="um-course-visual-error" role="alert"><p>{draft.error}</p>
+          {draft.textOnly ? <p>已选择仅用讲稿提问。</p> : <button type="button" disabled={loading} onClick={() => { if (draftRef.current) updateDraft({ ...draftRef.current, textOnly: true }); }}>仅用讲稿提问</button>}
+        </div>}
         <form className="um-course-chat-composer" onSubmit={event => { event.preventDefault(); send(input, true); }}>
           <div className="um-course-chat-fragment"><span><Clock size={14} />{input.trim() && selectedPosition !== null
             ? `已固定 ${formatDuration(Math.max(0, selectedPosition - 30))}–${formatDuration(selectedPosition + 30)}`
             : input.trim() ? '请重新选择提问片段' : '输入时固定提问片段'}</span>
             <div>{input.trim() && selectedPosition !== null && <button type="button" disabled={loading} onClick={() => onSeek(Math.max(0, selectedPosition - 30))}>回看</button>}
-              <button type="button" disabled={loading || recovering || !input.trim()} onClick={() => { const video = videoRef.current; if (video) setDraftPosition(video.currentTime); }}>改问当前片段</button></div>
+              <button type="button" disabled={loading || recovering || !input.trim()} onClick={() => { updateDraft(freeze()); }}>改问当前片段</button></div>
           </div>
           <div className="um-course-chat-field">
             <textarea ref={composerRef} value={input} onChange={event => editDraft(event.target.value)} disabled={loading} aria-label="向小宇提问" placeholder="问问这段课程…" rows={2}
               onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && (sendShortcut === 'enter' || event.ctrlKey || event.metaKey)) { event.preventDefault(); send(input, true); } }} />
             <div className="um-course-chat-send-row"><span>{sendShortcut === 'enter' ? 'Enter 发送 · Shift+Enter 换行' : '⌘ / Ctrl+Enter 发送'}</span>
-              <button type="submit" disabled={loading || !input.trim() || (!recovering && draftPosition === null)} aria-label="发送课程问题"><ArrowUp size={18} /></button></div>
+              <button type="submit" disabled={loading || !input.trim() || (!recovering && !draft?.visual && !draft?.textOnly)} aria-label="发送课程问题"><ArrowUp size={18} /></button></div>
           </div>
         </form>
-        {messages.length > 0 && <footer className="um-course-chat-footer">{floating && <button type="button" className="um-course-chat-details" onClick={() => setExpanded(value => !value)}>{expanded ? '收起本次对话' : '展开本次对话'}</button>}<button className="um-course-chat-new" type="button" disabled={loading} onClick={() => { setDraftPosition(null); setAttemptPosition(null); setInput(''); handleReset(false); }}><ArrowCounterClockwise size={13} />新对话</button></footer>}
+        {messages.length > 0 && <footer className="um-course-chat-footer">{floating && <button type="button" className="um-course-chat-details" onClick={() => setExpanded(value => !value)}>{expanded ? '收起本次对话' : '展开本次对话'}</button>}<button className="um-course-chat-new" type="button" disabled={loading} onClick={() => { updateDraft(null); draftTextRef.current = ''; setInput(''); handleReset(false); }}><ArrowCounterClockwise size={13} />新对话</button></footer>}
       </>}
   </section>
   </div>;
+}
+
+function CourseVisualPreview({ visual, compact = false }: { visual: CourseVisual; compact?: boolean }) {
+  return <details className="um-course-visual" open={compact ? undefined : true}>
+    <summary><img src={visual.current.image} alt="提问画面缩略图" />画面 {formatDuration(visual.current.video_seconds)} · 查看原图</summary>
+    <div className="um-course-visual-content">
+      <img src={visual.current.image} alt={`提问时的完整画面 ${formatDuration(visual.current.video_seconds)}`} />
+      {visual.previous && <>
+        <p>此前画面 {formatDuration(visual.previous.video_seconds)}</p>
+        <img src={visual.previous.image} alt={`此前的完整画面 ${formatDuration(visual.previous.video_seconds)}`} />
+      </>}
+    </div>
+  </details>;
 }

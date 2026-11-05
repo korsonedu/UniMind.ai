@@ -5,18 +5,16 @@ UniMind 发版时机检测脚本
 """
 import subprocess
 import json
-import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent  # UniMindCode root
-CHANGELOG = REPO / "CHANGELOG.md"
+PACKAGE = REPO / "frontend" / "package.json"
 
 # ── 阈值配置 ──────────────────────────────────────────────
 COMMITS_SINCE_TAG_THRESHOLD = 15   # 累计 N 个 commit 建议发版
 DAYS_SINCE_TAG_THRESHOLD    = 7    # 距上次发版 N 天建议发版
 SECURITY_FIX_THRESHOLD      = 1    # 有安全修复立即建议
-FEAT_COUNT_FOR_MINOR        = 5    # 累计 N 个 feat 建议 bump MINOR
 
 
 def git(cmd_args: list[str]) -> str:
@@ -29,7 +27,7 @@ def git(cmd_args: list[str]) -> str:
 
 def get_latest_tag() -> tuple[str, str] | None:
     """返回 (tag_name, tag_date) 或 None"""
-    tag = git(["describe", "--tags", "--abbrev=0"])
+    tag = git(["describe", "--tags", "--match", "v[0-9]*", "--abbrev=0"])
     if not tag:
         return None
     date = git(["log", "-1", "--format=%aI", tag])
@@ -74,24 +72,6 @@ def classify_commits(commits: list[dict]) -> dict:
     return stats
 
 
-def current_version_from_changelog() -> str:
-    """从 CHANGELOG.md 提取当前版本号"""
-    if not CHANGELOG.exists():
-        return "unknown"
-    text = CHANGELOG.read_text()
-    m = re.search(r"\[v([\d.]+(?:-[\w.]+)?)\]", text)
-    return m.group(1) if m else "unknown"
-
-
-def suggest_bump(stats: dict, current: str) -> str:
-    """建议 bump 类型"""
-    if stats["feat"] >= FEAT_COUNT_FOR_MINOR:
-        return "MINOR"
-    if stats["fix"] > 0 or stats["refactor"] > 0:
-        return "PATCH"
-    return "PATCH"
-
-
 def main():
     tag_info = get_latest_tag()
     tag_name = tag_info[0] if tag_info else None
@@ -103,7 +83,7 @@ def main():
 
     stats = classify_commits(commits)
     commit_count = len(commits)
-    current_ver = current_version_from_changelog()
+    current_ver = json.loads(PACKAGE.read_text())["version"]
 
     # ── 判断是否该发版 ──
     reasons = []
@@ -131,13 +111,6 @@ def main():
         return  # 未达阈值，静默
 
     # ── 生成建议 ──
-    bump = suggest_bump(stats, current_ver)
-    ver_parts = current_ver.split("-")[0].split(".")
-    if bump == "MINOR":
-        next_ver = f"v{ver_parts[0]}.{int(ver_parts[1]) + 1}.0"
-    else:
-        next_ver = f"v{ver_parts[0]}.{ver_parts[1]}.{int(ver_parts[2]) + 1}"
-
     output = []
     output.append("=" * 50)
     output.append("📋 UniMind 发版建议")
@@ -150,14 +123,13 @@ def main():
     for r in reasons:
         output.append(f"  {r}")
     output.append("")
-    output.append(f"建议版本: {next_ver}")
+    output.append("版本类型由用户能力变化决定：修复升修订号，完整新能力升次版本，产品整体变化再考虑主版本。")
     output.append("")
     output.append("操作清单:")
-    output.append("  1. 更新 CHANGELOG.md（合并 commit 为变更记录）")
-    output.append("  2. git add + git commit -m 'docs: 更新 CHANGELOG 至 {}'".format(next_ver))
-    output.append("  3. git tag {}".format(next_ver))
-    output.append("  4. git push && git push --tags")
-    output.append("  5. 服务器部署: cd /opt/unimind && git pull")
+    output.append("  1. 按 docs/VERSIONING.md 确定版本号和本次发布范围")
+    output.append("  2. 更新 frontend/package.json，再运行 npm --prefix frontend/electron run version:sync")
+    output.append("  3. 更新 CHANGELOG.md，完成冒烟并提交源码")
+    output.append("  4. 按实际部署／安装包完成情况标记 vX.Y.Z／desktop-vX.Y.Z，不复用旧版本")
     output.append("=" * 50)
 
     print("\n".join(output))
