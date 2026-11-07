@@ -54,7 +54,6 @@ class DesktopReleaseView(APIView):
                 'version': version,
                 'prerelease': release.get('prerelease', False),
                 'packages': packages,
-                'instructions': f'https://unimind-ai.com/static/desktop/{version}/INSTALL.txt',
             }
             cache.set('desktop-release', data, 300)
             return Response(data)
