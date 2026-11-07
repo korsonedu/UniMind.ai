@@ -1,4 +1,5 @@
 import { formatApiErrorToast } from '@/lib/apiError';
+import { useNotesSidebarAvailability } from '@/components/WorkspaceContext';
 import type { QAQuestion, QAAnswer } from '@/types/api';
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -640,6 +641,7 @@ export const QuestionDetail: React.FC = () => {
   const [question, setQuestion] = useState<QAQuestion | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  useNotesSidebarAvailability(!loading && !failed && !!question);
   const returnPath = `/qa${location.search}`;
 
   const refresh = async () => {

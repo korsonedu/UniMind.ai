@@ -1,6 +1,8 @@
 import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle } from '@phosphor-icons/react';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import NativeSessionSidebar from '@/components/NativeSessionSidebar';
+import { useNotesSidebarAvailability } from '@/components/WorkspaceContext';
+import { useXiaoYuChat } from './xiaoyu/xiaoYuChatContext';
 
 const SKILLS = [
   { icon: Target, label: '分析薄弱点', prompt: '帮我分析薄弱知识点，给出提升建议' },
@@ -17,6 +19,8 @@ const SKILLS = [
 ];
 
 export const XiaoYu = () => {
+  const { chat } = useXiaoYuChat();
+  useNotesSidebarAvailability(chat.hasConversation);
   return <AgentChatLayout
     appearance="native" layout="inline" enableNoteMentions inputTourClass="xiaoyu-input"
     sidebar={props => <NativeSessionSidebar claimMenuRequest={props.claimMenuRequest} sessions={props.sessions} activeSessionId={props.activeSessionId} thinkingIds={props.thinkingIds} unreadIds={props.unreadIds} onSelect={props.onLoadSession} onUpdate={props.onUpdateSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}

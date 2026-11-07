@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { shouldTogglePlayback } from './videoLessonKeyboard';
 import { useLearningSession } from '@/hooks/useLearningSession';
 import { useDesktopStore } from '@/lib/desktop';
+import { useNotesSidebarAvailability } from '@/components/WorkspaceContext';
 import '@/styles/course-lesson.css';
 
 const formatTime = (s: number) => {
@@ -87,6 +88,7 @@ export const VideoLesson: React.FC<VideoLessonProps> = ({ isFavorite = false, fa
     }
   };
 
+  useNotesSidebarAvailability(!loading && course?.id === courseId);
   useLearningSession({ enabled: !loading && course?.id === courseId && !!course.video_file, kind: 'video', courseId, videoRef });
 
   useEffect(() => {

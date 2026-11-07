@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { AssessmentDialog } from './test-ladder/AssessmentDialog';
 import { useLearningSession } from '@/hooks/useLearningSession';
 import { useExamActivityStore } from '@/store/useExamActivityStore';
+import { useNotesSidebarAvailability } from '@/components/WorkspaceContext';
 
 const hasAnswer = (val: unknown) => {
   if (typeof val === 'string') return val.trim().length > 0;
@@ -42,6 +43,7 @@ export const TestSessionPage: React.FC = () => {
   const [reminderSettings, setReminderSettings] = useState<LearningReminderSettings>(getLearningReminderSettings());
   const lastTypeReminderQidRef = useRef<number | null>(null);
 
+  useNotesSidebarAvailability(!loading && questions.length > 0);
   useLearningSession({ enabled: isMobile && !loading && !isSubmitting && questions.length > 0,
     kind: 'practice', questionIds: questions.map(question => question.id) });
 
