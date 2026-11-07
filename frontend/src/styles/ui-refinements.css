@@ -33,7 +33,6 @@
 
 .um-course-search:focus-within,
 .um-agent-search:focus-within,
-.um-agent-composer:focus-within,
 .notes-search:focus-within {
   outline: none;
   box-shadow: var(--um-focus-shadow);
@@ -63,11 +62,20 @@
 .um-agent-composer:has(textarea:focus-visible),
 .um-agent-search:has(input:focus-visible) { outline: none; }
 
-.dark :is(.um-agent-composer, .um-agent-chat-input > div > div:has(> textarea), .um-qa-composer-field, .um-qa-reply-composer, .um-agent-search, .um-course-search, .notes-search, .um-qa-search, .um-settings-search) {
+.um-agent-composer, .um-agent-chat-input > div > div:has(> textarea) {
   background-color: var(--um-color-field);
   transition: background-color var(--um-motion-fast);
 }
-.dark :is(.um-agent-composer, .um-agent-chat-input > div > div:has(> textarea), .um-qa-composer-field, .um-qa-reply-composer, .um-agent-search, .um-course-search, .notes-search, .um-qa-search, .um-settings-search):focus-within {
+.um-agent-composer:focus-within, .um-agent-chat-input > div > div:has(> textarea):focus-within {
+  background-color: var(--um-color-field-active);
+  box-shadow: none;
+}
+
+.dark :is(.um-qa-composer-field, .um-qa-reply-composer, .um-agent-search, .um-course-search, .notes-search, .um-qa-search, .um-settings-search) {
+  background-color: var(--um-color-field);
+  transition: background-color var(--um-motion-fast);
+}
+.dark :is(.um-qa-composer-field, .um-qa-reply-composer, .um-agent-search, .um-course-search, .notes-search, .um-qa-search, .um-settings-search):focus-within {
   background-color: var(--um-color-field-active);
 }
 
