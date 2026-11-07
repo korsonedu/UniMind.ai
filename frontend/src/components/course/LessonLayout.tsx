@@ -1,6 +1,7 @@
-import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { SidebarSimple } from '@phosphor-icons/react';
+import { NotesSidebarContext } from '@/components/WorkspaceContext';
 import { clampLessonWidth, isLessonSidebarNarrow, lessonDragBounds, lessonSplitBounds } from './lessonSplitBounds';
 
 const STORAGE_KEY = 'unimind-lesson-sidebar-width';
@@ -8,6 +9,7 @@ const COLLAPSED_KEY = 'unimind-lesson-sidebar-collapsed';
 const WIDE_KEY = 'unimind-lesson-wide-layout';
 
 export function LessonLayout({ aspectRatio, toolbarHost, revealKey, children }: { aspectRatio: number; toolbarHost?: HTMLElement | null; revealKey?: string | null; children: (controls: { sidebarCollapsed: boolean; expandSidebar: () => void }) => ReactNode }) {
+  const notesSidebar = useContext(NotesSidebarContext);
   const root = useRef<HTMLDivElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const handle = useRef<HTMLDivElement>(null);
@@ -85,12 +87,12 @@ export function LessonLayout({ aspectRatio, toolbarHost, revealKey, children }: 
   const previewAvailable = dragPreview?.wide ? metrics.fullAvailable : available;
   const dragBounds = lessonDragBounds(previewAvailable, metrics.gap, bounds);
   const width = clampLessonWidth(available - metrics.gap - (sidebarWidth ?? metrics.sidebar), bounds);
-  const sidebarCollapsed = metrics.desktop && collapsed;
+  const sidebarCollapsed = metrics.desktop && (collapsed || notesSidebar.open);
   const expandedWidth = dragPreview ? Math.min(dragPreview.width, dragBounds.max) : width;
   const sidebarNarrow = metrics.desktop && !sidebarCollapsed && isLessonSidebarNarrow(expandedWidth, previewAvailable, metrics.gap);
   const compressing = metrics.desktop && !sidebarCollapsed && previewAvailable - metrics.gap - expandedWidth < metrics.sidebar;
   const displayedWidth = sidebarCollapsed ? metrics.fullAvailable : expandedWidth;
-  const layoutWide = metrics.desktop && (collapsed || manualWide || dragPreview?.wide);
+  const layoutWide = metrics.desktop && (sidebarCollapsed || manualWide || dragPreview?.wide);
   const saveWide = useCallback((value: boolean) => {
     setManualWide(value);
     try { localStorage.setItem(WIDE_KEY, value ? '1' : '0'); } catch { /* Storage may be disabled. */ }
@@ -100,7 +102,7 @@ export function LessonLayout({ aspectRatio, toolbarHost, revealKey, children }: 
     setCollapsePreference({ value, revealKey });
     try { localStorage.setItem(COLLAPSED_KEY, value ? '1' : '0'); } catch { /* Storage may be disabled. */ }
   }, [saveWide, revealKey]);
-  const expandSidebar = useCallback(() => setCollapsedPreference(false), [setCollapsedPreference]);
+  const expandSidebar = useCallback(() => { if (notesSidebar.open) notesSidebar.close(); setCollapsedPreference(false); }, [notesSidebar, setCollapsedPreference]);
   const setWidth = (value: number, persist = false, wide = manualWide) => {
     const budget = wide ? metrics.fullAvailable : metrics.available;
     const limits = lessonSplitBounds(budget, metrics.height, aspectRatio, metrics.sidebar, metrics.gap, wide);
@@ -135,7 +137,7 @@ export function LessonLayout({ aspectRatio, toolbarHost, revealKey, children }: 
   };
 
   return <div ref={root} className="um-lesson" data-split={metrics.desktop || undefined} data-layout-wide={layoutWide || undefined} data-sidebar-collapsed={sidebarCollapsed || undefined} data-sidebar-narrow={sidebarNarrow || undefined} data-compressing={compressing || undefined} data-resizing={resizing || undefined} style={{ '--um-video-aspect-ratio': aspectRatio, '--um-lesson-video-width': `${displayedWidth}px` } as CSSProperties}>
-    {toolbarHost && metrics.desktop && createPortal(<button ref={toggle} type="button" className="um-course-directory-toggle" aria-label={sidebarCollapsed ? '展开学习侧栏' : '收起学习侧栏'} title={sidebarCollapsed ? '展开学习侧栏' : '收起学习侧栏'} aria-expanded={!sidebarCollapsed} onClick={() => setCollapsedPreference(!sidebarCollapsed)}><SidebarSimple size={18} /></button>, toolbarHost)}
+    {toolbarHost && metrics.desktop && createPortal(<button ref={toggle} type="button" className="um-course-directory-toggle" aria-label={sidebarCollapsed ? '展开学习侧栏' : '收起学习侧栏'} title={sidebarCollapsed ? '展开学习侧栏' : '收起学习侧栏'} aria-expanded={!sidebarCollapsed} onClick={() => sidebarCollapsed ? expandSidebar() : setCollapsedPreference(true)}><SidebarSimple size={18} /></button>, toolbarHost)}
     {children({ sidebarCollapsed, expandSidebar })}
     {metrics.desktop && !sidebarCollapsed && <div ref={handle} className="um-lesson-resize" role="separator" aria-label="调整视频与学习侧栏宽度" title="拖动调整宽度，拖至右侧窄带后松开收起侧栏；按 Enter 收起" aria-orientation="vertical" aria-valuemin={Math.round(bounds.min)} aria-valuemax={Math.round(resizing ? dragBounds.max : bounds.max)} aria-valuenow={Math.round(displayedWidth)} aria-valuetext={`视频宽度 ${Math.round(displayedWidth)} 像素；按 Enter 收起学习侧栏`} tabIndex={0}
       onKeyDown={event => {

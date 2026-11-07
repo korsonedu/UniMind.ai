@@ -7,6 +7,7 @@ import { MarkdownContent } from '@/components/MarkdownContent';
 import { useLearningSession } from '@/hooks/useLearningSession';
 import { cachePractice, getCachedPractice, offlineCacheSupported } from '@/lib/offlineData';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useNotesSidebarAvailability } from '@/components/WorkspaceContext';
 
 interface QuestionItem {
   id: number;
@@ -83,6 +84,7 @@ const PracticeSessionContent: React.FC<{ sessionId?: string }> = ({ sessionId })
   const [startTime] = useState(Date.now);
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches);
   const [elapsed, setElapsed] = useState(0);
+  useNotesSidebarAvailability((questions.length > 0 || !!submitResult?.results.length) && !error && phase !== 'loading');
   useLearningSession({ enabled: phase === 'answering' && !offline && questions.length > 0,
     kind: 'practice', questionIds: questions.map(question => question.id) });
   useEffect(() => {

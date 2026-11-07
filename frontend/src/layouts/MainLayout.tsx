@@ -20,9 +20,10 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import GuidedTour, { type TourStep } from '@/components/GuidedTour';
 import { ExamActivityBar } from '@/components/ExamActivityBar';
 import { WorkspaceTrail } from '@/components/WorkspaceTrail';
-import { WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
+import { NotesSidebarContext, WorkspaceActiveContext, WorkspaceToolbarHostContext } from '@/components/WorkspaceContext';
 import { useExamActivity } from '@/hooks/useExamActivity';
 import '@/styles/app-shell.css';
+import NotesSidebar from '@/pages/notes/NotesSidebar';
 import { useDesktopStore } from '@/lib/desktop';
 import { useDesktopRuntime } from '@/hooks/useDesktopRuntime';
 
@@ -54,6 +55,8 @@ export const MainLayout: React.FC = () => {
   const [historyEnd, setHistoryEnd] = useState(historyIndex);
   const [toolbarHost, setToolbarHost] = useState<HTMLDivElement | null>(null);
   const [railHidden, setRailHidden] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesMounted, setNotesMounted] = useState(false);
   const [historyKey, setHistoryKey] = useState(location.key);
   if (historyKey !== location.key) {
     setHistoryKey(location.key);
@@ -61,6 +64,13 @@ export const MainLayout: React.FC = () => {
   }
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
+  const [noteSession, setNoteSession] = useState<{ userId?: number; id: number | null }>({ id: null });
+  const rememberNote = useCallback((id: number | null) => { setNoteSession({ userId: user?.id, id }); }, [user?.id]);
+  const closeNotes = useCallback(() => {
+    setNotesOpen(false);
+    document.getElementById('um-notes-toggle')?.focus({ preventScroll: true });
+  }, []);
+  const inNotesPage = location.pathname === '/notes' || location.pathname.startsWith('/notes/');
   useDesktopRuntime(user?.id);
   const pendingLearningRecords = useDesktopStore(state => state.state?.learningSync?.pending ?? 0);
   const logout = useAuthStore(state => state.logout);
@@ -83,6 +93,10 @@ export const MainLayout: React.FC = () => {
   const isTourPage = location.pathname === '/xiaoyu';
   if (showTour && !isTourPage) { setShowTour(false); setPendingTourDismiss(true); }
   const xiaoyuVisible = location.pathname === '/xiaoyu';
+  const [notesPageAvailability, setNotesPageAvailability] = useState({ key: '', available: false });
+  const setNotesAvailable = useCallback((available: boolean) => { setNotesPageAvailability({ key: location.key, available }); }, [location.key]);
+  const notesAvailable = notesPageAvailability.key === location.key && notesPageAvailability.available;
+  const notesVisible = notesOpen && notesAvailable;
   useExamActivity();
 
   useEffect(() => {
@@ -167,6 +181,7 @@ export const MainLayout: React.FC = () => {
         <div className="um-window-navigation"><button aria-label="返回" title="返回" disabled={historyIndex <= 0} onClick={() => navigate(-1)}><ArrowLeft size={17} /></button><button aria-label="前进" title="前进" disabled={historyIndex >= historyEnd} onClick={() => navigate(1)}><ArrowRight size={17} /></button></div>
         <div className="um-window-workspace" ref={setToolbarHost}>{!hasWorkspaceToolbar && <><button className="um-agent-icon-button" aria-label="切换导航栏" onClick={() => setRailHidden(old => !old)}><SidebarSimple size={18} /></button><WorkspaceTrail title={pageTitle || '学习空间'} crumbs={[]} /></>}</div>
         {workspaceHeader}
+        {notesAvailable && <button id="um-notes-toggle" type="button" className="um-right-sidebar-toggle um-agent-icon-button" aria-label="切换右侧栏" title={notesVisible ? '收起笔记侧栏' : '展开笔记侧栏'} aria-expanded={notesVisible} aria-controls="um-right-panel" onClick={() => { setNotesMounted(true); setNotesOpen(value => !value); }}><SidebarSimple size={19} style={{ transform: 'scaleX(-1)' }} /></button>}
       </header>
       <div className="um-window-body flex flex-1 min-h-0 overflow-hidden">
       <aside data-tour="sidebar" aria-label="应用导航" className={cn('um-app-rail relative flex-col p-1.5 z-0 shrink-0 hidden md:flex w-[58px]', railHidden && 'md:hidden')}>
@@ -185,17 +200,25 @@ export const MainLayout: React.FC = () => {
           {navItems.map(item => <div key={item.to} className="px-1"><Tooltip><TooltipTrigger asChild><Button variant="ghost" asChild className={cn('w-full h-9 rounded-lg justify-center p-0', !canEnter(item) ? 'opacity-40 cursor-not-allowed text-muted-foreground' : isActive(item) ? 'bg-primary/10 text-primary' : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground')}>{canEnter(item) ? <Link to={item.to} aria-label={item.label} aria-current={isActive(item) ? 'page' : undefined}><NavIcon position={item.icon} /><span className="sr-only">{item.label}</span></Link> : <span role="link" tabIndex={0} aria-label={item.label} aria-disabled="true"><NavIcon position={item.icon} /><span className="sr-only">{item.label}</span></span>}</Button></TooltipTrigger><TooltipPortal><TooltipContent side="right" sideOffset={10} className="font-medium text-[13px] rounded-lg border-border shadow-sm">{item.label}{!canEnter(item) && ' · 暂未开通'}</TooltipContent></TooltipPortal></Tooltip></div>)}
         </nav>
       </aside>
-      <main className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
+      <div className="um-window-panes" data-notes-open={notesVisible}>
+      <main inert={isMobile && notesVisible} className={cn('um-app-main flex-1 min-w-0 min-h-0 relative z-[var(--z-base)] flex flex-col bg-background',
         isMobileImmersivePage || isMobileStudyPage ? 'overflow-hidden pb-0' : isIntegratedWorkspace ? hideMobileBottomNav ? 'overflow-hidden pb-0' : 'overflow-hidden pb-[calc(61px+env(safe-area-inset-bottom))] md:pb-0' : 'overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0')}>
         <ExamActivityBar />
         <div className={cn('um-app-page-content flex-1 w-full relative min-h-0', isMobileImmersivePage || isMobileStudyPage ? 'px-0 py-0 h-full overflow-hidden' : isMobileVideoPage ? 'px-0 py-0' : !isIntegratedWorkspace && 'px-4 py-4 md:px-8 md:py-6', isMobile && !hideMobileBottomNav && !isIntegratedWorkspace && 'pb-20')}>
           <WorkspaceToolbarHostContext.Provider value={{ host: toolbarHost, enabled: hasWorkspaceToolbar }}>
             <WorkspaceActiveContext.Provider value={xiaoyuVisible}>
-              <Outlet context={{ toolbarHost }} />
+              <NotesSidebarContext.Provider value={{ open: notesVisible, close: closeNotes, setAvailable: setNotesAvailable }}>
+                <Outlet context={{ toolbarHost }} />
+              </NotesSidebarContext.Provider>
             </WorkspaceActiveContext.Provider>
           </WorkspaceToolbarHostContext.Provider>
         </div>
       </main>
+      {notesVisible && <button className="um-notes-mobile-backdrop" aria-label="收起笔记侧栏" onClick={closeNotes} />}
+      <div id="um-right-panel" className="um-notes-sidebar-host" data-open={notesVisible} aria-hidden={!notesVisible} inert={!notesVisible} onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); closeNotes(); } }}>
+        {notesMounted && !inNotesPage && user && <NotesSidebar key={user.id} userId={user.id} visible={notesVisible} initialNoteId={noteSession.userId === user.id ? noteSession.id : null} onSelect={rememberNote} onClose={closeNotes} />}
+      </div>
+      </div>
       </div>
       <nav className={cn('md:hidden fixed bottom-0 inset-x-0 z-[var(--z-dropdown)] border-t border-border bg-card/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]', hideMobileBottomNav && 'hidden')}>
         <div className="um-app-mobile-links flex items-center justify-around px-1 py-2">{navItems.map(item => canEnter(item) ? <Link key={item.to} to={item.to} aria-current={isActive(item) ? 'page' : undefined} className={cn('relative flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-lg transition-colors min-h-[44px] min-w-[40px]', isActive(item) ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}>{isActive(item) && <span className="absolute top-0 inset-x-3 h-0.5 bg-primary rounded-full" />}<NavIcon position={item.icon} /><span className="text-[10px] font-bold">{item.mobileLabel}</span></Link> : <span key={item.to} role="link" aria-disabled="true" aria-label={`${item.label}，暂未开通`} className="flex flex-col items-center justify-center gap-0.5 py-1 px-1 min-h-[44px] min-w-[40px] text-muted-foreground opacity-40 cursor-not-allowed"><NavIcon position={item.icon} /><span className="text-[10px] font-bold">{item.mobileLabel}</span></span>)}</div>

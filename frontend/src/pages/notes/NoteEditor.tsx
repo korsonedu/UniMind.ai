@@ -13,20 +13,23 @@ import { notebookPath, notesApi, type Note, type NoteDraft, type Notebook } from
 
 interface Props {
   note: Note; notebooks: Notebook[]; onChange: (patch: Partial<NoteDraft>) => void;
-  onOpen: (id: number) => void;
+  onOpen: (id: number) => void; autoFocus?: boolean; compact?: boolean;
 }
-export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props) {
+export default function NoteEditor({ note, notebooks, onChange, onOpen, autoFocus = false, compact = false }: Props) {
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<NoteDialogOptions | null>(null);
   const [linkQuery, setLinkQuery] = useState<{ from: number; to: number; query: string } | null>(null);
   const [tagInput, setTagInput] = useState(note.tags.join(', '));
   const [matches, setMatches] = useState<Note[]>([]);
   const [searchFailed, setSearchFailed] = useState(false);
+  const [headings, setHeadings] = useState<{ pos: number; level: number; text: string }[]>([]);
+  const [showOutline, setShowOutline] = useState(false);
   const changeRef = useRef(onChange);
   useLayoutEffect(() => { changeRef.current = onChange; }, [onChange]);
   const editor = useEditor({
     extensions: [NoteMath, StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: { openOnClick: false } }), Markdown.configure({ html: false }), Placeholder.configure({ placeholder: '开始书写…' })],
     content: note.content,
+    autofocus: autoFocus ? 'end' : false,
     editable: !note.deleted_at,
     editorProps: { attributes: { class: 'notes-prose', 'aria-label': '笔记正文' } },
     onUpdate: ({ editor: instance }) => {
@@ -36,6 +39,19 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props)
       setLinkQuery(match ? { from: from - match[0].length, to: from, query: match[1] } : null);
     },
   });
+  useEffect(() => {
+    if (!editor) return;
+    const update = () => {
+      const items: { pos: number; level: number; text: string }[] = [];
+      editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'heading') items.push({ pos, level: node.attrs.level as number, text: node.textContent });
+      });
+      setHeadings(items);
+    };
+    update();
+    editor.on('update', update);
+    return () => { editor.off('update', update); };
+  }, [editor]);
   useEffect(() => {
     if (!linkQuery) return;
     const controller = new AbortController();
@@ -52,15 +68,16 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props)
   };
   const toolbar = (label: string, icon: React.ReactNode, action: () => void, active = false) => <button type="button" className="notes-icon-button" aria-label={label} title={label} aria-pressed={active} onMouseDown={e => e.preventDefault()} onClick={action}>{icon}</button>;
   return <>
-    <div className="notes-editor-meta">
+    {!compact && <div className="notes-editor-meta">
       <SelectField aria-label="所属笔记本" value={note.notebook ?? ''} disabled={!!note.deleted_at} onValueChange={value => onChange({ notebook: value ? Number(value) : null })}>
         <SelectOption value="">未分类</SelectOption>{notebooks.map(book => <SelectOption key={book.id} value={book.id}>{notebookPath(book.id, notebooks)}</SelectOption>)}
       </SelectField>
       <button type="button" className="notes-icon-button" aria-label={note.is_favorite ? '取消收藏' : '收藏'} title={note.is_favorite ? '取消收藏' : '收藏'} aria-pressed={note.is_favorite} disabled={!!note.deleted_at} onClick={() => onChange({ is_favorite: !note.is_favorite })}><Star size={18} weight={note.is_favorite ? 'fill' : 'regular'} /></button>
-    </div>
+    </div>}
     <input className="notes-title" aria-label="笔记标题" placeholder="未命名笔记" value={note.title} readOnly={!!note.deleted_at} onChange={e => onChange({ title: e.target.value })} />
-    <label className="notes-tags"><Tag size={16} /><input aria-label="笔记标签，逗号分隔" placeholder="标签" value={tagInput} disabled={!!note.deleted_at} onChange={e => { setTagInput(e.target.value); onChange({ tags: [...new Set(e.target.value.split(/[,，]/).map(t => t.trim()).filter(Boolean))] }); }} /></label>
+    {!compact && <label className="notes-tags"><Tag size={16} /><input aria-label="笔记标签，逗号分隔" placeholder="标签" value={tagInput} disabled={!!note.deleted_at} onChange={e => { setTagInput(e.target.value); onChange({ tags: [...new Set(e.target.value.split(/[,，]/).map(t => t.trim()).filter(Boolean))] }); }} /></label>}
     <div className="notes-editor-toolbar">
+      <button type="button" aria-expanded={showOutline} onClick={() => setShowOutline(value => !value)}>目录</button>
       {editor && !note.deleted_at && <div role="group" aria-label="文字格式">
         {toolbar('粗体', <TextB size={18} />, () => { editor.chain().focus().toggleBold().run(); }, editor.isActive('bold'))}
         {toolbar('斜体', <TextItalic size={18} />, () => { editor.chain().focus().toggleItalic().run(); }, editor.isActive('italic'))}
@@ -74,6 +91,8 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props)
         {toolbar('撤销', <ArrowUUpLeft size={18} />, () => { editor.chain().focus().undo().run(); })}
       </div>}
     </div>
+    <div className="notes-document-layout">
+    {showOutline && <nav className="notes-outline" aria-label="笔记目录">{headings.length ? headings.map(heading => <button type="button" key={heading.pos} style={{ paddingLeft: `${(heading.level - 1) * 12 + 8}px` }} onClick={() => { if (!editor) return; editor.commands.setTextSelection(heading.pos + 1); editor.view.domAtPos(heading.pos + 1).node.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' }); editor.commands.focus(); }}>{heading.text || '无标题'}</button>) : <span>暂无标题</span>}</nav>}
     <div className="notes-editor-body" onClick={event => {
       const anchor = (event.target as HTMLElement).closest('a');
       const match = anchor?.getAttribute('href')?.match(/^\/notes\/(\d+)$/);
@@ -88,6 +107,7 @@ export default function NoteEditor({ note, notebooks, onChange, onOpen }: Props)
         {matches.slice(0, 12).map(target => <button key={target.id} onClick={() => insertLink(target)}><span>{target.title || '未命名笔记'}</span><small>{notebookPath(target.notebook, notebooks)}</small></button>)}
         {!matches.length && <p>{searchFailed ? '搜索失败，请重试。' : '没有匹配的笔记。'}</p>}
       </div>}
+    </div>
     </div>
     <div className="notes-backlinks"><span>反向链接 · {note.backlinks.length}</span>{note.backlinks.map(link => <button key={link.id} onClick={() => onOpen(link.id)}>{link.title || '未命名笔记'}</button>)}</div>
     {dialog && <NoteDialog {...dialog} onClose={() => setDialog(null)} />}
