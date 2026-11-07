@@ -152,7 +152,7 @@ html {
 }
 /* Desktop auth pages opt out of native scroll bounce. */
 @media (min-width: 768px) {
-  html:has(.um-auth-shell) {
+  html.um-desktop:has(.um-auth-shell) {
     overscroll-behavior: none;
   }
 }
