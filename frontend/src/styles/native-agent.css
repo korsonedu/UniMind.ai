@@ -148,8 +148,6 @@
 .um-agent-button-danger { color: var(--um-color-on-accent); background: var(--um-color-danger); border-color: var(--um-color-danger); }
 .um-agent-button-danger:hover:not(:disabled) { background: var(--um-color-danger); filter: brightness(.92); }
 .um-agent-composer { width: 100%; max-width: 680px; background: var(--um-color-context); border: 1px solid var(--um-color-border); border-radius: var(--um-radius-composer); transition: border-color var(--um-motion-fast), box-shadow var(--um-motion-fast); animation: um-agent-enter 180ms ease-out; }
-.um-agent-composer:focus-within { border-color: var(--um-color-accent); }
-.um-agent-composer:has(textarea:focus-visible) { outline: 2px solid var(--um-color-focus); outline-offset: 2px; }
 .um-agent-composer textarea { display: block; width: 100%; resize: none; min-height: 70px; max-height: 176px; padding: 16px 18px; font-size: var(--um-font-chat); line-height: var(--um-line-chat); background: transparent; border: 0; border-radius: var(--um-radius-composer) var(--um-radius-composer) 0 0; outline: 0; }
 .um-native-agent .um-agent-composer textarea { font-size: var(--um-font-chat); }
 .um-native-agent .um-agent-composer textarea:focus-visible { outline: 0; }
@@ -169,7 +167,7 @@
 .um-agent-legacy-header { display: none; }
 .um-agent-chat-body { background: var(--um-color-surface); min-height: 0; padding-top: var(--um-height-header); }
 .um-agent-chat-input > div > div { background: var(--um-color-context); border: 0; outline: none; border-radius: var(--um-radius-composer); box-shadow: none; }
-.um-agent-chat-input > div > div:focus-within { border-color: transparent; box-shadow: var(--um-focus-shadow); }
+.um-agent-chat-input > div > div:focus-within { border-color: transparent; box-shadow: none; }
 .um-agent-chat-input > div > div:has(textarea:focus-visible) { outline: none; }
 .um-native-agent .um-agent-chat-input textarea:focus-visible { outline: none; }
 .um-native-agent .um-agent-chat-input textarea { font-size: var(--um-font-chat); line-height: var(--um-line-chat); display: block; min-height: 56px; max-height: 176px; padding: 14px 18px 8px; }
