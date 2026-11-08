@@ -1022,6 +1022,10 @@ class AIEngine:
                         "content": "题目已在左侧面板展示。你的回复只需简短告知结果，无需复述题目内容。",
                     })
 
+            if (any(outcome.call.name == 'build_learning_experiment' and not outcome.failed for outcome in outcomes)
+                    and any(visual['type'] == 'learning_experiment' for visual in coordinator.execution_evidence()['visuals'])):
+                return {'content': '', 'run_id': coordinator.run_id, 'finish_reason': 'stop'}
+
             tool_names_this_round = [outcome.call.name for outcome in outcomes]
             accumulated_text = ""
 

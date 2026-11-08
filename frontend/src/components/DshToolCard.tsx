@@ -24,7 +24,7 @@ export function DshToolCard({ card }: { card: DshCard }) {
       <Link to="/tests" className="inline-block text-xs underline underline-offset-4">进入习题训练 →</Link>
     </div></div></div>;
   }
-  if (card.type === 'practice_quiz') return <InlineVisualCard visual={card} />;
+  if (card.type === 'practice_quiz' || card.type === 'learning_experiment') return <InlineVisualCard visual={card} />;
   if (card.type === 'practice_result') return <section className="um-visual-card"><div className="um-visual-body"><PracticeResultCard payload={card.payload as unknown as PracticeResultPayload} snapshot /></div></section>;
   if (!['data_card', 'knowledge_map', 'latex_derivation', 'step_solution', 'function_graph', 'action_cards'].includes(card.type)) return null;
   return <InlineVisualCard visual={card} />;

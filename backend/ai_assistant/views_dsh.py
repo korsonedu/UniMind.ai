@@ -31,6 +31,7 @@ class ContextInput(serializers.Serializer):
 class ToolInput(serializers.Serializer):
     arguments = serializers.DictField(default=dict)
     memory_version = serializers.CharField(min_length=64, max_length=64)
+    tool_revision = serializers.IntegerField(min_value=1, required=False)
 
 
 class DshContextView(APIView):
@@ -42,7 +43,8 @@ class DshContextView(APIView):
             raise NotFound()
         data = ContextInput(data=request.data)
         data.is_valid(raise_exception=True)
-        context = build_context(request.user, **data.validated_data)
+        claims = request.auth if isinstance(request.auth, dict) else {}
+        context = build_context(request.user, **data.validated_data, chat_context=claims.get('chat_context'))
         if isinstance(request.auth, dict) and request.auth.get('chat_context'):
             from .services.dsh_xiaoyu import task_context, task_course_visual
             context['system_prompt'] += task_context(request.user, request.auth['chat_context'], data.validated_data['message'])
@@ -63,7 +65,9 @@ class DshToolView(APIView):
         data = ToolInput(data=request.data)
         data.is_valid(raise_exception=True)
         source = request.auth.get('reservation') if isinstance(request.auth, dict) else None
-        return Response(execute_tool(request.user, name, **data.validated_data, source=source))
+        claims = request.auth if isinstance(request.auth, dict) else None
+        return Response(execute_tool(request.user, name, **data.validated_data, source=source,
+                                     chat_context=claims.get('chat_context') if claims else None))
 
 
 class SiteChatInput(serializers.Serializer):

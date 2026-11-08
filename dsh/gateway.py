@@ -59,7 +59,7 @@ def attach_course_visual(body, context):
 
 
 @contextmanager
-def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_event=None):
+def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_event=None, refresh_context=None):
     target = urlsplit(upstream_url)
     official = upstream_url == 'https://api.deepseek.com/anthropic/v1/messages'
     fixture = target.scheme == 'http' and target.hostname in ('127.0.0.1', 'localhost', '::1')
@@ -69,6 +69,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
         raise ValueError('Missing upstream credential')
     policy = context['model_policy']
     budgets = {'assistant.chat.planner': ('fast', 4, 1024),
+               'assistant.chat.planner.prototype': ('fast', 6, 8192),
                'assistant.title': ('fast', 1, 64),
                'assistant.memory_extract': ('fast', 1, 800),
                'quizzes.preview_parse': ('fast', 1, 3200),
@@ -156,8 +157,22 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                             or not 0 < body['max_tokens'] <= policy['max_tokens']):
                         return self.reject(403, 'model_policy_denied')
                     tools = body.get('tools', [])
+                    dynamic = {}
+                    if 'session_registry' in context:
+                        if refresh_context is None:
+                            return self.reject(403, 'session_registry_unavailable')
+                        try:
+                            current = refresh_context()
+                            if any(current.get(key) != context.get(key) for key in ('student', 'permissions_version', 'model_policy')) or current['memory']['version'] != context['memory']['version']:
+                                return self.reject(403, 'session_authorization_changed')
+                            dynamic = {t['function']['name']: t['function']['parameters']
+                                       for t in current.get('session_registry', {}).get('tools', [])}
+                        except Exception:
+                            return self.reject(503, 'session_registry_unavailable')
+                    permitted = {name for name in allowed_tools if not name.startswith('session_')} | set(dynamic)
                     if not isinstance(tools, list) or len(tools) > 8 or any(not isinstance(t, dict) or 'type' in t
-                            or t.get('name') not in allowed_tools for t in tools):
+                            or t.get('name') not in permitted
+                            or (t.get('name') in dynamic and t.get('input_schema') != dynamic[t['name']]) for t in tools):
                         return self.reject(403, 'tool_policy_denied')
                 except (ValueError, TypeError):
                     return self.reject(400, 'invalid_request')

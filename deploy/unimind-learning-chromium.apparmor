@@ -1,0 +1,6 @@
+abi <abi/4.0>,
+include <tunables/global>
+
+profile unimind-learning-chromium /opt/unimind-learning-worker/browsers/chromium_headless_shell-1217/chrome-headless-shell-linux64/chrome-headless-shell flags=(unconfined) {
+  userns,
+}

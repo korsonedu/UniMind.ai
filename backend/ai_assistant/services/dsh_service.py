@@ -61,7 +61,25 @@ def permitted_tools(user):
     return [*allowed, PRESENTATION_TOOL] if allowed else []
 
 
-def build_context(user, message, recent_messages=None):
+def prototype_executor(user, chat_context):
+    from .learning_experiments import available_to, EXPERIMENT_TOOLS
+    from .session_tools import SESSION_TOOLS, refresh
+    if not chat_context or not available_to(user):
+        return None
+    executor = PlannerToolExecutor(user)
+    executor.experiment_context = chat_context
+    set_permitted_tools(executor, [*EXPERIMENT_TOOLS, *SESSION_TOOLS])
+    executor._allowed_tool_names = set(executor._permitted_tool_definitions)
+    refresh(executor, [])
+    return executor
+
+
+def session_registry(executor):
+    return {'tools': executor._session_tool_offered,
+            'versions': executor._session_tool_versions}
+
+
+def build_context(user, message, recent_messages=None, chat_context=None):
     from users.learning import cohort_info
     cohort = cohort_info(user)
     catalog = student_catalog(user)
@@ -70,15 +88,20 @@ def build_context(user, message, recent_messages=None):
     allowed = [t for t in catalog if t['function']['name'] in M0_TOOLS]
     if allowed:
         allowed.append(PRESENTATION_TOOL)
+    executor = prototype_executor(user, chat_context)
+    if executor:
+        allowed.extend(executor._permitted_tool_definitions.values())
+    # Runtime additions change the registry, not the underlying account authorization.
+    authorization = [t for t in allowed if not t['function']['name'].startswith('session_')]
     selected, groups, initial = grouped_tools(allowed, message, recent_messages)
-    return {
+    context = {
         'protocol': 'unimind.dsh.m0.v1',
         'student': {'id': user.pk, 'name': user.nickname or user.username, 'cohort': cohort},
         'memory': memory_snapshot(user),
         'tools': selected,
         'available_tools': allowed, 'tool_groups': groups,
         'permitted_tool_count': len(allowed),
-        'permissions_version': hashlib.sha256(json.dumps({'tools': allowed, 'cohort': cohort}, sort_keys=True).encode()).hexdigest(),
+        'permissions_version': hashlib.sha256(json.dumps({'tools': authorization, 'cohort': cohort}, sort_keys=True).encode()).hexdigest(),
         'route': 'grouped-native-tool-discovery',
         'routing': {
             'catalog_count': len(catalog), 'candidate_count': len(candidates),
@@ -98,9 +121,33 @@ def build_context(user, message, recent_messages=None):
         },
         'system_prompt': (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/dsh_system_prompt.txt').read_text(),
     }
+    if executor:
+        from .learning_experiments import conversation_experiments
+        context['session_registry'] = session_registry(executor)
+        context['learning_experiments'] = conversation_experiments(user, chat_context['conversation_id'])
+        context['model_policy'].update(operation='assistant.chat.planner.prototype', max_requests=6, max_tokens=8192)
+        for filename in ('experiment_prototype.txt', 'session_tool_prototype.txt'):
+            context['system_prompt'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu' / filename).read_text()
+        context['system_prompt'] += '\n已有工具直接调用，不重复发现。仅当所需工具不在当前列表时，才通过 find_learning_tools 选择分组：编写或注册能力选 authoring；调用已有会话工具选 session。尚未注册工具时不要进入 session。每次最多使用一个分组。'
+    return context
 
 
-def execute_tool(user, name, arguments, memory_version, source=None):
+def execute_tool(user, name, arguments, memory_version, source=None, chat_context=None, tool_revision=None):
+    prototype_names = {'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool'}
+    if name in prototype_names or name.startswith('session_'):
+        executor = prototype_executor(user, chat_context)
+        if not executor or name not in executor._permitted_tool_definitions:
+            raise PermissionDenied('当前对话无权使用此工具。')
+        if memory_snapshot(user)['version'] != memory_version:
+            raise MemoryContextChanged()
+        if name.startswith('session_') and (type(tool_revision) is not int
+                or executor._session_tool_versions.get(name) != tool_revision):
+            from .learning_experiments import ExperimentConflict
+            raise ExperimentConflict('工具版本已变化，请重新读取后调用。')
+        result = json.loads(executor(name, arguments))
+        if name in {'register_session_tool', 'read_session_tool'} and not result.get('error'):
+            result['session_registry'] = session_registry(executor)
+        return result
     definition = next((t for t in permitted_tools(user) if t['function']['name'] == name), None)
     if definition is None:
         raise PermissionDenied('当前账号无权使用此 M0 工具。')

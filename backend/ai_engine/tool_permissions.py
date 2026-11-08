@@ -1,6 +1,8 @@
 """按用户能力限制工具，机构套餐不再授予学习或管理能力。"""
 
 TOOL_FEATURES = {
+    'register_session_tool': 'ai.assistant', 'read_session_tool': 'ai.assistant',
+    'build_learning_experiment': 'ai.assistant', 'read_learning_experiment': 'ai.assistant',
     'search_knowledge_tree': 'quiz.exam', 'get_user_weak_points': 'full.report',
     'get_user_wrong_questions': 'wrong.review', 'lookup_question': 'quiz.exam',
     'search_courses': 'course.video', 'search_asr': 'course.video',

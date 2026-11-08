@@ -16,8 +16,10 @@ from .views_api import (
     practice_start_view, practice_pre_grade_view, practice_submit_view, practice_session_view,
     feedback_view,
 )
+from .views_learning_experiments import LearningExperimentView
 
 urlpatterns = [
+    path('learning-experiments/<uuid:conversation_id>/<uuid:experiment_id>/', LearningExperimentView.as_view(), name='learning-experiment'),
     path('dsh/actions/confirm/', DshConfirmView.as_view(), name='dsh-confirm'),
     path('dsh/actions/<uuid:request_id>/', DshSubmissionView.as_view(), name='dsh-submission'),
     path('dsh/context/', DshContextView.as_view(), name='dsh-context'),

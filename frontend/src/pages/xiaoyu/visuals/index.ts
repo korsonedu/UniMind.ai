@@ -9,6 +9,7 @@ import { GradingPreviewCard } from '@/components/GradingPreviewCard';
 import { StudentReportPreview } from '@/components/StudentReportPreview';
 import { PracticeResultCard } from './PracticeResultCard';
 import { PracticeQuizCard } from './PracticeQuizCard';
+import { LearningExperimentRenderer } from './LearningExperimentRenderer';
 
 export interface VisualData {
   type: string;
@@ -18,6 +19,7 @@ export interface VisualData {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const RENDERERS: Record<string, React.ComponentType<{ payload: any }>> = {
+  learning_experiment: LearningExperimentRenderer,
   data_card: DataCardRenderer,
   latex_derivation: LatexRenderer,
   step_solution: StepSolutionRenderer,
