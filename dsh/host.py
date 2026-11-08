@@ -76,7 +76,15 @@ def run_session_turn(message, model_config, session_id, on_event=None):
         audit_directory = Path(os.environ.get('UNIMIND_DSH_AUDIT_DIR', ROOT.parent / '.m0-state'))
         audit_directory.mkdir(exist_ok=True)
         audit_path = audit_directory / 'gateway-usage.jsonl'
-    with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path, **({'on_event': on_event} if on_event else {})) as gateway:
+    allowed = {t['function']['name'] for t in context.get('available_tools', []) + context['tools']}
+    def refresh_context():
+        current = backend_request('/api/ai/dsh/context/', {'message': message})
+        allowed.clear()
+        allowed.update(t['function']['name'] for t in current.get('available_tools', []) + current['tools'])
+        return current
+    with task_gateway(context, model_config['url'], model_config['key'], model_config['mode'], audit_path,
+                      **({'on_event': on_event} if on_event else {}),
+                      **({'refresh_context': refresh_context} if 'session_registry' in context else {})) as gateway:
         with DeepSeekHarness(
             dsh_home=str(home), cwd=str(home), patches=(str(ROOT / 'profile.patch.yml'),),
             provider='deepseek-official', model=context['model_policy']['model'],
@@ -85,13 +93,13 @@ def run_session_turn(message, model_config, session_id, on_event=None):
             env={
                 'UNIMIND_API_URL': os.environ.get('UNIMIND_API_URL', 'http://127.0.0.1:8000'),
                 'UNIMIND_AUTH_TOKEN': os.environ.get('UNIMIND_AUTH_TOKEN', ''),
+                'UNIMIND_DSH_AUTH_SCHEME': os.environ.get('UNIMIND_DSH_AUTH_SCHEME', 'Token'),
                 'UNIMIND_DSH_MESSAGE': message,
                 'UNIMIND_DSH_RECENT_MESSAGES': json.dumps(recent, ensure_ascii=False),
             },
         ) as harness:
             session = harness.resume_session(state['runtime_id']) if state['runtime_ready'] else harness.start_session(state['runtime_id'])
             calls = {}
-            allowed = {t['function']['name'] for t in context.get('available_tools', []) + context['tools']}
             def notify(notification):
                 if notification.method == 'session.event' and notification.payload.get('sessionId') == state['runtime_id']:
                     public = tool_status(notification.payload.get('event', {}), allowed, calls)
@@ -100,10 +108,16 @@ def run_session_turn(message, model_config, session_id, on_event=None):
             result = session.run(message, **({'on_notification': notify} if on_event else {}))
     if any(r['status'] == 'upstream_http_402' for r in gateway['requests']):
         raise HostConfigurationError('DeepSeek 官方接口返回 402（余额不足），请检查账户余额；本轮未完成。')
-    if not result.final_response:
-        raise RuntimeError('DSH turn did not produce a response')
     if result.finish_reason != 'completed':
+        failure = next((event.get('data', {}).get('reason', {}).get('error', {})
+                        for event in reversed(result.events) if event.get('type') == 'turn/end'), {})
+        if failure.get('code') == 'MALFORMED_RESPONSE' and 'tool input is invalid JSON' in failure.get('message', ''):
+            raise HostConfigurationError('模型生成的工具参数不是有效 JSON，本轮未完成，请重新提问。')
+        if failure.get('code') == 'RATE_LIMIT' and failure.get('message') == 'task_request_budget_exhausted':
+            raise HostConfigurationError('本轮模型请求次数已用尽，流程尚未完成，请重新提问。')
         raise HostConfigurationError('本轮未完整完成，请重新提问；未保存为成功对话。')
+    if not result.final_response:
+        raise HostConfigurationError('本轮没有生成完整回答，请重新提问。')
     if not gateway['requests'] or any(r['status'] != 'completed' for r in gateway['requests']):
         raise RuntimeError('Gateway turn did not complete')
     current = backend_request('/api/ai/dsh/context/', {'message': message})

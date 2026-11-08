@@ -622,6 +622,8 @@ class AIChatStreamView(APIView):
         course_context = prepare_course_context(request, bot, conversation_id)
 
         from django.conf import settings
+        from .services.learning_experiments import available_to, attach_to_chat
+        experiment_prototype = bot.bot_type == 'planner' and available_to(request.user)
         if (getattr(settings, 'UNIMIND_DSH_XIAOYU_ENABLED', False)
                 and bot.bot_type == 'planner' and bot.institution_id is None and bot.name == '小宇'):
             from .services.dsh_xiaoyu import response
@@ -706,6 +708,8 @@ class AIChatStreamView(APIView):
                 tools = route_tools(user_message, tools, recent_messages=history_msgs, bot_type=bot.bot_type)
 
             # 工具白名单（防止 prompt injection 调用非预期工具）
+            if experiment_prototype:
+                tools = attach_to_chat(request.user, user_msg, messages, tools, tool_executor)
             tool_executor._allowed_tool_names = {t['function']['name'] for t in tools}
 
             return history_msgs, messages, tools, tool_executor, profile, variant_name
@@ -800,7 +804,7 @@ class AIChatStreamView(APIView):
                                 on_message=on_message,
                                 tool_choice=forced_tool_choice,
                                 temperature=0.6,
-                                max_tokens=2500,
+                                max_tokens=8192 if experiment_prototype else 2500,
                                 operation=f'assistant.chat.{bot.bot_type}',
                                 max_tool_rounds=8 if bot.bot_type == 'exam_generator' else 12,
                             )

@@ -319,7 +319,9 @@ class ToolRunCoordinator:
         with self._progress_lock:
             self._terminal_call_ids.add(call.call_id)
         if error:
-            result = self._error_result(error)
+            # Generated experiments need the browser diagnostics for code repair.
+            if call.name not in {'build_learning_experiment', 'register_session_tool'}:
+                result = self._error_result(error)
             self._emit(
                 call,
                 round_number,

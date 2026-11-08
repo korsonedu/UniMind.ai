@@ -3,7 +3,7 @@ import json
 import re
 
 
-CARD_TYPES = {'data_card', 'knowledge_map', 'practice_result', 'question_preview', 'practice_quiz', 'diagnostic_quiz', 'faq_draft', 'latex_derivation', 'step_solution', 'function_graph', 'action_cards'}
+CARD_TYPES = {'data_card', 'knowledge_map', 'practice_result', 'question_preview', 'practice_quiz', 'diagnostic_quiz', 'faq_draft', 'latex_derivation', 'step_solution', 'function_graph', 'action_cards', 'learning_experiment'}
 INTERNAL_PATH = re.compile(r'/(?:courses|course/[1-9][0-9]*|tests(?:/results/[1-9][0-9]*|/session\?source=xiaoyu&preference=review_first)?|report-card|achievements|diagnostic|study|qa)')
 
 
@@ -51,6 +51,11 @@ def tool_cards(events, context):
         visual = meta.get('unimindCard') if isinstance(meta, dict) else None
         if (not failed and isinstance(visual, dict) and visual.get('type') in CARD_TYPES
                 and isinstance(visual.get('payload'), dict) and safe_links(visual)
+                and (visual['type'] != 'learning_experiment' or (name == 'build_learning_experiment'
+                     and isinstance(visual['payload'].get('experiment_id'), str)
+                     and isinstance(visual['payload'].get('conversation_id'), str)
+                     and type(visual['payload'].get('revision')) is int
+                     and set(visual['payload']) <= {'experiment_id', 'conversation_id', 'revision', 'title'}))
                 and (visual['type'] not in {'latex_derivation', 'step_solution', 'function_graph', 'action_cards'}
                      or name == 'present_learning_visual')):
             cards.append({'tool': name, 'type': visual['type'], 'payload': visual['payload']})

@@ -44,6 +44,42 @@ def slow_fixture():
 
 
 class GatewaySmoke(unittest.TestCase):
+    def test_session_tools_require_current_backend_registry(self):
+        upstream, calls = model_fixture()
+        context = {'model_policy': {'operation': 'assistant.chat.planner.prototype', 'tier': 'fast',
+            'model': 'deepseek-v4-flash', 'max_requests': 2, 'max_tokens': 128, 'max_request_bytes': 4096},
+            'student': {'id': 1}, 'memory': {'version': 'test'}, 'permissions_version': 'test',
+            'tools': [], 'session_registry': {'tools': [], 'versions': {}}}
+        current = {**context, 'session_registry': {'tools': [], 'versions': {}}}
+        schema = {'type': 'object', 'properties': {}, 'additionalProperties': False}
+        try:
+            with task_gateway(context, f'http://127.0.0.1:{upstream.server_port}/v1/messages',
+                              'SYNTHETIC_SECRET', 'local-protocol-smoke', refresh_context=lambda: current) as gateway:
+                body = {'model': 'deepseek-v4-flash', 'stream': True, 'max_tokens': 128,
+                    'messages': [], 'tools': [{'name': 'session_test', 'input_schema': schema}]}
+                def send():
+                    try:
+                        with urlopen(Request(gateway['url'] + '/messages', json.dumps(body).encode(),
+                                             {'x-api-key': gateway['credential']}), timeout=5) as response:
+                            response.read()
+                            return response.status
+                    except HTTPError as error:
+                        with error:
+                            return error.code
+                self.assertEqual(send(), 403)
+                current['session_registry']['tools'] = [{'function': {'name': 'session_test', 'parameters': schema}}]
+                body['tools'][0]['input_schema'] = {'type': 'object'}
+                self.assertEqual(send(), 403)
+                self.assertEqual(calls, [])
+                body['tools'][0]['input_schema'] = schema
+                self.assertEqual(send(), 200)
+                current['session_registry']['tools'] = []
+                self.assertEqual(send(), 403)
+                self.assertEqual(len(calls), 1)
+        finally:
+            upstream.shutdown()
+            upstream.server_close()
+
     def test_course_pixels_are_user_image_blocks_for_exact_current_question(self):
         visual = [{'type': 'text', 'text': '当前课程画面 00:12'},
                   {'type': 'image_url', 'image_url': {'url': 'data:image/jpeg;base64,Y291cnNl'}}]

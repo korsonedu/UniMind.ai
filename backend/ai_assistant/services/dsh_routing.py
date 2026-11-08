@@ -3,6 +3,8 @@ from ai_engine.tool_router import classify_intent_keywords
 
 
 GROUPS = {
+    'authoring': ('编写交互与计算工具', '根据学习任务编写、检查或修改交互实验，以及注册新的会话计算工具。', (
+        'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
     'presentation': ('教学展示与回复选项', '展示公式推导、解题步骤、函数采样图和回复选项，不改变学生数据。', ('present_learning_visual',)),
     'support': ('人工答疑', '准备需要学生核对确认的人工答疑草稿，不自动发布。', ('create_faq_ticket',)),
     'focus': ('自习专注', '查自习室当前专注状态与每日专注历史，区别于听课和做题记录。', (
@@ -27,6 +29,9 @@ def grouped_tools(allowed, message, recent_messages=None):
                    'tools': [definitions[name] for name in names if name in definitions]}
               for key, (title, description, names) in GROUPS.items()}
     groups = {key: group for key, group in groups.items() if group['tools']}
+    if 'read_session_tool' in definitions:
+        groups['session'] = {'title': '当前对话的计算工具', 'description': '调用本对话已经注册的计算工具，或读取源码和版本。',
+            'tools': [definitions['read_session_tool'], *[tool for name, tool in definitions.items() if name.startswith('session_')]]}
     intent = classify_intent_keywords(message, recent_messages, bot_type='planner')
     initial = {'resource': 'resources', 'learning_sessions': 'progress', 'analysis': 'progress',
                'planning': 'mastery', 'quiz': 'practice', 'error_review': 'practice',
@@ -41,6 +46,8 @@ def grouped_tools(allowed, message, recent_messages=None):
         initial = 'presentation'
     if any(word in message for word in ('人工', '老师答疑', '工单')):
         initial = 'support'
+    if 'authoring' in groups and any(word in message for word in ('计算工具', '会话工具', '交互实验', '注册工具')):
+        initial = 'authoring'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:

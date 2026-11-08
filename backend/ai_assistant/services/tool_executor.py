@@ -44,6 +44,10 @@ def _inject_kp_chain_experiences(kp_ids: list, user, institution=None) -> list[s
 def generate_step_label(tool_name: str, args: dict) -> str:
     """根据 tool name 和 args 动态生成中文步骤描述。"""
     labels = {
+        'register_session_tool': lambda a: '编写并注册会话计算工具',
+        'read_session_tool': lambda a: '读取会话工具代码与版本',
+        'build_learning_experiment': lambda a: f"编写并检查「{a.get('title', '交互实验')}」",
+        'read_learning_experiment': lambda a: "读取实验代码和当前操作状态",
         'search_knowledge_tree': lambda a: f"检索「{a.get('query', '')}」相关知识点",
         'get_user_weak_points': lambda a: "分析你的薄弱知识点",
         'get_user_wrong_questions': lambda a: f"查看{a.get('topic', '')}错题" if a.get('topic') else "查看你的错题记录",
@@ -224,7 +228,8 @@ class BaseToolExecutor:
         # 执行时再次检查身份和功能，不能仅依赖传给模型的工具列表。
         from ai_engine.tool_permissions import filter_tools
         definition = {'function': {'name': tool_name}}
-        if not filter_tools('planner', self.institution, [definition], user=self.user):
+        dynamic = tool_name.startswith('session_')
+        if not dynamic and not filter_tools('planner', self.institution, [definition], user=self.user):
             return json.dumps({'error': f'Tool not allowed: {tool_name}'}, ensure_ascii=False)
         permitted = self._permitted_tool_names
         if permitted is None or tool_name not in permitted:
@@ -248,7 +253,8 @@ class BaseToolExecutor:
                     ensure_ascii=False,
                 )
 
-        handler = getattr(self, f'_handle_{tool_name}', None)
+        handler = ((lambda arguments: self._session_tool_operation(tool_name, arguments)) if dynamic
+                   else getattr(self, f'_handle_{tool_name}', None))
         if handler is None:
             return json.dumps({"error": f"Unknown tool: {tool_name}"}, ensure_ascii=False)
         try:
@@ -315,6 +321,41 @@ class BaseToolExecutor:
             visuals.append(visual)
         self.pending_visuals = []
         return visuals
+
+    def _handle_register_session_tool(self, args: Dict) -> Dict:
+        return self._session_tool_operation('register_session_tool', args)
+
+    def _handle_read_session_tool(self, args: Dict) -> Dict:
+        return self._session_tool_operation('read_session_tool', args)
+
+    def _session_tool_operation(self, name: str, args: Dict) -> Dict:
+        from rest_framework.exceptions import APIException
+        from . import session_tools
+        try:
+            if name == 'register_session_tool':
+                return session_tools.register(self, args)
+            if name == 'read_session_tool':
+                return session_tools.read(self, args)
+            return session_tools.invoke(self, name, args)
+        except APIException as error:
+            return {'error': str(error.detail)}
+
+    def _handle_build_learning_experiment(self, args: Dict) -> Dict:
+        return self._learning_experiment('build_learning_experiment', args)
+
+    def _handle_read_learning_experiment(self, args: Dict) -> Dict:
+        return self._learning_experiment('read_learning_experiment', args)
+
+    def _learning_experiment(self, name: str, args: Dict) -> Dict:
+        from rest_framework.exceptions import NotFound, ValidationError
+        from .learning_experiments import execute, ExperimentConflict
+        try:
+            result = execute(self.user, name, args, getattr(self, 'experiment_context', None))
+        except (NotFound, ValidationError, ExperimentConflict) as error:
+            return {'error': str(error.detail)}
+        if result.get('visual'):
+            self._register_visual(result['visual'])
+        return result
 
     def _handle_render_visual(self, args: Dict) -> Dict:
         """将可视化数据返回给前端，同时缓存到实例供消息持久化。
