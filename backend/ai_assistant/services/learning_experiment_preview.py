@@ -60,7 +60,8 @@ def run(data):
                             const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
                             const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
                             if (w > 1 && h > 1 && w * h > Math.min(a.w * a.h, b.w * b.h) * .15) {
-                                found.push({labels: [a.text, b.text], overlap: [Math.round(w), Math.round(h)]});
+                                found.push({labels: [a.text, b.text], overlap: [Math.round(w), Math.round(h)],
+                                    bounds_css_px: [a, b].map(label => [label.x, label.y, label.w, label.h].map(value => Math.round(value)))});
                                 if (found.length === 3) return found;
                             }
                         }
