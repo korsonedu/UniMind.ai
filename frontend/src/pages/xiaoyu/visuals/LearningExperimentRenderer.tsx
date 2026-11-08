@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { ArrowUpRight, SlidersHorizontal } from '@phosphor-icons/react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useAgentReply } from './agentReplyContext';
+import './LearningExperimentRenderer.css';
 
 interface ExperimentPayload {
   title: string;
@@ -115,27 +117,28 @@ function ExperimentFrame({ payload }: { payload: ExperimentPayload }) {
     if (pending.current) { setSending(false); return; }
     const observation = runtimeError ? `实验出现运行错误：${runtimeError}，请修正同一个实验。`
       : summary || `当前参数：${JSON.stringify(state.current).slice(0, 1200)}`;
-    onReply(`我操作了“${experiment?.title || payload.title}”（实验 ID：${payload.experiment_id}，版本 ${revision.current}）。${observation} 请读取实验当前状态后继续。`);
+    onReply(`我操作了“${experiment?.title || payload.title}”（实验 ID：${payload.experiment_id}，版本 ${revision.current}）。${observation} 请读取实验当前状态后继续讲解。`);
     setSending(false);
   };
 
-  return <div className="space-y-2">
-    <header className="flex flex-wrap items-center justify-between gap-2">
-      <h3 className="min-w-0 truncate text-sm font-medium" title={experiment?.title || payload.title}>{experiment?.title || payload.title}</h3>
-      <span className="text-xs text-muted-foreground">交互讲解</span>
+  return <div className="um-experiment">
+    <header className="um-experiment-header">
+      <SlidersHorizontal size={17} weight="duotone" className="um-experiment-icon" aria-hidden="true" />
+      <h3 title={experiment?.title || payload.title}>{experiment?.title || payload.title}</h3>
+      <span className="um-experiment-kind">交互讲解</span>
     </header>
     {experiment && <iframe ref={frame} title={experiment.title} sandbox="allow-scripts" referrerPolicy="no-referrer"
-      srcDoc={experiment.document} className="w-full rounded-md border border-border bg-white" style={{ height }} />}
-    {!experiment && !error && <p className="text-sm text-muted-foreground">正在打开实验…</p>}
-    {runtimeError && <p role="alert" className="text-sm text-destructive">实验运行出错：{runtimeError}</p>}
-    {error && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+      srcDoc={experiment.document} className="um-experiment-frame" style={{ height }} />}
+    {!experiment && !error && <p className="um-experiment-status">正在打开讲解…</p>}
+    {runtimeError && <p role="alert" className="um-experiment-error">讲解运行出错：{runtimeError}</p>}
+    {error && <div role="alert" className="um-experiment-error">
       <span>{error}</span>{experiment && <button type="button" className="underline" onClick={() => void persistRef.current()}>重试保存</button>}
     </div>}
-    {experiment && <footer className="flex flex-wrap items-center justify-between gap-2">
-      <span className="text-xs text-muted-foreground">{saving ? '正在保存参数…' : '调整参数，观察变化'}</span>
+    {experiment && <footer className="um-experiment-footer">
+      <span className="um-experiment-save" role="status"><span aria-hidden="true" className={saving ? 'is-saving' : ''} />{saving ? '保存中…' : '参数自动保存'}</span>
       <button type="button" disabled={!onReply || sending || saving} onClick={() => void discuss()}
-        className="rounded-md border border-border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50">
-        {runtimeError ? '请小宇修正' : '让小宇解释'}
+        className="um-experiment-discuss">
+        {runtimeError ? '请小宇修正' : '继续讲解'}<ArrowUpRight size={14} aria-hidden="true" />
       </button>
     </footer>}
   </div>;

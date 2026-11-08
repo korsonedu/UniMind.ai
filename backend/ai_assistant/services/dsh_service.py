@@ -11,7 +11,7 @@ from ai_engine.tool_router import classify_intent_keywords, route_tools
 from ai_engine.tool_run import validate_arguments
 from ai_engine.config import get_model_for_task
 from ai_engine.tools import get_planner_tools
-from ai_assistant.models import AgentMemory
+from ai_assistant.models import AgentMemory, AIChatMessage
 from .tool_executor import PlannerToolExecutor, set_permitted_tools
 from .dsh_cards import build_tool_card, build_learning_visual, PRESENTATION_TOOL
 from .dsh_routing import grouped_tools
@@ -66,13 +66,19 @@ def permitted_tools(user):
 
 
 def prototype_executor(user, chat_context):
-    from .learning_experiments import available_to, EXPERIMENT_TOOLS
+    from .learning_experiments import available_to, allows_interaction, EXPERIMENT_TOOLS
     from .session_tools import SESSION_TOOLS, refresh
     if not chat_context or not available_to(user):
         return None
+    current = AIChatMessage.objects.filter(user=user, pk=chat_context.get('message_id'), role='user',
+        conversation_id=chat_context.get('conversation_id'), bot_id=chat_context.get('bot_id')).first()
+    if not current:
+        return None
     executor = PlannerToolExecutor(user)
     executor.experiment_context = chat_context
-    set_permitted_tools(executor, [*EXPERIMENT_TOOLS, *SESSION_TOOLS])
+    experiments = [tool for tool in EXPERIMENT_TOOLS
+        if tool['function']['name'] != 'build_learning_experiment' or allows_interaction(current)]
+    set_permitted_tools(executor, [*experiments, *SESSION_TOOLS])
     executor._allowed_tool_names = set(executor._permitted_tool_definitions)
     refresh(executor, [])
     return executor
@@ -132,6 +138,8 @@ def build_context(user, message, recent_messages=None, chat_context=None):
         context['model_policy'].update(operation='assistant.chat.planner.prototype', max_requests=6, max_tokens=8192)
         for filename in ('experiment_prototype.txt', 'session_tool_prototype.txt'):
             context['system_prompt'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu' / filename).read_text()
+        if 'build_learning_experiment' not in executor._permitted_tool_definitions:
+            context['system_prompt'] += '\n本轮不属于解答讲解，不生成交互卡片。出题、统计、计划等使用原有工具和文字。'
         context['system_prompt'] += '\n已有工具直接调用，不重复发现。仅当所需工具不在当前列表时，才通过 find_learning_tools 选择分组：编写或注册能力选 authoring；调用已有会话工具选 session。尚未注册工具时不要进入 session。每次最多使用一个分组。'
     return context
 

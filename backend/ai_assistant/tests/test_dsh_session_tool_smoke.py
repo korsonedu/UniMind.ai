@@ -24,6 +24,8 @@ def test_native_dsh_register_call_and_mount(tool_chat, settings, tmp_path):
     if not python.exists():
         pytest.skip('Local pinned DSH environment is not installed')
     user, bot, current = tool_chat
+    current.content = '解释6乘7为什么是42，使用计算工具和交互实验'
+    current.save(update_fields=['content'])
     settings.UNIMIND_DSH_ENABLED = True
     settings.ALLOWED_HOSTS = ['127.0.0.1']
     claims = {'message_id': current.pk, 'conversation_id': str(current.conversation_id), 'bot_id': bot.pk}

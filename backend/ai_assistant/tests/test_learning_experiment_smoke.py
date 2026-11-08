@@ -6,10 +6,47 @@ import asyncio
 import json
 
 import pytest
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 
 from ai_assistant.models import AIChatMessage, Bot
 from ai_assistant.services import learning_experiments as experiments
+
+
+@pytest.mark.django_db
+def test_interaction_is_only_offered_and_executed_for_explanation(user, settings):
+    from ai_assistant.services.dsh_service import build_context
+    settings.DEBUG = settings.UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE = True
+    settings.UNIMIND_CONTENT_INSTITUTION_ID = 'global'
+    user.is_member = True
+    user.save(update_fields=['is_member'])
+    bot = Bot.objects.create(name='小宇', bot_type='planner')
+    current = AIChatMessage.objects.create(user=user, bot=bot, role='user', content='')
+    claims = {'message_id': current.pk, 'conversation_id': str(current.conversation_id), 'bot_id': bot.pk}
+    arguments = {'title': '合成讲解', 'html': '<button id="go">观察</button>',
+        'checks': [{'selector': '#go', 'action': 'click', 'expect_selector': '#go', 'expect_text': '观察'}]}
+    for text, expected in [
+        ('给我讲一道金融硕士题目，用到交互', True), ('解释统计学中的抽样分布', True),
+        ('分析这道债券题为什么错了', True), ('用交互出一道题让我做', False),
+        ('统计本周做题情况，用交互', False), ('解释我的学习报告，用交互', False),
+        ('用交互制定学习计划', False), ('批改我的答案并解释错因', False),
+        ('你好，生成交互卡片', False), ('不要交互，解释久期', False),
+    ]:
+        current.content = text
+        current.save(update_fields=['content'])
+        context = build_context(user, '解释债券定价', chat_context=claims)
+        names = {tool['function']['name'] for tool in context['available_tools']}
+        assert ('build_learning_experiment' in names) is expected, text
+        if not expected:
+            assert 'interactive' not in context['tool_groups']
+            with patch.object(experiments, 'preview') as preview:
+                with pytest.raises(PermissionDenied):
+                    experiments.execute(user, 'build_learning_experiment', arguments, claims)
+                preview.assert_not_called()
+    current.content = '解释久期'
+    current.save(update_fields=['content'])
+    followup = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=current.conversation_id,
+        role='user', content='继续')
+    assert experiments.allows_interaction(followup)
 
 
 @pytest.mark.django_db
