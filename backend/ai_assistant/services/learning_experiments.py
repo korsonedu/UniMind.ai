@@ -48,6 +48,12 @@ def allows_interaction(current):
                  r'(?:制定|生成|调整|做个|做一份).{0,8}计划|学习统计|学习报告|成绩单|正确率|掌握率|'
                  r'统计(?!学|量|题|分布|推断|方法)|听课时长|做题时长|学习记录|专注|番茄钟|推荐课程|查找课程', text):
         return False
+    if (re.search(r'卡片|图|柱|滑块|控件|按钮|标签|文字|字', text)
+            and re.search(r'重叠|挤|混到|混在|遮挡|显示错误|不动|没反应|修正|修改|改一下', text)
+            and AIChatMessage.objects.filter(user=current.user, bot_id=current.bot_id,
+                conversation_id=current.conversation_id, role='user',
+                metadata__learning_experiments__isnull=False).exists()):
+        return True
     return bool(re.search(r'讲解|讲题|解答|求解|解释|推导|证明|为什么|如何|什么是|是什么意思|怎么做|怎么解|怎么算|怎么理解|不懂|没理解|不理解|不明白|看不懂|'
                           r'讲(?:一|这|那|讲|一下)|修正.{0,8}(?:实验|讲解|图形)|\b(?:explain|solve|derive|why)\b', text, re.I))
 

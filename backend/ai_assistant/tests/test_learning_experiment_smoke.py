@@ -47,6 +47,13 @@ def test_interaction_is_only_offered_and_executed_for_explanation(user, settings
     followup = AIChatMessage.objects.create(user=user, bot=bot, conversation_id=current.conversation_id,
         role='user', content='继续')
     assert experiments.allows_interaction(followup)
+    followup.content = '第一根柱子下面的字混到一起了'
+    assert not experiments.allows_interaction(followup)
+    current.metadata = {'learning_experiments': {'synthetic': {}}}
+    current.save(update_fields=['metadata'])
+    assert experiments.allows_interaction(followup)
+    followup.content = '修改学习计划，用交互卡片'
+    assert not experiments.allows_interaction(followup)
 
 
 @pytest.mark.django_db
@@ -129,7 +136,7 @@ def test_experiment_document_is_opaque_and_state_is_escaped():
 
 def test_browser_failure_reaches_model_and_mount_finishes_turn(monkeypatch):
     from ai_engine.service import AIEngine
-    diagnostics = {'ok': False, 'checks': [{'ok': False, 'error': 'Expected 7.99; actual 7.96'}]}
+    diagnostics = {'ok': False, 'errors': ['SVG标签重叠：息票 / 面值'], 'checks': []}
     requests, executions, events = [], [], []
     definition = {'type': 'function', 'function': {'name': 'build_learning_experiment',
         'parameters': {'type': 'object', 'properties': {}, 'additionalProperties': False}}}

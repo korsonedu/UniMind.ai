@@ -46,6 +46,32 @@ def run(data):
                 error = f'讲解内容超出 {width}×{height}，请精简布局，不能隐藏截断：{json.dumps(overflow, ensure_ascii=False)}'
                 if error not in errors:
                     errors.append(error)
+            overlaps = frame.locator('svg').evaluate_all('''svgs => {
+                const found = [];
+                for (const svg of svgs) {
+                    const labels = [...svg.querySelectorAll('text')].filter(node => node.closest('svg') === svg).map(node => {
+                        const box = node.getBoundingClientRect(), style = getComputedStyle(node);
+                        return {text: node.textContent.trim().slice(0, 60), x: box.x, y: box.y, w: box.width, h: box.height,
+                            visible: style.visibility !== 'hidden' && Number(style.opacity) > 0};
+                    }).filter(label => label.text && label.visible && label.w > 0 && label.h > 0);
+                    for (let i = 0; i < labels.length; i++) {
+                        for (let j = i + 1; j < labels.length; j++) {
+                            const a = labels[i], b = labels[j];
+                            const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+                            const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+                            if (w > 1 && h > 1 && w * h > Math.min(a.w * a.h, b.w * b.h) * .15) {
+                                found.push({labels: [a.text, b.text], overlap: [Math.round(w), Math.round(h)]});
+                                if (found.length === 3) return found;
+                            }
+                        }
+                    }
+                }
+                return found;
+            }''')
+            for overlap in overlaps:
+                error = f'SVG标签重叠（{width}px宽）：{json.dumps(overlap, ensure_ascii=False)}。请分开标签或将图例移到图外，不要缩小字号掩盖。'
+                if error not in errors:
+                    errors.append(error)
 
         check_layout(700)
         for check in data['checks']:
