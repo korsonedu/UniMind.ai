@@ -48,7 +48,8 @@ def test_official_turn_failure_releases_and_never_uses_legacy(user, settings, tm
             complete_turn(SimpleNamespace(user=user, data=body), bot, cid, body['message'], lambda event: None)
         legacy.assert_not_called()
     assert not AIChatMessage.objects.filter(conversation_id=cid).exists()
-    assert AIUsageReservation.objects.get(user=user).status == 'released'
+    released = AIUsageReservation.objects.get(user=user)
+    assert released.status == 'released' and released.response['is_error'] is True
     native = {'finish_reason': 'completed', 'content': '同一请求重试完成',
               'session': {'id': 'b' * 32, 'messages': [{'role': 'assistant', 'cards': []}]}}
     with patch('ai_assistant.services.dsh_xiaoyu.run_site_action', return_value=native) as runtime:

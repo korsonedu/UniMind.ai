@@ -36,4 +36,9 @@ def test_request_status_is_read_only_and_owner_scoped(auth_client, user):
     reservation.response = {'deleted': True}
     reservation.save()
     assert auth_client.get(url).data['status'] == 'unknown'
+    reservation.status = 'released'
+    reservation.response = {'done': True, 'is_error': True, 'full_content': '合成失败'}
+    reservation.save()
+    failed = auth_client.get(url).data
+    assert failed['status'] == 'failed' and failed['response'] == reservation.response
     assert not WeeklyAIUsage.objects.filter(user=user).exists()

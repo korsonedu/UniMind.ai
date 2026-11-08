@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db import transaction
 from django.http import StreamingHttpResponse
 from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 
 from ai_assistant.models import AIChatMessage, Conversation
 from ai_assistant.services.title_generator import sync_generate_title
@@ -16,7 +16,7 @@ from ai_assistant.services.memory_service import extract_memories_async
 from ai_assistant.views_projects import save_new_conversation_project, add_project_context
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
-from users.learning import confirm_ai_call, release_ai_call
+from users.learning import confirm_ai_call, finish_ai_call, release_ai_call
 from users.models import AIUsageReservation
 from .dsh_runtime import DshUnavailable, run_site_action, site_request_lock, quota_write_lock
 from .dsh_stream import stream_events
@@ -137,9 +137,15 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
             except Exception:
                 logger.exception('DSH auxiliary task failed for conversation %s', conversation_id)
             return payload
-        except BaseException:
-            if current and not AIUsageReservation.objects.filter(pk=reservation.pk, status='succeeded').exists():
-                current.delete()
+        except BaseException as exc:
+            if not AIUsageReservation.objects.filter(pk=reservation.pk, status='succeeded').exists():
+                if current:
+                    current.delete()
+                if isinstance(exc, Exception):
+                    error = str(exc.detail) if isinstance(exc, APIException) else '本轮执行失败，未扣除问答额度，请重新发送。'
+                    with quota_write_lock():
+                        finish_ai_call(reservation, success=False, response={
+                            'done': True, 'is_error': True, 'full_content': error})
             raise
         finally:
             with quota_write_lock():
