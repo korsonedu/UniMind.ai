@@ -3,6 +3,9 @@ from ai_engine.tool_router import classify_intent_keywords
 
 
 GROUPS = {
+    'interactive': ('交互讲题', '取题并编写交互实验，在同一分组内完成题目讲解和可操作实验。', (
+        'get_practice_questions', 'lookup_question', 'search_knowledge_tree', 'build_learning_experiment',
+        'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
     'authoring': ('编写交互与计算工具', '根据学习任务编写、检查或修改交互实验，以及注册新的会话计算工具。', (
         'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
     'presentation': ('教学展示与回复选项', '展示公式推导、解题步骤、函数采样图和回复选项，不改变学生数据。', ('present_learning_visual',)),
@@ -29,6 +32,8 @@ def grouped_tools(allowed, message, recent_messages=None):
                    'tools': [definitions[name] for name in names if name in definitions]}
               for key, (title, description, names) in GROUPS.items()}
     groups = {key: group for key, group in groups.items() if group['tools']}
+    if 'build_learning_experiment' not in definitions:
+        groups.pop('interactive', None)
     if 'read_session_tool' in definitions:
         groups['session'] = {'title': '当前对话的计算工具', 'description': '调用本对话已经注册的计算工具，或读取源码和版本。',
             'tools': [definitions['read_session_tool'], *[tool for name, tool in definitions.items() if name.startswith('session_')]]}
@@ -48,6 +53,8 @@ def grouped_tools(allowed, message, recent_messages=None):
         initial = 'support'
     if 'authoring' in groups and any(word in message for word in ('计算工具', '会话工具', '交互实验', '注册工具')):
         initial = 'authoring'
+    if 'interactive' in groups and '交互' in message and '题' in message:
+        initial = 'interactive'
     initial = initial if initial in groups else ''
     selected = list(groups[initial]['tools']) if initial else []
     if groups:

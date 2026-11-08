@@ -123,7 +123,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   const identityRef = useRef('');
   const recoveryEpochRef = useRef(0);
   const recoveryBusyRef = useRef<number | null>(null);
-  const [recoveryStatuses, setRecoveryStatuses] = useState<Record<string, 'pending' | 'completed' | 'unknown'>>({});
+  const [recoveryStatuses, setRecoveryStatuses] = useState<Record<string, 'pending' | 'completed' | 'failed' | 'unknown'>>({});
   const [generatingIds, setGeneratingIds] = useState<string[]>([]);
   const [isComposing, setIsComposition] = useState(false);
   const [initialized, setInitialized] = useState(false);
@@ -518,25 +518,28 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
         if (!isCurrent()) return;
         const draftAtStart = readRecovery(scope).conversations[id];
         try {
-          const data = await api.get<{ status: 'pending' | 'completed' | 'unknown' }>(`/ai/chat-requests/${pending.id}/`)
+          const data = await api.get<{ status: 'pending' | 'completed' | 'failed' | 'unknown'; response?: { full_content?: string } }>(`/ai/chat-requests/${pending.id}/`)
             .then(response => response.data, () => ({ status: 'unknown' as const }));
           // History is authoritative; recovery never starts another model/tool request.
           const history = await api.get<Message[]>('/ai/history/', { params: { bot_id: bot.id, conversation_id: id } });
           if (!isCurrent() || pendingSendsRef.current.get(id)?.id !== pending.id) continue;
-          if (data.status === 'completed' || !streamsRef.current.has(id)) {
-            if (data.status === 'completed') abortStream(id);
+          if (data.status === 'completed' || data.status === 'failed' || !streamsRef.current.has(id)) {
+            if (data.status === 'completed' || data.status === 'failed') abortStream(id);
             const next = restoreVisualSteps(history.data.filter(message => message.content !== '[Thinking...]')
               .map(message => ({ ...message, visible: true })));
+            if (data.status === 'failed') next.push({ _id: `failed-${pending.id}`, role: 'assistant',
+              content: data.response?.full_content || '本轮执行失败，未扣除问答额度，请重新发送。', visible: true });
             messageBuffersRef.current.set(id, next);
             if (id === conversationIdRef.current) { messagesRef.current = next; setMessages(next); }
             syncSession(id, next);
           }
           setRecoveryStatuses(previous => ({ ...previous, [id]: data.status }));
           if (data.status === 'unknown') toast.info('执行结果尚未确认，可稍后刷新历史', { id: `chat-recovery-${pending.id}` });
-          if (data.status === 'completed') {
+          if (data.status === 'failed') toast.error(data.response?.full_content || '本轮执行失败，请重新发送。');
+          if (data.status === 'completed' || data.status === 'failed') {
             pendingSendsRef.current.delete(id);
             const saved = readRecovery(scope).conversations[id];
-            const clearDraft = saved?.draft === pending.text && saved.draftRevision === draftAtStart?.draftRevision;
+            const clearDraft = data.status === 'completed' && saved?.draft === pending.text && saved.draftRevision === draftAtStart?.draftRevision;
             saveRecovery(scope, id, { pending: undefined, ...(clearDraft ? { draft: '' } : {}) });
             if (clearDraft && id === conversationIdRef.current && inputValueRef.current === pending.text) setInput('');
           }
@@ -832,16 +835,14 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
           } else if (payload.type === 'error') {
             toast.error(payload.message || 'AI 调用失败');
           } else if (payload.done) {
-            if (!payload.is_error) {
-              if (!completed) notifyDesktop({ kind: 'chat', title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: options.courseId ? `/course/${options.courseId}?conversation=${requestConversationId}` : '/xiaoyu' });
-              completed = true;
-              if (pendingSendsRef.current.get(requestConversationId)?.id === pending.id) {
-                pendingSendsRef.current.delete(requestConversationId);
-                saveRecovery(requestScope, requestConversationId, { pending: undefined });
-                setRecoveryStatuses(previous => ({ ...previous, [requestConversationId]: 'completed' }));
-              }
+            if (!payload.is_error && !completed) notifyDesktop({ kind: 'chat', title: '小宇已完成回复', body: '打开 UniMind 查看回复。', route: options.courseId ? `/course/${options.courseId}?conversation=${requestConversationId}` : '/xiaoyu' });
+            completed = true;
+            if (pendingSendsRef.current.get(requestConversationId)?.id === pending.id) {
+              pendingSendsRef.current.delete(requestConversationId);
+              saveRecovery(requestScope, requestConversationId, { pending: undefined });
+              setRecoveryStatuses(previous => ({ ...previous, [requestConversationId]: payload.is_error ? 'failed' : 'completed' }));
             }
-            updateTaskList(previous => completeToolRun(previous, payload.run_id));
+            updateTaskList(previous => completeToolRun(previous, payload.run_id, !!payload.is_error));
             const finalContent = payload.full_content || '';
             if (payload.is_error) {
               if (streamingId) {
@@ -849,6 +850,8 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
                 updateConversationMessages(requestConversationId, previous => previous.filter(message => message._id !== id));
               }
               streamingId = null; streamingContent = '';
+              updateConversationMessages(requestConversationId, previous => [...previous, { _id: nextId(),
+                role: 'assistant', content: finalContent || '本轮执行失败，请重新发送。', visible: true }]);
               if (isVisible() && inputRevisionRef.current === sentInputRevision) setInput(text);
               toast.error(finalContent || 'AI 调用失败');
             } else if (finalContent && streamingId) {

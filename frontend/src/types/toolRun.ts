@@ -44,6 +44,7 @@ export interface TaskListData {
   run_id: string;
   items: TaskItem[];
   completed: boolean;
+  failed?: boolean;
 }
 
 function isTerminalStatus(status: ToolTaskStatus): boolean {
@@ -139,7 +140,8 @@ export function shouldExpandToolRun(
 export function completeToolRun(
   previous: TaskListData | null,
   runId?: string,
+  failed = false,
 ): TaskListData | null {
   if (!previous || (runId && previous.run_id !== runId)) return previous;
-  return { ...previous, completed: true };
+  return { ...previous, completed: true, failed };
 }
