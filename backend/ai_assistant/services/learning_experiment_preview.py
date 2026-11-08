@@ -1,11 +1,17 @@
 """Short-lived browser-only preview; generated code never executes in Python."""
 import json
+import subprocess
 import sys
 
 from playwright.sync_api import sync_playwright
 
 
 def run(data):
+    if sys.platform.startswith('linux'):
+        fonts = subprocess.run(['/usr/bin/fc-match', '-f', '%{lang}', ':lang=zh-cn'],
+            capture_output=True, text=True, timeout=1)
+        if fonts.returncode or 'zh-cn' not in fonts.stdout.split('|'):
+            return {'ok': False, 'errors': ['运行器缺少中文字体，无法可靠检查文字布局，尚未挂载。'], 'checks': []}
     errors, results, messages = [], [], []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True, chromium_sandbox=True)
