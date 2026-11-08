@@ -68,7 +68,7 @@ def test_experiment_attachment_and_disabled_default(user, settings):
     tools = experiments.attach_to_chat(user, current, messages, [], executor)
     assert {item['function']['name'] for item in tools} == {
         'build_learning_experiment', 'read_learning_experiment', 'register_session_tool', 'read_session_tool'}
-    assert '自主交互学习实验' in messages[0]['content']
+    assert '自主交互讲解' in messages[0]['content']
     assert executor.experiment_context['message_id'] == current.pk
     invalid = json.loads(executor('build_learning_experiment', {
         'title': '不存在的实验', 'html': '<button id="run">运行</button>',

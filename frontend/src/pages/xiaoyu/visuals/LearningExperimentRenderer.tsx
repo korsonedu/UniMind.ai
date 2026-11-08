@@ -25,7 +25,7 @@ function ExperimentFrame({ payload }: { payload: ExperimentPayload }) {
   const { onReply } = useAgentReply();
   const frame = useRef<HTMLIFrameElement>(null);
   const [experiment, setExperiment] = useState<Experiment | null>(null);
-  const [height, setHeight] = useState(480);
+  const [height, setHeight] = useState(360);
   const [error, setError] = useState('');
   const [runtimeError, setRuntimeError] = useState('');
   const [summary, setSummary] = useState('');
@@ -85,7 +85,7 @@ function ExperimentFrame({ payload }: { payload: ExperimentPayload }) {
       const message = event.data;
       if (!message || message.channel !== 'unimind-experiment') return;
       if (message.type === 'height' && Number.isFinite(message.height)) {
-        setHeight(Math.max(240, Math.min(800, message.height + 16)));
+        setHeight(Math.max(180, Math.min(420, message.height)));
       }
       if (message.type === 'error') setRuntimeError(String(message.message || '实验运行出错').slice(0, 500));
       if (message.type === 'state' || message.type === 'report') {
@@ -119,24 +119,23 @@ function ExperimentFrame({ payload }: { payload: ExperimentPayload }) {
     setSending(false);
   };
 
-  return <div className="space-y-3">
+  return <div className="space-y-2">
     <header className="flex flex-wrap items-center justify-between gap-2">
-      <h3 className="text-sm font-medium">{experiment?.title || payload.title}</h3>
-      <span className="text-xs text-muted-foreground">交互实验{experiment ? ` · v${experiment.revision}` : ''}</span>
+      <h3 className="min-w-0 truncate text-sm font-medium" title={experiment?.title || payload.title}>{experiment?.title || payload.title}</h3>
+      <span className="text-xs text-muted-foreground">交互讲解</span>
     </header>
     {experiment && <iframe ref={frame} title={experiment.title} sandbox="allow-scripts" referrerPolicy="no-referrer"
       srcDoc={experiment.document} className="w-full rounded-md border border-border bg-white" style={{ height }} />}
     {!experiment && !error && <p className="text-sm text-muted-foreground">正在打开实验…</p>}
     {runtimeError && <p role="alert" className="text-sm text-destructive">实验运行出错：{runtimeError}</p>}
-    {summary && <p className="text-sm">{summary}</p>}
     {error && <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
       <span>{error}</span>{experiment && <button type="button" className="underline" onClick={() => void persistRef.current()}>重试保存</button>}
     </div>}
     {experiment && <footer className="flex flex-wrap items-center justify-between gap-2">
-      <span className="text-xs text-muted-foreground">{saving ? '正在保存操作…' : '实验结果仅用于本次对话讨论'}</span>
+      <span className="text-xs text-muted-foreground">{saving ? '正在保存参数…' : '调整参数，观察变化'}</span>
       <button type="button" disabled={!onReply || sending || saving} onClick={() => void discuss()}
         className="rounded-md border border-border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50">
-        {runtimeError ? '请小宇修正实验' : '把当前结果发给小宇'}
+        {runtimeError ? '请小宇修正' : '让小宇解释'}
       </button>
     </footer>}
   </div>;

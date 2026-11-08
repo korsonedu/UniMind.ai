@@ -14,7 +14,7 @@ def run(data):
         page = context.new_page()
         page.set_default_timeout(1200)
         page.on('pageerror', lambda error: errors.append(str(error)[:500]))
-        page.set_content('<iframe sandbox="allow-scripts" style="width:700px;height:600px"></iframe>')
+        page.set_content('<iframe sandbox="allow-scripts" style="width:700px;height:360px"></iframe>')
         page.evaluate('''() => window.addEventListener('message', event => {
             if (event.source === document.querySelector('iframe').contentWindow && event.data?.channel === 'unimind-experiment') {
                 const messages = window.experimentMessages ||= [];
@@ -24,6 +24,30 @@ def run(data):
         page.locator('iframe').evaluate('(frame, document) => frame.srcdoc = document', data['document'])
         frame = page.frame_locator('iframe')
         frame.locator('body').wait_for()
+        def check_layout(width, height=360):
+            page.locator('iframe').evaluate('''(element, size) => {
+                element.style.width = `${size[0]}px`;
+                element.style.height = `${size[1]}px`;
+            }''', [width, height])
+            page.wait_for_timeout(100)
+            overflow = frame.locator('html').evaluate('''element => {
+                const clipped = [...document.querySelectorAll('*')].filter(node => {
+                    const style = getComputedStyle(node);
+                    return (/hidden|clip/.test(style.overflowX) && node.scrollWidth > node.clientWidth + 2)
+                        || (/hidden|clip/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 2);
+                }).slice(0, 3).map(node => ({
+                    element: node.tagName + (node.id ? '#' + node.id : '') + (node.getAttribute('class') ? '.' + node.getAttribute('class') : ''),
+                    available: [node.clientWidth, node.clientHeight], content: [node.scrollWidth, node.scrollHeight]
+                }));
+                return element.scrollWidth > innerWidth + 2 || element.scrollHeight > innerHeight + 2 || clipped.length
+                    ? {page: [element.scrollWidth, element.scrollHeight], clipped} : null;
+            }''')
+            if overflow:
+                error = f'讲解内容超出 {width}×{height}，请精简布局，不能隐藏截断：{json.dumps(overflow, ensure_ascii=False)}'
+                if error not in errors:
+                    errors.append(error)
+
+        check_layout(700)
         for check in data['checks']:
             try:
                 control = frame.locator(check['selector'])
@@ -40,7 +64,8 @@ def run(data):
                 results.append({'selector': check['selector'], 'ok': True})
             except Exception as error:
                 results.append({'selector': check['selector'], 'ok': False, 'error': str(error)[:600]})
-        page.wait_for_timeout(100)
+        check_layout(700)
+        check_layout(360, 420)
         messages = page.evaluate('window.experimentMessages || []')
         errors.extend(str(item.get('message', ''))[:500] for item in messages if item.get('type') == 'error')
         text = frame.locator('body').inner_text()[:1800]
