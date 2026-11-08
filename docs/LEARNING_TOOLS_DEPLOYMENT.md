@@ -27,4 +27,10 @@ Ubuntu 的用户命名空间限制需要固定 Chromium 的专用规则 `deploy/
 
 本次回滚资料保存在 `/opt/unimind-backups/session-learning-tools-20261108`：旧提交、旧前端绝对路径、私有环境文件和 PostgreSQL 自定义格式一致性备份。应用回滚应关闭新开关，恢复旧代码与前端链接并重启应用；本次无数据库迁移，通常无需回灌数据库。独立运行器和专用规则在关闭功能后不会被应用调用。
 
-服务器隔离冒烟已确认运行 UID 为 995，站点环境文件及 root 主目录不可见，网络连接返回 `ENETUNREACH`，`NoNewPrivs=1`。Chromium 沙箱启动仍受 Ubuntu AppArmor 限制；专用规则尚待明确授权安装，不能将已准备好运行器视为已上线。
+服务器隔离冒烟已确认运行 UID 为 995，站点环境文件及 root 主目录不可见，网络连接返回 `ENETUNREACH`，`NoNewPrivs=1`。专用规则已获用户明确授权并安装，Chromium 自带沙箱保持开启，系统全局 `kernel.apparmor_restrict_unprivileged_userns=1` 保持不变。
+
+## 2026-11-08 上线记录
+
+功能提交 `7588a72`，生产首次切换至 `e6c4d99`（包含预检文档）；活动前端为 `/opt/unimind-releases/session-learning-tools-e6c4d99/frontend/dist`。生产保持 `DEBUG=false`，新开关已开启，Django 系统检查通过；应用、Celery 和 Nginx 均 active，公网 `/health/` 的数据库和缓存检查正常，公网 HTML 与本次构建字节一致。
+
+合成临时账号沿真实 DSH 回调和公网 API 验证了工具注册、动态名称调用返回 42、HTML 预览、实验读取、状态 PATCH 与重新读取，以及未认证请求被拒绝。此轮线上冒烟没有模型 API 请求，完成后已删除合成账号及关联消息、Token 和预留记录。生产私有结果在回滚目录的 `production-smoke.json`。

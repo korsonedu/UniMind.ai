@@ -1,6 +1,6 @@
 # 当前对话内动态工具注册原型
 
-状态：本地实现，沿用 `UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE=true` 与 `DEBUG=true`，默认关闭，未部署生产。真实浏览器 Worker、DSH SDK 与本机模型协议冒烟通过；2026-11-08 真实 DeepSeek 在空白合成对话中完成编写、自纠错、注册、新工具调用和最终回答，结果经独立计算核对一致。该条完整流程验收通过，不代表所有任务稳定性或教学效果已经验证。
+状态：2026-11-08 已发布生产，使用 `UNIMIND_LEARNING_EXPERIMENTS_ENABLED=true`，保持 `DEBUG=false`。本地仍可使用 `UNIMIND_LEARNING_EXPERIMENTS_PROTOTYPE=true` 与 `DEBUG=true`。真实浏览器 Worker、DSH SDK 与本机模型协议冒烟通过；真实 DeepSeek 在空白合成对话中完成编写、自纠错、注册、新工具调用和最终回答，结果经独立计算核对一致。该条完整流程验收通过，不代表所有任务稳定性或教学效果已经验证。运行器和发布记录见 [部署说明](../LEARNING_TOOLS_DEPLOYMENT.md)。
 
 ## 实现的行为
 
@@ -36,7 +36,7 @@
 
 生成代码在短时独立浏览器 Worker 中执行，`document`、`window` 不可用。Worker 位于隔离 iframe，CSP 禁止联网，预览浏览器也拦截网络请求；进程环境没有模型或站点凭据。
 
-每次调用使用新 Worker，函数不保留隐藏的运行状态。单个 Worker 最多约 1.2 秒，整个运行子进程最多 12 秒，超时终止进程组。仍是本地原型，没有完成公开服务所需的并发与内存资源隔离验收。
+每次调用使用新 Worker，函数不保留隐藏的运行状态。单个 Worker 最多约 1.2 秒，整个运行子进程最多 12 秒，超时终止进程组。生产还通过独立非 root、禁网的 systemd 单元限制最多 2 个并发、每个 512 MiB 内存、96 个进程、1 核 CPU 配额和 10 秒服务时限；浏览器沙箱保持开启，站点目录与凭据不可访问。已完成上线定向冒烟，尚未进行高并发压测。
 
 源码最多 12000 字符；参数 Schema 最多 4 KiB，只支持三层以内的 JSON 基础类型、属性、数组、枚举和范围约束。对象参数必须设置 `additionalProperties=false`。调用输入最多 4 KiB、输出最多 8 KiB，拒绝非有限数值及无法序列化的数据。
 
