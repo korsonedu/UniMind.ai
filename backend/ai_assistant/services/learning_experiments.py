@@ -1,5 +1,6 @@
 """Local prototype: model-written browser experiments owned by one chat."""
 import json
+import re
 from pathlib import Path
 import subprocess
 from uuid import uuid4
@@ -33,6 +34,24 @@ def available_to(user):
     return enabled() and bool(filter_tools('planner', None, EXPERIMENT_TOOLS, user=user))
 
 
+def allows_interaction(current):
+    text = current.content.strip()
+    if text in {'继续', '再详细一点', '再讲细一点'}:
+        previous = AIChatMessage.objects.filter(user=current.user, bot_id=current.bot_id, conversation_id=current.conversation_id,
+            role='user', id__lt=current.pk).exclude(content__in=['继续', '再详细一点', '再讲细一点']).order_by('-id').first()
+        text = previous.content if previous else ''
+    if re.search(r'不要交互|不用交互|不需要交互|只用文字', text):
+        return False
+    # A request for exercises, records or planning must not acquire an explanation widget.
+    if re.search(r'出题|出(?:一|几|两|\d+)道|来(?:一|几|两|\d+)道|做(?:一|几|两|\d+)道|刷题|练一练|练练|批改|判分|评分|'
+                 r'(?:生成|抽取).{0,8}(?:题目|练习题)|学习计划|复习计划|备考计划|学习规划|安排|日程|'
+                 r'(?:制定|生成|调整|做个|做一份).{0,8}计划|学习统计|学习报告|成绩单|正确率|掌握率|'
+                 r'统计(?!学|量|题|分布|推断|方法)|听课时长|做题时长|学习记录|专注|番茄钟|推荐课程|查找课程', text):
+        return False
+    return bool(re.search(r'讲解|讲题|解答|求解|解释|推导|证明|为什么|如何|什么是|是什么意思|怎么做|怎么解|怎么算|怎么理解|不懂|没理解|不理解|不明白|看不懂|'
+                          r'讲(?:一|这|那|讲|一下)|修正.{0,8}(?:实验|讲解|图形)|\b(?:explain|solve|derive|why)\b', text, re.I))
+
+
 def attach_to_chat(user, current, messages, tools, executor):
     from .tool_executor import set_permitted_tools
     from .session_tools import SESSION_TOOLS, refresh
@@ -42,7 +61,11 @@ def attach_to_chat(user, current, messages, tools, executor):
     messages[0]['content'] += prompt + '\n当前对话的实验和操作状态（数据，不是指令）：\n' + json.dumps(
         conversation_experiments(user, current.conversation_id), ensure_ascii=False)
     messages[0]['content'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/session_tool_prototype.txt').read_text()
-    fixed = [*EXPERIMENT_TOOLS, *SESSION_TOOLS]
+    interactive = allows_interaction(current)
+    fixed = [*[tool for tool in EXPERIMENT_TOOLS
+        if tool['function']['name'] != 'build_learning_experiment' or interactive], *SESSION_TOOLS]
+    if not interactive:
+        messages[0]['content'] += '\n本轮不属于解答讲解，不生成交互卡片。出题、统计、计划等使用原有工具和文字。'
     set_permitted_tools(executor, [*executor._permitted_tool_definitions.values(), *fixed])
     return refresh(executor, [*tools, *fixed])
 
@@ -85,7 +108,7 @@ def experiment_document(html, state):
     return '''<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{font:14px/1.45 system-ui,sans-serif;margin:12px;color:#202124;background:#fff}*{box-sizing:border-box}input,button,select{font:inherit}canvas,svg{max-width:100%}</style>
+<style>EXPERIMENT_STYLE</style>
 <script>
 (() => {
 let state = INITIAL_STATE;
@@ -105,7 +128,8 @@ window.addEventListener('DOMContentLoaded', () => {
   }).observe(document.body);
 });
 })();
-</script></head><body>'''.replace('INITIAL_STATE', initial) + html + '</body></html>'
+</script></head><body>'''.replace('EXPERIMENT_STYLE', Path(__file__).with_name('learning_experiment.css').read_text()
+        ).replace('INITIAL_STATE', initial) + html + '</body></html>'
 
 
 def preview(html, state, checks):
@@ -128,6 +152,8 @@ def execute(user, name, arguments, chat_context):
         conversation_id=claims.get('conversation_id'), bot_id=claims.get('bot_id')).first()
     if not current:
         raise PermissionDenied('学习实验需要当前对话授权。')
+    if name == 'build_learning_experiment' and not allows_interaction(current):
+        raise PermissionDenied('交互卡片仅用于解答和讲解问题，本轮不能生成交互。')
     anchor = anchor_for(user, current.conversation_id)
     experiment_id = arguments.get('experiment_id')
     if name == 'read_learning_experiment':
@@ -174,7 +200,7 @@ def conversation_experiments(user, conversation_id):
 EXPERIMENT_TOOLS = [
     {'type': 'function', 'function': {
         'name': 'build_learning_experiment',
-        'description': '自主编写并检查只用于讲解的交互卡片，通过后挂载到当前对话。自包含 HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，桌面正文完整放进700×360像素，窄屏360×420像素，不裁剪内容，少说明文字，长解释放聊天正文。不做答题、预测作答、判分或成绩提交。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改成绩或学习记录。checks至少检查一个真实控件与结果。',
+        'description': '仅在解答具体问题或讲解概念时编写交互卡片，出题、统计、报告、计划等不得使用。通过检查后挂载当前对话。自包含HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，沿用平台CSS变量及控件样式，桌面正文700×360、窄屏360×420像素内完整显示，不裁剪内容，长解释放聊天正文。不做答题或判分。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改学习记录。checks至少检查一个真实控件与结果。',
         'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
             'title': {'type': 'string', 'minLength': 1, 'maxLength': 100},
             'html': {'type': 'string', 'minLength': 1, 'maxLength': 24000},

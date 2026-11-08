@@ -1,0 +1,23 @@
+.um-visual-card[data-visual-type="learning_experiment"] .um-experiment { padding: 0; }
+.um-experiment { color: hsl(var(--foreground)); }
+.um-experiment-header { display: flex; align-items: center; gap: 9px; padding: 14px 16px; border-bottom: 1px solid hsl(var(--border) / .65); }
+.um-experiment-icon { flex-shrink: 0; color: hsl(var(--xiaoyu-500)); }
+.um-experiment-header h3 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: -.02em; }
+.um-experiment-kind { flex-shrink: 0; padding: 3px 7px; border-radius: 5px; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); font-size: 10px; line-height: 16px; }
+.um-experiment-frame { display: block; width: 100%; border: 0; background: #fff; }
+.um-experiment-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-top: 1px solid hsl(var(--border) / .65); }
+.um-experiment-save { display: flex; align-items: center; gap: 6px; color: hsl(var(--muted-foreground)); font-size: 11px; }
+.um-experiment-save > span { width: 5px; height: 5px; border-radius: 50%; background: #7a998c; }
+.um-experiment-save > .is-saving { background: #c58e49; }
+.um-experiment-discuss { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid hsl(var(--border)); border-radius: 7px; padding: 7px 10px; background: hsl(var(--foreground)); color: hsl(var(--background)); font-size: 12px; font-weight: 500; cursor: pointer; transition: opacity 120ms; }
+.um-experiment-discuss:hover { opacity: .85; }
+.um-experiment-discuss:focus-visible { outline: 2px solid hsl(var(--xiaoyu-500)); outline-offset: 3px; }
+.um-experiment-discuss:disabled { opacity: .45; cursor: default; }
+.um-experiment-status, .um-experiment-error { margin: 0; padding: 12px 16px; font-size: 12px; line-height: 1.6; }
+.um-experiment-status { color: hsl(var(--muted-foreground)); }
+.um-experiment-error { color: hsl(var(--destructive)); overflow-wrap: anywhere; }
+.um-experiment-error button { margin-left: 8px; }
+@media (max-width: 480px) {
+  .um-experiment-header { padding: 12px; gap: 7px; }
+  .um-experiment-footer { padding: 10px 12px; }
+}
