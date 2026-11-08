@@ -144,8 +144,10 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 if isinstance(exc, Exception):
                     error = str(exc.detail) if isinstance(exc, APIException) else '本轮执行失败，未扣除问答额度，请重新发送。'
                     with quota_write_lock():
+                        saved = AIUsageReservation.objects.filter(pk=reservation.pk, attempt_id=reservation.attempt_id).values_list('response', flat=True).first() or {}
                         finish_ai_call(reservation, success=False, response={
-                            'done': True, 'is_error': True, 'full_content': error})
+                            'done': True, 'is_error': True, 'full_content': error,
+                            **({'learning_failure': saved['learning_failure']} if saved.get('learning_failure') else {})})
             raise
         finally:
             with quota_write_lock():
@@ -178,9 +180,10 @@ def response(request, bot, conversation_id, message, *, course_context=None):
             elif event['type'] == 'text_delta':
                 event = {'type': 'text_delta', 'delta': event['text']}
             elif event['type'] == 'tool_status':
+                from .tool_executor import generate_step_label
                 event = {'type': 'step', 'run_id': run_id, 'call_id': event['call_id'],
                     'round': round_number, 'name': event['name'],
-                    'label': '切换学习工具' if event['name'] == 'find_learning_tools' else '展示学习内容' if event['name'] == 'present_learning_visual' else '查询学习资料',
+                    'label': '切换学习工具' if event['name'] == 'find_learning_tools' else '展示学习内容' if event['name'] == 'present_learning_visual' else '运行会话计算工具' if event['name'].startswith('session_') else generate_step_label(event['name'], {}),
                     'status': event['status'], **({'error': event['error']} if event.get('error') else {})}
                 if event['status'] == 'running':
                     pending[event['call_id']] = event

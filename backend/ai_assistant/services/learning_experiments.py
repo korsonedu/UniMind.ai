@@ -85,7 +85,7 @@ def experiment_document(html, state):
     return '''<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{font:14px/1.6 system-ui,sans-serif;margin:16px;color:#202124;background:#fff}*{box-sizing:border-box}input,button,select{font:inherit}canvas,svg{max-width:100%}</style>
+<style>body{font:14px/1.45 system-ui,sans-serif;margin:12px;color:#202124;background:#fff}*{box-sizing:border-box}input,button,select{font:inherit}canvas,svg{max-width:100%}</style>
 <script>
 (() => {
 let state = INITIAL_STATE;
@@ -99,7 +99,10 @@ window.unimind = Object.freeze({
 window.addEventListener('error', event => send('error',{message:String(event.message).slice(0,500)}));
 window.addEventListener('unhandledrejection', event => send('error',{message:String(event.reason).slice(0,500)}));
 window.addEventListener('DOMContentLoaded', () => {
-  new ResizeObserver(() => send('height',{height:Math.ceil(document.body.getBoundingClientRect().height)+32})).observe(document.body);
+  new ResizeObserver(() => {
+    const style=getComputedStyle(document.body);
+    send('height',{height:Math.ceil(document.body.getBoundingClientRect().height+parseFloat(style.marginTop)+parseFloat(style.marginBottom))});
+  }).observe(document.body);
 });
 })();
 </script></head><body>'''.replace('INITIAL_STATE', initial) + html + '</body></html>'
@@ -171,7 +174,7 @@ def conversation_experiments(user, conversation_id):
 EXPERIMENT_TOOLS = [
     {'type': 'function', 'function': {
         'name': 'build_learning_experiment',
-        'description': '自主编写并在浏览器检查一个交互学习实验，通过后挂载到当前对话。自由编写自包含 HTML/CSS/JavaScript 片段，不限模板，不用外部资源。失败会返回错误供修改；更新前先 read，传同一 experiment_id 和 base_revision。用 unimind.getState()/setState(object) 恢复和保存控件状态，unimind.report(简短结果) 准备供学生发送的观察结果；不修改成绩或学习记录。checks 至少检查一个实际交互和页面结果。',
+        'description': '自主编写并检查只用于讲解的交互卡片，通过后挂载到当前对话。自包含 HTML/CSS/JavaScript，无外部资源；以图形、参数控件和数值为主，桌面正文完整放进700×360像素，窄屏360×420像素，不裁剪内容，少说明文字，长解释放聊天正文。不做答题、预测作答、判分或成绩提交。失败返回诊断；更新前先read并沿用ID和版本。用unimind.getState()/setState(object)保存演示参数，report(简短观察)准备讲解线索；不修改成绩或学习记录。checks至少检查一个真实控件与结果。',
         'parameters': {'type': 'object', 'additionalProperties': False, 'properties': {
             'title': {'type': 'string', 'minLength': 1, 'maxLength': 100},
             'html': {'type': 'string', 'minLength': 1, 'maxLength': 24000},

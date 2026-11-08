@@ -644,6 +644,12 @@ class PlannerToolExecutor(BaseToolExecutor):
             q_type=q_type,
             subjective_type=subjective_type,
         )
+        if args.get('purpose') == 'explanation':
+            result.pop('practice_url', None)
+            if not result.get('questions'):
+                result['no_bank_match'] = True
+                result['message'] = '直接使用符合学生要求的合成示例讲解，不要求作答或评分，不伪造题目来源和ID。'
+            return result
         if not result.get('questions'):
             result.pop('practice_url', None)
             result['message'] = '直接按学生要求出题。'

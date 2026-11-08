@@ -68,3 +68,14 @@ def test_bank_hit_keeps_practice_card_without_fallback():
     assert result["visual"]["payload"]["practice_id"]
     assert result["questions"][0]["q_type"] == "objective"
     assert query.call_args.kwargs["q_type"] == ""
+
+
+def test_explanation_reads_question_without_practice_card():
+    for questions in ([{'id': 7, 'text': '合成题目'}], []):
+        with patch('ai_assistant.services.memory_system.MemorySystem.query_practice_questions',
+                   return_value={'questions': questions, 'practice_url': '/quiz/practice'}):
+            executor = _executor()
+            result = executor._handle_get_practice_questions({'purpose': 'explanation'})
+        assert result['questions'] == questions
+        assert 'visual' not in result and 'practice_url' not in result and 'fallback' not in result
+        assert not executor.pending_visuals
