@@ -62,7 +62,7 @@
 .um-agent-composer:has(textarea:focus-visible),
 .um-agent-search:has(input:focus-visible) { outline: none; }
 
-.um-agent-composer, .um-agent-chat-input > div > div:has(> textarea) {
+.um-native-agent .um-agent-composer, .um-native-agent .um-agent-chat-input > div > div:has(> textarea) {
   background-color: var(--um-color-field);
   transition: background-color var(--um-motion-fast);
 }
