@@ -61,6 +61,11 @@ class AssistantChatService:
             if parts:
                 personality_section = "\n\n## 机构教学配置\n" + "\n".join(f"- {x}" for x in parts)
 
+        if bot and bot.bot_type == 'planner':
+            from django.conf import settings
+            from pathlib import Path
+            base += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text()
+
         adaptive_section = f"\n\n{adaptive_directives}" if adaptive_directives else ''
         variant_section = f"\n\n{variant_suffix}" if variant_suffix else ''
         return base + memory_section + tool_guide + intent_guide + personality_section + adaptive_section + variant_section
@@ -115,6 +120,9 @@ class AssistantChatService:
         if profile.use_intent_router and user_message:
             from ai_engine.tool_router import route_tools
             tools = route_tools(user_message, tools, recent_messages=history_messages, bot_type=bot_type)
+
+        from .project_learning_tools import include_project_tools
+        tools = include_project_tools(tools, tool_executor)
 
         # 设置工具白名单，防止 LLM 被注入后调用非预期工具
         tool_executor._allowed_tool_names = {t['function']['name'] for t in tools}

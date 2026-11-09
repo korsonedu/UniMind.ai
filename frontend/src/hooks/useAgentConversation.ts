@@ -136,6 +136,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
     const next = typeof value === 'function' ? value(projectIdRef.current) : value;
     projectIdRef.current = next;
     updateProjectId(next);
+    saveRecovery(scopeRef.current, conversationIdRef.current, { projectId: next });
   }, []);
   const [sessionOpen, setSessionOpen] = useState(false);
   const [taskList, setTaskList] = useState<TaskListData | null>(null);
@@ -336,11 +337,11 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
 
   // ── Session management ──
 
-  const handleLoadSession = useCallback((session: ConversationSession, initial = false) => {
+  const handleLoadSession = useCallback((session: ConversationSession, initial = false, preferRemote = false) => {
     if (!initial) messageBuffersRef.current.set(conversationIdRef.current, messagesRef.current);
     const id = session.conversationId || session.messages.find(message => message.conversation_id)?.conversation_id || crypto.randomUUID();
     setConversationId(id);
-    const next = (messageBuffersRef.current.get(id) ?? session.messages)
+    const next = (preferRemote && !streamsRef.current.has(id) ? session.messages : messageBuffersRef.current.get(id) ?? session.messages)
       .map(message => ({ ...message, conversation_id: id, visible: true }));
     messagesRef.current = next;
     messageBuffersRef.current.set(id, next);
@@ -474,7 +475,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
   }, [identity]);
 
   useEffect(() => {
-    if (!initialized || !bot || !userId || (!window.unimindDesktop && !options.courseId)) return;
+    if (!initialized || !bot || !userId) return;
     const scope = recoveryScope(userId, bot.id) + (options.courseId ? `:course:${options.courseId}` : '');
     if (scopeRef.current === scope) return;
     const saved = readRecovery(scope);
@@ -496,7 +497,7 @@ export function useAgentConversation(options: UseAgentConversationOptions) {
       messageBuffersRef.current.set(id, next);
       setMessages(next);
       setActiveSessionId(session?.id ?? null);
-      setProjectId(session?.projectId ?? null);
+      setProjectId(session?.projectId ?? saved.conversations[id]?.projectId ?? null);
     } else if (inputRevisionRef.current === 0) {
       setConversationId(conversationIdRef.current);
     } else {

@@ -170,7 +170,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   const dashboardRef = useRef<HTMLDivElement>(null);
   const nativeInputRef = useRef<HTMLTextAreaElement>(null);
   const noteMentionsRef = useRef<ReturnType<typeof useNoteMentions> | null>(null);
-  const { chat, activate, setPageHooks, unreadIds } = useXiaoYuChat();
+  const { chat, activate, setPageHooks, unreadIds, openProject } = useXiaoYuChat();
   const removeUnread = useChatUnreadStore(state => state.remove);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
@@ -229,7 +229,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   const noteMentions = useNoteMentions({ enabled: enableNoteMentions, disabled: loading, botId: bot?.id, conversationId, input, setInput, textareaRef: nativeInputRef });
   useLayoutEffect(() => { noteMentionsRef.current = noteMentions; }, [noteMentions]);
-  const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions);
+  const projectControls = useConversationProjects(appearance === 'native', projectId, setProjectId, setSessions, openProject);
   const selectedProjectName = projectControls.projects.find(project => project.id === projectId)?.name;
 
   useEffect(() => {
@@ -348,7 +348,8 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   }, [sessions, activeSessionId, onSessionsReady, wrappedLoadSession, wrappedDeleteSession, wrappedReset]);
 
   const selectNewProject = (id: number | null) => {
-    wrappedReset(false, id);
+    if (id) void openProject(id);
+    else wrappedReset(false, null);
     setProjectPickerOpen(false);
     setProjectQuery('');
   };
@@ -399,7 +400,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
 
   if (!hasConversation && appearance === 'native') {
     return <TooltipProvider delayDuration={300}>
-      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} title={conversationTitle || '新对话'}>
+      <NativeAgentShell native sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={toolbarAction && <button className="um-agent-button" onClick={toolbarAction.onClick}><toolbarAction.icon size={16} />{toolbarAction.label}</button>} title={conversationTitle || '新对话'}>
         {contextPanel?.({ bot, conversationId })}
         <div className="um-agent-landing">
           <section className="um-agent-start" aria-label="开始对话">
@@ -488,10 +489,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       </div>
                     </PopoverContent>
                   </Popover>
-                  {toolbarAction && (
+                  {toolbarAction && appearance !== 'native' && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button onClick={toolbarAction.onClick}
+                        <button aria-label={toolbarAction.label} onClick={toolbarAction.onClick}
                           className="p-1 rounded-md text-muted-foreground/55 hover:text-foreground/65 hover:bg-muted/50 transition-colors">
                           <toolbarAction.icon className="h-3.5 w-3.5" />
                         </button>
@@ -565,7 +566,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
   if (layout === 'inline') {
     return (
       <TooltipProvider delayDuration={300}>
-        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} title={conversationTitle || '新对话'}>
+        <NativeAgentShell native={appearance === 'native'} sidebar={sessionDirectory} onNew={wrappedReset} label={botDisplayName} action={toolbarAction && <button className="um-agent-button" onClick={toolbarAction.onClick}><toolbarAction.icon size={16} />{toolbarAction.label}</button>} title={conversationTitle || '新对话'}>
           {contextPanel?.({ bot, conversationId })}
 
           <div className={cn("flex-1 min-w-0 flex flex-col bg-white", appearance === 'native' && 'um-agent-chat-body')}>
@@ -724,10 +725,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                       </div>
                     </PopoverContent>
                   </Popover>
-                  {toolbarAction && (
+                  {toolbarAction && appearance !== 'native' && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button onClick={toolbarAction.onClick}
+                        <button aria-label={toolbarAction.label} onClick={toolbarAction.onClick}
                           className="p-1.5 rounded-lg text-muted-foreground/55 hover:text-foreground/70 hover:bg-muted transition-colors">
                           <toolbarAction.icon className="h-3.5 w-3.5" />
                         </button>
@@ -879,10 +880,10 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
                     </div>
                   </PopoverContent>
                 </Popover>
-                {toolbarAction && (
+                {toolbarAction && appearance !== 'native' && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button onClick={toolbarAction.onClick}
+                      <button aria-label={toolbarAction.label} onClick={toolbarAction.onClick}
                         className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-foreground/70 hover:bg-muted transition-colors">
                         <toolbarAction.icon className="h-3.5 w-3.5" />
                       </button>

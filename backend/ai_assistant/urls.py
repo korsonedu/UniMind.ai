@@ -18,7 +18,10 @@ from .views_api import (
 )
 from .views_learning_experiments import LearningExperimentView
 
+from .views_learning import ProjectLearningView
+
 urlpatterns = [
+    path('projects/<int:pk>/learning/', ProjectLearningView.as_view(), name='project-learning'),
     path('learning-experiments/<uuid:conversation_id>/<uuid:experiment_id>/', LearningExperimentView.as_view(), name='learning-experiment'),
     path('dsh/actions/confirm/', DshConfirmView.as_view(), name='dsh-confirm'),
     path('dsh/actions/<uuid:request_id>/', DshSubmissionView.as_view(), name='dsh-submission'),

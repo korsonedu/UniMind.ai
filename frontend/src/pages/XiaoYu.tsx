@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { ProjectLearningDialog, ProjectLearningResume } from '@/components/ProjectLearningPanel';
 import { Target, CalendarCheck, CheckCircle, ChartBar, BookOpen, Lightbulb, ChatCircleText, Brain, Stethoscope, WarningCircle, PlayCircle } from '@phosphor-icons/react';
 import AgentChatLayout from '@/components/AgentChatLayout';
 import NativeSessionSidebar from '@/components/NativeSessionSidebar';
@@ -20,16 +22,19 @@ const SKILLS = [
 
 export const XiaoYu = () => {
   const { chat } = useXiaoYuChat();
+  const [learningOpen, setLearningOpen] = useState(false);
   useNotesSidebarAvailability(chat.hasConversation);
-  return <AgentChatLayout
+  return <><ProjectLearningDialog open={learningOpen} onOpenChange={setLearningOpen} /><AgentChatLayout
+    contextPanel={chat.projectId ? () => <ProjectLearningResume /> : undefined}
+    toolbarAction={{ icon: BookOpen, label: "学习安排", tooltip: "查看学习安排与反馈依据", onClick: () => setLearningOpen(true) }}
     appearance="native" layout="inline" enableNoteMentions inputTourClass="xiaoyu-input"
-    sidebar={props => <NativeSessionSidebar claimMenuRequest={props.claimMenuRequest} sessions={props.sessions} activeSessionId={props.activeSessionId} thinkingIds={props.thinkingIds} unreadIds={props.unreadIds} onSelect={props.onLoadSession} onUpdate={props.onUpdateSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
+    sidebar={props => <NativeSessionSidebar initialInstructions={chat.input} claimMenuRequest={props.claimMenuRequest} sessions={props.sessions} activeSessionId={props.activeSessionId} thinkingIds={props.thinkingIds} unreadIds={props.unreadIds} onSelect={props.onLoadSession} onUpdate={props.onUpdateSession} onDelete={props.onDeleteSession} onNew={props.onNewConversation} botDisplayName={props.botDisplayName} projectControls={props.projectControls} onNewInProject={props.onNewInProject} />}
     skills={SKILLS} typewriterWords={['让小宇分析薄弱知识点', '让小宇安排今天的复习', '让小宇推荐适合的课程', '让小宇看看复习进度']}
     chatPlaceholder="和小宇对话，@ 引用笔记…"
     landingTitle="小宇" landingDescription="" botDisplayName="小宇"
     onDeleteSession={() => {}}
     onLoadSession={(session, handler) => handler(session)}
-  />;
+  /></>;
 };
 
 export default XiaoYu;

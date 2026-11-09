@@ -451,3 +451,32 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"UserProfile({self.user_id})"
+
+
+class ProjectLearning(models.Model):
+    project = models.OneToOneField(ConversationProject, on_delete=models.CASCADE, related_name='learning')
+    status = models.CharField(max_length=16, default='preparing')
+    plan = models.JSONField(default=dict, blank=True)
+    resources = models.JSONField(default=list, blank=True)
+    current_stage = models.CharField(max_length=60, blank=True)
+    feedback = models.TextField(blank=True)
+    next_action = models.TextField(blank=True)
+    pending_plan = models.JSONField(default=dict, blank=True)
+    revision = models.PositiveIntegerField(default=0)
+    last_conversation = models.ForeignKey(Conversation, null=True, blank=True, on_delete=models.SET_NULL)
+    followup_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    followup_text = models.TextField(blank=True)
+    resume_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class ProjectLearningEvent(models.Model):
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE, related_name='learning_events')
+    message = models.ForeignKey(AIChatMessage, null=True, blank=True, on_delete=models.SET_NULL)
+    kind = models.CharField(max_length=20)
+    content = models.JSONField(default=dict)
+    request_key = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-id']

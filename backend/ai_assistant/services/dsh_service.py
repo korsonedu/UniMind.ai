@@ -18,6 +18,7 @@ from .dsh_routing import grouped_tools
 
 
 M0_TOOLS = frozenset({
+    'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup', 'find_learning_resources',
     'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points',
     'get_study_status', 'get_focus_history', 'run_diagnostic', 'create_faq_ticket',
     'search_courses', 'search_asr',
@@ -103,7 +104,9 @@ def build_context(user, message, recent_messages=None, chat_context=None):
         allowed.extend(executor._permitted_tool_definitions.values())
     # Runtime additions change the registry, not the underlying account authorization.
     authorization = [t for t in allowed if not t['function']['name'].startswith('session_')]
-    selected, groups, initial = grouped_tools(allowed, message, recent_messages)
+    from .project_learning import project_context
+    learning = project_context(user, (chat_context or {}).get('conversation_id')) if chat_context else ''
+    selected, groups, initial = grouped_tools(allowed, message, recent_messages, project=bool(learning))
     context = {
         'protocol': 'unimind.dsh.m0.v1',
         'student': {'id': user.pk, 'name': user.nickname or user.username, 'cohort': cohort},
@@ -131,6 +134,10 @@ def build_context(user, message, recent_messages=None, chat_context=None):
         },
         'system_prompt': (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/dsh_system_prompt.txt').read_text(),
     }
+    if learning:
+        context['student']['learning_project'] = learning
+        context['model_policy'].update(operation='assistant.chat.planner.learning', max_requests=6, max_tokens=4096)
+        context['system_prompt'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text()
     if executor:
         from .learning_experiments import conversation_experiments
         context['session_registry'] = session_registry(executor)
@@ -184,6 +191,7 @@ def execute_tool(user, name, arguments, memory_version, source=None, chat_contex
         from .dsh_actions import prepare_faq
         return prepare_faq(user, arguments, source)
     executor = PlannerToolExecutor(user)
+    executor.learning_context = chat_context
     set_permitted_tools(executor, [definition])
     executor._allowed_tool_names = {name}
     result = json.loads(executor(name, arguments))

@@ -226,6 +226,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                     user=self.user,
                     message=message,
                     history=agent_history,
+                    chat_context={'conversation_id': str(conversation_id), 'message_id': user_msg.pk, 'bot_id': self.bot.pk},
                     institution=self.institution,
                     stream=True,
                     on_step=on_step,

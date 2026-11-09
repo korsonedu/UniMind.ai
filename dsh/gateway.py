@@ -69,6 +69,7 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
         raise ValueError('Missing upstream credential')
     policy = context['model_policy']
     budgets = {'assistant.chat.planner': ('fast', 4, 1024),
+               'assistant.chat.planner.learning': ('fast', 6, 4096),
                'assistant.chat.planner.prototype': ('fast', 6, 8192),
                'assistant.title': ('fast', 1, 64),
                'assistant.memory_extract': ('fast', 1, 800),

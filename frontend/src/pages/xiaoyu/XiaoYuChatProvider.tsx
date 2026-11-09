@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { restoreVisualSteps } from '@/lib/visualHistory';
 import { useAgentConversation, type Bot, type Message } from '@/hooks/useAgentConversation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useChatUnreadStore } from '@/store/useChatUnreadStore';
+import { readRecovery, recoveryScope } from '@/lib/conversationRecovery';
+import { queryClient } from '@/lib/queryClient';
+import { learningKey, type ProjectLearning } from '@/lib/projectLearning';
 import { XiaoYuChatContext, findAssistantBot, type PageChatHooks } from './xiaoYuChatContext';
 
 /**
@@ -14,6 +17,10 @@ import { XiaoYuChatContext, findAssistantBot, type PageChatHooks } from './xiaoY
  */
 export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [openingProject, setOpeningProject] = useState(false);
+  const openSequence = useRef(0);
+  const restored = useRef<string>('');
   const [activated, setActivated] = useState(false);
   const pageHooksRef = useRef<PageChatHooks>({});
   const viewedRef = useRef<string | null>(null);
@@ -91,6 +98,8 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     };
   }, [activated, userId, setBot, setInitialized, setSessions, groupIntoSessions]);
 
+  useEffect(() => { if (userId && new URLSearchParams(location.search).has('project')) setActivated(true); }, [userId, location.search]);
+
   const viewed = location.pathname === '/xiaoyu' ? conversationId : null;
   useLayoutEffect(() => {
     viewedRef.current = viewed;
@@ -105,9 +114,82 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
     pageHooksRef.current = hooks ?? {};
   }, []);
 
+  const chatRef = useRef(chat);
+  useLayoutEffect(() => { chatRef.current = chat; }, [chat]);
+  const openProject = useCallback(async (id: number, explicitConversation?: string, draft?: string) => {
+    if (!userId || !Number.isSafeInteger(id) || id < 1) return;
+    const sequence = ++openSequence.current;
+    setOpeningProject(true);
+    try {
+      const { data } = await api.get<ProjectLearning>(`/ai/projects/${id}/learning/`);
+      const current = chatRef.current;
+      if (!current.bot || sequence !== openSequence.current || useAuthStore.getState().user?.id !== userId) return;
+      const saved = readRecovery(recoveryScope(userId, current.bot.id));
+      const draftEntry = explicitConversation ? undefined : Object.entries(saved.conversations)
+        .filter(([, value]) => value.projectId === id && value.draft?.trim())
+        .sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0))[0];
+      const selectedId = explicitConversation || draftEntry?.[0] || data.conversation_id;
+      const response = await api.get<Message[]>('/ai/history/', { params: { bot_id: current.bot.id, ...(selectedId ? { conversation_id: selectedId } : {}) } });
+      if (sequence !== openSequence.current || useAuthStore.getState().user?.id !== userId) return;
+      const messages = restoreVisualSteps(response.data.filter(m => m.content !== '[Thinking...]').map(m => ({ ...m, visible: true })));
+      const sessions = current.groupIntoSessions(messages);
+      const candidates = sessions.filter(session => session.projectId === id);
+      const target = selectedId ? candidates.find(session => session.conversationId === selectedId) : candidates.at(-1);
+      if ((explicitConversation || (selectedId && messages.length > 0)) && !target) throw new Error('这段对话不属于当前项目，或已删除。');
+      if (target) {
+        current.setSessions(previous => [...previous.filter(item => item.conversationId !== target.conversationId), target]);
+        current.handleLoadSession(target, false, true);
+      } else {
+        current.handleReset(false);
+        if (draftEntry) current.setConversationId(draftEntry[0]);
+        current.setProjectId(id);
+        if (draftEntry?.[1].draft) current.setInput(draftEntry[1].draft);
+        if (draft) current.setInput(draft);
+      }
+      queryClient.setQueryData(learningKey(userId, id), data);
+      localStorage.setItem(`unimind:learning:project:${userId}`, String(id));
+    } catch (error) {
+      if (sequence === openSequence.current && useAuthStore.getState().user?.id === userId) {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 404) {
+          if (localStorage.getItem(`unimind:learning:project:${userId}`) === String(id)) localStorage.removeItem(`unimind:learning:project:${userId}`);
+          if (chatRef.current.projectId === id) chatRef.current.handleReset(false);
+        }
+        toast.error(status === 404 ? '这个项目或对话已删除，无法恢复旧安排。' : error instanceof Error ? error.message : '项目暂时无法打开，请重试。');
+      }
+    } finally {
+      if (sequence === openSequence.current) setOpeningProject(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId || !chat.initialized) return;
+    const params = new URLSearchParams(location.search);
+    const explicit = params.get('project');
+    const key = `${userId}:${explicit ? location.key : 'initial'}`;
+    if (restored.current === key || (!explicit && restored.current.startsWith(`${userId}:`))) return;
+    if (explicit && !/^\d+$/.test(explicit)) return;
+    restored.current = key;
+    const id = Number(explicit || localStorage.getItem(`unimind:learning:project:${userId}`));
+    if (id) void openProject(id, explicit ? params.get('conversation') || undefined : undefined);
+    if (explicit) {
+      params.delete('project');
+      params.delete('conversation');
+      // Keep course context in its address. It is needed by the course assistant.
+      if (location.pathname === '/xiaoyu') navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+  }, [userId, chat.initialized, location.key, location.pathname, location.search, navigate, openProject]);
+  useEffect(() => {
+    if (userId && chat.projectId) localStorage.setItem(`unimind:learning:project:${userId}`, String(chat.projectId));
+  }, [userId, chat.projectId]);
+  useEffect(() => {
+    if (!chat.loading && chat.projectId && userId) void queryClient.invalidateQueries({ queryKey: learningKey(userId, chat.projectId) });
+  }, [chat.loading, chat.messages.at(-1)?.id, chat.projectId, userId]);
+  useEffect(() => () => { ++openSequence.current; }, [userId]);
+
   const value = useMemo(
-    () => ({ chat, unreadIds, activate, setPageHooks }),
-    [chat, unreadIds, activate, setPageHooks],
+    () => ({ chat, unreadIds, activate, setPageHooks, openProject, openingProject }),
+    [chat, unreadIds, activate, setPageHooks, openProject, openingProject],
   );
   return <XiaoYuChatContext.Provider value={value}>{children}</XiaoYuChatContext.Provider>;
 }

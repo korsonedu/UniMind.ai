@@ -6,10 +6,10 @@ import { useDirectoryWidth } from '@/hooks/useDirectoryWidth';
 import { DirectoryResizeHandle } from './DirectoryResizeHandle';
 import { WorkspaceTrail } from './WorkspaceTrail';
 
-interface Props { native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; title?: string; label?: string; }
+interface Props { native?: boolean; sidebar?: ReactNode; onNew: () => void; children: ReactNode; title?: string; label?: string; action?: ReactNode; }
 
 /** Opt-in presentation; the existing Agent runtime and workbench keep their behavior. */
-export function NativeAgentShell({ native, sidebar, onNew, children, title = '新对话', label = '小宇' }: Props) {
+export function NativeAgentShell({ native, sidebar, onNew, children, title = '新对话', label = '小宇', action }: Props) {
   const [open, setOpen] = useState(false);
   const directory = useDirectoryWidth();
   if (!native) return <div className="h-full flex um-motion-surface animate-in fade-in duration-[180ms] ease-out">{sidebar}{children}</div>;
@@ -33,7 +33,7 @@ export function NativeAgentShell({ native, sidebar, onNew, children, title = '�
           </Dialog.Root>
           <WorkspaceTrail title={title} crumbs={[{ label }]} />
         </div>
-        <div className="um-agent-toolbar-actions"><button className="um-agent-icon-button um-agent-toolbar-new" onClick={onNew} aria-label="新对话" title="新对话"><Plus size={17} /></button></div>
+        <div className="um-agent-toolbar-actions">{action}<button className="um-agent-icon-button um-agent-toolbar-new" onClick={onNew} aria-label="新对话" title="新对话"><Plus size={17} /></button></div>
       </WorkspaceToolbar>
       {children}
     </section>

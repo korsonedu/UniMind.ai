@@ -5,9 +5,20 @@ from .models import AIChatMessage, Conversation, ConversationProject
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    learning_summary = serializers.SerializerMethodField()
+
+    def get_learning_summary(self, project):
+        from .models import ProjectLearning
+        try:
+            state = project.learning
+        except ProjectLearning.DoesNotExist:
+            return None
+        return {'status': state.status, 'next_action': state.next_action,
+                'conversation_id': str(state.last_conversation.conversation_id) if state.last_conversation else None}
+
     class Meta:
         model = ConversationProject
-        fields = ('id', 'name', 'instructions', 'created_at')
+        fields = ('id', 'name', 'instructions', 'created_at', 'learning_summary')
         read_only_fields = ('id', 'created_at')
 
 
@@ -24,7 +35,7 @@ class ProjectListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        return ConversationProject.objects.filter(user=self.request.user)
+        return ConversationProject.objects.filter(user=self.request.user).select_related('learning__last_conversation')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -35,7 +46,7 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsMember]
 
     def get_queryset(self):
-        return ConversationProject.objects.filter(user=self.request.user)
+        return ConversationProject.objects.filter(user=self.request.user).select_related('learning__last_conversation')
 
 
 class ConversationUpdateSerializer(serializers.ModelSerializer):
@@ -79,17 +90,23 @@ def save_new_conversation_project(request, bot, conversation_id):
         raise PermissionDenied('无权修改此对话')
     # 历史会话未生成元数据时仍属于未分类，归属只在首次创建时确定。
     project = None if AIChatMessage.objects.filter(user=request.user, conversation_id=conversation_id).exists() else serializer.validated_data['project_id']
-    Conversation.objects.get_or_create(
+    conversation, _ = Conversation.objects.get_or_create(
         conversation_id=conversation_id, user=request.user,
         defaults={'bot': bot, 'project': project},
     )
+    if conversation.project_id:
+        from .models import ProjectLearning
+        state, _ = ProjectLearning.objects.get_or_create(project=conversation.project)
+        state.last_conversation = conversation
+        state.followup_at = None
+        state.save(update_fields=['last_conversation', 'followup_at', 'updated_at'])
 
 
 def add_project_context(user, conversation_id, history):
     conversation = Conversation.objects.filter(
         user=user, conversation_id=conversation_id, project__user=user,
     ).select_related('project').first()
-    if not conversation or not conversation.project.instructions.strip():
+    if not conversation:
         return history
-    project = conversation.project
-    return [{'role': 'user', 'content': f'当前学习项目：{project.name}\n以下是我为本项目填写的学习目标、背景与要求，请在本次对话中参考：\n{project.instructions}'}] + history
+    from .services.project_learning import project_context
+    return [{'role': 'user', 'content': project_context(user, conversation_id)}] + history

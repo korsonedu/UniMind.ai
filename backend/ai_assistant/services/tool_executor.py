@@ -591,6 +591,29 @@ class PlannerToolExecutor(BaseToolExecutor):
     def __init__(self, user, institution=None):
         super().__init__(user, institution)
 
+    def _project_learning(self, name, args):
+        from rest_framework.exceptions import APIException
+        from .project_learning import tool_operation
+        try:
+            return tool_operation(self, name, args)
+        except APIException as exc:
+            return {'error': {'code': exc.status_code, 'message': str(exc.detail)}}
+
+    def _handle_read_learning_project(self, args):
+        return self._project_learning('read_learning_project', args)
+
+    def _handle_plan_learning_project(self, args):
+        return self._project_learning('plan_learning_project', args)
+
+    def _handle_record_learning_progress(self, args):
+        return self._project_learning('record_learning_progress', args)
+
+    def _handle_set_learning_followup(self, args):
+        return self._project_learning('set_learning_followup', args)
+
+    def _handle_find_learning_resources(self, args):
+        return self._project_learning('find_learning_resources', args)
+
     def _handle_get_learning_sessions(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
         return MemorySystem.query_learning_sessions(

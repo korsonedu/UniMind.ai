@@ -5,6 +5,7 @@ class Notification(models.Model):
     TYPES = (
         ('qa_reply', '答疑回复'),
         ('system', '系统通知'),
+        ('learning_followup', '小宇学习跟进'),
         ('memorix_reminder', '复习提醒'),
         ('performance_alert', '绩效告警'),
         ('bulk_init', '初始化题库'),

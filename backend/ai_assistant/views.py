@@ -151,6 +151,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                 user=user,
                 message=user_message,
                 history=project_history,
+                chat_context={'conversation_id': str(conversation_id), 'message_id': current_user_message_id, 'bot_id': bot.pk},
                 institution=getattr(user, 'institution', None),
                 student_context=student_context,
                 memory_context=memory_context,
@@ -524,8 +525,13 @@ class AIChatListView(generics.ListAPIView):
                 from rest_framework.exceptions import NotFound
                 raise NotFound('课程不存在或不可访问。')
             qs = qs.filter(metadata__course_context__course_id=course_id)
+            if not conversation_id:
+                project_ids = Conversation.objects.filter(user=self.request.user, project__isnull=False).values('conversation_id')
+                qs = qs.exclude(conversation_id__in=project_ids)
         elif not conversation_id:
-            qs = qs.exclude(metadata__has_key='course_context')
+            from django.db.models import Q
+            project_ids = Conversation.objects.filter(user=self.request.user, project__isnull=False).values('conversation_id')
+            qs = qs.filter(~Q(metadata__has_key='course_context') | Q(conversation_id__in=project_ids))
 
         # 注解 conversation_title
         title_subquery = Conversation.objects.filter(
@@ -696,6 +702,7 @@ class AIChatStreamView(APIView):
                 user=request.user,
                 message=user_message,
                 history=project_history,
+                chat_context={'conversation_id': str(conversation_id), 'message_id': user_msg.pk, 'bot_id': bot.pk},
                 institution=getattr(request.user, 'institution', None),
                 student_context=student_context,
                 memory_context=memory_context,
@@ -706,6 +713,9 @@ class AIChatStreamView(APIView):
             if profile.use_intent_router and user_message:
                 from ai_engine.tool_router import route_tools
                 tools = route_tools(user_message, tools, recent_messages=history_msgs, bot_type=bot.bot_type)
+
+            from .services.project_learning_tools import include_project_tools
+            tools = include_project_tools(tools, tool_executor)
 
             # 工具白名单（防止 prompt injection 调用非预期工具）
             if experiment_prototype:

@@ -49,6 +49,7 @@ const Checkout = lazy(() => import('./pages/Checkout').then(module => ({ default
 const DiagnosticTest = lazy(() => import('./pages/DiagnosticTest').then(module => ({ default: module.DiagnosticTest })));
 const NotesPage = lazy(() => import('./pages/notes/NotesPage'));
 const PracticeSession = lazy(() => import('./pages/xiaoyu/PracticeSession'));
+const ProjectKnowledge = lazy(() => import('./pages/ProjectKnowledge'));
 const XiaoYu = lazy(() => import('./pages/XiaoYu').then(module => ({ default: module.XiaoYu })));
 
 // Default exports — plain lazy() works
@@ -115,8 +116,7 @@ const LegacyRedirect = ({ to }: { to: string }) => {
 const legacyRoutes = [
   ['workbench/*', HOME_PATH],
   ['assets/*', HOME_PATH],
-  ['knowledge-tree/*', HOME_PATH],
-  ['knowledge-map/*', HOME_PATH],
+  ['knowledge-map/*', '/knowledge-tree'],
   ['learning-products/*', HOME_PATH],
   ['articles/*', HOME_PATH],
   ['article/*', HOME_PATH],
@@ -230,6 +230,7 @@ const router = createBrowserRouter([
           { path: "tests/history", element: <FeatureGuard feature={FEATURES.QUIZ_EXAM}>{lazyPage(ExamHistoryPage)}</FeatureGuard> },
           { path: "notes", element: lazyPage(NotesPage) },
           { path: "notes/:id", element: lazyPage(NotesPage) },
+          { path: "knowledge-tree", element: <FeatureGuard feature="ai.assistant">{lazyPage(ProjectKnowledge)}</FeatureGuard> },
           { path: "xiaoyu", element: <FeatureGuard feature="ai.assistant">{lazyPage(XiaoYu)}</FeatureGuard> },
           { path: "xiaoyu/practice/:sessionId", element: <FeatureGuard feature="ai.assistant">{lazyPage(PracticeSession)}</FeatureGuard> },
           { path: "settings", element: lazyPage(Settings) },
