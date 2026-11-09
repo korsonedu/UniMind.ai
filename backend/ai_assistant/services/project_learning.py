@@ -5,6 +5,7 @@ from datetime import timedelta
 from uuid import UUID
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
@@ -67,7 +68,7 @@ def current_project(user, context):
 
 def learning_data(project):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
-    events = list(ProjectLearningEvent.objects.filter(project=project).select_related('message')[:30])
+    events = list(ProjectLearningEvent.objects.filter(project=project).exclude(kind='turn').select_related('message')[:30])
     from notifications.models import Notification
     notifications = dict(Notification.objects.filter(recipient=project.user,
         pk__in=[event.content['notification_id'] for event in events if event.content.get('notification_id')]).values_list('pk', 'is_read'))
@@ -171,6 +172,9 @@ def change_learning(project, data, *, message=None, model=False):
         request_key = hashlib.sha256(json.dumps([message.pk, data], sort_keys=True, default=str).encode()).hexdigest()
         if ProjectLearningEvent.objects.filter(request_key=request_key).exists():
             return learning_data(project)
+    if model and ProjectLearningEvent.objects.filter(project=project, created_at__gt=message.timestamp).filter(
+            Q(kind='turn') | Q(message__isnull=True, kind__in=['pause', 'resume', 'complete', 'schedule', 'accept', 'reject'])).exists():
+        raise LearningConflict('已有新的提问或用户安排，本轮学习写入已失效，请沿最新反馈继续。')
     revision = serializers.IntegerField(min_value=0).run_validation(data.get('revision'))
     if revision != state.revision:
         raise LearningConflict()

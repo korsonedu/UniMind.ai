@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import generics, serializers
 from rest_framework.exceptions import NotFound, PermissionDenied
 from users.views import IsMember
@@ -95,12 +96,15 @@ def save_new_conversation_project(request, bot, conversation_id):
         defaults={'bot': bot, 'project': project},
     )
     if conversation.project_id:
-        from .models import ProjectLearning
-        state, _ = ProjectLearning.objects.get_or_create(project=conversation.project)
-        state.last_conversation = conversation
-        if state.status == 'active':
-            state.followup_at = None
-        state.save(update_fields=['last_conversation', 'followup_at', 'updated_at'])
+        from .models import ProjectLearning, ProjectLearningEvent
+        with transaction.atomic():
+            state, _ = ProjectLearning.objects.get_or_create(project=conversation.project)
+            state = ProjectLearning.objects.select_for_update().get(pk=state.pk)
+            state.last_conversation = conversation
+            if state.status == 'active':
+                state.followup_at = None
+            state.save(update_fields=['last_conversation', 'followup_at', 'updated_at'])
+            ProjectLearningEvent.objects.create(project=conversation.project, kind='turn', content={})
 
 
 def add_project_context(user, conversation_id, history):

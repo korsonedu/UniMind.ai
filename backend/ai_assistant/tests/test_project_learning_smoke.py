@@ -178,3 +178,17 @@ class ProjectLearningSmoke(APITestCase):
         change_learning(self.project, {'action': 'pause', 'revision': revision, 'resume_at': future})
         save_new_conversation_project(SimpleNamespace(user=self.user, data={'project_id': self.project.pk}), self.bot, self.conversation.conversation_id)
         self.assertIsNotNone(ProjectLearning.objects.get(pk=self.state.pk).followup_at)
+
+    def test_new_project_turn_and_manual_pause_reject_late_model_writes(self):
+        from types import SimpleNamespace
+        from ai_assistant.views_projects import save_new_conversation_project
+        from ai_assistant.services.project_learning import LearningConflict
+        self.make_plan()
+        save_new_conversation_project(SimpleNamespace(user=self.user, data={'project_id': self.project.pk}), self.bot, self.conversation.conversation_id)
+        with self.assertRaises(LearningConflict):
+            change_learning(self.project, {'action': 'plan', 'revision': 1, 'plan': self.plan}, message=self.message, model=True)
+        newer = AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=self.conversation.conversation_id, role='user', content='先暂停。')
+        change_learning(self.project, {'action': 'pause', 'revision': 1})
+        with self.assertRaises(LearningConflict):
+            change_learning(self.project, {'action': 'plan', 'revision': 2, 'plan': self.plan}, message=newer, model=True)
+        self.assertEqual(ProjectLearning.objects.get(pk=self.state.pk).status, 'paused')
