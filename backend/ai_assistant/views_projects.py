@@ -98,7 +98,8 @@ def save_new_conversation_project(request, bot, conversation_id):
         from .models import ProjectLearning
         state, _ = ProjectLearning.objects.get_or_create(project=conversation.project)
         state.last_conversation = conversation
-        state.followup_at = None
+        if state.status == 'active':
+            state.followup_at = None
         state.save(update_fields=['last_conversation', 'followup_at', 'updated_at'])
 
 

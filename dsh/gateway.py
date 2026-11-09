@@ -78,8 +78,10 @@ def task_gateway(context, upstream_url, upstream_key, mode, audit_path=None, on_
                'quizzes.objective_analysis': ('fast', 1, 2000),
                'server.generate': (('fast', 'pro'), 8, 8192)}
     budget = budgets.get(policy['operation'])
+    request_limit = 262144 if context.get('learning_project') and policy['operation'] in (
+        'assistant.chat.planner.learning', 'assistant.chat.planner.prototype') else 65536
     if (not budget or policy['tier'] not in (budget[0] if isinstance(budget[0], tuple) else (budget[0],)) or not 1 <= policy['max_requests'] <= budget[1]
-            or not 1 <= policy['max_tokens'] <= budget[2] or not 1 <= policy['max_request_bytes'] <= 65536):
+            or not 1 <= policy['max_tokens'] <= budget[2] or not 1 <= policy['max_request_bytes'] <= request_limit):
         raise ValueError('Unsupported task policy')
     allowed_tools = {t['function']['name'] for t in context.get('available_tools', context['tools']) + context['tools']}
     capability = secrets.token_urlsafe(32)

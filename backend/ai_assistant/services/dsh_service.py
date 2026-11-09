@@ -104,8 +104,8 @@ def build_context(user, message, recent_messages=None, chat_context=None):
         allowed.extend(executor._permitted_tool_definitions.values())
     # Runtime additions change the registry, not the underlying account authorization.
     authorization = [t for t in allowed if not t['function']['name'].startswith('session_')]
-    from .project_learning import project_context
-    learning = project_context(user, (chat_context or {}).get('conversation_id')) if chat_context else ''
+    from .project_learning import turn_project_context
+    learning = turn_project_context(user, chat_context)
     selected, groups, initial = grouped_tools(allowed, message, recent_messages, project=bool(learning))
     context = {
         'protocol': 'unimind.dsh.m0.v1',
@@ -135,9 +135,9 @@ def build_context(user, message, recent_messages=None, chat_context=None):
         'system_prompt': (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/dsh_system_prompt.txt').read_text(),
     }
     if learning:
-        context['student']['learning_project'] = learning
-        context['model_policy'].update(operation='assistant.chat.planner.learning', max_requests=6, max_tokens=4096)
-        context['system_prompt'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text()
+        context['learning_project'] = learning
+        context['model_policy'].update(operation='assistant.chat.planner.learning', max_requests=6, max_tokens=4096, max_request_bytes=262144)
+        context['system_prompt'] += (Path(settings.BASE_DIR) / 'prompts/ai_assistant/bots/xiaoyu/project_learning.txt').read_text() + learning
     if executor:
         from .learning_experiments import conversation_experiments
         context['session_registry'] = session_registry(executor)

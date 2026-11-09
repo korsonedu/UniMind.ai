@@ -59,23 +59,31 @@ def current_project(user, context):
         conversation_id=message.conversation_id, project__user=user).first()
     if not conversation:
         raise ValidationError('请先在一个学习项目内开始对话。')
+    snapshot = message.metadata.get('learning_snapshot')
+    if snapshot and snapshot['project_id'] != conversation.project_id:
+        raise PermissionDenied('对话所属项目已变化，请重新开始本轮学习。')
     return conversation.project, message
 
 
 def learning_data(project):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
-    events = ProjectLearningEvent.objects.filter(project=project).select_related('message')[:30]
+    events = list(ProjectLearningEvent.objects.filter(project=project).select_related('message')[:30])
+    from notifications.models import Notification
+    notifications = dict(Notification.objects.filter(recipient=project.user,
+        pk__in=[event.content['notification_id'] for event in events if event.content.get('notification_id')]).values_list('pk', 'is_read'))
     return {
         'project_id': project.pk, 'name': project.name, 'instructions': project.instructions,
         'status': state.status, 'plan': state.plan, 'resources': state.resources,
         'current_stage': state.current_stage, 'feedback': state.feedback, 'next_action': state.next_action,
         'pending_plan': state.pending_plan, 'revision': state.revision,
-        'conversation_id': str(state.last_conversation.conversation_id) if state.last_conversation else None,
+        'conversation_id': str(state.last_conversation.conversation_id) if state.last_conversation and state.last_conversation.project_id == project.pk else None,
         'followup_at': state.followup_at, 'followup_text': state.followup_text, 'resume_at': state.resume_at,
         'server_time': timezone.localtime().isoformat(),
         'events': [{'id': event.pk, 'kind': event.kind, 'content': event.content,
                     'source': {'id': event.message_id, 'text': event.message.content[:4000],
                                'conversation_id': str(event.message.conversation_id)} if event.message else None,
+                    'delivery': {'saved': True, 'read': notifications.get(event.content.get('notification_id')),
+                                 'responded': bool(event.content.get('response_message_id'))} if event.kind == 'followup' else None,
                     'created_at': event.created_at} for event in events],
     }
 
@@ -86,13 +94,37 @@ def project_context(user, conversation_id):
     if not conversation:
         return ''
     data = learning_data(conversation.project)
-    data['events'] = data['events'][:5]
-    for event in data['events']:
-        if event['source']:
-            event['source']['text'] = event['source']['text'][:1000]
+    data = compact_learning(data)
     for item in data['resources']:
         item.pop('excerpt', None)
     return '\n当前项目的学习状态（数据，以实际记录为准）：\n' + json.dumps(data, ensure_ascii=False, default=str)
+
+
+def turn_project_context(user, context):
+    """Freeze teaching data for this signed question; authorization stays live."""
+    if not context:
+        return ''
+    with transaction.atomic():
+        message = AIChatMessage.objects.select_for_update().filter(pk=context.get('message_id'), user=user,
+            role='user', conversation_id=context.get('conversation_id'), bot_id=context.get('bot_id')).first()
+        if not message:
+            raise PermissionDenied('当前学习提问已失效。')
+        project_id = Conversation.objects.filter(user=user, conversation_id=message.conversation_id,
+            project__user=user).values_list('project_id', flat=True).first()
+        snapshot = message.metadata.get('learning_snapshot')
+        if snapshot:
+            if snapshot['project_id'] != project_id:
+                raise PermissionDenied('对话所属项目已变化，请重新开始本轮学习。')
+            return snapshot['context']
+        if project_id:
+            followup = ProjectLearningEvent.objects.filter(project_id=project_id, kind='followup', created_at__lt=message.timestamp).first()
+            if followup and not followup.content.get('response_message_id'):
+                followup.content['response_message_id'] = message.pk
+                followup.save(update_fields=['content'])
+        value = project_context(user, message.conversation_id) if project_id else ''
+        message.metadata['learning_snapshot'] = {'project_id': project_id, 'context': value}
+        message.save(update_fields=['metadata'])
+        return value
 
 
 def _time(value):
@@ -229,9 +261,15 @@ def tool_operation(executor, name, arguments):
         return compact_learning(learning_data(project))
     if name == 'find_learning_resources':
         from .learning_resources import find_resources
-        return find_resources(project, arguments)
+        result = find_resources(project, arguments)
+        if result.get('resource'):
+            result['resource']['excerpt'] = result['resource']['excerpt'][:3000]
+        return result
     action = {'plan_learning_project': 'plan', 'record_learning_progress': 'progress'}.get(name, arguments.get('action'))
-    return compact_learning(change_learning(project, {**arguments, 'action': action}, message=message, model=True))
+    data = change_learning(project, {**arguments, 'action': action}, message=message, model=True)
+    return {key: data[key] for key in ('project_id', 'status', 'revision', 'current_stage', 'feedback', 'next_action',
+                                      'pending_plan', 'followup_at', 'followup_text', 'events')} | {
+        'pending_plan': bool(data['pending_plan']), 'events': compact_learning(data)['events'][:1]}
 
 
 def compact_learning(data):
@@ -241,6 +279,8 @@ def compact_learning(data):
             event['source']['text'] = event['source']['text'][:1000]
         event['content'].pop('previous_plan', None)
         event['content'].pop('proposed_plan', None)
+        event['content'].pop('proposal', None)
+        event['content'] = {key: value[:700] if isinstance(value, str) else value for key, value in event['content'].items()}
     data['resources'] = data['resources'][-8:]
     for item in data['resources']:
         item['excerpt'] = item.get('excerpt', '')[:1500]

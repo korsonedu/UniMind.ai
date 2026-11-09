@@ -15,7 +15,7 @@ def send_project_learning_followups():
         status__in=['active', 'paused']).values_list('pk', flat=True)[:100]
     for pk in list(ids):
         with transaction.atomic():
-            state = ProjectLearning.objects.select_for_update().select_related(
+            state = ProjectLearning.objects.select_for_update(of=('self',)).select_related(
                 'project__user', 'last_conversation__bot').filter(pk=pk, followup_at__lte=now).first()
             if not state:
                 continue
@@ -41,11 +41,13 @@ def send_project_learning_followups():
                 continue
             event = ProjectLearningEvent.objects.create(project=state.project, kind='followup',
                 content={'text': text, 'revision': state.revision, 'notice': '跟进内容，不代表已完成学习。'})
-            AIChatMessage.objects.create(user=user, bot=conversation.bot,
+            message = AIChatMessage.objects.create(user=user, bot=conversation.bot,
                 conversation_id=conversation.conversation_id, role='assistant', content=text,
                 metadata={'learning_followup': {'project_id': state.project_id, 'event_id': event.pk}})
-            Notification.objects.create(recipient=user, ntype='learning_followup', title=f'小宇 · {state.project.name}',
+            notification = Notification.objects.create(recipient=user, ntype='learning_followup', title=f'小宇 · {state.project.name}',
                 content=text[:2000], link=f'/xiaoyu?project={state.project_id}&conversation={conversation.conversation_id}')
+            event.content.update(message_id=message.pk, notification_id=notification.pk)
+            event.save(update_fields=['content'])
             conversation.updated_at = now
             conversation.save(update_fields=['updated_at'])
             state.followup_at = None

@@ -77,6 +77,8 @@ def dispatch_bot_chat(
     # Create tool executor
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tool_executor = profile.executor_class(user=user, institution=institution)
+    from .project_learning import turn_project_context
+    turn_project_context(user, chat_context)
     tool_executor.learning_context = chat_context
 
     # 通用状态恢复钩子
@@ -142,6 +144,8 @@ def dispatch_bot_chat_sync(
 
     profile = get_bot_profile(bot.bot_type if bot else 'planner')
     tool_executor = profile.executor_class(user=user, institution=institution)
+    from .project_learning import turn_project_context
+    turn_project_context(user, chat_context)
     tool_executor.learning_context = chat_context
 
     # 通用状态恢复钩子

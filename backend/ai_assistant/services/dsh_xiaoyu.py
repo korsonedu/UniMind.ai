@@ -13,7 +13,7 @@ from rest_framework.exceptions import APIException, PermissionDenied, Validation
 from ai_assistant.models import AIChatMessage, Conversation
 from ai_assistant.services.title_generator import sync_generate_title
 from ai_assistant.services.memory_service import extract_memories_async
-from ai_assistant.views_projects import save_new_conversation_project, add_project_context
+from ai_assistant.views_projects import save_new_conversation_project
 from notes.context import prepare_note_context, conversation_uses_notes
 from notes.awareness import note_message_metadata
 from users.learning import confirm_ai_call, finish_ai_call, release_ai_call
@@ -57,7 +57,6 @@ def task_context(user, claims, message):
     current = task_message(user, claims, message)
     history = _get_chat_history(user, current.bot, current.conversation_id, exclude_ids=(current.pk,))
     history = [{**row, 'content': row['content'][:800]} for row in history[-8:]]
-    history = add_project_context(user, current.conversation_id, history)
     notes, _ = prepare_note_context(user, current.bot, current.conversation_id, message,
                                     selection=current.metadata.get('note_selection', ''))
     course = current.metadata.get('course_context')
@@ -139,7 +138,7 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
             return payload
         except BaseException as exc:
             if not AIUsageReservation.objects.filter(pk=reservation.pk, status='succeeded').exists():
-                if current:
+                if current and not current.projectlearningevent_set.exists():
                     current.delete()
                 if isinstance(exc, Exception):
                     error = str(exc.detail) if isinstance(exc, APIException) else '本轮执行失败，未扣除问答额度，请重新发送。'

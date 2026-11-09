@@ -44,6 +44,11 @@ def _inject_kp_chain_experiences(kp_ids: list, user, institution=None) -> list[s
 def generate_step_label(tool_name: str, args: dict) -> str:
     """根据 tool name 和 args 动态生成中文步骤描述。"""
     labels = {
+        'read_learning_project': lambda a: '读取这个项目的学习安排',
+        'plan_learning_project': lambda a: '整理阶段路径与下一步',
+        'record_learning_progress': lambda a: '记录这次表现与学习反馈',
+        'set_learning_followup': lambda a: '调整后续学习与跟进',
+        'find_learning_resources': lambda a: '查找并核对学习资料',
         'register_session_tool': lambda a: '编写并注册会话计算工具',
         'read_session_tool': lambda a: '读取会话工具代码与版本',
         'build_learning_experiment': lambda a: f"编写并检查「{a.get('title', '交互实验')}」",

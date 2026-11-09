@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework.exceptions import ValidationError
 from ai_assistant.models import AIChatMessage, Bot, Conversation, ConversationProject, ProjectLearning, ProjectLearningEvent
-from ai_assistant.services.project_learning import change_learning, current_project
+from ai_assistant.services.project_learning import change_learning, current_project, turn_project_context
 from ai_assistant.services.dsh_service import build_context, execute_tool, memory_snapshot
 from ai_assistant.services.learning_resources import find_resources, public_text
 from ai_assistant.tasks_learning import send_project_learning_followups
@@ -110,3 +110,71 @@ class ProjectLearningSmoke(APITestCase):
         self.assertIn(self.message.pk, [row['id'] for row in history.data])
         self.project.delete()
         self.assertEqual(send_project_learning_followups()['sent'], 0)
+
+    def test_turn_snapshot_stays_stable_after_own_tools_and_rejects_project_move(self):
+        from ai_assistant.services.dsh_xiaoyu import task_context
+        from rest_framework.exceptions import PermissionDenied
+        first = build_context(self.user, self.message.content, chat_context=self.context)
+        first['system_prompt'] += task_context(self.user, self.context, self.message.content)
+        self.make_plan()
+        second = build_context(self.user, self.message.content, chat_context=self.context)
+        second['system_prompt'] += task_context(self.user, self.context, self.message.content)
+        self.assertEqual(first['student'], second['student'])
+        self.assertEqual(first['system_prompt'], second['system_prompt'])
+        self.assertEqual(first['permissions_version'], second['permissions_version'])
+        new_project = ConversationProject.objects.create(user=self.user, name='另一个目标')
+        self.conversation.project = new_project
+        self.conversation.save(update_fields=['project'])
+        with self.assertRaises(PermissionDenied):
+            current_project(self.user, self.context)
+        with self.assertRaises(PermissionDenied):
+            turn_project_context(self.user, self.context)
+
+    def test_context_does_not_repeat_historical_plans(self):
+        from ai_assistant.services.project_learning import project_context
+        self.make_plan()
+        ProjectLearningEvent.objects.create(project=self.project, kind='plan', content={'previous_plan': {'goal': 'HISTORICAL_ONLY' * 2000}})
+        context = project_context(self.user, self.conversation.conversation_id)
+        self.assertNotIn('HISTORICAL_ONLY', context)
+        self.assertLess(len(context.encode()), 10000)
+
+    def test_project_course_turn_can_switch_visible_course_and_return(self):
+        from types import SimpleNamespace
+        from courses.models import Course, CourseModule, VideoTranscript, TranscriptSegment
+        from ai_assistant.services.course_context import prepare_course_context
+        from rest_framework.exceptions import NotFound
+        module = CourseModule.objects.create(name='公开数学', is_public=True)
+        public = Course.objects.create(title='函数课程', module=module, is_published=True)
+        private = Course.objects.create(title='未授权课程', is_published=True)
+        transcript = VideoTranscript.objects.create(course=public, asr_status='completed')
+        TranscriptSegment.objects.create(transcript=transcript, index=0, start_time=0, end_time=60, text='函数的条件')
+        request = SimpleNamespace(user=self.user, query_params={}, data={'course_context': {'course_id': public.pk, 'video_seconds': 20}})
+        result = prepare_course_context(request, self.bot, self.conversation.conversation_id)
+        self.assertEqual(result['video_seconds'], 20)
+        self.message.metadata = {'course_context': result}
+        self.message.save(update_fields=['metadata'])
+        request.data = {}
+        self.assertIsNone(prepare_course_context(request, self.bot, self.conversation.conversation_id))
+        request.data = {'course_context': {'course_id': private.pk, 'video_seconds': 20}}
+        with self.assertRaises(NotFound):
+            prepare_course_context(request, self.bot, self.conversation.conversation_id)
+
+    def test_followup_read_response_and_timed_resume_are_separate(self):
+        from types import SimpleNamespace
+        from ai_assistant.views_projects import save_new_conversation_project
+        self.make_plan()
+        ProjectLearning.objects.filter(pk=self.state.pk).update(followup_at=timezone.now() - timedelta(seconds=1))
+        send_project_learning_followups()
+        delivered = self.client.get(self.url).data['events'][0]
+        self.assertEqual(delivered['delivery'], {'saved': True, 'read': False, 'responded': False})
+        notification = Notification.objects.get(pk=delivered['content']['notification_id'])
+        notification.is_read = True
+        notification.save(update_fields=['is_read'])
+        reply = AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=self.conversation.conversation_id, role='user', content='我还需要一个提示。')
+        turn_project_context(self.user, {**self.context, 'message_id': reply.pk})
+        self.assertTrue(self.client.get(self.url).data['events'][0]['delivery']['responded'])
+        revision = self.client.get(self.url).data['revision']
+        future = (timezone.now() + timedelta(days=7)).isoformat()
+        change_learning(self.project, {'action': 'pause', 'revision': revision, 'resume_at': future})
+        save_new_conversation_project(SimpleNamespace(user=self.user, data={'project_id': self.project.pk}), self.bot, self.conversation.conversation_id)
+        self.assertIsNotNone(ProjectLearning.objects.get(pk=self.state.pk).followup_at)

@@ -135,15 +135,15 @@ export function XiaoYuChatProvider({ children }: { children: ReactNode }) {
       const sessions = current.groupIntoSessions(messages);
       const candidates = sessions.filter(session => session.projectId === id);
       const target = selectedId ? candidates.find(session => session.conversationId === selectedId) : candidates.at(-1);
-      if ((explicitConversation || (selectedId && messages.length > 0)) && !target) throw new Error('这段对话不属于当前项目，或已删除。');
+      if (explicitConversation && !target) throw new Error('这段对话不属于当前项目，或已删除。');
       if (target) {
         current.setSessions(previous => [...previous.filter(item => item.conversationId !== target.conversationId), target]);
         current.handleLoadSession(target, false, true);
       } else {
         current.handleReset(false);
-        if (draftEntry) current.setConversationId(draftEntry[0]);
+        if (draftEntry && !messages.length) current.setConversationId(draftEntry[0]);
         current.setProjectId(id);
-        if (draftEntry?.[1].draft) current.setInput(draftEntry[1].draft);
+        if (draftEntry?.[1].draft && !messages.length) current.setInput(draftEntry[1].draft);
         if (draft) current.setInput(draft);
       }
       queryClient.setQueryData(learningKey(userId, id), data);
