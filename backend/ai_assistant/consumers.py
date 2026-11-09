@@ -182,6 +182,9 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             return
 
         try:
+            from types import SimpleNamespace
+            from .views_projects import save_new_conversation_project, add_project_context
+            save_new_conversation_project(SimpleNamespace(user=self.user, data={}), self.bot, conversation_id)
             note_data = note_data or {}
             note_context, note_sources = prepare_note_context(
                 self.user, self.bot, conversation_id, message,
@@ -199,6 +202,7 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
                 conversation_id,
                 exclude_ids=(user_msg.id,),
             )
+            history_msgs = add_project_context(self.user, conversation_id, history_msgs)
             agent_history = history_msgs + ([{'role': 'user', 'content': note_context}] if note_context else [])
 
             student_context = ""
