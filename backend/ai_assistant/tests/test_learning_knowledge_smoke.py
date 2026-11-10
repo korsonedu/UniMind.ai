@@ -158,3 +158,27 @@ class LearningKnowledgeSmoke(APITestCase):
         response = execute_tool(self.user, 'manage_learning_knowledge', {'action': 'probe', 'node_id': 'sequence', 'mode': 'apply', 'question': '解释一段实际程序的执行顺序。', 'rubric': '逐行说明变量的值与执行先后。'}, version, chat_context=context)
         self.assertIn('error', response)
         self.assertEqual(self.client.post(f'/api/ai/projects/{self.project.pk}/learning/knowledge/', {'action': 'probe'}, format='json').status_code, 400)
+
+    def test_review_stages_use_first_learning_position(self):
+        from ai_assistant.services.learning_knowledge import validate_path
+        state = ProjectLearning.objects.get(project=self.project)
+        plan = deepcopy(state.plan)
+        base = plan['stages'][0]
+        def stages(order):
+            return [{**base, 'id': f's{index}', 'prerequisites': [], 'knowledge_nodes': [node]} for index, node in enumerate(order)]
+        plan['stages'] = stages(['branch', 'sequence', 'branch'])
+        with self.assertRaises(ValidationError): validate_path(self.project, state, plan)
+        plan['stages'] = stages(['sequence', 'branch', 'sequence'])
+        validate_path(self.project, state, plan)
+
+    def test_removed_task_presentation_stops_contributing_to_estimate(self):
+        probe = self.probe(); self.present(probe)
+        self.turn('先赋值为二，再加三，得到五。')
+        data = self.progress(probe)['knowledge']
+        self.assertEqual(data['nodes'][0]['beliefs']['apply']['independent_count'], 1)
+        AIChatMessage.objects.filter(role='assistant').delete()
+        state = ProjectLearning.objects.get(project=self.project)
+        data = knowledge_state(self.project, state)
+        self.assertEqual(data['excluded_evidence_count'], 1)
+        self.assertEqual(data['nodes'][0]['beliefs']['apply']['independent_count'], 0)
+        self.assertAlmostEqual(data['nodes'][0]['beliefs']['apply']['mean'], .5)

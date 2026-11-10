@@ -122,7 +122,10 @@ def validate_path(project, state, plan):
     nodes = closure(version.snapshot, path['targets'])
     if assigned != {node['id'] for node in nodes}:
         raise ValidationError('阶段需覆盖所选目标及其全部前置节点，且不能超出范围。')
-    positions = {node_id: index for index, stage in enumerate(plan['stages']) for node_id in stage.get('knowledge_nodes', [])}
+    positions = {}
+    for index, stage in enumerate(plan['stages']):
+        for node_id in stage.get('knowledge_nodes', []):
+            positions.setdefault(node_id, index)
     if any(positions[parent] > positions[node['id']] for node in nodes for parent in node['prerequisites']):
         raise ValidationError('前置知识应安排在相同或更早的学习阶段。')
     for stage in plan['stages']:
@@ -194,9 +197,17 @@ def knowledge_state(project, state, *, compact=False):
     evidence = []
     checks = ProjectLearningEvent.objects.filter(project=project, kind='progress', message__isnull=False,
         content__knowledge_check__version_id=version.pk).select_related('message').order_by('created_at', 'pk')
+    checks = list(checks)
+    probes_by_id = {probe.pk: probe for probe in ProjectLearningEvent.objects.filter(project=project, kind='probe',
+        pk__in=[event.content['knowledge_check']['probe_id'] for event in checks], message__isnull=False).select_related('message')}
+    excluded_count = 0
     for event in checks:
         check = event.content['knowledge_check']
         if check.get('algorithm') != ALGORITHM_VERSION:
+            continue
+        probe = probes_by_id.get(check['probe_id'])
+        if not probe or check['quote'] not in event.message.content or not presented(probe, event.message):
+            excluded_count += 1
             continue
         observations.setdefault((check['node_id'], check['mode']), []).append({**check, 'at': event.created_at.isoformat()})
         evidence.append({'event_id': event.pk, 'message_id': event.message_id, 'source': event.message.content[:2000], 'conversation_id': str(event.message.conversation_id),
@@ -229,6 +240,7 @@ def knowledge_state(project, state, *, compact=False):
     result = {'algorithm': ALGORITHM_VERSION, 'version_id': version.pk, 'map_id': version.knowledge_map_id,
               'revision': version.revision, 'title': version.snapshot['title'], 'path': path, 'nodes': states,
               'recommendations': recommendations[:3], 'probes': probes,
+              'excluded_evidence_count': excluded_count,
               'notice': '固定参数下的条件表现估计，尚未校准；不代表正式分数或真实掌握概率。迁移任务由小宇提出，尚未独立验证。'}
     if compact:
         result['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in states]
