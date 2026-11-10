@@ -5,7 +5,7 @@ from ai_engine.tool_router import classify_intent_keywords
 GROUPS = {
     'project': ('目标学习与跟进', '读取当前项目；规划阶段、查公开资源、记录实际学习反馈、调整与主动跟进。', (
         'read_learning_project', 'plan_learning_project', 'record_learning_progress',
-        'set_learning_followup', 'find_learning_resources')),
+        'set_learning_followup', 'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies')),
     'interactive': ('交互讲题', '取题并编写交互实验，在同一分组内完成题目讲解和可操作实验。', (
         'get_practice_questions', 'lookup_question', 'search_knowledge_tree', 'build_learning_experiment',
         'read_learning_experiment', 'register_session_tool', 'read_session_tool')),

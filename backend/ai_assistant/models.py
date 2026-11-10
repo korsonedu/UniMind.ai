@@ -480,3 +480,54 @@ class ProjectLearningEvent(models.Model):
 
     class Meta:
         ordering = ['-id']
+
+
+class LearningResource(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    url = models.URLField(max_length=3000)
+    url_hash = models.CharField(max_length=64)
+    title = models.CharField(max_length=200)
+    excerpt = models.TextField()
+    read_at = models.DateTimeField()
+    domain = models.CharField(max_length=100, blank=True)
+    topic = models.CharField(max_length=200, blank=True)
+    level = models.CharField(max_length=80, blank=True)
+    edition = models.CharField(max_length=80, blank=True)
+    is_archived = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'url_hash'], name='learning_resource_user_url')]
+
+
+class LearningStrategy(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    source_event = models.OneToOneField(ProjectLearningEvent, on_delete=models.CASCADE)
+    domain = models.CharField(max_length=100, blank=True)
+    topic = models.CharField(max_length=200, blank=True)
+    is_retired = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class LearningStrategyUse(models.Model):
+    strategy = models.ForeignKey(LearningStrategy, on_delete=models.CASCADE, related_name='uses')
+    project = models.ForeignKey(ConversationProject, on_delete=models.CASCADE)
+    message = models.ForeignKey(AIChatMessage, on_delete=models.CASCADE)
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['strategy', 'message'], name='learning_strategy_use_message')]
+
+
+class LearningStrategyReview(models.Model):
+    use = models.ForeignKey(LearningStrategyUse, on_delete=models.CASCADE, related_name='reviews')
+    evidence_event = models.ForeignKey(ProjectLearningEvent, on_delete=models.CASCADE)
+    judgement = models.CharField(max_length=16, choices=[('support', '支持观察'), ('against', '相反观察'), ('uncertain', '尚不确定')])
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['use', 'evidence_event'], name='learning_strategy_review_evidence')]

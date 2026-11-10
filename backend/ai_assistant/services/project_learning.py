@@ -72,7 +72,9 @@ def learning_data(project):
     from notifications.models import Notification
     notifications = dict(Notification.objects.filter(recipient=project.user,
         pk__in=[event.content['notification_id'] for event in events if event.content.get('notification_id')]).values_list('pk', 'is_read'))
+    from .learning_library import project_strategy_uses
     return {
+        'strategy_uses': project_strategy_uses(project),
         'project_id': project.pk, 'name': project.name, 'instructions': project.instructions,
         'status': state.status, 'plan': state.plan, 'resources': state.resources,
         'current_stage': state.current_stage, 'feedback': state.feedback, 'next_action': state.next_action,
@@ -163,6 +165,12 @@ def _major(old, new):
         new_stages[key]['outcome'] != value['outcome'] for key, value in old_stages.items() if key in new_stages)
 
 
+def assert_learning_turn(project, message):
+    if ProjectLearningEvent.objects.filter(project=project, created_at__gt=message.timestamp).filter(
+            Q(kind='turn') | Q(message__isnull=True, kind__in=['pause', 'resume', 'complete', 'schedule', 'accept', 'reject'])).exists():
+        raise LearningConflict('已有新的提问或用户安排，本轮学习写入已失效，请沿最新反馈继续。')
+
+
 @transaction.atomic
 def change_learning(project, data, *, message=None, model=False):
     state, _ = ProjectLearning.objects.get_or_create(project=project)
@@ -172,9 +180,8 @@ def change_learning(project, data, *, message=None, model=False):
         request_key = hashlib.sha256(json.dumps([message.pk, data], sort_keys=True, default=str).encode()).hexdigest()
         if ProjectLearningEvent.objects.filter(request_key=request_key).exists():
             return learning_data(project)
-    if model and ProjectLearningEvent.objects.filter(project=project, created_at__gt=message.timestamp).filter(
-            Q(kind='turn') | Q(message__isnull=True, kind__in=['pause', 'resume', 'complete', 'schedule', 'accept', 'reject'])).exists():
-        raise LearningConflict('已有新的提问或用户安排，本轮学习写入已失效，请沿最新反馈继续。')
+    if model:
+        assert_learning_turn(project, message)
     revision = serializers.IntegerField(min_value=0).run_validation(data.get('revision'))
     if revision != state.revision:
         raise LearningConflict()
@@ -213,6 +220,8 @@ def change_learning(project, data, *, message=None, model=False):
         if stage not in {s['id'] for s in state.plan.get('stages', [])}:
             raise ValidationError('当前阶段不在学习安排中。')
         state.current_stage = stage
+        stage_data = next(item for item in state.plan['stages'] if item['id'] == stage)
+        event['context'] = {'goal': state.plan['goal'], 'stage': stage_data['title'], 'outcome': stage_data['outcome']}
         event.update(observation=observation, feedback=feedback, assistance=assistance,
                      strategy=str(data.get('strategy', ''))[:2000], next_action=state.next_action, stage=stage)
         _clear_followup(state)
@@ -261,6 +270,10 @@ def change_learning(project, data, *, message=None, model=False):
 
 def tool_operation(executor, name, arguments):
     project, message = current_project(executor.user, getattr(executor, 'learning_context', None))
+    if name in ('manage_learning_resources', 'manage_learning_strategies'):
+        from .learning_library import resource_operation, strategy_operation
+        operation = resource_operation if name == 'manage_learning_resources' else strategy_operation
+        return operation(project, arguments, message=message)
     if name == 'read_learning_project':
         return compact_learning(learning_data(project))
     if name == 'find_learning_resources':

@@ -24,3 +24,22 @@ class ProjectLearningView(APIView):
     def post(self, request, pk):
         project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
         return Response(find_resources(project, request.data))
+
+
+class ProjectLearningLibraryView(APIView):
+    permission_classes = [IsMember]
+
+    def get(self, request, pk):
+        from .services.learning_library import library_data, validate
+        get_object_or_404(ConversationProject, pk=pk, user=request.user)
+        data = validate({'action': 'search', 'query': request.query_params.get('query', ''), 'domain': request.query_params.get('domain', '')})
+        return Response(library_data(request.user, data['query'], data['domain']))
+
+    def post(self, request, pk):
+        from .services.learning_library import resource_operation, strategy_operation
+        project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
+        if request.data.get('kind') == 'resource':
+            return Response(resource_operation(project, request.data))
+        if request.data.get('kind') == 'strategy' and request.data.get('action') in ('save', 'retire', 'restore'):
+            return Response(strategy_operation(project, request.data))
+        raise serializers.ValidationError('方法试用与结果检查请在实际学习对话中完成。')

@@ -44,6 +44,8 @@ def _inject_kp_chain_experiences(kp_ids: list, user, institution=None) -> list[s
 def generate_step_label(tool_name: str, args: dict) -> str:
     """根据 tool name 和 args 动态生成中文步骤描述。"""
     labels = {
+        'manage_learning_resources': lambda a: '整理与复用我的学习资料',
+        'manage_learning_strategies': lambda a: '查阅教学方法与后续表现',
         'read_learning_project': lambda a: '读取这个项目的学习安排',
         'plan_learning_project': lambda a: '整理阶段路径与下一步',
         'record_learning_progress': lambda a: '记录这次表现与学习反馈',
@@ -618,6 +620,12 @@ class PlannerToolExecutor(BaseToolExecutor):
 
     def _handle_find_learning_resources(self, args):
         return self._project_learning('find_learning_resources', args)
+
+    def _handle_manage_learning_resources(self, args):
+        return self._project_learning('manage_learning_resources', args)
+
+    def _handle_manage_learning_strategies(self, args):
+        return self._project_learning('manage_learning_strategies', args)
 
     def _handle_get_learning_sessions(self, args: Dict) -> Dict:
         from ai_assistant.services.memory_system import MemorySystem
