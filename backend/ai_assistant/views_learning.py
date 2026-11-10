@@ -33,6 +33,13 @@ class ProjectLearningLibraryView(APIView):
         from .services.learning_library import library_data, validate
         get_object_or_404(ConversationProject, pk=pk, user=request.user)
         data = validate({'action': 'search', 'query': request.query_params.get('query', ''), 'domain': request.query_params.get('domain', '')})
+        if request.query_params.get('resource_id'):
+            from .models import LearningResource, LearningResourceVersion
+            resource_id = serializers.IntegerField(min_value=1).run_validation(request.query_params['resource_id'])
+            revision = serializers.IntegerField(min_value=1).run_validation(request.query_params.get('revision'))
+            resource = get_object_or_404(LearningResource, pk=resource_id, user=request.user)
+            version = get_object_or_404(LearningResourceVersion, resource=resource, revision=revision)
+            return Response({'resource': version.snapshot, 'current_revision': resource.revision})
         return Response(library_data(request.user, data['query'], data['domain']))
 
     def post(self, request, pk):

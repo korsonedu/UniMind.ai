@@ -1,5 +1,6 @@
 """Owned source snapshots and traceable teaching methods; no cross-user promotion."""
 import hashlib
+import json
 from uuid import uuid4
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Q
@@ -8,7 +9,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from ai_assistant.models import (
     AIChatMessage, Conversation, ProjectLearning, ProjectLearningEvent, LearningResource,
-    LearningStrategy, LearningStrategyUse, LearningStrategyReview,
+    LearningStrategy, LearningStrategyUse, LearningStrategyReview, LearningResourceVersion,
 )
 from .project_learning import LearningConflict, assert_learning_turn
 from .learning_resources import store_resource
@@ -39,7 +40,7 @@ def validate(data):
 
 def resource_data(row, *, compact=False):
     return {key: getattr(row, key) for key in ('id', 'url', 'title', 'read_at', 'domain', 'topic', 'level', 'edition',
-                                               'is_archived', 'revision')} | {'excerpt': row.excerpt[:500] if compact else row.excerpt}
+                                               'is_archived', 'revision')} | {'read_at': row.read_at.isoformat(), 'excerpt': row.excerpt[:500] if compact else row.excerpt}
 
 
 def event_data(event):
@@ -50,8 +51,9 @@ def event_data(event):
 
 
 def strategy_data(row, *, compact=False):
-    reviews = [] if compact else list(LearningStrategyReview.objects.filter(use__strategy=row).select_related(
-        'evidence_event__message').order_by('-id')[:10])
+    checks = LearningStrategyReview.objects.filter(use__strategy=row).select_related('evidence_event__message').order_by('-id')
+    reviews = (list(checks.filter(judgement='against', evidence_event__message__isnull=False)[:2]) +
+               list(checks.exclude(judgement='against').filter(evidence_event__message__isnull=False)[:1])) if compact else list(checks[:10])
     counts = {kind: getattr(row, f'{kind}_count', 0) for kind in ('support', 'against', 'uncertain')}
     source = event_data(row.source_event)
     if compact:
@@ -64,9 +66,17 @@ def strategy_data(row, *, compact=False):
             'domain': row.domain, 'topic': row.topic, 'context': background,
             'available': not row.is_retired and bool(row.source_event.message_id), 'is_retired': row.is_retired,
             'revision': row.revision, 'counts': counts, 'source': source,
-            'reviews': [] if compact else [{'judgement': review.judgement, 'reason': review.reason,
-                'evidence': event_data(review.evidence_event)} for review in sorted(reviews, key=lambda item: item.pk, reverse=True)[:10]],
+            'reviews': [{'judgement': review.judgement, 'reason': review.reason[:600] if compact else review.reason,
+                'evidence': _review_evidence(review.evidence_event, compact)} for review in reviews],
             'notice': '候选教学方法；后续观察不能证明普遍有效，也不代表正式成绩。'}
+
+
+def _review_evidence(event, compact):
+    data = event_data(event)
+    if compact:
+        data['source'] = data['source'][:500] if data['source'] else None
+        data['observation'] = data['observation'][:500]
+    return data
 
 
 def strategy_rows(user):
@@ -87,7 +97,7 @@ def library_data(user, query='', domain='', *, compact=False):
     if compact:
         resources = resources.filter(is_archived=False)
         strategies = strategies.filter(is_retired=False, source_event__message__isnull=False)
-    return {'resources': [resource_data(row, compact=compact) for row in resources.order_by('-updated_at')[:20 if not compact else 8]],
+    return {'resources': [resource_data(row, compact=compact) | ({} if compact else {'versions': list(row.versions.order_by('-revision').values('revision', 'created_at')[:10])}) for row in resources.order_by('-updated_at')[:20 if not compact else 8]],
             'strategies': [strategy_data(row, compact=compact) for row in strategies.order_by('-id')[:20 if not compact else 3]]}
 
 
@@ -104,6 +114,11 @@ def _state(project, message):
 def _revision(row, data):
     if data.get('revision') != row.revision:
         raise LearningConflict('资料或方法已变化，请重新读取后操作。')
+
+
+def _keep_version(row):
+    LearningResourceVersion.objects.get_or_create(resource=row, revision=row.revision,
+        defaults={'snapshot': json.loads(json.dumps(resource_data(row), default=str))})
 
 
 @transaction.atomic
@@ -125,10 +140,12 @@ def resource_operation(project, arguments, *, message=None):
             _revision(row, data)
             if values['read_at'] < row.read_at:
                 raise LearningConflict('项目保留的是较早来源，不能覆盖资料库的新版本。')
+            _keep_version(row)
             for key, value in values.items():
                 setattr(row, key, value)
             row.revision += 1
             row.save()
+        _keep_version(row)
         return {'resource': resource_data(row), 'created': created}
     row = get_object_or_404(LearningResource.objects.select_for_update(), pk=data.get('resource_id'), user=project.user)
     if data['action'] == 'attach':
@@ -137,12 +154,13 @@ def resource_operation(project, arguments, *, message=None):
         existing = next((item for item in state.resources if item['url'] == row.url), None)
         if existing:
             return {'resource': existing, 'notice': '项目已有这份资料的快照，保留原引用；需要更新时请重新读取原文。'}
-        source = {key: getattr(row, key) for key in ('url', 'title', 'excerpt')}
+        source = {key: getattr(row, key) for key in ('url', 'title', 'excerpt', 'domain', 'topic', 'level', 'edition')}
         source.update(id=uuid4().hex, read_at=row.read_at.isoformat(), library_id=row.pk, library_revision=row.revision)
         return store_resource(project, source) | {'notice': '沿用此前读取的快照，未重新核验网页时效。'}
     if message or data['action'] not in ('update', 'archive', 'restore'):
         raise ValidationError('不支持的资料操作。')
     _revision(row, data)
+    _keep_version(row)
     if data['action'] == 'update':
         for key in ('domain', 'topic', 'level', 'edition'):
             if key in data:
@@ -151,6 +169,7 @@ def resource_operation(project, arguments, *, message=None):
         row.is_archived = data['action'] == 'archive'
     row.revision += 1
     row.save()
+    _keep_version(row)
     return {'resource': resource_data(row)}
 
 
@@ -176,9 +195,11 @@ def strategy_operation(project, arguments, *, message=None):
                                  kind='progress', message__user=project.user, message__role='user')
         if not message or event.message_id != message.pk or event.message_id == use.message_id or event.message.timestamp <= use.message.timestamp:
             raise ValidationError('评估必须来自试用之后另一轮实际提问的表现。')
-        if not AIChatMessage.objects.filter(user=project.user, conversation_id=use.message.conversation_id,
-                role='assistant', timestamp__gt=use.created_at, timestamp__lt=event.message.timestamp).exclude(content='[Thinking...]').exists():
-            raise ValidationError('还没有试用后已完成的讲解记录，暂不能把这次回答归为方法后续结果。')
+        reply = AIChatMessage.objects.filter(user=project.user, bot_id=use.message.bot_id, conversation_id=use.message.conversation_id,
+            role='assistant', metadata__learning_turn__message_id=use.message_id, metadata__learning_turn__completed=True).first()
+        completed_at = serializers.DateTimeField().run_validation(reply.metadata['learning_turn']['completed_at']) if reply else None
+        if not completed_at or completed_at >= event.message.timestamp:
+            raise ValidationError('还没有本次试用提问已完成的讲解记录，暂不能把这次回答归为方法后续结果。')
         if not use.strategy.source_event.message_id:
             raise ValidationError('原始依据已删除，不能继续评估这项方法。')
         judgement = data.get('judgement')

@@ -78,7 +78,7 @@ export async function apply(ctx: Context) {
         },
       },
       timeoutMs: 15000,
-      isConcurrencySafe: () => !['register_session_tool', 'build_learning_experiment', 'read_session_tool'].includes(definition.name),
+      isConcurrencySafe: () => !['register_session_tool', 'build_learning_experiment', 'read_session_tool', 'manage_learning_resources', 'manage_learning_strategies'].includes(definition.name),
       execute: async (args, exec) => {
         const value = await request<Record<string, unknown>>(`/api/ai/dsh/tools/${definition.name}/`, {
           arguments: args, memory_version: context.memory.version,

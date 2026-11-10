@@ -189,6 +189,9 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                     msg_metadata['visual'] = visuals[-1]
                     if len(visuals) > 1:
                         msg_metadata['all_visuals'] = visuals
+                if _complete_ai_result(res, ai_content, msg_metadata):
+                    from .services.project_learning import completed_learning_turn
+                    msg_metadata['learning_turn'] = completed_learning_turn(current_user_message_id)
                 if msg_metadata:
                     pending_msg.metadata = msg_metadata
                 pending_msg.save()
@@ -205,6 +208,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
                                              'metadata': pending_msg.metadata if pending_msg else {}})
         else:
             if pending_msg:
+                pending_msg.metadata.pop("learning_turn", None)
                 pending_msg.content = "Agent 暂时无法响应，请稍后再试。"
                 pending_msg.save()
 
@@ -212,6 +216,7 @@ def _process_ai_chat(user, bot, user_message, pending_msg_id, conversation_id=No
         logger.exception("AI Chat Thread Error: %s", e)
         pending_msg = AIChatMessage.objects.filter(id=pending_msg_id).first()
         if pending_msg:
+            pending_msg.metadata.pop("learning_turn", None)
             pending_msg.content = "抱歉，连接中断，请稍后再试。"
             pending_msg.save()
     finally:
@@ -906,6 +911,10 @@ class AIChatStreamView(APIView):
                     metadata['visual'] = visuals[-1]  # Last visual for backward compat
                     if len(visuals) > 1:
                         metadata['all_visuals'] = visuals
+
+                if not is_error and _complete_ai_result(result, ai_content, metadata):
+                    from .services.project_learning import completed_learning_turn
+                    metadata['learning_turn'] = completed_learning_turn(user_msg.pk)
 
                 # Save assistant message even when ai_content is empty (tool-only responses)
                 has_metadata = bool(metadata)

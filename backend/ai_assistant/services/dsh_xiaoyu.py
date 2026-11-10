@@ -105,7 +105,9 @@ def complete_turn(request, bot, conversation_id, message, emit, *, course_contex
                 raise DshUnavailable('本轮回答未完成，未扣除问答额度。')
             native = result['session']
             cards = next((row.get('cards', []) for row in reversed(native['messages']) if row['role'] == 'assistant'), [])
-            metadata = {'engine': 'dsh', 'dsh_session_id': native['id'], 'dsh_cards': cards}
+            from .project_learning import completed_learning_turn
+            metadata = {'engine': 'dsh', 'dsh_session_id': native['id'], 'dsh_cards': cards,
+                        'learning_turn': completed_learning_turn(current.pk)}
             if course_context:
                 metadata['course_context'] = course_context
             with quota_write_lock(), transaction.atomic():

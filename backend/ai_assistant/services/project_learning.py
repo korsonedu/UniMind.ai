@@ -165,6 +165,10 @@ def _major(old, new):
         new_stages[key]['outcome'] != value['outcome'] for key, value in old_stages.items() if key in new_stages)
 
 
+def completed_learning_turn(message_id):
+    return {'message_id': message_id, 'completed': True, 'completed_at': timezone.now().isoformat()}
+
+
 def assert_learning_turn(project, message):
     if ProjectLearningEvent.objects.filter(project=project, created_at__gt=message.timestamp).filter(
             Q(kind='turn') | Q(message__isnull=True, kind__in=['pause', 'resume', 'complete', 'schedule', 'accept', 'reject'])).exists():

@@ -261,6 +261,9 @@ class AgentChatConsumer(AsyncWebsocketConsumer):
             msg_metadata = self._build_metadata(tool_executor) or {}
             if note_sources:
                 msg_metadata['note_sources'] = note_sources
+            if _quota_earned and not engine_failed.is_set() and not self._cancelled.is_set() and _complete_ai_result(result, ai_content, msg_metadata):
+                from .services.project_learning import completed_learning_turn
+                msg_metadata['learning_turn'] = completed_learning_turn(user_msg.pk)
             from .services.chat_dispatch import build_tool_run_done_payload
             done_event = build_tool_run_done_payload(
                 result,

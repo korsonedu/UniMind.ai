@@ -7,7 +7,7 @@ from users.models import User
 from ai_assistant.models import (AIChatMessage, Bot, Conversation, ConversationProject, ProjectLearning,
     ProjectLearningEvent, LearningResource, LearningStrategy, LearningStrategyReview)
 from ai_assistant.views_projects import save_new_conversation_project
-from ai_assistant.services.project_learning import change_learning, turn_project_context, LearningConflict
+from ai_assistant.services.project_learning import change_learning, turn_project_context, LearningConflict, completed_learning_turn
 from ai_assistant.services.learning_resources import find_resources
 from ai_assistant.services.learning_library import resource_operation, strategy_operation, library_data
 from ai_assistant.services.dsh_service import build_context, execute_tool, memory_snapshot
@@ -63,6 +63,10 @@ class LearningLibrarySmoke(APITestCase):
         self.assertNotEqual(attached['id'], self.resource['id'])
         self.assertEqual(attached['read_at'], self.resource['read_at'])
         self.assertEqual(attached['library_revision'], 1)
+        self.assertEqual(attached['domain'], '数学')
+        history = self.client.get(self.url, {'resource_id': row['id'], 'revision': 1})
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual(history.data['resource']['excerpt'], self.resource['excerpt'])
         message = self.turn(self.target, '在另一个例子里继续。')
         plan = {**self.plan, 'stages': [{**self.plan['stages'][0], 'sources': [attached['id']]}]}
         result = change_learning(self.target, {'action': 'plan', 'revision': 0, 'plan': plan}, message=message)
@@ -81,6 +85,9 @@ class LearningLibrarySmoke(APITestCase):
             newer = find_resources(self.project, {'url': self.resource['url']})['resource']
         resource_operation(self.project, {'action': 'save', 'source_id': newer['id'], 'revision': 3})
         self.assertEqual(ProjectLearning.objects.get(project=self.target).resources[0]['excerpt'], attached['excerpt'])
+        history = self.client.get(self.url, {'resource_id': row['id'], 'revision': 1})
+        self.assertEqual(history.data['resource']['excerpt'], self.resource['excerpt'])
+        self.assertNotEqual(history.data['resource']['title'], LearningResource.objects.get(pk=row['id']).title)
         with self.assertRaises(LearningConflict):
             resource_operation(self.target, {'action': 'save', 'source_id': attached['id'], 'revision': 4})
         self.client.force_authenticate(self.other)
@@ -96,7 +103,7 @@ class LearningLibrarySmoke(APITestCase):
         same_turn = self.progress(self.target, trigger)
         with self.assertRaises(ValidationError):
             strategy_operation(self.target, {'action': 'review', 'use_id': use_id, 'event_id': same_turn.pk, 'judgement': 'support', 'reason': '不能用本轮冒充后续'}, message=trigger)
-        AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=trigger.conversation_id, role='assistant', content='请先说清定义，再判断这个新例子。')
+        AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=trigger.conversation_id, role='assistant', content='请先说清定义，再判断这个新例子。', metadata={'learning_turn': completed_learning_turn(trigger.pk)})
         later = self.turn(self.target, '有提示后我才知道怎么判断。')
         hinted = self.progress(self.target, later, 'hint')
         args = {'action': 'review', 'use_id': use_id, 'event_id': hinted.pk, 'judgement': 'support', 'reason': '仍有提示'}
@@ -114,6 +121,11 @@ class LearningLibrarySmoke(APITestCase):
         self.assertEqual(result['counts'], {'support': 1, 'against': 0, 'uncertain': 1})
         self.assertEqual(result['context']['goal'], self.plan['goal'])
         self.assertEqual(LearningStrategyReview.objects.count(), 2)
+        negative = self.turn(self.target, '新例子里我仍然把分支和循环混淆了。')
+        contrary = self.progress(self.target, negative)
+        strategy_operation(self.target, {'action': 'review', 'use_id': use_id, 'event_id': contrary.pk, 'judgement': 'against', 'reason': '换例子后仍混淆，不能泛化支持'}, message=negative)
+        brief = library_data(self.user, compact=True)['strategies'][0]
+        self.assertTrue(any(review['judgement'] == 'against' and '混淆' in review['reason'] for review in brief['reviews']))
 
     def test_retirement_and_removed_source_stop_new_recommendation(self):
         strategy_id = self.save_strategy()
@@ -148,3 +160,18 @@ class LearningLibrarySmoke(APITestCase):
         self.assertEqual(result.status_code, 400)
         self.assertEqual(self.client.post(self.url, {'kind': 'strategy', 'action': 'save', 'event_id': 999999}, format='json').status_code, 404)
         self.assertEqual(LearningResource.objects.count(), 0)
+
+    def test_reminder_and_unrelated_reply_do_not_complete_method_trial(self):
+        strategy_id = self.save_strategy()
+        trigger = self.turn(self.target, '请尝试这个方法。')
+        self.prepare(self.target, trigger)
+        use_id = strategy_operation(self.target, {'action': 'apply', 'strategy_id': strategy_id, 'reason': '区分定义和例子'}, message=trigger)['use_id']
+        AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=trigger.conversation_id, role='assistant',
+            content='记得回来继续学习。', metadata={'learning_followup': {'project_id': self.target.pk}})
+        AIChatMessage.objects.create(user=self.user, bot=self.bot, conversation_id=trigger.conversation_id, role='assistant',
+            content='另一条问题的回复。', metadata={'learning_turn': completed_learning_turn(self.message.pk)})
+        later = self.turn(self.target, '我做了一个新例子。')
+        evidence = self.progress(self.target, later)
+        with self.assertRaises(ValidationError):
+            strategy_operation(self.target, {'action': 'review', 'use_id': use_id, 'event_id': evidence.pk, 'judgement': 'support', 'reason': '不能靠提醒解锁'}, message=later)
+        self.assertEqual(LearningStrategyReview.objects.count(), 0)

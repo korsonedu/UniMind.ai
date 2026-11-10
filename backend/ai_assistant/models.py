@@ -531,3 +531,13 @@ class LearningStrategyReview(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['use', 'evidence_event'], name='learning_strategy_review_evidence')]
+
+
+class LearningResourceVersion(models.Model):
+    resource = models.ForeignKey(LearningResource, on_delete=models.CASCADE, related_name='versions')
+    revision = models.PositiveIntegerField()
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['resource', 'revision'], name='learning_resource_version')]
