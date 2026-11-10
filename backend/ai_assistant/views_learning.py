@@ -50,3 +50,21 @@ class ProjectLearningLibraryView(APIView):
         if request.data.get('kind') == 'strategy' and request.data.get('action') in ('save', 'retire', 'restore'):
             return Response(strategy_operation(project, request.data))
         raise serializers.ValidationError('方法试用与结果检查请在实际学习对话中完成。')
+
+
+class ProjectLearningKnowledgeView(APIView):
+    permission_classes = [IsMember]
+
+    def get(self, request, pk):
+        from .services.learning_knowledge import knowledge_operation
+        project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
+        if request.query_params.get('version_id'):
+            return Response(knowledge_operation(project, {'action': 'read', 'version_id': request.query_params['version_id']}))
+        return Response(knowledge_operation(project, {'action': 'search', 'query': request.query_params.get('query', '')}))
+
+    def post(self, request, pk):
+        from .services.learning_knowledge import knowledge_operation
+        project = get_object_or_404(ConversationProject, pk=pk, user=request.user)
+        if request.data.get('action') not in ('save', 'prepare'):
+            raise serializers.ValidationError('实际检查请在学习对话中完成。')
+        return Response(knowledge_operation(project, request.data))

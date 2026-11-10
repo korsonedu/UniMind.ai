@@ -25,6 +25,7 @@ class StageSerializer(serializers.Serializer):
     task = serializers.CharField(max_length=3000, allow_blank=True, default='')
     prerequisites = serializers.ListField(child=serializers.CharField(max_length=60), max_length=20, default=list)
     sources = serializers.ListField(child=serializers.CharField(max_length=60), max_length=10, default=list)
+    knowledge_nodes = serializers.ListField(child=serializers.CharField(max_length=60), max_length=30, required=False)
 
 
 class PlanSerializer(serializers.Serializer):
@@ -32,6 +33,7 @@ class PlanSerializer(serializers.Serializer):
     deadline = serializers.DateField(allow_null=True, default=None)
     weekly_minutes = serializers.IntegerField(min_value=0, max_value=10080, default=0)
     stages = StageSerializer(many=True, allow_empty=False, max_length=20)
+    knowledge_path = serializers.JSONField(required=False)
 
     def validate(self, data):
         if len(json.dumps(data, ensure_ascii=False, default=str).encode()) > 24000:
@@ -73,7 +75,9 @@ def learning_data(project):
     notifications = dict(Notification.objects.filter(recipient=project.user,
         pk__in=[event.content['notification_id'] for event in events if event.content.get('notification_id')]).values_list('pk', 'is_read'))
     from .learning_library import project_strategy_uses
+    from .learning_knowledge import knowledge_state
     return {
+        'knowledge': knowledge_state(project, state),
         'strategy_uses': project_strategy_uses(project),
         'project_id': project.pk, 'name': project.name, 'instructions': project.instructions,
         'status': state.status, 'plan': state.plan, 'resources': state.resources,
@@ -155,6 +159,8 @@ def _schedule(state, data):
 def _major(old, new):
     if not old:
         return False
+    if old.get('knowledge_path') != new.get('knowledge_path'):
+        return True
     if old.get('goal') != new['goal'] or (new['weekly_minutes'] > old.get('weekly_minutes', 0)):
         return True
     if old.get('deadline') and (not new['deadline'] or new['deadline'] > old['deadline']):
@@ -195,6 +201,8 @@ def change_learning(project, data, *, message=None, model=False):
         serializer = PlanSerializer(data=data.get('plan'))
         serializer.is_valid(raise_exception=True)
         plan = json.loads(json.dumps(serializer.validated_data, default=str))
+        from .learning_knowledge import validate_path
+        validate_path(project, state, plan)
         known_sources = {item['id'] for item in state.resources}
         if any(not set(stage['sources']).issubset(known_sources) for stage in plan['stages']):
             raise ValidationError('计划只能引用当前项目实际读取过的来源。')
@@ -228,6 +236,9 @@ def change_learning(project, data, *, message=None, model=False):
         event['context'] = {'goal': state.plan['goal'], 'stage': stage_data['title'], 'outcome': stage_data['outcome']}
         event.update(observation=observation, feedback=feedback, assistance=assistance,
                      strategy=str(data.get('strategy', ''))[:2000], next_action=state.next_action, stage=stage)
+        if data.get('knowledge_check') is not None:
+            from .learning_knowledge import validate_check
+            event['knowledge_check'] = validate_check(project, state, message, data['knowledge_check'], stage_data, assistance)
         _clear_followup(state)
         _schedule(state, data)
     elif action in ('pause', 'resume', 'complete', 'schedule'):
@@ -274,6 +285,9 @@ def change_learning(project, data, *, message=None, model=False):
 
 def tool_operation(executor, name, arguments):
     project, message = current_project(executor.user, getattr(executor, 'learning_context', None))
+    if name == 'manage_learning_knowledge':
+        from .learning_knowledge import knowledge_operation
+        return knowledge_operation(project, arguments, message=message)
     if name in ('manage_learning_resources', 'manage_learning_strategies'):
         from .learning_library import resource_operation, strategy_operation
         operation = resource_operation if name == 'manage_learning_resources' else strategy_operation
@@ -294,6 +308,9 @@ def tool_operation(executor, name, arguments):
 
 
 def compact_learning(data):
+    knowledge = data.get('knowledge', {})
+    knowledge.pop('evidence', None)
+    knowledge['nodes'] = [{'id': node['id'], 'title': node['title'], 'beliefs': node['beliefs']} for node in knowledge.get('nodes', [])]
     data['events'] = data['events'][:5]
     for event in data['events']:
         if event['source']:

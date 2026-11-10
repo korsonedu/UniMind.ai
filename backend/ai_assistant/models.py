@@ -541,3 +541,19 @@ class LearningResourceVersion(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['resource', 'revision'], name='learning_resource_version')]
+
+
+class LearningKnowledgeMap(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    title = models.CharField(max_length=200)
+    revision = models.PositiveIntegerField(default=1)
+
+
+class LearningKnowledgeVersion(models.Model):
+    knowledge_map = models.ForeignKey(LearningKnowledgeMap, on_delete=models.CASCADE, related_name='versions')
+    revision = models.PositiveIntegerField()
+    snapshot = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['knowledge_map', 'revision'], name='learning_knowledge_version')]

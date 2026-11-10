@@ -6,6 +6,9 @@ GROUPS = {
     'project': ('目标学习与跟进', '读取当前项目；规划阶段、查公开资源、记录实际学习反馈、调整与主动跟进。', (
         'read_learning_project', 'plan_learning_project', 'record_learning_progress',
         'set_learning_followup', 'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies')),
+    'knowledge': ('知识地图与证据路径', '组织带来源知识单元、有向前置关系与目标深度；登记检查任务并更新贝叶斯证据。', (
+        'read_learning_project', 'manage_learning_knowledge', 'plan_learning_project', 'record_learning_progress',
+        'manage_learning_resources', 'find_learning_resources')),
     'interactive': ('交互讲题', '取题并编写交互实验，在同一分组内完成题目讲解和可操作实验。', (
         'get_practice_questions', 'lookup_question', 'search_knowledge_tree', 'build_learning_experiment',
         'read_learning_experiment', 'register_session_tool', 'read_session_tool')),
@@ -58,7 +61,9 @@ def grouped_tools(allowed, message, recent_messages=None, project=False):
         initial = 'authoring'
     if 'interactive' in groups and '交互' in message and '题' in message:
         initial = 'interactive'
-    if project and initial not in ('interactive', 'authoring', 'presentation', 'practice'):
+    if project and any(word in message for word in ('知识地图', '知识单元', '先修', '贝叶斯', '证据路径')):
+        initial = 'knowledge'
+    if project and initial not in ('interactive', 'authoring', 'presentation', 'practice', 'knowledge'):
         initial = 'project'
     if any(word in message for word in ('学习目标', '阶段计划', '跟进', '暂停学习', '恢复学习', '学习安排')):
         initial = 'project'

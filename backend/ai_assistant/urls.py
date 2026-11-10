@@ -18,9 +18,10 @@ from .views_api import (
 )
 from .views_learning_experiments import LearningExperimentView
 
-from .views_learning import ProjectLearningView, ProjectLearningLibraryView
+from .views_learning import ProjectLearningView, ProjectLearningLibraryView, ProjectLearningKnowledgeView
 
 urlpatterns = [
+    path('projects/<int:pk>/learning/knowledge/', ProjectLearningKnowledgeView.as_view(), name='project-learning-knowledge'),
     path('projects/<int:pk>/learning/library/', ProjectLearningLibraryView.as_view(), name='project-learning-library'),
     path('projects/<int:pk>/learning/', ProjectLearningView.as_view(), name='project-learning'),
     path('learning-experiments/<uuid:conversation_id>/<uuid:experiment_id>/', LearningExperimentView.as_view(), name='learning-experiment'),

@@ -1,7 +1,7 @@
 """按用户能力限制工具，机构套餐不再授予学习或管理能力。"""
 
 TOOL_FEATURES = {
-    **dict.fromkeys(("read_learning_project", "plan_learning_project", "record_learning_progress", "set_learning_followup", "find_learning_resources", "manage_learning_resources", "manage_learning_strategies"), "ai.assistant"),
+    **dict.fromkeys(("read_learning_project", "plan_learning_project", "record_learning_progress", "set_learning_followup", "find_learning_resources", "manage_learning_resources", "manage_learning_strategies", "manage_learning_knowledge"), "ai.assistant"),
     'register_session_tool': 'ai.assistant', 'read_session_tool': 'ai.assistant',
     'build_learning_experiment': 'ai.assistant', 'read_learning_experiment': 'ai.assistant',
     'search_knowledge_tree': 'quiz.exam', 'get_user_weak_points': 'full.report',

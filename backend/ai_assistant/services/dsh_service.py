@@ -18,7 +18,7 @@ from .dsh_routing import grouped_tools
 
 
 M0_TOOLS = frozenset({
-    'manage_learning_resources', 'manage_learning_strategies',
+    'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge',
     'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup', 'find_learning_resources',
     'get_learning_stats', 'get_recent_practice_result', 'get_user_weak_points',
     'get_study_status', 'get_focus_history', 'run_diagnostic', 'create_faq_ticket',

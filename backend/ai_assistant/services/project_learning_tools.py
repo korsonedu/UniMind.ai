@@ -1,4 +1,4 @@
-"""Seven explicit project-learning operations, within the existing tool group budget."""
+"""Explicit learning operations, split into bounded model-visible groups."""
 from copy import deepcopy
 
 
@@ -13,11 +13,14 @@ def text(description=''):
 stage = obj({'id': text('稳定编号，字母数字下划线'), 'title': text(), 'outcome': text('阶段完成时能做到什么'),
              'task': text('当前可实际开始的学习任务'),
              'prerequisites': {'type': 'array', 'items': text('排在之前的阶段编号')},
-             'sources': {'type': 'array', 'items': text('find_learning_resources 实际读取后返回的来源 id')}},
+             'sources': {'type': 'array', 'items': text('find_learning_resources 实际读取后返回的来源 id')},
+             'knowledge_nodes': {'type': 'array', 'items': text('所选知识地图内的节点 id；只有绑定地图时填写')}},
             ('id', 'title', 'outcome', 'task', 'prerequisites', 'sources'))
 plan = obj({'goal': text(), 'deadline': {'type': ['string', 'null'], 'description': 'YYYY-MM-DD；无期限用 null'},
             'weekly_minutes': {'type': 'integer', 'minimum': 0, 'maximum': 10080},
-            'stages': {'type': 'array', 'items': stage, 'minItems': 1, 'maxItems': 20}},
+            'stages': {'type': 'array', 'items': stage, 'minItems': 1, 'maxItems': 20},
+            'knowledge_path': obj({'version_id': {'type': 'integer'}, 'targets': {'type': 'array', 'items': text()},
+                                   'depth': {'type': 'string', 'enum': ['apply', 'transfer']}}, ('version_id', 'targets', 'depth'))},
            ('goal', 'deadline', 'weekly_minutes', 'stages'))
 revision = {'type': 'integer', 'minimum': 0, 'description': '先读取当前项目取得最新 revision'}
 time_fields = {'followup_at': text('含时区的未来 ISO 时间；根据用户节奏自行判断'),
@@ -38,7 +41,10 @@ PROJECT_LEARNING_TOOLS = [
          obj({'revision': revision, 'observation': text(), 'feedback': text('一句具体反馈'),
               'assistance': {'type': 'string', 'enum': ['independent', 'hint', 'guided', 'unknown']},
               'strategy': text('本次采用的教学方法，作为待检验经验'), 'current_stage': text(),
-              'next_action': text(), **time_fields},
+              'next_action': text(), 'knowledge_check': obj({'probe_id': {'type': 'integer'},
+                  'outcome': {'type': 'string', 'enum': ['success', 'failure', 'unclear']},
+                  'quote': text('当前回答中的原文摘录'), 'reason': text('对照此前任务标准说明判断依据，不把自报懂了当成果')},
+                  ('probe_id', 'outcome', 'quote', 'reason')), **time_fields},
              ('revision', 'observation', 'feedback', 'assistance', 'strategy', 'next_action'))),
     tool('set_learning_followup', '根据用户情况安排跟进、暂停、恢复或结束项目。时间使用项目 server_time 为基准；暂停到未来时提供 resume_at。重大计划变更仍需用户确认，不能用结束项目代替完成证明。',
          obj({'revision': revision, 'action': {'type': 'string', 'enum': ['schedule', 'pause', 'resume', 'complete']},
@@ -61,6 +67,21 @@ PROJECT_LEARNING_TOOLS.extend([
               'judgement': {'type': 'string', 'enum': ['support', 'against', 'uncertain']},
               'reason': text('试用适用性或后续观察的具体依据')}, ('action',))),
 ])
+
+
+PROJECT_LEARNING_TOOLS.append(tool('manage_learning_knowledge',
+    '管理本人版本化知识地图。search 找地图，read 读确切版本；save 用本人资料库版本原文引用组织单元与有向前置教学建议；prepare 把所选目标及前置节点的来源接入项目，但须另存阶段计划才生效。probe 在当前范围登记单节点任务、常规或候选迁移类型、判断标准；本轮成功回复须原样呈现 question，后续另一轮真实作答才能由 record_learning_progress.knowledge_check 更新 BEP。不能伪造检验或从相邻节点推断实测。',
+    obj({'action': {'type': 'string', 'enum': ['search', 'read', 'save', 'prepare', 'probe']},
+         'query': text(), 'map_id': {'type': 'integer'}, 'revision': {'type': 'integer'}, 'version_id': {'type': 'integer'},
+         'title': text(), 'nodes': {'type': 'array', 'maxItems': 30, 'items': obj({
+             'id': text(), 'title': text(), 'outcome': text('可检查的具体目标'),
+             'prerequisites': {'type': 'array', 'items': text('前置节点 id，关系暂为教学建议')},
+             'citation': obj({'resource_id': {'type': 'integer'}, 'revision': {'type': 'integer'},
+                              'quote': text('该资料库版本实际 excerpt 中的原文，8 至 500 字')}, ('resource_id', 'revision', 'quote'))},
+             ('id', 'title', 'outcome', 'prerequisites', 'citation'))},
+         'targets': {'type': 'array', 'items': text()}, 'depth': {'type': 'string', 'enum': ['apply', 'transfer']},
+         'node_id': text(), 'mode': {'type': 'string', 'enum': ['apply', 'transfer']},
+         'question': text('需在回复中原样呈现的任务，8 至 2000 字'), 'rubric': text('明确的检查标准，8 至 1500 字')}, ('action',))))
 
 
 PROJECT_LEARNING_NAMES = frozenset(tool['function']['name'] for tool in PROJECT_LEARNING_TOOLS)

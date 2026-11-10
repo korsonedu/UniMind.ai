@@ -110,10 +110,14 @@ def store_resource(project, resource):
     with transaction.atomic():
         state, _ = ProjectLearning.objects.get_or_create(project=project)
         state = ProjectLearning.objects.select_for_update().get(pk=state.pk)
-        previous = next((item for item in state.resources if item['url'] == url), None)
+        def matches(item):
+            if resource.get('pinned'):
+                return item.get('pinned') and item.get('library_id') == resource.get('library_id') and item.get('library_revision') == resource.get('library_revision')
+            return item['url'] == url and not item.get('pinned')
+        previous = next((item for item in state.resources if matches(item)), None)
         if previous:
             resource['id'] = previous['id']
-        resources = [item for item in state.resources if item['url'] != url]
+        resources = [item for item in state.resources if not matches(item)]
         used = {source for stage in state.plan.get('stages', []) for source in stage.get('sources', [])}
         used.update(source for stage in state.pending_plan.get('plan', {}).get('stages', []) for source in stage.get('sources', []))
         while len(resources) >= 25:
