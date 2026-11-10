@@ -11,7 +11,7 @@ export interface ProjectLearning {
   knowledge?: LearningKnowledge;
   project_id: number; name: string; instructions: string; status: 'preparing' | 'active' | 'paused' | 'completed';
   plan: Partial<LearningPlan>; resources: LearningResource[]; current_stage: string; feedback: string; next_action: string;
-  pending_plan: { plan?: LearningPlan; reason?: string }; revision: number; conversation_id: string | null;
+  pending_plan: { plan?: LearningPlan; reason?: string; knowledge?: { title: string; revision: number; targets: string[]; depth: 'apply' | 'transfer' } }; revision: number; conversation_id: string | null;
   followup_at: string | null; followup_text: string; resume_at: string | null; events: LearningEvent[];
 }
 export const learningKey = (userId: number | undefined, projectId: number | null) => ['project-learning', userId, projectId];

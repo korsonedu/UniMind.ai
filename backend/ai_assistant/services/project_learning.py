@@ -208,6 +208,12 @@ def change_learning(project, data, *, message=None, model=False):
             raise ValidationError('计划只能引用当前项目实际读取过的来源。')
         if _major(state.plan, plan) or (state.plan and data.get('major_change')):
             state.pending_plan = {'plan': plan, 'reason': event['reason'], 'base_revision': state.revision}
+            if plan.get('knowledge_path'):
+                from .learning_knowledge import owned_version
+                path = plan['knowledge_path']
+                version = owned_version(project, path['version_id'])
+                state.pending_plan['knowledge'] = {'title': version.snapshot['title'], 'revision': version.revision,
+                    'targets': [node['title'] for node in version.snapshot['nodes'] if node['id'] in path['targets']], 'depth': path['depth']}
             event['proposed_plan'] = plan
         else:
             event['previous_plan'] = state.plan

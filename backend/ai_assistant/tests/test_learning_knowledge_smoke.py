@@ -143,6 +143,8 @@ class LearningKnowledgeSmoke(APITestCase):
         changed = self.bind(knowledge_path={'version_id': self.version['version_id'], 'targets': ['branch'], 'depth': 'apply'})
         self.assertEqual(changed['plan']['knowledge_path']['depth'], 'transfer')
         self.assertEqual(changed['pending_plan']['plan']['knowledge_path']['depth'], 'apply')
+        self.assertEqual(changed['pending_plan']['knowledge']['targets'], ['条件分支'])
+        self.assertEqual(changed['pending_plan']['knowledge']['depth'], 'apply')
         accepted = change_learning(self.project, {'action': 'accept', 'revision': changed['revision']})
         self.assertEqual(accepted['plan']['knowledge_path']['depth'], 'apply')
 
