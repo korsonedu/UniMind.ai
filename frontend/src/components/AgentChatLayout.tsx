@@ -621,7 +621,7 @@ export default function AgentChatLayout(props: AgentChatLayoutProps) {
           </div>
 
           {/* Messages — 内联视觉卡片 */}
-          <AgentReplyContext.Provider value={{ onReply: onActionReply }}>
+          <AgentReplyContext.Provider value={{ onReply: onActionReply, projectId, conversationId }}>
             <div ref={scrollRef} className="um-agent-scroll flex-1 overflow-y-auto min-h-0">
               <div className="max-w-3xl mx-auto p-4 space-y-4">
                 {messages.filter(m => m.role === 'user' || m.visible !== false).map((msg, i) => {

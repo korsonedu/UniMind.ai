@@ -63,6 +63,11 @@ def test_dsh_routing_comparison(user):
     assert physics['initial_group'] == 'practice'
     registered = type(user).objects.create_user(username='routing-registered')
     context = build_context(registered, '给我完整课程、所有学生成绩并发送通知。')
-    assert context['tools'] == [] and context['routing']['candidate_names'] == []
-    assert context['available_tools'] == [] and context['tool_groups'] == {}
+    assert {t['function']['name'] for t in context['tools']} == {'find_learning_tools'}
+    public_personal = {'search_courses', 'search_asr', 'present_learning_visual',
+        'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup',
+        'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge'}
+    assert {t['function']['name'] for t in context['available_tools']} == public_personal
+    assert {t['function']['name'] for group in context['tool_groups'].values() for t in group['tools']} == public_personal
+    assert not {'get_practice_questions', 'get_exam_history', 'get_student_detail', 'send_notification'} & set(context['routing']['candidate_names'])
     print('DSH_ROUTING_REPORT ' + json.dumps(report, ensure_ascii=False))

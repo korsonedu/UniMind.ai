@@ -39,6 +39,11 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pip-audit
 
+      - name: Install browser smoke dependencies
+        run: |
+          python -m playwright install --with-deps chromium
+          sudo apt-get install -y fontconfig fonts-noto-cjk
+
       - name: Dependency vulnerability scan
         run: pip-audit --strict
 

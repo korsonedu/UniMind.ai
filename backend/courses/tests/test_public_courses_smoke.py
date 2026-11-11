@@ -48,7 +48,12 @@ def test_registered_public_course_boundary(auth_client, user, settings, tmp_path
     assert APIClient().get('/media/public.mp4').status_code == 401
     assert APIClient().get('/api/courses/').status_code == 401
     from ai_engine.tool_permissions import filter_tools
-    assert filter_tools('planner', None, [{'function': {'name': 'search_courses'}}], user=user) == []
+    public_personal = {'search_courses', 'search_asr',
+        'read_learning_project', 'plan_learning_project', 'record_learning_progress', 'set_learning_followup',
+        'find_learning_resources', 'manage_learning_resources', 'manage_learning_strategies', 'manage_learning_knowledge'}
+    restricted = {'search_knowledge_tree', 'get_practice_questions', 'get_exam_history', 'get_student_detail', 'send_notification'}
+    definitions = [{'function': {'name': name}} for name in sorted(public_personal | restricted)]
+    assert {t['function']['name'] for t in filter_tools('planner', None, definitions, user=user)} == public_personal
     CourseStudentStatus.objects.create(user=user, is_course_student=True)
     assert auth_client.get(f'/api/courses/{paid.pk}/').status_code == 200
     assert auth_client.get(f'/api/courses/{unassigned.pk}/').status_code == 200
