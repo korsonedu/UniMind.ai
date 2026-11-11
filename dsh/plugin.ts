@@ -24,12 +24,12 @@ export async function apply(ctx: Context) {
   const backend = process.env.UNIMIND_API_URL;
   const token = process.env.UNIMIND_AUTH_TOKEN;
   if (!backend || !token) throw new Error('UniMind backend credentials are not configured');
-  const request = async <T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> => {
+  const request = async <T>(path: string, body: unknown, signal?: AbortSignal, timeoutMs = 15000): Promise<T> => {
     const response = await fetch(new URL(path, backend), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `${process.env.UNIMIND_DSH_AUTH_SCHEME === 'DSH' ? 'DSH' : 'Token'} ${token}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.any([AbortSignal.timeout(15000), ...(signal ? [signal] : [])]),
+      signal: AbortSignal.any([AbortSignal.timeout(timeoutMs), ...(signal ? [signal] : [])]),
       redirect: 'error',
     });
     if (!response.ok) throw new Error(`UniMind request failed (${response.status})`);
@@ -77,13 +77,13 @@ export async function apply(ctx: Context) {
           return { unimindCard: result.error ? null : result.visual ?? null };
         },
       },
-      timeoutMs: 15000,
+      timeoutMs: definition.name === 'build_learning_experiment' ? 45000 : 15000,
       isConcurrencySafe: () => !['register_session_tool', 'build_learning_experiment', 'read_session_tool'].includes(definition.name),
       execute: async (args, exec) => {
         const value = await request<Record<string, unknown>>(`/api/ai/dsh/tools/${definition.name}/`, {
           arguments: args, memory_version: context.memory.version,
           ...(definition.name.startsWith('session_') ? { tool_revision: registry?.versions[definition.name] } : {}),
-        }, exec.signal);
+        }, exec.signal, definition.name === 'build_learning_experiment' ? 45000 : 15000);
         if (!value.error && ['register_session_tool', 'read_session_tool'].includes(definition.name) && value.session_registry) {
           updateRegistry(value.session_registry as SessionRegistry);
         }

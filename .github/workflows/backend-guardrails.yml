@@ -50,6 +50,9 @@ jobs:
         working-directory: backend
         run: python manage.py makemigrations --check --dry-run
 
+      - name: Install browser for learning tool smoke checks
+        run: python -m playwright install --with-deps chromium
+
       - name: Backend regression tests
         working-directory: backend
         run: python -m pytest

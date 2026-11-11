@@ -41,7 +41,9 @@ def test_interactive_question_tools_are_visible_together(tool_chat, settings):
     from ai_assistant.services.dsh_service import build_context
     user, bot, current = tool_chat
     claims = {'message_id': current.pk, 'conversation_id': str(current.conversation_id), 'bot_id': bot.pk}
-    context = build_context(user, '给我讲一道金融硕士题目，用到交互', chat_context=claims)
+    current.content = '给我讲一道金融硕士题目，用到交互'
+    current.save(update_fields=['content'])
+    context = build_context(user, current.content, chat_context=claims)
     assert context['routing']['initial_group'] == 'interactive'
     names = {tool['function']['name'] for tool in context['tools']}
     assert {'get_practice_questions', 'lookup_question', 'build_learning_experiment'} <= names
